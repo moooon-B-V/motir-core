@@ -71,5 +71,9 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Prisma 7's `migrate deploy` does not auto-generate the client (unlike
+      # `migrate dev`); next build's internal `tsc` then can't resolve
+      # PrismaClient. Generate explicitly before build.
+      - run: pnpm prisma generate
       - run: pnpm prisma migrate deploy
       - run: pnpm build

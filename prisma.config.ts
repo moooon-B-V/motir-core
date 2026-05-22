@@ -6,27 +6,22 @@ import { defineConfig } from 'prisma/config';
 // is available below.
 loadEnv();
 
-function requireDatabaseUrl(): string {
-  const url = process.env['DATABASE_URL'];
-  if (!url) {
-    throw new Error(
-      'DATABASE_URL is not set. Copy .env.example to .env and start the ' +
-        'dev DB with `./scripts/db-up.sh`.',
-    );
-  }
-  return url;
-}
-
 // The CLI config: where the schema lives, where migrations live, and the
 // datasource URL the CLI uses for `prisma migrate` / `prisma db` commands.
 // The runtime adapter (PrismaPg) is wired up separately in `lib/db.ts` —
 // adapters belong to the client constructor, not the CLI config.
+//
+// Why datasource is conditional: Prisma 7 loads this entire config at every
+// CLI startup, including `prisma generate` (which doesn't need a database
+// connection). If we hard-required DATABASE_URL here, `generate` would fail
+// in CI's typecheck job (which has no DB). Migrate commands will produce
+// their own clear "no datasource" error when actually invoked without a URL.
+const databaseUrl = process.env['DATABASE_URL'];
+
 export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: {
     path: 'prisma/migrations',
   },
-  datasource: {
-    url: requireDatabaseUrl(),
-  },
+  ...(databaseUrl ? { datasource: { url: databaseUrl } } : {}),
 });
