@@ -127,20 +127,100 @@ All scale tokens are defined under `@theme` in `globals.css` as
 
 ## 4. Component Stylings
 
-Component primitives (Button, Input, Card, Modal, Pill, etc.) land in
-**Subtask 1.0.5.2** onward — this section will grow as each primitive
-is added.
+Nine primitives ship in [`components/ui/`](../components/ui/) — each
+file is a single primitive with a typed Props interface, `cva` for
+variant management, `cn()` (twMerge + clsx) for class composition, and
+ref forwarding. All primitives consume the design tokens from §2/§5/§6
+exclusively — no hardcoded hex or px values. Live demos render at
+[`/tokens`](../app/tokens/page.tsx).
 
-For 1.0.5.1, the only component-shaped artifact is the Button stub in
-[`/tokens`](../app/tokens/page.tsx), which uses semantic shape tokens
-(`--radius-btn`, `--height-btn-md`, etc.) that respond to the active
-`data-display-style`.
+### Button — [`components/ui/Button.tsx`](../components/ui/Button.tsx)
 
-### What primitives WILL exist (per Story 1.0.5.2)
+Primary interactive primitive. Variants `primary | secondary | ghost | danger`
+× sizes `sm | md | lg`. `loading` prop shows inline `Spinner` and disables
+interaction; `leftIcon` / `rightIcon` slots accept ReactNode. Shape responds
+to `data-display-style` via `--radius-btn` — Notion-sober rectangles in
+`default`, Figma-pill in `soft`. Use `primary` only for the single dominant
+CTA per view.
 
-Button, Input, Textarea, Card, Modal, Pill/Tag, Tooltip, Toast, Spinner.
-Each will define its own `--el-*` tokens for fine-grained customization,
-plus a Tailwind class API documented here when they land.
+### Input — [`components/ui/Input.tsx`](../components/ui/Input.tsx)
+
+Single-line text field with `label`, `helperText`, `error`, and
+`addonStart` / `addonEnd` slots for inline icons or labels (note: not
+`prefix`/`suffix` — those names collide with native HTML attrs). Error
+state flips border color to `--color-destructive` and sets `aria-invalid`.
+
+### Textarea — [`components/ui/Textarea.tsx`](../components/ui/Textarea.tsx)
+
+Multi-line variant of Input. Same `label` / `helperText` / `error` props.
+No prefix/suffix slots (uncommon for textareas). Pass `rows` to size; no
+auto-resize in v1.
+
+### Card — [`components/ui/Card.tsx`](../components/ui/Card.tsx)
+
+Content container with optional `header` and `footer` slots. `tint` prop
+applies one of six pastel feature tints (`peach | rose | mint | lavender |
+sky | yellow`) for tinted card variants — these match Notion's marketing
+feature tiles. `clickable` adds keyboard + hover + focus-ring affordances;
+wrap children in `<a>` or `<button>` semantically when interactive.
+
+### Modal — [`components/ui/Modal.tsx`](../components/ui/Modal.tsx)
+
+Wraps [`@radix-ui/react-dialog`](https://www.radix-ui.com/docs/primitives/components/dialog).
+Sizes `sm | md | lg`. Radix handles focus trap, ESC-to-close,
+click-outside-to-close, and focus-return-on-close automatically. Controlled
+via `open` + `onOpenChange`. Compose `Modal.Footer` for action buttons;
+`Modal.Trigger` is re-exported for declarative open patterns.
+
+### Pill — [`components/ui/Pill.tsx`](../components/ui/Pill.tsx)
+
+Compact status or severity label. Two variant axes (use one or the other):
+
+- `status`: `planned | in-progress | done` — Prodect's Subtask lifecycle.
+- `severity`: `info | success | warning | danger` — generic UI states.
+
+Always renders with `--radius-badge` (full pill) regardless of display style
+— badges look uniform across the system on purpose.
+
+### Tooltip — [`components/ui/Tooltip.tsx`](../components/ui/Tooltip.tsx)
+
+Wraps [`@radix-ui/react-tooltip`](https://www.radix-ui.com/docs/primitives/components/tooltip).
+Appears on hover + keyboard focus. `side` prop picks position
+(`top | right | bottom | left`). Self-contained — provides its own
+TooltipProvider; safe to use anywhere.
+
+### Toast — [`components/ui/Toast.tsx`](../components/ui/Toast.tsx)
+
+Wraps [`@radix-ui/react-toast`](https://www.radix-ui.com/docs/primitives/components/toast).
+Requires `<ToastProvider>` near the app root (already wired in
+[`app/layout.tsx`](../app/layout.tsx)). Dispatch imperatively via
+`useToast()`:
+
+```tsx
+const { toast } = useToast();
+toast({ variant: 'success', title: 'Saved', description: 'Changes synced.' });
+```
+
+Four variants (`info | success | warning | error`). Stacks, auto-dismisses
+after 5s, pauses on hover, dismisses on swipe.
+
+### Spinner — [`components/ui/Spinner.tsx`](../components/ui/Spinner.tsx)
+
+Pure CSS rotation indicator, three sizes (`sm | md | lg`). Inherits color
+from parent via `border-current` — useful inside colored Button variants.
+Used internally by Button's loading state.
+
+### Architecture notes
+
+- **`--el-*` token layer didn't need to grow** for these 9 primitives. Each
+  primitive consumed `--color-*` tokens directly or via Tailwind utility
+  classes (`bg-primary`, `text-foreground`). The Tier 3 `--el-*` layer
+  remains minimal — to be expanded when a future component needs distinct
+  semantics that can't be expressed through the base color tokens.
+- **`prefix` reserved-word lesson**: Native HTML `<input>` has a `prefix`
+  attribute (string). When we shadowed it with a ReactNode prop, TS errored.
+  Renamed to `addonStart` / `addonEnd`. If future primitives wrap native
+  elements, check for attribute name collisions early.
 
 ## 5. Layout Principles
 
