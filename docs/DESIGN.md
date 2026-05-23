@@ -210,6 +210,42 @@ Pure CSS rotation indicator, three sizes (`sm | md | lg`). Inherits color
 from parent via `border-current` — useful inside colored Button variants.
 Used internally by Button's loading state.
 
+### Patterns
+
+Patterns are composed components — they stack primitives in a fixed
+arrangement that encodes how we handle a recurring UX situation. They
+exist to prevent two failure modes: (a) every engineer hand-rolling the
+same arrangement slightly differently, and (b) someone reinventing an
+atom (e.g. a custom card-with-border) instead of reusing the primitive.
+
+**Rule for future patterns**: compose primitives, never reinvent atoms.
+If a pattern needs a shape that doesn't exist as a primitive, extend the
+primitive (or add a new one), don't bake the new atom into the pattern.
+
+#### EmptyState — [`components/ui/EmptyState.tsx`](../components/ui/EmptyState.tsx)
+
+Use whenever a list, table, board, or detail panel has no data to show.
+The common mistake is leaving the screen blank — to a user, blank reads
+as broken or still-loading. EmptyState communicates "this is correct,
+here's why it's empty, and here's what to do next." Composes
+[`Card`](../components/ui/Card.tsx) + a `lucide-react` icon + a
+`title`/`description`/`action` stack. Default icon is `<Inbox />`;
+override with situation-appropriate alternatives (FolderOpen,
+MessageSquareOff, Users, etc.).
+
+#### ErrorState — [`components/ui/ErrorState.tsx`](../components/ui/ErrorState.tsx)
+
+Use whenever a request, mutation, or background job has failed in a way
+that prevents the user from progressing. Prefer ErrorState over a silent
+toast when the failure blocks the workflow — toasts are for transient,
+acknowledge-and-move-on conditions. Composes [`Card`](../components/ui/Card.tsx)
+
+- `<AlertTriangle />` in `--color-destructive` + a "Try again" Button.
+  Has `role="alert"` so screen readers announce on mount, and renders
+  `error.message` in a mono code block in non-production builds only
+  (Next.js dead-code-eliminates the branch from production bundles via
+  the static `process.env.NODE_ENV` replacement).
+
 ### Architecture notes
 
 - **`--el-*` token layer didn't need to grow** for these 9 primitives. Each

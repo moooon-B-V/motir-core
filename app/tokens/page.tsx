@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Send, Sparkles } from 'lucide-react';
+import { MessageSquareOff, Plus, Send, Sparkles } from 'lucide-react';
 import { useTheme } from '@/lib/contexts/theme-context';
 import { useToast } from '@/components/ui/Toast';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Pill } from '@/components/ui/Pill';
@@ -673,6 +675,50 @@ export default function TokensPage() {
 
       <Section title="Primitives — Toast">
         <ToastDemo />
+      </Section>
+
+      <Section title="Patterns — EmptyState">
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: 'var(--spacing-md)',
+          }}
+        >
+          <EmptyState
+            title="No projects yet"
+            description="Create your first project to get started — projects group related tasks, threads, and decisions."
+            action={<Button leftIcon={<Plus className="h-4 w-4" />}>New project</Button>}
+          />
+          <EmptyState
+            icon={<MessageSquareOff className="h-12 w-12" aria-hidden />}
+            title="No comments"
+            description="Be the first to comment on this task."
+            action={<Button variant="secondary">Add comment</Button>}
+          />
+        </div>
+      </Section>
+
+      <Section title="Patterns — ErrorState">
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: 'var(--spacing-md)',
+          }}
+        >
+          <ErrorState
+            title="Couldn't load workspace"
+            description="We couldn't reach the server. Check your connection and try again."
+            retry={() => console.warn('[tokens] retry pressed')}
+          />
+          <ErrorState
+            title="Webhook failed"
+            description="Failed to deliver GitHub webhook event."
+            error={new Error('POST /hooks/github → 502 Bad Gateway')}
+            retry={() => console.warn('[tokens] webhook retry pressed')}
+          />
+        </div>
       </Section>
     </main>
   );
