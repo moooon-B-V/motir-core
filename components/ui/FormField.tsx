@@ -1,0 +1,64 @@
+import { type ReactNode } from 'react';
+import { cn } from '@/lib/utils/cn';
+
+/**
+ * Internal layout wrapper shared by Input and Textarea — handles the
+ * label / control / helper-or-error stack pattern. Not exported from
+ * the design system; consumers compose <Input> and <Textarea> directly.
+ */
+export interface FormFieldProps {
+  /** Visible label rendered above the control. */
+  label?: string;
+  /** Error message — overrides helperText when present. Sets aria-invalid. */
+  error?: string;
+  /** Helper text rendered below the control. */
+  helperText?: string;
+  /** id of the control element — used to associate label + describedby. */
+  htmlFor: string;
+  className?: string;
+  children: ReactNode;
+}
+
+export function FormField({
+  label,
+  error,
+  helperText,
+  htmlFor,
+  className,
+  children,
+}: FormFieldProps) {
+  const describedById = error ? `${htmlFor}-error` : helperText ? `${htmlFor}-helper` : undefined;
+  return (
+    <div className={cn('flex flex-col gap-1.5', className)}>
+      {label ? (
+        <label htmlFor={htmlFor} className="font-sans text-sm font-medium text-foreground">
+          {label}
+        </label>
+      ) : null}
+      {children}
+      {error ? (
+        <p
+          id={describedById}
+          role="alert"
+          className="font-sans text-xs"
+          style={{ color: 'var(--color-destructive)' }}
+        >
+          {error}
+        </p>
+      ) : helperText ? (
+        <p id={describedById} className="text-muted-foreground font-sans text-xs">
+          {helperText}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Returns the aria-describedby id that consumers should pass to the control. */
+export function describedById(
+  htmlFor: string,
+  error: string | undefined,
+  helperText: string | undefined,
+): string | undefined {
+  return error ? `${htmlFor}-error` : helperText ? `${htmlFor}-helper` : undefined;
+}

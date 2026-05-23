@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter, JetBrains_Mono, Source_Serif_4 } from 'next/font/google';
 import { ThemeProvider } from '@/lib/contexts/theme-context';
 import { themeInitScript } from '@/lib/theme/init-script';
+import { ToastProvider } from '@/components/ui/Toast';
 import './globals.css';
 
 /**
@@ -64,7 +65,9 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="min-h-full">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -1,6 +1,17 @@
 'use client';
 
+import { useState } from 'react';
+import { Plus, Send, Sparkles } from 'lucide-react';
 import { useTheme } from '@/lib/contexts/theme-context';
+import { useToast } from '@/components/ui/Toast';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
+import { Pill } from '@/components/ui/Pill';
+import { Spinner } from '@/components/ui/Spinner';
+import { Textarea } from '@/components/ui/Textarea';
+import { Tooltip } from '@/components/ui/Tooltip';
 import type { DisplayStyle, ThemePattern } from '@/lib/theme/types';
 
 /**
@@ -154,53 +165,6 @@ function Swatch({ name, label }: { name: string; label: string }) {
         <div style={{ color: 'var(--el-page-text-muted)' }}>--color-{name}</div>
       </div>
     </div>
-  );
-}
-
-function Button({
-  variant,
-  size = 'md',
-  children,
-}: {
-  variant: 'primary' | 'secondary';
-  size?: 'sm' | 'md' | 'lg';
-  children: React.ReactNode;
-}) {
-  const height =
-    size === 'sm'
-      ? 'var(--height-btn-sm)'
-      : size === 'lg'
-        ? 'var(--height-btn-lg)'
-        : 'var(--height-btn-md)';
-  const isPrimary = variant === 'primary';
-  return (
-    <button
-      type="button"
-      style={{
-        height,
-        paddingInline: 'var(--spacing-btn-x)',
-        borderRadius: 'var(--radius-btn)',
-        backgroundColor: isPrimary ? 'var(--color-primary)' : 'transparent',
-        color: isPrimary ? 'var(--color-primary-foreground)' : 'var(--el-page-text)',
-        border: isPrimary ? 'none' : `1px solid var(--color-hairline-strong)`,
-        fontFamily: 'var(--font-sans)',
-        fontSize: 'var(--font-size-sm)',
-        fontWeight: 500,
-        cursor: 'pointer',
-        transition: 'transform var(--transition-duration) ease',
-      }}
-      onMouseDown={(e) => {
-        e.currentTarget.style.transform = `scale(var(--active-scale))`;
-      }}
-      onMouseUp={(e) => {
-        e.currentTarget.style.transform = `scale(1)`;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = `scale(1)`;
-      }}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -514,36 +478,278 @@ export default function TokensPage() {
         </div>
       </Section>
 
-      <Section title="Buttons (responds to display style)">
+      <Section title="Primitives — Button">
+        <p
+          className="text-sm"
+          style={{ color: 'var(--el-page-text-muted)', marginBottom: 'var(--spacing-md)' }}
+        >
+          Variant × size grid. Toggle <code className="font-mono text-xs">display-style</code> to
+          see shapes flip — CSS only.
+        </p>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'auto repeat(3, 1fr)',
+            gap: 'var(--spacing-md)',
+            alignItems: 'center',
+          }}
+        >
+          <div />
+          <div className="font-mono text-xs">sm</div>
+          <div className="font-mono text-xs">md</div>
+          <div className="font-mono text-xs">lg</div>
+          {(['primary', 'secondary', 'ghost', 'danger'] as const).map((variant) => (
+            <div key={variant} style={{ display: 'contents' }}>
+              <div className="font-mono text-xs">{variant}</div>
+              <Button variant={variant} size="sm">
+                Action
+              </Button>
+              <Button variant={variant} size="md">
+                Action
+              </Button>
+              <Button variant={variant} size="lg">
+                Action
+              </Button>
+            </div>
+          ))}
+        </div>
         <div
           style={{
             display: 'flex',
             flexWrap: 'wrap',
             gap: 'var(--spacing-md)',
+            marginTop: 'var(--spacing-lg)',
+          }}
+        >
+          <Button leftIcon={<Plus className="h-4 w-4" />}>With left icon</Button>
+          <Button rightIcon={<Sparkles className="h-4 w-4" />} variant="secondary">
+            With right icon
+          </Button>
+          <Button loading>Loading</Button>
+          <Button disabled>Disabled</Button>
+        </div>
+      </Section>
+
+      <Section title="Primitives — Spinner">
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--spacing-lg)',
+            color: 'var(--color-primary)',
+          }}
+        >
+          <Spinner size="sm" />
+          <Spinner size="md" />
+          <Spinner size="lg" />
+          <span className="font-mono text-xs" style={{ color: 'var(--el-page-text-muted)' }}>
+            sm · md · lg (inherits color from parent)
+          </span>
+        </div>
+      </Section>
+
+      <Section title="Primitives — Input + Textarea">
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gap: 'var(--spacing-lg)',
+          }}
+        >
+          <Input label="Email" type="email" placeholder="you@example.com" />
+          <Input
+            label="With helper text"
+            placeholder="Type something"
+            helperText="We'll never share it."
+          />
+          <Input label="Error state" placeholder="bad value" error="That email isn't valid." />
+          <Input
+            label="With addons"
+            placeholder="prodect"
+            addonStart={<span className="font-mono text-xs">https://</span>}
+            addonEnd={<span className="font-mono text-xs">.dev</span>}
+          />
+          <Input label="Disabled" placeholder="Can't edit" disabled />
+          <Textarea label="Textarea" placeholder="Multi-line input…" rows={3} />
+        </div>
+      </Section>
+
+      <Section title="Primitives — Card">
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gap: 'var(--spacing-md)',
+          }}
+        >
+          <Card header={<h3 className="font-serif text-lg font-semibold">Default card</h3>}>
+            <p className="text-sm" style={{ color: 'var(--el-page-text-muted)' }}>
+              Canvas background, hairline border.
+            </p>
+          </Card>
+          <Card tint="lavender">
+            <p className="text-sm">Lavender tint</p>
+          </Card>
+          <Card tint="mint">
+            <p className="text-sm">Mint tint</p>
+          </Card>
+          <Card tint="peach">
+            <p className="text-sm">Peach tint</p>
+          </Card>
+          <Card
+            tint="sky"
+            footer={
+              <p className="font-mono text-xs" style={{ color: 'var(--el-page-text-muted)' }}>
+                with footer slot
+              </p>
+            }
+          >
+            <p className="text-sm">Sky tint + footer</p>
+          </Card>
+          <Card clickable onClick={() => undefined}>
+            <p className="text-sm">Clickable (hover for shadow)</p>
+          </Card>
+        </div>
+      </Section>
+
+      <Section title="Primitives — Pill">
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 'var(--spacing-sm)',
             alignItems: 'center',
           }}
         >
-          <Button variant="primary" size="sm">
-            Small primary
-          </Button>
-          <Button variant="primary" size="md">
-            Get Prodect free
-          </Button>
-          <Button variant="primary" size="lg">
-            Large primary
-          </Button>
-          <Button variant="secondary" size="md">
-            Request a demo
-          </Button>
+          <div
+            className="font-mono text-xs"
+            style={{ color: 'var(--el-page-text-muted)', marginRight: 'var(--spacing-sm)' }}
+          >
+            status
+          </div>
+          <Pill status="planned">Planned</Pill>
+          <Pill status="in-progress">In progress</Pill>
+          <Pill status="done">Done</Pill>
         </div>
-        <p
-          className="text-sm"
-          style={{ color: 'var(--el-page-text-muted)', marginTop: 'var(--spacing-md)' }}
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 'var(--spacing-sm)',
+            alignItems: 'center',
+            marginTop: 'var(--spacing-md)',
+          }}
         >
-          Toggle <code className="font-mono text-xs">display-style</code> above to see Notion-sober
-          rectangles flip to Figma-pill shapes. CSS only — no React re-render.
-        </p>
+          <div
+            className="font-mono text-xs"
+            style={{ color: 'var(--el-page-text-muted)', marginRight: 'var(--spacing-sm)' }}
+          >
+            severity
+          </div>
+          <Pill severity="info">Info</Pill>
+          <Pill severity="success">Success</Pill>
+          <Pill severity="warning">Warning</Pill>
+          <Pill severity="danger">Danger</Pill>
+        </div>
+      </Section>
+
+      <Section title="Primitives — Tooltip">
+        <div style={{ display: 'flex', gap: 'var(--spacing-md)', flexWrap: 'wrap' }}>
+          <Tooltip content="Tooltip on top">
+            <Button variant="secondary">Hover or focus me (top)</Button>
+          </Tooltip>
+          <Tooltip content="Tooltip on right" side="right">
+            <Button variant="secondary">Right</Button>
+          </Tooltip>
+          <Tooltip content="Tooltip on bottom" side="bottom">
+            <Button variant="secondary">Bottom</Button>
+          </Tooltip>
+        </div>
+      </Section>
+
+      <Section title="Primitives — Modal">
+        <ModalDemo />
+      </Section>
+
+      <Section title="Primitives — Toast">
+        <ToastDemo />
       </Section>
     </main>
+  );
+}
+
+function ModalDemo() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button onClick={() => setOpen(true)} leftIcon={<Send className="h-4 w-4" />}>
+        Open modal
+      </Button>
+      <Modal
+        open={open}
+        onOpenChange={setOpen}
+        title="Confirm action"
+        description="This modal demonstrates focus trap, ESC-to-close, and click-outside dismissal."
+      >
+        <p className="text-sm" style={{ color: 'var(--el-page-text-muted)' }}>
+          Try pressing <code className="font-mono text-xs">Esc</code>, clicking outside, or tabbing
+          to confirm Radix&apos;s a11y primitives are working.
+        </p>
+        <Modal.Footer>
+          <Button variant="ghost" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button onClick={() => setOpen(false)}>Confirm</Button>
+        </Modal.Footer>
+      </Modal>
+    </>
+  );
+}
+
+function ToastDemo() {
+  const { toast } = useToast();
+  return (
+    <div style={{ display: 'flex', gap: 'var(--spacing-md)', flexWrap: 'wrap' }}>
+      <Button
+        variant="secondary"
+        onClick={() =>
+          toast({ variant: 'info', title: 'Heads up', description: 'Just a friendly note.' })
+        }
+      >
+        Info toast
+      </Button>
+      <Button
+        variant="secondary"
+        onClick={() =>
+          toast({
+            variant: 'success',
+            title: 'Saved',
+            description: 'Your changes have been synced.',
+          })
+        }
+      >
+        Success toast
+      </Button>
+      <Button
+        variant="secondary"
+        onClick={() =>
+          toast({
+            variant: 'warning',
+            title: 'Heads up',
+            description: 'Approaching API rate limit.',
+          })
+        }
+      >
+        Warning toast
+      </Button>
+      <Button
+        variant="secondary"
+        onClick={() =>
+          toast({ variant: 'error', title: 'Failed', description: 'Could not save changes.' })
+        }
+      >
+        Error toast
+      </Button>
+    </div>
   );
 }
