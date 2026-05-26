@@ -5,15 +5,27 @@
 // production" a per-project planner decision (Layer 2 — pre-plan work for
 // each Prodect-planned project), not a starter-baked assumption (Layer 1).
 //
-// v1 of prodect-core ships ONLY the 'console' provider, which prints
-// emails to stdout. Real providers (Resend, Postmark, …) are stubs that
-// throw a loud not-yet-implemented error if selected — surfacing the
-// missing wiring at startup rather than silently falling back to console.
+// v1 of prodect-core ships THREE dev-grade providers:
+//   - 'console' (default) — prints emails to stdout so dev/test flows can
+//     grep the reset link. Tests in tests/password-reset.test.ts capture
+//     it via a console.log spy.
+//   - 'file'              — appends each email as a JSON line to the file
+//     at EMAIL_OUTBOX_PATH (default /tmp/prodect-test-emails.jsonl). Used
+//     by the Playwright E2E suite, which can't reliably tap the dev
+//     server's stdout from a separate test process. Dev/test only — the
+//     file is unauthenticated, so this MUST NOT be selected in
+//     production. Choosing it in NODE_ENV=production throws at module
+//     load with a clear message.
+//   - 'resend' / 'postmark' — stubs that throw a loud not-yet-implemented
+//     error if selected. Real provider wiring is planner work for each
+//     Prodect-planned project's pre-plan phase.
 //
 // The provider is resolved eagerly at module-import time (see the
 // `sendEmail` export at the bottom). An unknown EMAIL_PROVIDER value
 // therefore crashes the app at boot with a clear message — not on the
 // first email two days into a deploy.
+
+import { appendFile } from 'node:fs/promises';
 
 export interface EmailMessage {
   to: string;
@@ -75,11 +87,54 @@ function unimplementedProvider(name: string): SendEmail {
   };
 }
 
+// Dev-only file provider. Appends each email as a single JSON line to the
+// path in EMAIL_OUTBOX_PATH (defaults to /tmp/prodect-test-emails.jsonl).
+// Playwright E2E specs subscribe to this file to read the reset link —
+// the dev server's stdout isn't reliably tappable from a separate test
+// process, but a file on disk is.
+//
+// Atomicity: Node's fs.appendFile opens the file with O_APPEND, so even
+// if multiple concurrent emails are flushing at once the OS guarantees
+// each line-sized write lands intact (POSIX guarantees writes ≤ PIPE_BUF
+// against an O_APPEND fd are atomic; a single 1–2KB JSON line is well
+// inside that). No external lockfile needed.
+//
+// Trailing newline is REQUIRED — readers split on `\n`, so a missing
+// final newline would silently drop the last email.
+//
+// SECURITY: the outbox file is unauthenticated and world-readable by
+// whatever process started the dev server. Refusing to enable this
+// provider in production keeps the contract obvious: 'file' is a test
+// harness, not a deliverability path.
+function fileProvider(): SendEmail {
+  if (process.env['NODE_ENV'] === 'production') {
+    throw new Error(
+      `Email provider 'file' is not allowed in production. ` +
+        `It is a test-only sink that writes emails to a local file. ` +
+        `Set EMAIL_PROVIDER to a real provider (or 'console' for dev).`,
+    );
+  }
+  const path = process.env['EMAIL_OUTBOX_PATH'] ?? '/tmp/prodect-test-emails.jsonl';
+  return async (msg) => {
+    const line =
+      JSON.stringify({
+        to: msg.to,
+        subject: msg.subject,
+        text: msg.text ?? htmlToText(msg.html),
+        html: msg.html,
+        sentAt: new Date().toISOString(),
+      }) + '\n';
+    await appendFile(path, line, { encoding: 'utf8' });
+  };
+}
+
 export function getEmailProvider(): SendEmail {
   const provider = process.env['EMAIL_PROVIDER'] ?? 'console';
   switch (provider) {
     case 'console':
       return consoleProvider;
+    case 'file':
+      return fileProvider();
     case 'resend':
       return unimplementedProvider('resend');
     case 'postmark':
@@ -87,7 +142,7 @@ export function getEmailProvider(): SendEmail {
     default:
       throw new Error(
         `Unknown EMAIL_PROVIDER='${provider}'. ` +
-          `Valid values: 'console' (default), 'resend', 'postmark'. ` +
+          `Valid values: 'console' (default), 'file' (dev/test only), 'resend', 'postmark'. ` +
           `See lib/email.ts for the abstraction.`,
       );
   }

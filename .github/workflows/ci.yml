@@ -96,3 +96,76 @@ jobs:
       # ephemeral Postgres service container.
       - run: pnpm prisma generate
       - run: pnpm build
+
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    # Wait for the build job — E2E is more expensive than a build failure
+    # surfaces and there's no point burning Playwright minutes if `next
+    # build` is red.
+    needs: build
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: prodect
+          POSTGRES_PASSWORD: prodect
+          POSTGRES_DB: prodect
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U prodect -d prodect"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      # In CI Postgres runs on the standard 5432.
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      # See the build job for the rationale on these throwaway values.
+      # Better-Auth's module-load requiredEnv check needs them present;
+      # the actual OAuth round-trip is intercepted by the undici MockAgent
+      # in instrumentation.ts (E2E_TEST_OAUTH=1 below).
+      BETTER_AUTH_SECRET: ci-e2e-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-e2e-placeholder
+      GOOGLE_CLIENT_SECRET: ci-e2e-placeholder
+      # Dev-only file email provider — emails appended as JSON lines to
+      # EMAIL_OUTBOX_PATH so the credentials spec can capture the reset
+      # link. The playwright.config.ts's webServer.env block ALSO sets
+      # these on the dev server it spawns, but setting them at the job
+      # level too keeps them visible to anyone reading the workflow file.
+      EMAIL_PROVIDER: file
+      EMAIL_OUTBOX_PATH: /tmp/prodect-test-emails.jsonl
+      E2E_TEST_OAUTH: '1'
+      E2E_TEST_OAUTH_USER_PATH: /tmp/prodect-test-oauth-user.json
+      # Skip the husky install postinstall — CI has no .git/hooks to wire.
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma generate
+      # The auth module reads BETTER_AUTH_SECRET, GOOGLE_CLIENT_ID, and
+      # GOOGLE_CLIENT_SECRET at import time — the same reason `pnpm build`
+      # needs them. `pnpm prisma migrate deploy` creates the auth tables
+      # from prisma/migrations; without this the first sign-up POST hits
+      # an empty database and errors with "relation \"user\" does not
+      # exist". (The `build` job runs this transitively via the build
+      # script; here we run it explicitly because we don't run build.)
+      - run: pnpm prisma migrate deploy
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      # Always upload the report — pass-runs are useful for debugging
+      # flakes, and the report is small. The trace/video/screenshot
+      # artifacts only exist for failures (config above), so a passing
+      # run uploads only the html summary.
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: out/playwright-report
+          retention-days: 7

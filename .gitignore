@@ -12,6 +12,14 @@
 
 # testing
 /coverage
+# Playwright — the runner writes traces/screenshots/videos under
+# /out/playwright-output and the HTML report under /out/playwright-report.
+# `/out/` is already ignored below for Next.js's static export; calling
+# it out here so a future Subtask doesn't accidentally git-add a trace
+# zip if the out/ ignore moves.
+/test-results/
+/playwright-report/
+/playwright/.cache/
 
 # next.js
 /.next/

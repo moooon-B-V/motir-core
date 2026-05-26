@@ -170,6 +170,23 @@ export const auth = betterAuth({
       // claim is enforced upstream). Add new providers here only after
       // confirming the same.
       trustedProviders: ['google'],
+      // Better-Auth's `requireLocalEmailVerified` defaults to `true`, which
+      // gates linking on the EXISTING user.emailVerified column even when
+      // the incoming provider is trusted (see better-auth's
+      // oauth2/link-account.mjs line 22). Our email/password sign-up does
+      // NOT set emailVerified=true (we have not yet wired the verification
+      // UX), so leaving this default on would block the very flow
+      // `trustedProviders: ['google']` was meant to enable: email-first
+      // user later signing in with Google. Setting it to false defers the
+      // verification gate to the provider's `userInfo.emailVerified` —
+      // which for Google is enforced upstream before the id_token is
+      // issued. Side benefit: better-auth then promotes the local user's
+      // emailVerified to true on the linking sign-in (link-account.mjs
+      // line 48), so subsequent flows see the user as verified.
+      // The reverse direction (OAuth-first then email/password sign-in)
+      // remains unsupported because OAuth-only users have no credential
+      // Account row with a password hash; see PRODECT_FINDINGS.md.
+      requireLocalEmailVerified: false,
     },
     // Refresh persisted access/refresh tokens on every sign-in so a
     // long-lived refresh token doesn't go stale. Default in Better-Auth,
