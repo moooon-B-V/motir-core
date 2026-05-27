@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
-import { findOrCreateOAuthUser, createUser } from '@/lib/users/repo';
+import { usersService } from '@/lib/services/usersService';
+const { findOrCreateOAuthUser, createUser } = usersService;
 import { truncateAuthTables } from './helpers/db';
 
 beforeEach(async () => {

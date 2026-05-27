@@ -1,10 +1,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Module-level mock for getSession — the routes call it to read the
-// signed-in user. The mock returns whatever `mockSession.current` holds
-// at call time, so each test can swap the session by mutating that
-// object instead of re-mocking. The session is the only Better-Auth
-// surface the routes touch.
+// vi.mock for getSession — the routes call it to read the signed-in
+// user. The mock returns whatever `mockSession.current` holds at call
+// time, so each test can swap the session by mutating that object.
 const mockSession: { current: { user: { id: string; email: string; name: string } } | null } = {
   current: null,
 };
@@ -17,21 +15,23 @@ vi.mock('@/lib/auth', async (importOriginal) => {
 });
 
 import { db } from '@/lib/db';
-import { createUser } from '@/lib/users/repo';
-import { addMember, createWorkspace } from '@/lib/workspaces/repo';
+import { usersService } from '@/lib/services/usersService';
+import { workspacesService } from '@/lib/services/workspacesService';
 import {
   INVITE_IDENTIFIER_PREFIX,
-  createInviteToken,
-  readInviteToken,
-} from '@/lib/workspaces/invites';
+  workspaceInvitesService,
+} from '@/lib/services/workspaceInvitesService';
 import { POST as sendInvitePOST } from '@/app/api/workspaces/[workspaceId]/invites/route';
 import { GET as validateInviteGET } from '@/app/api/invites/[token]/route';
 import { POST as acceptInvitePOST } from '@/app/api/invites/[token]/accept/route';
 import { truncateAuthTables } from './helpers/db';
 
-// Integration tests for the invite endpoints against a real Postgres.
-// Pattern mirrors tests/password-reset.test.ts: spy on console.log to
-// capture [EMAIL] lines, hit handlers directly, assert DB state.
+// Integration tests against a real Postgres. Hits the route handlers
+// directly (so the request → service → repo → Prisma chain is
+// exercised end-to-end), then asserts DB state via the service for
+// reads where we already have a helper, and via `db.*` for raw row
+// counts when no service helper exists. Per CLAUDE.md, reaching into
+// `db.*` is allowed in tests for state assertions.
 
 const BASE_URL = 'http://localhost:3000';
 
@@ -75,12 +75,34 @@ function postAccept(token: string): Promise<Response> {
 }
 
 async function makeInviter(email = 'inviter@example.com', name = 'Inviter One') {
-  const user = await createUser({ email, password: 'hunter2hunter2', name });
-  const { workspace, membership } = await createWorkspace({
+  const user = await usersService.createUser({ email, password: 'hunter2hunter2', name });
+  const { workspace, membership } = await workspacesService.createWorkspace({
     name: 'Acme Co.',
     ownerUserId: user.id,
   });
   return { user, workspace, membership };
+}
+
+// Helper to plant an invite directly via the service when a test
+// needs to set one up without going through the email path.
+async function createInvite(args: {
+  workspaceId: string;
+  email: string;
+  inviterUserId: string;
+}): Promise<string> {
+  await workspaceInvitesService.sendInvite({
+    inviterUserId: args.inviterUserId,
+    inviterName: 'Inviter',
+    workspaceId: args.workspaceId,
+    targetEmail: args.email,
+  });
+  const row = await db.verification.findFirstOrThrow({
+    where: {
+      identifier: { startsWith: INVITE_IDENTIFIER_PREFIX },
+      value: { contains: args.email },
+    },
+  });
+  return row.identifier.slice(INVITE_IDENTIFIER_PREFIX.length);
 }
 
 beforeEach(async () => {
@@ -125,19 +147,19 @@ describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
     expect(captured.lines).toHaveLength(1);
     expect(captured.lines[0]).toContain('To: newbie@example.com');
     expect(captured.lines[0]).toContain("You're invited to join Acme Co. on Prodect");
-    // Plain-text body must contain the accept link unredacted (dev-console
-    // contract from 1.1.6).
+    // Plain-text body must contain the accept link unredacted
+    // (dev-console contract from 1.1.6).
     expect(captured.lines[0]).toMatch(/Accept invite: https?:\/\/[^\s]+\/invite\/accept\?token=/);
   });
 
   it('returns 422 ALREADY_MEMBER when target email is already in the workspace', async () => {
     const { user, workspace } = await makeInviter();
-    const teammate = await createUser({
+    const teammate = await usersService.createUser({
       email: 'teammate@example.com',
       password: 'hunter2hunter2',
       name: 'Teammate',
     });
-    await addMember({ userId: teammate.id, workspaceId: workspace.id });
+    await workspacesService.addMember({ userId: teammate.id, workspaceId: workspace.id });
     mockSession.current = { user: { id: user.id, email: user.email, name: user.name } };
 
     const res = await postInvite(workspace.id, { email: 'teammate@example.com' });
@@ -154,7 +176,7 @@ describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
 
   it('returns 403 NOT_A_MEMBER when requester is not in the workspace', async () => {
     const { workspace } = await makeInviter();
-    const outsider = await createUser({
+    const outsider = await usersService.createUser({
       email: 'outsider@example.com',
       password: 'hunter2hunter2',
       name: 'Outsider',
@@ -199,15 +221,14 @@ describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
 describe('POST /api/invites/[token]/accept', () => {
   it('happy path: matching email → creates membership and consumes token', async () => {
     const { user: inviter, workspace } = await makeInviter();
-    const invitee = await createUser({
+    const invitee = await usersService.createUser({
       email: 'invitee@example.com',
       password: 'hunter2hunter2',
       name: 'Invitee',
     });
-    const token = await createInviteToken({
+    const token = await createInvite({
       workspaceId: workspace.id,
       email: invitee.email,
-      role: 'member',
       inviterUserId: inviter.id,
     });
 
@@ -218,9 +239,7 @@ describe('POST /api/invites/[token]/accept', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ workspaceId: workspace.id });
 
-    const membership = await db.workspaceMembership.findUnique({
-      where: { userId_workspaceId: { userId: invitee.id, workspaceId: workspace.id } },
-    });
+    const membership = await workspacesService.findMembership(invitee.id, workspace.id);
     expect(membership).not.toBeNull();
 
     const remaining = await db.verification.count({
@@ -231,15 +250,14 @@ describe('POST /api/invites/[token]/accept', () => {
 
   it('returns 403 INVITE_EMAIL_MISMATCH and preserves the token when email differs', async () => {
     const { user: inviter, workspace } = await makeInviter();
-    const wrong = await createUser({
+    const wrong = await usersService.createUser({
       email: 'wrong@example.com',
       password: 'hunter2hunter2',
       name: 'Wrong',
     });
-    const token = await createInviteToken({
+    const token = await createInvite({
       workspaceId: workspace.id,
       email: 'target@example.com',
-      role: 'member',
       inviterUserId: inviter.id,
     });
 
@@ -249,26 +267,23 @@ describe('POST /api/invites/[token]/accept', () => {
     expect((await res.json()).code).toBe('INVITE_EMAIL_MISMATCH');
 
     // Token survives — they can sign in with the right email and retry.
-    const stillThere = await readInviteToken(token);
+    const stillThere = await workspaceInvitesService.validateInvite(token);
     expect(stillThere).not.toBeNull();
     // No membership was created.
-    const memberships = await db.workspaceMembership.count({
-      where: { userId: wrong.id, workspaceId: workspace.id },
-    });
-    expect(memberships).toBe(0);
+    const memberships = await workspacesService.findMembership(wrong.id, workspace.id);
+    expect(memberships).toBeNull();
   });
 
   it('returns 404 INVITE_EXPIRED_OR_MISSING when the token is expired', async () => {
     const { user: inviter, workspace } = await makeInviter();
-    const invitee = await createUser({
+    const invitee = await usersService.createUser({
       email: 'late@example.com',
       password: 'hunter2hunter2',
       name: 'Late',
     });
-    const token = await createInviteToken({
+    const token = await createInvite({
       workspaceId: workspace.id,
       email: invitee.email,
-      role: 'member',
       inviterUserId: inviter.id,
     });
     // Backdate the row's expiresAt to simulate "clicked after 7 days".
@@ -287,15 +302,14 @@ describe('POST /api/invites/[token]/accept', () => {
 
   it('single-use: a second accept with the same token returns 404 (token consumed)', async () => {
     const { user: inviter, workspace } = await makeInviter();
-    const invitee = await createUser({
+    const invitee = await usersService.createUser({
       email: 'twice@example.com',
       password: 'hunter2hunter2',
       name: 'Twice',
     });
-    const token = await createInviteToken({
+    const token = await createInvite({
       workspaceId: workspace.id,
       email: invitee.email,
-      role: 'member',
       inviterUserId: inviter.id,
     });
     mockSession.current = {
@@ -314,10 +328,9 @@ describe('POST /api/invites/[token]/accept', () => {
 describe('GET /api/invites/[token] — validate', () => {
   it('returns { workspaceName, inviterName, email } for a live token', async () => {
     const { user: inviter, workspace } = await makeInviter('boss@example.com', 'Ben Liu');
-    const token = await createInviteToken({
+    const token = await createInvite({
       workspaceId: workspace.id,
       email: 'newbie@example.com',
-      role: 'member',
       inviterUserId: inviter.id,
     });
 

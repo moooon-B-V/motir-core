@@ -1,7 +1,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
-import { createUser, verifyPassword } from '@/lib/users/repo';
+import { usersService } from '@/lib/services/usersService';
+const { createUser, verifyPassword } = usersService;
 import { truncateAuthTables } from './helpers/db';
 
 // Integration tests for Better-Auth's password-reset flow against a real
