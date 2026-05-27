@@ -4,6 +4,7 @@ import { nextCookies } from 'better-auth/next-js';
 import { headers } from 'next/headers';
 import { db } from '@/lib/db';
 import { sendEmail } from '@/lib/email';
+import { passwordResetEmail } from '@/lib/emailTemplates/passwordReset';
 import { hash, verify } from './passwords';
 
 // Better-Auth instance. Persistence is Postgres via Prisma; password hashing
@@ -99,34 +100,17 @@ export const auth = betterAuth({
     // is visible in code review and so a future framework default change
     // can't silently widen our reset-token window.
     resetPasswordTokenExpiresIn: 3600,
-    // Called by Better-Auth when /api/auth/request-password-reset succeeds.
-    // `url` is the canonical link to land the user on the new-password page;
-    // its `token` query param is the single-use reset token (also passed as
-    // a separate arg so callers don't have to parse the URL).
+    // Called by Better-Auth when /api/auth/request-password-reset
+    // succeeds. `url` is the canonical link to land the user on the
+    // new-password page; its `token` query param is the single-use
+    // reset token. Body lives in lib/emailTemplates/passwordReset.tsx
+    // — per CLAUDE.md, no email body strings live in the wiring layer.
     sendResetPassword: async ({ user, url }) => {
-      await sendEmail({
-        to: user.email,
-        subject: 'Reset your Prodect password',
-        text: [
-          `Hi ${user.name || ''},`,
-          '',
-          'We received a request to reset your Prodect password.',
-          '',
-          `Reset link: ${url}`,
-          '',
-          'This link expires in 1 hour. If you didn’t request this, you can ignore this email.',
-          '',
-          '— Prodect',
-        ].join('\n'),
-        html: [
-          '<p>Hi ' + (user.name || '') + ',</p>',
-          '<p>We received a request to reset your Prodect password.</p>',
-          `<p><a href="${url}">Reset your password</a></p>`,
-          `<p>Or copy this link into your browser:<br><code>${url}</code></p>`,
-          '<p>This link expires in 1 hour. If you didn’t request this, you can ignore this email.</p>',
-          '<p>— Prodect</p>',
-        ].join('\n'),
+      const rendered = await passwordResetEmail({
+        recipientName: user.name || 'there',
+        resetUrl: url,
       });
+      await sendEmail({ to: user.email, ...rendered });
     },
   },
 

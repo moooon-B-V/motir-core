@@ -39,6 +39,8 @@
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-toast": "^1.2.15",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.0.8",
     "argon2": "^0.44.0",
     "better-auth": "^1.6.11",
     "class-variance-authority": "^0.7.1",

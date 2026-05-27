@@ -1,15 +1,17 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
-import { createUser } from '@/lib/users/repo';
-import {
-  addMember,
-  createWorkspace,
-  findMembership,
-  findUserWorkspaces,
-  removeMember,
-} from '@/lib/workspaces/repo';
+import { usersService } from '@/lib/services/usersService';
+import { workspacesService } from '@/lib/services/workspacesService';
 import { AlreadyMemberError } from '@/lib/workspaces/errors';
 import { truncateAuthTables } from './helpers/db';
+
+// Service-layer tests for the Workspace + WorkspaceMembership
+// entities. Mirrors the layer split in CLAUDE.md.
+const { createUser } = usersService;
+const { addMember, createWorkspace, findMembership, listUserWorkspaces, removeMember } =
+  workspacesService;
+// Old name preserved so the test bodies don't need to change.
+const findUserWorkspaces = listUserWorkspaces;
 
 beforeEach(async () => {
   await truncateAuthTables();

@@ -6,6 +6,7 @@ import type {
   SendInviteResultDTO,
   ValidateInviteResultDTO,
 } from '@/lib/dto/invites';
+import { workspaceInviteEmail } from '@/lib/emailTemplates/workspaceInvite';
 import { toValidateInviteResultDTO } from '@/lib/mappers/inviteMappers';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { verificationRepository } from '@/lib/repositories/verificationRepository';
@@ -95,57 +96,21 @@ function buildInviteAcceptUrl(token: string): string {
   return `${base}/invite/accept?token=${encodeURIComponent(token)}`;
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 async function sendInviteEmailInternal(args: {
   inviterName: string;
   workspaceName: string;
   recipientEmail: string;
   token: string;
 }): Promise<void> {
-  const url = buildInviteAcceptUrl(args.token);
-  const subject = `You're invited to join ${args.workspaceName} on Prodect`;
-
-  // Plain-text body — link MUST appear unredacted so dev-console
-  // capture (mirroring 1.1.6's password-reset email contract) works
-  // in tests.
-  const text = [
-    'Hi,',
-    '',
-    `${args.inviterName} invited you to join ${args.workspaceName} on Prodect.`,
-    '',
-    `Accept invite: ${url}`,
-    '',
-    'This invite expires in 7 days.',
-    '',
-    `Don't know ${args.inviterName}? You can safely ignore this email.`,
-    '',
-    '— Prodect',
-  ].join('\n');
-
-  // HTML body — matches design/workspaces/invite-email-html.png.
-  const html = [
-    '<div style="font-family: -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px;">',
-    '  <p style="color: #6b7280; font-size: 14px; margin: 0 0 24px;">Prodect</p>',
-    '  <p style="font-size: 16px; margin: 0 0 16px;">Hi,</p>',
-    `  <p style="font-size: 16px; margin: 0 0 24px;">${escapeHtml(args.inviterName)} invited you to join ${escapeHtml(args.workspaceName)} on Prodect.</p>`,
-    `  <p style="margin: 0 0 24px;"><a href="${url}" style="display: block; background: #4f46e5; color: #ffffff; font-weight: 600; text-decoration: none; padding: 14px 20px; border-radius: 8px; text-align: center;">Accept invite</a></p>`,
-    '  <p style="color: #6b7280; font-size: 14px; margin: 0 0 8px;">Or copy this link into your browser:</p>',
-    `  <p style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; margin: 0 0 24px;"><a href="${url}" style="color: #2563eb; word-break: break-all;">${url}</a></p>`,
-    '  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />',
-    '  <p style="color: #6b7280; font-size: 14px; margin: 0 0 8px;">This invite expires in 7 days.</p>',
-    `  <p style="color: #6b7280; font-size: 14px; margin: 0;">Don't know ${escapeHtml(args.inviterName)}? You can safely ignore this email.</p>`,
-    '</div>',
-  ].join('\n');
-
-  await sendEmail({ to: args.recipientEmail, subject, text, html });
+  // Template rendering lives in lib/emailTemplates/. The service only
+  // knows who to email and which template to invoke — it does not
+  // build subject/body strings itself.
+  const rendered = await workspaceInviteEmail({
+    inviterName: args.inviterName,
+    workspaceName: args.workspaceName,
+    acceptUrl: buildInviteAcceptUrl(args.token),
+  });
+  await sendEmail({ to: args.recipientEmail, ...rendered });
 }
 
 export const workspaceInvitesService = {

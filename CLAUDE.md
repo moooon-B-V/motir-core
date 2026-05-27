@@ -200,6 +200,141 @@ export async function POST(_req: Request, { params }: { params: Promise<{ token:
   "the Verification row was deleted"). That's the only legitimate
   cross-layer reach.
 
+---
+
+## ⚠️ Email templates live in `lib/emailTemplates/`, NOT in service code
+
+**EXTREMELY IMPORTANT: No service file, no route handler, and no
+auth-wiring file may contain hand-written subject lines, HTML strings,
+or plain-text bodies for outgoing emails. Every transactional email is
+a typed render function in `lib/emailTemplates/`. Services compose the
+inputs and dispatch; templates render.**
+
+### Layer
+
+```
+lib/emailTemplates/
+  _components/                   shared React Email building blocks
+    EmailLayout.tsx              outer chrome (header, footer, sign-off)
+    PrimaryButton.tsx            CTA button
+  types.ts                       RenderedEmail = { subject, text, html }
+  workspaceInvite.tsx            export async function workspaceInviteEmail(props): Promise<RenderedEmail>
+  passwordReset.tsx              export async function passwordResetEmail(props): Promise<RenderedEmail>
+  <other templates>.tsx          one .tsx per template
+```
+
+### Template contract
+
+- Each template file exports an **async function** of the form
+  `async function fooEmail(props: FooEmailProps): Promise<RenderedEmail>`.
+- The function returns `{ subject, text, html }`. The service then
+  spreads it into `sendEmail({ to, ...rendered })`.
+- HTML is rendered from a React component via `@react-email/render`'s
+  `render(<Email />)`.
+- **Plain text is hand-written per template, not auto-derived.** This
+  preserves the dev-console provider's "link unredacted in plain text"
+  contract from Subtask 1.1.6 — auto-derivation strips the URL into
+  inline-text form (`label (url)`), which makes greppable assertions
+  more brittle.
+- Templates are PURE: no `sendEmail` import, no `db` import, no
+  `process.env` lookups, no token generation. All inputs come in as
+  typed props. This makes them snapshot-testable in isolation and
+  preview-renderable via `react-email dev` when we wire that up.
+- Shared chrome (the "Prodect" header, the "— Prodect" sign-off, the
+  CTA button) belongs in `_components/` so layout changes happen once.
+- The template file ALSO has a default export of the underlying React
+  component. That's required for the `react-email dev` preview server
+  (when we add it later) — it discovers templates by default export.
+
+### Example
+
+```tsx
+// lib/emailTemplates/workspaceInvite.tsx ─────── template (pure, no I/O)
+import { render } from '@react-email/render';
+import { EmailLayout } from './_components/EmailLayout';
+import { PrimaryButton } from './_components/PrimaryButton';
+import type { RenderedEmail } from './types';
+
+export interface WorkspaceInviteEmailProps {
+  inviterName: string;
+  workspaceName: string;
+  acceptUrl: string;
+}
+
+function WorkspaceInviteEmail(p: WorkspaceInviteEmailProps) {
+  return (
+    <EmailLayout preview={`${p.inviterName} invited you to join ${p.workspaceName}`}>
+      <Text>Hi,</Text>
+      <Text>{p.inviterName} invited you to join {p.workspaceName} on Prodect.</Text>
+      <PrimaryButton href={p.acceptUrl} label="Accept invite" />
+    </EmailLayout>
+  );
+}
+
+export async function workspaceInviteEmail(
+  props: WorkspaceInviteEmailProps,
+): Promise<RenderedEmail> {
+  const html = await render(<WorkspaceInviteEmail {...props} />);
+  return {
+    subject: `You're invited to join ${props.workspaceName} on Prodect`,
+    text: buildPlainText(props),
+    html,
+  };
+}
+
+function buildPlainText(p: WorkspaceInviteEmailProps): string {
+  return [...].join('\n'); // hand-written, link unredacted
+}
+
+export default WorkspaceInviteEmail;
+
+// lib/services/workspaceInvitesService.ts ──────── service: compose + dispatch
+import { workspaceInviteEmail } from '@/lib/emailTemplates/workspaceInvite';
+import { sendEmail } from '@/lib/email';
+
+async function dispatch(args: { inviterName: string; workspaceName: string; acceptUrl: string; to: string }) {
+  const rendered = await workspaceInviteEmail({
+    inviterName: args.inviterName,
+    workspaceName: args.workspaceName,
+    acceptUrl: args.acceptUrl,
+  });
+  await sendEmail({ to: args.to, ...rendered });
+}
+```
+
+### Do / Don't
+
+- ✅ Adding a new transactional email → new `lib/emailTemplates/<name>.tsx`
+  exporting both the React component (default) and the `<name>Email()`
+  render function (named)
+- ✅ Reusing chrome → import `EmailLayout` / `PrimaryButton` from
+  `_components/`
+- ✅ Hand-writing the plain-text body in the template — keeps the
+  `[EMAIL]`-line-grep contract intact for the dev-console provider
+- ❌ A new email body composed via template literals inside a service
+  or route file — extract to a template first
+- ❌ Calling `sendEmail` from inside a template — templates are pure,
+  the service dispatches
+- ❌ Reading `process.env` or DB inside a template — pass everything in
+  as props (e.g., the service builds `acceptUrl` from
+  `BETTER_AUTH_URL` + token and hands the finished URL to the template)
+- ❌ Putting auto-derived plain text (`{ plainText: true }`) into
+  production — the dev-console contract requires the URL to appear
+  verbatim, not as `label (url)`
+
+### Why
+
+Email bodies are content, not logic. They change for design reasons
+(brand refresh, copy tweaks, locale support) while the dispatch flow
+stays the same. Separating them means:
+
+- Designers can edit templates without touching service code
+- Snapshot tests catch unintended copy / markup drift
+- Templates become previewable via `react-email dev` (planned for a
+  future Subtask)
+- The dispatch policy (rate limit, recipient resolution, BCC) stays
+  centralized in services instead of sprinkling across N templates
+
 ### Why this matters
 
 The 4-layer split exists for three reasons:
