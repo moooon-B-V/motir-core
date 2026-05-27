@@ -4,6 +4,17 @@
 // adapter-wired in this Subtask via @better-auth/prisma-adapter) consumes
 // these as its persistence layer.
 //
+// Subtask 1.2.2 adds the workspaces layer (Workspace + WorkspaceMembership).
+// Workspaces are the tenant boundary: every workspace-scoped table in later
+// Stories (projects, work items, …) carries a non-null workspaceId FK with
+// onDelete: Cascade. The WorkspaceMembership join table lets a single User
+// belong to one-or-more workspaces (durable B2B SaaS shape — Linear/Notion/
+// GitHub all use the same pattern; the single-FK shortcut is forbidden per
+// notes.html mistake #28). The role column ships with a 'member' default —
+// a single role in v1, but the column exists durably so future RBAC lands
+// without a schema migration. RLS policies + the workspace-context middle-
+// ware are Subtask 1.2.3's territory; this Subtask is schema only.
+//
 // Field naming follows Better-Auth's adapter conventions so the adapter
 // requires zero custom field mapping. Concretely that means:
 //   - User.emailVerified is Boolean, not "emailVerifiedAt: DateTime?"
@@ -50,8 +61,9 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  accounts Account[]
-  sessions Session[]
+  accounts             Account[]
+  sessions             Session[]
+  workspaceMemberships WorkspaceMembership[]
 
   @@map("user")
 }
@@ -116,4 +128,56 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+/// Tenant boundary. Every workspace-scoped row (projects, work items, …)
+/// FKs against Workspace.id with onDelete: Cascade. The slug column is a
+/// URL-safe handle; it's unique globally (not per-user) so workspace URLs
+/// are sharable. subtaskPrMergeMode is consumed by Story 1.4 + Epic 4 —
+/// see Story 1.4 § Merge modes.
+model Workspace {
+  id                 String             @id @default(cuid())
+  name               String
+  slug               String             @unique
+  subtaskPrMergeMode SubtaskPrMergeMode @default(manual)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  memberships WorkspaceMembership[]
+
+  @@map("workspace")
+}
+
+/// Join table — a user belongs to one-or-more workspaces. Cascades on both
+/// FKs: deleting a Workspace or a User removes the membership row. The
+/// (userId, workspaceId) uniqueness prevents accidental double-inserts.
+/// The role column ships with 'member' default; future RBAC reads this
+/// without a schema migration.
+model WorkspaceMembership {
+  id          String   @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        String   @default("member")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([userId])
+  @@index([workspaceId])
+  @@map("workspace_membership")
+}
+
+/// Workspace-level setting controlling whether Subtask PRs auto-merge into
+/// the Story branch. Defaults to `manual` (developer-friendly review flow).
+/// `review_on_fail` is reserved for a later Story that ships the CI-driven
+/// gate; shipping the enum value now avoids a Postgres enum ALTER later.
+enum SubtaskPrMergeMode {
+  auto
+  manual
+  review_on_fail
+
+  @@map("subtask_pr_merge_mode")
 }
