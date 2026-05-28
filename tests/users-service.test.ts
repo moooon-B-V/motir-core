@@ -1,13 +1,16 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
-import {
-  createUser,
-  findUserByEmail,
-  verifyPassword,
-  findOrCreateOAuthUser,
-} from '@/lib/users/repo';
+import { usersService } from '@/lib/services/usersService';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { DuplicateEmailError } from '@/lib/users/errors';
 import { truncateAuthTables } from './helpers/db';
+
+// Service-layer tests for the User entity. Per CLAUDE.md, business
+// logic is owned by the service; we hit usersService.* directly and
+// reach into userRepository for the "did the row actually land?"
+// assertions.
+const { createUser, verifyPassword, findOrCreateOAuthUser } = usersService;
+const findUserByEmail = userRepository.findByEmail.bind(userRepository);
 
 beforeEach(async () => {
   await truncateAuthTables();

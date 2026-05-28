@@ -1,8 +1,10 @@
 import { Prisma } from '@prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
-import { createUser } from '@/lib/users/repo';
-import { createWorkspace, addMember } from '@/lib/workspaces/repo';
+import { usersService } from '@/lib/services/usersService';
+import { workspacesService } from '@/lib/services/workspacesService';
+const { createUser } = usersService;
+const { createWorkspace, addMember } = workspacesService;
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { truncateAuthTables } from './helpers/db';
 
