@@ -67,6 +67,24 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
   const sessionCookie = cookiesAfterSignUp.find((c) => c.name.startsWith('better-auth.session'));
   expect(sessionCookie, 'Better-Auth session cookie should be set').toBeDefined();
 
+  // --- Step c2 (Subtask 1.2.4): the auto-create-on-signup hook should have
+  // landed a default workspace. GET /api/workspaces/current (with the
+  // session cookie the browser context already holds) returns it.
+  const currentRes = await page.request.get('/api/workspaces/current');
+  expect(currentRes.ok(), 'GET /api/workspaces/current should be 200').toBe(true);
+  const current = (await currentRes.json()) as {
+    workspace: { id: string; name: string; slug: string };
+    membership: { role: string; userId: string; workspaceId: string };
+  };
+  // The sign-up page sends name = email.split('@')[0] (see
+  // app/(auth)/sign-up/page.tsx), so the auto-created workspace is named
+  // "{local-part}'s Workspace".
+  const localPart = TEST_EMAIL.split('@')[0]!;
+  expect(current.workspace.name).toBe(`${localPart}'s Workspace`);
+  expect(current.workspace.id).toBeTruthy();
+  expect(current.membership.role).toBe('member');
+  expect(current.membership.workspaceId).toBe(current.workspace.id);
+
   // --- Step d: sign out via the form on the dashboard.
   await signOut(page);
   // Hitting /dashboard again should now bounce to /sign-in (middleware).

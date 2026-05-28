@@ -1,12 +1,12 @@
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { workspacesService } from '@/lib/services/workspacesService';
 import type { WorkspaceContext } from './context';
 
 // Workspace-context resolution. Given a Better-Auth session and an
 // optional cookie hint, decide which workspace the request acts within.
-// Returns null when there is no session, or when the user has no
-// memberships (cold-start before the 1.2.4 signup hook lands an initial
-// workspace).
+// Returns null only when there is no session — a signed-in user with zero
+// memberships is SELF-HEALED here (Subtask 1.2.4) rather than stranded.
 //
 // Resolution order:
 //   1. session.user.id is present (no session → null).
@@ -14,7 +14,10 @@ import type { WorkspaceContext } from './context';
 //      that workspace → use it.
 //   3. Otherwise fall back to the user's first membership ordered by
 //      createdAt asc (the auto-created default from 1.2.4 lands first).
-//   4. Zero memberships → null.
+//   4. Zero memberships → call workspacesService.ensureDefaultWorkspace to
+//      backfill the default workspace (the best-effort signup hook in
+//      lib/auth/index.ts is not atomic with the user insert, so this is
+//      the correctness backstop) and use the workspace it returns.
 //
 // Two surfaces share this logic:
 //   - resolveWorkspaceContext(request) — for route handlers / Next.js
@@ -29,15 +32,20 @@ export const WORKSPACE_COOKIE_NAME = 'workspace_id';
  * Find the workspaceId of the user's first-membership workspace, or
  * verify the cookie-provided workspaceId is one the user belongs to.
  * Opens a transaction with `app.user_id` bound so the read respects RLS
- * even when the connection role is not a superuser. Returns null if
- * the user has no membership in the indicated workspace AND no other
- * workspaces.
+ * even when the connection role is not a superuser.
+ *
+ * When the user has zero memberships, falls back to
+ * workspacesService.ensureDefaultWorkspace (the lazy self-heal) so a
+ * freshly-signed-up user is never stranded without a workspace.
+ * `userName` seeds the default workspace name; when absent (no session
+ * object on hand) we read it off the user row before backfilling.
  */
 async function resolveFromUserAndCookie(
   userId: string,
   cookieWorkspaceId: string | null,
+  userName?: string,
 ): Promise<string | null> {
-  return db.$transaction(async (tx) => {
+  const existing = await db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('app.user_id', ${userId}, true)`;
 
     if (cookieWorkspaceId) {
@@ -54,6 +62,15 @@ async function resolveFromUserAndCookie(
     });
     return first?.workspaceId ?? null;
   });
+
+  if (existing) return existing;
+
+  // Zero memberships → self-heal. ensureDefaultWorkspace owns its own
+  // transaction (and a FOR UPDATE lock on the user row), so it stays
+  // outside the read transaction above. Idempotent + concurrency-safe.
+  const name = userName ?? (await db.user.findUnique({ where: { id: userId } }))?.name ?? 'My';
+  const { workspace } = await workspacesService.ensureDefaultWorkspace({ userId, userName: name });
+  return workspace.id;
 }
 
 function parseCookieHeader(header: string | null, name: string): string | null {
@@ -82,7 +99,7 @@ export async function resolveWorkspaceContext(request: Request): Promise<Workspa
   const userId = session.user.id;
   const cookieWorkspaceId = parseCookieHeader(request.headers.get('cookie'), WORKSPACE_COOKIE_NAME);
 
-  const workspaceId = await resolveFromUserAndCookie(userId, cookieWorkspaceId);
+  const workspaceId = await resolveFromUserAndCookie(userId, cookieWorkspaceId, session.user.name);
   if (!workspaceId) return null;
   return { userId, workspaceId };
 }

@@ -30,6 +30,49 @@ export const workspaceMembershipRepository = {
     return rows.map((r) => r.workspace);
   },
 
+  /**
+   * Count the user's memberships inside the caller's transaction. Used by
+   * ensureDefaultWorkspace as the zero-membership gate; reads inside a
+   * transaction take `tx` so the count reflects rows the same transaction
+   * (and the row lock it holds) can see.
+   */
+  async countByUser(userId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.workspaceMembership.count({ where: { userId } });
+  },
+
+  /**
+   * The user's first membership (by createdAt asc) inside the caller's
+   * transaction — the auto-created default lands first, so this returns
+   * the "active by default" workspace. Includes the workspace row so the
+   * service can build its DTO without a second round-trip.
+   */
+  async findFirstByUserWithWorkspace(
+    userId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<(WorkspaceMembership & { workspace: Workspace }) | null> {
+    return tx.workspaceMembership.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+      include: { workspace: true },
+    });
+  },
+
+  /**
+   * The user's membership in a specific workspace, with the workspace row,
+   * inside the caller's transaction. Used to resolve the active context
+   * for a cookie-pinned workspace.
+   */
+  async findByUserAndWorkspaceWithWorkspace(
+    userId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<(WorkspaceMembership & { workspace: Workspace }) | null> {
+    return tx.workspaceMembership.findUnique({
+      where: { userId_workspaceId: { userId, workspaceId } },
+      include: { workspace: true },
+    });
+  },
+
   async create(
     data: { userId: string; workspaceId: string; role: string },
     tx: Prisma.TransactionClient,

@@ -14,9 +14,10 @@ export { resolveWorkspaceContext, WORKSPACE_COOKIE_NAME } from './middleware';
  * React Server Component, Route Handler, or Server Action — the
  * workspace analogue of `getSession()` in lib/auth/index.ts.
  *
- * Returns null when there is no session or when the signed-in user has
- * no workspace memberships (the cold-start window before the 1.2.4
- * signup hook creates one).
+ * Returns null only when there is no session. A signed-in user with zero
+ * workspace memberships is self-healed by the resolver (Subtask 1.2.4):
+ * it calls workspacesService.ensureDefaultWorkspace and returns the
+ * backfilled workspace rather than stranding the user with null.
  *
  * Pair with withWorkspaceContext to actually run a tenant-scoped query:
  *
@@ -34,7 +35,7 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
   const cookieWorkspaceId = cookieStore.get(WORKSPACE_COOKIE_NAME)?.value ?? null;
 
   const userId = session.user.id;
-  const workspaceId = await resolveWorkspaceFromIds(userId, cookieWorkspaceId);
+  const workspaceId = await resolveWorkspaceFromIds(userId, cookieWorkspaceId, session.user.name);
   if (!workspaceId) return null;
   return { userId, workspaceId };
 }

@@ -5,6 +5,7 @@ import { headers } from 'next/headers';
 import { db } from '@/lib/db';
 import { sendEmail } from '@/lib/email';
 import { passwordResetEmail } from '@/lib/emailTemplates/passwordReset';
+import { workspacesService } from '@/lib/services/workspacesService';
 import { hash, verify } from './passwords';
 
 // Better-Auth instance. Persistence is Postgres via Prisma; password hashing
@@ -190,6 +191,50 @@ export const auth = betterAuth({
           httpOnly: true,
           sameSite: 'lax',
           secure: process.env['NODE_ENV'] === 'production',
+        },
+      },
+    },
+  },
+
+  // Auto-create a default workspace whenever Better-Auth creates a User
+  // (Subtask 1.2.4). This fires for BOTH signup paths that create a user:
+  // email/password sign-up and Google new-user sign-up. The Google
+  // *linking* path (an email-first user later signing in with Google) does
+  // NOT create a user row, so this hook correctly does not fire and the
+  // pre-existing workspace is preserved.
+  //
+  // BEST-EFFORT, NOT ATOMIC. In better-auth 1.6.11 the `create.after` hook
+  // runs via queueAfterTransactionHook — i.e. AFTER the user-insert
+  // transaction has already committed (verified in
+  // better-auth/dist/db/with-hooks.mjs; the planning card claimed it was
+  // in-transaction, corrected in PRODECT_FINDINGS #6). So a throw here
+  // cannot roll back the user; it would only turn an otherwise-successful
+  // signup into a 500. We therefore swallow + log any failure. The real
+  // correctness guarantee is the lazy self-heal:
+  // workspacesService.ensureDefaultWorkspace, which the workspace-context
+  // resolver calls when it finds a signed-in user with zero memberships
+  // (lib/workspaces/middleware.ts). That backfill also future-proofs any
+  // later signup path that bypasses this hook.
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          try {
+            await workspacesService.createWorkspace({
+              name: `${user.name}'s Workspace`,
+              ownerUserId: user.id,
+            });
+          } catch (err) {
+            // Post-commit best-effort: do not rethrow (the user row is
+            // already durably committed; rethrowing only 500s the signup
+            // response). The lazy backfill recreates this on first
+            // workspace-context resolution.
+            console.error(
+              `[auth] default-workspace creation failed for user ${user.id}; ` +
+                `the lazy backfill will retry on next context resolution.`,
+              err,
+            );
+          }
         },
       },
     },

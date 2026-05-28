@@ -14,6 +14,22 @@ export const userRepository = {
     return db.user.findUnique({ where: { id } });
   },
 
+  /**
+   * Acquire a row-level lock on the user inside the caller's transaction.
+   * Used by ensureDefaultWorkspace to serialize the zero-membership
+   * check-then-create: two concurrent first-requests both lock the same
+   * user row, so the second blocks until the first commits its membership
+   * and then re-reads a non-zero count (no duplicate default workspace).
+   * Returns null when the user id doesn't exist. Read-inside-a-transaction
+   * → requires `tx` per CLAUDE.md.
+   */
+  async lockById(id: string, tx: Prisma.TransactionClient): Promise<{ id: string } | null> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "user" WHERE "id" = ${id} FOR UPDATE
+    `;
+    return rows[0] ?? null;
+  },
+
   async findByEmail(email: string): Promise<User | null> {
     return db.user.findUnique({ where: { email: normalizeEmail(email) } });
   },
