@@ -143,49 +143,58 @@ describe('createProject — identifier collision retry', () => {
   });
 });
 
-describe('createProject — slug collision behavior (Finding #15)', () => {
-  it('FAILS to retry the slug — service bumps the identifier instead because Prisma 7 reports P2002.meta.target as undefined', async () => {
-    // Documented gap (Finding #15, logged on this Subtask): the service's
-    // collisionField() reads err.meta.target to decide which of
-    // (workspaceId, slug) / (workspaceId, identifier) collided, but Prisma
-    // 7 returns `undefined` for meta.target on Postgres for these composite
-    // unique violations. collisionField() therefore returns null and the
-    // service falls through to its identifier-bump branch even when the
-    // actual collision is on slug. Net effect: a same-slug-different-
-    // identifier second insert IDs a fresh project but its slug also gets
-    // a suffix-by-accident-of-retry, OR the service fails after 5 attempts
-    // with IdentifierCollisionError if the slug keeps colliding (it does,
-    // because we never bump the slug in the retry loop). Asserting the
-    // ACTUAL shipped behavior here, not the intent.
+describe('createProject — slug collision recovery (regression guard for Finding #15)', () => {
+  it('recovers from a slug collision by suffixing both the slug and the identifier', async () => {
+    // Regression guard for PRODECT_FINDINGS #15 (resolved in PR #33 commit
+    // 74714e9). Background: Prisma 7 returns `undefined` for
+    // `P2002.meta.target` against Postgres on the project table's composite
+    // unique indexes, so the original `collisionField()` helper always
+    // returned null and the slug-bump branch in createProject's retry loop
+    // was dead code — a same-slug-different-identifier second insert would
+    // loop on the same slug for all 5 attempts and throw
+    // IdentifierCollisionError. Fix: unconditionally re-suffix BOTH fields
+    // on every retry.
+    //
+    // This test pins the corrected behavior AND the documented trade-off
+    // (see createProject's docstring): the second create succeeds with the
+    // slug suffixed AND a numeric identifier suffix appended — even though
+    // the identifier didn't actually collide. That's the cost of giving up
+    // on `P2002.meta.target` and re-suffixing both fields unconditionally.
+    // Identifier suffixes are cheap and human-readable, so this is the
+    // durable shape over an unrecoverable retry loop.
     const { owner, workspace } = await makeWorkspace('owner@example.com', 'Acme');
 
-    await projectsService.createProject({
+    const first = await projectsService.createProject({
       workspaceId: workspace.id,
       actorUserId: owner.id,
       name: 'Alpha',
       identifier: 'ONE',
     });
+    expect(first.slug).toBe('alpha');
+    expect(first.identifier).toBe('ONE');
 
     // Same slug ("alpha") + distinct identifier ("TWO") → identifier doesn't
-    // collide, slug does. The retry-loop never bumps slug, so all 5 attempts
-    // hit the same slug collision, and we get IdentifierCollisionError
-    // carrying the LAST attempted identifier suffix.
-    await expect(
-      projectsService.createProject({
-        workspaceId: workspace.id,
-        actorUserId: owner.id,
-        name: 'Alpha',
-        identifier: 'TWO',
-      }),
-    ).rejects.toMatchObject({ code: 'IDENTIFIER_COLLISION' });
+    // collide, slug does. Pre-fix this hit IdentifierCollisionError on
+    // attempt 5; post-fix the first retry succeeds with both fields bumped.
+    const second = await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'Alpha',
+      identifier: 'TWO',
+    });
+    // Identifier base "TWO" with a numeric suffix from the retry counter
+    // (attempt + 1). The exact suffix value depends on how many retries the
+    // loop runs; in this scenario it succeeds on the first retry → "TWO1".
+    expect(second.identifier).toMatch(/^TWO\d+$/);
+    expect(second.slug).not.toBe('alpha');
+    expect(second.slug).toMatch(/^alpha-[a-z0-9]{4}$/);
+    expect(second.id).not.toBe(first.id);
   });
 
-  it('a single uncontested create still slug-suffixes a name that produces an already-taken slug when the identifier is also unique — n/a in current impl', async () => {
-    // Sanity check: if Prisma DID report meta.target correctly, the slug
-    // branch would suffix the slug. With Prisma 7 returning undefined, the
-    // service's slug branch is dead code. We capture this as part of the
-    // same finding by simply asserting that a non-colliding create works
-    // and that the slug it emits matches the deterministic shape.
+  it('emits a deterministic slug for a non-colliding name', async () => {
+    // Sanity check that uncontested slug derivation still produces the
+    // documented deterministic shape. Sits in this describe block as a
+    // companion to the regression-guard above.
     const { owner, workspace } = await makeWorkspace('owner@example.com', 'Acme');
     const p = await projectsService.createProject({
       workspaceId: workspace.id,
