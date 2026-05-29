@@ -55,7 +55,16 @@ export async function POST(req: Request, { params }: RouteParams): Promise<Respo
       return NextResponse.json({ error: err.message, code: err.code }, { status: 400 });
     }
     if (err instanceof NotAMemberError) {
-      return NextResponse.json({ error: err.message, code: err.code }, { status: 403 });
+      // Cross-tenant access must NOT leak that this workspace exists. A 403
+      // ("you're not a member") confirms the workspace is real; a 404
+      // ("no such workspace") is indistinguishable from an id that never
+      // existed, so an attacker probing for workspace ids learns nothing.
+      // The 404 body mirrors the not-found shape used by
+      // app/api/invites/[token]/route.ts so 404 responses stay consistent.
+      return NextResponse.json(
+        { error: 'Workspace not found', code: 'NOT_FOUND' },
+        { status: 404 },
+      );
     }
     if (err instanceof InviteTargetAlreadyMemberError) {
       return NextResponse.json({ error: err.message, code: err.code }, { status: 422 });

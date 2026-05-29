@@ -174,7 +174,11 @@ describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
     expect(captured.lines).toHaveLength(0);
   });
 
-  it('returns 403 NOT_A_MEMBER when requester is not in the workspace', async () => {
+  it('returns 404 NOT_FOUND when requester is not in the workspace (anti-enumeration)', async () => {
+    // Subtask 1.2.7: cross-tenant invite attempts must NOT return 403. A 403
+    // ("you're not a member") confirms the workspace exists; the route now
+    // maps NotAMemberError → 404 so a probing attacker can't distinguish a
+    // real-but-foreign workspace id from one that never existed.
     const { workspace } = await makeInviter();
     const outsider = await usersService.createUser({
       email: 'outsider@example.com',
@@ -186,9 +190,9 @@ describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
     };
 
     const res = await postInvite(workspace.id, { email: 'newbie@example.com' });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
     const body = await res.json();
-    expect(body.code).toBe('NOT_A_MEMBER');
+    expect(body.code).toBe('NOT_FOUND');
 
     const rows = await db.verification.count({
       where: { identifier: { startsWith: INVITE_IDENTIFIER_PREFIX } },
