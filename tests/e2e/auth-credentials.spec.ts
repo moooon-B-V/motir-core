@@ -20,6 +20,27 @@ async function signOut(page: Page): Promise<void> {
   await page.context().clearCookies();
 }
 
+// Assert the user is signed in as `email` by opening the top-nav Account
+// menu (the only post-1.3.4 dashboard surface that renders the session
+// email predictably). Closes the popover afterwards so subsequent
+// interactions aren't shadowed by the open panel. See Finding #17 for
+// the rationale on why this replaced the prior <strong>{email}</strong>
+// assertion against the (now-removed) session-debug dump.
+async function assertSignedInAs(page: Page, email: string): Promise<void> {
+  const accountMenuTrigger = page.getByRole('button', { name: 'Account menu' });
+  await expect(accountMenuTrigger).toBeVisible();
+  await accountMenuTrigger.click();
+  // The popover header renders the email when a name is also present;
+  // when name is empty it renders just the email. Either way, the
+  // popover panel contains the email string. Scope to the open Radix
+  // popover panel to avoid matching the email in any other surface.
+  const accountPopover = page.locator('[data-state=open]').filter({ hasText: 'Sign out' });
+  await expect(accountPopover).toContainText(email);
+  // Close the popover so subsequent clicks aren't intercepted.
+  await page.keyboard.press('Escape');
+  await expect(accountPopover).not.toBeVisible();
+}
+
 // Each spec gets its own deterministic email so a previous failed run's
 // stale rows don't interfere with re-runs even if `resetDatabase()`
 // somehow missed a table. The leading `e2e-cred-` prefix makes greppable
@@ -56,11 +77,15 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
 
   await page.waitForURL('**/dashboard');
-  // The smoke dashboard renders "Signed in as <email>" in its body.
-  // Match the <strong> in "Signed in as <strong>{email}</strong>" — the
-  // dashboard also dumps the full session JSON, which contains the email
-  // a second time, so a non-exact getByText resolves to two elements.
-  await expect(page.locator('strong').getByText(TEST_EMAIL)).toBeVisible();
+  // Confirm the session bound by opening the top-nav Account menu and
+  // checking the rendered email. The old assertion targeted a
+  // `<strong>{email}</strong>` debug dump on the dashboard that
+  // Subtask 1.3.4 deleted when it replaced the dashboard wholesale with
+  // the projects UI (Finding #17). The Account-menu popover is the
+  // durable equivalent — it only renders inside the authed layout, so
+  // a visible+email-bearing popover proves both the session cookie and
+  // the authed-layout's session resolver are working.
+  await assertSignedInAs(page, TEST_EMAIL);
 
   // Session cookie should be set on the response.
   const cookiesAfterSignUp = await page.context().cookies();
@@ -98,10 +123,9 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
   await page.getByPlaceholder('Password').fill(ORIGINAL_PASSWORD);
   await page.getByRole('button', { name: /^(Continue|Signing in…)$/ }).click();
   await page.waitForURL('**/dashboard');
-  // Match the <strong> in "Signed in as <strong>{email}</strong>" — the
-  // dashboard also dumps the full session JSON, which contains the email
-  // a second time, so a non-exact getByText resolves to two elements.
-  await expect(page.locator('strong').getByText(TEST_EMAIL)).toBeVisible();
+  // See assertSignedInAs docstring (Finding #17) — same re-anchor onto
+  // the Account-menu popover as the post-sign-up assertion above.
+  await assertSignedInAs(page, TEST_EMAIL);
 
   // --- Step f: click "Forgot password?" → land on /reset-password.
   // Sign out first so we're not authenticated when hitting the reset flow.

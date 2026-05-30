@@ -43,6 +43,20 @@ async function signOut(page: Page): Promise<void> {
   await page.context().clearCookies();
 }
 
+// See auth-credentials.spec.ts for the rationale (Finding #17). The
+// post-1.3.4 dashboard no longer renders the `<strong>{email}</strong>`
+// session-debug dump; the top-nav Account menu popover is the durable
+// equivalent for proving "I'm signed in as this email."
+async function assertSignedInAs(page: Page, email: string): Promise<void> {
+  const accountMenuTrigger = page.getByRole('button', { name: 'Account menu' });
+  await expect(accountMenuTrigger).toBeVisible();
+  await accountMenuTrigger.click();
+  const accountPopover = page.locator('[data-state=open]').filter({ hasText: 'Sign out' });
+  await expect(accountPopover).toContainText(email);
+  await page.keyboard.press('Escape');
+  await expect(accountPopover).not.toBeVisible();
+}
+
 const TEST_USER_PATH =
   process.env['E2E_TEST_OAUTH_USER_PATH'] ?? '/tmp/prodect-test-oauth-user.json';
 
@@ -107,7 +121,7 @@ test('@smoke Google OAuth happy path + email-first auto-link', async ({ page }) 
   await page.goto('/sign-up');
   await page.getByRole('button', { name: /^(Continue with Google|Connecting…)$/ }).click();
   await page.waitForURL('**/dashboard', { timeout: 15_000 });
-  await expect(page.locator('strong').getByText(GOOGLE_USER_EMAIL)).toBeVisible();
+  await assertSignedInAs(page, GOOGLE_USER_EMAIL);
 
   // Exactly one user row + one google account row in the DB.
   const usersAfterFirst = await db.user.findMany({
@@ -125,7 +139,7 @@ test('@smoke Google OAuth happy path + email-first auto-link', async ({ page }) 
   await page.goto('/sign-in');
   await page.getByRole('button', { name: /^(Continue with Google|Connecting…)$/ }).click();
   await page.waitForURL('**/dashboard', { timeout: 15_000 });
-  await expect(page.locator('strong').getByText(GOOGLE_USER_EMAIL)).toBeVisible();
+  await assertSignedInAs(page, GOOGLE_USER_EMAIL);
 
   const usersAfterSecond = await db.user.findMany({
     where: { email: GOOGLE_USER_EMAIL },
@@ -200,7 +214,7 @@ test('@smoke Google OAuth happy path + email-first auto-link', async ({ page }) 
   await page.goto('/sign-in');
   await page.getByRole('button', { name: /^(Continue with Google|Connecting…)$/ }).click();
   await page.waitForURL('**/dashboard', { timeout: 15_000 });
-  await expect(page.locator('strong').getByText(EMAIL_FIRST_EMAIL)).toBeVisible();
+  await assertSignedInAs(page, EMAIL_FIRST_EMAIL);
 
   // DB shape after auto-link:
   //   - Still exactly one User row for this email (no duplicate signup).
