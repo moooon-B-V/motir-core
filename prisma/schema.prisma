@@ -71,6 +71,10 @@ model User {
   // it). Named relations because there are two distinct User↔WorkItem edges.
   reportedWorkItems    WorkItem[]            @relation("WorkItemReporter")
   assignedWorkItems    WorkItem[]            @relation("WorkItemAssignee")
+  // Back-relation for WorkItemLink (Subtask 1.4.3). A user creates many
+  // issue-to-issue links (createdBy — Restrict: a user with links on record
+  // cannot be hard-deleted, mirroring the reporter pattern).
+  createdWorkItemLinks WorkItemLink[]        @relation("WorkItemLinkCreatedBy")
 
   @@map("user")
 }
@@ -150,9 +154,10 @@ model Workspace {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  memberships WorkspaceMembership[]
-  projects    Project[]
-  workItems   WorkItem[]
+  memberships   WorkspaceMembership[]
+  projects      Project[]
+  workItems     WorkItem[]
+  workItemLinks WorkItemLink[]
 
   @@map("workspace")
 }
@@ -289,6 +294,11 @@ model WorkItem {
   children  WorkItem[] @relation("WorkItemParent")
   assignee  User?      @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   reporter  User       @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  // Back-relations for WorkItemLink (Subtask 1.4.3). Two named relations
+  // because there are two distinct WorkItem↔WorkItemLink edges (from/to).
+  // Cascading delete on both sides: removing an issue removes its links.
+  linksFrom WorkItemLink[] @relation("LinksFrom")
+  linksTo   WorkItemLink[] @relation("LinksTo")
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -297,6 +307,64 @@ model WorkItem {
   @@index([projectId, assigneeId])
   @@index([workspaceId])
   @@map("work_item")
+}
+
+/// Many-to-many issue-to-issue relationships (Subtask 1.4.3). Models the four
+/// link kinds Linear / Jira / GitHub all expose: `is_blocked_by` (dependency —
+/// reading the AI planner's ready-set requires indexed traversal of this
+/// table), `relates_to` (symmetric soft link), `duplicates`, `clones`.
+///
+/// Direction convention: the row reads "fromItem <kind> toItem" — so
+/// `fromItem is_blocked_by toItem` means fromItem cannot start until toItem
+/// is done. The `relates_to` reciprocal row (write A↔B → also persist B↔A) is
+/// a SERVICE-layer concern (1.4.4); this repository writes one row per call.
+///
+/// `workspaceId` is denormalized from the fromItem for RLS speed: every link
+/// query starts with a workspace gate, and pulling it from fromItem at query
+/// time would require a join. The DB-layer trigger (see
+/// prisma/sql/work_item_link_triggers.sql) keeps the denormalization honest —
+/// it rejects any insert/update where fromItem.workspaceId ≠ toItem.workspaceId
+/// (no cross-workspace links) or where NEW.workspaceId ≠ fromItem.workspaceId
+/// (catches a service-layer bug that wrote the wrong workspaceId on the row).
+///
+/// Structural triggers (see work_item_link_triggers.sql):
+///   - WI_LINK_CYCLE      — cycle prevention, scoped to `is_blocked_by` only.
+///                          (relates_to is allowed to be reciprocal/cyclic by
+///                           design — A relates_to B AND B relates_to A is the
+///                           expected steady state for the symmetric kind.)
+///   - WI_LINK_CROSS_WORKSPACE / WI_LINK_WORKSPACE_MISMATCH
+///                        — workspaceId consistency (see above).
+///   - WI_LINK_SELF       — fromId = toId rejected.
+/// The repository translates these markers into the typed errors in
+/// lib/workItems/linkErrors.ts at its edge (the 4-layer rule).
+model WorkItemLink {
+  id          String           @id @default(cuid())
+  workspaceId String
+  fromId      String
+  toId        String
+  kind        WorkItemLinkKind
+  createdById String
+  createdAt   DateTime         @default(now())
+
+  fromItem  WorkItem  @relation("LinksFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  toItem    WorkItem  @relation("LinksTo", fields: [toId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("WorkItemLinkCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([fromId, toId, kind])
+  @@index([toId, kind])
+  @@index([fromId, kind])
+  @@index([workspaceId])
+  @@map("work_item_link")
+}
+
+enum WorkItemLinkKind {
+  is_blocked_by
+  relates_to
+  duplicates
+  clones
+
+  @@map("work_item_link_kind")
 }
 
 enum WorkItemKind {
