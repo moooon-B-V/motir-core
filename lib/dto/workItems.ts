@@ -61,6 +61,75 @@ export interface WorkItemSummaryDto {
 }
 
 /**
+ * A row of the subtree projection (Subtask 1.4.4) — the wire shape of
+ * `workItemRepository.findSubtree`'s recursive-CTE result. Carries the tree
+ * wiring (parentId, position, depth) plus the row-render fields, but NOT the
+ * heavy Markdown content (a tree view never renders description/explanation
+ * inline). `depth` is 1 for the root passed in, 2 for its children, … so the
+ * client can indent without recomputing ancestry.
+ */
+export interface WorkItemSubtreeDto {
+  id: string;
+  parentId: string | null;
+  kind: WorkItemKindDto;
+  key: number;
+  identifier: string;
+  title: string;
+  status: string;
+  position: string;
+  depth: number;
+}
+
+/**
+ * Input to `workItemsService.createWorkItem` (Subtask 1.4.4). The reporter is
+ * taken from the ServiceContext (`ctx.userId`), and key / identifier /
+ * position are allocated by the service — so none of those appear here. The
+ * caller supplies the content + placement. `kind` and `projectId` are fixed
+ * at creation (both immutable thereafter). Omitted optional fields fall back
+ * to the column defaults (status='open', priority='medium',
+ * explanationSource='user_authored'). `dueDate` is an ISO-8601 string on the
+ * wire; the service converts it to a Date.
+ */
+export interface CreateWorkItemInput {
+  projectId: string;
+  parentId?: string | null;
+  kind: WorkItemKindDto;
+  title: string;
+  descriptionMd?: string | null;
+  explanationMd?: string | null;
+  explanationSource?: WorkItemExplanationSourceDto;
+  assigneeId?: string | null;
+  priority?: WorkItemPriorityDto;
+  dueDate?: string | null; // ISO 8601
+  estimateMinutes?: number | null;
+}
+
+/**
+ * Input to `workItemsService.updateWorkItem` (Subtask 1.4.4) — a sparse patch.
+ * EVERY field is optional; an absent field (`undefined`) means "leave it
+ * untouched", while an explicit `null` clears a nullable column. An empty
+ * patch is a no-op (the service returns the current DTO without writing a
+ * revision). `projectId` and `kind` are NOT here — both are immutable post-
+ * creation. `status` and `parentId` ARE patchable (a re-parent is validated
+ * for same-project + kind before the DB trigger backstops it). The
+ * explanation-source state machine: supplying `explanationMd` while the
+ * current source is `ai_draft`, WITHOUT also setting `explanationSource`,
+ * auto-transitions the source to `user_edited`.
+ */
+export interface UpdateWorkItemInput {
+  parentId?: string | null;
+  title?: string;
+  descriptionMd?: string | null;
+  explanationMd?: string | null;
+  explanationSource?: WorkItemExplanationSourceDto;
+  status?: string;
+  assigneeId?: string | null;
+  priority?: WorkItemPriorityDto;
+  dueDate?: string | null; // ISO 8601
+  estimateMinutes?: number | null;
+}
+
+/**
  * Placeholder forward-compatibility type. The work_item_revision table and
  * its mapper land in Subtask 1.4.6 (revision audit). The DTO shape is fixed
  * here now so downstream consumers (Epic 5's activity feed, Epic 7's

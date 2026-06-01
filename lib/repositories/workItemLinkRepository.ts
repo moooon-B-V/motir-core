@@ -56,6 +56,56 @@ export const workItemLinkRepository = {
   },
 
   /**
+   * Look up the single link with the exact (fromId, toId, kind) triple via
+   * the @@unique([fromId, toId, kind]) index (Subtask 1.4.4). Named
+   * "reciprocal" because its caller is the `relates_to` unlink path: given
+   * the A→B link being removed, it resolves the B→A mirror row so both
+   * halves of the symmetric pair drop together. Takes an optional `tx` so
+   * the read joins the same transaction as the deletes it gates.
+   */
+  async findReciprocal(
+    fromId: string,
+    toId: string,
+    kind: WorkItemLinkKind,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItemLink | null> {
+    const client = tx ?? db;
+    return client.workItemLink.findUnique({
+      where: { fromId_toId_kind: { fromId, toId, kind } },
+    });
+  },
+
+  /**
+   * Count the `is_blocked_by` blockers of `workItemId` that are NOT yet done
+   * — the ready-set predicate, in ONE query (Subtask 1.4.4). A work item is
+   * "ready" iff this count is 0 (every blocker reached the terminal status).
+   * The service's `isReady` delegates here rather than fetch-then-filter so
+   * Epic 7's ready-set engine can call it across many items cheaply; the raw
+   * SQL belongs at the repository edge (the 4-layer rule keeps `$queryRaw`
+   * out of the service).
+   *
+   * v1 hardcodes `'done'` as the single terminal status. Epic 2's workflow
+   * Story generalizes to a per-project terminal-status set — at which point
+   * this predicate widens to `status <> ALL(<terminal set>)`. Documented as
+   * a forward note here and in PRODECT_FINDINGS.md.
+   *
+   * A LEFT JOIN (rather than INNER) makes the intent explicit — "blockers,
+   * via the link table" — and the `b."status" <> 'done'` predicate filters
+   * the unmatched (NULL) side out either way, so an item with zero blockers
+   * correctly counts 0. Read-only → `db` singleton.
+   */
+  async countOpenBlockers(workItemId: string): Promise<number> {
+    const rows = await db.$queryRaw<Array<{ cnt: number }>>`
+      SELECT COUNT(*)::int AS cnt
+        FROM "work_item_link" l
+        LEFT JOIN "work_item" b ON b."id" = l."toId"
+       WHERE l."fromId" = ${workItemId}
+         AND l."kind" = 'is_blocked_by'::"work_item_link_kind"
+         AND b."status" <> 'done'`;
+    return Number(rows[0]?.cnt ?? 0);
+  },
+
+  /**
    * Create a link. Required `tx`. The DB triggers validate cycle /
    * self-link / workspace consistency on insert; their SQLSTATE-23514
    * rejections and a P2002 unique violation are translated to typed errors

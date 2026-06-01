@@ -1,5 +1,6 @@
 import type { WorkItem } from '@prisma/client';
-import type { WorkItemDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
+import type { WorkItemSubtreeRow } from '@/lib/repositories/workItemRepository';
+import type { WorkItemDto, WorkItemSummaryDto, WorkItemSubtreeDto } from '@/lib/dto/workItems';
 
 // Prisma → DTO converters for the work-item domain. The service calls these
 // just before returning so no Prisma row shape (Date objects, Decimal
@@ -52,5 +53,27 @@ export function toWorkItemSummaryDto(row: WorkItem): WorkItemSummaryDto {
     assigneeId: row.assigneeId,
     position: row.position,
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
+  };
+}
+
+/**
+ * Subtree-row DTO (Subtask 1.4.4). Maps the recursive-CTE projection
+ * (WorkItemSubtreeRow — already plain scalars: `kind` cast to text,
+ * `position` a text column, `depth` an int) straight through. No date
+ * normalization needed; the projection carries no Date columns. Kept
+ * separate from toWorkItemSummaryDto because the source row is the tree-walk
+ * shape, not a full WorkItem.
+ */
+export function toWorkItemSubtreeDto(row: WorkItemSubtreeRow): WorkItemSubtreeDto {
+  return {
+    id: row.id,
+    parentId: row.parentId,
+    kind: row.kind,
+    key: row.key,
+    identifier: row.identifier,
+    title: row.title,
+    status: row.status,
+    position: row.position,
+    depth: row.depth,
   };
 }

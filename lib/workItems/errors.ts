@@ -19,7 +19,10 @@ export type WorkItemErrorTag =
   | 'DEPTH_LIMIT_EXCEEDED'
   | 'PARENT_CYCLE'
   | 'WORK_ITEM_NOT_FOUND'
-  | 'KEY_CONFLICT';
+  | 'KEY_CONFLICT'
+  | 'CROSS_PROJECT_PARENT'
+  | 'REPORTER_NOT_IN_WORKSPACE'
+  | 'ASSIGNEE_NOT_IN_WORKSPACE';
 
 /**
  * Base class for every work-items typed error. Concrete subclasses set a
@@ -95,5 +98,53 @@ export class WorkItemKeyConflictError extends WorkItemError {
   constructor(message = 'A work item with this key or identifier already exists in the project.') {
     super(message);
     this.name = 'WorkItemKeyConflictError';
+  }
+}
+
+/**
+ * A parent was specified that lives in a DIFFERENT project than the child
+ * (Subtask 1.4.4). This is a service-layer pre-flight check — the work-item
+ * tree is project-local, so a cross-project parent is structurally illegal.
+ * Distinct from IllegalParentTypeError (the DB trigger's kind-matrix class):
+ * a cross-project parent might still be a kind-legal pair, so it needs its
+ * own typed error. There is no DB trigger backstop for THIS rule today (the
+ * kind/depth/cycle triggers don't compare projectId), so this assertion is
+ * the primary guard — kept friendly + explicit at the service edge.
+ */
+export class CrossProjectParentError extends WorkItemError {
+  readonly tag = 'CROSS_PROJECT_PARENT' as const;
+  readonly code = 'CROSS_PROJECT_PARENT' as const;
+  constructor(message = 'A work item parent must belong to the same project as the child.') {
+    super(message);
+    this.name = 'CrossProjectParentError';
+  }
+}
+
+/**
+ * The reporter (the acting user creating the work item) is not a member of
+ * the project's workspace (Subtask 1.4.4). A service-layer membership gate;
+ * the RLS policy landing in 1.4.5 is the structural backstop.
+ */
+export class ReporterNotInWorkspaceError extends WorkItemError {
+  readonly tag = 'REPORTER_NOT_IN_WORKSPACE' as const;
+  readonly code = 'REPORTER_NOT_IN_WORKSPACE' as const;
+  constructor(message = 'The reporter is not a member of this workspace.') {
+    super(message);
+    this.name = 'ReporterNotInWorkspaceError';
+  }
+}
+
+/**
+ * The proposed assignee is not a member of the project's workspace (Subtask
+ * 1.4.4). Guards createWorkItem / updateWorkItem / assignWorkItem — you
+ * cannot assign an issue to someone outside its tenant. Un-assigning (null
+ * assignee) skips this check.
+ */
+export class AssigneeNotInWorkspaceError extends WorkItemError {
+  readonly tag = 'ASSIGNEE_NOT_IN_WORKSPACE' as const;
+  readonly code = 'ASSIGNEE_NOT_IN_WORKSPACE' as const;
+  constructor(message = 'The assignee is not a member of this workspace.') {
+    super(message);
+    this.name = 'AssigneeNotInWorkspaceError';
   }
 }

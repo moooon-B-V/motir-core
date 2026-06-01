@@ -78,6 +78,66 @@ export const workItemRepository = {
   },
 
   /**
+   * Bulk-read work items by id in a single `IN (...)` round-trip (Subtask
+   * 1.4.4). Rows come back in Postgres' arbitrary order — service callers
+   * (`getBlockers` / `getBlocking`) re-sort if they need a specific order.
+   * This is the N+1-avoidance leg of the blocker/blocking resolution: one
+   * link-table query yields the ids, this resolves them all at once.
+   * Read-only path → `db` singleton. Empty input short-circuits to `[]` so
+   * we never issue a degenerate `IN ()`.
+   */
+  async findByIds(ids: string[]): Promise<WorkItem[]> {
+    if (ids.length === 0) return [];
+    return db.workItem.findMany({ where: { id: { in: ids } } });
+  },
+
+  /**
+   * Non-archived siblings under a parent WITHIN a project, ordered by
+   * fractional `position` (Subtask 1.4.4). Distinct from `findChildren`: a
+   * top-level sibling set has `parentId IS NULL`, and scoping by `projectId`
+   * keeps a null-parent query from spanning every project's roots. Used by
+   * `createWorkItem` to find the last sibling whose position the new item
+   * appends after. Read-inside-a-transaction (the create flow allocates +
+   * inserts atomically) → takes the same optional `tx` as the other reads.
+   */
+  async findSiblings(
+    projectId: string,
+    parentId: string | null,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem[]> {
+    const client = tx ?? db;
+    return client.workItem.findMany({
+      where: { projectId, parentId, archivedAt: null },
+      orderBy: { position: 'asc' },
+    });
+  },
+
+  /**
+   * Non-archived work items in a project, filtered by any combination of
+   * kind / status / assignee (Subtask 1.4.4). Ordered by `key` asc to match
+   * the PROD-N identifier order the list surfaces render. A read-only list
+   * path → `db` singleton. Each filter is applied only when supplied, so the
+   * no-filter call returns every non-archived row in the project.
+   */
+  async findByProjectFiltered(
+    projectId: string,
+    filter: { kind?: WorkItemKind; status?: string; assigneeId?: string | null } = {},
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem[]> {
+    const client = tx ?? db;
+    return client.workItem.findMany({
+      where: {
+        projectId,
+        archivedAt: null,
+        ...(filter.kind ? { kind: filter.kind } : {}),
+        ...(filter.status ? { status: filter.status } : {}),
+        ...(filter.assigneeId !== undefined ? { assigneeId: filter.assigneeId } : {}),
+      },
+      orderBy: { key: 'asc' },
+    });
+  },
+
+  /**
    * Non-archived work items in a project, cursor-paginated. Ordered by `key`
    * asc (stable, monotonic, matches the PROD-N identifier order). `cursor` is
    * a work-item id; when present the row at the cursor is skipped so paging
