@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { keyForAppend, keyBetween } from '@/lib/workItems/positioning';
@@ -21,11 +22,13 @@ import {
   toWorkItemSubtreeDto,
 } from '@/lib/mappers/workItemMappers';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
+import { toWorkItemRevisionDto } from '@/lib/mappers/workItemRevisionMappers';
 import type {
   CreateWorkItemInput,
   UpdateWorkItemInput,
   WorkItemDto,
   WorkItemKindDto,
+  WorkItemRevisionDto,
   WorkItemSummaryDto,
   WorkItemSubtreeDto,
 } from '@/lib/dto/workItems';
@@ -659,5 +662,52 @@ export const workItemsService = {
   async isReady(workItemId: string, _ctx: ServiceContext): Promise<boolean> {
     const openBlockers = await workItemLinkRepository.countOpenBlockers(workItemId);
     return openBlockers === 0;
+  },
+
+  /**
+   * Fetch ONE work item by id, scoped to the caller's active workspace. Returns
+   * the full DTO, or throws WorkItemNotFoundError when the row is absent OR
+   * belongs to a DIFFERENT workspace — the 404-not-403 no-existence-leak
+   * contract (a cross-tenant id is indistinguishable from a never-existed one).
+   *
+   * This is the explicit application-layer tenancy gate that the work_item RLS
+   * policy (1.4.5) backstops structurally. It exists because the other read
+   * methods (listWorkItems / getWorkItemSubtree / getBlockers …) trust RLS for
+   * tenant scoping, but RLS is INERT on the dev/CI connection (the `prodect`
+   * superuser has BYPASSRLS) — so an explicit `workspaceId` check is the
+   * PRIMARY gate there. Route handlers also reuse this as a pre-flight guard
+   * before a mutation (PATCH/DELETE/link), so a cross-tenant write 404s before
+   * the unguarded mutation method runs.
+   */
+  async getWorkItem(id: string, ctx: ServiceContext): Promise<WorkItemDto> {
+    const row = await workItemRepository.findById(id);
+    if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
+    return toWorkItemDto(row);
+  },
+
+  /**
+   * The revision history of one work item (newest-first), scoped to the
+   * caller's active workspace: the work item must belong to the active
+   * workspace, or we throw WorkItemNotFoundError — so a cross-tenant probe of
+   * another workspace's revision feed yields 404, never the diffs. Maps each
+   * row to a WorkItemRevisionDto at the read boundary.
+   */
+  async listRevisions(workItemId: string, ctx: ServiceContext): Promise<WorkItemRevisionDto[]> {
+    const row = await workItemRepository.findById(workItemId);
+    if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(workItemId);
+    const revisions = await workItemRevisionRepository.listByWorkItem(workItemId);
+    return revisions.map(toWorkItemRevisionDto);
+  },
+
+  /**
+   * Fetch ONE link by id, scoped to the caller's active workspace. Returns the
+   * DTO, or throws WorkItemLinkNotFoundError when absent OR in a different
+   * workspace (404 no-existence-leak). Routes use this as the cross-tenant
+   * guard before unlinkWorkItems — a member of W1 can't delete a link in W2.
+   */
+  async getLink(linkId: string, ctx: ServiceContext): Promise<WorkItemLinkDto> {
+    const link = await workItemLinkRepository.findById(linkId);
+    if (!link || link.workspaceId !== ctx.workspaceId) throw new WorkItemLinkNotFoundError(linkId);
+    return toWorkItemLinkDto(link);
   },
 };
