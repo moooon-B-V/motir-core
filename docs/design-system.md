@@ -13,7 +13,7 @@
 ## Table of contents
 
 1. [Tokens](#tokens) — palette, type, spacing, radius, shadow
-2. [Primitives](#primitives) — the 9 components in `components/ui/`
+2. [Primitives](#primitives) — the components in `components/ui/` (incl. the App shell)
 3. [Patterns](#patterns) — `EmptyState` and `ErrorState`
 4. [Voice & tone](#voice--tone) — how Prodect's copy reads
 5. [Don'ts](#donts) — the anti-patterns that break the system
@@ -85,14 +85,34 @@ Eight spacing tokens (`--spacing-xxs`/4px through `--spacing-3xl`/40px, plus
 `--radius-md` / `--shadow-card`. That's what lets display-style flips
 cascade cleanly without component changes.
 
+### App shell element tokens
+
+The navigation rail owns four tier-3 `--el-*` element tokens (Subtask
+1.5.2). The mockup paints the rail on `--color-surface` and the content area
+on `--color-background`; the active row inverts that contrast so the current
+page reads as inset into the canvas.
+
+| Token                         | Resolves to                      | When to use                                                              |
+| ----------------------------- | -------------------------------- | ------------------------------------------------------------------------ |
+| `--el-sidebar-bg`             | `--color-surface`                | The rail background — distinct from the page canvas.                     |
+| `--el-sidebar-border`         | `--color-hairline`               | The seam between rail and content; dividers and the active-row outline.  |
+| `--el-sidebar-item-bg-hover`  | `#eeede9` light / `#222222` dark | Hover lift on a nav row (one shade off the surface; concrete hex).       |
+| `--el-sidebar-item-bg-active` | `--color-background`             | The active row — canvas inset into the rail, paired with `aria-current`. |
+
+Three of the four flow through `--color-*` vars that the dark block already
+flips; only the hover shade is a concrete hex, so it carries its own
+`[data-theme='dark']` value.
+
 ---
 
 ## Primitives
 
-Nine components live in [`components/ui/`](../components/ui/). Each ships
-with `cva` for variant management, `cn()` (twMerge + clsx) for class
-composition, and ref forwarding. See [`/tokens`](../app/tokens/page.tsx) for
-the live variant matrix.
+The primitives in [`components/ui/`](../components/ui/) each ship with `cva`
+for variant management (where they vary), `cn()` (twMerge + clsx) for class
+composition, and ref forwarding where they wrap a focusable element. See
+[`/tokens`](../app/tokens/page.tsx) for the live variant matrix. Below: the
+core controls, then [Popover](#popover), then the [App shell](#app-shell)
+family (AppLayout / Sidebar / SidebarToggle / SidebarDrawer / SectionLabel).
 
 ### Button
 
@@ -186,6 +206,31 @@ explicit opt-out. The `Modal` primitive handles both for you:
   `aria-describedby` to it. Pass a `description` whenever the dialog's
   purpose isn't obvious from its title + first line of body.
 
+### Popover
+
+```tsx
+<Popover open={open} onOpenChange={setOpen}>
+  <Popover.Trigger asChild>
+    <Button variant="ghost" rightIcon={<ChevronDown />}>
+      Menu
+    </Button>
+  </Popover.Trigger>
+  <Popover.Content align="start" width={320}>
+    {items}
+  </Popover.Content>
+</Popover>
+```
+
+Anchored, click-outside-dismissable, focus-managed floating panel wrapping
+`@radix-ui/react-popover` (shipped 1.2.6). Same controlled-`open` shape as
+`Modal`, but anchored to a trigger with no overlay. Sub-components:
+`Popover.Trigger`, `Popover.Content` (`align`, `sideOffset`, `width` —
+default 320px), `Popover.Close`, `Popover.Anchor`. Reuses
+`--radius-card` / `--shadow-elevated` / `--color-hairline` — no new tokens.
+**When to use**: menus and dropdowns whose panel holds free-form content —
+the workspace switcher's membership rows, the user menu. For centered,
+overlay-backed dialogs use `Modal`; for hover hints use `Tooltip`.
+
 ### Pill
 
 ```tsx
@@ -243,6 +288,85 @@ skeleton or `EmptyState`.
 
 _`FormField` is an internal helper used by Input and Textarea — not part
 of the public surface._
+
+### App shell
+
+The frame every signed-in surface renders inside (Subtask 1.5.2). Five
+primitives compose to the `design/shell/` contract; 1.5.3 wires them into
+`app/(authed)/layout.tsx`. All are **data-agnostic** — they render the
+header/footer/section JSX you hand them and know nothing about projects,
+workspaces, or routes (per PRODECT_FINDINGS #29 those states are the
+consumer's job).
+
+```tsx
+<AppLayout
+  topNav={<TopNav />} // contains <SidebarToggle variant="hamburger" /> + <SidebarDrawer> for <md
+  sidebar={
+    <Sidebar
+      header={<ProjectSwitcher />}
+      sections={[
+        { id: 'primary', items: [{ icon: <LayoutDashboard />, label: 'Dashboard', href: '/' }] },
+        { id: 'meta', items: [{ icon: <Settings />, label: 'Settings', href: '/settings' }] },
+      ]}
+      footer={<SidebarToggle variant="footer" />}
+    />
+  }
+>
+  <DashboardPage />
+</AppLayout>
+```
+
+**`AppLayout`** — `topNav`, `sidebar`, `children`. Two-row shell: full-width
+top nav, then a content region that is a two-column CSS grid `≥md`
+(persistent rail · main) and a single column below `md` (the rail goes
+off-canvas — surface it via the hamburger + drawer in `topNav`). The rail
+column tracks `useSidebarCollapsed` (`240px` ↔ `56px`). Renders a skip-link
+to `#main` as the first focusable element; `<main id="main" tabIndex={-1}>`.
+Registers the only global shortcut this story ships: **`Mod+\`** (⌘\ / Ctrl+\)
+toggles the rail.
+
+**`Sidebar`** — `header?`, `sections`, `footer?`, `collapsed?`, `aria-label?`
+(default `"Primary"`). Renders `<nav>`. `SidebarSection` is
+`{ id, label?, items, collapsible?, defaultOpen? }`; `SidebarItem` is
+`{ icon, label, href, kbd?, active? }`. The active item gets
+`aria-current="page"` + the inset active treatment. Reads the shared
+`useSidebarCollapsed` store unless the `collapsed` prop overrides it (the
+drawer passes `collapsed={false}` to always render expanded). In collapsed
+mode rows are icon-only, each wrapped in a `Tooltip` (`side="right"`) so the
+label surfaces on hover/focus. A section with `collapsible: true` (expanded
+mode, with a `label`) becomes a Radix Collapsible disclosure. Sections are
+separated by a hairline `<hr>`.
+
+**`SidebarToggle`** — `variant: 'footer' | 'hamburger'`. Both are a
+`<Button variant="ghost">` (not a new shape). `footer` is the desktop
+collapse control — a `Tooltip`-wrapped button with `ChevronsLeft` (expanded)
+/ `ChevronsRight` (collapsed) that toggles `useSidebarCollapsed`; pass it as
+the `Sidebar` `footer`. `hamburger` is the mobile trigger — a `Menu` button
+that opens the drawer via `useSidebarDrawer`; wrap it in `md:hidden` at the
+call site.
+
+**`SidebarDrawer`** — `header?`, `children`, `width?` (default 300px). The
+`<md` off-canvas drawer: a left-anchored `@radix-ui/react-dialog` that slides
+in (`translate-x-[-100%]` → `translate-x-0`, driven by Radix `data-state`)
+over a ~70%-opacity scrim. It reuses Radix Dialog directly rather than
+`Modal` because `Modal`'s centered geometry can't express the left slide.
+Open state lives in the shared `useSidebarDrawer` store; it **auto-closes on
+route change** (`usePathname`) and on ESC (Radix + the shared `useShortcut`
+registry). Pass a `<Sidebar collapsed={false} … />` as `children`.
+
+**`SectionLabel`** — `label?` / `children`. The small uppercase-mono caption
+(mono · 11px · semibold · 0.06em tracking · muted-foreground), lifted to one
+primitive (PRODECT_FINDINGS #28) so the sidebar's section labels and 1.5.4's
+cmd-K `CommandGroupHeader` share one source of truth.
+
+**Supporting hooks** (`lib/hooks/`): `useSidebarCollapsed()` →
+`[collapsed, setCollapsed, toggleCollapsed]`, a persisted
+(`prodect.shell.sidebar.collapsed`) external store mirroring `lib/theme/`'s
+lazy-read + `useSyncExternalStore` recipe; `useSidebarDrawer()` →
+`[open, setOpen]`, an ephemeral (not persisted) shared store;
+`useShortcut(combo, handler, opts?)`, the one shared keyboard-shortcut
+primitive (`Mod` resolves to ⌘/Ctrl at bind time; `whenInputFocused` guards
+typing). 1.5.4 registers `Mod+K` / `?` against the same hook.
 
 ---
 
