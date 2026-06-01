@@ -162,6 +162,7 @@ model Workspace {
   projects      Project[]
   workItems     WorkItem[]
   workItemLinks WorkItemLink[]
+  jobRuns       JobRun[]
 
   @@map("workspace")
 }
@@ -447,4 +448,62 @@ enum WorkItemExplanationSource {
   user_edited
 
   @@map("work_item_explanation_source")
+}
+
+// Background-job run ledger (Story 1.6 · Subtask 1.6.2). Every invocation of a
+// `defineJob`-wrapped Inngest function writes ONE row here: a `running` row at
+// start, flipped to `succeeded` / `failed` on completion. This is the read
+// path the operator dashboard (1.6.5) renders WITHOUT calling Inngest's own
+// API — Prodect owns its job-observability data.
+//
+// `workspaceId` is NULLABLE on purpose: most jobs are workspace-scoped (the
+// durable invariant `sendEvent` enforces — every business event carries a
+// workspaceId), but SYSTEM jobs (`system.ping` here, `system.daily-health-
+// check` in 1.6.4) are untenanted and write a null-workspace row. The FK
+// cascades: archiving/deleting a workspace removes its job-run history with it.
+//
+// RLS is DEFERRED to Subtask 1.6.4 — that Subtask folds the policy in alongside
+// the dead-letter-queue table so the two land in one atomic migration-by-concern
+// (mirrors PRODECT_FINDINGS #20's "create table + its policy in one migration"
+// lesson; here the policy is deliberately batched with the DLQ work it belongs
+// with, and until then job_run is reached ONLY through the trusted wrapper, never
+// a tenant-facing query path).
+//
+// `status` is a Postgres enum (running / succeeded / failed) — the set is closed
+// and stable, unlike `WorkItemRevision.changeKind` (left as text precisely
+// because its value set is open). `failure` is JSON: `{ message, stack, code? }`.
+// `idempotencyKey` is the rendered template (1.6.4 wires the dedup semantics;
+// the column ships now so the dashboard + dedup land without a later migration).
+model JobRun {
+  id             String       @id @default(cuid())
+  workspaceId    String?      @map("workspace_id")
+  functionId     String       @map("function_id")
+  eventName      String       @map("event_name")
+  eventId        String       @map("event_id")
+  attempt        Int
+  status         JobRunStatus
+  startedAt      DateTime     @default(now()) @map("started_at")
+  finishedAt     DateTime?    @map("finished_at")
+  durationMs     Int?         @map("duration_ms")
+  failure        Json?
+  idempotencyKey String?      @map("idempotency_key")
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Dashboard read paths (1.6.5): newest-first per workspace, and the same
+  // filtered by status. The eventId / idempotencyKey indexes serve the
+  // correlation + dedup lookups (1.6.4).
+  @@index([workspaceId, startedAt(sort: Desc)])
+  @@index([workspaceId, status, startedAt(sort: Desc)])
+  @@index([eventId])
+  @@index([idempotencyKey])
+  @@map("job_run")
+}
+
+enum JobRunStatus {
+  running
+  succeeded
+  failed
+
+  @@map("job_run_status")
 }
