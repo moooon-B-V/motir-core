@@ -105,6 +105,29 @@ backstop, not the primary gate.
 
 Unit + e2e test scaffolding (Vitest, Playwright) lands in later Subtasks.
 
+### Running the Playwright E2E suite locally
+
+```bash
+pnpm exec playwright install chromium   # one-time: download the browser
+pnpm test:e2e                           # run the suite
+```
+
+On a **no-root dev container** (e.g. the agent sandbox — non-root user, no
+`sudo`), Chromium can't launch because its system libraries aren't installed
+and `playwright install-deps` needs root. Use the no-root path instead:
+
+```bash
+pnpm test:e2e:local                     # installs the libs (user-space) + runs
+```
+
+`test:e2e:local` runs [`scripts/e2e-browser-deps.sh`](scripts/e2e-browser-deps.sh),
+which downloads Chromium's deps with `apt-get --download-only` and extracts them
+into `~/.cache/prodect-e2e-deps` (no root), exposes them via `LD_LIBRARY_PATH`,
+then runs `pnpm test:e2e`. It's idempotent and a no-op where the libs already
+exist. Args pass through: `pnpm test:e2e:local shell.spec.ts`. CI is unaffected
+— its Playwright job installs the deps system-wide with
+`playwright install --with-deps chromium`.
+
 ## Deploys
 
 Deployed on [Vercel](https://vercel.com) (Hobby tier for v1). Database is
