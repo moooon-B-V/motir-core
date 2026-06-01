@@ -63,10 +63,12 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: 'Create your first project' })).toBeVisible();
   await expect(page.getByText('Projects group your work items')).toBeVisible();
-  // Top-nav project switcher slot must NOT be there yet (workspace has
-  // no projects, so the switcher renders "No project" only inside the
-  // top-nav — which IS rendered since the workspace exists).
-  await expect(page.getByRole('button', { name: 'Switch project' })).toBeVisible();
+  // The project switcher moved to the sidebar in Subtask 1.5.3. With zero
+  // projects the sidebar header renders the "Create your first project" CTA
+  // card in place of the switcher (PRODECT_FINDINGS #29.1) — not the
+  // "Switch project" trigger.
+  await expect(page.getByRole('button', { name: 'Create your first project' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Switch project' })).toHaveCount(0);
   await applyTheme(page, 'light');
   await page.screenshot({ path: `${SCREENSHOT_DIR}/01-empty-state-light.png`, fullPage: true });
 

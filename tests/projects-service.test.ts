@@ -31,10 +31,12 @@ import { truncateAuthTables } from './helpers/db';
 //   - cascade: db.workspace.delete cascades to projects
 //   - SetNull: a hard db.project.delete clears activeProjectId on the
 //     membership row (the FK-level structural backstop)
-//   - archive (soft-delete) does NOT trigger the SetNull FK action AND the
-//     shipped service does not clear activeProjectId in app logic — the
-//     test asserts the ACTUAL shipped behavior and the gap is logged as a
-//     finding rather than asserting aspirational behavior.
+//   - archive (soft-delete): clears the ACTOR's own activeProjectId but
+//     leaves OTHER members' pointers intact (PRODECT_FINDINGS #29 / #16)
+//   - getActiveProject: returns a normal pinned project, SURFACES an archived
+//     pinned project (#29.2), RECOVERS + persists to the first non-archived
+//     when the pointer is unset/stale (#29.3), and returns null when every
+//     project is archived
 
 const PASSWORD = 'hunter2hunter2';
 
@@ -69,11 +71,14 @@ describe('createProject — happy path', () => {
       name: 'Prodect Core',
     });
 
-    // DTO shape: id / name / slug / identifier ONLY — never a Prisma row
-    // (no createdAt, no lastWorkItemNumber, no archivedAt).
-    expect(Object.keys(project).sort()).toEqual(['id', 'identifier', 'name', 'slug']);
+    // DTO shape: id / name / slug / identifier / archivedAt ONLY — never a
+    // raw Prisma row (no createdAt, no lastWorkItemNumber). archivedAt rides
+    // on the DTO so the shell can flag an archived active project (#29.2);
+    // a freshly created project is always non-archived (null).
+    expect(Object.keys(project).sort()).toEqual(['archivedAt', 'id', 'identifier', 'name', 'slug']);
     expect(project.name).toBe('Prodect Core');
     expect(project.slug).toBe('prodect-core');
+    expect(project.archivedAt).toBeNull();
     expect(project.identifier).toMatch(/^[A-Z0-9]{3,5}$/);
     // "Prodect Core" → strip non-alnum → "PRODECTCORE" → first 5 → "PRODE"
     expect(project.identifier).toBe('PRODE');
@@ -696,13 +701,12 @@ describe('SetNull: hard-deleting a project clears the member’s activeProjectId
     expect(afterRow?.activeProjectId).toBeNull();
   });
 
-  it('archiveProject (soft-delete) leaves activeProjectId set — service does not clear it (gap logged as Finding)', async () => {
-    // Documented current behavior: archiveProject only stamps archivedAt; it
-    // does NOT clear activeProjectId for members who had the archived project
-    // pinned. The FK SetNull only fires on a HARD delete. Asserted here as
-    // the real behavior; logged as a Finding so the planner can decide
-    // whether 1.3.2 / a follow-up should clear activeProjectId in app logic
-    // when archiving.
+  it('archiveProject clears the ACTOR’s own activeProjectId pointer (PRODECT_FINDINGS #29 / #16)', async () => {
+    // Resolution of the gap previously logged here: archiveProject now clears
+    // the actor's own activeProjectId when it referenced the archived project,
+    // so the actor "moves on" (getActiveProject recovers to the next project
+    // or the empty state). OTHER members keep their pointer — asserted in the
+    // sibling test below.
     const { owner, workspace, membership } = await makeWorkspace('owner@example.com', 'Acme');
     const project = await projectsService.createProject({
       workspaceId: workspace.id,
@@ -724,7 +728,141 @@ describe('SetNull: hard-deleting a project clears the member’s activeProjectId
     const row = await db.workspaceMembership.findUnique({
       where: { id: membership.id },
     });
-    // Stale pointer survives the archive — captured as a known gap (#15).
-    expect(row?.activeProjectId).toBe(project.id);
+    expect(row?.activeProjectId).toBeNull();
+  });
+
+  it('archiveProject leaves OTHER members’ activeProjectId intact (enables the #29.2 Archived pill)', async () => {
+    // The #29.2 scenario: a teammate archives a project another member still
+    // has open. The other member's pointer must survive so getActiveProject
+    // surfaces the archived project (with the Archived pill) for them rather
+    // than silently swapping it out.
+    const { owner, workspace } = await makeWorkspace('owner@example.com', 'Acme');
+    const project = await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'Shared',
+    });
+
+    // A second member who has the same project pinned.
+    const other = await makeUser('other@example.com', 'Other');
+    const otherMembership = await db.workspaceMembership.create({
+      data: {
+        userId: other.id,
+        workspaceId: workspace.id,
+        role: 'member',
+        activeProjectId: project.id,
+      },
+    });
+
+    // The owner (not `other`) archives the project.
+    await projectsService.archiveProject({
+      projectId: project.id,
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+    });
+
+    const otherRow = await db.workspaceMembership.findUnique({
+      where: { id: otherMembership.id },
+    });
+    expect(otherRow?.activeProjectId).toBe(project.id);
+  });
+});
+
+describe('getActiveProject — resolution, archived surfacing (#29.2), recovery (#29.3)', () => {
+  it('returns the pinned project with archivedAt=null for a normal active project', async () => {
+    const { owner, workspace } = await makeWorkspace('owner@example.com', 'Acme');
+    const project = await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'Active',
+    });
+    await projectsService.setActiveProject({
+      userId: owner.id,
+      workspaceId: workspace.id,
+      projectId: project.id,
+    });
+
+    const resolved = await projectsService.getActiveProject(owner.id, workspace.id);
+    expect(resolved?.id).toBe(project.id);
+    expect(resolved?.archivedAt).toBeNull();
+  });
+
+  it('surfaces an archived pinned project (archivedAt set) instead of swapping it out (#29.2)', async () => {
+    // Simulate a teammate archiving a project another member still has pinned:
+    // archive the project directly via the repo (so the actor-clears path does
+    // NOT fire), leaving the owner's pointer at the now-archived project.
+    const { owner, workspace } = await makeWorkspace('owner@example.com', 'Acme');
+    const pinned = await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'Pinned',
+    });
+    // A second, non-archived project exists — proving we surface the archived
+    // pinned one rather than falling back to this available alternative.
+    await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'Other',
+    });
+    await projectsService.setActiveProject({
+      userId: owner.id,
+      workspaceId: workspace.id,
+      projectId: pinned.id,
+    });
+    await db.project.update({ where: { id: pinned.id }, data: { archivedAt: new Date() } });
+
+    const resolved = await projectsService.getActiveProject(owner.id, workspace.id);
+    expect(resolved?.id).toBe(pinned.id);
+    expect(resolved?.archivedAt).not.toBeNull();
+  });
+
+  it('recovers to the first non-archived project and PERSISTS the pointer when it is unset (#29.3)', async () => {
+    const { owner, workspace, membership } = await makeWorkspace('owner@example.com', 'Acme');
+    // Two projects, NO active pointer set on the membership row.
+    const first = await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'First',
+    });
+    await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'Second',
+    });
+    // createProject does NOT pin; ensure the pointer really is null.
+    await db.workspaceMembership.update({
+      where: { id: membership.id },
+      data: { activeProjectId: null },
+    });
+
+    const resolved = await projectsService.getActiveProject(owner.id, workspace.id);
+    expect(resolved?.id).toBe(first.id);
+
+    // The recovery self-heals the pointer so subsequent reads don't re-recover.
+    const row = await db.workspaceMembership.findUnique({ where: { id: membership.id } });
+    expect(row?.activeProjectId).toBe(first.id);
+  });
+
+  it('returns null when every project is archived and no pointer resolves', async () => {
+    const { owner, workspace } = await makeWorkspace('owner@example.com', 'Acme');
+    const only = await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'Only',
+    });
+    await projectsService.setActiveProject({
+      userId: owner.id,
+      workspaceId: workspace.id,
+      projectId: only.id,
+    });
+    // Owner archives their own only project → pointer cleared, none remain.
+    await projectsService.archiveProject({
+      projectId: only.id,
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+    });
+
+    const resolved = await projectsService.getActiveProject(owner.id, workspace.id);
+    expect(resolved).toBeNull();
   });
 });
