@@ -1,52 +1,43 @@
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
-import { ProjectSwitcher } from './ProjectSwitcher';
 import { UserMenu } from './UserMenu';
+import { SidebarToggle } from '@/components/ui/SidebarToggle';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
-import type { ProjectDTO } from '@/lib/dto/projects';
 
-// Top-nav shell for every (authed)/* route. Left cluster: workspace
-// switcher + 1px hairline + project switcher (Subtask 1.3.4 minimal form
-// — Story 1.5 will move project nav into a left sidebar, at which point
-// the top-nav project switcher is demoted or retired). Right cluster: the
-// user menu. Story 1.5 (app shell) expands this by composing ATOP this
-// structure — add slots inside the existing clusters rather than
-// replacing the file. No wordmark slot (brand-mark deferral, PRODECT.md).
+// Top-nav shell for every (authed)/* route, spanning the full width above
+// the sidebar+content grid. Left cluster: the mobile hamburger (<md, opens
+// the off-canvas SidebarDrawer) + the workspace switcher. Right cluster: a
+// theme-toggle slot, a cmd-K slot (both empty placeholders awaiting Subtask
+// 1.5.4), and the user menu.
+//
+// The project switcher MOVED to the sidebar header in Subtask 1.5.3 — the
+// "Story 1.5 will move project nav into a left sidebar" promise from the
+// 1.3.4 minimal form is now fulfilled, so the project switcher (and its
+// workspace-gated hairline divider) is gone from here. No wordmark slot
+// (brand-mark deferral, PRODECT.md).
 
 export interface TopNavProps {
   workspaces: WorkspaceSummaryDTO[];
   activeWorkspaceId: string | null;
-  projects: ProjectDTO[];
-  activeProjectId: string | null;
   user: { name: string; email: string };
 }
 
-export function TopNav({
-  workspaces,
-  activeWorkspaceId,
-  projects,
-  activeProjectId,
-  user,
-}: TopNavProps) {
+export function TopNav({ workspaces, activeWorkspaceId, user }: TopNavProps) {
   return (
     <header className="border-(--color-hairline) bg-background sticky top-0 z-30 border-b">
-      <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
+      <nav className="flex h-14 items-center justify-between gap-2 px-4 sm:px-6">
         <div className="flex items-center gap-2">
+          {/* Mobile-only: opens the off-canvas SidebarDrawer. Hidden ≥md,
+              where the persistent rail takes over. */}
+          <div className="md:hidden">
+            <SidebarToggle variant="hamburger" />
+          </div>
           <WorkspaceSwitcher workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} />
-          {/*
-            Hairline divider separating the two switchers. Only rendered
-            when there's an active workspace — if the user has no
-            workspaces yet, the workspace switcher renders the "Create
-            workspace" empty-state button and a trailing divider would be
-            visually orphaned.
-          */}
-          {activeWorkspaceId ? (
-            <>
-              <div className="h-5 w-px bg-(--color-hairline)" aria-hidden />
-              <ProjectSwitcher projects={projects} activeProjectId={activeProjectId} />
-            </>
-          ) : null}
         </div>
         <div className="flex items-center gap-2">
+          {/* theme-toggle slot — Subtask 1.5.4 fills this. */}
+          <div data-slot="theme-toggle" />
+          {/* cmd-K slot — Subtask 1.5.4 fills this. */}
+          <div data-slot="cmd-k" />
           <UserMenu name={user.name} email={user.email} />
         </div>
       </nav>

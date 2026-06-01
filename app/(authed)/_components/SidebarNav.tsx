@@ -1,0 +1,115 @@
+'use client';
+
+import { usePathname } from 'next/navigation';
+import { BarChart3, BookOpen, CircleDot, Columns3, LayoutDashboard, Settings } from 'lucide-react';
+import { Sidebar, type SidebarSection } from '@/components/ui/Sidebar';
+import { SidebarToggle } from '@/components/ui/SidebarToggle';
+import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed';
+import type { ProjectDTO } from '@/lib/dto/projects';
+import { SidebarHeader } from './SidebarHeader';
+
+// The signed-in navigation rail. Composes the 1.5.2 Sidebar primitive with
+// a SidebarHeader (project context) and the route-aware nav sections. Active
+// detection is client-side (usePathname), which is why the whole rail is a
+// client component rather than the layout building <Sidebar sections={…} />
+// directly — section `active` flags can't be computed in the server layout.
+//
+// Section shape (PRODECT_FINDINGS #29):
+//   - active project (archived or not) → primary [Dashboard, Issues, Boards,
+//     Reports] + bottom [Settings → /settings/project, Docs]. The project-
+//     scoped nav stays visible even when archived (#29.2); the stub pages
+//     render the "this project is archived" empty state themselves.
+//   - no project (#29.1) → only the bottom section, with Settings deep-
+//     linking to the WORKSPACE settings (there's no project to configure).
+//
+// Two variants: `rail` (the persistent desktop rail, follows the shared
+// collapse store, carries the footer collapse toggle) and `drawer` (the
+// <md off-canvas body, always expanded, no footer — the drawer chrome owns
+// its own close affordance).
+
+// Docs is an external link (no in-app docs route yet); points at the repo.
+const DOCS_URL = 'https://github.com/moooon-B-V/prodect-core#readme';
+
+export interface SidebarNavProps {
+  activeProject: ProjectDTO | null;
+  projects: ProjectDTO[];
+  variant?: 'rail' | 'drawer';
+}
+
+function isActive(pathname: string, match: string): boolean {
+  return pathname === match || pathname.startsWith(`${match}/`);
+}
+
+export function SidebarNav({ activeProject, projects, variant = 'rail' }: SidebarNavProps) {
+  const pathname = usePathname();
+  const [storeCollapsed] = useSidebarCollapsed();
+  const isDrawer = variant === 'drawer';
+  // The drawer always renders expanded; the rail follows the shared store.
+  const collapsed = isDrawer ? false : storeCollapsed;
+
+  const hasProject = Boolean(activeProject);
+
+  const sections: SidebarSection[] = [];
+
+  if (hasProject) {
+    sections.push({
+      id: 'primary',
+      items: [
+        {
+          icon: <LayoutDashboard />,
+          label: 'Dashboard',
+          href: '/dashboard',
+          active: isActive(pathname, '/dashboard'),
+        },
+        {
+          icon: <CircleDot />,
+          label: 'Issues',
+          href: '/issues',
+          active: isActive(pathname, '/issues'),
+        },
+        {
+          icon: <Columns3 />,
+          label: 'Boards',
+          href: '/boards',
+          active: isActive(pathname, '/boards'),
+        },
+        {
+          icon: <BarChart3 />,
+          label: 'Reports',
+          href: '/reports',
+          active: isActive(pathname, '/reports'),
+        },
+      ],
+    });
+  }
+
+  sections.push({
+    id: 'bottom',
+    items: [
+      {
+        icon: <Settings />,
+        label: 'Settings',
+        // Deep-link to project settings when a project is active; otherwise
+        // there's nothing project-scoped to configure, so go to workspace.
+        href: hasProject ? '/settings/project' : '/settings/workspace',
+        active: isActive(pathname, '/settings'),
+      },
+      {
+        icon: <BookOpen />,
+        label: 'Docs',
+        href: DOCS_URL,
+      },
+    ],
+  });
+
+  return (
+    <Sidebar
+      header={
+        <SidebarHeader activeProject={activeProject} projects={projects} collapsed={collapsed} />
+      }
+      sections={sections}
+      footer={isDrawer ? undefined : <SidebarToggle variant="footer" />}
+      collapsed={isDrawer ? false : undefined}
+    />
+  );
+}

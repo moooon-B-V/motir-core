@@ -196,6 +196,20 @@ export const projectsService = {
    * Soft-delete (archive) a project. Asserts membership, stamps archivedAt
    * in a transaction. Never hard-deletes — work-item history (Story 1.4)
    * survives the archive.
+   *
+   * Also clears the ACTOR's own `activeProjectId` pointer when it referenced
+   * the just-archived project (PRODECT_FINDINGS #29 + the gap #16 logged in
+   * the 1.3.2 tests). This is what makes the archived-active states coherent
+   * across members:
+   *   - The actor who archived "moves on" — their pointer drops to null and
+   *     `getActiveProject` recovers to the next non-archived project (or the
+   *     empty state when none remain). This preserves the silent-fallback
+   *     behaviour the 1.3.4 projects-flow already relies on.
+   *   - OTHER members who had the same project pinned keep their pointer, so
+   *     `getActiveProject` surfaces it for them with the "Archived" pill
+   *     (#29.2) until they switch — rather than silently swapping it out.
+   * Done in the SAME transaction as the archive so the row can't be left
+   * pointing at a project that was archived a moment earlier.
    */
   async archiveProject(input: {
     projectId: string;
@@ -207,7 +221,21 @@ export const projectsService = {
       { userId: input.actorUserId, workspaceId: input.workspaceId },
       async (tx) => {
         await projectsService.assertProjectInWorkspaceInTx(input.projectId, input.workspaceId, tx);
-        return projectRepository.archive(input.projectId, tx);
+        await projectRepository.archive(input.projectId, tx);
+
+        const membership = await workspaceMembershipRepository.findByUserAndWorkspaceWithWorkspace(
+          input.actorUserId,
+          input.workspaceId,
+          tx,
+        );
+        if (membership?.activeProjectId === input.projectId) {
+          await workspaceMembershipRepository.setActiveProject(
+            input.actorUserId,
+            input.workspaceId,
+            null,
+            tx,
+          );
+        }
       },
     );
   },
@@ -309,33 +337,34 @@ export const projectsService = {
    * ProjectDTO (or null when no resolvable project exists). Resolution
    * order:
    *
-   *   1. The membership row's `activeProjectId` pointer — IF it's still
-   *      set, IF the project still exists, and IF it still belongs to the
-   *      workspace (defensive: the FK's `onDelete: SetNull` already nulls
-   *      the pointer on hard-delete, but we re-check to handle a stale
-   *      pointer to an archived project from a future surface that
-   *      archives without clearing).
-   *   2. The workspace's first non-archived project by createdAt asc — the
-   *      same ordering as the projects list, so "active by default" is the
-   *      project at the top of the switcher.
-   *   3. null — workspaces with no projects yet (a fresh workspace before
-   *      the user has created anything).
+   *   1. The membership row's `activeProjectId` pointer — IF it's still set
+   *      and the project still exists in this workspace. Per PRODECT_FINDINGS
+   *      #29.2 we now ACCEPT an archived pinned project here and surface it
+   *      (the DTO carries `archivedAt`) so the shell can flag it with an
+   *      "Archived" pill, rather than silently swapping the user onto a
+   *      different project. The actor who archives a project has their own
+   *      pointer cleared by `archiveProject`, so this branch only surfaces an
+   *      archived project for OTHER members who still had it pinned.
+   *   2. Recovery — the pointer is null (never set / cleared on archive) or
+   *      stale (points at a hard-deleted or cross-workspace project) while
+   *      ≥1 non-archived project exists. PRODECT_FINDINGS #29.3: auto-select
+   *      the first non-archived project (createdAt asc — same ordering as the
+   *      switcher), PERSIST it back onto the membership row so the pointer
+   *      self-heals, and — when the pointer was set-but-unresolvable (a real
+   *      inconsistency, not merely unset) — log a structured warning so we
+   *      can measure how often it fires in production.
+   *   3. null — no resolvable pinned project AND no non-archived projects
+   *      (a fresh workspace, or one whose every project is archived).
    *
-   * Reads run inside withWorkspaceContext so the project RLS policy
-   * exposes rows under the non-bypass prodect_app role; under the dev
-   * BYPASSRLS role the wrapper is a behavioral no-op. The membership
-   * read uses the `db` singleton because the workspace_membership policy
-   * already exposes the user's own rows via its `OR userId =
-   * current_setting('app.user_id', true)` branch, but for consistency we
-   * thread it through the same withWorkspaceContext transaction so the
-   * resolver is a single round-trip pair.
+   * Reads + the recovery write run inside withWorkspaceContext so the project
+   * RLS policy exposes rows (and the membership UPDATE's WITH CHECK passes)
+   * under the non-bypass prodect_app role; under the dev BYPASSRLS role the
+   * wrapper is a behavioral no-op. Threading the membership read through the
+   * same transaction keeps the resolver atomic: the pointer and the project
+   * it names are read in the same snapshot, so a concurrent setActiveProject
+   * can't shear the result.
    */
   async getActiveProject(userId: string, workspaceId: string): Promise<ProjectDTO | null> {
-    // The membership read can stay outside the workspace-scoped tx (the
-    // membership RLS policy has an own-rows branch keyed on app.user_id
-    // alone), but doing it inside keeps the resolver atomic: the pointer
-    // and the project it names are read in the same snapshot, so a
-    // concurrent setActiveProject can't shear the result.
     return withWorkspaceContext({ userId, workspaceId }, async (tx) => {
       const membership = await workspaceMembershipRepository.findByUserAndWorkspaceWithWorkspace(
         userId,
@@ -346,23 +375,38 @@ export const projectsService = {
 
       if (membership.activeProjectId) {
         const pinned = await projectRepository.findById(membership.activeProjectId, tx);
-        // Defensive: the FK's onDelete: SetNull means a hard-deleted
-        // project nulls the pointer, but a stale pointer to a project
-        // in a different workspace (shouldn't be possible under RLS,
-        // but belt + suspenders) or to an archived project still
-        // resolves to a valid row. Per spec we accept archived projects
-        // as the active pointer — archiving is a soft delete that
-        // preserves history; surfacing the archive as the active
-        // project would surprise the UI, so we only accept a non-
-        // archived project as a valid pinned active.
-        if (pinned && pinned.workspaceId === workspaceId && pinned.archivedAt === null) {
+        // Accept the pinned project whether archived or not (#29.2): an
+        // archived active project is surfaced (with archivedAt set) so the
+        // shell shows the "Archived" pill. Only a genuinely unresolvable
+        // pointer — hard-deleted (the FK's onDelete: SetNull would have
+        // nulled it, but belt + suspenders) or cross-workspace — falls
+        // through to recovery below.
+        if (pinned && pinned.workspaceId === workspaceId) {
           return toProjectDTO(pinned);
         }
       }
 
+      // No resolvable pinned project. Recover to the first non-archived
+      // project if one exists (#29.3), persisting it so the pointer heals.
       const projects = await projectRepository.findByWorkspace(workspaceId, tx);
       const first = projects[0];
-      return first ? toProjectDTO(first) : null;
+      if (!first) return null;
+
+      if (membership.activeProjectId) {
+        // The pointer was SET but didn't resolve — a real inconsistency
+        // (deleted / cross-workspace). Worth a warning so we can watch it.
+        console.warn(
+          '[projectsService.getActiveProject] active-project pointer unresolvable; auto-recovering',
+          {
+            userId,
+            workspaceId,
+            staleProjectId: membership.activeProjectId,
+            recoveredProjectId: first.id,
+          },
+        );
+      }
+      await workspaceMembershipRepository.setActiveProject(userId, workspaceId, first.id, tx);
+      return toProjectDTO(first);
     });
   },
 };

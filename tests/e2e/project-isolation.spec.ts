@@ -91,9 +91,13 @@ async function signUp(page: Page, email: string): Promise<void> {
 async function createProject(page: Page, name: string, identifier: string): Promise<void> {
   await page.goto('/dashboard');
   const emptyStateCta = page.getByRole('button', { name: 'Create project' }).first();
-  // Sync on either the empty-state CTA or the switcher being ready —
-  // whichever the workspace state renders.
-  await expect(page.getByRole('button', { name: 'Switch project' })).toBeVisible();
+  // Sync on either the empty-state CTA or the sidebar switcher being ready —
+  // whichever the workspace state renders. (Post-1.5.3 the switcher lives in
+  // the sidebar; an empty workspace shows the CTA card instead, so we can't
+  // assume "Switch project" is present here.)
+  await expect(
+    emptyStateCta.or(page.getByRole('button', { name: 'Switch project' })),
+  ).toBeVisible();
   if (await emptyStateCta.isVisible().catch(() => false)) {
     await emptyStateCta.click();
   } else {
