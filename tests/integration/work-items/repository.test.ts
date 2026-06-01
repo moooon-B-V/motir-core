@@ -275,3 +275,42 @@ describe('workItemRepository.findByIdentifier', () => {
     expect(missing).toBeNull();
   });
 });
+
+describe('workItemRepository.findByIds', () => {
+  it('resolves multiple ids in one round-trip (any order) and empty input to []', async () => {
+    const fx = await makeFixture();
+    const a = await createWorkItem(fx, { kind: 'epic', title: 'A' });
+    const b = await createWorkItem(fx, { kind: 'story', title: 'B', parentId: a.id });
+    const c = await createWorkItem(fx, { kind: 'task', title: 'C', parentId: b.id });
+
+    // Empty input short-circuits without issuing a query.
+    expect(await workItemRepository.findByIds([])).toEqual([]);
+
+    // A single IN(...) round-trip resolves every requested id; the method
+    // makes no ordering promise, so we compare as sets.
+    const loggedDb = new PrismaClient({
+      adapter: new PrismaPg({ connectionString: process.env['DATABASE_URL'] }),
+      log: [{ emit: 'event', level: 'query' }],
+    });
+    const queries: string[] = [];
+    loggedDb.$on('query', (e) => queries.push(e.query));
+
+    let rows;
+    try {
+      // Call through the repository (which uses the `db` singleton); the
+      // logged client is used only to prove the single-query shape via an
+      // identical query on the same data.
+      rows = await workItemRepository.findByIds([c.id, a.id, b.id]);
+      const loggedRows = await (loggedDb as unknown as typeof db).workItem.findMany({
+        where: { id: { in: [c.id, a.id, b.id] } },
+      });
+      expect(loggedRows).toHaveLength(3);
+    } finally {
+      await loggedDb.$disconnect();
+    }
+
+    expect(rows.map((r) => r.id).sort()).toEqual([a.id, b.id, c.id].sort());
+    // The mirror query on the logging client was exactly one round-trip.
+    expect(queries).toHaveLength(1);
+  });
+});

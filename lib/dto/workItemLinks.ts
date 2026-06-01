@@ -29,3 +29,18 @@ export interface WorkItemLinkDto {
   createdById: string;
   createdAt: string;
 }
+
+/**
+ * Input to `workItemsService.linkWorkItems` (Subtask 1.4.4). Reads as
+ * "fromId <kind> toId" (the Jira direction convention). `createdById` is
+ * taken from the ServiceContext (`ctx.userId`) and `workspaceId` is derived
+ * inside the service from `fromItem.workspaceId` — neither crosses the wire,
+ * so neither appears here. For `kind === 'relates_to'` the service also
+ * persists the reciprocal toId→fromId row in the same transaction; the
+ * caller still passes a single directed input.
+ */
+export interface LinkWorkItemsInput {
+  fromId: string;
+  toId: string;
+  kind: WorkItemLinkKindDto;
+}

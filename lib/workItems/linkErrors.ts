@@ -21,7 +21,8 @@ export type WorkItemLinkErrorTag =
   | 'CROSS_WORKSPACE_LINK'
   | 'WORKSPACE_MISMATCH_LINK'
   | 'SELF_LINK'
-  | 'DUPLICATE_LINK';
+  | 'DUPLICATE_LINK'
+  | 'WORK_ITEM_LINK_NOT_FOUND';
 
 /**
  * Base class for every work-item-link typed error. Concrete subclasses set a
@@ -111,5 +112,20 @@ export class DuplicateLinkError extends WorkItemLinkError {
   constructor(message = 'A link of this kind already exists between these work items.') {
     super(message);
     this.name = 'DuplicateLinkError';
+  }
+}
+
+/**
+ * No work-item link matched the id looked up (Subtask 1.4.4). Thrown by
+ * `unlinkWorkItems` when the target link is already gone. Mirrors the shape
+ * of WorkItemNotFoundError in errors.ts; the route layer (Epic 2) maps it to
+ * 404 Not Found.
+ */
+export class WorkItemLinkNotFoundError extends WorkItemLinkError {
+  readonly tag = 'WORK_ITEM_LINK_NOT_FOUND' as const;
+  readonly code = 'WORK_ITEM_LINK_NOT_FOUND' as const;
+  constructor(id: string) {
+    super(`Work item link ${id} not found.`);
+    this.name = 'WorkItemLinkNotFoundError';
   }
 }
