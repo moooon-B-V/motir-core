@@ -2,11 +2,20 @@ import type { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 
 // Runtime half of the workspace-RLS pair (the DB half lives in
-// prisma/migrations/.../add_workspace_rls). Every tenant-scoped query
-// path opens a transaction via withWorkspaceContext, which sets two
-// per-transaction GUCs the RLS policies read:
+// prisma/migrations/.../add_workspace_rls and .../add_work_item_rls). Every
+// tenant-scoped query path opens a transaction via withWorkspaceContext,
+// which sets three per-transaction GUCs the RLS policies read:
 //   app.user_id      — the authenticated user's id
 //   app.workspace_id — the active workspace id
+//   app.project_id   — the active project id, OR empty string when no
+//                      project is active. Read by the work_item table's
+//                      restrictive project-narrowing policy (1.4.5): when
+//                      empty, all of the workspace's projects are visible;
+//                      when set, work_item reads narrow to that one project.
+//                      Always bound (empty string when absent) so the
+//                      policy's `coalesce(...) = ''` branch fires cleanly
+//                      with no "unset vs empty" ambiguity. Unused by the
+//                      workspace/project/work_item_link policies.
 //
 // Why $transaction (not just $executeRaw on the singleton): SET LOCAL /
 // set_config(..., true) are transaction-scoped. Outside a transaction
@@ -25,6 +34,14 @@ import { db } from '@/lib/db';
 export interface WorkspaceContext {
   userId: string;
   workspaceId: string;
+  /**
+   * Optional active-project id. When provided, work_item reads narrow to
+   * this project (the restrictive project policy from add_work_item_rls);
+   * when omitted, all of the workspace's projects are visible. Bound as the
+   * `app.project_id` GUC (empty string when absent). Does not affect writes
+   * or the work_item_link table — those are workspace-scoped only.
+   */
+  projectId?: string;
 }
 
 /**
@@ -40,6 +57,10 @@ export async function withWorkspaceContext<T>(
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
     await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
+    // Always bind app.project_id (empty string when no project is active) so
+    // the work_item project-narrowing policy's `coalesce(...) = ''` branch
+    // fires cleanly — no ambiguity between "unset" and "deliberately empty".
+    await tx.$executeRaw`SELECT set_config('app.project_id', ${ctx.projectId ?? ''}, true)`;
     return fn(tx);
   });
 }
