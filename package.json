@@ -48,6 +48,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "fractional-indexing": "^3.2.0",
+    "inngest": "^4.5.0",
     "lucide-react": "^1.16.0",
     "next": "16.2.6",
     "pg": "^8.21.0",
@@ -60,6 +61,7 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@inngest/test": "^1.0.0",
     "@pencil.dev/cli": "^0.2.7",
     "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4",
@@ -76,6 +78,7 @@
     "eslint-config-prettier": "^10.1.8",
     "happy-dom": "^20.9.0",
     "husky": "^9.1.7",
+    "inngest-cli": "^1.23.0",
     "lint-staged": "^17.0.5",
     "prettier": "^3.8.3",
     "prisma": "^7.8.0",

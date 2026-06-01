@@ -2,6 +2,8 @@ allowBuilds:
   '@prisma/engines': true
   argon2: true
   esbuild: true
+  inngest-cli: true
   prisma: true
+  protobufjs: false
   sharp: true
   unrs-resolver: true
