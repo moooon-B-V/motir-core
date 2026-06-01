@@ -3,5 +3,11 @@ allowBuilds:
   argon2: true
   esbuild: true
   prisma: true
+  # protobufjs ships a postinstall that compiles native protobuf descriptors,
+  # used only by Inngest's gRPC `connect` transport. We serve over HTTP (the
+  # app/api/inngest serve route) and never use connect, so the build is
+  # unneeded — set false to silence pnpm 11's ERR_PNPM_IGNORED_BUILDS gate
+  # deterministically (PRODECT_FINDINGS #30, sharp edge #3).
+  protobufjs: false
   sharp: true
   unrs-resolver: true

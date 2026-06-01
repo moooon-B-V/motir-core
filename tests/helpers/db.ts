@@ -11,3 +11,10 @@ export async function truncateAuthTables(): Promise<void> {
     'TRUNCATE TABLE "workspace_membership", "workspace", "session", "account", "verification", "user" RESTART IDENTITY CASCADE',
   );
 }
+
+// job_run rows from SYSTEM jobs (system.ping) carry a null workspace_id, so
+// they are NOT reached by truncating "workspace" CASCADE. The jobs suite
+// truncates job_run directly between tests.
+export async function truncateJobRuns(): Promise<void> {
+  await db.$executeRawUnsafe('TRUNCATE TABLE "job_run" RESTART IDENTITY CASCADE');
+}

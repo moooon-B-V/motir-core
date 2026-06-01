@@ -29,6 +29,35 @@ const eslintConfig = defineConfig([
       // Implicit any is already forbidden by tsconfig's `noImplicitAny`; this rule
       // catches the lint-side equivalent for completeness.
       '@typescript-eslint/no-explicit-any': 'warn',
+
+      // Background-jobs boundary (Story 1.6). The raw Inngest SDK may be
+      // imported ONLY by the jobs runtime (lib/jobs/**) and the serve route
+      // (app/api/inngest/**) — see the override below. Everywhere else (routes,
+      // services, components) must go through sendEvent() / defineJob() from
+      // @/lib/jobs so the 4-layer split + the run-ledger bookkeeping stay
+      // uniform. Keeps a route from firing a background event by reaching past
+      // the wrapper into inngest.send().
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['inngest', 'inngest/*'],
+              message:
+                'Import the Inngest SDK only in lib/jobs/** or app/api/inngest/. Elsewhere use sendEvent() / defineJob() from @/lib/jobs.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // The two surfaces allowed to import the raw Inngest SDK: the jobs runtime
+  // and the serve route. This override MUST come after the rule above to win.
+  {
+    files: ['lib/jobs/**/*.{ts,tsx}', 'app/api/inngest/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': 'off',
     },
   },
 
