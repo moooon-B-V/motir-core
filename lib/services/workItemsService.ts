@@ -102,6 +102,39 @@ function byKeyAsc(a: WorkItem, b: WorkItem): number {
 /** A revision-diff cell. */
 type DiffCell = { from: unknown; to: unknown };
 
+/**
+ * The initial-state diff for a freshly-created work item: every NON-NULL
+ * field of the new row recorded as `{ from: null, to: <value> }` (the row had
+ * no prior state, so `from` is always null). Null/absent fields are omitted —
+ * an un-set descriptionMd doesn't appear. This is the created-revision shape
+ * Subtask 1.4.4 deliberately deferred to 1.4.6 (the create call site passed
+ * `diff: {}` with a "1.4.6's to finalize" note); finalized here. `dueDate` is
+ * serialized to ISO (matching the update path); enums/scalars pass through.
+ */
+function buildCreatedDiff(row: WorkItem): Record<string, DiffCell> {
+  const diff: Record<string, DiffCell> = {};
+  const set = (k: string, v: unknown): void => {
+    if (v !== null && v !== undefined) diff[k] = { from: null, to: v };
+  };
+  set('projectId', row.projectId);
+  set('parentId', row.parentId);
+  set('kind', row.kind);
+  set('key', row.key);
+  set('identifier', row.identifier);
+  set('title', row.title);
+  set('descriptionMd', row.descriptionMd);
+  set('explanationMd', row.explanationMd);
+  set('explanationSource', row.explanationSource);
+  set('status', row.status);
+  set('priority', row.priority);
+  set('assigneeId', row.assigneeId);
+  set('reporterId', row.reporterId);
+  set('dueDate', row.dueDate ? row.dueDate.toISOString() : null);
+  set('estimateMinutes', row.estimateMinutes);
+  set('position', row.position);
+  return diff;
+}
+
 export interface MoveWorkItemInput {
   /** Target parent. Omit to keep the current parent; `null` moves to top-level. */
   newParentId?: string | null;
@@ -185,10 +218,15 @@ export const workItemsService = {
 
       const row = await workItemRepository.create(data, tx);
 
-      // Initial revision. The created-row diff shape is 1.4.6's to finalize
-      // (it owns the table); the call-site + changeKind are locked here.
+      // Initial revision: the created-row state as a { from: null, to: value }
+      // diff (1.4.6 finalized the shape 1.4.4 deferred — see buildCreatedDiff).
       await workItemRevisionsService.recordRevision(
-        { workItemId: row.id, changedById: ctx.userId, changeKind: 'created', diff: {} },
+        {
+          workItemId: row.id,
+          changedById: ctx.userId,
+          changeKind: 'created',
+          diff: buildCreatedDiff(row),
+        },
         tx,
       );
 

@@ -75,6 +75,10 @@ model User {
   // issue-to-issue links (createdBy — Restrict: a user with links on record
   // cannot be hard-deleted, mirroring the reporter pattern).
   createdWorkItemLinks WorkItemLink[]        @relation("WorkItemLinkCreatedBy")
+  // Back-relation for WorkItemRevision (Subtask 1.4.6). A user authors many
+  // revisions (changedBy — Restrict on the FK: a user with audit history on
+  // record cannot be hard-deleted, mirroring the reporter pattern).
+  authoredWorkItemRevisions WorkItemRevision[] @relation("WorkItemRevisionAuthor")
 
   @@map("user")
 }
@@ -299,6 +303,9 @@ model WorkItem {
   // Cascading delete on both sides: removing an issue removes its links.
   linksFrom WorkItemLink[] @relation("LinksFrom")
   linksTo   WorkItemLink[] @relation("LinksTo")
+  // Audit trail (Subtask 1.4.6). A work item accrues many revision rows; the
+  // FK cascades so hard-deleting an issue removes its history with it.
+  revisions WorkItemRevision[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -356,6 +363,53 @@ model WorkItemLink {
   @@index([fromId, kind])
   @@index([workspaceId])
   @@map("work_item_link")
+}
+
+// Durable audit trail for work-item mutations (Subtask 1.4.6). Every
+// create / update / archive / link / unlink the service performs writes ONE
+// revision row inside the SAME transaction as the mutation it describes
+// (workItemsService → workItemRevisionsService.recordRevision), so the
+// history can never diverge from the data. Epic 5's activity feed reads it,
+// Epic 6's reporting sums over it, Epic 7 diffs "what changed since the last
+// planning pass" off it.
+//
+// `changeKind` is a plain `String`, NOT a Postgres enum, deliberately: future
+// kinds ('linked', 'unlinked', 'restored', …) must not require a Postgres
+// `ALTER TYPE` migration. The service is the validation boundary — it only
+// ever writes the values the WorkItemRevisionDto union constrains
+// ('created' | 'updated' | 'archived'); the mapper's `as` cast at the read
+// edge is what makes the DB-text → DTO-union narrowing safe.
+//
+// `diff` is JSON: the field-diff shape ({ title: { from, to }, … }) for
+// create/update/archive, and the link-diff shape ({ links: { added: [...] } })
+// for link/unlink. It is intentionally untyped at the DB layer — the DTO
+// pins the wire shape.
+//
+// `onDelete: Restrict` on `changedById` mirrors WorkItem.reporter (1.4.2):
+// revisions preserve history even after a user soft-deletes, so hard-deleting
+// a user who ever changed an issue requires explicit handling (a future
+// user-archive Story) rather than silently shredding the audit trail.
+// `workItemId` cascades — when an issue is hard-deleted its history goes with
+// it (work items are soft-archived in practice, so this is the rare path).
+//
+// NOTE: there is no `workspaceId` column by design — denormalizing tenancy
+// onto a revision row would let it lie about which workspace it belongs to.
+// The RLS policy (see the add_work_item_revisions migration) joins to the
+// parent work_item instead.
+model WorkItemRevision {
+  id          String   @id @default(cuid())
+  workItemId  String
+  changedById String
+  changedAt   DateTime @default(now())
+  changeKind  String // 'created' | 'updated' | 'archived' — String, not enum (see model note)
+  diff        Json
+
+  workItem  WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  changedBy User     @relation("WorkItemRevisionAuthor", fields: [changedById], references: [id], onDelete: Restrict)
+
+  @@index([workItemId, changedAt])
+  @@index([workItemId])
+  @@map("work_item_revision")
 }
 
 enum WorkItemLinkKind {
