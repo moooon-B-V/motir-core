@@ -1,12 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { WorkItem, WorkItemKind } from '@prisma/client';
 import { db } from '@/lib/db';
-import { projectRepository } from '@/lib/repositories/projectRepository';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
-import { usersService } from '@/lib/services/usersService';
-import { workspacesService } from '@/lib/services/workspacesService';
-import { projectsService } from '@/lib/services/projectsService';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import {
   CrossWorkspaceLinkError,
@@ -16,6 +10,11 @@ import {
   WorkspaceMismatchLinkError,
 } from '@/lib/workItems/linkErrors';
 import { truncateAuthTables } from '../../helpers/db';
+import {
+  makeWorkItemFixture as makeFixture,
+  createTestWorkItem as createWorkItem,
+  createTestLink as createLink,
+} from '../../fixtures';
 
 // Integration tests for workItemLinkRepository against a REAL Postgres (Yue's
 // no-mocks rule). These exercise the DB-layer triggers through the repository
@@ -24,12 +23,15 @@ import { truncateAuthTables } from '../../helpers/db';
 // translation. The mapper is exercised in the happy-path test so the DTO
 // shape is locked alongside the persistence.
 //
+// The fixture (makeFixture), work-item builder (createWorkItem), and link
+// builder (createLink) now come from tests/fixtures/ (Subtask 1.4.7) — the
+// per-file copies were unified there. makeFixture takes { name, identifier }
+// so the cross-workspace cases can mint two distinct tenants.
+//
 // work_item_link truncates with the auth tables: TRUNCATE ... CASCADE on
 // workspace/user carries it via the FKs, but we name it explicitly first
 // for intent + resilience if that cascade ever changes (mirrors what
 // repository.test.ts does for work_item).
-
-const PASSWORD = 'hunter2hunter2';
 
 async function truncateAll(): Promise<void> {
   await db.$executeRawUnsafe(
@@ -45,84 +47,6 @@ beforeEach(async () => {
 afterAll(async () => {
   await db.$disconnect();
 });
-
-/**
- * Workspace + project + owner fixture. The project identifier is "PROD"
- * by default so item identifiers read as PROD-1, PROD-2, … Callers may
- * pass `nameSeed` to disambiguate when constructing two workspaces in the
- * same test (the cross-workspace case).
- */
-async function makeFixture(opts: { name?: string; identifier?: string } = {}) {
-  const owner = await usersService.createUser({
-    email: `owner+${Math.random().toString(36).slice(2)}@example.com`,
-    password: PASSWORD,
-    name: 'Owner',
-  });
-  const { workspace } = await workspacesService.createWorkspace({
-    name: opts.name ?? 'Acme',
-    ownerUserId: owner.id,
-  });
-  const project = await projectsService.createProject({
-    workspaceId: workspace.id,
-    actorUserId: owner.id,
-    name: 'Prodect',
-    identifier: opts.identifier ?? 'PROD',
-  });
-  return { owner, workspace, project };
-}
-
-/**
- * Create a work item via the same allocate-then-create dance the service
- * (1.4.4) will. Position is zero-padded; these link-trigger tests don't
- * assert ordering so a stable lexicographic key suffices.
- */
-async function createWorkItem(
-  fx: Awaited<ReturnType<typeof makeFixture>>,
-  input: { kind: WorkItemKind; title: string; parentId?: string | null },
-): Promise<WorkItem> {
-  return db.$transaction(async (tx) => {
-    const key = await projectRepository.allocateWorkItemNumber(fx.project.id, tx);
-    return workItemRepository.create(
-      {
-        workspaceId: fx.workspace.id,
-        projectId: fx.project.id,
-        parentId: input.parentId ?? null,
-        kind: input.kind,
-        key,
-        identifier: `${fx.project.identifier}-${key}`,
-        title: input.title,
-        reporterId: fx.owner.id,
-        position: String(key).padStart(6, '0'),
-      },
-      tx,
-    );
-  });
-}
-
-/**
- * One-shot link create — wraps the required-tx repository call in a
- * transaction the way the service layer will. Returns the inserted row.
- */
-async function createLink(input: {
-  workspaceId: string;
-  fromId: string;
-  toId: string;
-  kind: 'is_blocked_by' | 'relates_to' | 'duplicates' | 'clones';
-  createdById: string;
-}) {
-  return db.$transaction((tx) =>
-    workItemLinkRepository.create(
-      {
-        workspaceId: input.workspaceId,
-        fromId: input.fromId,
-        toId: input.toId,
-        kind: input.kind,
-        createdById: input.createdById,
-      },
-      tx,
-    ),
-  );
-}
 
 describe('workItemLinkRepository.create — happy path', () => {
   it('persists a link and returns a row whose mapper produces the expected DTO', async () => {
@@ -176,6 +100,44 @@ describe('workItemLinkRepository.create — cycle trigger (is_blocked_by only)',
       createLink({
         workspaceId: fx.workspace.id,
         fromId: b.id,
+        toId: a.id,
+        kind: 'is_blocked_by',
+        createdById: fx.owner.id,
+      }),
+    ).rejects.toBeInstanceOf(WorkItemLinkCycleError);
+  });
+
+  // Subtask 1.4.7 gap-fill: the card calls for the DEEPER link cycle —
+  // A is_blocked_by B, B is_blocked_by C, then C is_blocked_by A closes a
+  // 3-edge cycle. The trigger's recursive CTE must walk A → B → C to discover
+  // that the new C→A edge reaches back to A. (The test above closes a 2-cycle;
+  // this exercises one more recursion hop.)
+  it('rejects a 3-hop is_blocked_by cycle (A→B→C, then C→A) on the closing edge', async () => {
+    const fx = await makeFixture();
+    const a = await createWorkItem(fx, { kind: 'task', title: 'A' });
+    const b = await createWorkItem(fx, { kind: 'task', title: 'B' });
+    const c = await createWorkItem(fx, { kind: 'task', title: 'C' });
+
+    await createLink({
+      workspaceId: fx.workspace.id,
+      fromId: a.id,
+      toId: b.id,
+      kind: 'is_blocked_by',
+      createdById: fx.owner.id,
+    });
+    await createLink({
+      workspaceId: fx.workspace.id,
+      fromId: b.id,
+      toId: c.id,
+      kind: 'is_blocked_by',
+      createdById: fx.owner.id,
+    });
+
+    // C is_blocked_by A closes the chain A → B → C → A.
+    await expect(
+      createLink({
+        workspaceId: fx.workspace.id,
+        fromId: c.id,
         toId: a.id,
         kind: 'is_blocked_by',
         createdById: fx.owner.id,

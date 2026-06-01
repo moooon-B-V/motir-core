@@ -3,14 +3,11 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { db } from '@/lib/db';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { usersService } from '@/lib/services/usersService';
-import { workspacesService } from '@/lib/services/workspacesService';
-import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { toWorkItemRevisionDto } from '@/lib/mappers/workItemRevisionMappers';
-import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { CreateWorkItemInput } from '@/lib/dto/workItems';
 import { truncateAuthTables } from '../../helpers/db';
+import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 
 // Service-layer integration tests for the work-item REVISION audit trail
 // (Subtask 1.4.6) against a REAL Postgres (Yue's no-mocks rule — the single
@@ -24,8 +21,6 @@ import { truncateAuthTables } from '../../helpers/db';
 // that the work_item_revision RLS policy isolates revisions by the parent work
 // item's workspace (mirroring tests/work-item-rls.test.ts's prodect_app
 // pattern, since the revision row has no workspaceId of its own).
-
-const PASSWORD = 'hunter2hunter2';
 
 async function truncateAll(): Promise<void> {
   await db.$executeRawUnsafe(
@@ -49,38 +44,16 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
-interface Fixture {
-  ownerId: string;
-  workspaceId: string;
-  projectId: string;
-  ctx: ServiceContext;
-}
+// makeFixture (the workspace/project/owner bundle) is the shared
+// makeWorkItemFixture from tests/fixtures/ (Subtask 1.4.7); its superset
+// return shape still exposes the { ownerId, workspaceId, projectId, ctx }
+// fields these revision tests read.
+const makeFixture = makeWorkItemFixture;
 
-async function makeFixture(opts: { identifier?: string; name?: string } = {}): Promise<Fixture> {
-  const owner = await usersService.createUser({
-    email: `owner+${Math.random().toString(36).slice(2)}@example.com`,
-    password: PASSWORD,
-    name: 'Owner',
-  });
-  const { workspace } = await workspacesService.createWorkspace({
-    name: opts.name ?? 'Acme',
-    ownerUserId: owner.id,
-  });
-  const project = await projectsService.createProject({
-    workspaceId: workspace.id,
-    actorUserId: owner.id,
-    name: 'Prodect',
-    identifier: opts.identifier ?? 'PROD',
-  });
-  return {
-    ownerId: owner.id,
-    workspaceId: workspace.id,
-    projectId: project.id,
-    ctx: { userId: owner.id, workspaceId: workspace.id },
-  };
-}
-
-function createInput(fx: Fixture, over: Partial<CreateWorkItemInput> = {}): CreateWorkItemInput {
+function createInput(
+  fx: WorkItemFixture,
+  over: Partial<CreateWorkItemInput> = {},
+): CreateWorkItemInput {
   return {
     projectId: fx.projectId,
     kind: 'task',
@@ -160,6 +133,30 @@ describe('updateWorkItem — revision', () => {
     // Unchanged fields are absent from the diff.
     expect(Object.keys(diff)).toEqual(['title']);
     expect(diff.priority).toBeUndefined();
+  });
+
+  // Subtask 1.4.7 gap-fill: the card's "update title + assigneeId → both in
+  // the diff" case. A multi-field patch records every changed field (and only
+  // changed fields) in one 'updated' revision.
+  it('writes ONE "updated" revision capturing BOTH changed fields (title + assigneeId)', async () => {
+    const fx = await makeFixture();
+    const created = await workItemsService.createWorkItem(
+      createInput(fx, { title: 'old' }),
+      fx.ctx,
+    );
+    // assign to the owner (a valid workspace member) AND rename in one patch.
+    await workItemsService.updateWorkItem(
+      created.id,
+      { title: 'new', assigneeId: fx.ownerId },
+      fx.ctx,
+    );
+
+    const revs = await workItemRevisionRepository.listByWorkItem(created.id);
+    expect(revs.map((r) => r.changeKind)).toEqual(['updated', 'created']);
+    const diff = diffOf(revs[0]!);
+    expect(diff.title).toEqual({ from: 'old', to: 'new' });
+    expect(diff.assigneeId).toEqual({ from: null, to: fx.ownerId });
+    expect(Object.keys(diff).sort()).toEqual(['assigneeId', 'title']);
   });
 
   it('an empty patch writes NO revision', async () => {
@@ -301,6 +298,66 @@ describe('atomicity — revision write failure rolls back the mutation', () => {
 
     spy.mockRestore();
   });
+
+  // Subtask 1.4.7 gap-fill: the OTHER direction. The test above fails the
+  // REVISION write and proves the work_item rolls back. This one fails the
+  // WORK-ITEM write and proves no orphan revision is left behind — the
+  // atomicity guarantee is symmetric.
+  it('createWorkItem: an injected failure in the work_item write leaves NO revision and NO work_item', async () => {
+    const fx = await makeFixture();
+
+    // Inject a failure into the work_item INSERT. createWorkItem does:
+    // allocate key → insert work_item (THIS throws) → recordRevision. The
+    // revision write is never reached, and the $transaction rolls back the
+    // key allocation too — so neither table gains a row.
+    const spy = vi
+      .spyOn(workItemRepository, 'create')
+      .mockRejectedValue(new Error('injected work_item failure'));
+
+    await expect(
+      workItemsService.createWorkItem(createInput(fx, { title: 'Doomed' }), fx.ctx),
+    ).rejects.toThrow('injected work_item failure');
+
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    // No revision orphaned (the revision write never ran), and no work_item.
+    const revCount = await db.workItemRevision.count();
+    expect(revCount).toBe(0);
+    const items = await workItemRepository.findByProjectFiltered(fx.projectId);
+    expect(items).toEqual([]);
+
+    spy.mockRestore();
+  });
+
+  // Subtask 1.4.7 gap-fill: the update flow's atomicity. A revision-write
+  // failure mid-UPDATE must roll back the field change too — the work_item
+  // keeps its prior value and gains no 'updated' revision.
+  it('updateWorkItem: an injected failure in the revision write rolls back the field change', async () => {
+    const fx = await makeFixture();
+    const created = await workItemsService.createWorkItem(
+      createInput(fx, { title: 'Before' }),
+      fx.ctx,
+    );
+
+    // Let the 'created' revision land, then fail the NEXT revision write (the
+    // 'updated' one). The mutation it accompanies must roll back with it.
+    const spy = vi
+      .spyOn(workItemRevisionRepository, 'create')
+      .mockRejectedValueOnce(new Error('injected revision failure on update'));
+
+    await expect(
+      workItemsService.updateWorkItem(created.id, { title: 'After' }, fx.ctx),
+    ).rejects.toThrow('injected revision failure on update');
+
+    // The title is unchanged (the work_item update rolled back).
+    const row = await workItemRepository.findById(created.id);
+    expect(row?.title).toBe('Before');
+    // Only the original 'created' revision survives — no 'updated' orphan.
+    const revs = await workItemRevisionRepository.listByWorkItem(created.id);
+    expect(revs.map((r) => r.changeKind)).toEqual(['created']);
+
+    spy.mockRestore();
+  });
 });
 
 // ── listByWorkItem ordering ──────────────────────────────────────────────────
@@ -318,6 +375,28 @@ describe('listByWorkItem — ordering', () => {
     for (let i = 1; i < revs.length; i += 1) {
       expect(revs[i - 1]!.changedAt.getTime()).toBeGreaterThanOrEqual(revs[i]!.changedAt.getTime());
     }
+  });
+
+  // Subtask 1.4.7 coverage-fill: the cursor-pagination branch of
+  // listByWorkItem (skip the row AT the cursor and resume after it).
+  it('resumes after a cursor, skipping the cursor row', async () => {
+    const fx = await makeFixture();
+    const created = await workItemsService.createWorkItem(createInput(fx, { title: 'v1' }), fx.ctx);
+    await workItemsService.updateWorkItem(created.id, { title: 'v2' }, fx.ctx);
+    await workItemsService.archiveWorkItem(created.id, fx.ctx);
+
+    const all = await workItemRevisionRepository.listByWorkItem(created.id);
+    expect(all.map((r) => r.changeKind)).toEqual(['archived', 'updated', 'created']);
+
+    // Page after the newest ('archived') revision → the next two, in order.
+    const afterFirst = await workItemRevisionRepository.listByWorkItem(created.id, {
+      cursor: all[0]!.id,
+    });
+    expect(afterFirst.map((r) => r.changeKind)).toEqual(['updated', 'created']);
+
+    // Cap the page size.
+    const firstOnly = await workItemRevisionRepository.listByWorkItem(created.id, { take: 1 });
+    expect(firstOnly.map((r) => r.changeKind)).toEqual(['archived']);
   });
 });
 

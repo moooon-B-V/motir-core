@@ -102,6 +102,7 @@ export const workItemLinkRepository = {
        WHERE l."fromId" = ${workItemId}
          AND l."kind" = 'is_blocked_by'::"work_item_link_kind"
          AND b."status" <> 'done'`;
+    /* istanbul ignore next -- defensive: COUNT(*) always returns exactly one row, so rows[0].cnt is always present; the ?? 0 guards a shape change */
     return Number(rows[0]?.cnt ?? 0);
   },
 
@@ -169,15 +170,19 @@ function translateWriteError(
     if (message.includes('WI_LINK_WORKSPACE_MISMATCH')) {
       throw new WorkspaceMismatchLinkError();
     }
+    /* istanbul ignore else -- defensive: within a 23514 block the four WI_LINK markers are exhaustive, so "not a self-link here" is unreachable */
     if (message.includes('WI_LINK_SELF')) {
       throw new SelfLinkError();
     }
   }
 
+  /* istanbul ignore else -- defensive: a non-Prisma error never reaches here (every link write error is a 23514 trigger or a Prisma known-request error) */
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    /* istanbul ignore else -- defensive: P2002 (the (fromId,toId,kind) unique) is the only Prisma code this write produces */
     if (err.code === 'P2002') throw new DuplicateLinkError();
   }
 
+  /* istanbul ignore next -- defensive rethrow: every work_item_link write error is a 23514 trigger marker or a Prisma P2002, all handled above */
   throw err;
 }
 
@@ -197,6 +202,7 @@ function extractSqlState(err: unknown): string | undefined {
     if (cause && typeof cause === 'object') {
       const c = cause as { code?: unknown; originalCode?: unknown };
       if (typeof c.code === 'string') return c.code;
+      /* istanbul ignore next -- defensive: the @prisma/adapter-pg error exposes `code`; `originalCode` is a fallback for a future driver shape */
       if (typeof c.originalCode === 'string') return c.originalCode;
     }
   }
@@ -205,8 +211,10 @@ function extractSqlState(err: unknown): string | undefined {
 
 function extractMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
+  /* istanbul ignore next -- defensive: work_item_link write errors are always Error instances; these branches guard a non-Error throw */
   if (err && typeof err === 'object' && 'message' in err) {
     return String((err as { message: unknown }).message);
   }
+  /* istanbul ignore next -- defensive: see above */
   return String(err);
 }
