@@ -14,18 +14,20 @@ validated on the three surfaces real jobs (1.6.2–1.6.6) will run on. The spike
 is a 2-file runtime (`app/api/inngest/route.ts` serve route + `spike.ts` client
 & one `example.ping` no-op function), exercised three ways.
 
-| #   | Surface                                               | Result                       | How proven                                                                                                                  |
-| --- | ----------------------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Local dev** (`inngest-cli dev` + `next dev`)        | ✅ PASS                      | CLI discovered the function via `/api/inngest`; event triggered; run reached `COMPLETED` with full step history             |
-| 2   | **Vercel preview** (prod control plane → preview URL) | ⚠️ **NOT EXECUTED in spike** | Requires Vercel + Inngest **dashboard** access the automated spike env doesn't have. Manual runbook below; **human-gated**. |
-| 3   | **CI harness** (`@inngest/test` in Vitest)            | ✅ PASS                      | In-process run, no live server; asserts exact return shape. `pnpm test` green.                                              |
+| #   | Surface                                               | Result                                 | How proven                                                                                                                                                                                                                                                          |
+| --- | ----------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Local dev** (`inngest-cli dev` + `next dev`)        | ✅ PASS                                | CLI discovered the function via `/api/inngest`; event triggered; run reached `COMPLETED` with full step history                                                                                                                                                     |
+| 2   | **Vercel preview** (prod control plane → preview URL) | ⚠️ **Deploy/boot ✅, runtime BLOCKED** | Preview deploys + boots (CI `Vercel` ✅). But `/api/inngest` returns **401 (Deployment Protection)** → Inngest's control plane can't reach it. Keys alone won't fix it. See [§Validation 2](#validation-2--vercel-preview-partially-confirmed-a-blocker-was-found). |
+| 3   | **CI harness** (`@inngest/test` in Vitest)            | ✅ PASS                                | In-process run, no live server; asserts exact return shape. `pnpm test` green.                                                                                                                                                                                      |
 
 **Honest scope note:** the spike ran in a headless sandbox with **no `vercel`
 CLI and no Inngest cloud account**. Surfaces 1 and 3 — which carry the real
 _code-feasibility_ risk (does the SDK work here, does the API shape hold, does
-the test harness compose with Vitest 4) — were executed and pass. Surface 2 is
-an _operational / credentials_ task (set keys in two dashboards, click deploy);
-it is documented, not executed. See [§Validation 2](#validation-2--vercel-preview).
+the test harness compose with Vitest 4) — were executed and pass. Surface 2 was
+**probed against the real deployed preview**: it deploys and boots, but
+`/api/inngest` is behind a **401 Vercel Deployment Protection** wall that also
+blocks Inngest's control plane — a real wiring blocker the spike caught (sharp
+edge #9), not just an un-run step. See [§Validation 2](#validation-2--vercel-preview-partially-confirmed-a-blocker-was-found).
 
 ## Package versions installed (pin these in 1.6.2)
 
@@ -115,6 +117,21 @@ lives in `lib/auth/index.ts`. Left untouched either way.)
    event whose `data` is an empty object. Tests asserting on a default-event run
    must expect `{}`; pass an explicit `events:` mock when the function branches
    on payload.
+9. **🔴 Vercel Deployment Protection blocks Inngest on preview.** The preview
+   deployment (and its root `/`) returns **`401 Authentication Required`** — the
+   project has Vercel Deployment Protection (SSO) on, the team default. Inngest's
+   cloud control plane is an **unauthenticated external caller**, so its sync
+   (`PUT /api/inngest`) and invoke (`POST /api/inngest`) requests hit the **same
+   401**. **Consequence: setting the signing/event keys is NOT sufficient — while
+   Deployment Protection is on, Inngest cannot reach the preview at all.** This is
+   the single most important thing the spike caught by probing the real URL.
+   Resolutions: (a) install the **official Inngest↔Vercel integration**, which
+   configures Vercel "Protection Bypass for Automation" so the control plane can
+   reach protected previews — this is the _recommended_ path and elevates the
+   integration from "nice-to-have for URL sync" to **near-required**; or (b)
+   generate a Protection Bypass secret manually and configure Inngest with it; or
+   (c) disable Deployment Protection for the project (weakens preview security —
+   not recommended).
 
 ## Validation 1 — local dev (executed ✅)
 
@@ -139,33 +156,54 @@ Evidence captured:
   `FunctionScheduled → FunctionStarted → StepStarted(step) → StepCompleted(step) → FunctionCompleted`;
   next log shows `POST /api/inngest?fnId=prodect-core-example-ping&stepId=step 206`.
 
-## Validation 2 — Vercel preview (NOT executed — human runbook)
+## Validation 2 — Vercel preview (partially confirmed; a blocker was found)
 
-The spike could not execute this: no `vercel` CLI and no Inngest cloud account
-in the sandbox. **Yue must run these steps** (they gate 1.6.x going live in
-preview/prod, but do **not** block 1.6.2 _code_ work):
+**What the spike confirmed by probing the real deployment:**
 
-1. Push the branch → confirm Vercel (team `zhuyue11s-projects`) auto-builds a
-   preview deployment for `prodect-core` and that **boot succeeds** (the preview
-   opens a Prisma connection against its Vercel-Neon per-PR branch DB; `ping`
-   itself doesn't touch the DB, so this only proves boot isn't broken by the
-   Inngest additions — confirmed locally, expected fine).
-2. Inngest dashboard (`app.inngest.com`) → create/confirm an Inngest **app** and
+- The push **did** auto-build a Vercel preview
+  (`prodect-core-git-subtask-prod-161-inn-4df2c7-zhuyue11s-projects.vercel.app`)
+  and CI's `Vercel` check **passed** — the preview **deploys and boots** with the
+  Inngest additions (the Prisma connection at boot is unaffected; `ping` doesn't
+  touch the DB). ✅
+- `GET <preview>/api/inngest` (and `GET <preview>/`) both return **`401`** — the
+  project has **Vercel Deployment Protection (SSO)** on. The local
+  `VERCEL_OIDC_TOKEN` does **not** bypass it (trusted-sources not configured;
+  wrong token type). So the spike could **not** reach the serve route on the
+  preview to confirm its mode / key state.
+
+**The blocker this revealed (sharp edge #9):** Inngest's cloud control plane is
+an unauthenticated external caller and would hit the **same 401** when it tries
+to sync/invoke `/api/inngest`. **Setting the keys is necessary but NOT
+sufficient** — Deployment Protection must be handled first. This is the spike
+doing its job: it found a preview-wiring blocker on a 2-file diff, before
+`lib/jobs/` was woven in.
+
+**Runbook for whoever completes this (still needs Vercel + Inngest dashboards):**
+
+1. **Resolve Deployment Protection for the control plane.** Install the official
+   **Inngest↔Vercel integration** (it sets up Vercel "Protection Bypass for
+   Automation" so Inngest can reach protected previews **and** auto-syncs the
+   per-push preview URL) — the recommended path. Manual alternative: create a
+   Protection Bypass secret and configure Inngest with it.
+2. Inngest dashboard (`app.inngest.com`) → create/confirm an Inngest **app**;
    grab `INNGEST_SIGNING_KEY` + `INNGEST_EVENT_KEY` for the target environment.
-3. Vercel dashboard → **Settings → Environment Variables** → add both keys with
-   scope = **Preview** (and later **Production**). Do **not** set `INNGEST_DEV`.
-   Redeploy the preview so the new env takes effect.
-4. In the Inngest dashboard, register/sync the preview's `/api/inngest` URL
-   (Inngest's prod control plane discovers it once the signing key matches), then
-   trigger `example/ping` from the dashboard and confirm a run executed **in the
-   preview deployment**.
-5. Note the interaction: Vercel mints a **new preview URL per push**, and each
-   PR gets an **isolated Neon branch DB** — neither affects Inngest discovery
-   (Inngest keys off the signing key + the synced URL, not the DB), but the
-   per-push URL means the Inngest app's synced URL must be re-pointed (or use
-   Inngest's Vercel integration, which auto-syncs preview URLs). **Recommend
-   1.6.2 install the official Inngest↔Vercel integration** so preview URLs sync
-   automatically rather than by hand.
+3. Vercel → **Settings → Environment Variables** → add both keys, scope
+   **Preview** (and later **Production**). Do **not** set `INNGEST_DEV`. Redeploy.
+4. Confirm Inngest synced the preview `/api/inngest` (now reachable past the
+   bypass), then trigger `example/ping` from the dashboard and confirm a run
+   executed **in the preview deployment**.
+5. Per-push reality: Vercel mints a **new preview URL per push** and each PR gets
+   an **isolated Neon branch DB**. The DB doesn't affect Inngest discovery
+   (Inngest keys off the signing key + synced URL); the changing URL is exactly
+   why the auto-syncing official integration (step 1) is worth it over manual
+   URL re-pointing.
+
+> **To let an agent finish the live route/key probe past the 401:** provide a
+> Vercel Protection Bypass token (Project → Settings → Deployment Protection →
+> Protection Bypass for Automation) and the agent can
+> `curl -H 'x-vercel-protection-bypass: <token>' <preview>/api/inngest` to read
+> `mode` / `has_signing_key` / `has_event_key` directly. The Inngest dashboard
+> trigger still needs a human with the Inngest account.
 
 ## Validation 3 — CI harness (executed ✅)
 
@@ -187,7 +225,12 @@ are all validated. 1.6.2 should: pin the versions above; use the 2-arg
 `createFunction`; promote client → `lib/inngest/client.ts` and functions →
 `lib/jobs/` behind the planned `defineJob()`; set `INNGEST_DEV=1` in the local
 dev script; wire `INNGEST_SIGNING_KEY` (and `INNGEST_EVENT_KEY` once jobs send
-events) into `requiredEnv` **for preview/prod only**; and install the official
-Inngest↔Vercel integration. **One human-gated item carries over:** the
-Vercel-preview + Inngest-cloud wiring (Validation 2) must be completed by Yue in
-the two dashboards before any 1.6.x job runs in preview/production.
+events) into `requiredEnv` **for preview/prod only**; and **install the official
+Inngest↔Vercel integration — now near-required, not optional**, because (sharp
+edge #9) Vercel Deployment Protection 401s the control plane and the integration
+configures the bypass. **One human-gated item carries over:** the Vercel-preview
+
+- Inngest-cloud wiring (Validation 2) must be completed in the two dashboards
+  before any 1.6.x job runs in preview/production — and it must **resolve
+  Deployment Protection first**, since the signing/event keys alone won't make
+  Inngest reachable on a protected preview.
