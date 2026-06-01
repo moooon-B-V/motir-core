@@ -1,7 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { MessageSquareOff, Plus, Send, Sparkles } from 'lucide-react';
+import {
+  BarChart3,
+  BookOpen,
+  ChevronsUpDown,
+  CircleDot,
+  Columns3,
+  LayoutDashboard,
+  MessageSquareOff,
+  Plus,
+  Send,
+  Settings,
+  Sparkles,
+} from 'lucide-react';
 import { useTheme } from '@/lib/contexts/theme-context';
 import { useToast } from '@/components/ui/Toast';
 import { Button } from '@/components/ui/Button';
@@ -11,6 +23,10 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Pill } from '@/components/ui/Pill';
+import { SectionLabel } from '@/components/ui/SectionLabel';
+import { Sidebar, type SidebarSection } from '@/components/ui/Sidebar';
+import { SidebarDrawer } from '@/components/ui/SidebarDrawer';
+import { SidebarToggle } from '@/components/ui/SidebarToggle';
 import { Spinner } from '@/components/ui/Spinner';
 import { Textarea } from '@/components/ui/Textarea';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -720,7 +736,155 @@ export default function TokensPage() {
           />
         </div>
       </Section>
+
+      <Section title="App shell">
+        <p
+          className="text-sm"
+          style={{ color: 'var(--el-page-text-muted)', marginBottom: 'var(--spacing-lg)' }}
+        >
+          The navigation rail (Subtask 1.5.2). Expanded (240px) and collapsed (56px, icon-only with
+          hover tooltips) share the <code className="font-mono text-xs">useSidebarCollapsed</code>{' '}
+          store; the mobile drawer slides in over a scrim. The active row uses{' '}
+          <code className="font-mono text-xs">--el-sidebar-item-bg-active</code>; hover any other
+          row for <code className="font-mono text-xs">--el-sidebar-item-bg-hover</code>.
+        </p>
+        <AppShellDemo />
+      </Section>
     </main>
+  );
+}
+
+const SHELL_DEMO_SECTIONS: SidebarSection[] = [
+  {
+    id: 'primary',
+    items: [
+      { icon: <LayoutDashboard />, label: 'Dashboard', href: '#dashboard' },
+      { icon: <CircleDot />, label: 'Issues', href: '#issues', active: true },
+      { icon: <Columns3 />, label: 'Boards', href: '#boards' },
+      { icon: <BarChart3 />, label: 'Reports', href: '#reports' },
+    ],
+  },
+  {
+    id: 'meta',
+    items: [
+      { icon: <Settings />, label: 'Settings', href: '#settings' },
+      { icon: <BookOpen />, label: 'Docs', href: '#docs' },
+    ],
+  },
+];
+
+/** A ProjectSwitcher-shaped header specimen — collapsed shows just the avatar. */
+function DemoProjectHeader({ collapsed }: { collapsed: boolean }) {
+  if (collapsed) {
+    return (
+      <div
+        aria-hidden
+        className="mx-auto flex h-8 w-8 items-center justify-center rounded-(--radius-sm) bg-primary font-sans text-sm font-semibold text-primary-foreground"
+      >
+        M
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="flex w-full items-center gap-2 rounded-(--radius-sm) border border-(--el-sidebar-border) bg-background px-2 py-1.5 text-left"
+    >
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-(--radius-xs) bg-primary text-xs font-semibold text-primary-foreground">
+        M
+      </span>
+      <span className="min-w-0 flex-1">
+        <SectionLabel label="Project" />
+        <span className="block truncate font-sans text-sm font-medium text-foreground">
+          Mobile App
+        </span>
+      </span>
+      <ChevronsUpDown className="h-4 w-4 shrink-0 text-(--color-muted-foreground)" aria-hidden />
+    </button>
+  );
+}
+
+function AppShellDemo() {
+  const [collapsedPreview, setCollapsedPreview] = useState(false);
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-2xl)' }}>
+      {/* (a) Expanded */}
+      <div>
+        <div
+          className="font-mono text-xs"
+          style={{ color: 'var(--el-page-text-muted)', marginBottom: 'var(--spacing-sm)' }}
+        >
+          Expanded · 240px
+        </div>
+        <div
+          style={{ width: 240, height: 420 }}
+          className="overflow-hidden rounded-(--radius-card) border border-(--el-sidebar-border)"
+        >
+          <Sidebar
+            collapsed={false}
+            header={<DemoProjectHeader collapsed={false} />}
+            sections={SHELL_DEMO_SECTIONS}
+            footer={<SidebarToggle variant="footer" />}
+          />
+        </div>
+      </div>
+
+      {/* (b) Collapsed — driven by a local useState boolean */}
+      <div>
+        <div
+          className="font-mono text-xs"
+          style={{ color: 'var(--el-page-text-muted)', marginBottom: 'var(--spacing-sm)' }}
+        >
+          Collapsed · {collapsedPreview ? '56px' : '240px'} (local toggle)
+        </div>
+        <div
+          style={{ width: collapsedPreview ? 56 : 240, height: 420 }}
+          className="overflow-hidden rounded-(--radius-card) border border-(--el-sidebar-border)"
+        >
+          <Sidebar
+            collapsed={collapsedPreview}
+            header={<DemoProjectHeader collapsed={collapsedPreview} />}
+            sections={SHELL_DEMO_SECTIONS}
+            footer={
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                onClick={() => setCollapsedPreview((c) => !c)}
+              >
+                {collapsedPreview ? '»' : '« Collapse'}
+              </Button>
+            }
+          />
+        </div>
+      </div>
+
+      {/* (c) Mobile drawer — button opens the off-canvas drawer over a scrim */}
+      <div>
+        <div
+          className="font-mono text-xs"
+          style={{ color: 'var(--el-page-text-muted)', marginBottom: 'var(--spacing-sm)' }}
+        >
+          Mobile drawer · 300px
+        </div>
+        <SidebarToggle variant="hamburger" />
+        <SidebarDrawer
+          header={
+            <div className="flex items-center gap-2">
+              <span className="h-5 w-5 rounded-(--radius-xs) border border-(--el-sidebar-border)" />
+              <span className="font-sans text-sm font-semibold text-foreground">Acme Inc.</span>
+            </div>
+          }
+        >
+          <Sidebar
+            collapsed={false}
+            header={<DemoProjectHeader collapsed={false} />}
+            sections={SHELL_DEMO_SECTIONS}
+          />
+        </SidebarDrawer>
+      </div>
+    </div>
   );
 }
 
