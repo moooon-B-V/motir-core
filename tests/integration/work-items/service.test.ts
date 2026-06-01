@@ -2,14 +2,12 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
-import { usersService } from '@/lib/services/usersService';
-import { workspacesService } from '@/lib/services/workspacesService';
-import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { CreateWorkItemInput } from '@/lib/dto/workItems';
+import { IllegalParentTypeError } from '@/lib/workItems/errors';
 import { WorkItemLinkCycleError } from '@/lib/workItems/linkErrors';
 import { truncateAuthTables } from '../../helpers/db';
+import { makeWorkItemFixture as makeFixture, type WorkItemFixture } from '../../fixtures';
 
 // Service-layer integration tests for workItemsService against a REAL Postgres
 // (Yue's no-mocks rule — the single allowed spy here is vi.spyOn on a
@@ -19,8 +17,11 @@ import { truncateAuthTables } from '../../helpers/db';
 // update path, the explanation-source state machine, archive-doesn't-cascade,
 // fractional-index moves, link/unlink (incl. relates_to reciprocal + cycle),
 // the N+0 blocker/blocking resolution, and the single-query ready predicate.
-
-const PASSWORD = 'hunter2hunter2';
+//
+// The workspace/project/owner fixture (makeFixture) now comes from
+// tests/fixtures/ (Subtask 1.4.7); it returns a superset bundle, so the
+// { ownerId, workspaceId, projectId, ctx } fields these tests read are
+// unchanged.
 
 async function truncateAll(): Promise<void> {
   await db.$executeRawUnsafe(
@@ -38,40 +39,10 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
-interface Fixture {
-  ownerId: string;
-  workspaceId: string;
-  projectId: string;
-  projectIdentifier: string;
-  ctx: ServiceContext;
-}
-
-async function makeFixture(opts: { identifier?: string; name?: string } = {}): Promise<Fixture> {
-  const owner = await usersService.createUser({
-    email: `owner+${Math.random().toString(36).slice(2)}@example.com`,
-    password: PASSWORD,
-    name: 'Owner',
-  });
-  const { workspace } = await workspacesService.createWorkspace({
-    name: opts.name ?? 'Acme',
-    ownerUserId: owner.id,
-  });
-  const project = await projectsService.createProject({
-    workspaceId: workspace.id,
-    actorUserId: owner.id,
-    name: 'Prodect',
-    identifier: opts.identifier ?? 'PROD',
-  });
-  return {
-    ownerId: owner.id,
-    workspaceId: workspace.id,
-    projectId: project.id,
-    projectIdentifier: project.identifier,
-    ctx: { userId: owner.id, workspaceId: workspace.id },
-  };
-}
-
-function createInput(fx: Fixture, over: Partial<CreateWorkItemInput> = {}): CreateWorkItemInput {
+function createInput(
+  fx: WorkItemFixture,
+  over: Partial<CreateWorkItemInput> = {},
+): CreateWorkItemInput {
   return {
     projectId: fx.projectId,
     kind: 'task',
@@ -109,6 +80,34 @@ describe('createWorkItem — key allocation', () => {
     expect(keys).toEqual(Array.from({ length: N }, (_, i) => i + 1));
     // Identifiers are unique too.
     expect(new Set(results.map((r) => r.identifier)).size).toBe(N);
+  });
+
+  // Subtask 1.4.7 gap-fill: the AC names 20 explicitly. This is the heavier
+  // stress variant of the 8-wide test above — 20 createWorkItem calls fired
+  // concurrently against ONE project must produce a CONTIGUOUS key set 1..20
+  // with no duplicates and no gaps. The allocate-key-inside-the-transaction
+  // design (projectRepository.allocateWorkItemNumber does an atomic
+  // UPDATE ... RETURNING under the row lock) is what guarantees this even
+  // when all 20 transactions race.
+  it('allocates a contiguous, gap-free, duplicate-free key set under 20-wide concurrency', async () => {
+    const fx = await makeFixture();
+    const N = 20;
+    const results = await Promise.all(
+      Array.from({ length: N }, (_, i) =>
+        workItemsService.createWorkItem(createInput(fx, { title: `Stress ${i}` }), fx.ctx),
+      ),
+    );
+
+    const keys = results.map((r) => r.key).sort((x, y) => x - y);
+    // Contiguous 1..20: no gaps (every key present) and no duplicates (Set
+    // size equals N). The two together pin "exactly the integers 1..20, once".
+    expect(keys).toEqual(Array.from({ length: N }, (_, i) => i + 1));
+    expect(new Set(keys).size).toBe(N);
+    expect(new Set(results.map((r) => r.identifier)).size).toBe(N);
+    // Every identifier is the derived PROD-<key>.
+    expect(new Set(results.map((r) => r.identifier))).toEqual(
+      new Set(Array.from({ length: N }, (_, i) => `PROD-${i + 1}`)),
+    );
   });
 });
 
@@ -199,6 +198,27 @@ describe('updateWorkItem — explanation-source state machine', () => {
       fx.ctx,
     );
     expect(edited.explanationSource).toBe('ai_draft');
+  });
+
+  // Subtask 1.4.7 gap-fill: the card's "direct PATCH of explanationSource
+  // alone (no explanationMd) is allowed — e.g. a user manually dismisses the
+  // AI-draft badge". The patch carries ONLY explanationSource, so the
+  // auto-transition machine doesn't fire; the explicit value is written as-is.
+  it('patches explanationSource alone (no explanationMd) — manual badge dismissal', async () => {
+    const fx = await makeFixture();
+    const created = await workItemsService.createWorkItem(
+      createInput(fx, { explanationMd: 'AI wrote this', explanationSource: 'ai_draft' }),
+      fx.ctx,
+    );
+
+    const dismissed = await workItemsService.updateWorkItem(
+      created.id,
+      { explanationSource: 'user_edited' },
+      fx.ctx,
+    );
+    expect(dismissed.explanationSource).toBe('user_edited');
+    // The explanation content is untouched by a source-only patch.
+    expect(dismissed.explanationMd).toBe('AI wrote this');
   });
 
   it('does not flip when the current source is not ai_draft', async () => {
@@ -312,6 +332,109 @@ describe('moveWorkItem', () => {
     const moved = await workItemsService.moveWorkItem(story.id, { newParentId: e2.id }, fx.ctx);
     expect(moved.parentId).toBe(e2.id);
     expect(moved.position).toBeTruthy();
+  });
+});
+
+// Subtask 1.4.7 gap-fill: the three explicit reorder slots. `position` is a
+// fractional-index string, so "sorts into the expected slot" is a plain
+// lexicographic (string <) comparison. Recall the service's slot semantics
+// (MoveWorkItemInput): `beforeId` = the sibling the moved item sorts AFTER,
+// `afterId` = the sibling it sorts BEFORE — so the new key is minted
+// keyBetween(beforeId.position, afterId.position).
+describe('moveWorkItem — edge cases', () => {
+  // Build an epic with three ordered children A < B < C and return them.
+  async function threeChildren(fx: WorkItemFixture) {
+    const epic = await workItemsService.createWorkItem(
+      createInput(fx, { kind: 'epic', title: 'Epic' }),
+      fx.ctx,
+    );
+    const a = await workItemsService.createWorkItem(
+      createInput(fx, { kind: 'story', title: 'A', parentId: epic.id }),
+      fx.ctx,
+    );
+    const b = await workItemsService.createWorkItem(
+      createInput(fx, { kind: 'story', title: 'B', parentId: epic.id }),
+      fx.ctx,
+    );
+    const c = await workItemsService.createWorkItem(
+      createInput(fx, { kind: 'story', title: 'C', parentId: epic.id }),
+      fx.ctx,
+    );
+    expect(a.position < b.position && b.position < c.position).toBe(true);
+    return { epic, a, b, c };
+  }
+
+  it('move-to-start: { beforeId: null, afterId: <first sibling> } sorts before every sibling', async () => {
+    const fx = await makeFixture();
+    const { a, b, c } = await threeChildren(fx);
+
+    // Move C to the very front: it must sort BEFORE A (the current first).
+    const moved = await workItemsService.moveWorkItem(
+      c.id,
+      { beforeId: null, afterId: a.id },
+      fx.ctx,
+    );
+    expect(moved.position < a.position).toBe(true);
+    expect(moved.position < b.position).toBe(true);
+  });
+
+  it('move-to-end: { beforeId: <last sibling>, afterId: null } sorts after every sibling', async () => {
+    const fx = await makeFixture();
+    const { a, b, c } = await threeChildren(fx);
+
+    // Move A to the very end: it must sort AFTER C (the current last).
+    const moved = await workItemsService.moveWorkItem(
+      a.id,
+      { beforeId: c.id, afterId: null },
+      fx.ctx,
+    );
+    expect(moved.position > c.position).toBe(true);
+    expect(moved.position > b.position).toBe(true);
+  });
+
+  it('move-between: { beforeId: <X>, afterId: <Y> } sorts strictly between X and Y', async () => {
+    const fx = await makeFixture();
+    const { a, b, c } = await threeChildren(fx);
+
+    // Move C to sit between A and B.
+    const moved = await workItemsService.moveWorkItem(
+      c.id,
+      { beforeId: a.id, afterId: b.id },
+      fx.ctx,
+    );
+    expect(moved.position > a.position).toBe(true);
+    expect(moved.position < b.position).toBe(true);
+  });
+});
+
+// Subtask 1.4.7 gap-fill: the service-path counterpart to repository.test.ts's
+// 3-hop ParentCycleError test. A re-parent that would close a cycle (moving an
+// ancestor under its own descendant) NEVER reaches the DB cycle trigger via
+// the service, because the kind hierarchy is a strict DAG: an ancestor's kind
+// can never be a legal child of a descendant's kind, so moveWorkItem's
+// assertKindParent pre-flight rejects with IllegalParentTypeError first. This
+// locks in that layering (the friendly service error fires ahead of the
+// structural trigger backstop) so a future refactor that drops the pre-flight
+// is caught.
+describe('moveWorkItem — re-parent cycle is intercepted by the kind pre-flight', () => {
+  it('moving an ancestor (A) under its descendant (C) rejects with IllegalParentTypeError, not ParentCycleError', async () => {
+    const fx = await makeFixture();
+    const a = await workItemsService.createWorkItem(
+      createInput(fx, { kind: 'epic', title: 'A' }),
+      fx.ctx,
+    );
+    const b = await workItemsService.createWorkItem(
+      createInput(fx, { kind: 'story', title: 'B', parentId: a.id }),
+      fx.ctx,
+    );
+    const c = await workItemsService.createWorkItem(
+      createInput(fx, { kind: 'task', title: 'C', parentId: b.id }),
+      fx.ctx,
+    );
+
+    await expect(
+      workItemsService.moveWorkItem(a.id, { newParentId: c.id }, fx.ctx),
+    ).rejects.toBeInstanceOf(IllegalParentTypeError);
   });
 });
 
@@ -490,6 +613,44 @@ describe('isReady', () => {
     expect(await workItemsService.isReady(a.id, fx.ctx)).toBe(false); // C still open
 
     await workItemsService.updateWorkItem(c.id, { status: 'done' }, fx.ctx);
+    expect(await workItemsService.isReady(a.id, fx.ctx)).toBe(true);
+  });
+
+  // Subtask 1.4.7 gap-fill: isReady must read the LIVE blocker set on every
+  // call, not a cached snapshot. This is the "unlink restores readiness" leg.
+  //
+  // Scenario (chosen to be unambiguous about the re-read property):
+  //   A is_blocked_by B (open) AND A is_blocked_by C.
+  //   Mark only C done. → A is NOT ready (B still open).
+  //   Unlink the STILL-OPEN blocker B.
+  //   → A IS ready, because the only remaining link is C, which is done.
+  // The flip to ready happens solely because the open blocker's LINK was
+  // removed — so isReady must have re-counted the current links (the
+  // countOpenBlockers query), not reused the earlier "not ready" result. The
+  // inverse — leaving B linked — keeps A not-ready, which the first leg below
+  // re-confirms after the unlink would have mattered.
+  it('re-reads the live blocker set: unlinking the still-open blocker flips isReady to true', async () => {
+    const fx = await makeFixture();
+    const a = await workItemsService.createWorkItem(createInput(fx, { title: 'A' }), fx.ctx);
+    const b = await workItemsService.createWorkItem(createInput(fx, { title: 'B' }), fx.ctx);
+    const c = await workItemsService.createWorkItem(createInput(fx, { title: 'C' }), fx.ctx);
+
+    const linkAB = await workItemsService.linkWorkItems(
+      { fromId: a.id, toId: b.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+    await workItemsService.linkWorkItems(
+      { fromId: a.id, toId: c.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+
+    // C done, B still open → not ready.
+    await workItemsService.updateWorkItem(c.id, { status: 'done' }, fx.ctx);
+    expect(await workItemsService.isReady(a.id, fx.ctx)).toBe(false);
+
+    // Remove the open blocker B. The predicate must re-evaluate against the
+    // now-single remaining (done) blocker C and return true.
+    await workItemsService.unlinkWorkItems(linkAB.id, fx.ctx);
     expect(await workItemsService.isReady(a.id, fx.ctx)).toBe(true);
   });
 });

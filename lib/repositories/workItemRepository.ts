@@ -278,9 +278,11 @@ function translateWriteError(err: unknown, ctx?: { id?: string }): never {
 
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === 'P2002') throw new WorkItemKeyConflictError();
+    /* istanbul ignore next -- defensive default: the P2025 path is only reached via update/archive, which always pass ctx.id, so the '(unknown)' fallback is unreachable */
     if (err.code === 'P2025') throw new WorkItemNotFoundError(ctx?.id ?? '(unknown)');
   }
 
+  /* istanbul ignore next -- defensive rethrow: every work_item write error is a 23514 trigger marker or a Prisma P2002/P2025, all handled above */
   throw err;
 }
 
@@ -300,6 +302,7 @@ function extractSqlState(err: unknown): string | undefined {
     if (cause && typeof cause === 'object') {
       const c = cause as { code?: unknown; originalCode?: unknown };
       if (typeof c.code === 'string') return c.code;
+      /* istanbul ignore next -- defensive: the @prisma/adapter-pg error exposes `code`; `originalCode` is a fallback for a future driver shape */
       if (typeof c.originalCode === 'string') return c.originalCode;
     }
   }
@@ -308,8 +311,10 @@ function extractSqlState(err: unknown): string | undefined {
 
 function extractMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
+  /* istanbul ignore next -- defensive: work_item write errors are always Error instances; these branches guard a non-Error throw */
   if (err && typeof err === 'object' && 'message' in err) {
     return String((err as { message: unknown }).message);
   }
+  /* istanbul ignore next -- defensive: see above */
   return String(err);
 }

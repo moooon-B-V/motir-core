@@ -97,6 +97,52 @@ jobs:
       - run: pnpm prisma generate
       - run: pnpm build
 
+  test:
+    name: Vitest (integration + coverage)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: prodect
+          POSTGRES_PASSWORD: prodect
+          POSTGRES_DB: prodect
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U prodect -d prodect"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      # In CI Postgres runs on the standard 5432.
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      # The auth module reads these at import time (Better-Auth's requiredEnv
+      # check); the Vitest suite imports it transitively. Throwaway CI values —
+      # see the build job for the rationale. No real OAuth happens here.
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      # Skip the husky install postinstall — CI has no .git/hooks to wire.
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma generate
+      # The integration tests run against a REAL Postgres (no mocks): they need
+      # the schema, the structural-integrity triggers, the RLS policies, AND
+      # the non-bypass `prodect_app` role — all created by the migrations.
+      # `migrate deploy` applies every migration to the service container.
+      - run: pnpm prisma migrate deploy
+      # test:coverage enforces the ≥90% per-module thresholds for the four
+      # work-item modules (vitest.config.ts). A regression below 90% fails CI.
+      - run: pnpm test:coverage
+
   e2e:
     name: Playwright E2E
     runs-on: ubuntu-latest

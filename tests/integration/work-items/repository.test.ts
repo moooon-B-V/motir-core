@@ -1,30 +1,37 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { PrismaClient, Prisma, type WorkItem, type WorkItemKind } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { db } from '@/lib/db';
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { usersService } from '@/lib/services/usersService';
-import { workspacesService } from '@/lib/services/workspacesService';
-import { projectsService } from '@/lib/services/projectsService';
 import {
   DepthLimitExceededError,
   IllegalParentTypeError,
   ParentCycleError,
+  WorkItemKeyConflictError,
+  WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
 import { truncateAuthTables } from '../../helpers/db';
+import {
+  makeWorkItemFixture as makeFixture,
+  createTestWorkItem as createWorkItem,
+} from '../../fixtures';
 
 // Integration tests for workItemRepository against a REAL Postgres (Yue's
 // no-mocks rule). These exercise the DB-layer triggers through the repository
 // edge: the kind-parent matrix, the depth limit, cycle prevention, the
 // single-round-trip recursive-CTE subtree read, and identifier lookup.
 //
+// The fixture (makeFixture) + work-item builder (createWorkItem) now come from
+// tests/fixtures/ (Subtask 1.4.7) — the per-file copies were unified there.
+// makeFixture still forces the project identifier to "PROD" by default so
+// item identifiers read as PROD-1, … (the findByIdentifier test asserts that);
+// createWorkItem still does the allocate-key-then-create dance through the
+// repository, so the triggers fire on this path exactly as in production.
+//
 // The triggers truncate with the auth tables: TRUNCATE ... CASCADE on
 // workspace/user carries work_item with it (it FKs both). We add an explicit
 // work_item truncate first for intent + resilience if that cascade ever
 // changes.
-
-const PASSWORD = 'hunter2hunter2';
 
 async function truncateAll(): Promise<void> {
   await db.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
@@ -38,61 +45,6 @@ beforeEach(async () => {
 afterAll(async () => {
   await db.$disconnect();
 });
-
-/**
- * Workspace + project + owner fixture. The project identifier is forced to
- * "PROD" so work-item identifiers read as PROD-1, PROD-2, … (the
- * findByIdentifier test asserts on "PROD-1").
- */
-async function makeFixture() {
-  const owner = await usersService.createUser({
-    email: `owner+${Math.random().toString(36).slice(2)}@example.com`,
-    password: PASSWORD,
-    name: 'Owner',
-  });
-  const { workspace } = await workspacesService.createWorkspace({
-    name: 'Acme',
-    ownerUserId: owner.id,
-  });
-  const project = await projectsService.createProject({
-    workspaceId: workspace.id,
-    actorUserId: owner.id,
-    name: 'Prodect',
-    identifier: 'PROD',
-  });
-  return { owner, workspace, project };
-}
-
-/**
- * Create a work item the way the service (1.4.4) will: allocate the per-
- * project key inside the transaction, derive the identifier, and create the
- * row — all through the repository. `position` is a fractional-index string
- * column; these structural-trigger tests don't assert ordering, so we use a
- * zero-padded key string (lexicographically stable) rather than minting real
- * fractional keys.
- */
-async function createWorkItem(
-  fx: Awaited<ReturnType<typeof makeFixture>>,
-  input: { kind: WorkItemKind; title: string; parentId?: string | null },
-): Promise<WorkItem> {
-  return db.$transaction(async (tx) => {
-    const key = await projectRepository.allocateWorkItemNumber(fx.project.id, tx);
-    return workItemRepository.create(
-      {
-        workspaceId: fx.workspace.id,
-        projectId: fx.project.id,
-        parentId: input.parentId ?? null,
-        kind: input.kind,
-        key,
-        identifier: `${fx.project.identifier}-${key}`,
-        title: input.title,
-        reporterId: fx.owner.id,
-        position: String(key).padStart(6, '0'),
-      },
-      tx,
-    );
-  });
-}
 
 describe('workItemRepository.create — happy paths', () => {
   it('persists a top-level epic and returns it', async () => {
@@ -180,6 +132,31 @@ describe('workItemRepository.update — cycle trigger', () => {
     // before kind, so we get ParentCycleError (not "epic can't have a parent").
     await expect(
       db.$transaction((tx) => workItemRepository.update(a.id, { parentId: c.id }, tx)),
+    ).rejects.toBeInstanceOf(ParentCycleError);
+  });
+
+  // Subtask 1.4.7 gap-fill: the test above closes the cycle two hops up
+  // (C → B → A). This one goes one level DEEPER — a four-node chain
+  // A → B → C → D where the recursive cycle CTE must walk D → C → B → A
+  // (three recursion hops) to discover that A is an ancestor of D. Driven via
+  // the REPOSITORY (direct update), because the SERVICE path can never reach
+  // this trigger: moving an ancestor under a descendant is ALWAYS kind-illegal
+  // (the kind hierarchy is a strict DAG, so an ancestor's kind can never be a
+  // legal child of a descendant's kind), and workItemsService.moveWorkItem's
+  // assertKindParent pre-flight throws IllegalParentTypeError first. At the DB
+  // level the cycle trigger (trg_work_item_cycle) fires before depth and kind
+  // (triggers run in alphabetical name order), so ParentCycleError surfaces.
+  it('rejects a 3-hop re-parent cycle (A→B→C→D, move A under D) with ParentCycleError', async () => {
+    const fx = await makeFixture();
+    const a = await createWorkItem(fx, { kind: 'epic', title: 'A' });
+    const b = await createWorkItem(fx, { kind: 'story', title: 'B', parentId: a.id });
+    const c = await createWorkItem(fx, { kind: 'task', title: 'C', parentId: b.id });
+    const d = await createWorkItem(fx, { kind: 'subtask', title: 'D', parentId: c.id });
+
+    // Move A (root) under D (its great-grandchild). The CTE recurses
+    // D → C → B → A and finds the cycle on the deepest hop.
+    await expect(
+      db.$transaction((tx) => workItemRepository.update(a.id, { parentId: d.id }, tx)),
     ).rejects.toBeInstanceOf(ParentCycleError);
   });
 });
@@ -312,5 +289,137 @@ describe('workItemRepository.findByIds', () => {
     expect(rows.map((r) => r.id).sort()).toEqual([a.id, b.id, c.id].sort());
     // The mirror query on the logging client was exactly one round-trip.
     expect(queries).toHaveLength(1);
+  });
+});
+
+// Subtask 1.4.7 coverage-fill: repository read methods + filters + the
+// Prisma-error → typed-error translation paths the service layer relies on but
+// doesn't exercise from its happy-path tests.
+
+describe('workItemRepository.findByProjectFiltered — filters', () => {
+  it('filters by status and assignee, and excludes archived rows', async () => {
+    const fx = await makeFixture();
+    const open = await createWorkItem(fx, { kind: 'task', title: 'open' });
+    const done = await createWorkItem(fx, { kind: 'task', title: 'done' });
+    const gone = await createWorkItem(fx, { kind: 'task', title: 'archived' });
+    await db.$transaction((tx) =>
+      workItemRepository.update(done.id, { status: 'done', assigneeId: fx.owner.id }, tx),
+    );
+    await db.$transaction((tx) => workItemRepository.archive(gone.id, tx));
+
+    const all = await workItemRepository.findByProjectFiltered(fx.project.id);
+    expect(all.map((r) => r.id).sort()).toEqual([open.id, done.id].sort()); // archived excluded
+
+    const byStatus = await workItemRepository.findByProjectFiltered(fx.project.id, {
+      status: 'done',
+    });
+    expect(byStatus.map((r) => r.id)).toEqual([done.id]);
+
+    const byAssignee = await workItemRepository.findByProjectFiltered(fx.project.id, {
+      assigneeId: fx.owner.id,
+    });
+    expect(byAssignee.map((r) => r.id)).toEqual([done.id]);
+  });
+});
+
+describe('workItemRepository.findByProject — pagination', () => {
+  it('takes a page and resumes after a cursor (skipping the cursor row)', async () => {
+    const fx = await makeFixture();
+    const a = await createWorkItem(fx, { kind: 'task', title: 'A' });
+    const b = await createWorkItem(fx, { kind: 'task', title: 'B' });
+    const c = await createWorkItem(fx, { kind: 'task', title: 'C' });
+
+    const firstTwo = await workItemRepository.findByProject(fx.project.id, { take: 2 });
+    expect(firstTwo.map((r) => r.id)).toEqual([a.id, b.id]);
+
+    const afterB = await workItemRepository.findByProject(fx.project.id, { cursor: b.id });
+    expect(afterB.map((r) => r.id)).toEqual([c.id]);
+  });
+});
+
+describe('workItemRepository.findSiblings', () => {
+  it('returns non-archived siblings under a parent (and top-level siblings), without a tx', async () => {
+    const fx = await makeFixture();
+    const epic = await createWorkItem(fx, { kind: 'epic', title: 'Epic' });
+    const s1 = await createWorkItem(fx, { kind: 'story', title: 'S1', parentId: epic.id });
+    const s2 = await createWorkItem(fx, { kind: 'story', title: 'S2', parentId: epic.id });
+
+    // Called WITHOUT a tx (the `db`-singleton read path).
+    const childSiblings = await workItemRepository.findSiblings(fx.project.id, epic.id);
+    expect(childSiblings.map((r) => r.id)).toEqual([s1.id, s2.id]);
+
+    // Top-level siblings: parentId null is project-scoped, so only this epic.
+    const topSiblings = await workItemRepository.findSiblings(fx.project.id, null);
+    expect(topSiblings.map((r) => r.id)).toEqual([epic.id]);
+  });
+});
+
+describe('workItemRepository.findChildren', () => {
+  it('returns only the direct, non-archived children ordered by position', async () => {
+    const fx = await makeFixture();
+    const epic = await createWorkItem(fx, { kind: 'epic', title: 'Epic' });
+    const s1 = await createWorkItem(fx, { kind: 'story', title: 'S1', parentId: epic.id });
+    const s2 = await createWorkItem(fx, { kind: 'story', title: 'S2', parentId: epic.id });
+    // A grandchild must NOT appear (findChildren is one level only).
+    await createWorkItem(fx, { kind: 'task', title: 'GC', parentId: s1.id });
+
+    const children = await workItemRepository.findChildren(epic.id);
+    expect(children.map((r) => r.id)).toEqual([s1.id, s2.id]);
+  });
+});
+
+describe('workItemRepository.create / update — Prisma error translation', () => {
+  it('translates a duplicate (projectId, key) to WorkItemKeyConflictError (P2002)', async () => {
+    const fx = await makeFixture();
+    // Insert key=1 directly, then attempt a second row with the SAME key in the
+    // same project (bypassing the allocator) → unique violation → typed error.
+    await db.$transaction((tx) =>
+      workItemRepository.create(
+        {
+          workspaceId: fx.workspace.id,
+          projectId: fx.project.id,
+          kind: 'epic',
+          key: 1,
+          identifier: 'PROD-1',
+          title: 'first',
+          reporterId: fx.owner.id,
+          position: 'a0',
+        },
+        tx,
+      ),
+    );
+    await expect(
+      db.$transaction((tx) =>
+        workItemRepository.create(
+          {
+            workspaceId: fx.workspace.id,
+            projectId: fx.project.id,
+            kind: 'epic',
+            key: 1, // duplicate key in the same project
+            identifier: 'PROD-1b',
+            title: 'second',
+            reporterId: fx.owner.id,
+            position: 'a1',
+          },
+          tx,
+        ),
+      ),
+    ).rejects.toBeInstanceOf(WorkItemKeyConflictError);
+  });
+
+  it('translates an update of a missing row to WorkItemNotFoundError (P2025)', async () => {
+    await expect(
+      db.$transaction((tx) =>
+        workItemRepository.update('00000000-0000-0000-0000-000000000000', { title: 'x' }, tx),
+      ),
+    ).rejects.toBeInstanceOf(WorkItemNotFoundError);
+  });
+
+  it('translates an archive of a missing row to WorkItemNotFoundError (P2025)', async () => {
+    await expect(
+      db.$transaction((tx) =>
+        workItemRepository.archive('00000000-0000-0000-0000-000000000000', tx),
+      ),
+    ).rejects.toBeInstanceOf(WorkItemNotFoundError);
   });
 });

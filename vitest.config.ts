@@ -38,6 +38,36 @@ export default defineConfig({
       concurrent: false,
     },
     testTimeout: 15_000,
+    // Coverage (Subtask 1.4.7). The work-item data model's load-bearing
+    // modules — the service + its three repositories — must stay at ≥90%
+    // branches/functions/lines. We scope `include` to exactly those four
+    // files so the report (and the per-file thresholds below) is focused on
+    // the surface 1.4.7 is responsible for, rather than diluting the signal
+    // across the whole tree. Other modules carry their own coverage stories in
+    // their own Subtasks. v8 is the provider (matches @vitest/coverage-v8).
+    coverage: {
+      provider: 'v8',
+      include: [
+        'lib/services/workItemsService.ts',
+        'lib/repositories/workItemRepository.ts',
+        'lib/repositories/workItemLinkRepository.ts',
+        'lib/repositories/workItemRevisionRepository.ts',
+      ],
+      reporter: ['text', 'text-summary'],
+      // Per-file thresholds keyed by glob: each of the four modules gates
+      // independently, so a regression in any one fails the run (rather than a
+      // blended average hiding a weak module).
+      thresholds: {
+        'lib/services/workItemsService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/workItemRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/workItemLinkRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/workItemRevisionRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+      },
+    },
   },
   resolve: {
     alias: {
