@@ -123,25 +123,35 @@ export function WorkflowEditor({
                 : 'Restricted mode: only the transitions below are allowed.'}
             </p>
           </div>
-          <div className="flex gap-1" role="group" aria-label="Transition policy mode">
-            {(['restricted', 'open'] as const).map((mode) => (
-              <Button
-                key={mode}
-                variant={policyMode === mode ? 'primary' : 'ghost'}
-                size="sm"
-                aria-pressed={policyMode === mode}
-                disabled={!isAdmin || isPending}
-                onClick={() => {
-                  // Active segment is highlighted, not disabled — clicking it is
-                  // a harmless no-op; clicking the other switches the mode.
-                  if (policyMode !== mode) {
-                    run(() => setPolicyModeAction(mode), `Policy set to ${mode}`);
-                  }
-                }}
-              >
-                {mode === 'restricted' ? 'Restricted' : 'Open'}
-              </Button>
-            ))}
+          {/* Segmented control: one bordered track, two connected segments — the
+              active one is a raised pill, not a separate solid button. */}
+          <div
+            role="group"
+            aria-label="Transition policy mode"
+            className="border-border bg-background inline-flex shrink-0 rounded-md border p-0.5"
+          >
+            {(['restricted', 'open'] as const).map((mode) => {
+              const active = policyMode === mode;
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={active}
+                  disabled={!isAdmin || isPending}
+                  onClick={() => {
+                    // Clicking the active segment is a harmless no-op; the other switches.
+                    if (!active) run(() => setPolicyModeAction(mode), `Policy set to ${mode}`);
+                  }}
+                  className={`rounded px-3 py-1 font-sans text-xs font-medium transition-colors disabled:opacity-50 ${
+                    active
+                      ? 'bg-foreground text-background'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {mode === 'restricted' ? 'Restricted' : 'Open'}
+                </button>
+              );
+            })}
           </div>
         </div>
       </section>
