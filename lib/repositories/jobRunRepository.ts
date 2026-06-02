@@ -10,6 +10,26 @@ export const jobRunRepository = {
   },
 
   /**
+   * Find the still-`running` row for a given (function, event), newest first.
+   * This is how the TERMINAL-FAILURE path (1.6.6) correlates the failure back
+   * to the `running` row that `recordStart` wrote: the failure is reported by
+   * Inngest's `onFailure` handler — a SEPARATE invocation from the run that
+   * created the row — which carries the original event but not the row id. The
+   * `@@index([eventId])` exists precisely for this lookup. Read inside the
+   * failure transaction, so it takes `tx`.
+   */
+  async findRunningByEventId(
+    eventId: string,
+    functionId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<JobRun | null> {
+    return tx.jobRun.findFirst({
+      where: { eventId, functionId, status: 'running' },
+      orderBy: { startedAt: 'desc' },
+    });
+  },
+
+  /**
    * Insert the initial `running` row. Uses the UNCHECKED create input (scalar
    * `workspaceId` FK) rather than a `workspace: { connect }` relation: the job
    * runtime writes under the system-admin context with NO workspace context, so

@@ -25,7 +25,7 @@
 // therefore crashes the app at boot with a clear message — not on the
 // first email two days into a deploy.
 
-import { appendFile } from 'node:fs/promises';
+import { appendFile, readFile } from 'node:fs/promises';
 
 export interface EmailMessage {
   to: string;
@@ -128,6 +128,61 @@ function fileProvider(): SendEmail {
   };
 }
 
+// Dev/test-only deterministic fault injector. Wraps whichever provider is
+// resolved so a Playwright spec can make a send FAIL on demand — the only way
+// to exercise the real Story-1.6 failure path (provider throws → job retries →
+// dead-letters → operator replays) end-to-end through the running stack
+// (Subtask 1.6.6).
+//
+// Cross-process by design. The Playwright runner and the Next dev server are
+// SEPARATE processes, so an in-memory flag can't reach the provider running in
+// the server. We reuse the same channel the file outbox already relies on — a
+// file on disk: the test writes a recipient SUBSTRING into the file at
+// EMAIL_FAULT_PATH to arm the fault, and deletes the file to disarm it. The
+// provider reads the file on every send and throws iff the file exists and its
+// content is a (case-insensitive) substring of `msg.to`.
+//
+// Per-recipient, not global. Because the trigger is the RECIPIENT matching the
+// armed substring (not a blanket "fail everything" switch), only the spec's
+// chosen forced-failure address fails; every other email in the same dev
+// server keeps flowing. Combined with the file's set/clear lifecycle being
+// owned by the spec, the fault scope is per-spec, never global.
+//
+// Off unless explicitly armed. The wrapper is a no-op unless EMAIL_FAULT_PATH
+// is set, so production and ordinary dev never pay for it. Setting it in
+// production is refused at module load — like the 'file' provider, this is a
+// test harness and must never ship as a deliverability path.
+function withFaultInjection(provider: SendEmail): SendEmail {
+  const faultPath = process.env['EMAIL_FAULT_PATH'];
+  if (faultPath === undefined || faultPath === '') return provider;
+  if (process.env['NODE_ENV'] === 'production') {
+    throw new Error(
+      `EMAIL_FAULT_PATH is set in production. It is a test-only deterministic ` +
+        `email-fault injector and must never be enabled in production. Unset it.`,
+    );
+  }
+  return async (msg) => {
+    // Read the armed pattern fresh on every send so the test can arm/disarm it
+    // mid-run (the forced-failure path arms it, the replay path clears it).
+    let pattern: string | null = null;
+    try {
+      pattern = (await readFile(faultPath, 'utf8')).trim();
+    } catch (err) {
+      // No file → fault disarmed. Any other error is a real problem.
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    }
+    if (pattern && msg.to.toLowerCase().includes(pattern.toLowerCase())) {
+      // A typed-ish provider failure: the email.send job surfaces this as a
+      // retried run, then a DLQ entry once the retry budget is spent.
+      throw new Error(
+        `Injected email-delivery fault: send to '${msg.to}' failed deterministically ` +
+          `(matched armed pattern '${pattern}' at EMAIL_FAULT_PATH).`,
+      );
+    }
+    return provider(msg);
+  };
+}
+
 export function getEmailProvider(): SendEmail {
   const provider = process.env['EMAIL_PROVIDER'] ?? 'console';
   switch (provider) {
@@ -148,4 +203,4 @@ export function getEmailProvider(): SendEmail {
   }
 }
 
-export const sendEmail: SendEmail = getEmailProvider();
+export const sendEmail: SendEmail = withFaultInjection(getEmailProvider());

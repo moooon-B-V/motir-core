@@ -171,7 +171,7 @@ describe('jobsDashboardService.replayDLQ', () => {
     expect(sendSpy).not.toHaveBeenCalled();
   });
 
-  it('an owner replays: re-emits the original event payload byte-for-byte and stamps replayedAt', async () => {
+  it('an owner replays: re-emits the original event with a re-shaped idempotency key and stamps replayedAt', async () => {
     const eventData = {
       to: 'replay@example.com',
       template: 'password-reset',
@@ -184,10 +184,15 @@ describe('jobsDashboardService.replayDLQ', () => {
     const result = await jobsDashboardService.replayDLQ({ dlqId, workspaceId, userId: owner.id });
 
     expect(sendSpy).toHaveBeenCalledTimes(1);
-    const sent = sendSpy.mock.calls[0]![0] as { name: string; data: unknown };
+    const sent = sendSpy.mock.calls[0]![0] as {
+      name: string;
+      data: Record<string, unknown>;
+    };
     expect(sent.name).toBe('email.send');
-    // The stored payload is re-emitted unchanged.
-    expect(sent.data).toEqual(eventData);
+    // The payload is re-emitted intact EXCEPT the idempotency key, which is
+    // re-shaped to `{original}:replay:{dlqId}` so Inngest's same-key dedup
+    // doesn't drop the replay (PRODECT_FINDINGS #40).
+    expect(sent.data).toEqual({ ...eventData, idempotencyKey: `replay-key-xyz:replay:${dlqId}` });
 
     expect(result.replayedAt).not.toBeNull();
     const reread = await db.jobRunDlq.findUnique({ where: { id: dlqId } });

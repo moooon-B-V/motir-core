@@ -100,14 +100,28 @@ export const sendInvoice = defineJob(
 
 **Run ledger.** Around every handler, `defineJob` writes one `job_run` row:
 `running` at start → `succeeded` on return. On a throw, the row stays `running`
-across retries and only flips to `failed` on the **final** attempt (when the
-retry budget is exhausted) — at which point it also writes a dead-letter row
-(see **Dead-letter queue**). So a job that's mid-retry reads as in-flight, not
-prematurely failed. The writes run inside `step.run(...)`, so they execute
-exactly once per run even when the handler replays across step boundaries — one
-row per run, not one per replay (the `job-run:start` step's result is reused
-across retries too). This is the read path the operator dashboard (1.6.5)
-renders without calling Inngest's API. `workspace_id` is null for system jobs.
+across retries; once the retry budget is exhausted Inngest invokes the
+function's **`onFailure` handler**, which flips the row to `failed` and writes a
+dead-letter row (see **Dead-letter queue**). So a job that's mid-retry reads as
+in-flight, not prematurely failed. The writes run inside `step.run(...)`, so
+they execute exactly once per run even when the handler replays across step
+boundaries — one row per run, not one per replay (the `job-run:start` step's
+result is reused across retries too). This is the read path the operator
+dashboard (1.6.5) renders without calling Inngest's API. `workspace_id` is null
+for system jobs.
+
+> **Why `onFailure`, not a try/catch (1.6.6).** The dead-letter write used to
+> live in a `try/catch` around the handler, on the "final attempt" branch. On
+> the **real Inngest executor** a `step.run` scheduled from a catch block _after_
+> the step that terminally failed is never executed — the run is already
+> finalizing as failed — so the failed/DLQ rows silently never got written in
+> production (only the in-process unit harness, which runs the catch
+> synchronously, made it look like they did). `onFailure` is Inngest's
+> first-class "run exactly once after all retries are exhausted" hook, so the
+> write is reliable. It's a **separate** invocation from the failed run, so it
+> carries the original event but not the row id — `jobRunsService`
+> correlates back to the `running` row by `(functionId, eventId)` (the
+> `@@index([eventId])` exists for this). See `PRODECT_FINDINGS.md` #39.
 
 The ledger tables (`job_run`, `job_run_dlq`) are **workspace-scoped by RLS**
 (1.6.4): a tenant sees only its own workspace's rows. The runtime writes them
@@ -255,19 +269,25 @@ action.
   Each row is one dead-lettered run. `replayed_at` is null until you replay it.
 - **How to replay** — click **Replay** on the dead-letter row in the operator
   dashboard (see below). Under the hood the owner-gated `jobsDashboardService`
-  calls `replayDLQ(dlqId, tx)` (`lib/jobs/dlq.ts`), which re-emits the
-  **original** event and stamps `replayed_at` so the action is auditable.
+  calls `replayDLQ(dlqId, tx)` (`lib/jobs/dlq.ts`), which re-emits the original
+  event — with a **re-shaped idempotency key** (see below) — and stamps
+  `replayed_at` so the action is auditable.
 - **When NOT to replay** — if the failure was a bad payload or a since-removed
   code path, replaying just re-fails. Fix forward first; replay only transient
   infrastructure failures (provider outage, expired upstream token now renewed).
 
-**Idempotency caveat (important).** Replay re-emits the event **as-is**,
-including its original idempotency key. If the job was defined with an
-`idempotency` expression and Inngest's dedup window has **not** elapsed, the
-replay is **dropped** (same key → no re-execute). To force a replay through:
-either wait the dedup window out, or — when a code change has made the original
-a no-op — re-shape the idempotency key so the replay reads as a new event. A
-job with **no** idempotency key replays unconditionally.
+**Idempotency on replay (1.6.6).** A replay re-emits the original event but
+**re-shapes its idempotency key** to `{original}:replay:{dlqId}`. This is
+deliberate: an operator replays precisely when they've fixed a transient failure
+and want the job to run **now** — but the original key is, by definition, still
+inside Inngest's dedup window, so re-emitting it unchanged (the 1.6.4 behavior)
+was silently **dropped**, while the dashboard still toasted success and stamped
+`replayed_at`. Re-keying makes the replay a genuinely new event that actually
+runs, so the Replay button does what it says. The new key is derived from the
+**DLQ row id**, so a double-click of Replay on the same row still dedups to one
+re-run (no double-delivery), while a genuinely new failure replays
+independently. A job with **no** idempotency key was always replayed
+unconditionally and is unaffected. See `PRODECT_FINDINGS.md` #40.
 
 ## Operator dashboard
 

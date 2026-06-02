@@ -51,6 +51,26 @@ export type JobContext = Parameters<Parameters<typeof inngest.createFunction>[1]
  */
 export type JobHandler = (ctx: JobContext, services: JobServices) => Promise<unknown> | unknown;
 
+/**
+ * The shape of the argument Inngest passes a function's `onFailure` handler
+ * (1.6.6). `event` is the internal `inngest/function.failed` payload — it nests
+ * the ORIGINAL triggering event under `data.event`, plus the failed `run_id`
+ * and the final `error`. We only read the few fields the dead-letter write
+ * needs; `step` is the same step API as the main handler, used to make the
+ * dead-letter write durable across an onFailure retry.
+ */
+export interface FailureHandlerArgs {
+  event: {
+    data: {
+      run_id: string;
+      error?: unknown;
+      event: { id?: string; name?: string; data?: unknown };
+    };
+  };
+  error: Error;
+  step: JobContext['step'];
+}
+
 export interface DefineJobOptions<N extends JobEventName> {
   /** The job id. Also the triggering event name (1:1 convention). */
   id: N;
@@ -102,6 +122,40 @@ export function defineJob<N extends JobEventName>(
   // given). Used BOTH for Inngest's config and for the final-attempt check below.
   const maxRetries = resolveRetries(options);
 
+  // Terminal-failure handler (1.6.6). Inngest invokes `onFailure` ONCE, after a
+  // function permanently exhausts its retry budget — a SEPARATE invocation from
+  // the failed run, triggered by the internal `inngest/function.failed` event.
+  // This is where the dead-letter write lives now: a `step.run` scheduled from a
+  // try/catch in the main handler AFTER the step that terminally failed is never
+  // executed by the real Inngest executor (it finalizes the run as failed
+  // first), so the 1.6.4 approach silently never wrote the failed/DLQ rows in
+  // production — only the in-process unit harness, which ran the catch
+  // synchronously, made it look like it worked. See PRODECT_FINDINGS #39.
+  //
+  // The failure event carries the ORIGINAL triggering event under
+  // `event.data.event`; jobRunsService correlates it back to the `running` row
+  // by (functionId, eventId) — the same eventId the main handler recorded.
+  const onFailure = async (args: FailureHandlerArgs) => {
+    const original = args.event.data.event;
+    const payload = (original.data ?? {}) as { workspaceId?: string | null };
+    const eventName = cron !== undefined ? `scheduled.${id}` : (original.name ?? id);
+    // Mirror the main handler's eventId logic so correlation lines up: prefer the
+    // event id, fall back to the run id (cron / harness events carry no id).
+    const eventId = original.id ?? args.event.data.run_id;
+    await args.step.run('job-run:dead-letter', () =>
+      jobRunsService.recordTerminalFailure({
+        functionId: id,
+        eventId,
+        eventName,
+        workspaceId: payload.workspaceId ?? null,
+        failure: serializeFailure(args.error),
+        eventData: (original.data ?? {}) as Prisma.InputJsonValue,
+        // Total attempts including the first = the Inngest retry budget + 1.
+        attempts: maxRetries + 1,
+      }),
+    );
+  };
+
   // event name === id (the 1:1 convention) for event-triggered jobs; a cron job
   // uses a `{ cron }` trigger instead. 2-arg createFunction form: triggers live
   // in the options object, NOT a third argument (the legacy 3-arg form throws at
@@ -113,6 +167,7 @@ export function defineJob<N extends JobEventName>(
     id,
     retries: maxRetries,
     triggers: cron !== undefined ? [{ cron }] : [{ event: id }],
+    onFailure,
     ...(concurrency !== undefined ? { concurrency: { limit: concurrency } } : {}),
     ...(idempotency !== undefined ? { idempotency } : {}),
   } as Parameters<typeof inngest.createFunction>[0];
@@ -145,26 +200,15 @@ export function defineJob<N extends JobEventName>(
       }),
     );
 
-    try {
-      const result = await handler(ctx, jobServices);
-      await step.run('job-run:succeeded', () => jobRunsService.recordSuccess(jobRun.id));
-      return result;
-    } catch (err) {
-      const failure = serializeFailure(err);
-      const isFinalAttempt = ctx.attempt >= maxRetries;
-      if (isFinalAttempt) {
-        // Retry budget exhausted: flip to failed + dead-letter in one tx. The
-        // original event payload is persisted so the entry is replayable.
-        await step.run('job-run:dead-letter', () =>
-          jobRunsService.recordFailureAndDeadLetter(jobRun.id, failure, {
-            eventData: (event.data ?? {}) as Prisma.InputJsonValue,
-            attempts: ctx.attempt + 1,
-          }),
-        );
-      }
-      // Re-throw on every attempt so Inngest's retry machinery still sees the
-      // failure (and stops once the budget — which it shares — is exhausted).
-      throw err;
-    }
+    // Success path only. On a thrown error we DON'T bookkeep here — the error
+    // propagates so Inngest's retry machinery sees it; once the budget is spent
+    // Inngest fires the function's `onFailure` (above), which writes the
+    // `failed` + dead-letter rows. Bookkeeping the failure from a catch here
+    // would not survive the real executor (PRODECT_FINDINGS #39). Non-final
+    // attempts therefore leave the row `running` — the dashboard shows a
+    // retrying run as in-flight, which is the intended UX.
+    const result = await handler(ctx, jobServices);
+    await step.run('job-run:succeeded', () => jobRunsService.recordSuccess(jobRun.id));
+    return result;
   });
 }
