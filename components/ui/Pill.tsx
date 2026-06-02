@@ -5,15 +5,19 @@ import { cn } from '@/lib/utils/cn';
 /**
  * Pill — compact status or severity label. Pure span, no interaction.
  *
- * Two variant axes (use one or the other, not both):
+ * Three variant axes (use exactly one):
  *  - `status`: planned | in-progress | done — Prodect's Subtask lifecycle states.
  *  - `severity`: info | success | warning | danger — semantic UI states.
+ *  - `tone`: neutral — a non-semantic chip (counts, metadata). Dark text on a
+ *    neutral surface, so it clears WCAG AA contrast where the colored
+ *    tint-on-hue tones currently don't (tracked design-system finding #35).
  *
  * Always uses `--radius-badge` for fully rounded ends regardless of display style.
  *
  * @example
  * <Pill status="in-progress">In progress</Pill>
  * <Pill severity="danger">Validation failed</Pill>
+ * <Pill tone="neutral">3 members</Pill>
  */
 const pillVariants = cva(
   cn(
@@ -36,6 +40,9 @@ const pillVariants = cva(
         warning: 'bg-(--color-tint-peach) text-(--color-warning) border-transparent',
         danger: 'bg-(--color-tint-rose) text-(--color-destructive) border-transparent',
       },
+      tone: {
+        neutral: 'bg-(--color-surface) text-(--color-slate) border-(--color-hairline)',
+      },
     },
     defaultVariants: {},
   },
@@ -45,11 +52,11 @@ export interface PillProps
   extends HTMLAttributes<HTMLSpanElement>, VariantProps<typeof pillVariants> {}
 
 export const Pill = forwardRef<HTMLSpanElement, PillProps>(function Pill(
-  { status, severity, className, children, ...rest },
+  { status, severity, tone, className, children, ...rest },
   ref,
 ) {
   return (
-    <span ref={ref} className={cn(pillVariants({ status, severity }), className)} {...rest}>
+    <span ref={ref} className={cn(pillVariants({ status, severity, tone }), className)} {...rest}>
       {children}
     </span>
   );

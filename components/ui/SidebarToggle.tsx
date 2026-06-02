@@ -60,7 +60,13 @@ export const SidebarToggle = forwardRef<HTMLButtonElement, SidebarToggleProps>(
           variant="ghost"
           size="sm"
           aria-label={label}
-          aria-pressed={collapsed}
+          // Disclosure semantics (W3C APG): this control shows/hides the
+          // sidebar rail, so `aria-expanded` reflects the rail's state
+          // (expanded when NOT collapsed) — the canonical pattern for a
+          // region show/hide toggle. `aria-controls` points AT was considered
+          // but the rail/drawer share this component, so we keep the name +
+          // state on the control itself.
+          aria-expanded={!collapsed}
           onClick={toggleCollapsed}
           className={cn(collapsed ? 'mx-auto w-9 px-0' : 'w-9 px-0', className)}
         >

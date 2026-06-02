@@ -77,6 +77,11 @@ export function CommandPalette({
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
         <Dialog.Content
           aria-label="Command palette"
+          // Radix Dialog (v1.1.15) is modal-by-default (focus trap + outside
+          // inert) but doesn't emit aria-modal itself — set it explicitly so
+          // screen readers treat the rest of the page as inert while the
+          // palette is open.
+          aria-modal="true"
           aria-describedby={undefined}
           className={cn(
             'fixed left-1/2 top-[15vh] z-50 w-[90vw] max-w-[40rem] -translate-x-1/2',

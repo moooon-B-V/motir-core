@@ -135,7 +135,8 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
                     >
                       {w.name}
                     </span>
-                    <Pill severity="info">member</Pill>
+                    {/* Role label = metadata → neutral tone (AA-safe; #35). */}
+                    <Pill tone="neutral">member</Pill>
                   </button>
                 </li>
               );

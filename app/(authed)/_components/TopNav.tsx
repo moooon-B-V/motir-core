@@ -26,7 +26,14 @@ export interface TopNavProps {
 export function TopNav({ workspaces, activeWorkspaceId, user }: TopNavProps) {
   return (
     <header className="border-(--color-hairline) bg-background sticky top-0 z-30 border-b">
-      <nav className="flex h-14 items-center justify-between gap-2 px-4 sm:px-6">
+      {/* `aria-label` names this landmark distinctly from the sidebar's
+          "Primary" nav — two unnamed <nav> landmarks fail axe's
+          landmark-unique rule and leave screen-reader users unable to tell the
+          global bar from the primary rail. */}
+      <nav
+        aria-label="Global"
+        className="flex h-14 items-center justify-between gap-2 px-4 sm:px-6"
+      >
         <div className="flex items-center gap-2">
           {/* Mobile-only: opens the off-canvas SidebarDrawer. Hidden ≥md,
               where the persistent rail takes over. */}
