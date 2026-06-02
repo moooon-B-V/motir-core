@@ -7,11 +7,15 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
+import { workflowsService } from '@/lib/services/workflowsService';
 import { keyForAppend, keyBetween } from '@/lib/workItems/positioning';
 import {
   AssigneeNotInWorkspaceError,
   CrossProjectParentError,
+  IllegalTransitionError,
+  NoInitialStatusError,
   ReporterNotInWorkspaceError,
+  UnknownStatusError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
 import { CrossWorkspaceLinkError, WorkItemLinkNotFoundError } from '@/lib/workItems/linkErrors';
@@ -160,6 +164,16 @@ export const workItemsService = {
       assertValidParent(null, input.kind);
     }
 
+    // Initial status (Subtask 2.2.4): a new item lands in the project's
+    // workflow initial status — there's no "from" status to validate against
+    // on a brand-new row, so this bypasses transition validation. The pre-2.2.4
+    // schema `@default("open")` no longer governs the created status; the
+    // default now comes from the workflow's initial-status row (2.2.2 seeds
+    // exactly one per project). A corrupt/missing seed is a server invariant
+    // violation → NoInitialStatusError (500).
+    const statusKey = await workflowsService.getInitialStatusKey(input.projectId, workspaceId);
+    if (statusKey == null) throw new NoInitialStatusError(input.projectId);
+
     return db.$transaction(async (tx) => {
       const key = await projectRepository.allocateWorkItemNumber(input.projectId, tx);
       const identifier = `${project.identifier}-${key}`;
@@ -185,6 +199,7 @@ export const workItemsService = {
         title: input.title,
         descriptionMd: input.descriptionMd ?? null,
         explanationMd: input.explanationMd ?? null,
+        status: statusKey,
         ...(input.explanationSource ? { explanationSource: input.explanationSource } : {}),
         ...(input.priority ? { priority: input.priority } : {}),
         assigneeId: input.assigneeId ?? null,
@@ -350,6 +365,69 @@ export const workItemsService = {
       const row = await workItemRepository.update(id, update, tx);
       await workItemRevisionsService.recordRevision(
         { workItemId: id, changedById: ctx.userId, changeKind: 'updated', diff },
+        tx,
+      );
+      return toWorkItemDto(row);
+    });
+  },
+
+  /**
+   * Move a work item to a new status THROUGH the per-project workflow gate
+   * (Subtask 2.2.4) — the typed-workflow entry point for `work_item.status`,
+   * distinct from updateWorkItem's free-form status patch. Order matters:
+   *   1. tenant gate (cross-workspace id → 404, BEFORE any status check — no
+   *      existence leak, and the AC's "404 not UNKNOWN_STATUS" ordering);
+   *   2. no-op (`toStatusKey === current`) → return WITHOUT a revision row,
+   *      the same idempotency rule updateWorkItem follows;
+   *   3. target must be a real status in this project's workflow → UnknownStatusError;
+   *   4. the move must be legal under the workflow → IllegalTransitionError;
+   *   5. status write + the 'updated' revision in ONE transaction (atomic — a
+   *      revision-insert failure rolls back the status change).
+   * The validation reads (getStatusByKey / canTransition) are workspace-scoped
+   * via the explicit workspaceId the workflow service already enforces.
+   */
+  async updateStatus(
+    workItemId: string,
+    toStatusKey: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemDto> {
+    return db.$transaction(async (tx) => {
+      const locked = await workItemRepository.lockById(workItemId, tx);
+      if (!locked) throw new WorkItemNotFoundError(workItemId);
+      const current = await workItemRepository.findById(workItemId, tx);
+      // Tenant gate FIRST: a cross-workspace id is indistinguishable from a
+      // never-existed one (404), and must not leak via a status error.
+      if (!current || current.workspaceId !== ctx.workspaceId) {
+        throw new WorkItemNotFoundError(workItemId);
+      }
+
+      const fromKey = current.status;
+      // No-op move: succeed without writing a revision (idempotent).
+      if (fromKey === toStatusKey) return toWorkItemDto(current);
+
+      const target = await workflowsService.getStatusByKey(
+        current.projectId,
+        toStatusKey,
+        ctx.workspaceId,
+      );
+      if (!target) throw new UnknownStatusError(toStatusKey);
+
+      const legal = await workflowsService.canTransition(
+        current.projectId,
+        fromKey,
+        toStatusKey,
+        ctx.workspaceId,
+      );
+      if (!legal) throw new IllegalTransitionError(fromKey, toStatusKey);
+
+      const row = await workItemRepository.update(workItemId, { status: toStatusKey }, tx);
+      await workItemRevisionsService.recordRevision(
+        {
+          workItemId,
+          changedById: ctx.userId,
+          changeKind: 'updated',
+          diff: { status: { from: fromKey, to: toStatusKey } },
+        },
         tx,
       );
       return toWorkItemDto(row);
