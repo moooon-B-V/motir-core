@@ -1,11 +1,105 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { toWorkflowStatusDto, toWorkflowTransitionDto } from '@/lib/mappers/workflowMappers';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { isOwnerRole } from '@/lib/workspaces/roles';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { keyForAppend } from '@/lib/workItems/positioning';
 import { DEFAULT_STATUSES, DEFAULT_TRANSITIONS } from '@/lib/workflows/defaultWorkflow';
-import type { WorkflowDto, WorkflowPolicyModeDto, WorkflowStatusDto } from '@/lib/dto/workflows';
+import {
+  CannotDeleteInitialStatusError,
+  CannotDeleteLastTerminalStatusError,
+  NotProjectAdminError,
+  StatusInUseError,
+  StatusKeyConflictError,
+  WorkflowStatusNotFoundError,
+  WorkflowTransitionNotFoundError,
+} from '@/lib/workflows/errors';
+import type {
+  StatusCategoryDto,
+  WorkflowDto,
+  WorkflowPolicyModeDto,
+  WorkflowStatusDto,
+  WorkflowTransitionDto,
+} from '@/lib/dto/workflows';
+
+/**
+ * Project-admin gate (Subtask 2.2.5). v1 routes "project admin" to the
+ * workspace OWNER (finding #36) — full per-project RBAC is Epic 6. The gate is
+ * the durable shape; only the role-set behind it widens later. Also asserts the
+ * project belongs to the workspace (404 no-existence-leak) so a foreign
+ * projectId can't probe membership.
+ */
+async function assertProjectAdmin(
+  userId: string,
+  projectId: string,
+  workspaceId: string,
+): Promise<void> {
+  const project = await projectRepository.findById(projectId);
+  if (!project || project.workspaceId !== workspaceId) {
+    throw new ProjectNotFoundError(projectId);
+  }
+  const membership = await workspaceMembershipRepository.findByUserAndWorkspace(
+    userId,
+    workspaceId,
+  );
+  if (!isOwnerRole(membership?.role)) {
+    throw new NotProjectAdminError();
+  }
+}
+
+export interface CreateStatusInput {
+  userId: string;
+  workspaceId: string;
+  projectId: string;
+  key: string;
+  label: string;
+  category: StatusCategoryDto;
+  color?: string | null;
+  /** Optional explicit fractional position; appended to the end when omitted. */
+  position?: string;
+}
+
+export interface UpdateWorkflowStatusInput {
+  userId: string;
+  workspaceId: string;
+  statusId: string;
+  label?: string;
+  category?: StatusCategoryDto;
+  color?: string | null;
+  position?: string;
+  isInitial?: boolean;
+}
+
+export interface DeleteStatusInput {
+  userId: string;
+  workspaceId: string;
+  statusId: string;
+}
+
+export interface AddTransitionInput {
+  userId: string;
+  workspaceId: string;
+  projectId: string;
+  fromStatusId: string;
+  toStatusId: string;
+}
+
+export interface RemoveTransitionInput {
+  userId: string;
+  workspaceId: string;
+  transitionId: string;
+}
+
+export interface SetPolicyModeInput {
+  userId: string;
+  workspaceId: string;
+  projectId: string;
+  mode: WorkflowPolicyModeDto;
+}
 
 // The READ surface for per-project status workflows (Story 2.2 · Subtask
 // 2.2.3). The only doorway to the workflow tables: repositories are single-op
@@ -211,5 +305,192 @@ export const workflowsService = {
       workflowsService.seedDefaultWorkflow(projectId, project.workspaceId, tx),
     );
     return true;
+  },
+
+  // ── Management writes (Subtask 2.2.5) ──────────────────────────────────────
+  // Every method is project-admin-gated (owner v1) and runs its writes under
+  // withWorkspaceContext so the FORCE-RLS WITH CHECK passes.
+
+  /** Add a status to a project's workflow. Appends to the end unless a position is given. */
+  async createStatus(input: CreateStatusInput): Promise<WorkflowStatusDto> {
+    await assertProjectAdmin(input.userId, input.projectId, input.workspaceId);
+
+    const existing = await workflowsRepository.findStatusByKey(
+      input.projectId,
+      input.key,
+      input.workspaceId,
+    );
+    if (existing) throw new StatusKeyConflictError(input.key);
+
+    let position = input.position;
+    if (position == null) {
+      const statuses = await workflowsRepository.findStatuses(input.projectId, input.workspaceId);
+      const last = statuses.length ? statuses[statuses.length - 1]!.position : null;
+      position = keyForAppend(last);
+    }
+
+    return withWorkspaceContext(
+      { userId: input.userId, workspaceId: input.workspaceId },
+      async (tx) => {
+        try {
+          const row = await workflowsRepository.createStatus(
+            {
+              workspaceId: input.workspaceId,
+              projectId: input.projectId,
+              key: input.key,
+              label: input.label,
+              category: input.category,
+              color: input.color ?? null,
+              position: position!,
+              isInitial: false,
+            },
+            tx,
+          );
+          return toWorkflowStatusDto(row);
+        } catch (err) {
+          // Backstop the pre-check against a concurrent insert of the same key.
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+            throw new StatusKeyConflictError(input.key);
+          }
+          throw err;
+        }
+      },
+    );
+  },
+
+  /**
+   * Edit a status. Flipping `isInitial` to true unsets the previous initial in
+   * the SAME transaction, so the partial unique index never sees two true rows.
+   */
+  async updateStatus(input: UpdateWorkflowStatusInput): Promise<WorkflowStatusDto> {
+    const pre = await workflowsRepository.findStatusById(input.statusId, input.workspaceId);
+    if (!pre) throw new WorkflowStatusNotFoundError(input.statusId);
+    await assertProjectAdmin(input.userId, pre.projectId, input.workspaceId);
+
+    return withWorkspaceContext(
+      { userId: input.userId, workspaceId: input.workspaceId },
+      async (tx) => {
+        if (input.isInitial === true) {
+          await workflowsRepository.clearInitialForProject(pre.projectId, input.workspaceId, tx);
+        }
+        const data: Prisma.WorkflowStatusUncheckedUpdateInput = {};
+        if (input.label !== undefined) data.label = input.label;
+        if (input.category !== undefined) data.category = input.category;
+        if (input.color !== undefined) data.color = input.color;
+        if (input.position !== undefined) data.position = input.position;
+        if (input.isInitial !== undefined) data.isInitial = input.isInitial;
+        const row = await workflowsRepository.updateStatus(input.statusId, data, tx);
+        return toWorkflowStatusDto(row);
+      },
+    );
+  },
+
+  /**
+   * Delete a status. Refuses (typed 422s) when it's the initial status, still
+   * referenced by a work item, or the project's last terminal (`category=done`)
+   * status. Same-tx cleanup removes every transition touching it.
+   */
+  async deleteStatus(input: DeleteStatusInput): Promise<void> {
+    const pre = await workflowsRepository.findStatusById(input.statusId, input.workspaceId);
+    if (!pre) throw new WorkflowStatusNotFoundError(input.statusId);
+    await assertProjectAdmin(input.userId, pre.projectId, input.workspaceId);
+
+    await withWorkspaceContext(
+      { userId: input.userId, workspaceId: input.workspaceId },
+      async (tx) => {
+        const status = await workflowsRepository.findStatusById(
+          input.statusId,
+          input.workspaceId,
+          tx,
+        );
+        if (!status) throw new WorkflowStatusNotFoundError(input.statusId);
+        if (status.isInitial) throw new CannotDeleteInitialStatusError(status.key);
+
+        const inUse = await workItemRepository.countByProjectAndStatusKey(
+          status.projectId,
+          status.key,
+          tx,
+        );
+        if (inUse > 0) throw new StatusInUseError(status.key, inUse);
+
+        if (status.category === 'done') {
+          const all = await workflowsRepository.findStatuses(
+            status.projectId,
+            input.workspaceId,
+            tx,
+          );
+          const terminals = all.filter((s) => s.category === 'done').length;
+          if (terminals <= 1) throw new CannotDeleteLastTerminalStatusError(status.key);
+        }
+
+        await workflowsRepository.deleteTransitionsForStatus(status.id, tx);
+        await workflowsRepository.deleteStatus(status.id, tx);
+      },
+    );
+  },
+
+  /** Add a legal transition. Duplicate inserts are idempotent (return existing). */
+  async addTransition(input: AddTransitionInput): Promise<WorkflowTransitionDto> {
+    await assertProjectAdmin(input.userId, input.projectId, input.workspaceId);
+
+    const existing = await workflowsRepository.findTransition(
+      input.projectId,
+      input.fromStatusId,
+      input.toStatusId,
+      input.workspaceId,
+    );
+    if (existing) return toWorkflowTransitionDto(existing);
+
+    return withWorkspaceContext(
+      { userId: input.userId, workspaceId: input.workspaceId },
+      async (tx) => {
+        try {
+          const row = await workflowsRepository.createTransition(
+            {
+              workspaceId: input.workspaceId,
+              projectId: input.projectId,
+              fromStatusId: input.fromStatusId,
+              toStatusId: input.toStatusId,
+            },
+            tx,
+          );
+          return toWorkflowTransitionDto(row);
+        } catch (err) {
+          // Concurrent duplicate insert → re-read and return it (idempotent).
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+            const row = await workflowsRepository.findTransition(
+              input.projectId,
+              input.fromStatusId,
+              input.toStatusId,
+              input.workspaceId,
+              tx,
+            );
+            if (row) return toWorkflowTransitionDto(row);
+          }
+          throw err;
+        }
+      },
+    );
+  },
+
+  /** Remove a transition. */
+  async removeTransition(input: RemoveTransitionInput): Promise<void> {
+    const pre = await workflowsRepository.findTransitionById(input.transitionId, input.workspaceId);
+    if (!pre) throw new WorkflowTransitionNotFoundError(input.transitionId);
+    await assertProjectAdmin(input.userId, pre.projectId, input.workspaceId);
+
+    await withWorkspaceContext({ userId: input.userId, workspaceId: input.workspaceId }, (tx) =>
+      workflowsRepository.deleteTransition(input.transitionId, tx),
+    );
+  },
+
+  /** Flip the project's transition-enforcement policy mode. */
+  async setPolicyMode(input: SetPolicyModeInput): Promise<WorkflowPolicyModeDto> {
+    await assertProjectAdmin(input.userId, input.projectId, input.workspaceId);
+
+    await withWorkspaceContext({ userId: input.userId, workspaceId: input.workspaceId }, (tx) =>
+      projectRepository.updateWorkflowPolicyMode(input.projectId, input.mode, tx),
+    );
+    return input.mode;
   },
 };

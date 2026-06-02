@@ -99,4 +99,71 @@ export const workflowsRepository = {
   ): Promise<WorkflowTransition> {
     return tx.workflowTransition.create({ data });
   },
+
+  // Management writes (Subtask 2.2.5). Reads that GUARD a write take `tx`;
+  // every write requires `tx` (CLAUDE.md). All are workspace-scoped via an
+  // explicit `workspaceId` in the WHERE (finding #26).
+
+  /** One status by id, scoped to the workspace, or null. */
+  async findStatusById(
+    statusId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkflowStatus | null> {
+    const client = tx ?? db;
+    return client.workflowStatus.findFirst({ where: { id: statusId, workspaceId } });
+  },
+
+  /** One transition by id, scoped to the workspace, or null. */
+  async findTransitionById(
+    transitionId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkflowTransition | null> {
+    const client = tx ?? db;
+    return client.workflowTransition.findFirst({ where: { id: transitionId, workspaceId } });
+  },
+
+  async updateStatus(
+    statusId: string,
+    data: Prisma.WorkflowStatusUncheckedUpdateInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkflowStatus> {
+    return tx.workflowStatus.update({ where: { id: statusId }, data });
+  },
+
+  /**
+   * Clear `isInitial` on every status of a project (used before setting a new
+   * one, so the partial unique index never sees two true rows in one tx).
+   */
+  async clearInitialForProject(
+    projectId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const r = await tx.workflowStatus.updateMany({
+      where: { projectId, workspaceId, isInitial: true },
+      data: { isInitial: false },
+    });
+    return r.count;
+  },
+
+  async deleteStatus(statusId: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.workflowStatus.delete({ where: { id: statusId } });
+  },
+
+  async deleteTransition(transitionId: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.workflowTransition.delete({ where: { id: transitionId } });
+  },
+
+  /** Delete every transition touching a status (either endpoint). */
+  async deleteTransitionsForStatus(
+    statusId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const r = await tx.workflowTransition.deleteMany({
+      where: { OR: [{ fromStatusId: statusId }, { toStatusId: statusId }] },
+    });
+    return r.count;
+  },
 };
