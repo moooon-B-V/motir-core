@@ -92,6 +92,18 @@ export const workflowsService = {
   },
 
   /**
+   * The `key` of the project's initial status (the one a freshly-created work
+   * item lands in), or null if the project has none (no workflow / corrupt
+   * seed). The schema's partial unique index guarantees AT MOST one initial
+   * status per project, so `find` is unambiguous. Used by
+   * workItemsService.createWorkItem to seed `work_item.status` (2.2.4).
+   */
+  async getInitialStatusKey(projectId: string, workspaceId: string): Promise<string | null> {
+    const statuses = await workflowsRepository.findStatuses(projectId, workspaceId);
+    return statuses.find((s) => s.isInitial)?.key ?? null;
+  },
+
+  /**
    * Whether a status move `fromKey → toKey` is legal in the project. True when:
    *   - it's a no-op (`fromKey === toKey`) — always legal, regardless of mode;
    *   - the project's policy is `open` — any move is legal;

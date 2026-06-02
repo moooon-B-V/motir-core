@@ -22,7 +22,9 @@ export type WorkItemErrorTag =
   | 'KEY_CONFLICT'
   | 'CROSS_PROJECT_PARENT'
   | 'REPORTER_NOT_IN_WORKSPACE'
-  | 'ASSIGNEE_NOT_IN_WORKSPACE';
+  | 'ASSIGNEE_NOT_IN_WORKSPACE'
+  | 'UNKNOWN_STATUS'
+  | 'ILLEGAL_TRANSITION';
 
 /**
  * Base class for every work-items typed error. Concrete subclasses set a
@@ -146,5 +148,51 @@ export class AssigneeNotInWorkspaceError extends WorkItemError {
   constructor(message = 'The assignee is not a member of this workspace.') {
     super(message);
     this.name = 'AssigneeNotInWorkspaceError';
+  }
+}
+
+/**
+ * The target status key isn't one of the project's workflow statuses (Subtask
+ * 2.2.4). Thrown by updateStatus (the move target) and by createWorkItem when
+ * a caller supplies an explicit status that the project's workflow doesn't
+ * define. A client error → 422.
+ */
+export class UnknownStatusError extends WorkItemError {
+  readonly tag = 'UNKNOWN_STATUS' as const;
+  readonly code = 'UNKNOWN_STATUS' as const;
+  constructor(statusKey: string) {
+    super(`Unknown status "${statusKey}" for this project's workflow.`);
+    this.name = 'UnknownStatusError';
+  }
+}
+
+/**
+ * The requested status move is not a legal transition under the project's
+ * workflow (Subtask 2.2.4) — `restricted` mode with no `workflow_transition`
+ * row connecting the (from, to) pair. The message names the offending pair.
+ * A client error → 422.
+ */
+export class IllegalTransitionError extends WorkItemError {
+  readonly tag = 'ILLEGAL_TRANSITION' as const;
+  readonly code = 'ILLEGAL_TRANSITION' as const;
+  constructor(fromKey: string, toKey: string) {
+    super(`Illegal status transition: "${fromKey}" → "${toKey}".`);
+    this.name = 'IllegalTransitionError';
+  }
+}
+
+/**
+ * A project has no initial workflow status (Subtask 2.2.4) — a corrupt/missing
+ * seed. This is a SERVER INVARIANT violation, not a client error: every
+ * project is seeded with exactly one initial status at creation (2.2.2). So it
+ * is deliberately NOT a `WorkItemError` (the route layer blanket-maps those to
+ * 422); it propagates unhandled → 500, the right signal for "the data is in a
+ * state that should be impossible."
+ */
+export class NoInitialStatusError extends Error {
+  readonly code = 'NO_INITIAL_STATUS' as const;
+  constructor(projectId: string) {
+    super(`Project ${projectId} has no initial workflow status (corrupt seed).`);
+    this.name = 'NoInitialStatusError';
   }
 }

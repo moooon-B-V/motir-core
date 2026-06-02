@@ -7,7 +7,9 @@ import {
   CrossProjectParentError,
   DepthLimitExceededError,
   IllegalParentTypeError,
+  IllegalTransitionError,
   ReporterNotInWorkspaceError,
+  UnknownStatusError,
   WorkItemKeyConflictError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
@@ -57,10 +59,14 @@ function mapError(err: unknown): NextResponse {
     err instanceof DepthLimitExceededError ||
     err instanceof CrossProjectParentError ||
     err instanceof AssigneeNotInWorkspaceError ||
-    err instanceof ReporterNotInWorkspaceError
+    err instanceof ReporterNotInWorkspaceError ||
+    err instanceof UnknownStatusError ||
+    err instanceof IllegalTransitionError
   ) {
     return NextResponse.json({ code: err.code, error: err.name }, { status: 422 });
   }
+  // NoInitialStatusError is deliberately NOT mapped here — it's a server
+  // invariant violation that should surface as a 500 (the default `throw`).
   if (err instanceof WorkItemKeyConflictError) {
     return NextResponse.json({ code: err.code, error: err.name }, { status: 409 });
   }
