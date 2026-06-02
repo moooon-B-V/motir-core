@@ -8,15 +8,18 @@
 // metadata (label, icon, color token) and the set of allowed child types that
 // every later issue-tracking surface (pickers, icons, validation) reads.
 //
-// Two deliberate scope decisions, both per the Story 2.1 card:
+// Two deliberate decisions:
 //
-//  1. FOUR product types, not five kinds. The v1 user-facing issue types are
-//     `epic`, `story`, `task`, `bug`. The schema's fifth `kind` value,
-//     `subtask`, is a structural kind governed by the DB constraint but is NOT
-//     a v1 product-facing issue type, so it is intentionally absent here and
-//     `canParent` does not range over it. If product surfaces ever expose
-//     sub-tasks as a first-class type, add it to ISSUE_TYPES and the matrix
-//     below — this is the one place that grows.
+//  1. FIVE types, total over the schema's `kind` enum. The user-facing issue
+//     types are `epic`, `story`, `task`, `bug`, `subtask` — the same five Jira
+//     ships by default, and exactly the five values Story 1.4's `WorkItemKind`
+//     enum + DB triggers already enforce. Keeping this map TOTAL over the kind
+//     enum matters: a `subtask` row is a legal DB state (the trigger permits
+//     `subtask.parentId ∈ {story, task, bug}`), so any picker / icon /
+//     validation doing `ISSUE_TYPE_META[item.kind]` must resolve for every
+//     kind. A four-type map would leave a partial-function hole on subtask
+//     rows. (`subtask` was added here after review — the original Story 2.1
+//     card under-scoped it to four; see the card's amended note.)
 //
 //  2. A typed in-code map, not a DB table. The type set is small, fixed for
 //     v1, and read on nearly every render. A typed constant gives compile-time
@@ -26,17 +29,19 @@
 //     constant, not a premature config table).
 //
 // `allowedChildTypes` is the product-readable form of the DB kind-parent
-// matrix, restricted to the four product types. It is the parent→children
-// inverse of the trigger's child→allowed-parents rule and must stay in lockstep
-// with it:
+// matrix. It is the parent→children inverse of the trigger's
+// child→allowed-parents rule and must stay in lockstep with it:
 //   DB (child → allowed parents)        →  this map (parent → allowed children)
-//   epic    : root only                    epic  → [story, task, bug]
-//   story   : {epic}                       story → [task, bug]
-//   task    : {epic, story}                task  → [bug]
-//   bug     : {epic, story, task}          bug   → []
-// The service layer (Subtask 2.1.2) validates against `canParent` BEFORE any
-// write so the API returns a clean typed 422 instead of leaning on the DB
-// trigger's raw 23514; the trigger remains the defense-in-depth backstop.
+//   epic    : root only                    epic    → [story, task, bug]
+//   story   : {epic}                       story   → [task, bug, subtask]
+//   task    : {epic, story}                task    → [bug, subtask]
+//   bug     : {epic, story, task}          bug     → [subtask]
+//   subtask : {story, task, bug}           subtask → []   (the leaf)
+// Note bug is NOT a leaf — a subtask may be parented to a bug. The single leaf
+// is `subtask` (nothing may parent to it). The service layer (Subtask 2.1.2)
+// validates against `canParent` BEFORE any write so the API returns a clean
+// typed 422 instead of leaning on the DB trigger's raw 23514; the trigger
+// remains the defense-in-depth backstop.
 //
 // `icon` is the lucide component reference (not a string name): it is
 // type-safe (a typo is a compile error), renders directly anywhere
@@ -46,10 +51,14 @@
 // custom property `--color-{colorToken}` (e.g. Tailwind `text-(--color-accent)`
 // / `bg-(--color-accent)`), matching how components/ui/Pill.tsx wires tones.
 
-import { BookOpen, Bug, SquareCheckBig, Zap, type LucideIcon } from 'lucide-react';
+import { BookOpen, Bug, ListChecks, SquareCheckBig, Zap, type LucideIcon } from 'lucide-react';
 
-/** The four v1 user-facing issue types, in display order (broadest → narrowest). */
-export const ISSUE_TYPES = ['epic', 'story', 'task', 'bug'] as const;
+/**
+ * The five user-facing issue types, in display order (broadest → narrowest).
+ * Identical to Story 1.4's `WorkItemKind` enum, so this map stays total over
+ * every kind a `work_item` row can hold.
+ */
+export const ISSUE_TYPES = ['epic', 'story', 'task', 'bug', 'subtask'] as const;
 
 export type IssueType = (typeof ISSUE_TYPES)[number];
 
@@ -58,7 +67,7 @@ export type IssueType = (typeof ISSUE_TYPES)[number];
  * `--color-*` custom property declared in app/globals.css; callers reference it
  * as `--color-{IssueColorToken}`.
  */
-export type IssueColorToken = 'accent' | 'accent-green' | 'info' | 'destructive';
+export type IssueColorToken = 'accent' | 'accent-green' | 'info' | 'destructive' | 'accent-teal';
 
 export interface IssueTypeMeta {
   /** The type itself, so a meta object is self-describing when passed around. */
@@ -90,20 +99,27 @@ export const ISSUE_TYPE_META: Record<IssueType, IssueTypeMeta> = {
     label: 'Story',
     icon: BookOpen,
     colorToken: 'accent-green',
-    allowedChildTypes: ['task', 'bug'],
+    allowedChildTypes: ['task', 'bug', 'subtask'],
   },
   task: {
     type: 'task',
     label: 'Task',
     icon: SquareCheckBig,
     colorToken: 'info',
-    allowedChildTypes: ['bug'],
+    allowedChildTypes: ['bug', 'subtask'],
   },
   bug: {
     type: 'bug',
     label: 'Bug',
     icon: Bug,
     colorToken: 'destructive',
+    allowedChildTypes: ['subtask'],
+  },
+  subtask: {
+    type: 'subtask',
+    label: 'Sub-task',
+    icon: ListChecks,
+    colorToken: 'accent-teal',
     allowedChildTypes: [],
   },
 };

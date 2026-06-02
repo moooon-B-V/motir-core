@@ -13,27 +13,31 @@ import {
 // drifts from the DB kind-parent trigger fails here.
 
 // The expected legal parent→child edges, transcribed independently from the
-// Story 2.1 card / the DB trigger (NOT read off ISSUE_TYPE_META) so the test is
-// a genuine oracle rather than a tautology.
+// DB kind-parent trigger (NOT read off ISSUE_TYPE_META) so the test is a
+// genuine oracle rather than a tautology. Inverts the trigger's
+// child→allowed-parents rule, incl. subtask.parent ∈ {story, task, bug}.
 const LEGAL_EDGES: ReadonlyArray<[IssueType, IssueType]> = [
   ['epic', 'story'],
   ['epic', 'task'],
   ['epic', 'bug'],
   ['story', 'task'],
   ['story', 'bug'],
+  ['story', 'subtask'],
   ['task', 'bug'],
+  ['task', 'subtask'],
+  ['bug', 'subtask'],
 ];
 
 const isLegal = (parent: IssueType, child: IssueType): boolean =>
   LEGAL_EDGES.some(([p, c]) => p === parent && c === child);
 
 describe('ISSUE_TYPES', () => {
-  it('is exactly the four v1 product types in display order', () => {
-    expect(ISSUE_TYPES).toEqual(['epic', 'story', 'task', 'bug']);
+  it('is exactly the five issue types in display order', () => {
+    expect(ISSUE_TYPES).toEqual(['epic', 'story', 'task', 'bug', 'subtask']);
   });
 
-  it('deliberately excludes the structural `subtask` kind', () => {
-    expect((ISSUE_TYPES as readonly string[]).includes('subtask')).toBe(false);
+  it('is total over the schema kind set (includes subtask)', () => {
+    expect((ISSUE_TYPES as readonly string[]).includes('subtask')).toBe(true);
   });
 });
 
@@ -97,8 +101,11 @@ describe('canParent — full matrix (every legal + illegal ordered pair)', () =>
     }
   });
 
-  it('makes bug a leaf (parents nothing) and epic the only root-capable parent of stories', () => {
-    expect(ISSUE_TYPE_META.bug.allowedChildTypes).toEqual([]);
+  it('makes subtask the single leaf and bug a subtask-parent (not a leaf)', () => {
+    expect(ISSUE_TYPE_META.subtask.allowedChildTypes).toEqual([]);
+    expect(canParent('bug', 'subtask')).toBe(true); // bug is NOT a leaf
+    expect(ISSUE_TYPE_META.bug.allowedChildTypes).toEqual(['subtask']);
+    expect(canParent('epic', 'subtask')).toBe(false); // epic can't directly parent a subtask
     expect(canParent('epic', 'story')).toBe(true);
     expect(canParent('story', 'epic')).toBe(false);
     expect(canParent('task', 'epic')).toBe(false);
@@ -106,14 +113,14 @@ describe('canParent — full matrix (every legal + illegal ordered pair)', () =>
 });
 
 describe('isIssueType', () => {
-  it('accepts the four product types', () => {
+  it('accepts all five issue types', () => {
     for (const type of ISSUE_TYPES) {
       expect(isIssueType(type)).toBe(true);
     }
+    expect(isIssueType('subtask')).toBe(true);
   });
 
-  it('rejects the structural `subtask` kind and arbitrary input', () => {
-    expect(isIssueType('subtask')).toBe(false);
+  it('rejects arbitrary input', () => {
     expect(isIssueType('Epic')).toBe(false); // case-sensitive
     expect(isIssueType('')).toBe(false);
     expect(isIssueType(null)).toBe(false);
