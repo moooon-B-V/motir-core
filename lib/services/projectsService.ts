@@ -9,6 +9,7 @@ import {
   ProjectWorkspaceMismatchError,
 } from '@/lib/projects/errors';
 import { toProjectDTO } from '@/lib/mappers/projectMappers';
+import { workflowsService } from '@/lib/services/workflowsService';
 import type { ProjectDTO } from '@/lib/dto/projects';
 
 // Projects service — business logic for the Project entity. Owns all
@@ -145,11 +146,18 @@ export const projectsService = {
         // current one, so we can't catch-and-continue inside a single tx.
         const project = await withWorkspaceContext(
           { userId: input.actorUserId, workspaceId: input.workspaceId },
-          (tx) =>
-            projectRepository.create(
+          async (tx) => {
+            const created = await projectRepository.create(
               { workspaceId: input.workspaceId, name: trimmedName, slug, identifier },
               tx,
-            ),
+            );
+            // Seed the default status workflow in the SAME transaction (Subtask
+            // 2.2.2): a project either has its workflow or doesn't exist. A
+            // P2002 on identifier/slug rolls back the project AND its seed; the
+            // next retry re-seeds in a fresh transaction.
+            await workflowsService.seedDefaultWorkflow(created.id, input.workspaceId, tx);
+            return created;
+          },
         );
         return toProjectDTO(project);
       } catch (err) {

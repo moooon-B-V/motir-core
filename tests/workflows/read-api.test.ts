@@ -6,7 +6,6 @@ import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
 
 // workflowsService + workflowsRepository read API (Story 2.2 · Subtask 2.2.3).
@@ -86,7 +85,12 @@ async function makeFixture(): Promise<Fixture> {
   });
   const w1 = await workspacesService.createWorkspace({ name: 'WF Read 1', ownerUserId: userA.id });
   const w2 = await workspacesService.createWorkspace({ name: 'WF Read 2', ownerUserId: userB.id });
-  const project = await createTestProject({ workspaceId: w1.workspace.id, actorUserId: userA.id });
+  // A BARE project (db insert, NOT projectsService.createProject) so the
+  // controlled 4-status fixture below isn't shadowed by 2.2.2's auto-seeded
+  // default workflow — this suite exercises the read API against a known set.
+  const project = await db.project.create({
+    data: { workspaceId: w1.workspace.id, name: 'WF Read', slug: 'wf-read', identifier: 'WFR' },
+  });
 
   const wsId = w1.workspace.id;
   const todoId = await makeStatus({
