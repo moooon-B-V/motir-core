@@ -33,6 +33,24 @@ export const workflowsRepository = {
     });
   },
 
+  /**
+   * Statuses across MANY projects in ONE query (Subtask 2.2.6) — the batched
+   * read behind `getTerminalStatusKeysByProjects`, so resolving terminal sets
+   * for N blocker-projects is O(1) round-trips, not N+1. Empty `projectIds`
+   * short-circuits to `[]` (no query).
+   */
+  async findStatusesByProjects(
+    projectIds: string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkflowStatus[]> {
+    if (projectIds.length === 0) return [];
+    const client = tx ?? db;
+    return client.workflowStatus.findMany({
+      where: { projectId: { in: projectIds }, workspaceId },
+    });
+  },
+
   /** A project's legal transitions (directed status edges). */
   async findTransitions(
     projectId: string,

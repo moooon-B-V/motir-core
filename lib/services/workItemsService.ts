@@ -705,16 +705,24 @@ export const workItemsService = {
 
   /**
    * Whether `workItemId` is ready to start: every `is_blocked_by` blocker has
-   * reached the terminal status. Backed by a SINGLE counting query in the
-   * repository (countOpenBlockers) — no fetch-then-filter — so Epic 7's
-   * ready-set engine can call it across many items cheaply. v1 hardcodes
-   * 'done' as the terminal status (see countOpenBlockers' note); Epic 2's
-   * workflow Story generalizes to per-project terminal-status sets. Read-only;
-   * `ctx` reserved for 1.4.5 RLS.
+   * reached a TERMINAL status (Subtask 2.2.6, resolving finding #21). "Terminal"
+   * is per-project — a status whose `category = done` in ITS OWN project's
+   * workflow (so `done` AND `cancelled` count out of the box, and an admin who
+   * recategorizes a status changes readiness live). Blockers can span projects,
+   * so each is classified against its own project's terminal set.
+   *
+   * Two queries total, no N+1: one for the blocker `(status, projectId)` rows,
+   * one batched `getTerminalStatusKeysByProjects` for every blocker-project's
+   * terminal set. A blocker is OPEN unless its status is in its project's set.
    */
-  async isReady(workItemId: string, _ctx: ServiceContext): Promise<boolean> {
-    const openBlockers = await workItemLinkRepository.countOpenBlockers(workItemId);
-    return openBlockers === 0;
+  async isReady(workItemId: string, ctx: ServiceContext): Promise<boolean> {
+    const blockers = await workItemLinkRepository.findBlockerStates(workItemId);
+    if (blockers.length === 0) return true;
+    const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+      blockers.map((b) => b.projectId),
+      ctx.workspaceId,
+    );
+    return blockers.every((b) => terminalByProject.get(b.projectId)?.has(b.status) ?? false);
   },
 
   /**
