@@ -131,6 +131,11 @@ export default defineConfig({
         // dev server (below), so the job runs and writes the outbox. Without
         // this the SDK targets cloud and no E2E email is ever delivered.
         INNGEST_DEV: '1',
+        // Subtask 1.5.6: hide the Next dev-tools indicator (a bottom-left
+        // fixed portal) so it stops occluding the sidebar footer's collapse
+        // toggle during the browser-driven shell-flows journey. next.config.ts
+        // reads this flag; a normal `pnpm dev` session keeps its indicator.
+        E2E_DISABLE_DEV_INDICATOR: '1',
       },
     },
     {
