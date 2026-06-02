@@ -82,43 +82,71 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    // The webServer command is the same locally and in CI. Setting
-    // EMAIL_PROVIDER=file + EMAIL_OUTBOX_PATH here ensures both
-    // environments write reset emails to a file the specs can read.
-    // NODE_ENV is left unset (Next dev sets it to 'development') so the
-    // 'file' provider's production-guard doesn't fire.
-    command: `pnpm dev --port ${PORT}`,
-    url: BASE_URL,
-    // Reuse a running dev server locally for fast iteration — but NEVER when a
-    // custom origin was requested (a worktree run), since the only server that
-    // could be reused on that port is a sibling's, running different code.
-    reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
-    timeout: 120_000,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    env: {
-      EMAIL_PROVIDER: 'file',
-      EMAIL_OUTBOX_PATH: path.resolve('/tmp/prodect-test-emails.jsonl'),
-      // E2E_TEST_OAUTH=1 makes instrumentation.ts install an undici
-      // MockAgent that intercepts POSTs to oauth2.googleapis.com/token,
-      // returning a synthetic id_token. See instrumentation.ts +
-      // tests/e2e/auth-google.spec.ts for the wiring. Production builds
-      // (and any local dev where this var isn't set) leave the dispatcher
-      // untouched.
-      E2E_TEST_OAUTH: '1',
-      E2E_TEST_OAUTH_USER_PATH: path.resolve('/tmp/prodect-test-oauth-user.json'),
-      // PRODECT_FINDINGS #8: hand the dev server the same origin Playwright
-      // drives. lib/auth/index.ts uses BETTER_AUTH_URL as both its baseURL and
-      // a trustedOrigins entry, so this is what lets /api/auth/* POSTs pass the
-      // CSRF origin guard on a non-default port.
-      BETTER_AUTH_URL: BASE_URL,
-      // PRODECT_FINDINGS #9: Better-Auth buckets /sign-in + /sign-up into one
-      // IP-keyed window (10s / max 3). Multi-user specs sign up several users
-      // from localhost inside that window and hit 429s. This flag disables the
-      // limiter for the E2E dev server only; lib/auth/index.ts reads it and
-      // leaves the limiter fully active everywhere it isn't set (i.e. prod).
-      E2E_DISABLE_RATE_LIMIT: '1',
+  // TWO servers (Story 1.6.3). Transactional emails are no longer sent inline
+  // — password reset + invites enqueue an `email.send` event that a background
+  // job delivers. So E2E needs the Inngest dev server (the executor) running
+  // alongside `pnpm dev`, or the email never reaches the file outbox the specs
+  // poll (waitForEmail would hang). The Next server's INNGEST_DEV=1 points the
+  // SDK at the local dev server (default :8288) instead of cloud; the cli `dev`
+  // discovers the app via the serve route and invokes the job on each event.
+  webServer: [
+    {
+      // The webServer command is the same locally and in CI. Setting
+      // EMAIL_PROVIDER=file + EMAIL_OUTBOX_PATH here ensures both
+      // environments write reset emails to a file the specs can read.
+      // NODE_ENV is left unset (Next dev sets it to 'development') so the
+      // 'file' provider's production-guard doesn't fire.
+      command: `pnpm dev --port ${PORT}`,
+      url: BASE_URL,
+      // Reuse a running dev server locally for fast iteration — but NEVER when a
+      // custom origin was requested (a worktree run), since the only server that
+      // could be reused on that port is a sibling's, running different code.
+      reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
+      timeout: 120_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        EMAIL_PROVIDER: 'file',
+        EMAIL_OUTBOX_PATH: path.resolve('/tmp/prodect-test-emails.jsonl'),
+        // E2E_TEST_OAUTH=1 makes instrumentation.ts install an undici
+        // MockAgent that intercepts POSTs to oauth2.googleapis.com/token,
+        // returning a synthetic id_token. See instrumentation.ts +
+        // tests/e2e/auth-google.spec.ts for the wiring. Production builds
+        // (and any local dev where this var isn't set) leave the dispatcher
+        // untouched.
+        E2E_TEST_OAUTH: '1',
+        E2E_TEST_OAUTH_USER_PATH: path.resolve('/tmp/prodect-test-oauth-user.json'),
+        // PRODECT_FINDINGS #8: hand the dev server the same origin Playwright
+        // drives. lib/auth/index.ts uses BETTER_AUTH_URL as both its baseURL and
+        // a trustedOrigins entry, so this is what lets /api/auth/* POSTs pass the
+        // CSRF origin guard on a non-default port.
+        BETTER_AUTH_URL: BASE_URL,
+        // PRODECT_FINDINGS #9: Better-Auth buckets /sign-in + /sign-up into one
+        // IP-keyed window (10s / max 3). Multi-user specs sign up several users
+        // from localhost inside that window and hit 429s. This flag disables the
+        // limiter for the E2E dev server only; lib/auth/index.ts reads it and
+        // leaves the limiter fully active everywhere it isn't set (i.e. prod).
+        E2E_DISABLE_RATE_LIMIT: '1',
+        // Story 1.6.3: route enqueued email.send events to the local Inngest
+        // dev server (below), so the job runs and writes the outbox. Without
+        // this the SDK targets cloud and no E2E email is ever delivered.
+        INNGEST_DEV: '1',
+      },
     },
-  },
+    {
+      // The Inngest dev server = the executor. It discovers this app's
+      // functions by syncing the serve route (-u), then invokes `email.send`
+      // whenever the Next server publishes an event. It listens on :8288 (the
+      // default the SDK's dev mode targets). NOTE: :8288 is fixed, so two
+      // concurrent E2E runs on different app ports would collide here — fine
+      // for CI (one run) + single local runs; a future improvement is a
+      // per-run dev-server port threaded through INNGEST_DEV as a URL.
+      command: `npx --yes inngest-cli@latest dev -u http://localhost:${PORT}/api/inngest --no-discovery`,
+      url: 'http://localhost:8288',
+      reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
+      timeout: 120_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+  ],
 });

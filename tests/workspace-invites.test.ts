@@ -24,7 +24,8 @@ import {
 import { POST as sendInvitePOST } from '@/app/api/workspaces/[workspaceId]/invites/route';
 import { GET as validateInviteGET } from '@/app/api/invites/[token]/route';
 import { POST as acceptInvitePOST } from '@/app/api/invites/[token]/accept/route';
-import { truncateAuthTables } from './helpers/db';
+import { truncateAuthTables, truncateJobRuns } from './helpers/db';
+import { captureConsoleEmails, captureEmailEvents, runEmailSendJob } from './helpers/jobs';
 
 // Integration tests against a real Postgres. Hits the route handlers
 // directly (so the request → service → repo → Prisma chain is
@@ -35,15 +36,12 @@ import { truncateAuthTables } from './helpers/db';
 
 const BASE_URL = 'http://localhost:3000';
 
-function captureEmails(): { lines: string[]; restore: () => void } {
-  const lines: string[] = [];
-  const spy = vi.spyOn(console, 'log').mockImplementation((arg) => {
-    if (typeof arg === 'string' && arg.startsWith('[EMAIL]')) {
-      lines.push(arg);
-    }
-  });
-  return { lines, restore: () => spy.mockRestore() };
-}
+// Story 1.6.3: sendInvite no longer dispatches the email inline — it ENQUEUES
+// an `email.send` event. So we capture the enqueued events (which also stops
+// the publish from reaching a non-existent dev server) for the whole file:
+// every helper that plants an invite (createInvite) goes through sendInvite,
+// so the spy must be active in every block, not just the "send" describe.
+let emailEvents: ReturnType<typeof captureEmailEvents>;
 
 function paramsFor<T>(value: T): { params: Promise<T> } {
   return { params: Promise.resolve(value) };
@@ -107,7 +105,13 @@ async function createInvite(args: {
 
 beforeEach(async () => {
   await truncateAuthTables();
+  await truncateJobRuns();
   mockSession.current = null;
+  emailEvents = captureEmailEvents();
+});
+
+afterEach(() => {
+  emailEvents.restore();
 });
 
 afterAll(async () => {
@@ -115,15 +119,7 @@ afterAll(async () => {
 });
 
 describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
-  let captured: ReturnType<typeof captureEmails>;
-  beforeEach(() => {
-    captured = captureEmails();
-  });
-  afterEach(() => {
-    captured.restore();
-  });
-
-  it('creates a Verification row and sends the invite email (happy path)', async () => {
+  it('creates a Verification row and enqueues the invite email (happy path)', async () => {
     const { user, workspace } = await makeInviter();
     mockSession.current = { user: { id: user.id, email: user.email, name: user.name } };
 
@@ -143,13 +139,30 @@ describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
       inviterUserId: user.id,
     });
     expect(rows[0]!.expiresAt.getTime()).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
+    const token = rows[0]!.identifier.slice(INVITE_IDENTIFIER_PREFIX.length);
 
-    expect(captured.lines).toHaveLength(1);
-    expect(captured.lines[0]).toContain('To: newbie@example.com');
-    expect(captured.lines[0]).toContain("You're invited to join Acme Co. on Prodect");
-    // Plain-text body must contain the accept link unredacted
-    // (dev-console contract from 1.1.6).
-    expect(captured.lines[0]).toMatch(/Accept invite: https?:\/\/[^\s]+\/invite\/accept\?token=/);
+    // Exactly one tenanted email.send event was enqueued for the invitee,
+    // keyed by the invite token, with the workspace-invite template.
+    expect(emailEvents.events).toHaveLength(1);
+    const event = emailEvents.events[0]!;
+    expect(event.data.template).toBe('workspace-invite');
+    expect(event.data.to).toBe('newbie@example.com');
+    expect(event.data.workspaceId).toBe(workspace.id);
+    expect(event.data.idempotencyKey).toBe(token);
+
+    // End-to-end: draining the queued event renders + sends the invite, with
+    // the accept link unredacted in the plain-text body (dev-console contract
+    // from 1.1.6).
+    const emails = captureConsoleEmails();
+    try {
+      await runEmailSendJob(event.data);
+      expect(emails.lines).toHaveLength(1);
+      expect(emails.lines[0]).toContain('To: newbie@example.com');
+      expect(emails.lines[0]).toContain("You're invited to join Acme Co. on Prodect");
+      expect(emails.lines[0]).toMatch(/Accept invite: https?:\/\/[^\s]+\/invite\/accept\?token=/);
+    } finally {
+      emails.restore();
+    }
   });
 
   it('returns 422 ALREADY_MEMBER when target email is already in the workspace', async () => {
@@ -171,7 +184,7 @@ describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
       where: { identifier: { startsWith: INVITE_IDENTIFIER_PREFIX } },
     });
     expect(rows).toBe(0);
-    expect(captured.lines).toHaveLength(0);
+    expect(emailEvents.events).toHaveLength(0);
   });
 
   it('returns 404 NOT_FOUND when requester is not in the workspace (anti-enumeration)', async () => {
@@ -198,7 +211,7 @@ describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
       where: { identifier: { startsWith: INVITE_IDENTIFIER_PREFIX } },
     });
     expect(rows).toBe(0);
-    expect(captured.lines).toHaveLength(0);
+    expect(emailEvents.events).toHaveLength(0);
   });
 
   it('rate-limits: 3 invites in the window succeed, 4th returns 429 RATE_LIMITED', async () => {
@@ -218,7 +231,7 @@ describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
       where: { identifier: { startsWith: INVITE_IDENTIFIER_PREFIX } },
     });
     expect(rows).toBe(3);
-    expect(captured.lines).toHaveLength(3);
+    expect(emailEvents.events).toHaveLength(3);
   });
 });
 

@@ -1,9 +1,15 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { usersService } from '@/lib/services/usersService';
 const { createUser, verifyPassword } = usersService;
-import { truncateAuthTables } from './helpers/db';
+import { truncateAuthTables, truncateJobRuns } from './helpers/db';
+import {
+  captureConsoleEmails,
+  captureEmailEvents,
+  runEmailSendJob,
+  type CapturedEmailEvent,
+} from './helpers/jobs';
 
 // Integration tests for Better-Auth's password-reset flow against a real
 // Postgres. Token storage / single-use / expiry semantics are owned by
@@ -12,6 +18,15 @@ import { truncateAuthTables } from './helpers/db';
 // internals. The rate-limit suite is in a separate describe block at the
 // bottom because it shares Better-Auth's in-memory limiter state across
 // cases and needs deterministic ordering.
+//
+// Story 1.6.3: the reset email is no longer sent inline — sendResetPassword
+// now ENQUEUES an `email.send` event (better-auth awaits the hook, so the
+// event is published by the time requestPasswordReset resolves). So these
+// tests capture the enqueued event (via the inngest.send spy in
+// captureEmailEvents) and read the reset token off its idempotencyKey,
+// instead of grepping an `[EMAIL]` console line. One test additionally drives
+// the `email.send` job in-process to prove the queued event ultimately
+// renders + sends with the token.
 
 const BASE_URL = 'http://localhost:3000';
 
@@ -26,30 +41,16 @@ function buildHeaders(extra?: Record<string, string>): HeadersInit {
   };
 }
 
-function captureEmails(): { lines: string[]; restore: () => void } {
-  const lines: string[] = [];
-  const spy = vi.spyOn(console, 'log').mockImplementation((arg) => {
-    if (typeof arg === 'string' && arg.startsWith('[EMAIL]')) {
-      lines.push(arg);
-    }
-    // Drop everything else silently so test output stays clean.
-  });
-  return { lines, restore: () => spy.mockRestore() };
-}
-
-function tokenFromEmailLine(line: string): string {
-  // Reset URL shape from better-auth password.mjs:
-  //   ${baseURL}/api/auth/reset-password/${token}?callbackURL=...
-  // Strip the prefix and the query string.
-  const match = line.match(/\/api\/auth\/reset-password\/([A-Za-z0-9_-]+)/);
-  if (!match) {
-    throw new Error(`No reset token found in email line: ${line}`);
-  }
-  return match[1]!;
+// The reset token IS the enqueued event's idempotency key (lib/auth/index.ts).
+function tokenFromEvent(event: CapturedEmailEvent): string {
+  const token = event.data.idempotencyKey;
+  if (!token) throw new Error('No idempotencyKey on the captured email.send event');
+  return token;
 }
 
 beforeEach(async () => {
   await truncateAuthTables();
+  await truncateJobRuns();
 });
 
 afterAll(async () => {
@@ -57,17 +58,17 @@ afterAll(async () => {
 });
 
 describe('forget-password (auth.api.requestPasswordReset)', () => {
-  let captured: ReturnType<typeof captureEmails>;
+  let captured: ReturnType<typeof captureEmailEvents>;
 
   beforeEach(() => {
-    captured = captureEmails();
+    captured = captureEmailEvents();
   });
 
   afterEach(() => {
     captured.restore();
   });
 
-  it('creates a Verification row and sends the reset email with the token', async () => {
+  it('creates a Verification row and enqueues the reset email with the token', async () => {
     const user = await createUser({
       email: 'reset-1@example.com',
       password: 'hunter2hunter2',
@@ -81,9 +82,20 @@ describe('forget-password (auth.api.requestPasswordReset)', () => {
       },
     });
 
-    expect(captured.lines).toHaveLength(1);
-    const token = tokenFromEmailLine(captured.lines[0]!);
+    // Exactly one email.send event was enqueued, cross-workspace (null), with
+    // the password-reset template addressed to the requesting user.
+    expect(captured.events).toHaveLength(1);
+    const event = captured.events[0]!;
+    expect(event.data.template).toBe('password-reset');
+    expect(event.data.to).toBe('reset-1@example.com');
+    expect(event.data.workspaceId).toBeNull();
+
+    const token = tokenFromEvent(event);
     expect(token.length).toBeGreaterThan(0);
+    // The token threads into the reset URL the template will render.
+    if (event.data.template === 'password-reset') {
+      expect(event.data.data.resetUrl).toContain(token);
+    }
 
     // Verification row is keyed by `reset-password:<token>`, with the
     // value being the user id — see better-auth/dist/api/routes/password.mjs.
@@ -93,9 +105,21 @@ describe('forget-password (auth.api.requestPasswordReset)', () => {
     expect(row).not.toBeNull();
     expect(row!.value).toBe(user.id);
     expect(row!.expiresAt.getTime()).toBeGreaterThan(Date.now());
+
+    // End-to-end: draining the queued event through the email.send job renders
+    // + dispatches the reset email, with the token unredacted in the body.
+    const emails = captureConsoleEmails();
+    try {
+      await runEmailSendJob(event.data);
+      expect(emails.lines).toHaveLength(1);
+      expect(emails.lines[0]).toContain('To: reset-1@example.com');
+      expect(emails.lines[0]).toContain(token);
+    } finally {
+      emails.restore();
+    }
   });
 
-  it('returns success silently and sends no email for an unknown address (no enumeration)', async () => {
+  it('returns success silently and enqueues nothing for an unknown address (no enumeration)', async () => {
     const result = await auth.api.requestPasswordReset({
       body: {
         email: 'ghost@example.com',
@@ -104,7 +128,7 @@ describe('forget-password (auth.api.requestPasswordReset)', () => {
     });
 
     expect(result.status).toBe(true);
-    expect(captured.lines).toHaveLength(0);
+    expect(captured.events).toHaveLength(0);
 
     const rowCount = await db.verification.count();
     expect(rowCount).toBe(0);
@@ -112,10 +136,10 @@ describe('forget-password (auth.api.requestPasswordReset)', () => {
 });
 
 describe('reset-password (auth.api.resetPassword)', () => {
-  let captured: ReturnType<typeof captureEmails>;
+  let captured: ReturnType<typeof captureEmailEvents>;
 
   beforeEach(() => {
-    captured = captureEmails();
+    captured = captureEmailEvents();
   });
 
   afterEach(() => {
@@ -135,7 +159,7 @@ describe('reset-password (auth.api.resetPassword)', () => {
         redirectTo: `${BASE_URL}/reset-password`,
       },
     });
-    const token = tokenFromEmailLine(captured.lines[0]!);
+    const token = tokenFromEvent(captured.events[0]!);
 
     await auth.api.resetPassword({
       body: { token, newPassword: 'newpassword12' },
@@ -175,7 +199,7 @@ describe('reset-password (auth.api.resetPassword)', () => {
         redirectTo: `${BASE_URL}/reset-password`,
       },
     });
-    const token = tokenFromEmailLine(captured.lines[0]!);
+    const token = tokenFromEvent(captured.events[0]!);
 
     // Backdate the row's expiry — simulates the user clicking the link
     // after the 1-hour window. We touch the DB directly rather than wait
@@ -216,10 +240,15 @@ describe('rate limit on /request-password-reset', () => {
   // share state with this one. They don't (auth.api.* direct calls bypass
   // the limiter entirely, as the limiter requires a Request). If that
   // changes, this test should pin a unique x-forwarded-for IP per case.
-  let captured: ReturnType<typeof captureEmails>;
+  //
+  // captureEmailEvents is installed so the inngest.send the hook fires per
+  // allowed request resolves in-process (no dev server) — and we assert the
+  // 3 allowed requests each enqueued one event while the rate-limited 4th
+  // enqueued nothing.
+  let captured: ReturnType<typeof captureEmailEvents>;
 
   beforeEach(() => {
-    captured = captureEmails();
+    captured = captureEmailEvents();
   });
 
   afterEach(() => {
@@ -255,5 +284,8 @@ describe('rate limit on /request-password-reset', () => {
 
     const r4 = await postForgetPassword('rl@example.com');
     expect(r4.status).toBe(429);
+
+    // Only the 3 allowed requests enqueued a send; the 429 enqueued nothing.
+    expect(captured.events).toHaveLength(3);
   });
 });

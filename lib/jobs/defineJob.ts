@@ -92,8 +92,14 @@ export function defineJob<N extends JobEventName>(
 
   return inngest.createFunction(config, async (ctx: JobContext) => {
     const { event, step } = ctx;
-    const data = event.data as { workspaceId?: string } | undefined;
+    const data = event.data as { workspaceId?: string | null; idempotencyKey?: string } | undefined;
     const workspaceId = data?.workspaceId ?? null;
+    // Record the idempotency key the run executed under (when the event
+    // carries one) so the operator dashboard (1.6.5) can show it. This only
+    // POPULATES the column — the ledger-side dedup that READS it to skip a
+    // duplicate run is 1.6.4; today's dedup is Inngest's own event-level
+    // dedup, configured per-job via the `idempotency` option above.
+    const idempotencyKey = data?.idempotencyKey ?? null;
     // The triggering event's id correlates the run to its event; fall back
     // to the runId when the event carries no id (e.g. the test harness's
     // synthetic event).
@@ -106,6 +112,7 @@ export function defineJob<N extends JobEventName>(
         eventName: event.name,
         eventId,
         attempt: ctx.attempt,
+        idempotencyKey,
       }),
     );
 
