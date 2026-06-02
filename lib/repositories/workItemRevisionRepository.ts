@@ -48,7 +48,13 @@ export const workItemRevisionRepository = {
     const { take = 50, cursor } = options;
     return db.workItemRevision.findMany({
       where: { workItemId },
-      orderBy: { changedAt: 'desc' },
+      // `id` is a required secondary sort: `changedAt` alone is not a total
+      // order — two revisions written in the same millisecond tie, and an
+      // unbroken tie makes BOTH the rendered order AND cursor pagination
+      // (cursor:{id}+skip:1) non-deterministic, so a page boundary that lands
+      // mid-tie can skip or repeat a row. cuid `id`s are monotonic-ish and
+      // unique, giving a stable tiebreaker (PRODECT_FINDINGS #38).
+      orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
       take,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });

@@ -385,6 +385,25 @@ describe('listByWorkItem — ordering', () => {
     await workItemsService.updateWorkItem(created.id, { title: 'v2' }, fx.ctx);
     await workItemsService.archiveWorkItem(created.id, fx.ctx);
 
+    // The three revisions are written within the same millisecond, so their
+    // `changedAt` values tie — which (before PRODECT_FINDINGS #38 added the
+    // `id` secondary sort) made the newest-first order non-deterministic under
+    // load. Stamp DISTINCT timestamps so this assertion is independent of both
+    // timing and id ordering; the secondary sort is the production safety net.
+    const base = Date.UTC(2026, 0, 1);
+    await db.workItemRevision.updateMany({
+      where: { workItemId: created.id, changeKind: 'created' },
+      data: { changedAt: new Date(base) },
+    });
+    await db.workItemRevision.updateMany({
+      where: { workItemId: created.id, changeKind: 'updated' },
+      data: { changedAt: new Date(base + 1000) },
+    });
+    await db.workItemRevision.updateMany({
+      where: { workItemId: created.id, changeKind: 'archived' },
+      data: { changedAt: new Date(base + 2000) },
+    });
+
     const all = await workItemRevisionRepository.listByWorkItem(created.id);
     expect(all.map((r) => r.changeKind)).toEqual(['archived', 'updated', 'created']);
 
