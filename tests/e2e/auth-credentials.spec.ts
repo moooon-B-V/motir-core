@@ -107,7 +107,9 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
   const localPart = TEST_EMAIL.split('@')[0]!;
   expect(current.workspace.name).toBe(`${localPart}'s Workspace`);
   expect(current.workspace.id).toBeTruthy();
-  expect(current.membership.role).toBe('member');
+  // The signed-up user is the creator → owner of their auto-created workspace
+  // (Subtask 1.6.5 — the role the operator-dashboard replay gate keys off).
+  expect(current.membership.role).toBe('owner');
   expect(current.membership.workspaceId).toBe(current.workspace.id);
 
   // --- Step d: sign out via the form on the dashboard.

@@ -253,11 +253,10 @@ action.
 
 - **How DLQ rows appear** — automatically, once a job's retries are exhausted.
   Each row is one dead-lettered run. `replayed_at` is null until you replay it.
-- **How to replay** — call `replayDLQ(dlqId, tx)` (`lib/jobs/dlq.ts`). It
-  re-emits the **original** event and stamps `replayed_at` so the action is
-  auditable. The 1.6.5 dashboard wires this to a "Replay" button; until then it
-  runs from a server-side context (the same trusted/system context the runtime
-  uses).
+- **How to replay** — click **Replay** on the dead-letter row in the operator
+  dashboard (see below). Under the hood the owner-gated `jobsDashboardService`
+  calls `replayDLQ(dlqId, tx)` (`lib/jobs/dlq.ts`), which re-emits the
+  **original** event and stamps `replayed_at` so the action is auditable.
 - **When NOT to replay** — if the failure was a bad payload or a since-removed
   code path, replaying just re-fails. Fix forward first; replay only transient
   infrastructure failures (provider outage, expired upstream token now renewed).
@@ -269,6 +268,38 @@ replay is **dropped** (same key → no re-execute). To force a replay through:
 either wait the dedup window out, or — when a code change has made the original
 a no-op — re-shape the idempotency key so the replay reads as a new event. A
 job with **no** idempotency key replays unconditionally.
+
+## Operator dashboard
+
+`/settings/workspace/jobs` (Subtask 1.6.5) is the in-app surface for the ledger
+above — no one needs Inngest's own dashboard for day-to-day operation. It's a
+workspace-settings sub-page (a "Job runs" link under the sidebar's Settings
+group) backed by `lib/services/jobsDashboardService.ts`.
+
+**Tabs.**
+
+- **Recent runs** (default) — every `job_run` for the active workspace,
+  newest-first, 50 per page. Columns: status pill (succeeded / failed /
+  running), function, event, attempts, started, duration, and the failure's
+  first line (full JSON via the row's **View** dialog). A status-filter row
+  (All / Succeeded / Failed / Running) narrows the list.
+- **Dead letter** — the workspace's `job_run_dlq` rows, newest-failure-first.
+  The tab carries a badge with the count of **not-yet-replayed** entries.
+  **Replay** is gated to the workspace **owner** (others see a disabled button
+  with a tooltip); **View** opens the failure + the replayable event payload.
+- **System** — visible only to a `PLATFORM_ADMIN_EMAIL` operator. Same shape as
+  Recent runs but spans **all** workspaces, including untenanted system jobs
+  (`workspace_id IS NULL`). This is the pre-Epic-6 escape hatch; real
+  platform-admin roles replace the email check in Epic 6 (PRODECT_FINDINGS #36).
+
+**Scoping.** Tenant reads run under `withWorkspaceContext`, so the `job_run` /
+`job_run_dlq` RLS policies scope every row to the active workspace (the repo
+also filters by `workspace_id` explicitly, so the scope holds in dev/CI where
+the superuser bypasses RLS). The System tab is the one `withSystemContext` read.
+
+**No realtime in v1.** There is no polling or websockets — a **Refresh** button
+reloads the data. Auto-refresh is deferred to a holistic reporting pass in
+Epic 6 (PRODECT_FINDINGS #37).
 
 ## Scheduled jobs
 

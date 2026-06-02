@@ -1,7 +1,15 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { BarChart3, BookOpen, CircleDot, Columns3, LayoutDashboard, Settings } from 'lucide-react';
+import {
+  BarChart3,
+  BookOpen,
+  CircleDot,
+  Columns3,
+  LayoutDashboard,
+  ListChecks,
+  Settings,
+} from 'lucide-react';
 import { Sidebar, type SidebarSection } from '@/components/ui/Sidebar';
 import { SidebarToggle } from '@/components/ui/SidebarToggle';
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed';
@@ -92,7 +100,17 @@ export function SidebarNav({ activeProject, projects, variant = 'rail' }: Sideba
         // Deep-link to project settings when a project is active; otherwise
         // there's nothing project-scoped to configure, so go to workspace.
         href: hasProject ? '/settings/project' : '/settings/workspace',
-        active: isActive(pathname, '/settings'),
+        // Stay un-highlighted when the more-specific Job runs sub-link is the
+        // active route, so only one row reads as current.
+        active: isActive(pathname, '/settings') && !isActive(pathname, '/settings/workspace/jobs'),
+      },
+      {
+        // Operator surface (Subtask 1.6.5) — the workspace's background-job runs
+        // + dead-letter queue. A workspace-scoped settings sub-page.
+        icon: <ListChecks />,
+        label: 'Job runs',
+        href: '/settings/workspace/jobs',
+        active: isActive(pathname, '/settings/workspace/jobs'),
       },
       {
         icon: <BookOpen />,

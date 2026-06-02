@@ -1,4 +1,4 @@
-import { Prisma, type JobRun } from '@prisma/client';
+import { Prisma, type JobRun, type JobRunStatus } from '@prisma/client';
 
 // Data access for the job_run ledger (Story 1.6 · Subtask 1.6.2). Single-op
 // methods only; writes require `tx` (the 4-layer contract). jobRunsService
@@ -32,5 +32,47 @@ export const jobRunRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<JobRun> {
     return tx.jobRun.update({ where: { id }, data });
+  },
+
+  /**
+   * Dashboard read (1.6.5): a workspace's runs, newest-first, optionally
+   * filtered by status, with limit/offset paging. Takes `tx` because the read
+   * runs inside withWorkspaceContext so the job_run RLS policy scopes it; the
+   * explicit `where.workspaceId` is the in-query scope that also holds in
+   * dev/CI where the superuser bypasses RLS (defense-in-depth, mirrors
+   * workspaceMembershipRepository.findMembersByWorkspace). Serves the
+   * `[workspaceId, startedAt desc]` / `[workspaceId, status, startedAt desc]`
+   * indexes from the 1.6.2 schema.
+   */
+  async listByWorkspace(
+    workspaceId: string,
+    opts: { status?: JobRunStatus; limit: number; offset: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<JobRun[]> {
+    return tx.jobRun.findMany({
+      where: { workspaceId, ...(opts.status ? { status: opts.status } : {}) },
+      orderBy: { startedAt: 'desc' },
+      take: opts.limit,
+      skip: opts.offset,
+    });
+  },
+
+  /**
+   * System-tab read (1.6.5): every run across all workspaces INCLUDING the
+   * untenanted system rows (workspace_id IS NULL). No workspace filter — the
+   * caller MUST run this under withSystemContext (the only context whose RLS
+   * branch admits null-workspace rows), and the dashboard only reaches it for a
+   * PLATFORM_ADMIN_EMAIL operator. Newest-first, paged.
+   */
+  async listAll(
+    opts: { status?: JobRunStatus; limit: number; offset: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<JobRun[]> {
+    return tx.jobRun.findMany({
+      where: { ...(opts.status ? { status: opts.status } : {}) },
+      orderBy: { startedAt: 'desc' },
+      take: opts.limit,
+      skip: opts.offset,
+    });
   },
 };
