@@ -59,12 +59,10 @@ const SHELL_ROUTES: { path: string; ready: (page: Page) => Promise<void> }[] = [
   },
   {
     // Operator dashboard (Subtask 1.6.5). Swept in its EMPTY state (a fresh
-    // workspace has no job runs), which is the shell-bearing surface — so the
-    // colored status pills (succeeded/failed/running) that carry the systemic
-    // tint-on-hue color-contrast gap (PRODECT_FINDINGS #35) never render here,
-    // and this route stays in the STRICT sweep with zero rule exclusions, like
-    // every other shell route. The populated table inherits #35 and is excluded
-    // from a strict color-contrast assertion until the reviewed design pass.
+    // workspace has no job runs). Stays in the STRICT sweep with zero rule
+    // exclusions, like every other shell route — and now that the colored Pill
+    // tones meet WCAG AA (PRODECT_FINDINGS #35 resolved), the populated table's
+    // status pills (succeeded/failed/running) pass color-contrast too.
     path: '/settings/workspace/jobs',
     ready: async (page) =>
       expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible(),
@@ -124,15 +122,15 @@ test.describe('@a11y shell accessibility', () => {
   // catches regressions before they reach a real surface. Scanned without a
   // session (the route is public).
   //
-  // `color-contrast` is excluded HERE ONLY: the specimen deliberately renders
-  // the Pill `severity`/`status` matrix, whose colored tint-on-hue tones fail
-  // WCAG AA in light mode (foreground hue too light on its own light tint).
-  // That's a real but systemic design-system issue that needs a reviewed color
-  // pass, not a shell-test fix — tracked as PRODECT_FINDINGS #35. The shell
-  // routes above stay strict (no rule exclusions); the one place that tone
-  // reached a shell surface (the workspace member-count badge) was switched to
-  // the AA-safe neutral tone. Every OTHER axe rule still guards /tokens.
-  test('the /tokens specimen route is axe-clean (WCAG 2.1 AA; color-contrast tracked as #35)', async ({
+  // `color-contrast` is excluded on the WHOLE-page sweep — but NOT for the Pill
+  // anymore (PRODECT_FINDINGS #35 is fixed; the focused test below proves the
+  // Pill matrix passes color-contrast). The exclusion now covers only genuine
+  // SPECIMEN-DISPLAY artifacts that aren't product UI: tinted-surface Card demos
+  // rendered with body copy to show the tint tokens, the tiny mono hex micro-
+  // labels under each color swatch, and the raw `<pre>` code samples. Those are
+  // documentation elements, not shipped surfaces, so they aren't held to AA
+  // here. Every OTHER axe rule still guards the full page.
+  test('the /tokens specimen route is axe-clean (WCAG 2.1 AA; color-contrast on specimen artifacts excluded)', async ({
     page,
   }) => {
     await page.goto('/tokens');
@@ -145,6 +143,25 @@ test.describe('@a11y shell accessibility', () => {
     expect(
       results.violations,
       formatViolations('/tokens', results.violations as AxeViolation[]),
+    ).toEqual([]);
+  });
+
+  // The actual subject of PRODECT_FINDINGS #35: the Pill `status`/`severity`
+  // matrix. Scoped color-contrast sweep over JUST the Pill specimen section,
+  // with the rule ENABLED — proves every colored tone clears WCAG AA now that
+  // they use adaptive charcoal text on the hued tint (~10:1 both modes), and
+  // guards against a future regression to hue-on-tint text.
+  test('the Pill matrix passes color-contrast (WCAG 2.1 AA) — #35 fixed', async ({ page }) => {
+    await page.goto('/tokens');
+    await expect(page.locator('#primitives-pill')).toBeVisible();
+
+    const results = await new AxeBuilder({ page })
+      .withTags(WCAG_TAGS)
+      .include('#primitives-pill')
+      .analyze();
+    expect(
+      results.violations,
+      formatViolations('/tokens#primitives-pill', results.violations as AxeViolation[]),
     ).toEqual([]);
   });
 

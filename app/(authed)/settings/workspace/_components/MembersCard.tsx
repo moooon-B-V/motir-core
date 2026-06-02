@@ -36,9 +36,9 @@ export function MembersCard({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h2 className="font-sans text-base font-semibold text-foreground">Members</h2>
-            {/* A member count is metadata, not an "info" severity state — the
-                neutral tone is both the right semantics and AA-contrast-safe
-                (the colored `info` tone fails WCAG AA on its tint; finding #35). */}
+            {/* A member count is metadata, not an "info" severity state — so the
+                neutral tone is the right semantics here (independent of #35,
+                now resolved: all colored tones clear WCAG AA too). */}
             <Pill tone="neutral">
               {members.length} {members.length === 1 ? 'member' : 'members'}
             </Pill>
