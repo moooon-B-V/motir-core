@@ -46,7 +46,8 @@ describe('createWorkspace', () => {
     expect(workspace.subtaskPrMergeMode).toBe('manual');
     expect(membership.userId).toBe(owner.id);
     expect(membership.workspaceId).toBe(workspace.id);
-    expect(membership.role).toBe('member');
+    // The workspace creator is its owner (Subtask 1.6.5 — replay gate tier).
+    expect(membership.role).toBe('owner');
 
     const persistedMembership = await db.workspaceMembership.findUnique({
       where: { id: membership.id },
@@ -224,7 +225,7 @@ describe('listMembers', () => {
 
     const members = await listMembers(workspace.id, owner.id);
     expect(members).toEqual([
-      { userId: owner.id, name: 'Owner Person', email: 'owner@example.com', role: 'member' },
+      { userId: owner.id, name: 'Owner Person', email: 'owner@example.com', role: 'owner' },
       { userId: invitee.id, name: 'Invitee Person', email: 'invitee@example.com', role: 'member' },
     ]);
   });

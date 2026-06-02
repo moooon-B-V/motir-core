@@ -57,6 +57,18 @@ const SHELL_ROUTES: { path: string; ready: (page: Page) => Promise<void> }[] = [
     ready: async (page) =>
       expect(page.getByRole('heading', { name: 'Project settings' })).toBeVisible(),
   },
+  {
+    // Operator dashboard (Subtask 1.6.5). Swept in its EMPTY state (a fresh
+    // workspace has no job runs), which is the shell-bearing surface — so the
+    // colored status pills (succeeded/failed/running) that carry the systemic
+    // tint-on-hue color-contrast gap (PRODECT_FINDINGS #35) never render here,
+    // and this route stays in the STRICT sweep with zero rule exclusions, like
+    // every other shell route. The populated table inherits #35 and is excluded
+    // from a strict color-contrast assertion until the reviewed design pass.
+    path: '/settings/workspace/jobs',
+    ready: async (page) =>
+      expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible(),
+  },
 ];
 
 interface AxeViolation {

@@ -4,6 +4,7 @@ import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import { WORKSPACE_ROLE } from '@/lib/workspaces/roles';
 import {
   AlreadyMemberError,
   LastMemberError,
@@ -79,8 +80,13 @@ async function insertWorkspaceWithOwner(
   tx: Prisma.TransactionClient,
 ): Promise<{ workspace: Workspace; membership: WorkspaceMembership }> {
   const workspace = await workspaceRepository.create({ name: input.name, slug: input.slug }, tx);
+  // The workspace creator is its OWNER — the privileged tier the 1.6.5 operator
+  // dashboard's replay gate keys off. Invited members default to `member`
+  // (workspacesService.addMember). This is what the function name has always
+  // promised; Story 1.2 wrote `member` here as a single-role shortcut, corrected
+  // now — see lib/workspaces/roles.ts (PRODECT_FINDINGS #36).
   const membership = await workspaceMembershipRepository.create(
-    { userId: input.ownerUserId, workspaceId: workspace.id, role: 'member' },
+    { userId: input.ownerUserId, workspaceId: workspace.id, role: WORKSPACE_ROLE.owner },
     tx,
   );
   return { workspace, membership };
@@ -435,5 +441,22 @@ export const workspacesService = {
   async assertMembership(userId: string, workspaceId: string): Promise<void> {
     const m = await workspaceMembershipRepository.findByUserAndWorkspace(userId, workspaceId);
     if (!m) throw new NotAMemberError(userId, workspaceId);
+  },
+
+  /**
+   * The user's role in the workspace (`owner` | `member`), or null if they
+   * aren't a member. Read-only — used by surfaces that gate an action on the
+   * privileged tier (e.g. the 1.6.5 dashboard's owner-only Replay button).
+   * Returns the raw stored string so callers compare via lib/workspaces/roles.
+   */
+  async getMemberRole(userId: string, workspaceId: string): Promise<string | null> {
+    // Read inside withWorkspaceContext so the membership_visible RLS policy
+    // admits the row under the non-bypass prodect_app role (a db-singleton read
+    // with no GUC bound returns NULL → would mis-gate every owner as a member
+    // in production). Mirrors listMembers.
+    const m = await withWorkspaceContext({ userId, workspaceId }, (tx) =>
+      workspaceMembershipRepository.findByUserAndWorkspaceInTx(userId, workspaceId, tx),
+    );
+    return m?.role ?? null;
   },
 };

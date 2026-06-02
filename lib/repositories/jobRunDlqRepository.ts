@@ -33,4 +33,32 @@ export const jobRunDlqRepository = {
   ): Promise<JobRunDlq> {
     return tx.jobRunDlq.update({ where: { id }, data });
   },
+
+  /**
+   * Dashboard DLQ-tab read (1.6.5): a workspace's dead-letter entries,
+   * newest-failure-first, paged. Takes `tx` (runs under withWorkspaceContext;
+   * explicit workspaceId scope is defense-in-depth like jobRunRepository).
+   * Serves the `[workspaceId, lastFailedAt desc]` index from the 1.6.4 schema.
+   */
+  async listByWorkspace(
+    workspaceId: string,
+    opts: { limit: number; offset: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<JobRunDlq[]> {
+    return tx.jobRunDlq.findMany({
+      where: { workspaceId },
+      orderBy: { lastFailedAt: 'desc' },
+      take: opts.limit,
+      skip: opts.offset,
+    });
+  },
+
+  /**
+   * Count of ACTIVE (not-yet-replayed) dead-letter entries for the DLQ-tab
+   * badge. Excludes replayed rows (`replayedAt IS NOT NULL`) so the badge
+   * reflects entries still needing operator attention, per the 1.6.5 AC.
+   */
+  async countActiveByWorkspace(workspaceId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.jobRunDlq.count({ where: { workspaceId, replayedAt: null } });
+  },
 };
