@@ -13,6 +13,7 @@ import {
   Send,
   Settings,
   Sparkles,
+  Users,
 } from 'lucide-react';
 import { useTheme } from '@/lib/contexts/theme-context';
 import { useToast } from '@/components/ui/Toast';
@@ -943,6 +944,24 @@ function CommandPaletteDemo() {
           label: 'Go to Settings',
           icon: <Settings />,
           onSelect: pick('Go to Settings'),
+        },
+      ],
+    },
+    {
+      heading: 'Workspace',
+      actions: [
+        {
+          id: 'd-ws-current',
+          label: 'Acme Inc.',
+          icon: <Users />,
+          badge: 'Current',
+          onSelect: () => {},
+        },
+        {
+          id: 'd-ws-other',
+          label: 'Switch to Beta Labs',
+          icon: <Users />,
+          onSelect: pick('Switch to Beta Labs'),
         },
       ],
     },

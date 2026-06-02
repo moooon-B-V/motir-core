@@ -134,29 +134,39 @@ export function AppCommandPalette({
   });
   groups.push({ heading: 'Navigation', actions: navActions });
 
+  // The active workspace/project isn't a switch target — show it by name with
+  // a "Current" tag, and make selecting it a no-op (just closes the palette).
   if (workspaces.length > 0) {
     groups.push({
       heading: 'Workspace',
-      actions: workspaces.map((w) => ({
-        id: `ws-${w.id}`,
-        label: `Switch to ${w.name}`,
-        icon: <Users />,
-        keywords: w.name,
-        onSelect: () => switchWorkspace(w.id),
-      })),
+      actions: workspaces.map((w) => {
+        const isCurrent = w.id === activeWorkspaceId;
+        return {
+          id: `ws-${w.id}`,
+          label: isCurrent ? w.name : `Switch to ${w.name}`,
+          icon: <Users />,
+          keywords: w.name,
+          ...(isCurrent ? { badge: 'Current' } : {}),
+          onSelect: isCurrent ? () => {} : () => switchWorkspace(w.id),
+        };
+      }),
     });
   }
 
   if (projects.length > 0) {
     groups.push({
       heading: 'Project',
-      actions: projects.map((p) => ({
-        id: `proj-${p.id}`,
-        label: `Switch to ${p.name}`,
-        icon: <Folder />,
-        keywords: p.name,
-        onSelect: () => switchProject(p.id),
-      })),
+      actions: projects.map((p) => {
+        const isCurrent = p.id === activeProjectId;
+        return {
+          id: `proj-${p.id}`,
+          label: isCurrent ? p.name : `Switch to ${p.name}`,
+          icon: <Folder />,
+          keywords: p.name,
+          ...(isCurrent ? { badge: 'Current' } : {}),
+          onSelect: isCurrent ? () => {} : () => switchProject(p.id),
+        };
+      }),
     });
   }
 

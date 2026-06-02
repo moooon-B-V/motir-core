@@ -40,6 +40,8 @@ export interface CommandAction {
   label: string;
   /** Optional keyboard-hint chip(s) shown right-aligned (e.g. 'G then I'). */
   kbd?: string;
+  /** Optional trailing status tag shown right-aligned (e.g. 'Current'). */
+  badge?: string;
   /** Optional leading icon. */
   icon?: ReactNode;
   /** Extra text matched by the filter in addition to `label`. */
@@ -240,6 +242,11 @@ function PaletteBody({
                           </span>
                         ) : null}
                         <span className="flex-1 truncate">{action.label}</span>
+                        {action.badge ? (
+                          <span className="text-muted-foreground shrink-0 rounded-(--radius-pill) bg-surface px-2 py-0.5 font-sans text-[10px] font-medium uppercase tracking-wide">
+                            {action.badge}
+                          </span>
+                        ) : null}
                         {action.kbd ? (
                           <kbd className="text-muted-foreground shrink-0 rounded-(--radius-xs) border border-(--color-hairline) px-1.5 py-0.5 font-mono text-[10px]">
                             {action.kbd}

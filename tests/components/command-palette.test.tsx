@@ -110,6 +110,33 @@ describe('CommandPalette (primitive)', () => {
     expect(screen.queryAllByRole('option')).toHaveLength(0);
   });
 
+  it('renders a trailing badge on an action that carries one', () => {
+    function Host() {
+      const [open, setOpen] = useState(true);
+      return (
+        <CommandPalette
+          open={open}
+          onOpenChange={setOpen}
+          groups={[
+            {
+              heading: 'Workspace',
+              actions: [
+                { id: 'cur', label: 'Acme Inc.', badge: 'Current', onSelect: vi.fn() },
+                { id: 'other', label: 'Switch to Beta Labs', onSelect: vi.fn() },
+              ],
+            },
+          ]}
+        />
+      );
+    }
+    render(<Host />);
+    const current = screen.getByRole('option', { name: /Acme Inc\./ });
+    expect(current.textContent).toContain('Current');
+    // The non-active workspace keeps the "Switch to" affordance, no badge.
+    const other = screen.getByRole('option', { name: /Switch to Beta Labs/ });
+    expect(other.textContent).not.toContain('Current');
+  });
+
   it('closes (onOpenChange→false) when Escape is pressed', () => {
     render(
       <Host
