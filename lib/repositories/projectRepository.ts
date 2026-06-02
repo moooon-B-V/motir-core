@@ -1,4 +1,4 @@
-import { Prisma, type Project } from '@prisma/client';
+import { Prisma, type Project, type WorkflowPolicyMode } from '@prisma/client';
 import { db } from '@/lib/db';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 
@@ -64,6 +64,15 @@ export const projectRepository = {
    */
   async archive(id: string, tx: Prisma.TransactionClient): Promise<Project> {
     return tx.project.update({ where: { id }, data: { archivedAt: new Date() } });
+  },
+
+  /** Flip the project's workflow policy mode (Subtask 2.2.5). */
+  async updateWorkflowPolicyMode(
+    id: string,
+    mode: WorkflowPolicyMode,
+    tx: Prisma.TransactionClient,
+  ): Promise<Project> {
+    return tx.project.update({ where: { id }, data: { workflowPolicyMode: mode } });
   },
 
   /**

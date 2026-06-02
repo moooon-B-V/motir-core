@@ -159,6 +159,21 @@ export const workItemRepository = {
   },
 
   /**
+   * How many work items in a project reference a given status key (Subtask
+   * 2.2.5's delete-protection: a status still in use can't be removed).
+   * Counts ALL items including archived — an archived item's status string
+   * still references the status, so deleting it would orphan that reference.
+   */
+  async countByProjectAndStatusKey(
+    projectId: string,
+    statusKey: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const client = tx ?? db;
+    return client.workItem.count({ where: { projectId, status: statusKey } });
+  },
+
+  /**
    * Direct (non-archived) children of a work item, ordered by fractional
    * `position`. One level only — for the full subtree use `findSubtree`.
    */
