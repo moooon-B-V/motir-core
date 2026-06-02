@@ -36,7 +36,10 @@ export function MembersCard({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h2 className="font-sans text-base font-semibold text-foreground">Members</h2>
-            <Pill severity="info">
+            {/* A member count is metadata, not an "info" severity state — the
+                neutral tone is both the right semantics and AA-contrast-safe
+                (the colored `info` tone fails WCAG AA on its tint; finding #35). */}
+            <Pill tone="neutral">
               {members.length} {members.length === 1 ? 'member' : 'members'}
             </Pill>
           </div>
@@ -113,7 +116,9 @@ function MemberRow({
         </p>
         <p className="text-muted-foreground truncate font-sans text-xs">{member.email}</p>
       </div>
-      <Pill severity="info">{member.role}</Pill>
+      {/* A role is a category label, not an "info" severity — neutral tone
+          (AA-contrast-safe; see finding #35). */}
+      <Pill tone="neutral">{member.role}</Pill>
       {isSelf ? null : (
         <Button variant="ghost" size="sm" onClick={handleRemove} loading={isPending}>
           Remove

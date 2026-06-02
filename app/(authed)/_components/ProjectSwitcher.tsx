@@ -80,7 +80,9 @@ export function ProjectSwitcher({
                 {active?.name ?? 'No project'}
               </span>
               {isArchived ? (
-                <Pill severity="info" className="shrink-0">
+                // "Archived" is a muted inactive state, not an info severity —
+                // neutral tone (AA-safe; #35).
+                <Pill tone="neutral" className="shrink-0">
                   Archived
                 </Pill>
               ) : null}

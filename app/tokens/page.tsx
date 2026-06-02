@@ -170,8 +170,12 @@ function Swatch({ name, label }: { name: string; label: string }) {
         border: '1px solid var(--el-border)',
       }}
     >
+      {/* Decorative swatch — the label is rendered as visible text below, so
+          no aria-label here (a bare <div> can't carry one; axe flags
+          aria-prohibited-attr). aria-hidden keeps the empty chip out of the
+          a11y tree entirely. */}
       <div
-        aria-label={label}
+        aria-hidden
         style={{
           width: '100%',
           height: '64px',
