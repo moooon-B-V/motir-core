@@ -18,6 +18,7 @@ import { useTheme } from '@/lib/contexts/theme-context';
 import { useToast } from '@/components/ui/Toast';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { CommandPalette, type CommandGroup } from '@/components/ui/CommandPalette';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Input } from '@/components/ui/Input';
@@ -693,6 +694,20 @@ export default function TokensPage() {
         <ToastDemo />
       </Section>
 
+      <Section title="Primitives — CommandPalette">
+        <p
+          className="text-sm"
+          style={{ color: 'var(--el-page-text-muted)', marginBottom: 'var(--spacing-md)' }}
+        >
+          The generic ⌘K launcher (Subtask 1.5.4). Open it, then exercise the variant matrix live:
+          an <strong>empty query</strong> shows all actions grouped by heading; typing narrows by
+          substring (try <code className="font-mono text-xs">iss</code> for the{' '}
+          <strong>filtered</strong> state, or <code className="font-mono text-xs">zzz</code> for the{' '}
+          <strong>empty-results</strong> state). ↑↓ navigate, ↵ selects, esc closes.
+        </p>
+        <CommandPaletteDemo />
+      </Section>
+
       <Section title="Patterns — EmptyState">
         <div
           style={{
@@ -885,6 +900,72 @@ function AppShellDemo() {
         </SidebarDrawer>
       </div>
     </div>
+  );
+}
+
+function CommandPaletteDemo() {
+  const [open, setOpen] = useState(false);
+  const { toast } = useToast();
+
+  const pick = (label: string) => () =>
+    toast({ variant: 'info', title: 'Action selected', description: label });
+
+  const groups: CommandGroup[] = [
+    {
+      heading: 'Navigation',
+      actions: [
+        {
+          id: 'd-dashboard',
+          label: 'Go to Dashboard',
+          icon: <LayoutDashboard />,
+          onSelect: pick('Go to Dashboard'),
+        },
+        {
+          id: 'd-issues',
+          label: 'Go to Issues',
+          icon: <CircleDot />,
+          onSelect: pick('Go to Issues'),
+        },
+        {
+          id: 'd-boards',
+          label: 'Go to Boards',
+          icon: <Columns3 />,
+          onSelect: pick('Go to Boards'),
+        },
+        {
+          id: 'd-reports',
+          label: 'Go to Reports',
+          icon: <BarChart3 />,
+          onSelect: pick('Go to Reports'),
+        },
+        {
+          id: 'd-settings',
+          label: 'Go to Settings',
+          icon: <Settings />,
+          onSelect: pick('Go to Settings'),
+        },
+      ],
+    },
+    {
+      heading: 'Account',
+      actions: [
+        {
+          id: 'd-theme',
+          label: 'Toggle theme',
+          icon: <Sparkles />,
+          onSelect: pick('Toggle theme'),
+        },
+      ],
+    },
+  ];
+
+  return (
+    <>
+      <Button onClick={() => setOpen(true)} leftIcon={<Send className="h-4 w-4" />}>
+        Open command palette
+      </Button>
+      <CommandPalette open={open} onOpenChange={setOpen} groups={groups} />
+    </>
   );
 }
 
