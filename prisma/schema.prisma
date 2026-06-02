@@ -163,6 +163,7 @@ model Workspace {
   workItems     WorkItem[]
   workItemLinks WorkItemLink[]
   jobRuns       JobRun[]
+  jobRunDlqs    JobRunDlq[]
 
   @@map("workspace")
 }
@@ -462,12 +463,13 @@ enum WorkItemExplanationSource {
 // check` in 1.6.4) are untenanted and write a null-workspace row. The FK
 // cascades: archiving/deleting a workspace removes its job-run history with it.
 //
-// RLS is DEFERRED to Subtask 1.6.4 — that Subtask folds the policy in alongside
-// the dead-letter-queue table so the two land in one atomic migration-by-concern
-// (mirrors PRODECT_FINDINGS #20's "create table + its policy in one migration"
-// lesson; here the policy is deliberately batched with the DLQ work it belongs
-// with, and until then job_run is reached ONLY through the trusted wrapper, never
-// a tenant-facing query path).
+// RLS landed in Subtask 1.6.4 (migration add_job_run_dlq_and_rls), folded in
+// alongside the dead-letter-queue table so the two policies + the new table
+// land in one atomic migration-by-concern (mirrors PRODECT_FINDINGS #20's
+// "create table + its policy in one migration" lesson). The policy is the
+// workspace gate with a system-admin escape hatch (`app.system_admin = 'true'`)
+// so the trusted wrapper can write rows for any/no workspace and operator
+// tooling can see untenanted system rows — see the migration for the shape.
 //
 // `status` is a Postgres enum (running / succeeded / failed) — the set is closed
 // and stable, unlike `WorkItemRevision.changeKind` (left as text precisely
@@ -498,6 +500,44 @@ model JobRun {
   @@index([eventId])
   @@index([idempotencyKey])
   @@map("job_run")
+}
+
+// Dead-letter queue for background jobs (Story 1.6 · Subtask 1.6.4). When a
+// `defineJob`-wrapped function exhausts its retry budget (the final attempt
+// throws), the wrapper writes ONE row here — inside the same transaction that
+// flips the run's `job_run.status` to `failed` — capturing enough to REPLAY:
+// the function id, the original event name + full payload, the final failure,
+// and the attempt count. This is the durable operator surface the 1.6.5
+// dashboard's DLQ tab reads from and the "Replay" button acts on; Inngest's
+// own failure view stays available for deep tracing but is NOT the source of
+// truth for operator action.
+//
+// Deliberately NOT FK'd to `job_run`: a DLQ entry is a self-contained replay
+// record (it carries the event payload), so it survives independent of the
+// ledger row and a future retention sweep can prune `job_run` without
+// orphaning replayable failures. `workspaceId` is nullable (system/cross-
+// workspace jobs) and cascades on workspace delete, exactly like `job_run`.
+//
+// `firstFailedAt` is the run's `started_at` (when the failing run began);
+// `lastFailedAt` is the exhaustion timestamp. `replayedAt` is null until an
+// operator replays the entry (stamped by `replayDLQ`, lib/jobs/dlq.ts).
+model JobRunDlq {
+  id            String    @id @default(cuid())
+  workspaceId   String?   @map("workspace_id")
+  functionId    String    @map("function_id")
+  eventName     String    @map("event_name")
+  eventData     Json      @map("event_data")
+  failure       Json
+  attempts      Int
+  firstFailedAt DateTime  @default(now()) @map("first_failed_at")
+  lastFailedAt  DateTime  @default(now()) @map("last_failed_at")
+  replayedAt    DateTime? @map("replayed_at")
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Dashboard DLQ-tab read path (1.6.5): newest-failure-first per workspace.
+  @@index([workspaceId, lastFailedAt(sort: Desc)])
+  @@map("job_run_dlq")
 }
 
 enum JobRunStatus {

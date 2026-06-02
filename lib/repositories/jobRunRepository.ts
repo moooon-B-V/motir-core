@@ -9,8 +9,19 @@ export const jobRunRepository = {
     return tx.jobRun.findUnique({ where: { id } });
   },
 
-  /** Insert the initial `running` row. */
-  async create(data: Prisma.JobRunCreateInput, tx: Prisma.TransactionClient): Promise<JobRun> {
+  /**
+   * Insert the initial `running` row. Uses the UNCHECKED create input (scalar
+   * `workspaceId` FK) rather than a `workspace: { connect }` relation: the job
+   * runtime writes under the system-admin context with NO workspace context, so
+   * a `connect` — which issues a SELECT on `workspace` to validate the related
+   * row — would be hidden by the workspace table's RLS and fail. The scalar FK
+   * sets the column directly; referential integrity is still enforced by the
+   * Postgres FK constraint (FK checks are not subject to RLS).
+   */
+  async create(
+    data: Prisma.JobRunUncheckedCreateInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<JobRun> {
     return tx.jobRun.create({ data });
   },
 
