@@ -109,6 +109,30 @@ describe('createWorkItem — key allocation', () => {
       new Set(Array.from({ length: N }, (_, i) => `PROD-${i + 1}`)),
     );
   });
+
+  // Subtask 2.1.3 AC: "deleting an issue does not recycle its key." Work items
+  // are soft-deleted (archived), and the per-project counter is the monotonic
+  // project.lastWorkItemNumber bumped by an atomic UPDATE … RETURNING — it is
+  // never derived from MAX(existing key) or from the live row count, so a
+  // removed key can never be re-minted. This pins that invariant: archiving the
+  // holder of key 2 must NOT free 2 for the next create, which keeps climbing.
+  it('does not recycle a key after the holding item is archived', async () => {
+    const fx = await makeFixture();
+    const a = await workItemsService.createWorkItem(createInput(fx, { title: 'A' }), fx.ctx);
+    const b = await workItemsService.createWorkItem(createInput(fx, { title: 'B' }), fx.ctx);
+    const c = await workItemsService.createWorkItem(createInput(fx, { title: 'C' }), fx.ctx);
+    expect([a.key, b.key, c.key]).toEqual([1, 2, 3]);
+
+    // Archive the middle item — its key (2) is now held by an archived row.
+    const archived = await workItemsService.archiveWorkItem(b.id, fx.ctx);
+    expect(archived.archivedAt).not.toBeNull();
+    expect(archived.key).toBe(2);
+
+    // The next create climbs to 4 — it does NOT reclaim the archived 2.
+    const d = await workItemsService.createWorkItem(createInput(fx, { title: 'D' }), fx.ctx);
+    expect(d.key).toBe(4);
+    expect(d.identifier).toBe('PROD-4');
+  });
 });
 
 // ── updateWorkItem — no-op + explanation-source state machine ────────────
