@@ -29,19 +29,21 @@
 //     constant, not a premature config table).
 //
 // `allowedChildTypes` is the product-readable form of the DB kind-parent
-// matrix. It is the parent→children inverse of the trigger's
-// child→allowed-parents rule and must stay in lockstep with it:
-//   DB (child → allowed parents)        →  this map (parent → allowed children)
-//   epic    : root only                    epic    → [story, task, bug]
-//   story   : {epic}                       story   → [task, bug, subtask]
-//   task    : {epic, story}                task    → [bug, subtask]
-//   bug     : {epic, story, task}          bug     → [subtask]
-//   subtask : {story, task, bug}           subtask → []   (the leaf)
+// matrix. The authoritative encoding of that matrix — plus the `canParent`
+// predicate, the `isIssueType` guard, the `IssueType` union / `ISSUE_TYPES`
+// tuple, and the service-layer `assertValidParent` gate — now lives in the
+// UI-free module `lib/issues/parentRules.ts` (Subtask 2.1.2's
+// single-source-of-truth reconciliation: the rule used to be duplicated
+// between this file and workItemsService's private `ALLOWED_PARENT_KINDS`
+// table). This file sources the matrix from there (`ALLOWED_CHILD_TYPES`) and
+// re-exports the predicates/types so 2.1.1's public surface is unchanged, while
+// keeping the icon/color presentation metadata — and the `lucide-react` import
+// it needs — out of the server-side service module graph.
 // Note bug is NOT a leaf — a subtask may be parented to a bug. The single leaf
 // is `subtask` (nothing may parent to it). The service layer (Subtask 2.1.2)
-// validates against `canParent` BEFORE any write so the API returns a clean
-// typed 422 instead of leaning on the DB trigger's raw 23514; the trigger
-// remains the defense-in-depth backstop.
+// validates via `assertValidParent` (which delegates to `canParent`) BEFORE any
+// write so the API returns a clean typed 422 instead of leaning on the DB
+// trigger's raw 23514; the trigger remains the defense-in-depth backstop.
 //
 // DELIBERATE DEVIATION FROM JIRA (planner decision, PRODECT_FINDINGS #41).
 // Default Jira keeps Story / Task / Bug as strict siblings (Epic → standard
@@ -63,15 +65,12 @@
 // / `bg-(--color-accent)`), matching how components/ui/Pill.tsx wires tones.
 
 import { BookOpen, Bug, ListChecks, SquareCheckBig, Zap, type LucideIcon } from 'lucide-react';
+import { ALLOWED_CHILD_TYPES, type IssueType } from '@/lib/issues/parentRules';
 
-/**
- * The five user-facing issue types, in display order (broadest → narrowest).
- * Identical to Story 1.4's `WorkItemKind` enum, so this map stays total over
- * every kind a `work_item` row can hold.
- */
-export const ISSUE_TYPES = ['epic', 'story', 'task', 'bug', 'subtask'] as const;
-
-export type IssueType = (typeof ISSUE_TYPES)[number];
+// Re-export the rule-layer primitives so 2.1.1's public surface
+// (`@/lib/issues/issueTypes`) is unchanged for existing importers/tests.
+export { ISSUE_TYPES, canParent, isIssueType } from '@/lib/issues/parentRules';
+export type { IssueType } from '@/lib/issues/parentRules';
 
 /**
  * Design-system color tokens used by the issue types. Each maps to a
@@ -103,48 +102,34 @@ export const ISSUE_TYPE_META: Record<IssueType, IssueTypeMeta> = {
     label: 'Epic',
     icon: Zap,
     colorToken: 'accent',
-    allowedChildTypes: ['story', 'task', 'bug'],
+    allowedChildTypes: ALLOWED_CHILD_TYPES.epic,
   },
   story: {
     type: 'story',
     label: 'Story',
     icon: BookOpen,
     colorToken: 'accent-green',
-    allowedChildTypes: ['task', 'bug', 'subtask'],
+    allowedChildTypes: ALLOWED_CHILD_TYPES.story,
   },
   task: {
     type: 'task',
     label: 'Task',
     icon: SquareCheckBig,
     colorToken: 'info',
-    allowedChildTypes: ['bug', 'subtask'],
+    allowedChildTypes: ALLOWED_CHILD_TYPES.task,
   },
   bug: {
     type: 'bug',
     label: 'Bug',
     icon: Bug,
     colorToken: 'destructive',
-    allowedChildTypes: ['subtask'],
+    allowedChildTypes: ALLOWED_CHILD_TYPES.bug,
   },
   subtask: {
     type: 'subtask',
     label: 'Sub-task',
     icon: ListChecks,
     colorToken: 'accent-teal',
-    allowedChildTypes: [],
+    allowedChildTypes: ALLOWED_CHILD_TYPES.subtask,
   },
 };
-
-/** Narrowing guard: true when `value` is one of the four product issue types. */
-export function isIssueType(value: unknown): value is IssueType {
-  return typeof value === 'string' && (ISSUE_TYPES as readonly string[]).includes(value);
-}
-
-/**
- * True when an issue of `parentType` may directly parent an issue of
- * `childType`. The service layer (Subtask 2.1.2) calls this before any
- * create/move write; the DB trigger is the defense-in-depth backstop.
- */
-export function canParent(parentType: IssueType, childType: IssueType): boolean {
-  return ISSUE_TYPE_META[parentType].allowedChildTypes.includes(childType);
-}
