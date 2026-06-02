@@ -73,7 +73,7 @@ async function seedDlqRow(workspaceId: string): Promise<void> {
 
 async function gotoJobs(page: Page, query = ''): Promise<void> {
   await page.goto(`/settings/workspace/jobs${query}`);
-  await expect(page.getByRole('heading', { name: 'Job runs' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
 }
 
 test('@smoke jobs dashboard: empty states + sidebar link', async ({ page }) => {
@@ -85,7 +85,7 @@ test('@smoke jobs dashboard: empty states + sidebar link', async ({ page }) => {
     .getByRole('navigation', { name: 'Primary' })
     .getByRole('link', { name: 'Job runs' })
     .click();
-  await expect(page.getByRole('heading', { name: 'Job runs' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
 
   // Fresh workspace → empty "Recent runs".
   await expect(page.getByText('No job runs yet')).toBeVisible();

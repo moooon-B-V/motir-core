@@ -66,7 +66,8 @@ const SHELL_ROUTES: { path: string; ready: (page: Page) => Promise<void> }[] = [
     // every other shell route. The populated table inherits #35 and is excluded
     // from a strict color-contrast assertion until the reviewed design pass.
     path: '/settings/workspace/jobs',
-    ready: async (page) => expect(page.getByRole('heading', { name: 'Job runs' })).toBeVisible(),
+    ready: async (page) =>
+      expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible(),
   },
 ];
 
