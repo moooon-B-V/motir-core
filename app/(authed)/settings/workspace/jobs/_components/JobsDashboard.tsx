@@ -60,14 +60,18 @@ function buildHref(params: { tab: JobsTab; status?: JobRunStatus | 'all'; page?:
 
 // ── Formatting helpers ──────────────────────────────────────────────────────
 function formatDateTime(iso: string): string {
-  // Stable, locale-aware short form. The Date is from a server ISO string, so
-  // there's no Date.now() involved (which the workflow env forbids).
-  return new Date(iso).toLocaleString(undefined, {
+  // Pinned locale + timezone (en-US / UTC) so the string is IDENTICAL when
+  // rendered on the server and re-rendered on the client — a runtime-default
+  // locale/timezone (`toLocaleString(undefined, …)`) differs between the two
+  // and triggers a React hydration mismatch. UTC is the right default for an
+  // operator/audit surface anyway; the trailing "UTC" makes the zone explicit.
+  return `${new Date(iso).toLocaleString('en-US', {
+    timeZone: 'UTC',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  });
+  })} UTC`;
 }
 
 function formatDuration(ms: number | null): string {

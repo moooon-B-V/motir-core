@@ -144,7 +144,9 @@ test('@smoke jobs dashboard: DLQ badge counts entries, and an owner replays', as
   await replay.click();
 
   // Success toast + the row's "Replayed" cell now carries a timestamp (not —).
-  await expect(page.getByText('Job replayed')).toBeVisible();
+  // exact:true so the toast title isn't also matched by the sr-only live-region
+  // announcement span ("Notification Job replayed…").
+  await expect(page.getByText('Job replayed', { exact: true })).toBeVisible();
   await expect
     .poll(async () => {
       const row = await db.jobRunDlq.findFirst({ where: { workspaceId } });
