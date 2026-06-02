@@ -35,7 +35,15 @@ if (process.env['NODE_ENV'] !== 'production') {
 }
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // The Next.js dev-mode tools indicator renders a fixed portal in the
+  // bottom-left corner by default — directly over the app shell's sidebar
+  // footer (the collapse toggle). In `next dev` that portal intercepts pointer
+  // events on the footer, so a browser-driven E2E click on "Collapse sidebar"
+  // is occluded (Subtask 1.5.6's shell-flows spec). The indicator is a dev-only
+  // affordance (it never ships to production), so disable it for the E2E dev
+  // server — gated on an env flag the Playwright webServer sets, leaving a
+  // normal `pnpm dev` session's indicator untouched.
+  ...(process.env['E2E_DISABLE_DEV_INDICATOR'] ? { devIndicators: false as const } : {}),
 };
 
 export default nextConfig;

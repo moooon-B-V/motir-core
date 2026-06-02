@@ -34,3 +34,25 @@ export async function createFirstProject(page: Page, name: string): Promise<void
   await page.getByRole('button', { name: 'Create project', exact: true }).last().click();
   await expect(page.getByText('Project created').first()).toBeVisible({ timeout: 5_000 });
 }
+
+// Create an additional named workspace via the top-nav switcher and switch to
+// it (the new workspace becomes active, with zero projects). Mirrors the
+// helper in workspace-flows.spec.ts; lifted here so the shell journey spec can
+// stand up two workspaces with distinct projects for the cmd-k switch path.
+export async function createWorkspace(page: Page, name: string): Promise<void> {
+  // With existing workspaces the "Create workspace" entry lives inside the
+  // open switcher popover; a brand-new account's empty state surfaces it
+  // directly. Handle both so callers don't have to know the current state.
+  const directCreate = page.getByRole('button', { name: 'Create workspace' });
+  if (await directCreate.isVisible().catch(() => false)) {
+    await directCreate.click();
+  } else {
+    await page.getByRole('button', { name: 'Switch workspace' }).click();
+    await page.getByRole('button', { name: 'Create workspace' }).click();
+  }
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Workspace name').fill(name);
+  await dialog.getByRole('button', { name: 'Create', exact: true }).click();
+  // The switcher trigger reflects the new (now-active) workspace.
+  await expect(page.getByRole('button', { name: 'Switch workspace' })).toContainText(name);
+}
