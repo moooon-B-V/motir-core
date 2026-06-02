@@ -130,8 +130,14 @@ export function WorkflowEditor({
                 variant={policyMode === mode ? 'primary' : 'ghost'}
                 size="sm"
                 aria-pressed={policyMode === mode}
-                disabled={!isAdmin || isPending || policyMode === mode}
-                onClick={() => run(() => setPolicyModeAction(mode), `Policy set to ${mode}`)}
+                disabled={!isAdmin || isPending}
+                onClick={() => {
+                  // Active segment is highlighted, not disabled — clicking it is
+                  // a harmless no-op; clicking the other switches the mode.
+                  if (policyMode !== mode) {
+                    run(() => setPolicyModeAction(mode), `Policy set to ${mode}`);
+                  }
+                }}
               >
                 {mode === 'restricted' ? 'Restricted' : 'Open'}
               </Button>
