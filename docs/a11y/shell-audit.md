@@ -77,19 +77,23 @@ tabIndex={-1}>` is its programmatically-focusable target.
 
 The axe sweep surfaced real issues; each was fixed or tracked:
 
-- **`Pill` colored tones fail WCAG AA contrast** (light mode): the
-  `severity` (info/success/warning/danger) and `status` (in-progress/done) tones
-  render a saturated hue on its own light tint (e.g. `--color-info` #0075de on
-  `--color-tint-sky` #dcecfa = 3.78:1, below 4.5:1). This is a **systemic
-  design-system issue** needing a reviewed color pass, not a shell-test fix —
-  logged as **PRODECT_FINDINGS #35**. The one place a colored tone reached a
-  shell surface (the workspace **member-count + role badges**, plus the
-  workspace/project switcher chips) was a _misuse_ — counts, roles, and an
-  "Archived" state are metadata, not severities — so those switched to a new
-  AA-safe **`Pill tone="neutral"`** (dark slate text on `--color-surface`).
-  Shell routes are now strictly clean; the `/tokens` specimen still renders the
-  full colored matrix, so its `color-contrast` rule is explicitly excluded with
-  a reference to #35.
+- **`Pill` colored tones failed WCAG AA contrast — RESOLVED (PRODECT_FINDINGS
+  #35).** Originally the `severity` (info/success/warning/danger) and `status`
+  (in-progress/done) tones rendered a saturated hue on its own light tint (e.g.
+  `--color-info` #0075de on `--color-tint-sky` #dcecfa = 3.78:1, below 4.5:1).
+  Fixed by standardizing all colored tones on adaptive dark/light TEXT
+  (`--color-charcoal`) on the hued tint — the same pattern `planned` always
+  used — which clears ~10:1 in both light and dark modes; the hue now lives in
+  the background, not the text. A focused `shell-a11y` test runs `color-contrast`
+  (enabled) over the `/tokens` Pill matrix (`#primitives-pill`) to prove this and
+  guard regressions; the whole-page `/tokens` sweep still disables
+  `color-contrast` ONLY for genuine specimen-display artifacts (tinted-Card body
+  copy, mono hex micro-labels, raw `<pre>` code) that aren't product UI.
+  Separately, the
+  workspace **member-count + role badges** and the workspace/project switcher
+  chips stay on **`Pill tone="neutral"`** — counts, roles, and an "Archived"
+  state are metadata, not severities, so neutral is the correct semantics there
+  regardless of the contrast fix.
 - **`aria-prohibited-attr` on `/tokens` color swatches**: the decorative chip
   `<div aria-label=…>` is invalid (a bare div can't take `aria-label`) and
   redundant (the label is visible text below). Fixed — the chip is now

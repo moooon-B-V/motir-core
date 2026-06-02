@@ -9,8 +9,11 @@ import { cn } from '@/lib/utils/cn';
  *  - `status`: planned | in-progress | done — Prodect's Subtask lifecycle states.
  *  - `severity`: info | success | warning | danger — semantic UI states.
  *  - `tone`: neutral — a non-semantic chip (counts, metadata). Dark text on a
- *    neutral surface, so it clears WCAG AA contrast where the colored
- *    tint-on-hue tones currently don't (tracked design-system finding #35).
+ *    neutral surface.
+ *
+ * All tones use adaptive dark/light text (`--color-charcoal`) on a hued tint,
+ * so every variant clears WCAG AA contrast in both light and dark modes
+ * (the hue lives in the background, not the text — PRODECT_FINDINGS #35).
  *
  * Always uses `--radius-badge` for fully rounded ends regardless of display style.
  *
@@ -29,16 +32,21 @@ const pillVariants = cva(
   ),
   {
     variants: {
+      // All colored tones carry the semantic hue in the TINT BACKGROUND and use
+      // adaptive dark/light TEXT (`--color-charcoal`: #37352f light, #e5e5e5
+      // dark) — the same pattern `planned` always used. The previous saturated
+      // hue-on-tint TEXT failed WCAG AA (≈2.5–3.8:1 light, 3.2–4.0:1 dark);
+      // charcoal-on-tint clears ~10:1 in both modes (PRODECT_FINDINGS #35).
       status: {
         planned: 'bg-(--color-tint-lavender) text-(--color-charcoal) border-transparent',
-        'in-progress': 'bg-(--color-tint-sky) text-(--color-info) border-transparent',
-        done: 'bg-(--color-tint-mint) text-(--color-success) border-transparent',
+        'in-progress': 'bg-(--color-tint-sky) text-(--color-charcoal) border-transparent',
+        done: 'bg-(--color-tint-mint) text-(--color-charcoal) border-transparent',
       },
       severity: {
-        info: 'bg-(--color-tint-sky) text-(--color-info) border-transparent',
-        success: 'bg-(--color-tint-mint) text-(--color-success) border-transparent',
-        warning: 'bg-(--color-tint-peach) text-(--color-warning) border-transparent',
-        danger: 'bg-(--color-tint-rose) text-(--color-destructive) border-transparent',
+        info: 'bg-(--color-tint-sky) text-(--color-charcoal) border-transparent',
+        success: 'bg-(--color-tint-mint) text-(--color-charcoal) border-transparent',
+        warning: 'bg-(--color-tint-peach) text-(--color-charcoal) border-transparent',
+        danger: 'bg-(--color-tint-rose) text-(--color-charcoal) border-transparent',
       },
       tone: {
         neutral: 'bg-(--color-surface) text-(--color-slate) border-(--color-hairline)',

@@ -139,8 +139,16 @@ const DISPLAY_STYLE_OPTIONS: { value: DisplayStyle; label: string }[] = [
 ];
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  // Slug id so each specimen section is directly addressable (deep links, and a
+  // scoped axe sweep — e.g. the Pill-matrix color-contrast assertion in
+  // shell-a11y.spec.ts can target `#primitives-pill`).
+  const id = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
   return (
     <section
+      id={id}
       style={{
         marginBottom: 'var(--spacing-section)',
         paddingBottom: 'var(--spacing-xl)',
