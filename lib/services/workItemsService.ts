@@ -1,5 +1,6 @@
-import { Prisma, type WorkItem, type WorkItemKind } from '@prisma/client';
+import { Prisma, type WorkItem } from '@prisma/client';
 import { db } from '@/lib/db';
+import { assertValidParent } from '@/lib/issues/parentRules';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
@@ -10,7 +11,6 @@ import { keyForAppend, keyBetween } from '@/lib/workItems/positioning';
 import {
   AssigneeNotInWorkspaceError,
   CrossProjectParentError,
-  IllegalParentTypeError,
   ReporterNotInWorkspaceError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
@@ -50,41 +50,16 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 // reads is bound by upstream middleware before any method runs; service
 // methods trust the ServiceContext and never re-set it.
 
-/**
- * The kind-parent matrix, mirrored from the DB trigger
- * (prisma/sql/work_item_triggers.sql · enforce_work_item_kind_parent). The
- * service pre-flights against this for a friendly IllegalParentTypeError; the
- * trigger is the backstop. Allowed PARENT kinds per child kind (epic is
- * always a root → empty set, any non-null parent is illegal):
- */
-const ALLOWED_PARENT_KINDS: Record<WorkItemKind, readonly WorkItemKind[]> = {
-  epic: [],
-  story: ['epic'],
-  task: ['epic', 'story'],
-  bug: ['epic', 'story', 'task'],
-  subtask: ['story', 'task', 'bug'],
-};
-
-/** Child kinds that MUST have a parent (cannot be a tree root). */
-const KINDS_REQUIRING_PARENT: ReadonlySet<WorkItemKind> = new Set<WorkItemKind>(['subtask']);
-
-/**
- * Cheap service-layer pre-flight of the kind-parent rule. Throws
- * IllegalParentTypeError on a violation so callers get a typed error before
- * the DB trigger fires the same rejection (with a less specific marker
- * message). `parentKind === null` means "top-level placement".
- */
-function assertKindParent(childKind: WorkItemKind, parentKind: WorkItemKind | null): void {
-  if (parentKind === null) {
-    if (KINDS_REQUIRING_PARENT.has(childKind)) {
-      throw new IllegalParentTypeError(`A ${childKind} must have a parent.`);
-    }
-    return;
-  }
-  if (!ALLOWED_PARENT_KINDS[childKind].includes(parentKind)) {
-    throw new IllegalParentTypeError(`A ${childKind} may not be parented to a ${parentKind}.`);
-  }
-}
+// The service-layer kind-parent pre-flight is `assertValidParent` from
+// lib/issues/parentRules.ts — the single source of truth for the kind-parent
+// matrix (Subtask 2.1.2). It throws a friendly IllegalParentTypeError ahead of
+// the DB trigger (prisma/sql/work_item_triggers.sql · enforce_work_item_kind_parent),
+// which remains the structural backstop. This service used to carry a private
+// `ALLOWED_PARENT_KINDS` copy of the matrix; 2.1.2 removed it so the rule lives
+// in exactly one place. `WorkItemKind` and `parentRules`' `IssueType` are the
+// same string union, so the kinds read off rows pass straight through.
+// Convention at the call sites: assertValidParent(parentKind, childKind) — a
+// null parent is top-level placement.
 
 /** Membership gate — distinct typed error per role so routes map them apart. */
 async function assertReporterMember(userId: string, workspaceId: string): Promise<void> {
@@ -180,9 +155,9 @@ export const workItemsService = {
       const parent = await workItemRepository.findById(input.parentId);
       if (!parent) throw new WorkItemNotFoundError(input.parentId);
       if (parent.projectId !== input.projectId) throw new CrossProjectParentError();
-      assertKindParent(input.kind, parent.kind);
+      assertValidParent(parent.kind, input.kind);
     } else {
-      assertKindParent(input.kind, null);
+      assertValidParent(null, input.kind);
     }
 
     return db.$transaction(async (tx) => {
@@ -357,12 +332,12 @@ export const workItemsService = {
       // cycle/depth/kind on the write).
       if (patch.parentId !== undefined && patch.parentId !== current.parentId) {
         if (patch.parentId === null) {
-          assertKindParent(current.kind, null);
+          assertValidParent(null, current.kind);
         } else {
           const parent = await workItemRepository.findById(patch.parentId, tx);
           if (!parent) throw new WorkItemNotFoundError(patch.parentId);
           if (parent.projectId !== current.projectId) throw new CrossProjectParentError();
-          assertKindParent(current.kind, parent.kind);
+          assertValidParent(parent.kind, current.kind);
         }
         update.parentId = patch.parentId;
         diff.parentId = { from: current.parentId, to: patch.parentId };
@@ -447,12 +422,12 @@ export const workItemsService = {
 
       if (parentChanged) {
         if (targetParentId === null) {
-          assertKindParent(current.kind, null);
+          assertValidParent(null, current.kind);
         } else {
           const parent = await workItemRepository.findById(targetParentId, tx);
           if (!parent) throw new WorkItemNotFoundError(targetParentId);
           if (parent.projectId !== current.projectId) throw new CrossProjectParentError();
-          assertKindParent(current.kind, parent.kind);
+          assertValidParent(parent.kind, current.kind);
         }
       }
 
