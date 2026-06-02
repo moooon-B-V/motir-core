@@ -61,24 +61,24 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  accounts             Account[]
-  sessions             Session[]
-  workspaceMemberships WorkspaceMembership[]
+  accounts                  Account[]
+  sessions                  Session[]
+  workspaceMemberships      WorkspaceMembership[]
   // Back-relations for WorkItem (Story 1.4). A user reports many work items
   // (reporter — Restrict on the FK: a user with reported issues on record
   // cannot be hard-deleted) and can be assigned many (assignee — SetNull on
   // the FK: deleting an assignee leaves the issue unassigned, never removes
   // it). Named relations because there are two distinct User↔WorkItem edges.
-  reportedWorkItems    WorkItem[]            @relation("WorkItemReporter")
-  assignedWorkItems    WorkItem[]            @relation("WorkItemAssignee")
+  reportedWorkItems         WorkItem[]            @relation("WorkItemReporter")
+  assignedWorkItems         WorkItem[]            @relation("WorkItemAssignee")
   // Back-relation for WorkItemLink (Subtask 1.4.3). A user creates many
   // issue-to-issue links (createdBy — Restrict: a user with links on record
   // cannot be hard-deleted, mirroring the reporter pattern).
-  createdWorkItemLinks WorkItemLink[]        @relation("WorkItemLinkCreatedBy")
+  createdWorkItemLinks      WorkItemLink[]        @relation("WorkItemLinkCreatedBy")
   // Back-relation for WorkItemRevision (Subtask 1.4.6). A user authors many
   // revisions (changedBy — Restrict on the FK: a user with audit history on
   // record cannot be hard-deleted, mirroring the reporter pattern).
-  authoredWorkItemRevisions WorkItemRevision[] @relation("WorkItemRevisionAuthor")
+  authoredWorkItemRevisions WorkItemRevision[]    @relation("WorkItemRevisionAuthor")
 
   @@map("user")
 }
@@ -158,12 +158,14 @@ model Workspace {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  memberships   WorkspaceMembership[]
-  projects      Project[]
-  workItems     WorkItem[]
-  workItemLinks WorkItemLink[]
-  jobRuns       JobRun[]
-  jobRunDlqs    JobRunDlq[]
+  memberships         WorkspaceMembership[]
+  projects            Project[]
+  workItems           WorkItem[]
+  workItemLinks       WorkItemLink[]
+  jobRuns             JobRun[]
+  jobRunDlqs          JobRunDlq[]
+  workflowStatuses    WorkflowStatus[]
+  workflowTransitions WorkflowTransition[]
 
   @@map("workspace")
 }
@@ -179,23 +181,34 @@ model Workspace {
 /// archive/delete clears a member's `activeProjectId` (onDelete: SetNull)
 /// rather than cascading the membership away.
 model Project {
-  id                 String    @id @default(cuid())
+  id                 String             @id @default(cuid())
   workspaceId        String
   name               String
   slug               String
   identifier         String
-  lastWorkItemNumber Int       @default(0)
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  lastWorkItemNumber Int                @default(0)
+  /// Per-project status-transition enforcement mode (Story 2.2). `restricted`
+  /// (default) consults the `workflow_transition` rows — only an explicit
+  /// edge is a legal move. `open` ignores them: any status → any status is
+  /// allowed. Storing the policy as a project column (not a flag on every
+  /// transition row) keeps storage O(transitions) and the policy check O(1);
+  /// flipping to `open` does NOT delete the curated transition rows, so a
+  /// flip back to `restricted` restores the graph. Jira and Linear both ship
+  /// this same "guarded vs anything-goes" project-level toggle.
+  workflowPolicyMode WorkflowPolicyMode @default(restricted)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
   archivedAt         DateTime?
 
-  workspace Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace           Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   // Back-relation for WorkspaceMembership.activeProject. Named explicitly
   // so Prisma's relation inference doesn't have to guess; there is exactly
   // ONE relation between Project and WorkspaceMembership (the active-project
   // pointer), and both sides carry the same @relation("ActiveProject") name.
-  members   WorkspaceMembership[] @relation("ActiveProject")
-  workItems WorkItem[]
+  members             WorkspaceMembership[] @relation("ActiveProject")
+  workItems           WorkItem[]
+  workflowStatuses    WorkflowStatus[]
+  workflowTransitions WorkflowTransition[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -294,17 +307,17 @@ model WorkItem {
   createdAt         DateTime                  @default(now())
   updatedAt         DateTime                  @updatedAt
 
-  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent    WorkItem?  @relation("WorkItemParent", fields: [parentId], references: [id], onDelete: NoAction)
-  children  WorkItem[] @relation("WorkItemParent")
-  assignee  User?      @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  reporter  User       @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent    WorkItem?          @relation("WorkItemParent", fields: [parentId], references: [id], onDelete: NoAction)
+  children  WorkItem[]         @relation("WorkItemParent")
+  assignee  User?              @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter  User               @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
   // Back-relations for WorkItemLink (Subtask 1.4.3). Two named relations
   // because there are two distinct WorkItem↔WorkItemLink edges (from/to).
   // Cascading delete on both sides: removing an issue removes its links.
-  linksFrom WorkItemLink[] @relation("LinksFrom")
-  linksTo   WorkItemLink[] @relation("LinksTo")
+  linksFrom WorkItemLink[]     @relation("LinksFrom")
+  linksTo   WorkItemLink[]     @relation("LinksTo")
   // Audit trail (Subtask 1.4.6). A work item accrues many revision rows; the
   // FK cascades so hard-deleting an issue removes its history with it.
   revisions WorkItemRevision[]
@@ -449,6 +462,120 @@ enum WorkItemExplanationSource {
   user_edited
 
   @@map("work_item_explanation_source")
+}
+
+/// A per-project, customizable issue status (Story 2.2). Every project owns an
+/// ordered set of these; `work_item.status` stores the `key` of one of them.
+/// `category` is the durable Jira-style three-bucket taxonomy (todo /
+/// in_progress / done) every later surface groups by — boards (Epic 3) draw a
+/// column per status, reports (Epic 6) filter/group by category, and Story
+/// 1.4's readiness predicate generalizes "terminal" from a hardcoded 'done'
+/// string to `category = done` (finding #21).
+///
+/// Tenancy mirrors `work_item`: an explicit non-null `workspaceId` column +
+/// `projectId` FK, with RLS (ENABLE + FORCE) gating on `app.workspace_id`.
+/// There is NO system-admin escape hatch here (unlike `job_run`): these rows
+/// are pure tenant data with a non-null workspaceId, always written under an
+/// active workspace context (the 2.2.2 seed runs inside createProject's
+/// withWorkspaceContext transaction) — exactly like `project`/`work_item`, so
+/// the policy is their pure workspace gate. See the add_workflow_status_and_
+/// transition_rls migration for the rationale.
+///
+/// `position` is a fractional index (the SAME `String`/`lib/workItems/
+/// positioning.ts` shape `work_item.position` uses — opaque base-62 keys that
+/// sort lexicographically), so a status reorder is a single-row write. (The
+/// 2.2.1 card's "Decimal(20,10)" wording contradicts its own "same
+/// fractional-indexing path the work-item ordering uses" clause; the shipped
+/// ordering path is string-keyed, so `String @db.Text` is the consistent
+/// shape — decision-authority rung 2 over rung 3.)
+///
+/// `color` is an OPTIONAL per-status hex override; null means "derive from the
+/// category" (the Jira default, where category drives the swatch). `isInitial`
+/// marks the one status new work items land in; a partial unique index
+/// (`workflow_status_one_initial_per_project`, in the migration — Prisma can't
+/// express a partial index in the DSL) enforces exactly one initial status per
+/// project. Seeding the default rows is 2.2.2's job (application-layer, under
+/// the request's workspace context — NOT a SQL INSERT in the migration).
+model WorkflowStatus {
+  id          String         @id @default(cuid())
+  workspaceId String         @map("workspace_id")
+  projectId   String         @map("project_id")
+  key         String
+  label       String
+  category    StatusCategory
+  color       String?
+  position    String         @db.Text
+  isInitial   Boolean        @default(false) @map("is_initial")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  workspace       Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project         Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // A transition references two statuses (from / to); both edges cascade so
+  // deleting a status removes the transitions that touch it.
+  transitionsFrom WorkflowTransition[] @relation("WorkflowTransitionFrom")
+  transitionsTo   WorkflowTransition[] @relation("WorkflowTransitionTo")
+
+  // `key` is the machine-stable handle work_item.status stores; unique per
+  // project. The partial "exactly one initial per project" unique index is
+  // raw SQL in the migration (not expressible here).
+  @@unique([projectId, key])
+  @@index([workspaceId])
+  @@index([projectId, position])
+  @@map("workflow_status")
+}
+
+/// A legal status move within a project (Story 2.2). One row = one directed
+/// edge `fromStatus → toStatus`. Consulted only when the project's
+/// `workflowPolicyMode = restricted`; under `open` these rows are ignored at
+/// validation time (but kept, so flipping back to `restricted` restores the
+/// curated graph). The denormalized non-null `workspaceId` mirrors
+/// `work_item_link` — it makes the RLS gate a direct comparison (no join) and
+/// is kept honest by the FK chain (both endpoints + the project share one
+/// workspace). Same pure-workspace-gate RLS as `workflow_status`.
+model WorkflowTransition {
+  id           String   @id @default(cuid())
+  workspaceId  String   @map("workspace_id")
+  projectId    String   @map("project_id")
+  fromStatusId String   @map("from_status_id")
+  toStatusId   String   @map("to_status_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  workspace  Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fromStatus WorkflowStatus @relation("WorkflowTransitionFrom", fields: [fromStatusId], references: [id], onDelete: Cascade)
+  toStatus   WorkflowStatus @relation("WorkflowTransitionTo", fields: [toStatusId], references: [id], onDelete: Cascade)
+
+  // No duplicate edges between the same ordered pair within a project.
+  @@unique([projectId, fromStatusId, toStatusId])
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([fromStatusId])
+  @@index([toStatusId])
+  @@map("workflow_transition")
+}
+
+/// The Jira-style three-bucket status taxonomy. Every `workflow_status` falls
+/// in exactly one bucket; downstream surfaces (boards, reports, the readiness
+/// predicate) group/branch on this, not on the per-project `key`. Closed +
+/// stable set, so a Postgres enum (unlike `work_item.status`, kept a String
+/// for per-project customizability/portability).
+enum StatusCategory {
+  todo
+  in_progress
+  done
+
+  @@map("status_category")
+}
+
+/// Per-project transition-enforcement mode (`project.workflowPolicyMode`).
+/// `restricted` = only explicit `workflow_transition` edges are legal;
+/// `open` = any status → any status. Default `restricted`.
+enum WorkflowPolicyMode {
+  restricted
+  open
+
+  @@map("workflow_policy_mode")
 }
 
 // Background-job run ledger (Story 1.6 · Subtask 1.6.2). Every invocation of a
