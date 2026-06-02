@@ -131,6 +131,13 @@ export default defineConfig({
         // dev server (below), so the job runs and writes the outbox. Without
         // this the SDK targets cloud and no E2E email is ever delivered.
         INNGEST_DEV: '1',
+        // Subtask 1.6.6: arm-able deterministic email-fault injector. lib/email.ts
+        // reads this file on every send and throws when the recipient matches the
+        // armed substring, so the jobs-flow spec can drive the real failure →
+        // DLQ → replay path. The file is absent (fault disarmed) unless a spec
+        // writes it via tests/e2e/_helpers/email-fault.ts; it is test-only and
+        // refused in production.
+        EMAIL_FAULT_PATH: path.resolve('/tmp/prodect-test-email-fault'),
         // Subtask 1.5.6: hide the Next dev-tools indicator (a bottom-left
         // fixed portal) so it stops occluding the sidebar footer's collapse
         // toggle during the browser-driven shell-flows journey. next.config.ts

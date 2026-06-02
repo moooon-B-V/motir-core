@@ -4,35 +4,31 @@ import { db } from '@/lib/db';
 import { inngest } from '@/lib/jobs/client';
 import { defineJob } from '@/lib/jobs/defineJob';
 import { replayDLQ } from '@/lib/jobs/dlq';
+import { jobRunsService } from '@/lib/services/jobRunsService';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { EmailSendData } from '@/lib/jobs/types';
+import type { Prisma } from '@prisma/client';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
-// Dead-letter queue + replay (Story 1.6 · Subtask 1.6.4). Drives a deliberately
-// failing job IN-PROCESS via @inngest/test and asserts the durable contract:
-//   1. when a run exhausts its retry budget (here `retryPolicy: 'none'` → the
-//      first attempt IS the final one), the wrapper writes BOTH a `failed`
-//      job_run row AND a job_run_dlq row, in one transaction;
-//   2. the DLQ row carries the original event payload + the serialized failure
-//      + the tenancy of the run (real workspace, or null for system/cross-
-//      workspace);
-//   3. replayDLQ re-emits the ORIGINAL event (same name + data, including the
-//      idempotency key — so Inngest's dedup still applies) and stamps
-//      replayed_at.
+// Dead-letter queue + replay (Story 1.6 · Subtask 1.6.4, REWORKED in 1.6.6).
 //
-// `retryPolicy: 'none'` is what lets the in-process harness reach the DLQ path:
-// the test engine runs the handler once (ctx.attempt = 0), and with maxRetries
-// = 0 that attempt is final, so the dead-letter branch fires. (For a job with a
-// real retry budget, the DLQ write is exercised by the runtime, not the unit
-// harness — same boundary as email.send's idempotency dedup, see docs/jobs.md.)
-
-// A throwing job reusing a real event name (no test-only entry in the event
-// map). The handler always throws; with `none` it dead-letters on attempt 0.
-const failingJob = defineJob({ id: 'email.send', retryPolicy: 'none' }, () => {
-  throw new Error('deliberate boom');
-});
+// 1.6.4 wrote the dead-letter from a try/catch in the job handler and unit-
+// tested it by running that handler in-process. PRODECT_FINDINGS #39 found that
+// path never executes on the REAL Inngest runtime (a step scheduled after the
+// terminally-failed step is dropped), so the dead-letter is now written by
+// Inngest's `onFailure` handler instead — and `onFailure` is a separate runtime
+// invocation the in-process harness does not drive. So the honest unit surface
+// here is:
+//   1. the `recordTerminalFailure` SERVICE method (the actual dead-letter logic,
+//      correlating back to the `running` row by eventId), tested directly;
+//   2. `defineJob` WIRING an onFailure handler into the Inngest config;
+//   3. a failing attempt leaving the row `running` (no premature failure);
+//   4. `replayDLQ` re-emitting with a RE-SHAPED idempotency key (finding #40) so
+//      the replay isn't dedup-dropped, and stamping replayed_at.
+// The full failure → DLQ → replay path on the real runtime is covered E2E in
+// tests/e2e/jobs-flow.spec.ts (the only place the real executor runs).
 
 function emailEvent(overrides: Partial<EmailSendData> = {}): EmailSendData {
   return {
@@ -45,20 +41,6 @@ function emailEvent(overrides: Partial<EmailSendData> = {}): EmailSendData {
   } as EmailSendData;
 }
 
-/** Run a job we expect to fail; tolerate the engine surfacing the throw either
- * way (returned `{ error }` or a rejected promise). DB assertions follow. */
-async function runFailing(event: EmailSendData): Promise<void> {
-  const engine = new InngestTestEngine({
-    function: failingJob,
-    events: [{ name: 'email.send', data: event }],
-  });
-  try {
-    await engine.execute();
-  } catch {
-    // swallowed — the failure is the point; we assert on persisted rows.
-  }
-}
-
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
@@ -68,13 +50,35 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
-describe('dead-letter on retry-budget exhaustion', () => {
-  it('writes BOTH a failed job_run and a job_run_dlq row (untenanted)', async () => {
-    await runFailing(emailEvent());
+describe('recordTerminalFailure — correlates to the running row', () => {
+  it('flips the existing running row to failed AND writes a DLQ row (untenanted)', async () => {
+    // The shape onFailure produces: a `running` row already exists (recordStart),
+    // and the terminal-failure write correlates to it by (functionId, eventId).
+    const started = await jobRunsService.recordStart({
+      workspaceId: null,
+      functionId: 'email.send',
+      eventName: 'email.send',
+      eventId: 'evt-terminal-1',
+      attempt: 0,
+      idempotencyKey: 'dlq-key-1',
+    });
 
+    const dto = await jobRunsService.recordTerminalFailure({
+      functionId: 'email.send',
+      eventId: 'evt-terminal-1',
+      eventName: 'email.send',
+      workspaceId: null,
+      failure: { message: 'deliberate boom' },
+      eventData: emailEvent() as unknown as Prisma.InputJsonValue,
+      attempts: 3,
+    });
+    expect(dto.status).toBe('failed');
+
+    // Exactly one run row — the running row was FLIPPED, not duplicated.
     const runs = await db.jobRun.findMany();
     expect(runs).toHaveLength(1);
     const run = runs[0]!;
+    expect(run.id).toBe(started.id);
     expect(run.status).toBe('failed');
     expect(run.workspaceId).toBeNull();
     expect(run.finishedAt).not.toBeNull();
@@ -86,7 +90,7 @@ describe('dead-letter on retry-budget exhaustion', () => {
     expect(entry.functionId).toBe('email.send');
     expect(entry.eventName).toBe('email.send');
     expect(entry.workspaceId).toBeNull();
-    expect(entry.attempts).toBe(1); // none → exactly one attempt
+    expect(entry.attempts).toBe(3);
     expect(entry.replayedAt).toBeNull();
     expect((entry.failure as { message?: string }).message).toBe('deliberate boom');
     // The full original payload is persisted for replay.
@@ -107,31 +111,80 @@ describe('dead-letter on retry-budget exhaustion', () => {
       ownerUserId: owner.id,
     });
 
-    await runFailing(emailEvent({ workspaceId: workspace.id, idempotencyKey: 'dlq-key-2' }));
+    await jobRunsService.recordStart({
+      workspaceId: workspace.id,
+      functionId: 'email.send',
+      eventName: 'email.send',
+      eventId: 'evt-terminal-ws',
+      attempt: 0,
+      idempotencyKey: 'dlq-key-ws',
+    });
+    await jobRunsService.recordTerminalFailure({
+      functionId: 'email.send',
+      eventId: 'evt-terminal-ws',
+      eventName: 'email.send',
+      workspaceId: workspace.id,
+      failure: { message: 'tenant boom' },
+      eventData: emailEvent({ workspaceId: workspace.id }) as unknown as Prisma.InputJsonValue,
+      attempts: 3,
+    });
 
     const run = (await db.jobRun.findMany())[0]!;
     expect(run.status).toBe('failed');
     expect(run.workspaceId).toBe(workspace.id);
-
     const entry = (await db.jobRunDlq.findMany())[0]!;
     expect(entry.workspaceId).toBe(workspace.id);
   });
 
-  it('does NOT dead-letter on a non-final attempt (the run stays running)', async () => {
-    // A job with a real retry budget: the in-process harness runs attempt 0,
-    // which is NOT final (maxRetries = 4 for idempotent), so nothing is written
-    // on failure — the row stays `running`, no DLQ row appears.
-    const retryingJob = defineJob({ id: 'email.send', retryPolicy: 'idempotent' }, () => {
-      throw new Error('still retrying');
+  it('writes a fresh failed row + DLQ row when no running row is found (never drops a dead-letter)', async () => {
+    // Defensive path: if recordStart was lost or correlation missed, the terminal
+    // failure still lands a failed row + DLQ row from the onFailure payload.
+    await jobRunsService.recordTerminalFailure({
+      functionId: 'email.send',
+      eventId: 'orphan-evt',
+      eventName: 'email.send',
+      workspaceId: null,
+      failure: { message: 'orphan boom' },
+      eventData: emailEvent({ idempotencyKey: 'orphan-key' }) as unknown as Prisma.InputJsonValue,
+      attempts: 3,
+    });
+
+    const runs = await db.jobRun.findMany();
+    expect(runs).toHaveLength(1);
+    expect(runs[0]!.status).toBe('failed');
+    expect(runs[0]!.eventId).toBe('orphan-evt');
+    expect(runs[0]!.attempt).toBe(2); // attempts - 1 (zero-indexed final attempt)
+    expect(await db.jobRunDlq.count()).toBe(1);
+  });
+});
+
+describe('defineJob failure wiring', () => {
+  it('registers an onFailure handler (the runtime dead-letter hook)', () => {
+    const spy = vi.spyOn(inngest, 'createFunction');
+    try {
+      defineJob({ id: 'email.send' }, () => undefined);
+      const config = spy.mock.calls.at(-1)?.[0] as { onFailure?: unknown } | undefined;
+      expect(typeof config?.onFailure).toBe('function');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('a failing attempt leaves the row running and writes no DLQ (failure bookkeeping is in onFailure)', async () => {
+    // The in-process engine runs ONE attempt of the handler; it does not drive
+    // onFailure. So a throw leaves the recordStart row `running` and writes no
+    // DLQ — exactly the in-flight state the dashboard shows for a retrying run.
+    const failingJob = defineJob({ id: 'email.send', retryPolicy: 'none' }, () => {
+      throw new Error('still in flight');
     });
     const engine = new InngestTestEngine({
-      function: retryingJob,
+      function: failingJob,
       events: [{ name: 'email.send', data: emailEvent() }],
     });
     try {
       await engine.execute();
     } catch {
-      /* expected */
+      /* the throw is expected; we assert on persisted rows */
     }
 
     const run = (await db.jobRun.findMany())[0]!;
@@ -151,23 +204,62 @@ describe('replayDLQ', () => {
     sendSpy.mockRestore();
   });
 
-  it('re-emits the original event as-is (same name + data, incl. idempotency key) and stamps replayed_at', async () => {
-    await runFailing(emailEvent({ idempotencyKey: 'dlq-key-3' }));
-    const entry = (await db.jobRunDlq.findMany())[0]!;
+  async function seedDlqRow(idempotencyKey: string): Promise<string> {
+    await jobRunsService.recordStart({
+      workspaceId: null,
+      functionId: 'email.send',
+      eventName: 'email.send',
+      eventId: `evt-${idempotencyKey}`,
+      attempt: 0,
+      idempotencyKey,
+    });
+    await jobRunsService.recordTerminalFailure({
+      functionId: 'email.send',
+      eventId: `evt-${idempotencyKey}`,
+      eventName: 'email.send',
+      workspaceId: null,
+      failure: { message: 'boom' },
+      eventData: emailEvent({ idempotencyKey }) as unknown as Prisma.InputJsonValue,
+      attempts: 3,
+    });
+    return (await db.jobRunDlq.findFirst())!.id;
+  }
 
-    const result = await withSystemContext((tx) => replayDLQ(entry.id, tx));
+  it('re-emits with a RE-SHAPED idempotency key (finding #40) so the replay is not dedup-dropped, and stamps replayed_at', async () => {
+    const dlqId = await seedDlqRow('dlq-key-3');
 
-    // Re-emitted with the stored event name + the full original payload — so
-    // Inngest's same-key dedup still applies (the documented caveat).
+    const result = await withSystemContext((tx) => replayDLQ(dlqId, tx));
+
+    // Re-emitted with the stored event name + payload, but the idempotency key is
+    // re-shaped to `{original}:replay:{dlqId}` so Inngest treats it as a new run.
     expect(sendSpy).toHaveBeenCalledTimes(1);
-    const sent = sendSpy.mock.calls[0]![0] as { name: string; data: { idempotencyKey?: string } };
+    const sent = sendSpy.mock.calls[0]![0] as {
+      name: string;
+      data: { idempotencyKey?: string; to?: string };
+    };
     expect(sent.name).toBe('email.send');
-    expect(sent.data.idempotencyKey).toBe('dlq-key-3');
+    expect(sent.data.idempotencyKey).toBe(`dlq-key-3:replay:${dlqId}`);
+    // The rest of the payload is unchanged (same delivery).
+    expect(sent.data.to).toBe('dlq@example.com');
 
     // The row is stamped (auditable replay).
     expect(result.replayedAt).not.toBeNull();
-    const reread = await db.jobRunDlq.findUnique({ where: { id: entry.id } });
+    const reread = await db.jobRunDlq.findUnique({ where: { id: dlqId } });
     expect(reread!.replayedAt).not.toBeNull();
+  });
+
+  it('replaying the SAME row twice re-shapes to the SAME key (a double-click dedups, no double-send)', async () => {
+    const dlqId = await seedDlqRow('dlq-key-4');
+
+    await withSystemContext((tx) => replayDLQ(dlqId, tx));
+    await withSystemContext((tx) => replayDLQ(dlqId, tx));
+
+    const keys = sendSpy.mock.calls.map(
+      (c: unknown[]) => (c[0] as { data: { idempotencyKey?: string } }).data.idempotencyKey,
+    );
+    // Both re-emits carry the SAME dlqId-derived key, so Inngest dedups the
+    // second to one delivery.
+    expect(keys).toEqual([`dlq-key-4:replay:${dlqId}`, `dlq-key-4:replay:${dlqId}`]);
   });
 
   it('throws for an unknown DLQ id', async () => {

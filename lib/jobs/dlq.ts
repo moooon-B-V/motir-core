@@ -19,13 +19,19 @@ import type { JobRunDlqDTO } from '@/lib/dto/jobs';
 // that didn't happen. (The reverse — stamp then send — could record a replay
 // that never went out if the publish threw.)
 //
-// IDEMPOTENCY CAVEAT (the interaction Subtask 1.6.4 AC calls out): the event is
-// re-emitted AS-IS, including its original idempotency key. If the job was
-// defined with an `idempotency` expression and Inngest's dedup window has not
-// elapsed, Inngest DROPS the replay — same key → no re-execute. To force a
-// replay through, either wait the window out, or (when a code change has made
-// the original a no-op) re-shape the idempotency key. See docs/jobs.md →
-// "Dead-letter queue".
+// IDEMPOTENCY ON REPLAY (reworked in 1.6.6 — PRODECT_FINDINGS #40). 1.6.4
+// re-emitted the event AS-IS, including its original idempotency key. But an
+// operator replays a dead-lettered job precisely when they've fixed a transient
+// failure and want it to run NOW — and the original key is, by definition, still
+// inside Inngest's dedup window, so the runtime DROPPED the re-emit and nothing
+// re-ran. Worse, the dashboard's Replay button still stamped `replayedAt` and
+// toasted success, so the no-op was invisible. So replay now RE-SHAPES the key:
+// the re-emitted event carries `{original}:replay:{dlqId}`, distinct from the
+// original, so Inngest treats it as a new run and actually executes it. The new
+// key is derived from the DLQ row id (not a timestamp), so a double-click of
+// Replay on the SAME row still dedups to one re-run (no double-delivery), while
+// a genuinely new failure — a new dlq row — replays independently. A job with no
+// idempotency key is unaffected (it already replayed unconditionally).
 //
 // Why the raw client and not `sendEvent`: dlq.ts lives in lib/jobs/** so it may
 // import the Inngest SDK. The stored `eventData` is dynamic jsonb (it can be ANY
@@ -46,10 +52,15 @@ export async function replayDLQ(
   if (!row) {
     throw new Error(`job_run_dlq ${dlqId} not found`);
   }
-  await inngest.send({
-    name: row.eventName,
-    data: (row.eventData ?? {}) as Record<string, unknown>,
-  });
+  const originalData = (row.eventData ?? {}) as Record<string, unknown>;
+  // Re-shape the idempotency key (see header comment) so the replay isn't
+  // dedup-dropped. Only when the stored payload actually carries a string key;
+  // otherwise re-emit untouched.
+  const replayData =
+    typeof originalData['idempotencyKey'] === 'string'
+      ? { ...originalData, idempotencyKey: `${originalData['idempotencyKey']}:replay:${dlqId}` }
+      : originalData;
+  await inngest.send({ name: row.eventName, data: replayData });
   const replayed = await jobRunDlqRepository.update(dlqId, { replayedAt: new Date() }, tx);
   return toJobRunDlqDTO(replayed);
 }

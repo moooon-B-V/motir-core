@@ -6,8 +6,10 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import type { JobRunDTO, JobRunFailure } from '@/lib/dto/jobs';
 
 // Business logic for the job_run ledger (Story 1.6 · Subtask 1.6.2, extended in
-// 1.6.4). Owns the transactions; `defineJob` calls `recordStart` then either
-// `recordSuccess` or `recordFailureAndDeadLetter` around the user handler. Each
+// 1.6.4, failure path reworked in 1.6.6). Owns the transactions. `defineJob`'s
+// run handler calls `recordStart` then `recordSuccess`; its `onFailure` handler
+// calls `recordTerminalFailure` once the retry budget is spent (the failure path
+// moved out of the run handler — see recordTerminalFailure / FINDINGS #39). Each
 // method is a one-statement-flow transaction — the writes can't share one
 // transaction because the user handler runs (possibly for minutes) between them.
 //
@@ -29,9 +31,25 @@ export interface RecordStartInput {
   idempotencyKey?: string | null;
 }
 
-/** What `recordFailureAndDeadLetter` needs beyond the existing job_run row. */
-export interface DeadLetterInput {
-  /** The original triggering event's payload, persisted so a replay can re-emit it. */
+/**
+ * Everything the terminal-failure path needs. Unlike the old
+ * `recordFailureAndDeadLetter`, this does NOT take a job_run row id: the failure
+ * is reported by Inngest's `onFailure` handler, a SEPARATE invocation that has
+ * the original event but not the row id. The service correlates back to the
+ * `running` row by (functionId, eventId) — see `recordTerminalFailure`.
+ */
+export interface TerminalFailureInput {
+  /** The job id (= functionId on the ledger row). */
+  functionId: string;
+  /** The triggering event's id — correlates back to the `running` row. */
+  eventId: string;
+  /** Ledger event name (the synthetic `scheduled.{id}` for cron jobs). */
+  eventName: string;
+  /** Tenancy of the run (a real workspace, or null for system/cross-workspace). */
+  workspaceId: string | null;
+  /** The serialized final error. */
+  failure: JobRunFailure;
+  /** The original event payload, persisted so a replay can re-emit it. */
   eventData: Prisma.InputJsonValue;
   /** Total attempts made before exhaustion (including the first). */
   attempts: number;
@@ -77,50 +95,83 @@ export const jobRunsService = {
   },
 
   /**
-   * Terminal failure path (1.6.4): the run has exhausted its retry budget. In
-   * ONE transaction, flip the job_run to `failed` AND write the dead-letter
-   * row — so the durable failure record + its replayable payload always land
-   * together (no window where a run is `failed` but absent from the DLQ, or
-   * vice-versa). Earlier (non-final) attempts write nothing: the row stays
-   * `running` so the dashboard shows a retrying run as in-flight rather than
-   * prematurely failed.
+   * Terminal failure path (1.6.4 mechanism; reworked in 1.6.6). The run has
+   * exhausted its retry budget. Inngest reports this via the function's
+   * `onFailure` handler (NOT the run's own handler — see defineJob), so this
+   * method is invoked OUT of the failing run's context: it correlates back to
+   * the `running` row by (functionId, eventId) instead of receiving a row id.
+   *
+   * Why onFailure and not a try/catch in the handler (the 1.6.4 approach):
+   * PRODECT_FINDINGS #39. On the REAL Inngest runtime, a `step.run` scheduled
+   * from a catch block AFTER the step that terminally failed is never executed —
+   * the executor finalizes the run as failed first. So the 1.6.4 dead-letter
+   * write silently never happened in production (the in-process unit harness ran
+   * the catch synchronously, masking it). `onFailure` is Inngest's first-class
+   * "run exactly once after all retries are exhausted" hook, so the write is
+   * reliable. The forced-failure E2E (1.6.6) is what surfaced the gap.
+   *
+   * In ONE transaction: flip the `running` job_run to `failed` AND write the
+   * dead-letter row, so the durable failure record + its replayable payload
+   * always land together. If no `running` row is found (the start write was
+   * lost, or eventId correlation missed), it still writes a `failed` row + DLQ
+   * row from the onFailure payload — a dead-letter is never dropped. Earlier
+   * (non-final) attempts write nothing: the row stays `running` so the dashboard
+   * shows a retrying run as in-flight rather than prematurely failed.
    */
-  async recordFailureAndDeadLetter(
-    id: string,
-    failure: JobRunFailure,
-    dlq: DeadLetterInput,
-  ): Promise<JobRunDTO> {
-    const failureJson = failure as unknown as Prisma.InputJsonObject;
+  async recordTerminalFailure(input: TerminalFailureInput): Promise<JobRunDTO> {
+    const failureJson = input.failure as unknown as Prisma.InputJsonObject;
     const run = await withSystemContext(async (tx) => {
-      const existing = await jobRunRepository.findById(id, tx);
-      if (!existing) {
-        throw new Error(`job_run ${id} not found when dead-lettering`);
-      }
-      const finishedAt = new Date();
-      const durationMs = finishedAt.getTime() - existing.startedAt.getTime();
-      const updated = await jobRunRepository.update(
-        id,
-        { status: 'failed', finishedAt, durationMs, failure: failureJson },
+      const existing = await jobRunRepository.findRunningByEventId(
+        input.eventId,
+        input.functionId,
         tx,
       );
+      const finishedAt = new Date();
+      // Tenancy + the run start come from the existing row when we found it;
+      // otherwise fall back to the onFailure payload (defensive, see above).
+      const workspaceId = existing ? existing.workspaceId : input.workspaceId;
+      const startedAt = existing ? existing.startedAt : finishedAt;
+      const durationMs = finishedAt.getTime() - startedAt.getTime();
+
+      const failedRun = existing
+        ? await jobRunRepository.update(
+            existing.id,
+            { status: 'failed', finishedAt, durationMs, failure: failureJson },
+            tx,
+          )
+        : await jobRunRepository.create(
+            {
+              workspaceId,
+              functionId: input.functionId,
+              eventName: input.eventName,
+              eventId: input.eventId,
+              attempt: input.attempts - 1, // zero-indexed final attempt
+              status: 'failed',
+              finishedAt,
+              durationMs,
+              failure: failureJson,
+            },
+            tx,
+          );
+
       await jobRunDlqRepository.create(
         {
           // The DLQ row inherits the run's tenancy via the scalar FK (a real
           // workspace id, or null for a system / cross-workspace job).
-          workspaceId: existing.workspaceId,
-          functionId: existing.functionId,
-          eventName: existing.eventName,
-          eventData: dlq.eventData,
+          workspaceId,
+          functionId: input.functionId,
+          eventName: input.eventName,
+          eventData: input.eventData,
           failure: failureJson,
-          attempts: dlq.attempts,
+          attempts: input.attempts,
           // firstFailedAt = when the failing run began; lastFailedAt = now (the
           // exhaustion moment). A single-run DLQ entry, so they bracket the run.
-          firstFailedAt: existing.startedAt,
+          firstFailedAt: startedAt,
           lastFailedAt: finishedAt,
         },
         tx,
       );
-      return updated;
+      return failedRun;
     });
     return toJobRunDTO(run);
   },
