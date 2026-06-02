@@ -3,8 +3,7 @@ import { prismaAdapter } from '@better-auth/prisma-adapter';
 import { nextCookies } from 'better-auth/next-js';
 import { headers } from 'next/headers';
 import { db } from '@/lib/db';
-import { sendEmail } from '@/lib/email';
-import { passwordResetEmail } from '@/lib/emailTemplates/passwordReset';
+import { sendEvent } from '@/lib/jobs/sendEvent';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { hash, verify } from './passwords';
 
@@ -103,15 +102,33 @@ export const auth = betterAuth({
     resetPasswordTokenExpiresIn: 3600,
     // Called by Better-Auth when /api/auth/request-password-reset
     // succeeds. `url` is the canonical link to land the user on the
-    // new-password page; its `token` query param is the single-use
-    // reset token. Body lives in lib/emailTemplates/passwordReset.tsx
-    // — per CLAUDE.md, no email body strings live in the wiring layer.
-    sendResetPassword: async ({ user, url }) => {
-      const rendered = await passwordResetEmail({
-        recipientName: user.name || 'there',
-        resetUrl: url,
+    // new-password page; `token` is the single-use reset token.
+    //
+    // We ENQUEUE the send (Story 1.6.3) rather than calling the provider
+    // inline: the actual delivery (slow / flaky) moves to the durable
+    // `email.send` job with retries, and this hook returns as soon as the
+    // event is published — Better-Auth's reset response no longer waits on
+    // the email provider, and a provider outage surfaces in the jobs
+    // dashboard (1.6.5) instead of being silently swallowed here.
+    //
+    //   - workspaceId: null — a password reset is identity-scoped, not
+    //     workspace-scoped (the user may belong to many workspaces or none),
+    //     so this is a deliberately cross-workspace / system email.
+    //   - idempotencyKey: the single-use reset token — a retried request
+    //     that re-fires the same token dedups to one delivery within
+    //     Inngest's window.
+    //
+    // The body still lives in lib/emailTemplates/passwordReset.tsx; the
+    // template is rendered inside the job by emailService (per CLAUDE.md,
+    // no email body strings in the wiring layer).
+    sendResetPassword: async ({ user, url, token }) => {
+      await sendEvent('email.send', {
+        workspaceId: null,
+        idempotencyKey: token,
+        to: user.email,
+        template: 'password-reset',
+        data: { recipientName: user.name || 'there', resetUrl: url },
       });
-      await sendEmail({ to: user.email, ...rendered });
     },
   },
 

@@ -88,9 +88,9 @@ export const sendInvoice = defineJob(
 - `ctx` — the Inngest context: `ctx.event` (`.name`, `.data`, `.id`),
   `ctx.step` (durable step tools), `ctx.runId`, `ctx.attempt`, `ctx.logger`.
 - `services` — the injected service-layer bag (`lib/jobs/services.ts`):
-  `workspaces`, `workspaceInvites`, `projects`, `workItems`, `users`. Use these
-  instead of importing service singletons directly, so handlers stay testable
-  with a stubbed bag.
+  `workspaces`, `workspaceInvites`, `projects`, `workItems`, `users`, `email`.
+  Use these instead of importing service singletons directly, so handlers stay
+  testable with a stubbed bag.
 - The return value becomes the run's resolved output.
 
 **Run ledger.** Around every handler, `defineJob` writes one `job_run` row:
@@ -104,8 +104,10 @@ renders without calling Inngest's API. `workspace_id` is null for system jobs.
 ## `sendEvent(name, data)`
 
 The only way to emit an event — `lib/jobs/sendEvent.ts`. Wraps `inngest.send`
-and enforces the **workspace-scoping invariant**: `data.workspaceId` is required
-at compile time and re-checked at runtime. No untenanted background work.
+and enforces the **workspace-scoping invariant**: every event carries an
+**explicit** `workspaceId`. The field is required by each event's payload type
+(a forgotten id is a compile error) and re-checked at runtime, where `undefined`
+(missing) and `''` (empty) are rejected.
 
 ```ts
 import { sendEvent } from '@/lib/jobs/sendEvent';
@@ -113,14 +115,73 @@ import { sendEvent } from '@/lib/jobs/sendEvent';
 await sendEvent('invoice.send', { workspaceId, invoiceId });
 ```
 
+**The `null` carve-out.** A handful of events are genuinely cross-workspace — a
+password-reset email is identity-scoped, not workspace-scoped (the user may
+belong to many workspaces or none). Such events type their `workspaceId` as
+`string | null`, and `sendEvent` accepts an **explicit `null`** (but never a
+forgotten field). `null` is what the `job_run` row stores — its `workspace_id`
+FK is nullable. Do **not** invent a `"system"` sentinel string: that's not a
+real workspace id and would violate the FK on insert.
+
 System events (the `system.*` namespace) are untenanted by design and are NOT
-dispatched through `sendEvent` — they're triggered by crons (1.6.4) or, for the
-`system.ping` smoke job, by the in-process test harness.
+dispatched through `sendEvent` at all — they're triggered by crons (1.6.4) or,
+for the `system.ping` smoke job, by the in-process test harness. (`sendEvent`'s
+type excludes the `system.*` namespace.)
+
+## Canonical job: `email.send`
+
+`email.send` (`lib/jobs/definitions/emailSend.ts`) is the first production job
+and the reference exemplar — every transactional email in prodect-core flows
+through it.
+
+**Why it exists.** Password reset (`lib/auth/index.ts`) and workspace invites
+(`lib/services/workspaceInvitesService.ts`) used to render + `sendEmail()`
+**inside the HTTP request**. A slow or down provider stalled the request or
+returned a misleading success while no mail went out. Now those sites call
+`sendEvent('email.send', …)` and return immediately; the job does the delivery
+with retries, off the request path. Terminal failures surface in the jobs
+dashboard (1.6.5), not as a silent drop.
+
+**Shape.**
+
+```ts
+// caller (request lifecycle) — enqueue and return
+await sendEvent('email.send', {
+  workspaceId, // a workspace id, or null for a cross-workspace email
+  idempotencyKey: token, // the reset token / invite token
+  to: user.email,
+  template: 'password-reset', // discriminant
+  data: { recipientName, resetUrl }, // exactly that template's props
+});
+```
+
+- **Layering.** The job handler owns no email logic. Rendering + dispatch live
+  in `emailService` (`lib/services/emailService.ts`), which the handler reaches
+  via the injected `jobServices` bag — the 4-layer rule (a job handler is the
+  "service caller" for a background trigger). `@/lib/email` (`sendEmail`) is
+  import-restricted to `emailService` alone; every other caller must enqueue.
+  Templates stay pure render functions in `lib/emailTemplates/`.
+- **Durability.** The single `step.run('send', …)` persists the send result, so
+  a retry of a different step never re-delivers.
+- **Idempotency.** The job is configured with
+  `idempotency: 'event.data.idempotencyKey'`. Inngest dedups same-key events
+  inside its window, so a retried Server Action that re-fires the same token
+  collapses to one delivery. This is **event-level dedup enforced by the Inngest
+  runtime** (validated on the dev-server / cloud surfaces in 1.6.1). The
+  in-process unit harness runs the handler directly and does **not** simulate
+  the dedup layer — so the unit tests assert the _wiring_ (the config carries
+  the expression) and the _caller contract_ (the key is supplied), not the
+  runtime drop. The key is also recorded on the `job_run` row (the ledger-side
+  dedup that reads it is 1.6.4).
+- **`workspaceId: null`** for password reset (cross-workspace); the invite path
+  passes its real workspace id.
 
 ## How to add a new job
 
 1. **Declare the event** in `lib/jobs/types.ts` — add a key + payload to
-   `JobEventDataMap`. Business-event payloads must include `workspaceId: string`.
+   `JobEventDataMap`. Business-event payloads must include `workspaceId` —
+   `string`, or `string | null` for a genuinely cross-workspace event (see the
+   `null` carve-out above).
 2. **Define the job** in `lib/jobs/definitions/<name>.ts` via `defineJob`.
 3. **Register it** — add it to the `jobFunctions` array in `lib/jobs/registry.ts`.
    (The serve route imports from the registry, so it never changes.)

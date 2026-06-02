@@ -1,13 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { db } from '@/lib/db';
-import { sendEmail } from '@/lib/email';
+import { sendEvent } from '@/lib/jobs/sendEvent';
 import type {
   AcceptInviteResultDTO,
   InspectInviteResultDTO,
   SendInviteResultDTO,
   ValidateInviteResultDTO,
 } from '@/lib/dto/invites';
-import { workspaceInviteEmail } from '@/lib/emailTemplates/workspaceInvite';
 import { toValidateInviteResultDTO } from '@/lib/mappers/inviteMappers';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { verificationRepository } from '@/lib/repositories/verificationRepository';
@@ -97,21 +96,34 @@ function buildInviteAcceptUrl(token: string): string {
   return `${base}/invite/accept?token=${encodeURIComponent(token)}`;
 }
 
-async function sendInviteEmailInternal(args: {
+async function enqueueInviteEmail(args: {
+  workspaceId: string;
   inviterName: string;
   workspaceName: string;
   recipientEmail: string;
   token: string;
 }): Promise<void> {
-  // Template rendering lives in lib/emailTemplates/. The service only
-  // knows who to email and which template to invoke — it does not
-  // build subject/body strings itself.
-  const rendered = await workspaceInviteEmail({
-    inviterName: args.inviterName,
-    workspaceName: args.workspaceName,
-    acceptUrl: buildInviteAcceptUrl(args.token),
+  // Enqueue the send (Story 1.6.3) instead of dispatching inline: the
+  // provider call moves to the durable `email.send` job (with retries), and
+  // sendInvite returns as soon as the event is published. The template still
+  // renders in lib/emailTemplates/ — here in the job via emailService — so
+  // this service never builds subject/body strings itself. We pass the
+  // fully-built accept URL as a template prop; the job stays env-agnostic.
+  //
+  //   - workspaceId: the inviting workspace (a real, tenanted email).
+  //   - idempotencyKey: the invite token (unique per invite) — a retried
+  //     send Action dedups to one delivery within Inngest's window.
+  await sendEvent('email.send', {
+    workspaceId: args.workspaceId,
+    idempotencyKey: args.token,
+    to: args.recipientEmail,
+    template: 'workspace-invite',
+    data: {
+      inviterName: args.inviterName,
+      workspaceName: args.workspaceName,
+      acceptUrl: buildInviteAcceptUrl(args.token),
+    },
   });
-  await sendEmail({ to: args.recipientEmail, ...rendered });
 }
 
 export const workspaceInvitesService = {
@@ -124,11 +136,14 @@ export const workspaceInvitesService = {
    *   - we haven't sent ≥3 invites to (workspaceId, email) in the last
    *     hour (else InviteRateLimitedError)
    *
-   * Then creates a Verification row with the token + payload and sends
-   * the email. The create + email are NOT atomic — if email delivery
-   * fails after the token is created, the user can retry; the wasted
-   * token cleans up via expiry. That's the standard trade-off for any
-   * "write-then-side-effect" flow.
+   * Then creates a Verification row with the token + payload and ENQUEUES
+   * the invite email as an `email.send` job (Story 1.6.3). The create +
+   * enqueue are NOT atomic — if enqueue fails after the token is created,
+   * the user can retry; the wasted token cleans up via expiry. That's the
+   * standard trade-off for any "write-then-side-effect" flow. Delivery
+   * itself is now durable: once enqueued, the job retries the provider call
+   * and lands terminal failures in the jobs dashboard rather than dropping
+   * them on the request path.
    */
   async sendInvite(args: {
     inviterUserId: string;
@@ -198,7 +213,8 @@ export const workspaceInvitesService = {
       );
     });
 
-    await sendInviteEmailInternal({
+    await enqueueInviteEmail({
+      workspaceId: args.workspaceId,
       inviterName: args.inviterName,
       workspaceName: workspace.name,
       recipientEmail: email,
