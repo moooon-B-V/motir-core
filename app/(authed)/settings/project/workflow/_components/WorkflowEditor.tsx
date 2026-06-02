@@ -242,10 +242,11 @@ export function WorkflowEditor({
               <Button
                 variant="secondary"
                 size="sm"
+                leftIcon={<Plus className="h-4 w-4" />}
                 disabled={isPending}
                 onClick={() => setAddOpen(true)}
               >
-                <Plus className="h-4 w-4" /> Add status
+                Add status
               </Button>
             </div>
           )}
