@@ -1,7 +1,10 @@
+import type { Prisma } from '@prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { toWorkflowStatusDto, toWorkflowTransitionDto } from '@/lib/mappers/workflowMappers';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { DEFAULT_STATUSES, DEFAULT_TRANSITIONS } from '@/lib/workflows/defaultWorkflow';
 import type { WorkflowDto, WorkflowPolicyModeDto, WorkflowStatusDto } from '@/lib/dto/workflows';
 
 // The READ surface for per-project status workflows (Story 2.2 · Subtask
@@ -123,5 +126,78 @@ export const workflowsService = {
       workspaceId,
     );
     return transition !== null;
+  },
+
+  /**
+   * Seed a project's default workflow (Subtask 2.2.2) — the 6 statuses +
+   * 15 transitions from lib/workflows/defaultWorkflow (finding #45).
+   * NEVER opens its own transaction: `tx` is REQUIRED and supplied by the
+   * caller (createProject), so the project insert and its workflow are atomic —
+   * a rollback of either rolls back both. Statuses are inserted first to
+   * capture their ids, then the key-pair transition graph is resolved against
+   * those ids. The rows carry the SCALAR workspaceId (not a relation connect)
+   * so the writes pass the workflow RLS WITH CHECK under the active workspace
+   * context (finding #33 / #44).
+   */
+  async seedDefaultWorkflow(
+    projectId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const idByKey = new Map<string, string>();
+    for (const status of DEFAULT_STATUSES) {
+      const row = await workflowsRepository.createStatus(
+        {
+          projectId,
+          workspaceId,
+          key: status.key,
+          label: status.label,
+          category: status.category,
+          position: status.position,
+          isInitial: status.isInitial,
+        },
+        tx,
+      );
+      idByKey.set(status.key, row.id);
+    }
+
+    for (const [fromKey, toKey] of DEFAULT_TRANSITIONS) {
+      const fromStatusId = idByKey.get(fromKey);
+      const toStatusId = idByKey.get(toKey);
+      // Unreachable — the transition graph only references the six seeded keys;
+      // the guard turns a future typo in defaultWorkflow into a clear failure
+      // instead of a Prisma null-FK error.
+      if (!fromStatusId || !toStatusId) {
+        throw new Error(
+          `defaultWorkflow: transition references an unknown status key (${fromKey} -> ${toKey})`,
+        );
+      }
+      await workflowsRepository.createTransition(
+        { projectId, workspaceId, fromStatusId, toStatusId },
+        tx,
+      );
+    }
+  },
+
+  /**
+   * One-off backfill of the default workflow onto a project that predates this
+   * Story (older test/migration rows; production has none). Admin/CLI-only —
+   * `actorUserId` is required because the seed must run under withWorkspaceContext
+   * (the card's bare `(projectId)` can't bind the workspace GUC the FORCE-RLS
+   * writes need; rung-2 shipped-context shape over the card's illustration).
+   * Idempotent: a no-op (returns false) when the project already has statuses;
+   * seeds and returns true otherwise. Throws ProjectNotFoundError if absent.
+   */
+  async backfillDefaultWorkflow(projectId: string, actorUserId: string): Promise<boolean> {
+    const project = await projectRepository.findById(projectId);
+    if (!project) throw new ProjectNotFoundError(projectId);
+
+    const existing = await workflowsRepository.findStatuses(projectId, project.workspaceId);
+    if (existing.length > 0) return false;
+
+    await withWorkspaceContext({ userId: actorUserId, workspaceId: project.workspaceId }, (tx) =>
+      workflowsService.seedDefaultWorkflow(projectId, project.workspaceId, tx),
+    );
+    return true;
   },
 };

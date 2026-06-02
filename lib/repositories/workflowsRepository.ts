@@ -78,4 +78,25 @@ export const workflowsRepository = {
       where: { projectId, workspaceId, fromStatusId, toStatusId },
     });
   },
+
+  // Writes (Subtask 2.2.2's seed). `tx` is REQUIRED — the seed runs inside
+  // createProject's transaction so the project + its workflow are atomic. The
+  // `Unchecked` create input takes the SCALAR `workspaceId`/`projectId` FKs
+  // directly (not a relation `connect`): under FORCE RLS a connect's validation
+  // SELECT on the parent could be hidden by the parent's own policy — the
+  // scalar write avoids that, the same lesson finding #33 recorded for the
+  // job-ledger writer.
+  async createStatus(
+    data: Prisma.WorkflowStatusUncheckedCreateInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkflowStatus> {
+    return tx.workflowStatus.create({ data });
+  },
+
+  async createTransition(
+    data: Prisma.WorkflowTransitionUncheckedCreateInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkflowTransition> {
+    return tx.workflowTransition.create({ data });
+  },
 };

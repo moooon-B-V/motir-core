@@ -3,7 +3,6 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
 
 // Row-level security + key constraints for the status-workflow tables
@@ -129,8 +128,15 @@ async function makeWorkflowTenants(): Promise<WorkflowTenantFixture> {
   });
   const w1 = await workspacesService.createWorkspace({ name: 'WF WS 1', ownerUserId: userA.id });
   const w2 = await workspacesService.createWorkspace({ name: 'WF WS 2', ownerUserId: userB.id });
-  const p1 = await createTestProject({ workspaceId: w1.workspace.id, actorUserId: userA.id });
-  const p2 = await createTestProject({ workspaceId: w2.workspace.id, actorUserId: userB.id });
+  // BARE projects (db insert, NOT projectsService.createProject) so the manual
+  // status fixtures below aren't shadowed by 2.2.2's auto-seeded default
+  // workflow — this suite controls the exact rows under test.
+  const p1 = await db.project.create({
+    data: { workspaceId: w1.workspace.id, name: 'WF P1', slug: 'wf-rls', identifier: 'WFR' },
+  });
+  const p2 = await db.project.create({
+    data: { workspaceId: w2.workspace.id, name: 'WF P2', slug: 'wf-rls', identifier: 'WFR' },
+  });
 
   const statusW1TodoId = await makeStatus({
     workspaceId: w1.workspace.id,
@@ -320,7 +326,9 @@ describe('workflow_status constraints — partial-unique initial status', () => 
       name: 'WF Extra',
     });
     const w3 = await workspacesService.createWorkspace({ name: 'WF WS 3', ownerUserId: userA.id });
-    const p3 = await createTestProject({ workspaceId: w3.workspace.id, actorUserId: userA.id });
+    const p3 = await db.project.create({
+      data: { workspaceId: w3.workspace.id, name: 'WF P3', slug: 'wf-rls', identifier: 'WFR' },
+    });
     const id = await makeStatus({
       workspaceId: w3.workspace.id,
       projectId: p3.id,
