@@ -43,6 +43,17 @@
 // typed 422 instead of leaning on the DB trigger's raw 23514; the trigger
 // remains the defense-in-depth backstop.
 //
+// DELIBERATE DEVIATION FROM JIRA (planner decision, PRODECT_FINDINGS #41).
+// Default Jira keeps Story / Task / Bug as strict siblings (Epic → standard
+// issue → Sub-task only). This matrix is deeper — it also allows story→task,
+// story→bug, and task→bug. That is an intentional, justified deviation, NOT an
+// oversight: Prodect is AI-native and the work-item tree IS the execution DAG,
+// so scoping finer work under coarser work earns rollup (a task isn't done
+// while it has open child bugs) and coding-agent context inheritance. Prodect
+// already plans itself this way (Epic → Story → typed sub-work). Per the
+// justified-deviation rule, the richer shape ships only because a concrete use
+// case earns its complexity.
+//
 // `icon` is the lucide component reference (not a string name): it is
 // type-safe (a typo is a compile error), renders directly anywhere
 // (`<meta.icon />`), and matches the existing `icon: <Comp />` convention used
