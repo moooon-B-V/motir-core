@@ -4,6 +4,7 @@ import { type ReactNode } from 'react';
 import { cn } from '@/lib/utils/cn';
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed';
 import { useShortcut } from '@/lib/hooks/useShortcut';
+import { SHORTCUTS } from '@/lib/shortcuts';
 
 /**
  * AppLayout — the frame every signed-in surface renders inside.
@@ -46,9 +47,10 @@ export interface AppLayoutProps {
 export function AppLayout({ topNav, sidebar, children, className }: AppLayoutProps) {
   const [collapsed, , toggleCollapsed] = useSidebarCollapsed();
 
-  // ⌘\ (Mac) / Ctrl+\ — toggle the rail from anywhere in the shell. The only
-  // global shortcut 1.5.2 registers (1.5.4 adds Mod+K / ? against the same hook).
-  useShortcut('Mod+\\', toggleCollapsed);
+  // ⌘\ (Mac) / Ctrl+\ — toggle the rail from anywhere in the shell. Combo comes
+  // from lib/shortcuts.ts, the single source the cheatsheet also reads (1.5.4
+  // wires Mod+K / ? against the same hook + module).
+  useShortcut(SHORTCUTS.toggleSidebar.combo, toggleCollapsed);
 
   return (
     <div className={cn('flex h-dvh flex-col overflow-hidden bg-background', className)}>

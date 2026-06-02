@@ -1,13 +1,15 @@
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { UserMenu } from './UserMenu';
+import { ThemeToggle } from './ThemeToggle';
+import { CommandPaletteTrigger } from './CommandPaletteTrigger';
 import { SidebarToggle } from '@/components/ui/SidebarToggle';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
 
 // Top-nav shell for every (authed)/* route, spanning the full width above
 // the sidebar+content grid. Left cluster: the mobile hamburger (<md, opens
-// the off-canvas SidebarDrawer) + the workspace switcher. Right cluster: a
-// theme-toggle slot, a cmd-K slot (both empty placeholders awaiting Subtask
-// 1.5.4), and the user menu.
+// the off-canvas SidebarDrawer) + the workspace switcher. Right cluster: the
+// cmd-K "Search" trigger + the tri-state theme toggle (both wired in Subtask
+// 1.5.4) + the user menu.
 //
 // The project switcher MOVED to the sidebar header in Subtask 1.5.3 — the
 // "Story 1.5 will move project nav into a left sidebar" promise from the
@@ -34,10 +36,8 @@ export function TopNav({ workspaces, activeWorkspaceId, user }: TopNavProps) {
           <WorkspaceSwitcher workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} />
         </div>
         <div className="flex items-center gap-2">
-          {/* theme-toggle slot — Subtask 1.5.4 fills this. */}
-          <div data-slot="theme-toggle" />
-          {/* cmd-K slot — Subtask 1.5.4 fills this. */}
-          <div data-slot="cmd-k" />
+          <CommandPaletteTrigger />
+          <ThemeToggle />
           <UserMenu name={user.name} email={user.email} />
         </div>
       </nav>
