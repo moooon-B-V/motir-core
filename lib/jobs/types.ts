@@ -22,20 +22,21 @@
 // 1.6.2 schema), NOT a `"system"` sentinel string (that would violate the FK).
 //
 // The OTHER untenanted path is SYSTEM events (the `system.*` namespace), which
-// are NOT dispatched through `sendEvent` at all (they're triggered by crons in
-// 1.6.4 or, here, by the in-process test harness). The `system.ping` payload
-// therefore makes `workspaceId` optional.
+// are NOT dispatched through `sendEvent` at all. They are CRON-triggered (1.6.4:
+// `system.daily-health-check` runs on a schedule) or driven by the in-process
+// test harness. A scheduled job has no real triggering event, so the wrapper
+// synthesizes the ledger's `event_name` as `scheduled.{job_id}` (see
+// defineJob); the payload type therefore makes `workspaceId` optional.
 
 import type { TransactionalEmail } from '@/lib/services/emailService';
 
-export interface SystemPingData {
+export interface SystemScheduledData {
   /**
    * System events are untenanted, so this is optional. When present it's
    * recorded on the job_run row; when absent the row's workspace_id is null.
+   * Cron-triggered runs carry no payload, so this is typically absent.
    */
   workspaceId?: string;
-  /** Optional free-form note echoed back in the static payload. */
-  note?: string;
 }
 
 /**
@@ -61,7 +62,7 @@ export type EmailSendData = TransactionalEmail & {
  * event name that triggers it. Grows one entry per job.
  */
 export interface JobEventDataMap {
-  'system.ping': SystemPingData;
+  'system.daily-health-check': SystemScheduledData;
   'email.send': EmailSendData;
 }
 
@@ -74,7 +75,8 @@ export type JobEventData<N extends JobEventName> = JobEventDataMap[N];
 /**
  * The names of events that are workspace-scoped (everything OUTSIDE the
  * `system.*` namespace). `sendEvent` is typed to accept only these — system
- * events never go through `sendEvent`. Today the map holds only `system.ping`,
- * so this resolves to `never`; 1.6.3's `email.send` makes it non-empty.
+ * events never go through `sendEvent` (they are cron / harness triggered). With
+ * the map holding `system.daily-health-check` + `email.send`, this resolves to
+ * just `email.send`.
  */
 export type WorkspaceScopedEventName = Exclude<JobEventName, `system.${string}`>;

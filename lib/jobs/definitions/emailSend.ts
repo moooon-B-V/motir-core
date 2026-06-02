@@ -31,7 +31,11 @@ import type { EmailSendData } from '../types';
 export const EMAIL_SEND_IDEMPOTENCY = 'event.data.idempotencyKey';
 
 export const emailSend = defineJob(
-  { id: 'email.send', retries: 3, idempotency: EMAIL_SEND_IDEMPOTENCY },
+  // `retryPolicy: 'transient'` (1.6.4): a transactional-email send fails on
+  // transient provider/network blips, so a few attempts with backoff is the
+  // right intent. The idempotency key (the reset / invite token) keeps a retried
+  // Server Action that re-fires the same send from double-delivering.
+  { id: 'email.send', retryPolicy: 'transient', idempotency: EMAIL_SEND_IDEMPOTENCY },
   async (ctx, services) => {
     // `event.data` is typed loosely on the shared JobContext; narrow it to the
     // email payload (the map in types.ts is the source of truth for the shape).

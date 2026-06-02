@@ -66,6 +66,35 @@ export async function withWorkspaceContext<T>(
 }
 
 /**
+ * Opens a Prisma transaction binding the `app.system_admin` GUC to `'true'`,
+ * then invokes `fn` with the transaction client. This is the TRUSTED-WRITER /
+ * cross-workspace-admin context for the job-ledger tables (job_run /
+ * job_run_dlq, Subtask 1.6.4): their RLS policy admits any row — tenanted or
+ * untenanted — when system_admin is set.
+ *
+ * Two callers, by design:
+ *   * the background-jobs runtime (jobRunsService, run by defineJob) — it
+ *     writes ledger rows OUTSIDE any HTTP request, so it has no active
+ *     workspace context; the system-admin branch is what lets its INSERT/UPDATE
+ *     pass WITH CHECK under the non-bypass prodect_app role.
+ *   * operator tooling that must see SYSTEM rows (workspace_id IS NULL) or span
+ *     workspaces (the 1.6.5 dashboard's system tab).
+ *
+ * SECURITY: this helper is NEVER fed user input — it binds a constant. A tenant
+ * request path uses withWorkspaceContext (which binds only user/workspace/
+ * project), so a tenant can never elevate itself to system_admin. Keep it that
+ * way: do not thread a request-derived flag into this function.
+ */
+export async function withSystemContext<T>(
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('app.system_admin', 'true', true)`;
+    return fn(tx);
+  });
+}
+
+/**
  * Opens a Prisma transaction binding ONLY the `app.user_id` GUC, then
  * invokes `fn` with the transaction client. This is the half-context used
  * while RESOLVING which workspace a request acts within: the workspace id

@@ -3,17 +3,20 @@
 Prodect runs background work on [Inngest](https://www.inngest.com/) — durable,
 event-driven functions with built-in retries and step memoization. This
 document covers the runtime landed in Subtask 1.6.2: the client, the
-`defineJob` / `sendEvent` wrappers, the `job_run` ledger, and how to add a job.
+`defineJob` / `sendEvent` wrappers, the `job_run` ledger, and how to add a job —
+plus the cross-cutting patterns added in 1.6.4: named **retry policies**, the
+**dead-letter queue** + replay, and **scheduled (cron) jobs**.
 
-> Deeper sections — idempotency, retry tuning, the dead-letter queue, and the
-> operator runbook — arrive with Subtasks 1.6.4 and 1.6.5.
+> The operator dashboard that renders the ledger + DLQ (with a UI "Replay"
+> button) arrives in Subtask 1.6.5. Until then the DLQ + `replayDLQ` are
+> reachable programmatically / via the runbook below.
 
 ## Runtime overview
 
 ```
 emit:   route/service ──sendEvent("x.y", { workspaceId, … })──▶ Inngest
 run:    Inngest ──POST /api/inngest──▶ serve route ──▶ defineJob wrapper ──▶ your handler
-ledger: defineJob writes a job_run row: running ─▶ succeeded | failed
+ledger: defineJob writes a job_run row: running ─▶ succeeded | failed (+ DLQ on exhaustion)
 ```
 
 - **Serve route** — `app/api/inngest/route.ts`. The single endpoint the Inngest
@@ -65,7 +68,7 @@ The canonical way to define a job — `lib/jobs/defineJob.ts`. Wraps
 import { defineJob } from '@/lib/jobs/defineJob';
 
 export const sendInvoice = defineJob(
-  { id: 'invoice.send', retries: 3, concurrency: 5 },
+  { id: 'invoice.send', retryPolicy: 'transient', concurrency: 5 },
   async (ctx, services) => {
     const { workspaceId, invoiceId } = ctx.event.data;
     await services.workspaces.something(workspaceId);
@@ -76,12 +79,14 @@ export const sendInvoice = defineJob(
 
 **Options**
 
-| Field         | Default | Meaning                                                                                                                     |
-| ------------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `id`          | —       | The job id, **also the triggering event name** (1:1 convention). Must be a key of `JobEventDataMap` in `lib/jobs/types.ts`. |
-| `retries`     | `3`     | Inngest retry count on failure.                                                                                             |
-| `concurrency` | —       | Max simultaneous runs (forwarded as `{ limit }`).                                                                           |
-| `idempotency` | —       | Event-payload-keyed dedup template (the ledger-side dedup lands in 1.6.4).                                                  |
+| Field         | Default       | Meaning                                                                                                                          |
+| ------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | —             | The job id, **also the triggering event name** (1:1 convention). Must be a key of `JobEventDataMap` in `lib/jobs/types.ts`.      |
+| `retryPolicy` | `'transient'` | Named retry policy — the preferred way to declare retry intent. See **Retry policies** below. Mutually exclusive with `retries`. |
+| `retries`     | —             | Raw Inngest retry count (escape hatch; prefer `retryPolicy`). Passing both throws.                                               |
+| `concurrency` | —             | Max simultaneous runs (forwarded as `{ limit }`).                                                                                |
+| `idempotency` | —             | Event-payload-keyed dedup template (Inngest event-level dedup).                                                                  |
+| `cron`        | —             | Schedule the job instead of event-triggering it. See **Scheduled jobs** below.                                                   |
 
 **Handler signature** — `(ctx, services) => result`:
 
@@ -94,12 +99,22 @@ export const sendInvoice = defineJob(
 - The return value becomes the run's resolved output.
 
 **Run ledger.** Around every handler, `defineJob` writes one `job_run` row:
-`running` at start → `succeeded` on return, or `failed` (with the serialized
-error) on throw, then re-throws so Inngest's retry machinery still sees it. The
-three writes run inside `step.run(...)`, so they execute exactly once per run
-even when the handler body replays across step boundaries — one row per run,
-not one per replay. This is the read path the operator dashboard (1.6.5)
+`running` at start → `succeeded` on return. On a throw, the row stays `running`
+across retries and only flips to `failed` on the **final** attempt (when the
+retry budget is exhausted) — at which point it also writes a dead-letter row
+(see **Dead-letter queue**). So a job that's mid-retry reads as in-flight, not
+prematurely failed. The writes run inside `step.run(...)`, so they execute
+exactly once per run even when the handler replays across step boundaries — one
+row per run, not one per replay (the `job-run:start` step's result is reused
+across retries too). This is the read path the operator dashboard (1.6.5)
 renders without calling Inngest's API. `workspace_id` is null for system jobs.
+
+The ledger tables (`job_run`, `job_run_dlq`) are **workspace-scoped by RLS**
+(1.6.4): a tenant sees only its own workspace's rows. The runtime writes them
+under a trusted **system-admin context** (`withSystemContext`) so the wrapper —
+which has no workspace context — can record rows for any/no workspace, and
+operator tooling can see untenanted `system.*` runs. See the
+`add_job_run_dlq_and_rls` migration for the policy.
 
 ## `sendEvent(name, data)`
 
@@ -124,9 +139,9 @@ FK is nullable. Do **not** invent a `"system"` sentinel string: that's not a
 real workspace id and would violate the FK on insert.
 
 System events (the `system.*` namespace) are untenanted by design and are NOT
-dispatched through `sendEvent` at all — they're triggered by crons (1.6.4) or,
-for the `system.ping` smoke job, by the in-process test harness. (`sendEvent`'s
-type excludes the `system.*` namespace.)
+dispatched through `sendEvent` at all — they're **cron-triggered** (e.g.
+`system.daily-health-check`, see **Scheduled jobs**) or driven by the in-process
+test harness. (`sendEvent`'s type excludes the `system.*` namespace.)
 
 ## Canonical job: `email.send`
 
@@ -171,8 +186,10 @@ await sendEvent('email.send', {
   in-process unit harness runs the handler directly and does **not** simulate
   the dedup layer — so the unit tests assert the _wiring_ (the config carries
   the expression) and the _caller contract_ (the key is supplied), not the
-  runtime drop. The key is also recorded on the `job_run` row (the ledger-side
-  dedup that reads it is 1.6.4).
+  runtime drop. The key is also recorded on the `job_run` row.
+- **Retry policy.** `email.send` uses `retryPolicy: 'transient'` — a send fails
+  on transient provider/network blips, so a few attempts with backoff is the
+  right intent (see **Retry policies**). A terminal failure dead-letters.
 - **`workspaceId: null`** for password reset (cross-workspace); the invite path
   passes its real workspace id.
 
@@ -182,15 +199,101 @@ await sendEvent('email.send', {
    `JobEventDataMap`. Business-event payloads must include `workspaceId` —
    `string`, or `string | null` for a genuinely cross-workspace event (see the
    `null` carve-out above).
-2. **Define the job** in `lib/jobs/definitions/<name>.ts` via `defineJob`.
+2. **Define the job** in `lib/jobs/definitions/<name>.ts` via `defineJob`. Pick
+   a `retryPolicy` that matches the failure surface (see **Retry policies**).
 3. **Register it** — add it to the `jobFunctions` array in `lib/jobs/registry.ts`.
    (The serve route imports from the registry, so it never changes.)
-4. **Emit it** from a route or service via `sendEvent` (business events) — or a
-   cron trigger for system jobs.
+4. **Emit it** from a route or service via `sendEvent` (business events) — or
+   give it a `cron` (system jobs, see **Scheduled jobs**).
 5. **Test it** with `@inngest/test`'s `InngestTestEngine` against the real
-   Postgres (see `tests/jobs/ping.test.ts`). Pass the real event explicitly via
-   `events: [{ name, data }]` — the default synthetic event is
-   `inngest/function.invoked`.
+   Postgres (see `tests/jobs/scheduled.test.ts` for a cron job,
+   `tests/jobs/dlq.test.ts` for the failure/DLQ path). For an **event-triggered**
+   job pass the real event explicitly via `events: [{ name, data }]`; for a
+   **cron** job omit `events` so the engine uses the direct-invoke path (a cron
+   job has no event trigger to match).
+
+## Retry policies
+
+A job declares its retry **intent** with a named policy (`lib/jobs/retries.ts`)
+rather than a magic count, so the choice is self-documenting and visible in the
+operator dashboard. Each policy is defined in terms of total **attempts**
+(including the first); the module translates that to Inngest's `retries` value
+(`retries = maxAttempts − 1`). Inngest applies exponential backoff between
+attempts automatically — the policies differ by their attempt **budget**, not by
+a hand-tuned curve.
+
+| Policy       | Attempts | When to pick it                                                                                                 |
+| ------------ | -------- | --------------------------------------------------------------------------------------------------------------- |
+| `transient`  | 3        | **Default.** Failures are usually transient (flaky provider, network blip). `email.send` uses this.             |
+| `idempotent` | 5        | The operation is read-only or naturally idempotent, so repeating is always safe — a longer budget is upside.    |
+| `none`       | 1        | Run **at most once**: a retry would be semantically wrong (e.g. "send this signup notification once or never"). |
+
+```ts
+defineJob({ id: 'invoice.send', retryPolicy: 'idempotent' }, handler);
+```
+
+Passing both `retryPolicy` and a raw `retries` throws (ambiguous intent). When a
+job specifies neither, it gets `transient`. On the **final** failed attempt the
+run dead-letters (below); `none` therefore dead-letters on the very first
+failure.
+
+## Dead-letter queue
+
+When a job exhausts its retry budget, the wrapper writes a row to `job_run_dlq`
+**in the same transaction** that flips the `job_run` to `failed` — so a failed
+run and its replayable record always land together. The DLQ row captures
+everything needed to replay: the `function_id`, the original `event_name` +
+full `event_data` payload, the serialized `failure`, the `attempts` count, and
+`first_failed_at` / `last_failed_at`. This is the durable operator surface
+(the 1.6.5 dashboard's DLQ tab reads it); Inngest's own failure view stays
+available for deep tracing but is **not** the source of truth for operator
+action.
+
+**Operator runbook.**
+
+- **How DLQ rows appear** — automatically, once a job's retries are exhausted.
+  Each row is one dead-lettered run. `replayed_at` is null until you replay it.
+- **How to replay** — call `replayDLQ(dlqId, tx)` (`lib/jobs/dlq.ts`). It
+  re-emits the **original** event and stamps `replayed_at` so the action is
+  auditable. The 1.6.5 dashboard wires this to a "Replay" button; until then it
+  runs from a server-side context (the same trusted/system context the runtime
+  uses).
+- **When NOT to replay** — if the failure was a bad payload or a since-removed
+  code path, replaying just re-fails. Fix forward first; replay only transient
+  infrastructure failures (provider outage, expired upstream token now renewed).
+
+**Idempotency caveat (important).** Replay re-emits the event **as-is**,
+including its original idempotency key. If the job was defined with an
+`idempotency` expression and Inngest's dedup window has **not** elapsed, the
+replay is **dropped** (same key → no re-execute). To force a replay through:
+either wait the dedup window out, or — when a code change has made the original
+a no-op — re-shape the idempotency key so the replay reads as a new event. A
+job with **no** idempotency key replays unconditionally.
+
+## Scheduled jobs
+
+A job runs on a schedule instead of an event when you give it a `cron`:
+
+```ts
+export const dailyHealthCheck = defineJob(
+  { id: 'system.daily-health-check', cron: '0 9 * * *', retryPolicy: 'none' },
+  () => ({ ok: true }),
+);
+```
+
+Inngest's cron trigger means there's **no separate scheduler service** to run.
+Cron jobs are uniform with event-triggered jobs in the ledger: the wrapper
+records the `job_run` row's `event_name` as the synthetic `scheduled.{job_id}`
+(a cron run carries no real triggering-event name), so the dashboard treats both
+kinds the same, and a scheduled run that fails surfaces in the DLQ exactly like
+any other job. `system.daily-health-check`
+(`lib/jobs/definitions/dailyHealthCheck.ts`) is the reference example — a no-op
+that proves the scheduled path end-to-end.
+
+Cron jobs live in the `system.*` namespace (untenanted — `workspace_id` is null)
+and are **not** emitted via `sendEvent`. The cron syntax is standard 5-field
+(`min hour day month weekday`); see the
+[Inngest cron docs](https://www.inngest.com/docs/features/inngest-functions/cron).
 
 ## Cloud + Vercel wiring (human-gated)
 
