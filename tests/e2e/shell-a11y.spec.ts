@@ -58,6 +58,16 @@ const SHELL_ROUTES: { path: string; ready: (page: Page) => Promise<void> }[] = [
       expect(page.getByRole('heading', { name: 'Project settings' })).toBeVisible(),
   },
   {
+    // Workflow editor (Subtask 2.2.5). Swept against a fresh project's default
+    // seed (the six default statuses) — STRICT, zero exclusions: the category
+    // Pills (todo/in_progress/done) are AA-safe (PRODECT_FINDINGS #35 resolved),
+    // the transition matrix is a semantic <table> of aria-checkbox cells, the
+    // policy control is a labelled aria-pressed segmented group.
+    path: '/settings/project/workflow',
+    ready: async (page) =>
+      expect(page.getByRole('heading', { name: 'Workflow', exact: true })).toBeVisible(),
+  },
+  {
     // Operator dashboard (Subtask 1.6.5). Swept in its EMPTY state (a fresh
     // workspace has no job runs). Stays in the STRICT sweep with zero rule
     // exclusions, like every other shell route — and now that the colored Pill
