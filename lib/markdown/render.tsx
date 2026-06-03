@@ -1,7 +1,20 @@
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
 import rehypeHighlight from 'rehype-highlight';
+
+// Rendered Markdown links must be distinguishable WITHOUT relying on color
+// (WCAG 2.4.1 / axe `link-in-text-block`). Tailwind's preflight resets
+// `a { text-decoration: inherit }`, so a link inside body text would otherwise
+// look identical to the surrounding prose. Underline it at the render layer —
+// an inline style so it holds regardless of the surrounding stylesheet cascade
+// (the editor's bundled markdown CSS is imported unlayered). `node` is dropped
+// so it doesn't leak onto the DOM element.
+const components: Components = {
+  a: ({ node: _node, style, ...props }) => (
+    <a {...props} style={{ ...style, textDecorationLine: 'underline' }} />
+  ),
+};
 
 // Markdown render stack for the two work-item content axes (descriptionMd /
 // explanationMd) — Story 1.4's "rich text shape: Markdown source, HTML-
@@ -20,7 +33,11 @@ import rehypeHighlight from 'rehype-highlight';
 // editor) is Epic 2's issue-detail Subtask; this Story ships the render path.
 export function renderMarkdown(md: string) {
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize, rehypeHighlight]}>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeSanitize, rehypeHighlight]}
+      components={components}
+    >
       {md}
     </ReactMarkdown>
   );
