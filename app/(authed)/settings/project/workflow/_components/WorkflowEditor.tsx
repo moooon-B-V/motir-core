@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ColorSwatchPicker } from '@/components/ui/ColorSwatchPicker';
@@ -16,6 +16,7 @@ import {
   deleteStatusAction,
   removeTransitionAction,
   reorderStatusAction,
+  restoreDefaultsAction,
   setPolicyModeAction,
   updateStatusAction,
   type ActionResult,
@@ -66,6 +67,7 @@ export function WorkflowEditor({
   const [tab, setTab] = useState<'statuses' | 'transitions'>('statuses');
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<WorkflowStatusDto | null>(null);
+  const [restoreOpen, setRestoreOpen] = useState(false);
 
   // Statuses arrive position-ordered from getWorkflow.
   const transitionByPair = new Map(
@@ -113,6 +115,20 @@ export function WorkflowEditor({
 
   return (
     <div className="flex flex-col gap-5">
+      {isAdmin && (
+        <div className="flex justify-end">
+          <Button
+            variant="ghost"
+            size="sm"
+            leftIcon={<RotateCcw className="h-4 w-4" />}
+            disabled={isPending}
+            onClick={() => setRestoreOpen(true)}
+          >
+            Restore defaults
+          </Button>
+        </div>
+      )}
+
       {/* Policy mode */}
       <section className="border-border bg-card flex flex-col gap-2 rounded-lg border p-4">
         <div className="flex items-center justify-between gap-4">
@@ -362,6 +378,37 @@ export function WorkflowEditor({
             )
           }
         />
+      )}
+
+      {restoreOpen && (
+        <Modal open={restoreOpen} onOpenChange={setRestoreOpen} size="md">
+          <h2 className="font-serif text-xl font-semibold text-foreground">
+            Restore default workflow?
+          </h2>
+          <p className="text-muted-foreground mt-2 font-sans text-sm">
+            This re-adds the standard statuses and transitions that are missing from this
+            project&apos;s workflow. It does <strong>not</strong> remove or rename any statuses you
+            added or customized — nothing you&apos;ve set up is lost.
+          </p>
+          <Modal.Footer>
+            <Button variant="ghost" onClick={() => setRestoreOpen(false)} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={isPending}
+              onClick={() =>
+                run(
+                  () => restoreDefaultsAction(),
+                  'Defaults restored',
+                  () => setRestoreOpen(false),
+                )
+              }
+            >
+              Restore defaults
+            </Button>
+          </Modal.Footer>
+        </Modal>
       )}
     </div>
   );
