@@ -35,8 +35,12 @@ export default function MarkdownEditorSpecimenPage() {
   const [minValue, setMinValue] = useState('A short description.');
   const [fullValue, setFullValue] = useState(SAMPLE);
 
+  // NOTE: arbitrary `max-w-[48rem]`, NOT `max-w-3xl` — this project's Tailwind theme
+  // resolves `max-w-{key}` against the --spacing-* scale (--spacing-3xl = 40px), so
+  // `max-w-3xl` would collapse the page to a ~40px column (see components/ui/Modal.tsx
+  // for the same gotcha; real pages use max-w-[Nrem]).
   return (
-    <main className="bg-background text-foreground mx-auto max-w-3xl px-6 py-10">
+    <main className="bg-background text-foreground mx-auto max-w-[48rem] px-6 py-10">
       <h1 className="text-2xl font-semibold tracking-tight">Markdown editor</h1>
       <p className="text-muted-foreground mt-1 text-sm">
         The rich-text editor + read-only render path over the <code>descriptionMd</code> Markdown
