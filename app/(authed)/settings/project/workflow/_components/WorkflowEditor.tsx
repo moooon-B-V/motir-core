@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { ColorSwatchPicker } from '@/components/ui/ColorSwatchPicker';
 import { Modal } from '@/components/ui/Modal';
 import { Pill } from '@/components/ui/Pill';
 import { useToast } from '@/components/ui/Toast';
@@ -448,11 +449,10 @@ function StatusFormModal({
             ))}
           </select>
         </label>
-        <Input
-          label="Color (hex, optional)"
-          value={color}
-          onChange={(e) => setColor(e.target.value)}
-          placeholder="#6B778C"
+        <ColorSwatchPicker
+          label="Color"
+          value={color || null}
+          onChange={(v) => setColor(v ?? '')}
           disabled={isPending}
         />
         {!requireKey && (
