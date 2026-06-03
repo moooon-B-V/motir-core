@@ -127,6 +127,26 @@ test.describe('@a11y shell accessibility', () => {
     }
   });
 
+  // Create-issue modal (Subtask 2.3.3), swept in its default-open state — the
+  // first Modal the a11y sweep opens. STRICT, zero exclusions: Radix wires the
+  // focus trap + the dialog's accessible name (the `title` prop → Dialog.Title),
+  // every field has a <label>, and the stub <select>/<textarea> carry explicit
+  // aria-labels. Opened via the top-nav "+" entry point.
+  test('the create-issue modal has zero axe violations (WCAG 2.1 AA)', async ({ page }) => {
+    await signUp(page, 'e2e-create-issue-a11y@example.com');
+    await createFirstProject(page, 'Mobile App');
+    await page.goto('/issues');
+
+    await page.getByRole('button', { name: 'Create issue' }).click();
+    await expect(page.getByRole('heading', { name: 'Create issue' })).toBeVisible();
+
+    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    expect(
+      results.violations,
+      formatViolations('/issues (create-issue modal)', results.violations as AxeViolation[]),
+    ).toEqual([]);
+  });
+
   // /tokens is the public design-system specimen — not a shell-bearing route,
   // but it's where every primitive renders together, so an axe sweep here
   // catches regressions before they reach a real surface. Scanned without a

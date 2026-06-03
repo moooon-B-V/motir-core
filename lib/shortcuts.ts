@@ -25,6 +25,7 @@ export interface ShortcutDef {
 
 export const SHORTCUTS = {
   commandPalette: { combo: 'Mod+K', keys: ['Mod', 'K'], label: 'Open the command palette' },
+  createIssue: { combo: 'C', keys: ['C'], label: 'Create an issue' },
   toggleSidebar: { combo: 'Mod+\\', keys: ['Mod', '\\'], label: 'Collapse or expand the sidebar' },
   shortcuts: { combo: '?', keys: ['?'], label: 'Show this keyboard-shortcut cheatsheet' },
   closeOverlay: {
@@ -37,6 +38,7 @@ export const SHORTCUTS = {
 /** The full ordered list the cheatsheet enumerates. */
 export const SHELL_SHORTCUTS: ShortcutDef[] = [
   SHORTCUTS.commandPalette,
+  SHORTCUTS.createIssue,
   SHORTCUTS.toggleSidebar,
   SHORTCUTS.shortcuts,
   SHORTCUTS.closeOverlay,

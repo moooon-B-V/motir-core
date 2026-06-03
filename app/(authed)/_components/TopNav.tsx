@@ -2,6 +2,7 @@ import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { UserMenu } from './UserMenu';
 import { ThemeToggle } from './ThemeToggle';
 import { CommandPaletteTrigger } from './CommandPaletteTrigger';
+import { CreateIssueButton } from './CreateIssueButton';
 import { SidebarToggle } from '@/components/ui/SidebarToggle';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
 
@@ -43,6 +44,7 @@ export function TopNav({ workspaces, activeWorkspaceId, user }: TopNavProps) {
           <WorkspaceSwitcher workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} />
         </div>
         <div className="flex items-center gap-2">
+          <CreateIssueButton />
           <CommandPaletteTrigger />
           <ThemeToggle />
           <UserMenu name={user.name} email={user.email} />
