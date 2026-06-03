@@ -142,8 +142,15 @@ test.describe('@a11y shell accessibility', () => {
 
     await page.getByRole('button', { name: 'Create issue' }).click();
     await expect(page.getByRole('heading', { name: 'Create issue' })).toBeVisible();
+    // 2.3.7 swapped the textarea stub for the real MarkdownEditor — wait for it
+    // to mount (so its "Loading editor…" placeholder isn't swept) and exclude
+    // the vendored `.w-md-editor` chrome (same as the 2.3.5 specimen sweep).
+    await expect(page.locator('.w-md-editor').first()).toBeVisible();
 
-    const modalResults = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    const modalResults = await new AxeBuilder({ page })
+      .withTags(WCAG_TAGS)
+      .exclude('.w-md-editor')
+      .analyze();
     expect(
       modalResults.violations,
       formatViolations('/issues (create-issue modal)', modalResults.violations as AxeViolation[]),
@@ -153,7 +160,10 @@ test.describe('@a11y shell accessibility', () => {
     await page.getByRole('combobox', { name: 'Type' }).click();
     await expect(page.getByRole('listbox', { name: 'Type' })).toBeVisible();
 
-    const listboxResults = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    const listboxResults = await new AxeBuilder({ page })
+      .withTags(WCAG_TAGS)
+      .exclude('.w-md-editor')
+      .analyze();
     expect(
       listboxResults.violations,
       formatViolations('/issues (type picker open)', listboxResults.violations as AxeViolation[]),

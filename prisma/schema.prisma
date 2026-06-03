@@ -166,6 +166,7 @@ model Workspace {
   jobRunDlqs          JobRunDlq[]
   workflowStatuses    WorkflowStatus[]
   workflowTransitions WorkflowTransition[]
+  attachments         Attachment[]
 
   @@map("workspace")
 }
@@ -673,4 +674,29 @@ enum JobRunStatus {
   failed
 
   @@map("job_run_status")
+}
+
+/// An uploaded blob (Subtask 2.3.7) — a description image/file persisted to
+/// Vercel Blob. v1 is a billing/audit trail: it records WHO uploaded WHAT,
+/// not which work_item references it (the Markdown body just holds the URL).
+/// Epic 5's attachments panel adds the `workItemId` link + management UI and
+/// REUSES this table + the upload service/route (finding #52). RLS = pure
+/// workspace gate (mirrors workflow_status — non-null workspaceId, written
+/// inside an active workspace context); policy is in the migration SQL.
+/// `uploaderUserId` is a scalar (its FK lives in the migration) so this model
+/// doesn't have to add a back-relation to the User table.
+model Attachment {
+  id               String   @id @default(cuid())
+  workspaceId      String   @map("workspace_id")
+  uploaderUserId   String   @map("uploader_user_id")
+  blobUrl          String   @map("blob_url")
+  mimeType         String   @map("mime_type")
+  sizeBytes        Int      @map("size_bytes")
+  originalFilename String   @map("original_filename")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@map("attachment")
 }

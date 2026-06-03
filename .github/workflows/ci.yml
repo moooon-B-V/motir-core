@@ -78,6 +78,10 @@ jobs:
       # build never actually hits Google with these.
       GOOGLE_CLIENT_ID: ci-build-only-placeholder
       GOOGLE_CLIENT_SECRET: ci-build-only-placeholder
+      # Story 2.3.7: Vercel Blob token. A placeholder is sufficient for build +
+      # tests (the Blob SDK is mocked in unit tests; no CI path performs a real
+      # upload). The real token lives in the Vercel dashboard (Subtask 2.3.9).
+      BLOB_READ_WRITE_TOKEN: vercel_blob_rw_ci_build_only_placeholder
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -123,6 +127,9 @@ jobs:
       BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
       GOOGLE_CLIENT_ID: ci-test-placeholder
       GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      # Story 2.3.7 — placeholder; the Blob SDK is mocked in unit tests and no
+      # E2E performs a real upload (the real token lives in Vercel, Subtask 2.3.9).
+      BLOB_READ_WRITE_TOKEN: vercel_blob_rw_ci_test_only_placeholder
       # Skip the husky install postinstall — CI has no .git/hooks to wire.
       HUSKY: '0'
     steps:

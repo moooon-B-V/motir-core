@@ -132,12 +132,12 @@ describe('MarkdownEditor', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('pasting an image WITH a handler inserts an uploading placeholder then the final URL', async () => {
+  it('pasting an IMAGE inserts an uploading placeholder then the final inline `![]`', async () => {
     let captured = 'start';
     const onChange = vi.fn((next: string) => {
       captured = next;
     });
-    const onImageUpload = vi.fn().mockResolvedValue('https://blob.example/shot.png');
+    const onFileUpload = vi.fn().mockResolvedValue('https://blob.example/shot.png');
 
     function Host() {
       return (
@@ -145,7 +145,7 @@ describe('MarkdownEditor', () => {
           label="d"
           value={captured}
           onChange={onChange}
-          onImageUpload={onImageUpload}
+          onFileUpload={onFileUpload}
         />
       );
     }
@@ -167,13 +167,57 @@ describe('MarkdownEditor', () => {
     // First synchronous onChange inserts the uploading placeholder.
     expect(onChange).toHaveBeenCalledWith(expect.stringContaining('![Uploading shot.png…]'));
 
-    // After the upload resolves, the placeholder is replaced with the final URL.
+    // After the upload resolves, the placeholder → the final inline image.
     await vi.waitFor(() => {
       expect(onChange).toHaveBeenCalledWith(
         expect.stringContaining('![shot.png](https://blob.example/shot.png)'),
       );
     });
-    expect(onImageUpload).toHaveBeenCalledWith(file);
+    expect(onFileUpload).toHaveBeenCalledWith(file);
+  });
+
+  it('pasting a NON-IMAGE allowed file inserts a `[]` LINK (not an embed) — finding #52', async () => {
+    let captured = '';
+    const onChange = vi.fn((next: string) => {
+      captured = next;
+    });
+    const onFileUpload = vi.fn().mockResolvedValue('https://blob.example/report.pdf');
+
+    function Host() {
+      return (
+        <MarkdownEditor
+          label="d"
+          value={captured}
+          onChange={onChange}
+          onFileUpload={onFileUpload}
+        />
+      );
+    }
+    render(<Host />);
+
+    const file = new File(['x'], 'report.pdf', { type: 'application/pdf' });
+    const textarea = screen.getByTestId('md-textarea') as HTMLTextAreaElement;
+    textarea.selectionStart = textarea.selectionEnd = captured.length;
+    const onPaste = lastProps().textareaProps as { onPaste: (e: unknown) => void };
+
+    act(() => {
+      onPaste.onPaste({
+        clipboardData: { files: [file] },
+        preventDefault: () => {},
+        currentTarget: textarea,
+      });
+    });
+
+    // Placeholder + final are LINKS (no leading `!`), since pdf can't embed inline.
+    expect(onChange).toHaveBeenCalledWith(expect.stringContaining('[Uploading report.pdf…]'));
+    await vi.waitFor(() => {
+      expect(onChange).toHaveBeenCalledWith(
+        expect.stringContaining('[report.pdf](https://blob.example/report.pdf)'),
+      );
+    });
+    // And it is NOT an image embed.
+    expect(captured).not.toContain('![report.pdf]');
+    expect(onFileUpload).toHaveBeenCalledWith(file);
   });
 
   it('a non-image paste is ignored (normal editor paste proceeds)', () => {
