@@ -140,7 +140,9 @@ describe('updateWorkItem — not-found', () => {
 });
 
 describe('updateWorkItem — per-field change branches', () => {
-  it('updates descriptionMd, priority, estimateMinutes, status and records each in the diff', async () => {
+  // status is NOT an updateWorkItem field anymore (2.3.6/finding #46) — its diff
+  // path lives in updateStatus (tests/workflows/transition-validation.test.ts).
+  it('updates descriptionMd, priority, estimateMinutes and records each in the diff', async () => {
     const fx = await makeWorkItemFixture();
     const created = await workItemsService.createWorkItem(
       createInput(fx, { title: 'T', descriptionMd: 'old desc', priority: 'low' }),
@@ -152,14 +154,12 @@ describe('updateWorkItem — per-field change branches', () => {
         descriptionMd: 'new desc',
         priority: 'high',
         estimateMinutes: 120,
-        status: 'in_progress',
       },
       fx.ctx,
     );
     expect(updated.descriptionMd).toBe('new desc');
     expect(updated.priority).toBe('high');
     expect(updated.estimateMinutes).toBe(120);
-    expect(updated.status).toBe('in_progress');
   });
 
   it('sets then clears a dueDate (instant comparison both ways)', async () => {
@@ -295,7 +295,12 @@ describe('listWorkItems — filters', () => {
     const fx = await makeWorkItemFixture();
     const a = await workItemsService.createWorkItem(createInput(fx, { title: 'A' }), fx.ctx);
     await workItemsService.createWorkItem(createInput(fx, { title: 'B' }), fx.ctx);
-    await workItemsService.updateWorkItem(a.id, { status: 'done', assigneeId: fx.ownerId }, fx.ctx);
+    // 2.3.6/finding #46: status isn't an updateWorkItem patch field anymore —
+    // set both via a direct write for this list-filter setup.
+    await db.workItem.update({
+      where: { id: a.id },
+      data: { status: 'done', assigneeId: fx.ownerId },
+    });
 
     const done = await workItemsService.listWorkItems(fx.projectId, { status: 'done' }, fx.ctx);
     expect(done.map((w) => w.id)).toEqual([a.id]);

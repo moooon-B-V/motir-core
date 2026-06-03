@@ -49,7 +49,7 @@ describe('isReady — terminal status is per-project category=done (finding #21)
     expect(await workItemsService.isReady(x.id, fx.ctx)).toBe(false);
 
     // Cancel the blocker — `cancelled` is category=done in the default seed.
-    await workItemsService.updateWorkItem(blocker.id, { status: 'cancelled' }, fx.ctx);
+    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'cancelled' } });
     expect(await workItemsService.isReady(x.id, fx.ctx)).toBe(true);
   });
 
@@ -67,7 +67,7 @@ describe('isReady — terminal status is per-project category=done (finding #21)
       { fromId: x.id, toId: blocker.id, kind: 'is_blocked_by' },
       fx.ctx,
     );
-    await workItemsService.updateWorkItem(blocker.id, { status: 'cancelled' }, fx.ctx);
+    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'cancelled' } });
     expect(await workItemsService.isReady(x.id, fx.ctx)).toBe(true);
 
     // Admin recategorizes cancelled to a non-terminal bucket → it's no longer
@@ -97,7 +97,7 @@ describe('isReady — terminal status is per-project category=done (finding #21)
       { projectId: projectB.id, kind: 'task', title: 'BB' },
       fx.ctx,
     );
-    await workItemsService.updateWorkItem(blockerInB.id, { status: 'cancelled' }, fx.ctx);
+    await db.workItem.update({ where: { id: blockerInB.id }, data: { status: 'cancelled' } });
     await workItemsService.linkWorkItems(
       { fromId: x.id, toId: blockerInB.id, kind: 'is_blocked_by' },
       fx.ctx,
@@ -114,7 +114,7 @@ describe('isReady — terminal status is per-project category=done (finding #21)
       { projectId: fx.projectId, kind: 'task', title: 'BA' },
       fx.ctx,
     );
-    await workItemsService.updateWorkItem(blockerInA.id, { status: 'cancelled' }, fx.ctx);
+    await db.workItem.update({ where: { id: blockerInA.id }, data: { status: 'cancelled' } });
     await workItemsService.linkWorkItems(
       { fromId: x2.id, toId: blockerInA.id, kind: 'is_blocked_by' },
       fx.ctx,

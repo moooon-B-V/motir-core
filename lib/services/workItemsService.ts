@@ -15,6 +15,7 @@ import {
   IllegalTransitionError,
   NoInitialStatusError,
   ReporterNotInWorkspaceError,
+  StaleWorkItemError,
   UnknownStatusError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
@@ -240,6 +241,7 @@ export const workItemsService = {
     id: string,
     patch: UpdateWorkItemInput,
     ctx: ServiceContext,
+    opts: { expectedUpdatedAt?: string } = {},
   ): Promise<WorkItemDto> {
     const PATCH_KEYS: readonly (keyof UpdateWorkItemInput)[] = [
       'parentId',
@@ -247,7 +249,6 @@ export const workItemsService = {
       'descriptionMd',
       'explanationMd',
       'explanationSource',
-      'status',
       'assigneeId',
       'priority',
       'dueDate',
@@ -266,6 +267,17 @@ export const workItemsService = {
       const current = await workItemRepository.findById(id, tx);
       if (!current) throw new WorkItemNotFoundError(id);
 
+      // Optimistic concurrency (2.3.6): the edit form submits the `updatedAt`
+      // it read at render; if the row moved since (someone else edited), reject
+      // with a 409 the UI turns into a "refresh and retry" banner. Checked
+      // under the FOR UPDATE lock so the compare-then-write is race-free.
+      if (
+        opts.expectedUpdatedAt !== undefined &&
+        current.updatedAt.toISOString() !== opts.expectedUpdatedAt
+      ) {
+        throw new StaleWorkItemError();
+      }
+
       const update: Prisma.WorkItemUncheckedUpdateInput = {};
       const diff: Record<string, DiffCell> = {};
 
@@ -282,10 +294,6 @@ export const workItemsService = {
       if (patch.explanationMd !== undefined && patch.explanationMd !== current.explanationMd) {
         update.explanationMd = patch.explanationMd;
         diff.explanationMd = { from: current.explanationMd, to: patch.explanationMd };
-      }
-      if (patch.status !== undefined && patch.status !== current.status) {
-        update.status = patch.status;
-        diff.status = { from: current.status, to: patch.status };
       }
       if (patch.priority !== undefined && patch.priority !== current.priority) {
         update.priority = patch.priority;
@@ -743,6 +751,22 @@ export const workItemsService = {
   async getWorkItem(id: string, ctx: ServiceContext): Promise<WorkItemDto> {
     const row = await workItemRepository.findById(id);
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
+    return toWorkItemDto(row);
+  },
+
+  /**
+   * Resolve a work item by its human identifier (e.g. "PROD-7") within a
+   * project — the read backing the edit route (Subtask 2.3.6), whose URL is
+   * keyed by identifier. Cross-workspace (or missing) → WorkItemNotFoundError so
+   * the route renders 404 without leaking another tenant's existence.
+   */
+  async getWorkItemByIdentifier(
+    projectId: string,
+    identifier: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemDto> {
+    const row = await workItemRepository.findByIdentifier(projectId, identifier);
+    if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(identifier);
     return toWorkItemDto(row);
   },
 
