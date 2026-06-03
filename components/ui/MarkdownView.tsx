@@ -28,8 +28,16 @@ export interface MarkdownViewProps {
 }
 
 export function MarkdownView({ value, className, ...rest }: MarkdownViewProps) {
+  // `[&_a]:underline`: Tailwind's preflight resets `a { text-decoration: inherit }`,
+  // so rendered Markdown links would otherwise rely on color alone — a WCAG
+  // link-in-text-block failure (axe, serious). Underlining every link in the
+  // rendered output makes them distinguishable without color. This utility lives
+  // in @layer utilities, so it beats preflight's base reset.
   return (
-    <div className={['wmde-markdown', className].filter(Boolean).join(' ')} {...rest}>
+    <div
+      className={['wmde-markdown', '[&_a]:underline', className].filter(Boolean).join(' ')}
+      {...rest}
+    >
       {renderMarkdown(value)}
     </div>
   );
