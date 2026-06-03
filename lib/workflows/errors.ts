@@ -40,12 +40,32 @@ export class WorkflowTransitionNotFoundError extends Error {
   }
 }
 
-/** Refuse to delete a status still referenced by a work item's status. → 422. */
+/**
+ * Refuse to delete a status still referenced by a work item's status, WHEN no
+ * reassignment target was supplied. → 422. The UI catches this (it carries the
+ * `count`) and re-prompts with the delete-with-reassign modal (Subtask 2.3.1).
+ */
 export class StatusInUseError extends Error {
   readonly code = 'STATUS_IN_USE' as const;
+  readonly statusKey: string;
+  readonly count: number;
   constructor(statusKey: string, count: number) {
     super(`Status "${statusKey}" is still used by ${count} work item(s) and can't be deleted.`);
     this.name = 'StatusInUseError';
+    this.statusKey = statusKey;
+    this.count = count;
+  }
+}
+
+/**
+ * The delete-with-reassign target (Subtask 2.3.1) is invalid: it doesn't exist,
+ * belongs to another project, or is the status being deleted itself. → 422.
+ */
+export class InvalidReassignTargetError extends Error {
+  readonly code = 'INVALID_REASSIGN_TARGET' as const;
+  constructor(message = 'Pick a different status in this project to move the items to.') {
+    super(message);
+    this.name = 'InvalidReassignTargetError';
   }
 }
 
