@@ -505,7 +505,10 @@ function ReassignModal({
   return (
     <Modal open onOpenChange={(o) => !o && onCancel()} size="md">
       <h2 className="font-serif text-xl font-semibold text-foreground">Delete “{status.label}”</h2>
-      <p className="text-muted-foreground mt-2 font-sans text-sm">
+      <p
+        className="text-muted-foreground mt-2 font-sans text-sm"
+        data-testid="reassign-affected-count"
+      >
         {count} {noun} still use this status. Choose a status to move {count === 1 ? 'it' : 'them'}{' '}
         to — then “{status.label}” is removed.
       </p>
