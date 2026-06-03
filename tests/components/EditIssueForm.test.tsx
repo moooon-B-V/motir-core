@@ -20,7 +20,7 @@ vi.mock('@/app/(authed)/issues/[key]/edit/actions', () => ({
 vi.mock('@/app/(authed)/issues/actions', () => ({
   listCandidateParentsAction: vi.fn(async () => ({ ok: true, candidates: [] })),
 }));
-// The MarkdownEditor/View are client-only (next/dynamic + @uiw) — stub them.
+// The MarkdownEditor/View are client-only (Tiptap WYSIWYG) — stub them.
 vi.mock('@/components/ui/MarkdownEditor', () => ({
   MarkdownEditor: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
     <textarea aria-label="Description" value={value} onChange={(e) => onChange(e.target.value)} />

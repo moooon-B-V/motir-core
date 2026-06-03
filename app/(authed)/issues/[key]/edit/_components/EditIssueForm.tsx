@@ -141,7 +141,7 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
   }
 
   return (
-    <form className="mx-auto flex max-w-[44rem] flex-col gap-4" onSubmit={handleSubmit}>
+    <form className="flex w-full flex-col gap-4" onSubmit={handleSubmit}>
       <div className="flex items-center gap-2">
         <TypeIcon
           className="h-4 w-4"
@@ -177,18 +177,17 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
         required
       />
 
-      <label className="flex flex-col gap-1 font-sans text-sm">
-        <span className="text-foreground font-medium">Description</span>
-        <MarkdownEditor
-          label="Description"
-          value={description}
-          onChange={setDescription}
-          size="full"
-          onFileUpload={uploadIssueAttachment}
-        />
-      </label>
+      {/* The MarkdownEditor renders its own label (also its aria-label) — no
+          wrapping <label>/span, else "Description" shows twice. */}
+      <MarkdownEditor
+        label="Description"
+        value={description}
+        onChange={setDescription}
+        size="full"
+        onFileUpload={uploadIssueAttachment}
+      />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="flex flex-col gap-1 font-sans text-sm">
           <span className="text-foreground font-medium">Status</span>
           <StatusPicker
