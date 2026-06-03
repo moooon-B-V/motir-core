@@ -8,6 +8,8 @@
 // `string` (a fractional-index key is already a string and Decimals don't
 // JSON-serialize losslessly as numbers). The mapper owns those conversions.
 
+import type { WorkflowDto } from './workflows';
+
 export type WorkItemKindDto = 'epic' | 'story' | 'task' | 'bug' | 'subtask';
 export type WorkItemPriorityDto = 'lowest' | 'low' | 'medium' | 'high' | 'highest';
 export type WorkItemExplanationSourceDto = 'user_authored' | 'ai_draft' | 'user_edited';
@@ -58,6 +60,24 @@ export interface WorkItemSummaryDto {
   assigneeId: string | null;
   position: string;
   archivedAt: string | null;
+}
+
+/**
+ * The aggregate read backing the issue DETAIL page (Story 2.4 · Subtask 2.4.1).
+ * One service call assembles everything the page renders in a single round-trip:
+ * the work item, its immediate parent + direct children (for the breadcrumb /
+ * child list — 2.4.3), its blocked-by / blocks dependency links resolved to
+ * summaries (the relationships panel + readiness badge — 2.4.5), and the
+ * project's workflow (the status control's legal-transition source — 2.4.4).
+ * `blockedBy` = items THIS item is blocked by; `blocks` = items it blocks.
+ */
+export interface IssueDetailDto {
+  item: WorkItemDto;
+  parent: WorkItemSummaryDto | null;
+  children: WorkItemSummaryDto[];
+  blockedBy: WorkItemSummaryDto[];
+  blocks: WorkItemSummaryDto[];
+  workflow: WorkflowDto;
 }
 
 /**

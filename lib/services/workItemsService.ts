@@ -30,6 +30,7 @@ import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toWorkItemRevisionDto } from '@/lib/mappers/workItemRevisionMappers';
 import type {
   CreateWorkItemInput,
+  IssueDetailDto,
   UpdateWorkItemInput,
   WorkItemDto,
   WorkItemKindDto,
@@ -768,6 +769,51 @@ export const workItemsService = {
     const row = await workItemRepository.findByIdentifier(projectId, identifier);
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(identifier);
     return toWorkItemDto(row);
+  },
+
+  /**
+   * The aggregate read backing the issue DETAIL page (Subtask 2.4.1): one
+   * service call assembling the item + its immediate parent + direct children +
+   * its blocked-by / blocks dependency links (resolved to summaries) + the
+   * project's workflow. Tenant gate FIRST (cross-workspace / missing identifier
+   * → WorkItemNotFoundError → 404, no existence leak), then the rest fans out
+   * in parallel. `blockedBy` = items this item `is_blocked_by` (its OUT edges of
+   * that kind); `blocks` = items blocked by it (the IN edges). All reads are
+   * within one workspace (children/parent share the project; the link targets
+   * are resolved by id and rendered read-only here — the relationships panel's
+   * grouping + readiness verdict layer on top in 2.4.5).
+   */
+  async getIssueDetail(
+    projectId: string,
+    identifier: string,
+    ctx: ServiceContext,
+  ): Promise<IssueDetailDto> {
+    const item = await workItemRepository.findByIdentifier(projectId, identifier);
+    if (!item || item.workspaceId !== ctx.workspaceId) {
+      throw new WorkItemNotFoundError(identifier);
+    }
+
+    const [parentRow, childRows, blockedByLinks, blocksLinks, workflow] = await Promise.all([
+      item.parentId ? workItemRepository.findById(item.parentId) : Promise.resolve(null),
+      workItemRepository.findChildren(item.id),
+      workItemLinkRepository.findByFromItem(item.id, 'is_blocked_by'),
+      workItemLinkRepository.findByToItem(item.id, 'is_blocked_by'),
+      workflowsService.getWorkflow(projectId, ctx.workspaceId),
+    ]);
+
+    const [blockerRows, blockingRows] = await Promise.all([
+      workItemRepository.findByIds(blockedByLinks.map((l) => l.toId)),
+      workItemRepository.findByIds(blocksLinks.map((l) => l.fromId)),
+    ]);
+
+    return {
+      item: toWorkItemDto(item),
+      parent: parentRow ? toWorkItemSummaryDto(parentRow) : null,
+      children: childRows.map(toWorkItemSummaryDto),
+      blockedBy: blockerRows.map(toWorkItemSummaryDto),
+      blocks: blockingRows.map(toWorkItemSummaryDto),
+      workflow,
+    };
   },
 
   /**
