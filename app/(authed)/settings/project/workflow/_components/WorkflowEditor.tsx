@@ -121,20 +121,6 @@ export function WorkflowEditor({
 
   return (
     <div className="flex flex-col gap-5">
-      {isAdmin && (
-        <div className="flex justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={<RotateCcw className="h-4 w-4" />}
-            disabled={isPending}
-            onClick={() => setRestoreOpen(true)}
-          >
-            Restore default transitions
-          </Button>
-        </div>
-      )}
-
       {/* Policy mode */}
       <section className="border-border bg-card flex flex-col gap-2 rounded-lg border p-4">
         <div className="flex items-center justify-between gap-4">
@@ -289,61 +275,78 @@ export function WorkflowEditor({
           )}
         </section>
       ) : (
-        <section aria-label="Transitions" className="overflow-x-auto">
-          <table className="border-collapse font-sans text-xs">
-            <caption className="text-muted-foreground mb-2 text-left text-xs">
-              Each cell is a legal move from the row status to the column status.
-              {policyMode === 'open' && ' (Ignored while policy is Open.)'}
-            </caption>
-            <thead>
-              <tr>
-                <th className="text-muted-foreground p-2 text-left font-medium">From ↓ / To →</th>
-                {statuses.map((to) => (
-                  <th key={to.id} scope="col" className="text-muted-foreground p-2 font-medium">
-                    {to.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {statuses.map((from) => (
-                <tr key={from.id}>
-                  <th scope="row" className="text-foreground p-2 text-left font-medium">
-                    {from.label}
-                  </th>
-                  {statuses.map((to) => {
-                    const self = from.id === to.id;
-                    const on = transitionByPair.has(`${from.id}|${to.id}`);
-                    return (
-                      <td key={to.id} className="p-1 text-center">
-                        {self ? (
-                          <span aria-hidden className="text-muted-foreground">
-                            —
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            role="checkbox"
-                            aria-checked={on}
-                            aria-label={`${from.label} to ${to.label}`}
-                            disabled={!isAdmin || isPending}
-                            onClick={() => toggleTransition(from, to)}
-                            className={`h-6 w-6 rounded border ${
-                              on
-                                ? 'border-foreground bg-foreground text-background'
-                                : 'border-border text-transparent'
-                            } disabled:opacity-50`}
-                          >
-                            {on ? '✓' : '·'}
-                          </button>
-                        )}
-                      </td>
-                    );
-                  })}
+        <section aria-label="Transitions" className="flex flex-col gap-3">
+          {/* Restore lives here — it re-adds default transition edges, so it
+              belongs to the Transitions tab, not the always-visible header. */}
+          {isAdmin && (
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={<RotateCcw className="h-4 w-4" />}
+                disabled={isPending}
+                onClick={() => setRestoreOpen(true)}
+              >
+                Restore default transitions
+              </Button>
+            </div>
+          )}
+          <div className="overflow-x-auto">
+            <table className="border-collapse font-sans text-xs">
+              <caption className="text-muted-foreground mb-2 text-left text-xs">
+                Each cell is a legal move from the row status to the column status.
+                {policyMode === 'open' && ' (Ignored while policy is Open.)'}
+              </caption>
+              <thead>
+                <tr>
+                  <th className="text-muted-foreground p-2 text-left font-medium">From ↓ / To →</th>
+                  {statuses.map((to) => (
+                    <th key={to.id} scope="col" className="text-muted-foreground p-2 font-medium">
+                      {to.label}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {statuses.map((from) => (
+                  <tr key={from.id}>
+                    <th scope="row" className="text-foreground p-2 text-left font-medium">
+                      {from.label}
+                    </th>
+                    {statuses.map((to) => {
+                      const self = from.id === to.id;
+                      const on = transitionByPair.has(`${from.id}|${to.id}`);
+                      return (
+                        <td key={to.id} className="p-1 text-center">
+                          {self ? (
+                            <span aria-hidden className="text-muted-foreground">
+                              —
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              role="checkbox"
+                              aria-checked={on}
+                              aria-label={`${from.label} to ${to.label}`}
+                              disabled={!isAdmin || isPending}
+                              onClick={() => toggleTransition(from, to)}
+                              className={`h-6 w-6 rounded border ${
+                                on
+                                  ? 'border-foreground bg-foreground text-background'
+                                  : 'border-border text-transparent'
+                              } disabled:opacity-50`}
+                            >
+                              {on ? '✓' : '·'}
+                            </button>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
 
