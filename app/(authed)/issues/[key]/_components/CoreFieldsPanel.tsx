@@ -1,4 +1,5 @@
 import type { WorkItemDto } from '@/lib/dto/workItems';
+import { Card } from '@/components/ui/Card';
 import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
 import { PRIORITY_LABELS } from '@/lib/issues/priority';
 import { formatDateTime, formatDate } from '@/lib/utils/datetime';
@@ -29,11 +30,9 @@ export interface CoreFieldsPanelProps {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      {/* Labels use --color-slate (the design-system "secondary text" token),
-          NOT --muted-foreground: muted (#787671) on the panel's `bg-surface`
-          tint is only 4.16:1 — below AA for 12px text — whereas slate clears
-          ~5.9:1 (the same token the neutral Pill's color-contrast test proves
-          safe on surface). */}
+      {/* Labels are 12px secondary text → --color-slate (the design-system
+          "secondary text" token), which clears AA comfortably on the Card's
+          untinted bg-background. */}
       <dt className="font-sans text-xs font-medium tracking-wide text-(--color-slate) uppercase">
         {label}
       </dt>
@@ -64,9 +63,19 @@ export function CoreFieldsPanel({ item, assignee, reporter }: CoreFieldsPanelPro
   const typeMeta = ISSUE_TYPE_META[item.kind];
   const TypeIcon = typeMeta.icon;
 
+  // The design-system container is `Card` (the same primitive MembersCard and
+  // the other settings panels use) — its default `tint="none"` sits on
+  // `bg-background` with the canonical card radius / padding / hairline tokens.
+  // (An earlier hand-rolled `bg-surface` section put 12px secondary text on a
+  // tint at 4.16:1 — below AA; the Card's untinted surface is the correct fix,
+  // not just darkening the text. The doc warns against tinting page surfaces.)
+  // `role="region"` + `aria-label` keep it a labelled landmark (Card is a div).
   return (
-    <section aria-label="Details" className="border-border bg-surface rounded-lg border p-4">
-      <h2 className="text-foreground mb-3 font-sans text-sm font-semibold">Details</h2>
+    <Card
+      role="region"
+      aria-label="Details"
+      header={<h2 className="text-foreground font-sans text-base font-semibold">Details</h2>}
+    >
       <dl className="flex flex-col gap-4">
         <Field label="Type">
           <span className="flex items-center gap-1.5">
@@ -98,6 +107,6 @@ export function CoreFieldsPanel({ item, assignee, reporter }: CoreFieldsPanelPro
         <Field label="Created">{formatDateTime(item.createdAt)}</Field>
         <Field label="Updated">{formatDateTime(item.updatedAt)}</Field>
       </dl>
-    </section>
+    </Card>
   );
 }
