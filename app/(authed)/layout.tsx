@@ -12,6 +12,7 @@ import { TopNav } from './_components/TopNav';
 import { SidebarNav } from './_components/SidebarNav';
 import { WorkspaceSwitcher } from './_components/WorkspaceSwitcher';
 import { CommandPaletteProvider } from './_components/CommandPaletteProvider';
+import { CreateIssueProvider } from './_components/CreateIssueProvider';
 import { AppCommandPalette } from './_components/AppCommandPalette';
 
 // Layout for every authenticated route. Story 1.5 migrates this from a bare
@@ -55,42 +56,46 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
           TopNav "Search" trigger and the AppCommandPalette below share one
           context. */}
       <CommandPaletteProvider>
-        <AppLayout
-          topNav={
-            <TopNav
-              workspaces={workspaces}
-              activeWorkspaceId={activeWorkspaceId}
-              user={{ name: session.user.name, email: session.user.email }}
-            />
-          }
-          sidebar={<SidebarNav activeProject={activeProject} projects={projects} variant="rail" />}
-        >
-          <div className="px-4 py-6 sm:px-6 lg:px-8">{children}</div>
-        </AppLayout>
+        <CreateIssueProvider hasProject={Boolean(activeProject)}>
+          <AppLayout
+            topNav={
+              <TopNav
+                workspaces={workspaces}
+                activeWorkspaceId={activeWorkspaceId}
+                user={{ name: session.user.name, email: session.user.email }}
+              />
+            }
+            sidebar={
+              <SidebarNav activeProject={activeProject} projects={projects} variant="rail" />
+            }
+          >
+            <div className="px-4 py-6 sm:px-6 lg:px-8">{children}</div>
+          </AppLayout>
 
-        {/* Mobile off-canvas nav — opened by the TopNav hamburger (<md). The
+          {/* Mobile off-canvas nav — opened by the TopNav hamburger (<md). The
             drawer is portaled, so it lives at the layout root rather than in an
             AppLayout slot. Its header carries the workspace switcher (the rail's
             workspace switcher lives in the top nav, which the drawer replaces on
             mobile). */}
-        <SidebarDrawer
-          header={
-            <WorkspaceSwitcher workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} />
-          }
-        >
-          <SidebarNav activeProject={activeProject} projects={projects} variant="drawer" />
-        </SidebarDrawer>
+          <SidebarDrawer
+            header={
+              <WorkspaceSwitcher workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} />
+            }
+          >
+            <SidebarNav activeProject={activeProject} projects={projects} variant="drawer" />
+          </SidebarDrawer>
 
-        {/* The ⌘K palette UI — fed the same workspace/project data the shell
+          {/* The ⌘K palette UI — fed the same workspace/project data the shell
             above already resolved, so navigation + switch actions stay in sync
             without a second fetch. */}
-        <AppCommandPalette
-          workspaces={workspaces}
-          activeWorkspaceId={activeWorkspaceId}
-          projects={projects}
-          activeProjectId={activeProject?.id ?? null}
-          hasProject={Boolean(activeProject)}
-        />
+          <AppCommandPalette
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspaceId}
+            projects={projects}
+            activeProjectId={activeProject?.id ?? null}
+            hasProject={Boolean(activeProject)}
+          />
+        </CreateIssueProvider>
       </CommandPaletteProvider>
     </ToastProvider>
   );

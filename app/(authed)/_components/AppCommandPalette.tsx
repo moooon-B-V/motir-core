@@ -9,6 +9,7 @@ import {
   Folder,
   LayoutDashboard,
   LogOut,
+  Plus,
   Settings,
   SunMoon,
   Users,
@@ -22,6 +23,7 @@ import type { ThemePattern } from '@/lib/theme/types';
 import { switchWorkspaceAction } from '../_actions';
 import { setActiveProjectAction } from '../_project-actions';
 import { useCommandPalette } from './CommandPaletteProvider';
+import { useCreateIssue } from './CreateIssueProvider';
 
 /**
  * AppCommandPalette — the application composition over the generic
@@ -57,12 +59,18 @@ export function AppCommandPalette({
   hasProject,
 }: AppCommandPaletteProps) {
   const { open, setOpen } = useCommandPalette();
+  const { openCreateIssue, canCreate } = useCreateIssue();
   const router = useRouter();
   const { pattern, setPattern } = useTheme();
   const [, startTransition] = useTransition();
 
   function go(href: string) {
     router.push(href);
+  }
+
+  function createIssue() {
+    setOpen(false); // close the palette before the modal takes focus
+    openCreateIssue();
   }
 
   function switchWorkspace(workspaceId: string) {
@@ -94,6 +102,23 @@ export function AppCommandPalette({
   }
 
   const groups: CommandGroup[] = [];
+
+  // Create — the create-issue entry point (one of three: also the top-nav "+"
+  // and the "C" shortcut). Only with an active project to create into.
+  if (canCreate) {
+    groups.push({
+      heading: 'Create',
+      actions: [
+        {
+          id: 'create-issue',
+          label: 'Create issue',
+          icon: <Plus />,
+          kbd: 'C',
+          onSelect: createIssue,
+        },
+      ],
+    });
+  }
 
   // Navigation — project-scoped routes only when a project is active; Settings
   // deep-links the same way the sidebar does (project vs. workspace settings).
