@@ -91,11 +91,12 @@ describe('deleteStatus — delete-with-reassign (2.3.1)', () => {
     for (const id of ids) {
       const row = await db.workItem.findUnique({ where: { id } });
       expect(row?.status).toBe('todo');
-      // Exactly one status-change revision per item, with the right diff.
+      // Exactly one 'updated' revision per item — the migration. (createWorkItem
+      // already wrote a 'created' revision whose diff ALSO carries a `status`
+      // field, so we key off changeKind, not the mere presence of `status`.)
       const revs = await db.workItemRevision.findMany({ where: { workItemId: id } });
-      const statusRevs = revs.filter((r) => (r.diff as { status?: unknown }).status !== undefined);
+      const statusRevs = revs.filter((r) => r.changeKind === 'updated');
       expect(statusRevs).toHaveLength(1);
-      expect(statusRevs[0]!.changeKind).toBe('updated');
       expect(statusRevs[0]!.diff).toEqual({ status: { from: 'triage', to: 'todo' } });
     }
 
