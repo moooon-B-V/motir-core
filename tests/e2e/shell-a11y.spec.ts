@@ -156,6 +156,40 @@ test.describe('@a11y shell accessibility', () => {
     ).toEqual([]);
   });
 
+  // The MarkdownEditor primitive specimen (Subtask 2.3.5). Renders every
+  // variant (min / full / read-only) + the MarkdownView render path. Public,
+  // no session.
+  //
+  // The `.w-md-editor` subtree is EXCLUDED: it's vendored third-party DOM from
+  // @uiw/react-md-editor we don't own and won't fork. Its toolbar SVG icons set
+  // role="img" without a per-svg title (svg-img-alt — but each toolbar BUTTON
+  // carries an aria-label, so the controls are AT-usable), and its markdown
+  // PREVIEW pane strips link underlines (link-in-text-block). Everything that
+  // IS our code stays in the strict sweep: the page chrome, the editor's label
+  // + status notice, and the standalone MarkdownView render path (whose links
+  // keep their underline and pass link-in-text-block). This mirrors the /tokens
+  // precedent of holding specimen/third-party artifacts to a narrower bar than
+  // shipped product UI.
+  //
+  // `color-contrast` is excluded on the same basis as the /tokens sweep (the
+  // syntax-highlight tints in the rendered sample are specimen display).
+  test('the /tokens/markdown-editor specimen is axe-clean (WCAG 2.1 AA; third-party editor chrome excluded)', async ({
+    page,
+  }) => {
+    await page.goto('/tokens/markdown-editor');
+    await expect(page.getByRole('heading', { name: 'Markdown editor', level: 1 })).toBeVisible();
+
+    const results = await new AxeBuilder({ page })
+      .withTags(WCAG_TAGS)
+      .exclude('.w-md-editor')
+      .disableRules(['color-contrast'])
+      .analyze();
+    expect(
+      results.violations,
+      formatViolations('/tokens/markdown-editor', results.violations as AxeViolation[]),
+    ).toEqual([]);
+  });
+
   // The actual subject of PRODECT_FINDINGS #35: the Pill `status`/`severity`
   // matrix. Scoped color-contrast sweep over JUST the Pill specimen section,
   // with the rule ENABLED — proves every colored tone clears WCAG AA now that

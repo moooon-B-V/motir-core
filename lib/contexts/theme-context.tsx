@@ -143,3 +143,18 @@ export function useTheme(): ThemeContextValue {
   }
   return ctx;
 }
+
+/**
+ * Non-throwing variant of {@link useTheme}. Returns `null` when no
+ * `<ThemeProvider>` is mounted instead of throwing.
+ *
+ * Use this in low-level primitives that must also render outside the authed
+ * shell — e.g. the `MarkdownEditor` (Subtask 2.3.5) reads `resolvedPattern`
+ * to drive the underlying editor's `data-color-mode`, but it's also exercised
+ * on the public `/tokens` specimen and in component tests where wrapping every
+ * render in a provider would be noise. Callers fall back to a sensible default
+ * (`'light'`).
+ */
+export function useOptionalTheme(): ThemeContextValue | null {
+  return useContext(ThemeContext);
+}
