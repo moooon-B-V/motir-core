@@ -29,7 +29,12 @@ export interface CoreFieldsPanelProps {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <dt className="text-muted-foreground font-sans text-xs font-medium tracking-wide uppercase">
+      {/* Labels use --color-slate (the design-system "secondary text" token),
+          NOT --muted-foreground: muted (#787671) on the panel's `bg-surface`
+          tint is only 4.16:1 — below AA for 12px text — whereas slate clears
+          ~5.9:1 (the same token the neutral Pill's color-contrast test proves
+          safe on surface). */}
+      <dt className="font-sans text-xs font-medium tracking-wide text-(--color-slate) uppercase">
         {label}
       </dt>
       <dd className="text-foreground font-sans text-sm">{children}</dd>
@@ -39,7 +44,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Person({ person }: { person: PersonRef | null }) {
   if (!person) {
-    return <span className="text-muted-foreground italic">Unassigned</span>;
+    return <span className="text-(--color-slate) italic">Unassigned</span>;
   }
   const initial = (person.name || person.email).charAt(0).toUpperCase();
   return (
@@ -80,14 +85,14 @@ export function CoreFieldsPanel({ item, assignee, reporter }: CoreFieldsPanelPro
           {item.dueDate ? (
             formatDate(item.dueDate)
           ) : (
-            <span className="text-muted-foreground italic">No due date</span>
+            <span className="text-(--color-slate) italic">No due date</span>
           )}
         </Field>
         <Field label="Estimate">
           {item.estimateMinutes != null ? (
             formatDurationMinutes(item.estimateMinutes)
           ) : (
-            <span className="text-muted-foreground italic">No estimate</span>
+            <span className="text-(--color-slate) italic">No estimate</span>
           )}
         </Field>
         <Field label="Created">{formatDateTime(item.createdAt)}</Field>
