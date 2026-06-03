@@ -10,13 +10,14 @@ import { Modal } from '@/components/ui/Modal';
 import { Pill } from '@/components/ui/Pill';
 import { useToast } from '@/components/ui/Toast';
 import { keyBetween } from '@/lib/workItems/positioning';
+import { DEFAULT_STATUS_KEYS } from '@/lib/workflows/defaultWorkflow';
 import {
   addTransitionAction,
   createStatusAction,
   deleteStatusAction,
   removeTransitionAction,
   reorderStatusAction,
-  restoreDefaultsAction,
+  restoreDefaultTransitionsAction,
   setPolicyModeAction,
   updateStatusAction,
   type ActionResult,
@@ -47,6 +48,11 @@ function CategoryPill({ category }: { category: StatusCategoryDto }) {
   if (category === 'done') return <Pill severity="success">Done</Pill>;
   return <Pill tone="neutral">To Do</Pill>;
 }
+
+// A default status (Subtask 2.2.10 / finding #49) is PROTECTED: recolor only —
+// no rename, recategorize, reorder, or delete. The editor locks those
+// affordances and shows a "Default" badge so the rule is legible in the UI.
+const isDefaultStatus = (s: WorkflowStatusDto) => DEFAULT_STATUS_KEYS.has(s.key);
 
 export interface WorkflowEditorProps {
   statuses: WorkflowStatusDto[];
@@ -124,7 +130,7 @@ export function WorkflowEditor({
             disabled={isPending}
             onClick={() => setRestoreOpen(true)}
           >
-            Restore defaults
+            Restore default transitions
           </Button>
         </div>
       )}
@@ -199,60 +205,74 @@ export function WorkflowEditor({
       {tab === 'statuses' ? (
         <section className="flex flex-col gap-2" aria-label="Statuses">
           <ul className="flex flex-col gap-2">
-            {statuses.map((s, i) => (
-              <li
-                key={s.id}
-                className="border-border bg-card flex items-center gap-3 rounded-lg border p-3"
-              >
-                <span
-                  aria-hidden
-                  className="h-3 w-3 shrink-0 rounded-full border border-border"
-                  style={s.color ? { backgroundColor: s.color } : undefined}
-                />
-                <span className="font-sans text-sm font-medium text-foreground">{s.label}</span>
-                <CategoryPill category={s.category} />
-                {s.isInitial && <Pill tone="neutral">Initial</Pill>}
-                {isAdmin && (
-                  <div className="ml-auto flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`Move ${s.label} up`}
-                      disabled={i === 0 || isPending}
-                      onClick={() => moveStatus(i, -1)}
-                    >
-                      <ArrowUp className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`Move ${s.label} down`}
-                      disabled={i === statuses.length - 1 || isPending}
-                      onClick={() => moveStatus(i, 1)}
-                    >
-                      <ArrowDown className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={isPending}
-                      onClick={() => setEditing(s)}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`Delete ${s.label}`}
-                      disabled={isPending}
-                      onClick={() => run(() => deleteStatusAction(s.id), 'Status deleted')}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
-              </li>
-            ))}
+            {statuses.map((s, i) => {
+              const isDefault = isDefaultStatus(s);
+              return (
+                <li
+                  key={s.id}
+                  className="border-border bg-card flex items-center gap-3 rounded-lg border p-3"
+                >
+                  <span
+                    aria-hidden
+                    className="h-3 w-3 shrink-0 rounded-full border border-border"
+                    style={s.color ? { backgroundColor: s.color } : undefined}
+                  />
+                  <span className="font-sans text-sm font-medium text-foreground">{s.label}</span>
+                  <CategoryPill category={s.category} />
+                  {s.isInitial && <Pill tone="neutral">Initial</Pill>}
+                  {isDefault && <Pill tone="neutral">Default</Pill>}
+                  {isAdmin && (
+                    <div className="ml-auto flex items-center gap-1">
+                      {/* Defaults are non-reorderable (protected) — hide the
+                          up/down controls; custom statuses keep them. */}
+                      {!isDefault && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`Move ${s.label} up`}
+                            disabled={i === 0 || isPending}
+                            onClick={() => moveStatus(i, -1)}
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`Move ${s.label} down`}
+                            disabled={i === statuses.length - 1 || isPending}
+                            onClick={() => moveStatus(i, 1)}
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label={isDefault ? `Change color of ${s.label}` : undefined}
+                        disabled={isPending}
+                        onClick={() => setEditing(s)}
+                      >
+                        {isDefault ? 'Color' : 'Edit'}
+                      </Button>
+                      {/* Defaults can't be deleted (protected) — no delete button. */}
+                      {!isDefault && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Delete ${s.label}`}
+                          disabled={isPending}
+                          onClick={() => run(() => deleteStatusAction(s.id), 'Status deleted')}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           {isAdmin && (
             <div>
@@ -354,8 +374,11 @@ export function WorkflowEditor({
         <StatusFormModal
           open={Boolean(editing)}
           onOpenChange={(o) => !o && setEditing(null)}
-          title={`Edit ${editing.label}`}
+          title={isDefaultStatus(editing) ? `Color · ${editing.label}` : `Edit ${editing.label}`}
           isPending={isPending}
+          // A default status is recolor-only (finding #49): the form hides the
+          // label/category/initial fields and the action sends just `color`.
+          colorOnly={isDefaultStatus(editing)}
           initial={{
             key: editing.key,
             label: editing.label,
@@ -366,13 +389,15 @@ export function WorkflowEditor({
           onSubmit={(values) =>
             run(
               () =>
-                updateStatusAction({
-                  statusId: editing.id,
-                  label: values.label,
-                  category: values.category,
-                  color: values.color || null,
-                  isInitial: values.isInitial,
-                }),
+                isDefaultStatus(editing)
+                  ? updateStatusAction({ statusId: editing.id, color: values.color || null })
+                  : updateStatusAction({
+                      statusId: editing.id,
+                      label: values.label,
+                      category: values.category,
+                      color: values.color || null,
+                      isInitial: values.isInitial,
+                    }),
               'Status updated',
               () => setEditing(null),
             )
@@ -383,12 +408,13 @@ export function WorkflowEditor({
       {restoreOpen && (
         <Modal open={restoreOpen} onOpenChange={setRestoreOpen} size="md">
           <h2 className="font-serif text-xl font-semibold text-foreground">
-            Restore default workflow?
+            Restore default transitions?
           </h2>
           <p className="text-muted-foreground mt-2 font-sans text-sm">
-            This re-adds the standard statuses and transitions that are missing from this
-            project&apos;s workflow. It does <strong>not</strong> remove or rename any statuses you
-            added or customized — nothing you&apos;ve set up is lost.
+            This re-adds the standard transitions (the allowed moves between statuses) that are
+            missing from this project&apos;s workflow. It does <strong>not</strong> remove any
+            transitions you added, and it doesn&apos;t touch your statuses — nothing you&apos;ve set
+            up is lost.
           </p>
           <Modal.Footer>
             <Button variant="ghost" onClick={() => setRestoreOpen(false)} disabled={isPending}>
@@ -399,13 +425,13 @@ export function WorkflowEditor({
               loading={isPending}
               onClick={() =>
                 run(
-                  () => restoreDefaultsAction(),
-                  'Defaults restored',
+                  () => restoreDefaultTransitionsAction(),
+                  'Default transitions restored',
                   () => setRestoreOpen(false),
                 )
               }
             >
-              Restore defaults
+              Restore default transitions
             </Button>
           </Modal.Footer>
         </Modal>
@@ -429,6 +455,7 @@ function StatusFormModal({
   isPending,
   initial,
   requireKey = false,
+  colorOnly = false,
   onSubmit,
 }: {
   open: boolean;
@@ -437,6 +464,10 @@ function StatusFormModal({
   isPending: boolean;
   initial?: Partial<StatusFormValues>;
   requireKey?: boolean;
+  // Recolor-only: a protected default status (finding #49). Hides every field
+  // but the color picker; the label/category/initial values pass through
+  // unchanged so the submitted shape is still a full StatusFormValues.
+  colorOnly?: boolean;
   onSubmit: (values: StatusFormValues) => void;
 }) {
   const [key, setKey] = useState(initial?.key ?? '');
@@ -445,7 +476,8 @@ function StatusFormModal({
   const [color, setColor] = useState(initial?.color ?? '');
   const [isInitial, setIsInitial] = useState(initial?.isInitial ?? false);
 
-  const canSubmit = label.trim().length > 0 && (!requireKey || key.trim().length > 0);
+  const canSubmit =
+    colorOnly || (label.trim().length > 0 && (!requireKey || key.trim().length > 0));
 
   return (
     <Modal open={open} onOpenChange={onOpenChange} size="md">
@@ -464,7 +496,13 @@ function StatusFormModal({
           });
         }}
       >
-        {requireKey && (
+        {colorOnly && (
+          <p className="text-muted-foreground font-sans text-sm">
+            <span className="text-foreground font-medium">{initial?.label}</span> is a default
+            status — only its color can be changed.
+          </p>
+        )}
+        {!colorOnly && requireKey && (
           <Input
             label="Key (machine id, lowercase)"
             value={key}
@@ -474,35 +512,39 @@ function StatusFormModal({
             autoFocus
           />
         )}
-        <Input
-          label="Label"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="In Review"
-          disabled={isPending}
-        />
-        <label className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-foreground font-medium">Category</span>
-          <select
-            className="border-border bg-background rounded-md border px-3 py-2 text-sm"
-            value={category}
-            onChange={(e) => setCategory(e.target.value as StatusCategoryDto)}
+        {!colorOnly && (
+          <Input
+            label="Label"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="In Review"
             disabled={isPending}
-          >
-            {CATEGORY_OPTIONS.map((c) => (
-              <option key={c.value} value={c.value}>
-                {CATEGORY_LABEL[c.value]}
-              </option>
-            ))}
-          </select>
-        </label>
+          />
+        )}
+        {!colorOnly && (
+          <label className="flex flex-col gap-1 font-sans text-sm">
+            <span className="text-foreground font-medium">Category</span>
+            <select
+              className="border-border bg-background rounded-md border px-3 py-2 text-sm"
+              value={category}
+              onChange={(e) => setCategory(e.target.value as StatusCategoryDto)}
+              disabled={isPending}
+            >
+              {CATEGORY_OPTIONS.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {CATEGORY_LABEL[c.value]}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <ColorSwatchPicker
           label="Color"
           value={color || null}
           onChange={(v) => setColor(v ?? '')}
           disabled={isPending}
         />
-        {!requireKey && (
+        {!colorOnly && !requireKey && (
           <label className="flex items-center gap-2 font-sans text-sm">
             <input
               type="checkbox"
