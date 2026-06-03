@@ -163,3 +163,8 @@ export async function setPolicyModeAction(mode: WorkflowPolicyModeDto): Promise<
   const ctx = await requireProjectContext();
   return run(() => workflowsService.setPolicyMode({ ...ctx, mode }));
 }
+
+export async function restoreDefaultsAction(): Promise<ActionResult> {
+  const ctx = await requireProjectContext();
+  return run(() => workflowsService.restoreDefaultWorkflow(ctx));
+}

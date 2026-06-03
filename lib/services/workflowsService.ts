@@ -101,6 +101,12 @@ export interface SetPolicyModeInput {
   mode: WorkflowPolicyModeDto;
 }
 
+export interface RestoreDefaultsInput {
+  userId: string;
+  workspaceId: string;
+  projectId: string;
+}
+
 // The READ surface for per-project status workflows (Story 2.2 · Subtask
 // 2.2.3). The only doorway to the workflow tables: repositories are single-op
 // leaves, this service owns DTO shaping + the explicit tenant gate. Later
@@ -515,5 +521,92 @@ export const workflowsService = {
       projectRepository.updateWorkflowPolicyMode(input.projectId, input.mode, tx),
     );
     return input.mode;
+  },
+
+  /**
+   * Restore the default workflow ADDITIVELY (Subtask 2.2.9): re-add any default
+   * statuses (matched by `key`) and default transitions that are MISSING —
+   * WITHOUT touching the admin's customizations. Idempotent (a second call is a
+   * no-op), never deletes or duplicates rows, never reverts a renamed default's
+   * label/color. Admin-gated. A destructive "reset to factory" is out of scope.
+   * Returns how many rows were added.
+   */
+  async restoreDefaultWorkflow(
+    input: RestoreDefaultsInput,
+  ): Promise<{ statusesAdded: number; transitionsAdded: number }> {
+    await assertProjectAdmin(input.userId, input.projectId, input.workspaceId);
+
+    return withWorkspaceContext(
+      { userId: input.userId, workspaceId: input.workspaceId },
+      async (tx) => {
+        const current = await workflowsRepository.findStatuses(
+          input.projectId,
+          input.workspaceId,
+          tx,
+        );
+        const byKey = new Map(current.map((s) => [s.key, s]));
+        const hadInitial = current.some((s) => s.isInitial);
+        // Append-anchor: re-added statuses go AFTER the project's current last
+        // one (custom statuses keep their place), each its own fractional key.
+        let lastPosition = current.length ? current[current.length - 1]!.position : null;
+
+        let statusesAdded = 0;
+        for (const def of DEFAULT_STATUSES) {
+          if (byKey.has(def.key)) continue; // present (or renamed) → leave it
+          lastPosition = keyForAppend(lastPosition);
+          const row = await workflowsRepository.createStatus(
+            {
+              workspaceId: input.workspaceId,
+              projectId: input.projectId,
+              key: def.key,
+              label: def.label,
+              category: def.category,
+              position: lastPosition,
+              isInitial: false, // never on insert — the initial rule runs below
+            },
+            tx,
+          );
+          byKey.set(row.key, row);
+          statusesAdded += 1;
+        }
+
+        // Initial-status rule: only if the project has NO initial status, make
+        // `todo` the initial (the partial-unique index is never at risk — an
+        // existing initial is left untouched).
+        if (!hadInitial) {
+          const todo = byKey.get('todo');
+          if (todo) await workflowsRepository.updateStatus(todo.id, { isInitial: true }, tx);
+        }
+
+        // Re-add missing default transitions whose BOTH endpoints now exist.
+        const existing = await workflowsRepository.findTransitions(
+          input.projectId,
+          input.workspaceId,
+          tx,
+        );
+        const seen = new Set(existing.map((t) => `${t.fromStatusId}|${t.toStatusId}`));
+        let transitionsAdded = 0;
+        for (const [fromKey, toKey] of DEFAULT_TRANSITIONS) {
+          const from = byKey.get(fromKey);
+          const to = byKey.get(toKey);
+          if (!from || !to) continue;
+          const pair = `${from.id}|${to.id}`;
+          if (seen.has(pair)) continue;
+          await workflowsRepository.createTransition(
+            {
+              workspaceId: input.workspaceId,
+              projectId: input.projectId,
+              fromStatusId: from.id,
+              toStatusId: to.id,
+            },
+            tx,
+          );
+          seen.add(pair);
+          transitionsAdded += 1;
+        }
+
+        return { statusesAdded, transitionsAdded };
+      },
+    );
   },
 };
