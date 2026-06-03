@@ -197,6 +197,23 @@ export const workItemRepository = {
   },
 
   /**
+   * Every work item in a project that references a given status key — INCLUDING
+   * archived ones (Subtask 2.3.1's delete-with-reassign). The scope mirrors
+   * `countByProjectAndStatusKey` exactly: an archived item's status string
+   * still points at the status, so the reassign must migrate it too or deleting
+   * the status would leave a dangling reference. Used inside the delete tx, so
+   * it takes `tx`.
+   */
+  async findByProjectAndStatusKey(
+    projectId: string,
+    statusKey: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem[]> {
+    const client = tx ?? db;
+    return client.workItem.findMany({ where: { projectId, status: statusKey } });
+  },
+
+  /**
    * Direct (non-archived) children of a work item, ordered by fractional
    * `position`. One level only — for the full subtree use `findSubtree`.
    */

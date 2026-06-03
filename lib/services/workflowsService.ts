@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { toWorkflowStatusDto, toWorkflowTransitionDto } from '@/lib/mappers/workflowMappers';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -17,6 +18,7 @@ import {
   CannotDeleteInitialStatusError,
   CannotDeleteLastTerminalStatusError,
   DefaultStatusProtectedError,
+  InvalidReassignTargetError,
   NotProjectAdminError,
   StatusInUseError,
   StatusKeyConflictError,
@@ -83,6 +85,13 @@ export interface DeleteStatusInput {
   userId: string;
   workspaceId: string;
   statusId: string;
+  /**
+   * Delete-with-reassign (Subtask 2.3.1): when the status is in use, migrate
+   * every referencing work item to this target status (same project) in the
+   * same transaction, then delete. Omit it to keep the strict behaviour —
+   * deleting an in-use status throws {@link StatusInUseError}.
+   */
+  reassignToStatusId?: string;
 }
 
 export interface AddTransitionInput {
@@ -432,9 +441,16 @@ export const workflowsService = {
   },
 
   /**
-   * Delete a status. Refuses (typed 422s) when it's the initial status, still
-   * referenced by a work item, or the project's last terminal (`category=done`)
-   * status. Same-tx cleanup removes every transition touching it.
+   * Delete a status. Default statuses are protected (2.2.10), so this only ever
+   * applies to CUSTOM statuses. The initial-status and last-terminal guards fire
+   * FIRST and can't be reassigned past (a target doesn't unlock them). When the
+   * status is in use:
+   *   - no `reassignToStatusId` → throws {@link StatusInUseError} (the UI's cue
+   *     to re-prompt with the delete-with-reassign modal);
+   *   - with a valid target → migrates every referencing work item (INCLUDING
+   *     archived ones) to the target's key, writing one status-change revision
+   *     per item, then deletes — all in ONE transaction (Subtask 2.3.1).
+   * Same-tx cleanup removes every transition touching the status.
    */
   async deleteStatus(input: DeleteStatusInput): Promise<void> {
     const pre = await workflowsRepository.findStatusById(input.statusId, input.workspaceId);
@@ -455,15 +471,10 @@ export const workflowsService = {
           tx,
         );
         if (!status) throw new WorkflowStatusNotFoundError(input.statusId);
+
+        // Protections fire FIRST and unconditionally — a reassign target can't
+        // buy a path past the initial or the last-terminal status.
         if (status.isInitial) throw new CannotDeleteInitialStatusError(status.key);
-
-        const inUse = await workItemRepository.countByProjectAndStatusKey(
-          status.projectId,
-          status.key,
-          tx,
-        );
-        if (inUse > 0) throw new StatusInUseError(status.key, inUse);
-
         if (status.category === 'done') {
           const all = await workflowsRepository.findStatuses(
             status.projectId,
@@ -472,6 +483,48 @@ export const workflowsService = {
           );
           const terminals = all.filter((s) => s.category === 'done').length;
           if (terminals <= 1) throw new CannotDeleteLastTerminalStatusError(status.key);
+        }
+
+        const inUse = await workItemRepository.countByProjectAndStatusKey(
+          status.projectId,
+          status.key,
+          tx,
+        );
+        if (inUse > 0) {
+          // Strict mode (no target): refuse, carrying the count for the UI.
+          if (!input.reassignToStatusId) throw new StatusInUseError(status.key, inUse);
+
+          // The target must be a DIFFERENT status in the SAME project. A
+          // cross-workspace id won't resolve under the workspace filter →
+          // InvalidReassignTarget (no existence leak).
+          const target = await workflowsRepository.findStatusById(
+            input.reassignToStatusId,
+            input.workspaceId,
+            tx,
+          );
+          if (!target || target.projectId !== status.projectId || target.id === status.id) {
+            throw new InvalidReassignTargetError();
+          }
+
+          // Migrate every referencing item (incl. archived) + one revision each,
+          // reusing 2.2.4's status-change revision shape.
+          const items = await workItemRepository.findByProjectAndStatusKey(
+            status.projectId,
+            status.key,
+            tx,
+          );
+          for (const item of items) {
+            await workItemRepository.update(item.id, { status: target.key }, tx);
+            await workItemRevisionsService.recordRevision(
+              {
+                workItemId: item.id,
+                changedById: input.userId,
+                changeKind: 'updated',
+                diff: { status: { from: status.key, to: target.key } },
+              },
+              tx,
+            );
+          }
         }
 
         await workflowsRepository.deleteTransitionsForStatus(status.id, tx);

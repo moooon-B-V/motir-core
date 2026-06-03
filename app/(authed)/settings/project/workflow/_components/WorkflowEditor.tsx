@@ -74,6 +74,11 @@ export function WorkflowEditor({
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<WorkflowStatusDto | null>(null);
   const [restoreOpen, setRestoreOpen] = useState(false);
+  // Delete-with-reassign target prompt (Subtask 2.3.1): set when a delete is
+  // refused because the status is in use, carrying the affected-item count.
+  const [reassign, setReassign] = useState<{ status: WorkflowStatusDto; count: number } | null>(
+    null,
+  );
 
   // Statuses arrive position-ordered from getWorkflow.
   const transitionByPair = new Map(
@@ -87,6 +92,22 @@ export function WorkflowEditor({
         toast({ variant: 'success', title: successTitle });
         onSuccess?.(); // e.g. close the modal — ONLY on success, so a failure keeps the form
         router.refresh();
+      } else {
+        toast({ variant: 'error', title: res.error ?? 'Something went wrong' });
+      }
+    });
+  }
+
+  // First-pass delete (no target). If the status is in use the server returns
+  // the affected count instead of an error toast — open the reassign modal.
+  function handleDelete(s: WorkflowStatusDto) {
+    startTransition(async () => {
+      const res = await deleteStatusAction(s.id);
+      if (res.ok) {
+        toast({ variant: 'success', title: 'Status deleted' });
+        router.refresh();
+      } else if (res.statusInUse) {
+        setReassign({ status: s, count: res.statusInUse.count });
       } else {
         toast({ variant: 'error', title: res.error ?? 'Something went wrong' });
       }
@@ -249,7 +270,7 @@ export function WorkflowEditor({
                           size="sm"
                           aria-label={`Delete ${s.label}`}
                           disabled={isPending}
-                          onClick={() => run(() => deleteStatusAction(s.id), 'Status deleted')}
+                          onClick={() => handleDelete(s)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -439,7 +460,86 @@ export function WorkflowEditor({
           </Modal.Footer>
         </Modal>
       )}
+
+      {reassign && (
+        <ReassignModal
+          status={reassign.status}
+          count={reassign.count}
+          targets={statuses.filter((s) => s.id !== reassign.status.id)}
+          isPending={isPending}
+          onCancel={() => setReassign(null)}
+          onConfirm={(targetId) =>
+            run(
+              () => deleteStatusAction(reassign.status.id, targetId),
+              'Status deleted',
+              () => setReassign(null),
+            )
+          }
+        />
+      )}
     </div>
+  );
+}
+
+// Delete-with-reassign prompt (Subtask 2.3.1). Shown only when a delete was
+// refused because the status is still in use: the admin picks a target status
+// and every referencing work item is migrated to it before the status is
+// removed (server-side, in one transaction).
+function ReassignModal({
+  status,
+  count,
+  targets,
+  isPending,
+  onCancel,
+  onConfirm,
+}: {
+  status: WorkflowStatusDto;
+  count: number;
+  targets: WorkflowStatusDto[];
+  isPending: boolean;
+  onCancel: () => void;
+  onConfirm: (targetId: string) => void;
+}) {
+  const [targetId, setTargetId] = useState('');
+  const noun = count === 1 ? 'work item' : 'work items';
+  return (
+    <Modal open onOpenChange={(o) => !o && onCancel()} size="md">
+      <h2 className="font-serif text-xl font-semibold text-foreground">Delete “{status.label}”</h2>
+      <p className="text-muted-foreground mt-2 font-sans text-sm">
+        {count} {noun} still use this status. Choose a status to move {count === 1 ? 'it' : 'them'}{' '}
+        to — then “{status.label}” is removed.
+      </p>
+      <label className="mt-4 flex flex-col gap-1">
+        <span className="font-sans text-sm font-medium text-foreground">Move items to</span>
+        <select
+          className="border-border bg-card text-foreground rounded-md border px-3 py-2 font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          value={targetId}
+          onChange={(e) => setTargetId(e.target.value)}
+        >
+          <option value="" disabled>
+            Select a status…
+          </option>
+          {targets.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <Modal.Footer>
+        <Button variant="ghost" onClick={onCancel} disabled={isPending}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          loading={isPending}
+          disabled={!targetId}
+          onClick={() => onConfirm(targetId)}
+        >
+          Reassign &amp; delete
+        </Button>
+      </Modal.Footer>
+    </Modal>
   );
 }
 

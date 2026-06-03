@@ -9,6 +9,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   CannotDeleteInitialStatusError,
   CannotDeleteLastTerminalStatusError,
+  InvalidReassignTargetError,
   NotProjectAdminError,
   StatusInUseError,
   StatusKeyConflictError,
@@ -51,6 +52,7 @@ function toMessage(err: unknown): string {
   if (err instanceof WorkflowStatusNotFoundError) return 'That status no longer exists.';
   if (err instanceof WorkflowTransitionNotFoundError) return 'That transition no longer exists.';
   if (err instanceof StatusInUseError) return err.message;
+  if (err instanceof InvalidReassignTargetError) return err.message;
   if (err instanceof CannotDeleteInitialStatusError) return err.message;
   if (err instanceof CannotDeleteLastTerminalStatusError) return err.message;
   throw err;
@@ -123,15 +125,38 @@ export async function reorderStatusAction(input: {
   );
 }
 
-export async function deleteStatusAction(statusId: string): Promise<ActionResult> {
+/** Delete result. On an in-use status with no target, `statusInUse` carries the
+ * count so the client can open the delete-with-reassign modal (Subtask 2.3.1). */
+export interface DeleteStatusResult extends ActionResult {
+  statusInUse?: { count: number };
+}
+
+/**
+ * Delete a status. Pass `reassignToStatusId` to migrate referencing work items
+ * to another status first (delete-with-reassign). Without it, an in-use status
+ * returns `{ ok: false, statusInUse: { count } }` instead of a toast-only error,
+ * so the editor can re-prompt with the reassign picker.
+ */
+export async function deleteStatusAction(
+  statusId: string,
+  reassignToStatusId?: string,
+): Promise<DeleteStatusResult> {
   const ctx = await requireProjectContext();
-  return run(() =>
-    workflowsService.deleteStatus({
+  try {
+    await workflowsService.deleteStatus({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
       statusId,
-    }),
-  );
+      reassignToStatusId,
+    });
+  } catch (err) {
+    if (err instanceof StatusInUseError) {
+      return { ok: false, statusInUse: { count: err.count }, error: err.message };
+    }
+    return { ok: false, error: toMessage(err) };
+  }
+  revalidatePath(WORKFLOW_PATH);
+  return { ok: true };
 }
 
 export async function addTransitionAction(input: {
