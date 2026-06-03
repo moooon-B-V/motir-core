@@ -127,12 +127,15 @@ test.describe('@a11y shell accessibility', () => {
     }
   });
 
-  // Create-issue modal (Subtask 2.3.3), swept in its default-open state — the
-  // first Modal the a11y sweep opens. STRICT, zero exclusions: Radix wires the
-  // focus trap + the dialog's accessible name (the `title` prop → Dialog.Title),
-  // every field has a <label>, and the stub <select>/<textarea> carry explicit
-  // aria-labels. Opened via the top-nav "+" entry point.
-  test('the create-issue modal has zero axe violations (WCAG 2.1 AA)', async ({ page }) => {
+  // Create-issue modal (Subtask 2.3.3) + the Type/Parent pickers (2.3.4), swept
+  // in their open state. STRICT, zero exclusions: Radix wires the dialog focus
+  // trap + accessible name; each field has a label; the Combobox uses the
+  // WAI-ARIA listbox-combobox shape (role="combobox" trigger → role="listbox" of
+  // role="option" rows, aria-activedescendant). Swept twice — modal alone, then
+  // with the Type listbox expanded — so the open listbox is audited too.
+  test('the create-issue modal + type/parent pickers have zero axe violations (WCAG 2.1 AA)', async ({
+    page,
+  }) => {
     await signUp(page, 'e2e-create-issue-a11y@example.com');
     await createFirstProject(page, 'Mobile App');
     await page.goto('/issues');
@@ -140,10 +143,20 @@ test.describe('@a11y shell accessibility', () => {
     await page.getByRole('button', { name: 'Create issue' }).click();
     await expect(page.getByRole('heading', { name: 'Create issue' })).toBeVisible();
 
-    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    const modalResults = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     expect(
-      results.violations,
-      formatViolations('/issues (create-issue modal)', results.violations as AxeViolation[]),
+      modalResults.violations,
+      formatViolations('/issues (create-issue modal)', modalResults.violations as AxeViolation[]),
+    ).toEqual([]);
+
+    // Open the Type picker so the expanded listbox is in the swept DOM.
+    await page.getByRole('combobox', { name: 'Type' }).click();
+    await expect(page.getByRole('listbox', { name: 'Type' })).toBeVisible();
+
+    const listboxResults = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    expect(
+      listboxResults.violations,
+      formatViolations('/issues (type picker open)', listboxResults.violations as AxeViolation[]),
     ).toEqual([]);
   });
 

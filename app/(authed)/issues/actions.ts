@@ -5,9 +5,10 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { isIssueType } from '@/lib/issues/parentRules';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { IllegalParentTypeError, WorkItemError } from '@/lib/workItems/errors';
-import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
+import type { WorkItemKindDto, WorkItemPriorityDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
 
 // Server Actions for the create-issue surface (Subtask 2.3.3). Transport only:
 // resolve the session + the ACTIVE project (the shipped shell has no
@@ -80,4 +81,33 @@ export async function createIssueAction(input: CreateIssueInput): Promise<Create
     if (err instanceof WorkItemError) return { ok: false, error: err.message };
     throw err;
   }
+}
+
+export type ListCandidateParentsResult =
+  | { ok: true; candidates: WorkItemSummaryDto[] }
+  | { ok: false; error: string };
+
+/**
+ * Candidate parents for the parent picker (Subtask 2.3.4): the active project's
+ * non-archived work items whose kind may legally hold a `childType`, pre-
+ * filtered by the inverted kind-parent matrix so the UI can't construct an
+ * illegal pair. Resolves the active project server-side (same active-project
+ * model as createIssueAction); `childType` is validated against the issue-type
+ * set before it reaches the service.
+ */
+export async function listCandidateParentsAction(
+  childType: string,
+): Promise<ListCandidateParentsResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, error: 'Pick or create a project before choosing a parent.' };
+  if (!isIssueType(childType)) return { ok: false, error: 'Unknown issue type.' };
+
+  const candidates = await workItemsService.listCandidateParents(
+    ctx.projectId,
+    childType,
+    ctx.workspaceId,
+  );
+  return { ok: true, candidates };
 }

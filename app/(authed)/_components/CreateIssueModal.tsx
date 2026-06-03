@@ -6,33 +6,24 @@ import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
+import { TypePicker } from '@/components/issues/TypePicker';
+import { ParentPicker } from '@/components/issues/ParentPicker';
 import { createIssueAction } from '../issues/actions';
 import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 
-// The create-issue modal (Subtask 2.3.3). Collects the lean field set and
-// dispatches the `createIssueAction` Server Action; the service owns key
-// allocation + the create revision. Open state lives in CreateIssueProvider
-// (so the top-nav "+" button, the global "C" shortcut, and the ⌘K command all
-// drive the same dialog) — this component reads it via props.
+// The create-issue modal (Subtask 2.3.3, pickers wired in 2.3.4). Collects the
+// field set and dispatches the `createIssueAction` Server Action; the service
+// owns key allocation + the create revision. Open state lives in
+// CreateIssueProvider (so the top-nav "+" button, the global "C" shortcut, and
+// the ⌘K command all drive the same dialog) — this component reads it via props.
 //
-// STUBS (per the 2.3.3 card — swapped when their owning subtasks land):
-//   - Type: a plain <select>. The filtered type+parent combobox is 2.3.4.
-//   - Description: a plain <textarea>. The MarkdownEditor primitive is 2.3.5.
-// DEFERRED (no shipped surface yet, both optional on the service):
-//   - Parent: needs 2.3.4's canParent-filtered picker.
-//   - Assignee: needs a workspace-member combobox.
-// Until those land an issue is created top-level + unassigned. Reporter is
-// never a field — the Server Action sets it to the session user.
+// Type + Parent are the 2.3.4 pickers (filtered so an illegal parent can't be
+// constructed; an illegal pair from a forged payload still 422s and surfaces
+// inline on the Parent field). STILL a stub: Description is a plain <textarea>
+// (2.3.6 swaps in the 2.3.5 MarkdownEditor). DEFERRED: Assignee (needs a
+// workspace-member combobox). Reporter is never a field — set server-side.
 
 const MAX_TITLE_LENGTH = 200;
-
-const KIND_OPTIONS: ReadonlyArray<{ value: WorkItemKindDto; label: string }> = [
-  { value: 'task', label: 'Task' },
-  { value: 'story', label: 'Story' },
-  { value: 'bug', label: 'Bug' },
-  { value: 'epic', label: 'Epic' },
-  { value: 'subtask', label: 'Subtask' },
-];
 
 const PRIORITY_OPTIONS: ReadonlyArray<{ value: WorkItemPriorityDto; label: string }> = [
   { value: 'highest', label: 'Highest' },
@@ -53,20 +44,24 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
   const [isPending, startTransition] = useTransition();
 
   const [kind, setKind] = useState<WorkItemKindDto>('task');
+  const [parentId, setParentId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<WorkItemPriorityDto>('medium');
   const [titleError, setTitleError] = useState<string | null>(null);
+  const [parentError, setParentError] = useState<string | null>(null);
 
   const trimmedTitle = title.trim();
   const canSubmit = trimmedTitle.length > 0 && trimmedTitle.length <= MAX_TITLE_LENGTH;
 
   function reset() {
     setKind('task');
+    setParentId(null);
     setTitle('');
     setDescription('');
     setPriority('medium');
     setTitleError(null);
+    setParentError(null);
   }
 
   function close() {
@@ -91,6 +86,7 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
         title: trimmedTitle,
         descriptionMd: description.trim() ? description : null,
         priority,
+        parentId,
       });
       if (result.ok) {
         toast({
@@ -101,9 +97,9 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
         close();
         router.refresh();
       } else if (result.field === 'parent') {
-        // Parent isn't a field yet (deferred); a parent error can't originate
-        // here today, but keep the inline path wired for when 2.3.4 adds it.
-        toast({ variant: 'error', title: result.error });
+        // The picker pre-filters to legal parents, so this only fires on a
+        // forged/edge payload (e.g. subtask + no parent) — surface it inline.
+        setParentError(result.error);
       } else {
         toast({ variant: 'error', title: result.error });
       }
@@ -118,23 +114,31 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
       title="Create issue"
     >
       <form className="mt-4 flex flex-col gap-3" onSubmit={handleSubmit}>
-        {/* STUB (2.3.4 swaps this for the filtered type combobox). */}
-        <label className="flex flex-col gap-1 font-sans text-sm">
+        <div className="flex flex-col gap-1 font-sans text-sm">
           <span className="text-foreground font-medium">Type</span>
-          <select
-            className="border-border bg-background rounded-md border px-3 py-2 text-sm"
+          <TypePicker
             value={kind}
-            onChange={(e) => setKind(e.target.value as WorkItemKindDto)}
+            onChange={(v) => {
+              setKind(v);
+              setParentError(null); // a type change re-scopes the parent picker
+            }}
             disabled={isPending}
-            aria-label="Type"
-          >
-            {KIND_OPTIONS.map((k) => (
-              <option key={k.value} value={k.value}>
-                {k.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          />
+        </div>
+
+        <div className="flex flex-col gap-1 font-sans text-sm">
+          <span className="text-foreground font-medium">Parent</span>
+          <ParentPicker
+            childType={kind}
+            value={parentId}
+            onChange={(id) => {
+              setParentId(id);
+              setParentError(null);
+            }}
+            error={parentError}
+            disabled={isPending}
+          />
+        </div>
 
         <Input
           label="Title"
@@ -151,7 +155,7 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
           required
         />
 
-        {/* STUB (2.3.5 swaps this for the MarkdownEditor in "min" mode). */}
+        {/* STUB — 2.3.6 swaps this for the 2.3.5 MarkdownEditor in "min" mode. */}
         <label className="flex flex-col gap-1 font-sans text-sm">
           <span className="text-foreground font-medium">Description</span>
           <textarea

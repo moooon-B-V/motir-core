@@ -91,6 +91,23 @@ export function canParent(parentType: IssueType, childType: IssueType): boolean 
 }
 
 /**
+ * The INVERSE of the matrix: the parent kinds that may legally hold a given
+ * `childType`. DERIVED from `ALLOWED_CHILD_TYPES` (the one authoritative map) —
+ * NOT a re-encoding — so the parent picker's candidate filter can never drift
+ * from the gate `assertValidParent` enforces. Used by
+ * `workItemsService.listCandidateParents` (Subtask 2.3.4) to pre-filter the
+ * parent picker so an illegal (parent, child) pair is never constructible in
+ * the UI; the service + DB trigger remain the defense-in-depth backstops.
+ *
+ *   epic → []   (root only)        bug     → [epic, story, task]
+ *   story → [epic]                 subtask → [story, task, bug]
+ *   task → [epic, story]
+ */
+export function allowedParentKinds(childType: IssueType): IssueType[] {
+  return ISSUE_TYPES.filter((parentType) => ALLOWED_CHILD_TYPES[parentType].includes(childType));
+}
+
+/**
  * The service-layer gate: assert that an issue of `childType` may be placed
  * under `parentType` (or at top-level when `parentType` is null), throwing a
  * typed {@link IllegalParentTypeError} (→ HTTP 422) on a violation so callers

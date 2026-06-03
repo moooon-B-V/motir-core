@@ -1,6 +1,6 @@
 import { Prisma, type WorkItem } from '@prisma/client';
 import { db } from '@/lib/db';
-import { assertValidParent } from '@/lib/issues/parentRules';
+import { assertValidParent, allowedParentKinds, type IssueType } from '@/lib/issues/parentRules';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
@@ -744,6 +744,28 @@ export const workItemsService = {
     const row = await workItemRepository.findById(id);
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
     return toWorkItemDto(row);
+  },
+
+  /**
+   * Candidate PARENTS for a new/edited issue of `childType` in a project: every
+   * non-archived work item whose kind may legally hold a `childType`, by the
+   * inverted kind-parent matrix (`allowedParentKinds` — the single source of
+   * truth from 2.1.2, derived not re-encoded). The parent picker (Subtask
+   * 2.3.4) renders exactly this set, so an illegal (parent, child) pair is never
+   * CONSTRUCTIBLE in the UI; `createWorkItem`/`updateWorkItem` + the DB trigger
+   * stay the backstops for a forged payload. Returns [] for a childType with no
+   * legal parent (`epic`) or an empty project. Explicit `workspaceId` gate per
+   * finding #26 (the primary tenant filter — RLS is inert under the dev/CI
+   * superuser).
+   */
+  async listCandidateParents(
+    projectId: string,
+    childType: IssueType,
+    workspaceId: string,
+  ): Promise<WorkItemSummaryDto[]> {
+    const kinds = allowedParentKinds(childType);
+    const rows = await workItemRepository.findByProjectAndKinds(projectId, kinds, workspaceId);
+    return rows.map(toWorkItemSummaryDto);
   },
 
   /**
