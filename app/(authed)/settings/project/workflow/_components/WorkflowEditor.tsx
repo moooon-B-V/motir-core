@@ -412,7 +412,7 @@ export function WorkflowEditor({
           </h2>
           <p className="text-muted-foreground mt-2 font-sans text-sm">
             This re-adds the standard transitions (the allowed moves between statuses) that are
-            missing from this project&apos;s workflow. It does <strong>not</strong> remove any
+            missing from this project&apos;s workflow. It does <strong>not</strong>&nbsp;remove any
             transitions you added, and it doesn&apos;t touch your statuses — nothing you&apos;ve set
             up is lost.
           </p>
