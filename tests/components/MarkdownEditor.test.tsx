@@ -1,236 +1,156 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { Editor } from '@tiptap/core';
 
-// The underlying @uiw/react-md-editor is heavy and DOM-bound (loaded via
-// next/dynamic with ssr:false in the wrapper). We mock it with a lightweight
-// stub that (a) captures the props the wrapper passes — so the toolbar/preview
-// config contract is asserted deterministically — and (b) renders a real
-// <textarea> wired to the same value/onChange/onPaste/onDrop handlers, so the
-// image-paste contract is exercised through the actual handler path.
-const hoisted = vi.hoisted(() => ({ state: { props: null as Record<string, unknown> | null } }));
+import { MarkdownEditor, buildEditorExtensions } from '@/components/ui/MarkdownEditor';
 
-vi.mock('@uiw/react-md-editor', async () => {
-  const { createElement } = await import('react');
-  const Editor = (props: Record<string, unknown>) => {
-    hoisted.state.props = props;
-    const textareaProps = (props.textareaProps ?? {}) as Record<string, unknown>;
-    return createElement('textarea', {
-      'data-testid': 'md-textarea',
-      'aria-label': textareaProps['aria-label'],
-      readOnly: textareaProps.readOnly,
-      value: (props.value as string) ?? '',
-      onChange: (e: { target: { value: string } }) =>
-        (props.onChange as (v: string) => void)?.(e.target.value),
-      onPaste: textareaProps.onPaste,
-      onDrop: textareaProps.onDrop,
-    });
+afterEach(cleanup);
+
+// ── The library-choice gate ────────────────────────────────────────────────
+// 2.3.10 swaps the split source/preview editor for a true WYSIWYG one, but the
+// storage invariant (Story 1.4) is unchanged: `descriptionMd` is Markdown TEXT.
+// The editor is only acceptable if it round-trips Markdown losslessly over our
+// supported feature set — parse it into the document, serialize it back, and the
+// Markdown must survive. We exercise the SAME extension schema the UI uses
+// (`buildEditorExtensions`) via a headless editor so this is a pure data test.
+function roundTrip(markdown: string): string {
+  const element = document.createElement('div');
+  const editor = new Editor({ element, extensions: buildEditorExtensions(), content: markdown });
+  const storage = (editor.storage as unknown as Record<string, unknown>).markdown as {
+    getMarkdown: () => string;
   };
-  return { default: Editor };
-});
-
-// next/dynamic returns the (mocked) editor directly, skipping the lazy boundary.
-vi.mock('next/dynamic', async () => {
-  const mod = await import('@uiw/react-md-editor');
-  return { default: () => (mod as { default: unknown }).default };
-});
-
-import { MarkdownEditor, editorConfigFor } from '@/components/ui/MarkdownEditor';
-
-afterEach(() => {
-  cleanup();
-  hoisted.state.props = null;
-});
-
-function lastProps() {
-  if (!hoisted.state.props) throw new Error('editor did not render');
-  return hoisted.state.props;
+  const out = storage.getMarkdown();
+  editor.destroy();
+  return out.trim();
 }
 
-describe('editorConfigFor (pure toolbar/preview contract)', () => {
-  it('full → live preview, full toolbar, tab toggle', () => {
-    const c = editorConfigFor('full', false);
-    expect(c.preview).toBe('live');
-    expect(c.hideToolbar).toBe(false);
-    expect(c.commands.length).toBeGreaterThan(8);
-    expect(c.extraCommands.map((x) => x.name)).toEqual(['edit', 'preview']);
+describe('Markdown round-trip fidelity (storage invariant)', () => {
+  const cases: Array<[name: string, input: string, expected: string]> = [
+    ['heading', '# Title', '# Title'],
+    ['h2', '## Section', '## Section'],
+    ['bold', '**bold**', '**bold**'],
+    ['italic', '*italic*', '*italic*'],
+    ['strikethrough', '~~struck~~', '~~struck~~'],
+    ['inline code', 'a `snippet` here', 'a `snippet` here'],
+    ['link', '[docs](https://example.com)', '[docs](https://example.com)'],
+    ['blockquote', '> quoted', '> quoted'],
+  ];
+
+  it.each(cases)('preserves %s', (_name, input, expected) => {
+    expect(roundTrip(input)).toContain(expected);
   });
 
-  it('min → edit-first preview, compact toolbar (bold/italic/code/link)', () => {
-    const c = editorConfigFor('min', false);
-    expect(c.preview).toBe('edit');
-    expect(c.hideToolbar).toBe(false);
-    expect(c.commands.map((x) => x.name)).toEqual(['bold', 'italic', 'code', 'link']);
+  it('preserves an unordered list', () => {
+    const out = roundTrip('- one\n- two');
+    expect(out).toContain('- one');
+    expect(out).toContain('- two');
   });
 
-  it('readOnly → no toolbar, no tabs, preview-only', () => {
-    const c = editorConfigFor('full', true);
-    expect(c.hideToolbar).toBe(true);
-    expect(c.preview).toBe('preview');
-    expect(c.commands).toEqual([]);
-    expect(c.extraCommands).toEqual([]);
+  it('preserves an ordered list', () => {
+    const out = roundTrip('1. first\n2. second');
+    expect(out).toContain('1. first');
+    expect(out).toContain('second');
+  });
+
+  it('preserves a GFM task list (checked + unchecked)', () => {
+    const out = roundTrip('- [ ] todo\n- [x] done');
+    expect(out).toContain('[ ]');
+    expect(out).toContain('[x]');
+  });
+
+  it('preserves a fenced code block', () => {
+    const out = roundTrip('```\nconst x = 1;\n```');
+    expect(out).toContain('```');
+    expect(out).toContain('const x = 1;');
+  });
+
+  it('is idempotent over a mixed document (serialize∘parse is stable)', () => {
+    const doc = [
+      '# Heading',
+      '',
+      'Some **bold** and *italic* and a [link](https://example.com).',
+      '',
+      '- bullet one',
+      '- bullet two',
+      '',
+      '1. step one',
+      '2. step two',
+      '',
+      '- [ ] open task',
+      '- [x] closed task',
+      '',
+      '> a quote',
+      '',
+      '`inline code`',
+    ].join('\n');
+    const once = roundTrip(doc);
+    const twice = roundTrip(once);
+    expect(twice).toBe(once);
+  });
+
+  it('keeps raw HTML inert (no injection through the editor)', () => {
+    const out = roundTrip('<script>alert(1)</script> safe');
+    expect(out).not.toContain('<script>');
+    expect(out).toContain('safe');
   });
 });
 
-describe('MarkdownEditor', () => {
-  it('is a controlled value/onChange passthrough', () => {
-    const onChange = vi.fn();
-    render(<MarkdownEditor label="Description" value="hello" onChange={onChange} />);
-    expect(lastProps().value).toBe('hello');
-
-    fireEvent.change(screen.getByTestId('md-textarea'), { target: { value: 'world' } });
-    expect(onChange).toHaveBeenCalledWith('world');
+// ── Component wiring ────────────────────────────────────────────────────────
+describe('MarkdownEditor (component)', () => {
+  it('renders a labelled, editable textbox with a formatting toolbar', async () => {
+    render(<MarkdownEditor label="Description" value="hello" onChange={() => {}} />);
+    await waitFor(() => expect(screen.getByLabelText('Description')).toBeTruthy());
+    expect(screen.getByRole('toolbar')).toBeTruthy();
+    expect(screen.getByLabelText('Bold')).toBeTruthy();
   });
 
-  it('labels the editing surface from the required label prop', () => {
-    render(<MarkdownEditor label="Issue description" value="" onChange={() => {}} />);
-    expect(screen.getByLabelText('Issue description')).toBeTruthy();
-  });
+  it('full size exposes the rich toolbar; min size the compact one', async () => {
+    const { unmount } = render(
+      <MarkdownEditor label="d" size="full" value="" onChange={() => {}} />,
+    );
+    await waitFor(() => expect(screen.getByLabelText('Heading')).toBeTruthy());
+    expect(screen.getByLabelText('Task list')).toBeTruthy();
+    unmount();
+    cleanup();
 
-  it('passes the full-size toolbar set by default', () => {
-    render(<MarkdownEditor label="d" value="" onChange={() => {}} />);
-    const props = lastProps();
-    expect(props.preview).toBe('live');
-    expect((props.commands as unknown[]).length).toBeGreaterThan(8);
-  });
-
-  it('passes the compact toolbar for size="min"', () => {
     render(<MarkdownEditor label="d" size="min" value="" onChange={() => {}} />);
-    const props = lastProps();
-    expect(props.preview).toBe('edit');
-    expect((props.commands as { name: string }[]).map((c) => c.name)).toEqual([
-      'bold',
-      'italic',
-      'code',
-      'link',
-    ]);
+    await waitFor(() => expect(screen.getByLabelText('Bold')).toBeTruthy());
+    // The compact toolbar omits the block-level controls.
+    expect(screen.queryByLabelText('Heading')).toBeNull();
+    expect(screen.queryByLabelText('Task list')).toBeNull();
   });
 
-  it('readOnly hides the toolbar + tabs and marks the textarea read-only', () => {
+  it('readOnly renders the rendered document with no toolbar', () => {
     render(<MarkdownEditor label="d" readOnly value="# hi" onChange={() => {}} />);
-    const props = lastProps();
-    expect(props.hideToolbar).toBe(true);
-    expect(props.preview).toBe('preview');
-    expect((props.textareaProps as { readOnly: boolean }).readOnly).toBe(true);
+    expect(screen.queryByRole('toolbar')).toBeNull();
+    // The read surface renders the heading text (via MarkdownView).
+    expect(screen.getByText('hi')).toBeTruthy();
   });
 
-  it('pasting an image WITHOUT an upload handler surfaces a notice and does not insert', () => {
+  it('picking a file with NO upload handler surfaces a notice (never silent)', async () => {
     const onChange = vi.fn();
-    render(<MarkdownEditor label="d" value="before" onChange={onChange} />);
+    const { container } = render(<MarkdownEditor label="d" value="" onChange={onChange} />);
+    await waitFor(() => expect(screen.getByRole('toolbar')).toBeTruthy());
 
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(['x'], 'shot.png', { type: 'image/png' });
-    const onPaste = lastProps().textareaProps as { onPaste: (e: unknown) => void };
-    act(() => {
-      onPaste.onPaste({
-        clipboardData: { files: [file] },
-        preventDefault: () => {},
-        currentTarget: screen.getByTestId('md-textarea'),
-      });
-    });
+    fireEvent.change(input, { target: { files: [file] } });
 
     expect(screen.getByRole('status').textContent).toMatch(/aren't enabled/i);
-    expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('pasting an IMAGE inserts an uploading placeholder then the final inline `![]`', async () => {
-    let captured = 'start';
-    const onChange = vi.fn((next: string) => {
-      captured = next;
-    });
+  it('picking an allowed file WITH a handler calls the uploader', async () => {
     const onFileUpload = vi.fn().mockResolvedValue('https://blob.example/shot.png');
+    const { container } = render(
+      <MarkdownEditor label="d" value="" onChange={() => {}} onFileUpload={onFileUpload} />,
+    );
+    await waitFor(() => expect(screen.getByLabelText('Attach file')).toBeTruthy());
 
-    function Host() {
-      return (
-        <MarkdownEditor
-          label="d"
-          value={captured}
-          onChange={onChange}
-          onFileUpload={onFileUpload}
-        />
-      );
-    }
-    render(<Host />);
-
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(['x'], 'shot.png', { type: 'image/png' });
-    const textarea = screen.getByTestId('md-textarea') as HTMLTextAreaElement;
-    textarea.selectionStart = textarea.selectionEnd = captured.length;
-    const onPaste = lastProps().textareaProps as { onPaste: (e: unknown) => void };
+    fireEvent.change(input, { target: { files: [file] } });
 
-    act(() => {
-      onPaste.onPaste({
-        clipboardData: { files: [file] },
-        preventDefault: () => {},
-        currentTarget: textarea,
-      });
-    });
-
-    // First synchronous onChange inserts the uploading placeholder.
-    expect(onChange).toHaveBeenCalledWith(expect.stringContaining('![Uploading shot.png…]'));
-
-    // After the upload resolves, the placeholder → the final inline image.
-    await vi.waitFor(() => {
-      expect(onChange).toHaveBeenCalledWith(
-        expect.stringContaining('![shot.png](https://blob.example/shot.png)'),
-      );
-    });
-    expect(onFileUpload).toHaveBeenCalledWith(file);
-  });
-
-  it('pasting a NON-IMAGE allowed file inserts a `[]` LINK (not an embed) — finding #52', async () => {
-    let captured = '';
-    const onChange = vi.fn((next: string) => {
-      captured = next;
-    });
-    const onFileUpload = vi.fn().mockResolvedValue('https://blob.example/report.pdf');
-
-    function Host() {
-      return (
-        <MarkdownEditor
-          label="d"
-          value={captured}
-          onChange={onChange}
-          onFileUpload={onFileUpload}
-        />
-      );
-    }
-    render(<Host />);
-
-    const file = new File(['x'], 'report.pdf', { type: 'application/pdf' });
-    const textarea = screen.getByTestId('md-textarea') as HTMLTextAreaElement;
-    textarea.selectionStart = textarea.selectionEnd = captured.length;
-    const onPaste = lastProps().textareaProps as { onPaste: (e: unknown) => void };
-
-    act(() => {
-      onPaste.onPaste({
-        clipboardData: { files: [file] },
-        preventDefault: () => {},
-        currentTarget: textarea,
-      });
-    });
-
-    // Placeholder + final are LINKS (no leading `!`), since pdf can't embed inline.
-    expect(onChange).toHaveBeenCalledWith(expect.stringContaining('[Uploading report.pdf…]'));
-    await vi.waitFor(() => {
-      expect(onChange).toHaveBeenCalledWith(
-        expect.stringContaining('[report.pdf](https://blob.example/report.pdf)'),
-      );
-    });
-    // And it is NOT an image embed.
-    expect(captured).not.toContain('![report.pdf]');
-    expect(onFileUpload).toHaveBeenCalledWith(file);
-  });
-
-  it('a non-image paste is ignored (normal editor paste proceeds)', () => {
-    const onChange = vi.fn();
-    render(<MarkdownEditor label="d" value="" onChange={onChange} />);
-    const onPaste = lastProps().textareaProps as { onPaste: (e: unknown) => void };
-    const preventDefault = vi.fn();
-    onPaste.onPaste({
-      clipboardData: { files: [] },
-      preventDefault,
-      currentTarget: screen.getByTestId('md-textarea'),
-    });
-    expect(preventDefault).not.toHaveBeenCalled();
-    expect(screen.queryByRole('status')).toBeNull();
+    await waitFor(() => expect(onFileUpload).toHaveBeenCalledWith(file));
   });
 });

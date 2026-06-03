@@ -141,7 +141,7 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
   }
 
   return (
-    <form className="mx-auto flex max-w-[44rem] flex-col gap-4" onSubmit={handleSubmit}>
+    <form className="mx-auto flex max-w-[64rem] flex-col gap-4" onSubmit={handleSubmit}>
       <div className="flex items-center gap-2">
         <TypeIcon
           className="h-4 w-4"
