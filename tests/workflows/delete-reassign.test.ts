@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -103,6 +104,14 @@ describe('deleteStatus — delete-with-reassign (2.3.1)', () => {
     // Status gone.
     const wf = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
     expect(wf.statuses.map((s) => s.key)).not.toContain('triage');
+
+    // Repo read via the no-tx (db singleton) path: nothing references the old
+    // key anymore, and all three items now live under the target key.
+    expect(await workItemRepository.findByProjectAndStatusKey(fx.projectId, 'triage')).toHaveLength(
+      0,
+    );
+    const migrated = await workItemRepository.findByProjectAndStatusKey(fx.projectId, 'todo');
+    expect(migrated.map((w) => w.id).sort()).toEqual([...ids].sort());
   });
 
   it('also migrates ARCHIVED referencing items (their status still points at the deleted key)', async () => {
