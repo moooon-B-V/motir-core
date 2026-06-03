@@ -46,6 +46,14 @@ export const DEFAULT_STATUSES: ReadonlyArray<DefaultStatusSpec> = (() => {
   });
 })();
 
+/**
+ * The keys of the six default statuses (Subtask 2.2.10). A status whose `key`
+ * is in here is a PROTECTED default: it can be recolored but NOT renamed,
+ * recategorized, reordered, or deleted (finding #49). Used by the service gates
+ * and by the editor UI to render the "Default" badge + lock the affordances.
+ */
+export const DEFAULT_STATUS_KEYS: ReadonlySet<string> = new Set(STATUS_ORDER.map((s) => s.key));
+
 // The default transition graph (restricted-mode), as [fromKey, toKey] pairs.
 //
 // NOTE ON COUNT (finding #45): the 2.2.2 card enumerates these FIFTEEN distinct,

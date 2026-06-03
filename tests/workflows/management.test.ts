@@ -7,7 +7,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import {
   CannotDeleteInitialStatusError,
-  CannotDeleteLastTerminalStatusError,
+  DefaultStatusProtectedError,
   NotProjectAdminError,
   StatusInUseError,
   StatusKeyConflictError,
@@ -103,91 +103,176 @@ describe('createStatus', () => {
 });
 
 describe('updateStatus', () => {
-  it('renames a status', async () => {
+  it('renames a custom status', async () => {
+    const fx = await makeFixture();
+    const custom = await workflowsService.createStatus({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      key: 'qa',
+      label: 'QA',
+      category: 'in_progress',
+    });
+    const updated = await workflowsService.updateStatus({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      statusId: custom.id,
+      label: 'Review',
+    });
+    expect(updated.label).toBe('Review');
+  });
+
+  it('flipping isInitial onto a custom status atomically unsets the previous initial', async () => {
+    const fx = await makeFixture();
+    const custom = await workflowsService.createStatus({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      key: 'triage',
+      label: 'Triage',
+      category: 'todo',
+    });
+    // Making the custom status initial internally unsets `todo` (the seeded
+    // initial). That internal unset is NOT blocked by the default-protection
+    // gate, which only guards a direct edit of the targeted status.
+    await workflowsService.updateStatus({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      statusId: custom.id,
+      isInitial: true,
+    });
+    const all = await workflowsService.listStatusesByProject(fx.projectId, fx.workspaceId);
+    expect(all.filter((s) => s.isInitial).map((s) => s.key)).toEqual(['triage']); // exactly one
+  });
+});
+
+describe('default status protection (finding #49)', () => {
+  it('allows recoloring a default status', async () => {
     const fx = await makeFixture();
     const updated = await workflowsService.updateStatus({
       userId: fx.ownerId,
       workspaceId: fx.workspaceId,
-      statusId: await statusId(fx, 'in_review'),
-      label: 'QA',
+      statusId: await statusId(fx, 'in_progress'),
+      color: '#ff0000',
     });
-    expect(updated.label).toBe('QA');
+    expect(updated.color).toBe('#ff0000');
   });
 
-  it('flipping isInitial atomically unsets the previous initial (index never sees two)', async () => {
+  it('rejects renaming, recategorizing, reordering, or re-initialing a default', async () => {
     const fx = await makeFixture();
-    await workflowsService.updateStatus({
-      userId: fx.ownerId,
-      workspaceId: fx.workspaceId,
-      statusId: await statusId(fx, 'blocked'),
-      isInitial: true,
-    });
-    const all = await workflowsService.listStatusesByProject(fx.projectId, fx.workspaceId);
-    const initials = all.filter((s) => s.isInitial).map((s) => s.key);
-    expect(initials).toEqual(['blocked']); // exactly one, now `blocked`
-  });
-});
-
-describe('deleteStatus protections', () => {
-  it('refuses to delete the initial status', async () => {
-    const fx = await makeFixture();
-    await expect(
-      workflowsService.deleteStatus({
-        userId: fx.ownerId,
-        workspaceId: fx.workspaceId,
-        statusId: await statusId(fx, 'todo'),
-      }),
-    ).rejects.toThrow(CannotDeleteInitialStatusError);
+    const id = await statusId(fx, 'in_review');
+    const changes = [
+      { label: 'QA' },
+      { category: 'done' as const },
+      { isInitial: true },
+      { position: 'a1' },
+    ];
+    for (const change of changes) {
+      await expect(
+        workflowsService.updateStatus({
+          userId: fx.ownerId,
+          workspaceId: fx.workspaceId,
+          statusId: id,
+          ...change,
+        }),
+      ).rejects.toThrow(DefaultStatusProtectedError);
+    }
   });
 
-  it('refuses to delete a status still referenced by a work item', async () => {
+  it('rejects deleting a default status', async () => {
     const fx = await makeFixture();
-    const item = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'T' },
-      { userId: fx.ownerId, workspaceId: fx.workspaceId },
-    );
-    // Park the item in in_review (a non-initial status) directly.
-    await db.workItem.update({ where: { id: item.id }, data: { status: 'in_review' } });
     await expect(
       workflowsService.deleteStatus({
         userId: fx.ownerId,
         workspaceId: fx.workspaceId,
         statusId: await statusId(fx, 'in_review'),
       }),
-    ).rejects.toThrow(StatusInUseError);
+    ).rejects.toThrow(DefaultStatusProtectedError);
   });
+});
 
-  it('refuses to delete the LAST terminal status (but allows it while another remains)', async () => {
+// These protections now apply to CUSTOM statuses only — every default status is
+// non-deletable (protected), so the default-protection gate would fire first.
+// (CannotDeleteLastTerminalStatusError is consequently unreachable in practice:
+// the two default terminals `done`/`cancelled` can never be removed, so a
+// project always keeps ≥2 terminals. The guard stays as defensive code.)
+describe('deleteStatus protections (custom statuses)', () => {
+  it('refuses to delete a custom status made initial', async () => {
     const fx = await makeFixture();
-    // Seed has two terminals (done + cancelled). Deleting cancelled is fine.
-    await workflowsService.deleteStatus({
+    const custom = await workflowsService.createStatus({
       userId: fx.ownerId,
       workspaceId: fx.workspaceId,
-      statusId: await statusId(fx, 'cancelled'),
+      projectId: fx.projectId,
+      key: 'intake',
+      label: 'Intake',
+      category: 'todo',
     });
-    // Now `done` is the only terminal — deleting it is refused.
+    await workflowsService.updateStatus({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      statusId: custom.id,
+      isInitial: true,
+    });
     await expect(
       workflowsService.deleteStatus({
         userId: fx.ownerId,
         workspaceId: fx.workspaceId,
-        statusId: await statusId(fx, 'done'),
+        statusId: custom.id,
       }),
-    ).rejects.toThrow(CannotDeleteLastTerminalStatusError);
+    ).rejects.toThrow(CannotDeleteInitialStatusError);
   });
 
-  it('deletes a deletable status and cascades its transitions away', async () => {
+  it('refuses to delete a custom status still referenced by a work item', async () => {
     const fx = await makeFixture();
-    const reviewId = await statusId(fx, 'in_review');
+    const custom = await workflowsService.createStatus({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      key: 'on_hold',
+      label: 'On Hold',
+      category: 'todo',
+    });
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'T' },
+      { userId: fx.ownerId, workspaceId: fx.workspaceId },
+    );
+    await db.workItem.update({ where: { id: item.id }, data: { status: 'on_hold' } });
+    await expect(
+      workflowsService.deleteStatus({
+        userId: fx.ownerId,
+        workspaceId: fx.workspaceId,
+        statusId: custom.id,
+      }),
+    ).rejects.toThrow(StatusInUseError);
+  });
+
+  it('deletes a deletable custom status and cascades its transitions away', async () => {
+    const fx = await makeFixture();
+    const custom = await workflowsService.createStatus({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      key: 'on_hold',
+      label: 'On Hold',
+      category: 'todo',
+    });
+    await workflowsService.addTransition({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      fromStatusId: await statusId(fx, 'todo'),
+      toStatusId: custom.id,
+    });
     await workflowsService.deleteStatus({
       userId: fx.ownerId,
       workspaceId: fx.workspaceId,
-      statusId: reviewId,
+      statusId: custom.id,
     });
     const wf = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
-    expect(wf.statuses.map((s) => s.key)).not.toContain('in_review');
+    expect(wf.statuses.map((s) => s.key)).not.toContain('on_hold');
     // No surviving transition references the deleted status.
     expect(
-      wf.transitions.some((t) => t.fromStatusId === reviewId || t.toStatusId === reviewId),
+      wf.transitions.some((t) => t.fromStatusId === custom.id || t.toStatusId === custom.id),
     ).toBe(false);
   });
 });

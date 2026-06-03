@@ -7,9 +7,11 @@ import { NotProjectAdminError } from '@/lib/workflows/errors';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
 
-// Restore default workflow — ADDITIVE merge (Story 2.2 · Subtask 2.2.9). Real
-// Postgres. createTestProject auto-seeds the default workflow (6 statuses, 15
-// transitions, todo initial); the tests edit it then restore.
+// Restore default TRANSITIONS — additive merge (Story 2.2 · Subtask 2.2.10).
+// Real Postgres. Default statuses are now protected (finding #49) so they can't
+// go missing; restore only re-adds missing default transition EDGES. It never
+// deletes, never touches statuses, and is idempotent. createTestProject
+// auto-seeds the default workflow (6 statuses, 15 transitions, todo initial).
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -36,29 +38,30 @@ async function makeFixture(): Promise<Fixture> {
   return { ownerId: owner.id, workspaceId: ws.workspace.id, projectId: project.id };
 }
 
-describe('restoreDefaultWorkflow — additive merge', () => {
-  it('re-adds missing default statuses + transitions, keeps customizations, is idempotent', async () => {
+describe('restoreDefaultTransitions — additive merge', () => {
+  it('re-adds missing default edges, keeps custom edges, is idempotent', async () => {
     const fx = await makeFixture();
 
-    // Customize: delete two defaults (cascades their transitions via the FK),
-    // remove a transition between survivors, add a custom status.
-    await db.workflowStatus.deleteMany({
-      where: { projectId: fx.projectId, key: { in: ['in_review', 'cancelled'] } },
-    });
-    // Drop the todo→in_progress edge (both endpoints survive).
     const statuses = await db.workflowStatus.findMany({ where: { projectId: fx.projectId } });
     const idOf = (k: string) => statuses.find((s) => s.key === k)!.id;
+
+    // Remove three default edges (their endpoints all survive — statuses are
+    // protected and never deleted).
     await db.workflowTransition.deleteMany({
       where: {
         projectId: fx.projectId,
-        fromStatusId: idOf('todo'),
-        toStatusId: idOf('in_progress'),
+        OR: [
+          { fromStatusId: idOf('todo'), toStatusId: idOf('in_progress') },
+          { fromStatusId: idOf('in_progress'), toStatusId: idOf('in_review') },
+          { fromStatusId: idOf('in_review'), toStatusId: idOf('done') },
+        ],
       },
     });
-    // Add the custom status through the real service so its `position` is a
-    // valid fractional-index key (db-inserting a bogus 'zz' would make the
-    // later keyForAppend reject it — positions are always helper-generated).
-    await workflowsService.createStatus({
+
+    // Add a custom status + a custom edge into it (neither is a default edge,
+    // so restore must leave both untouched). createStatus gives it a valid
+    // fractional-index position.
+    const onHold = await workflowsService.createStatus({
       userId: fx.ownerId,
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -66,61 +69,53 @@ describe('restoreDefaultWorkflow — additive merge', () => {
       label: 'On Hold',
       category: 'todo',
     });
+    await workflowsService.addTransition({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      fromStatusId: idOf('todo'),
+      toStatusId: onHold.id,
+    });
 
-    const result = await workflowsService.restoreDefaultWorkflow({
+    const result = await workflowsService.restoreDefaultTransitions({
       userId: fx.ownerId,
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
     });
-    expect(result.statusesAdded).toBe(2); // in_review + cancelled
-    expect(result.transitionsAdded).toBe(9); // 8 cascaded with the 2 statuses + todo→in_progress
+    expect(result.transitionsAdded).toBe(3);
 
     const wf = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
-    // The two defaults are back; the custom status survives.
-    const keys = wf.statuses.map((s) => s.key);
-    expect(keys).toContain('in_review');
-    expect(keys).toContain('cancelled');
-    expect(keys).toContain('on_hold');
-    expect(wf.statuses).toHaveLength(7); // 6 defaults + on_hold
-    expect(wf.transitions).toHaveLength(15); // full default graph restored
-    // Exactly one initial, still todo.
-    expect(wf.statuses.filter((s) => s.isInitial).map((s) => s.key)).toEqual(['todo']);
+    // Full default graph restored (15) + the one custom edge kept = 16.
+    expect(wf.transitions).toHaveLength(16);
+    // Statuses untouched: 6 defaults + on_hold.
+    expect(wf.statuses).toHaveLength(7);
+    const has = (from: string, to: string) =>
+      wf.transitions.some((t) => t.fromStatusId === idOf(from) && t.toStatusId === idOf(to));
+    expect(has('todo', 'in_progress')).toBe(true);
+    expect(has('in_progress', 'in_review')).toBe(true);
+    expect(has('in_review', 'done')).toBe(true);
+    // The custom edge survives.
+    expect(wf.transitions.some((t) => t.toStatusId === onHold.id)).toBe(true);
 
     // Idempotent: a second restore changes nothing.
-    const again = await workflowsService.restoreDefaultWorkflow({
+    const again = await workflowsService.restoreDefaultTransitions({
       userId: fx.ownerId,
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
     });
-    expect(again).toEqual({ statusesAdded: 0, transitionsAdded: 0 });
+    expect(again).toEqual({ transitionsAdded: 0 });
     const wf2 = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
-    expect(wf2.statuses).toHaveLength(7);
-    expect(wf2.transitions).toHaveLength(15);
-  });
-
-  it('a renamed default is matched by key and NOT reverted', async () => {
-    const fx = await makeFixture();
-    await db.workflowStatus.updateMany({
-      where: { projectId: fx.projectId, key: 'in_progress' },
-      data: { label: 'Doing' },
-    });
-    await workflowsService.restoreDefaultWorkflow({
-      userId: fx.ownerId,
-      workspaceId: fx.workspaceId,
-      projectId: fx.projectId,
-    });
-    const wf = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
-    expect(wf.statuses.find((s) => s.key === 'in_progress')?.label).toBe('Doing');
+    expect(wf2.transitions).toHaveLength(16);
   });
 
   it('is a no-op on a pristine default-seeded project', async () => {
     const fx = await makeFixture();
-    const result = await workflowsService.restoreDefaultWorkflow({
+    const result = await workflowsService.restoreDefaultTransitions({
       userId: fx.ownerId,
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
     });
-    expect(result).toEqual({ statusesAdded: 0, transitionsAdded: 0 });
+    expect(result).toEqual({ transitionsAdded: 0 });
   });
 
   it('is admin-gated: a non-owner member is rejected', async () => {
@@ -134,7 +129,7 @@ describe('restoreDefaultWorkflow — additive merge', () => {
       data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
     });
     await expect(
-      workflowsService.restoreDefaultWorkflow({
+      workflowsService.restoreDefaultTransitions({
         userId: member.id,
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,

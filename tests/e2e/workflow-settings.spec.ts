@@ -1,7 +1,9 @@
-// E2E: the workflow-management settings page (Story 2.2 · Subtask 2.2.5).
+// E2E: the workflow-management settings page (Story 2.2 · Subtask 2.2.5,
+// revised by 2.2.10 / finding #49).
 //
-// @smoke — proves an owner can edit a project's workflow end to end through the
-// real shell: the default statuses render, a status renames, a new status adds,
+// @smoke — proves an owner can manage a project's workflow end to end through
+// the real shell: the default statuses render and are PROTECTED (a "Default"
+// badge, a color-only action, no Edit/Delete), a custom status adds + renames,
 // a transition toggles off, and the policy mode flips (with its banner). The
 // signed-up user is the workspace OWNER (creator = owner, finding #36), so the
 // service's project-admin gate admits the edits. The project is created
@@ -47,7 +49,7 @@ async function gotoWorkflow(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Workflow' })).toBeVisible();
 }
 
-test('owner edits the default workflow: rename, add, toggle transition, flip policy', async ({
+test('owner manages the workflow: defaults protected, custom status add + rename, toggle transition, flip policy', async ({
   page,
 }) => {
   await signUp(page, USER_EMAIL);
@@ -59,20 +61,32 @@ test('owner edits the default workflow: rename, add, toggle transition, flip pol
     await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
   }
 
-  // Rename "In Review" → "QA".
+  // A default status is PROTECTED (finding #49): it carries a "Default" badge
+  // and a color-only action — NO Edit, NO Delete.
   const reviewRow = page.getByRole('listitem').filter({ hasText: 'In Review' });
-  await reviewRow.getByRole('button', { name: 'Edit' }).click();
-  const labelInput = page.getByLabel('Label');
-  await labelInput.fill('QA');
-  await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByText('QA', { exact: true }).first()).toBeVisible();
+  await expect(reviewRow.getByText('Default', { exact: true })).toBeVisible();
+  await expect(reviewRow.getByRole('button', { name: 'Edit' })).toHaveCount(0);
+  await expect(reviewRow.getByRole('button', { name: /^Delete/ })).toHaveCount(0);
 
-  // Add a new status.
+  // Its "Color" action opens a recolor-only form — no Label field to rename.
+  await reviewRow.getByRole('button', { name: 'Change color of In Review' }).click();
+  await expect(page.getByText('only its color can be changed')).toBeVisible();
+  await expect(page.getByLabel('Label')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Cancel' }).click();
+
+  // Add a custom status — custom statuses stay fully editable.
   await page.getByRole('button', { name: 'Add status' }).click();
   await page.getByLabel('Key (machine id, lowercase)').fill('on_hold');
   await page.getByLabel('Label').fill('On Hold');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('On Hold', { exact: true }).first()).toBeVisible();
+
+  // Rename the custom status: On Hold → On Standby.
+  const customRow = page.getByRole('listitem').filter({ hasText: 'On Hold' });
+  await customRow.getByRole('button', { name: 'Edit' }).click();
+  await page.getByLabel('Label').fill('On Standby');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('On Standby', { exact: true }).first()).toBeVisible();
 
   // Transitions tab: toggle the todo→in_progress edge OFF.
   await page.getByRole('tab', { name: 'Transitions' }).click();

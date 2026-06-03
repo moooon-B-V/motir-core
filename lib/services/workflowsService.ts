@@ -8,10 +8,15 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { isOwnerRole } from '@/lib/workspaces/roles';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { keyForAppend } from '@/lib/workItems/positioning';
-import { DEFAULT_STATUSES, DEFAULT_TRANSITIONS } from '@/lib/workflows/defaultWorkflow';
+import {
+  DEFAULT_STATUSES,
+  DEFAULT_STATUS_KEYS,
+  DEFAULT_TRANSITIONS,
+} from '@/lib/workflows/defaultWorkflow';
 import {
   CannotDeleteInitialStatusError,
   CannotDeleteLastTerminalStatusError,
+  DefaultStatusProtectedError,
   NotProjectAdminError,
   StatusInUseError,
   StatusKeyConflictError,
@@ -396,6 +401,18 @@ export const workflowsService = {
     if (!pre) throw new WorkflowStatusNotFoundError(input.statusId);
     await assertProjectAdmin(input.userId, pre.projectId, input.workspaceId);
 
+    // A default status is protected (2.2.10 / finding #49): only its color may
+    // change. Any label / category / isInitial / position edit is rejected.
+    if (
+      DEFAULT_STATUS_KEYS.has(pre.key) &&
+      (input.label !== undefined ||
+        input.category !== undefined ||
+        input.isInitial !== undefined ||
+        input.position !== undefined)
+    ) {
+      throw new DefaultStatusProtectedError(pre.key);
+    }
+
     return withWorkspaceContext(
       { userId: input.userId, workspaceId: input.workspaceId },
       async (tx) => {
@@ -423,6 +440,11 @@ export const workflowsService = {
     const pre = await workflowsRepository.findStatusById(input.statusId, input.workspaceId);
     if (!pre) throw new WorkflowStatusNotFoundError(input.statusId);
     await assertProjectAdmin(input.userId, pre.projectId, input.workspaceId);
+
+    // Default statuses are protected — non-deletable (2.2.10 / finding #49).
+    // The initial / last-terminal / in-use guards below still apply to CUSTOM
+    // statuses (a custom status can be the initial or last terminal).
+    if (DEFAULT_STATUS_KEYS.has(pre.key)) throw new DefaultStatusProtectedError(pre.key);
 
     await withWorkspaceContext(
       { userId: input.userId, workspaceId: input.workspaceId },
@@ -531,60 +553,32 @@ export const workflowsService = {
    * label/color. Admin-gated. A destructive "reset to factory" is out of scope.
    * Returns how many rows were added.
    */
-  async restoreDefaultWorkflow(
+  async restoreDefaultTransitions(
     input: RestoreDefaultsInput,
-  ): Promise<{ statusesAdded: number; transitionsAdded: number }> {
+  ): Promise<{ transitionsAdded: number }> {
     await assertProjectAdmin(input.userId, input.projectId, input.workspaceId);
 
     return withWorkspaceContext(
       { userId: input.userId, workspaceId: input.workspaceId },
       async (tx) => {
-        const current = await workflowsRepository.findStatuses(
+        // Default STATUSES can't go missing now (protected — 2.2.10), so the
+        // only thing to restore is missing default transition EDGES. ADDITIVE +
+        // idempotent: re-add each default edge whose both endpoints exist and
+        // isn't already present; never delete or duplicate.
+        const statuses = await workflowsRepository.findStatuses(
           input.projectId,
           input.workspaceId,
           tx,
         );
-        const byKey = new Map(current.map((s) => [s.key, s]));
-        const hadInitial = current.some((s) => s.isInitial);
-        // Append-anchor: re-added statuses go AFTER the project's current last
-        // one (custom statuses keep their place), each its own fractional key.
-        let lastPosition = current.length ? current[current.length - 1]!.position : null;
+        const byKey = new Map(statuses.map((s) => [s.key, s]));
 
-        let statusesAdded = 0;
-        for (const def of DEFAULT_STATUSES) {
-          if (byKey.has(def.key)) continue; // present (or renamed) → leave it
-          lastPosition = keyForAppend(lastPosition);
-          const row = await workflowsRepository.createStatus(
-            {
-              workspaceId: input.workspaceId,
-              projectId: input.projectId,
-              key: def.key,
-              label: def.label,
-              category: def.category,
-              position: lastPosition,
-              isInitial: false, // never on insert — the initial rule runs below
-            },
-            tx,
-          );
-          byKey.set(row.key, row);
-          statusesAdded += 1;
-        }
-
-        // Initial-status rule: only if the project has NO initial status, make
-        // `todo` the initial (the partial-unique index is never at risk — an
-        // existing initial is left untouched).
-        if (!hadInitial) {
-          const todo = byKey.get('todo');
-          if (todo) await workflowsRepository.updateStatus(todo.id, { isInitial: true }, tx);
-        }
-
-        // Re-add missing default transitions whose BOTH endpoints now exist.
         const existing = await workflowsRepository.findTransitions(
           input.projectId,
           input.workspaceId,
           tx,
         );
         const seen = new Set(existing.map((t) => `${t.fromStatusId}|${t.toStatusId}`));
+
         let transitionsAdded = 0;
         for (const [fromKey, toKey] of DEFAULT_TRANSITIONS) {
           const from = byKey.get(fromKey);
@@ -605,7 +599,7 @@ export const workflowsService = {
           transitionsAdded += 1;
         }
 
-        return { statusesAdded, transitionsAdded };
+        return { transitionsAdded };
       },
     );
   },

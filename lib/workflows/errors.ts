@@ -49,6 +49,18 @@ export class StatusInUseError extends Error {
   }
 }
 
+/**
+ * A default status is protected (Subtask 2.2.10): it can be recolored but not
+ * renamed, recategorized, reordered, or deleted (finding #49). → 422.
+ */
+export class DefaultStatusProtectedError extends Error {
+  readonly code = 'DEFAULT_STATUS_PROTECTED' as const;
+  constructor(statusKey: string) {
+    super(`"${statusKey}" is a default status — only its color can be changed.`);
+    this.name = 'DefaultStatusProtectedError';
+  }
+}
+
 /** Refuse to delete the project's initial status. → 422. */
 export class CannotDeleteInitialStatusError extends Error {
   readonly code = 'CANNOT_DELETE_INITIAL_STATUS' as const;
