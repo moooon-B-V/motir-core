@@ -1,0 +1,6 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`MarkdownView > round-trips a stored Markdown value identically (snapshot) 1`] = `
+"<h2>Heading</h2>
+<p>A <a href="https://example.com">link</a> and <code>code</code>.</p>"
+`;

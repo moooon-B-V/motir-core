@@ -156,6 +156,30 @@ test.describe('@a11y shell accessibility', () => {
     ).toEqual([]);
   });
 
+  // The MarkdownEditor primitive specimen (Subtask 2.3.5). Renders every
+  // variant (min / full / read-only) + the MarkdownView render path. Public,
+  // no session. `color-contrast` is excluded here on the same basis as the
+  // /tokens sweep: the third-party @uiw/react-md-editor toolbar chrome isn't a
+  // product-token surface (our own label, status notice, and the rendered
+  // MarkdownView output ARE product UI and pass every other rule). The editor's
+  // toolbar buttons carry aria-labels and the textarea is labelled, so
+  // button-name / label rules stay enforced.
+  test('the /tokens/markdown-editor specimen is axe-clean (WCAG 2.1 AA; color-contrast on editor chrome excluded)', async ({
+    page,
+  }) => {
+    await page.goto('/tokens/markdown-editor');
+    await expect(page.getByRole('heading', { name: 'Markdown editor', level: 1 })).toBeVisible();
+
+    const results = await new AxeBuilder({ page })
+      .withTags(WCAG_TAGS)
+      .disableRules(['color-contrast'])
+      .analyze();
+    expect(
+      results.violations,
+      formatViolations('/tokens/markdown-editor', results.violations as AxeViolation[]),
+    ).toEqual([]);
+  });
+
   // The actual subject of PRODECT_FINDINGS #35: the Pill `status`/`severity`
   // matrix. Scoped color-contrast sweep over JUST the Pill specimen section,
   // with the rule ENABLED — proves every colored tone clears WCAG AA now that
