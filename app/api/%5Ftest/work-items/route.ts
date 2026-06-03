@@ -169,13 +169,23 @@ export async function PATCH(req: Request): Promise<Response> {
   if (auth.response) return auth.response;
   const ctx: ServiceContext = auth.ctx;
 
-  const id = new URL(req.url).searchParams.get('id');
+  const url = new URL(req.url);
+  const id = url.searchParams.get('id');
   if (!id) {
     return NextResponse.json({ code: 'BAD_REQUEST', error: 'Provide ?id=<id>' }, { status: 400 });
   }
-  const body = (await req.json()) as UpdateWorkItemInput;
+  // `?status=<key>` drives the GATED workflow transition (workItemsService.
+  // updateStatus, Subtask 2.2.4) — the surface the 2.2.7 Story E2E needs, since
+  // no product issue-detail status route exists yet (issue detail is Story 2.4).
+  // Omitting it keeps the free-form updateWorkItem patch. mapError already maps
+  // UnknownStatus / IllegalTransition (422) + WorkItemNotFound (404).
+  const statusKey = url.searchParams.get('status');
   try {
     await workItemsService.getWorkItem(id, ctx); // tenancy guard (404 on cross-tenant)
+    if (statusKey !== null) {
+      return NextResponse.json(await workItemsService.updateStatus(id, statusKey, ctx));
+    }
+    const body = (await req.json()) as UpdateWorkItemInput;
     return NextResponse.json(await workItemsService.updateWorkItem(id, body, ctx));
   } catch (err) {
     return mapError(err);
