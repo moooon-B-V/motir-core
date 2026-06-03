@@ -141,7 +141,7 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
   }
 
   return (
-    <form className="mx-auto flex max-w-[64rem] flex-col gap-4" onSubmit={handleSubmit}>
+    <form className="flex w-full flex-col gap-4" onSubmit={handleSubmit}>
       <div className="flex items-center gap-2">
         <TypeIcon
           className="h-4 w-4"
@@ -188,7 +188,7 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
         />
       </label>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="flex flex-col gap-1 font-sans text-sm">
           <span className="text-foreground font-medium">Status</span>
           <StatusPicker
