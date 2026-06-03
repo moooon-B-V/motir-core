@@ -209,6 +209,39 @@ test.describe('@a11y shell accessibility', () => {
     ).toEqual([]);
   });
 
+  // The issue DETAIL route (Subtask 2.4.2) with content populated: the rendered
+  // description + explanation + the core-fields metadata panel. STRICT, zero
+  // exclusions — unlike the edit route there is NO `@uiw/react-md-editor` on the
+  // page (the detail page renders read-only Markdown via MarkdownView, not the
+  // editor), so the whole DOM is held to full WCAG 2.1 AA.
+  test('the issue detail route has zero axe violations (WCAG 2.1 AA; content populated)', async ({
+    page,
+  }) => {
+    await signUp(page, 'e2e-detail-issue-a11y@example.com');
+    await createFirstProject(page, 'Mobile App');
+
+    await page.goto('/issues');
+    await page.getByRole('button', { name: 'Create issue' }).click();
+    await page.getByLabel('Title').fill('Detail-view issue');
+    await page.getByRole('button', { name: 'Create', exact: true }).click();
+
+    const toast = page.getByText(/ created$/);
+    await expect(toast).toBeVisible();
+    const identifier = ((await toast.textContent()) ?? '').replace(/ created$/, '').trim();
+    expect(identifier).toMatch(/^[A-Z]+-\d+$/);
+
+    await page.goto(`/issues/${identifier}`);
+    await expect(page.getByRole('heading', { name: 'Detail-view issue' })).toBeVisible();
+    // The metadata panel is part of the populated content the sweep must cover.
+    await expect(page.getByRole('region', { name: 'Details' })).toBeVisible();
+
+    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    expect(
+      results.violations,
+      formatViolations('/issues/[key]', results.violations as AxeViolation[]),
+    ).toEqual([]);
+  });
+
   // /tokens is the public design-system specimen — not a shell-bearing route,
   // but it's where every primitive renders together, so an axe sweep here
   // catches regressions before they reach a real surface. Scanned without a

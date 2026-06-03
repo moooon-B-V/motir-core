@@ -17,6 +17,7 @@ import type { IssueType } from '@/lib/issues/parentRules';
 import type { WorkItemDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+import { PRIORITY_OPTIONS } from '@/lib/issues/priority';
 import { updateIssueAction, changeStatusAction } from '../actions';
 
 // The full edit form (Subtask 2.3.6). Status and non-status fields submit via
@@ -26,14 +27,6 @@ import { updateIssueAction, changeStatusAction } from '../actions';
 // a refresh banner. Type is read-only (kind is immutable post-creation in the
 // shipped model — changing an issue's type is a future "move" feature); Parent
 // stays editable. Reporter + Explanation are read-only.
-
-const PRIORITY_OPTIONS: ReadonlyArray<{ value: WorkItemPriorityDto; label: string }> = [
-  { value: 'highest', label: 'Highest' },
-  { value: 'high', label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low', label: 'Low' },
-  { value: 'lowest', label: 'Lowest' },
-];
 
 const isoToDateInput = (iso: string | null) => (iso ? iso.slice(0, 10) : '');
 

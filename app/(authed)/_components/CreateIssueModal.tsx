@@ -11,6 +11,7 @@ import { uploadIssueAttachment } from '@/lib/blob/uploadClient';
 import { TypePicker } from '@/components/issues/TypePicker';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { createIssueAction } from '../issues/actions';
+import { PRIORITY_OPTIONS } from '@/lib/issues/priority';
 import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 
 // The create-issue modal (Subtask 2.3.3, pickers wired in 2.3.4). Collects the
@@ -26,14 +27,6 @@ import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 // workspace-member combobox). Reporter is never a field — set server-side.
 
 const MAX_TITLE_LENGTH = 200;
-
-const PRIORITY_OPTIONS: ReadonlyArray<{ value: WorkItemPriorityDto; label: string }> = [
-  { value: 'highest', label: 'Highest' },
-  { value: 'high', label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low', label: 'Low' },
-  { value: 'lowest', label: 'Lowest' },
-];
 
 export interface CreateIssueModalProps {
   open: boolean;
