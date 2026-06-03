@@ -183,6 +183,11 @@ test.describe('@a11y shell accessibility', () => {
 
     await page.goto(`/issues/${identifier}/edit`);
     await expect(page.getByRole('heading', { name: 'Edit issue' })).toBeVisible();
+    // Wait for the lazy MarkdownEditor to mount — until it does, its dynamic-
+    // import fallback ("Loading editor…") is on screen, and that transient
+    // placeholder would be swept. Once `.w-md-editor` is present the placeholder
+    // is gone (and the editor chrome itself is excluded below).
+    await expect(page.locator('.w-md-editor').first()).toBeVisible();
 
     const results = await new AxeBuilder({ page })
       .withTags(WCAG_TAGS)
