@@ -24,6 +24,7 @@ import {
 } from '@uiw/react-md-editor/commands';
 import '@uiw/react-md-editor/markdown-editor.css';
 import { useOptionalTheme } from '@/lib/contexts/theme-context';
+import { ALLOWED_UPLOAD_TYPES, isImageType } from '@/lib/blob/allowlist';
 import { MarkdownView } from './MarkdownView';
 
 // MarkdownEditor — the rich-text editor over Story 1.4's `descriptionMd`
@@ -55,8 +56,6 @@ const MDEditor = dynamic(() => import('@uiw/react-md-editor'), {
     </div>
   ),
 });
-
-const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 
 // Compact toolbar for the `min` variant (the create modal). A focused set —
 // the formatting users reach for inline — plus the edit/preview tab toggle.
@@ -126,15 +125,16 @@ export function editorConfigFor(size: Size, readOnly: boolean): EditorConfig {
 }
 
 /**
- * First supported image file in a clipboard/drop payload, or null. Restricted
- * to the same MIME allowlist the 2.3.7 upload endpoint enforces server-side —
- * so an unsupported type (e.g. SVG) falls through to the editor's normal paste
- * rather than kicking off an upload that the server would reject anyway.
+ * First allowed file in a clipboard/drop payload, or null (2.3.7, finding #52:
+ * ANY allowed file, not just images). Restricted to the shared upload allowlist
+ * the endpoint enforces server-side — so an unsupported type falls through to
+ * the editor's normal paste rather than kicking off an upload the server would
+ * reject. Images embed inline (`![]`); other allowed files insert as links.
  */
-function pickImageFile(files: FileList | null | undefined): File | null {
+function pickAllowedFile(files: FileList | null | undefined): File | null {
   if (!files) return null;
   for (const file of Array.from(files)) {
-    if (ALLOWED_IMAGE_TYPES.includes(file.type)) return file;
+    if (ALLOWED_UPLOAD_TYPES.includes(file.type)) return file;
   }
   return null;
 }
@@ -149,11 +149,13 @@ export interface MarkdownEditorProps {
   /** Size variant. `min` for the create modal, `full` for the edit form. */
   size?: Size;
   /**
-   * Persist a pasted/dropped image and resolve to its URL (spliced into the
-   * Markdown). Omit to disable image upload — paste/drop then surfaces a polite
-   * inline notice and the image is NOT inserted (never silently dropped).
+   * Persist a pasted/dropped FILE (2.3.7, finding #52 — any allowed type, not
+   * just images) and resolve to its URL. The editor splices an image as `![]`
+   * (inline) and any other file as `[]` (a link), by the File's MIME. Omit to
+   * disable uploads — paste/drop then surfaces a polite inline notice and the
+   * file is NOT inserted (never silently dropped).
    */
-  onImageUpload?: (file: File) => Promise<string>;
+  onFileUpload?: (file: File) => Promise<string>;
   /** Render read-only (no toolbar, no tabs — preview only). */
   readOnly?: boolean;
 }
@@ -163,7 +165,7 @@ export function MarkdownEditor({
   onChange,
   label,
   size = 'full',
-  onImageUpload,
+  onFileUpload,
   readOnly = false,
 }: MarkdownEditorProps) {
   const theme = useOptionalTheme();
@@ -202,50 +204,54 @@ export function MarkdownEditor({
     [onChange],
   );
 
-  const uploadImage = useCallback(
+  const uploadFile = useCallback(
     async (file: File, textarea: HTMLTextAreaElement | null) => {
-      if (!onImageUpload) {
-        showNotice("Image uploads aren't enabled here.");
+      if (!onFileUpload) {
+        showNotice("File uploads aren't enabled here.");
         return;
       }
+      // Image embeds inline (`![]`); any other file inserts as a link (`[]`).
+      const image = isImageType(file.type);
+      const md = (target: string) =>
+        image ? `![${file.name}](${target})` : `[${file.name}](${target})`;
       // Unique placeholder per upload so concurrent pastes don't collide and a
       // later edit elsewhere in the doc doesn't shift the wrong token.
       const token = `uploading:${++uploadSeq.current}`;
-      const placeholder = `![Uploading ${file.name}…](${token})`;
+      const placeholder = md(token).replace(file.name, `Uploading ${file.name}…`);
       spliceAtCaret(textarea, placeholder);
       try {
-        const url = await onImageUpload(file);
-        valueRef.current = valueRef.current.replace(placeholder, `![${file.name}](${url})`);
+        const url = await onFileUpload(file);
+        valueRef.current = valueRef.current.replace(placeholder, md(url));
         onChange(valueRef.current);
-      } catch {
+      } catch (err) {
         // Revert the placeholder and tell the user — never leave a dangling
-        // "Uploading…" marker and never silently drop the image.
+        // "Uploading…" marker and never silently drop the file.
         valueRef.current = valueRef.current.replace(placeholder, '');
         onChange(valueRef.current);
-        showNotice('Image upload failed — please try again.');
+        showNotice(err instanceof Error ? err.message : 'Upload failed — please try again.');
       }
     },
-    [onImageUpload, onChange, showNotice, spliceAtCaret],
+    [onFileUpload, onChange, showNotice, spliceAtCaret],
   );
 
   const handlePaste = useCallback(
     (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-      const file = pickImageFile(event.clipboardData?.files);
-      if (!file) return; // not an image — let the editor handle the paste normally
+      const file = pickAllowedFile(event.clipboardData?.files);
+      if (!file) return; // not an allowed file — let the editor paste normally
       event.preventDefault();
-      void uploadImage(file, event.currentTarget);
+      void uploadFile(file, event.currentTarget);
     },
-    [uploadImage],
+    [uploadFile],
   );
 
   const handleDrop = useCallback(
     (event: React.DragEvent<HTMLTextAreaElement>) => {
-      const file = pickImageFile(event.dataTransfer?.files);
+      const file = pickAllowedFile(event.dataTransfer?.files);
       if (!file) return;
       event.preventDefault();
-      void uploadImage(file, event.currentTarget);
+      void uploadFile(file, event.currentTarget);
     },
-    [uploadImage],
+    [uploadFile],
   );
 
   // Render the editor's preview pane through OUR single render module so the

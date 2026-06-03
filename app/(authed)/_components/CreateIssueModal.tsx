@@ -6,6 +6,8 @@ import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
+import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
+import { uploadIssueAttachment } from '@/lib/blob/uploadClient';
 import { TypePicker } from '@/components/issues/TypePicker';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { createIssueAction } from '../issues/actions';
@@ -155,18 +157,18 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
           required
         />
 
-        {/* STUB — 2.3.6 swaps this for the 2.3.5 MarkdownEditor in "min" mode. */}
-        <label className="flex flex-col gap-1 font-sans text-sm">
+        <div className="flex flex-col gap-1 font-sans text-sm">
           <span className="text-foreground font-medium">Description</span>
-          <textarea
-            className="border-border bg-background min-h-24 rounded-md border px-3 py-2 text-sm"
+          {/* 2.3.7: swaps the 2.3.3 textarea stub for the real MarkdownEditor
+              (min) with file upload — paste/drop an image (inline) or a file (link). */}
+          <MarkdownEditor
+            label="Description"
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            disabled={isPending}
-            placeholder="Add more detail (optional)"
-            aria-label="Description"
+            onChange={setDescription}
+            size="min"
+            onFileUpload={uploadIssueAttachment}
           />
-        </label>
+        </div>
 
         <label className="flex flex-col gap-1 font-sans text-sm">
           <span className="text-foreground font-medium">Priority</span>

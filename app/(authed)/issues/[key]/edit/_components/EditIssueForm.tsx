@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { useToast } from '@/components/ui/Toast';
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
+import { uploadIssueAttachment } from '@/lib/blob/uploadClient';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { StatusPicker } from '@/components/issues/StatusPicker';
@@ -183,6 +184,7 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
           value={description}
           onChange={setDescription}
           size="full"
+          onFileUpload={uploadIssueAttachment}
         />
       </label>
 

@@ -23,6 +23,14 @@ vi.mock('@/lib/contexts/theme-context', () => ({
 vi.mock('@/lib/auth/client', () => ({ signOut: vi.fn() }));
 vi.mock('@/app/(authed)/_actions', () => ({ switchWorkspaceAction: vi.fn() }));
 vi.mock('@/app/(authed)/_project-actions', () => ({ setActiveProjectAction: vi.fn() }));
+// The modal now renders the real MarkdownEditor (client-only dynamic + @uiw) —
+// stub it to a labelled textarea so the Description assertions still work.
+vi.mock('@/components/ui/MarkdownEditor', () => ({
+  MarkdownEditor: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <textarea aria-label="Description" value={value} onChange={(e) => onChange(e.target.value)} />
+  ),
+}));
+vi.mock('@/lib/blob/uploadClient', () => ({ uploadIssueAttachment: vi.fn() }));
 
 import { CreateIssueProvider } from '@/app/(authed)/_components/CreateIssueProvider';
 import { CreateIssueButton } from '@/app/(authed)/_components/CreateIssueButton';
