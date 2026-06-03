@@ -55,15 +55,16 @@ describe('restoreDefaultWorkflow — additive merge', () => {
         toStatusId: idOf('in_progress'),
       },
     });
-    await db.workflowStatus.create({
-      data: {
-        workspaceId: fx.workspaceId,
-        projectId: fx.projectId,
-        key: 'on_hold',
-        label: 'On Hold',
-        category: 'todo',
-        position: 'zz',
-      },
+    // Add the custom status through the real service so its `position` is a
+    // valid fractional-index key (db-inserting a bogus 'zz' would make the
+    // later keyForAppend reject it — positions are always helper-generated).
+    await workflowsService.createStatus({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      key: 'on_hold',
+      label: 'On Hold',
+      category: 'todo',
     });
 
     const result = await workflowsService.restoreDefaultWorkflow({
