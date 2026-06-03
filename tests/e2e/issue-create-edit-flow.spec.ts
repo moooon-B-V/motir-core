@@ -130,8 +130,9 @@ test('@smoke the type+parent picker filters candidates inline (2.3.4)', async ({
   await expect(page.getByRole('option', { name: /The Story/ })).toBeVisible();
   await expect(page.getByRole('option', { name: /The Task/ })).toBeVisible();
   await expect(page.getByRole('option', { name: /The Epic/ })).toHaveCount(0);
-  // close the listbox
-  await page.keyboard.press('Escape');
+  // Close the Parent listbox by SELECTING "No parent" — NOT Escape (Escape on
+  // the Radix Dialog closes the whole modal, not just the combobox panel).
+  await page.getByRole('option', { name: 'No parent' }).click();
 
   // Type = Epic → no parent candidates (epics are top-level): only "No parent".
   await page.getByRole('combobox', { name: 'Type' }).click();
