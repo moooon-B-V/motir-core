@@ -138,6 +138,29 @@ export const workItemRepository = {
   },
 
   /**
+   * Non-archived work items in a project whose `kind` is one of `kinds`,
+   * ordered by `key` asc (the stable PROD-N identifier order). Carries an
+   * EXPLICIT `workspaceId` filter (finding #26) — the primary tenant gate,
+   * since RLS is inert under the dev/CI superuser. Backs
+   * `workItemsService.listCandidateParents` (Subtask 2.3.4): the parent
+   * picker's candidate set. Short-circuits to `[]` on an empty `kinds` list
+   * (an `epic` child has no legal parents) so no pointless query is issued.
+   */
+  async findByProjectAndKinds(
+    projectId: string,
+    kinds: readonly WorkItemKind[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem[]> {
+    if (kinds.length === 0) return [];
+    const client = tx ?? db;
+    return client.workItem.findMany({
+      where: { projectId, workspaceId, kind: { in: [...kinds] }, archivedAt: null },
+      orderBy: { key: 'asc' },
+    });
+  },
+
+  /**
    * Non-archived work items in a project, cursor-paginated. Ordered by `key`
    * asc (stable, monotonic, matches the PROD-N identifier order). `cursor` is
    * a work-item id; when present the row at the cursor is skipped so paging

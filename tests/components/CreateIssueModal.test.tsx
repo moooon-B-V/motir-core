@@ -10,7 +10,11 @@ const { refresh, createIssueActionSpy } = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh, push: vi.fn() }) }));
-vi.mock('@/app/(authed)/issues/actions', () => ({ createIssueAction: createIssueActionSpy }));
+vi.mock('@/app/(authed)/issues/actions', () => ({
+  createIssueAction: createIssueActionSpy,
+  // The modal now renders ParentPicker, which fetches candidates on mount.
+  listCandidateParentsAction: vi.fn(async () => ({ ok: true, candidates: [] })),
+}));
 // Heavy palette deps — only the ⌘K-command test renders AppCommandPalette, but
 // the mocks must exist at module-eval time.
 vi.mock('@/lib/contexts/theme-context', () => ({
@@ -107,7 +111,9 @@ describe('CreateIssueModal — validation + submit', () => {
     createIssueActionSpy.mockResolvedValue({ ok: true, id: 'wi_1', identifier: 'WFD-7' });
     openModal();
 
-    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'bug' } });
+    // Type is now the combobox picker — open it and choose Bug.
+    fireEvent.click(screen.getByRole('combobox', { name: 'Type' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Bug' }));
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Login is broken' } });
     fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Repro steps…' } });
     fireEvent.change(screen.getByLabelText('Priority'), { target: { value: 'high' } });
@@ -122,6 +128,7 @@ describe('CreateIssueModal — validation + submit', () => {
       title: 'Login is broken',
       descriptionMd: 'Repro steps…',
       priority: 'high',
+      parentId: null,
     });
     // Success path: toast surfaces the identifier, list revalidates, modal closes.
     await waitFor(() => expect(screen.getByText('WFD-7 created')).toBeTruthy());
