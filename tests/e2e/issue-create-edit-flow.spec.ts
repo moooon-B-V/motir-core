@@ -8,10 +8,12 @@
 //
 // Setup uses ONLY auth + the 2.2.7 `_test` harness (createItem etc.), so this
 // has no ordering dependency on other specs. Reconciliations vs shipped reality:
-//  - The create modal's Description is still a plain <textarea> stub (2.3.3) —
-//    no MarkdownEditor / image-paste there yet — so the create scenario types
-//    Markdown TEXT and round-trips it; the card's "image paste" assertion is
-//    N/A until the create modal adopts the editor (tracked separately).
+//  - The create modal's Description is a WYSIWYG editor (2.3.7 adopted it,
+//    2.3.10 made it true rendered-view Tiptap). You don't type raw Markdown
+//    into a WYSIWYG — syntax chars are literal text and serialize back escaped
+//    — so this scenario types PLAIN PROSE and round-trips it byte-for-byte.
+//    Markdown formatting fidelity (bold/links/lists/etc.) is gated separately by
+//    the editor's headless round-trip unit test, not re-proven through the UI.
 //  - StatusPicker pre-filters to LEGAL transitions (2.3.6), so an illegal move
 //    isn't UI-selectable — asserted as "not offered" rather than a rejected
 //    submit (the inline statusError stays a defense-in-depth backstop).
@@ -79,11 +81,11 @@ test('@smoke create → round-trips on the edit form', async ({ page }) => {
   await page.goto('/issues');
   await page.getByRole('button', { name: 'Create issue' }).click();
 
-  // Default type (Task) keeps it top-level-legal; fill title + Markdown description.
+  // Default type (Task) keeps it top-level-legal; fill title + a PLAIN-PROSE
+  // description (the WYSIWYG editor stores typed text literally — no Markdown
+  // syntax, so it round-trips byte-for-byte; fidelity is unit-tested elsewhere).
   await page.getByLabel('Title').fill('Wire the dashboard');
-  await page
-    .getByLabel('Description')
-    .fill('A **bold** requirement with a [link](https://example.com).');
+  await page.getByLabel('Description').fill('A short requirement for the dashboard view.');
   await page.getByRole('button', { name: 'Create' }).click();
   await expect(page.getByText(/created$/).first()).toBeVisible();
 
@@ -92,14 +94,18 @@ test('@smoke create → round-trips on the edit form', async ({ page }) => {
   const created = items.find((i) => i.title === 'Wire the dashboard');
   expect(created, 'the created item is listed').toBeTruthy();
 
-  // It round-trips: title + raw Markdown description persisted.
+  // It round-trips: title + description persisted verbatim.
   const stored = await getItem(page, created!.id);
   expect(stored.title).toBe('Wire the dashboard');
-  expect(stored.descriptionMd).toBe('A **bold** requirement with a [link](https://example.com).');
+  expect(stored.descriptionMd).toBe('A short requirement for the dashboard view.');
 
-  // The edit route opens for that identifier and shows the title.
+  // The edit route opens for that identifier and rehydrates BOTH fields — the
+  // stored Markdown parses back into the WYSIWYG editor's rendered document.
   await page.goto(`/issues/${created!.identifier}/edit`);
   await expect(page.getByLabel('Title')).toHaveValue('Wire the dashboard');
+  await expect(page.getByLabel('Description')).toContainText(
+    'A short requirement for the dashboard view.',
+  );
 });
 
 test('@smoke the type+parent picker filters candidates inline (2.3.4)', async ({ page }) => {
