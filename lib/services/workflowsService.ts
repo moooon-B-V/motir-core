@@ -175,14 +175,37 @@ export const workflowsService = {
 
   /**
    * The set of status keys whose category is `done` — the per-project terminal
-   * set. This is the surface that resolves finding #21: 2.2.6 swaps
-   * workItemsService.isReady / countOpenBlockers' hardcoded `'done'` literal
-   * for this set, so "terminal" generalizes to every `category = done` status
-   * (e.g. `done` AND `cancelled` out of the box). Empty for a foreign project.
+   * set. The surface that resolved finding #21: `workItemsService.isReady`
+   * classifies blockers against this set (via the batched
+   * `getTerminalStatusKeysByProjects` below) instead of a hardcoded `'done'`
+   * literal, so "terminal" generalizes to every `category = done` status (e.g.
+   * `done` AND `cancelled` out of the box). Empty for a foreign project.
    */
   async getTerminalStatusKeys(projectId: string, workspaceId: string): Promise<Set<string>> {
     const statuses = await workflowsRepository.findStatuses(projectId, workspaceId);
     return new Set(statuses.filter((s) => s.category === 'done').map((s) => s.key));
+  },
+
+  /**
+   * The terminal-status-key set for MANY projects at once (Subtask 2.2.6) —
+   * the batched form of `getTerminalStatusKeys`, returning
+   * `Map<projectId, Set<terminalKey>>` from ONE query (no N+1). Used by
+   * `workItemsService.isReady` to classify each blocker against ITS OWN
+   * project's terminal set when blockers span projects. Every requested
+   * projectId is present in the map (empty set when it has no terminal statuses
+   * or isn't in the workspace), so callers can `.get(pid)` without a null gap.
+   */
+  async getTerminalStatusKeysByProjects(
+    projectIds: string[],
+    workspaceId: string,
+  ): Promise<Map<string, Set<string>>> {
+    const unique = [...new Set(projectIds)];
+    const map = new Map<string, Set<string>>(unique.map((pid) => [pid, new Set<string>()]));
+    const statuses = await workflowsRepository.findStatusesByProjects(unique, workspaceId);
+    for (const s of statuses) {
+      if (s.category === 'done') map.get(s.projectId)?.add(s.key);
+    }
+    return map;
   },
 
   /**

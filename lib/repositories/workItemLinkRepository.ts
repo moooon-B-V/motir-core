@@ -76,34 +76,27 @@ export const workItemLinkRepository = {
   },
 
   /**
-   * Count the `is_blocked_by` blockers of `workItemId` that are NOT yet done
-   * — the ready-set predicate, in ONE query (Subtask 1.4.4). A work item is
-   * "ready" iff this count is 0 (every blocker reached the terminal status).
-   * The service's `isReady` delegates here rather than fetch-then-filter so
-   * Epic 7's ready-set engine can call it across many items cheaply; the raw
-   * SQL belongs at the repository edge (the 4-layer rule keeps `$queryRaw`
-   * out of the service).
+   * The `(status, projectId)` of every `is_blocked_by` blocker of `workItemId`
+   * — the raw input the service's `isReady` reduces to a readiness verdict
+   * (Subtask 2.2.6, resolving finding #21). ONE query, no fetch-then-filter
+   * loop; the terminal classification is NOT done here because "terminal" is a
+   * per-project property (`category = done`, which can differ per blocker's
+   * project) — that lives in `workflowsService.getTerminalStatusKeysByProjects`
+   * and the service composes the two. (Earlier this was a single COUNT query
+   * with a hardcoded `status <> 'done'`; finding #21 generalized it.)
    *
-   * v1 hardcodes `'done'` as the single terminal status. Epic 2's workflow
-   * Story generalizes to a per-project terminal-status set — at which point
-   * this predicate widens to `status <> ALL(<terminal set>)`. Documented as
-   * a forward note here and in PRODECT_FINDINGS.md.
-   *
-   * A LEFT JOIN (rather than INNER) makes the intent explicit — "blockers,
-   * via the link table" — and the `b."status" <> 'done'` predicate filters
-   * the unmatched (NULL) side out either way, so an item with zero blockers
-   * correctly counts 0. Read-only → `db` singleton.
+   * A blocker can live in a DIFFERENT project than `workItemId` (cross-project
+   * blocks are legal in the link model), so each blocker carries its own
+   * `projectId`. Read-only → `db` singleton.
    */
-  async countOpenBlockers(workItemId: string): Promise<number> {
-    const rows = await db.$queryRaw<Array<{ cnt: number }>>`
-      SELECT COUNT(*)::int AS cnt
-        FROM "work_item_link" l
-        LEFT JOIN "work_item" b ON b."id" = l."toId"
-       WHERE l."fromId" = ${workItemId}
-         AND l."kind" = 'is_blocked_by'::"work_item_link_kind"
-         AND b."status" <> 'done'`;
-    /* istanbul ignore next -- defensive: COUNT(*) always returns exactly one row, so rows[0].cnt is always present; the ?? 0 guards a shape change */
-    return Number(rows[0]?.cnt ?? 0);
+  async findBlockerStates(
+    workItemId: string,
+  ): Promise<Array<{ status: string; projectId: string }>> {
+    const rows = await db.workItemLink.findMany({
+      where: { fromId: workItemId, kind: 'is_blocked_by' },
+      select: { toItem: { select: { status: true, projectId: true } } },
+    });
+    return rows.map((r) => ({ status: r.toItem.status, projectId: r.toItem.projectId }));
   },
 
   /**
