@@ -122,9 +122,10 @@ test('@smoke the type+parent picker filters candidates inline (2.3.4)', async ({
   await page.goto('/issues');
   await page.getByRole('button', { name: 'Create issue' }).click();
 
-  // Type = Subtask → parent candidates are Story/Task/Bug, never the Epic.
+  // Type = Sub-task → parent candidates are Story/Task/Bug, never the Epic.
+  // (the type's display label is "Sub-task", hyphenated — ISSUE_TYPE_META.)
   await page.getByRole('combobox', { name: 'Type' }).click();
-  await page.getByRole('option', { name: 'Subtask' }).click();
+  await page.getByRole('option', { name: 'Sub-task' }).click();
   await page.getByRole('combobox', { name: 'Parent' }).click();
   await expect(page.getByRole('option', { name: /The Story/ })).toBeVisible();
   await expect(page.getByRole('option', { name: /The Task/ })).toBeVisible();
