@@ -256,7 +256,11 @@ export function MarkdownEditor({
   );
 
   return (
-    <div className="flex flex-col gap-1" data-color-mode={colorMode}>
+    // suppressHydrationWarning: `colorMode` is 'light' on the server (the theme
+    // provider's stable SSR snapshot) but resolves to the OS preference on the
+    // client — an intentional, sanctioned attribute mismatch (same pattern the
+    // ThemeProvider uses for <html data-theme>), not a bug to reconcile.
+    <div className="flex flex-col gap-1" data-color-mode={colorMode} suppressHydrationWarning>
       <span className="text-foreground font-sans text-sm font-medium">{label}</span>
       <MDEditor
         value={value}
