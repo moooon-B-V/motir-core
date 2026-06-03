@@ -110,11 +110,15 @@ export interface CreateWorkItemInput {
  * untouched", while an explicit `null` clears a nullable column. An empty
  * patch is a no-op (the service returns the current DTO without writing a
  * revision). `projectId` and `kind` are NOT here — both are immutable post-
- * creation. `status` and `parentId` ARE patchable (a re-parent is validated
- * for same-project + kind before the DB trigger backstops it). The
- * explanation-source state machine: supplying `explanationMd` while the
- * current source is `ai_draft`, WITHOUT also setting `explanationSource`,
- * auto-transitions the source to `user_edited`.
+ * creation. `parentId` IS patchable (a re-parent is validated for same-project
+ * + kind before the DB trigger backstops it). `status` is DELIBERATELY ABSENT
+ * (Subtask 2.3.6, finding #46): a status change is NOT a free-form patch — it
+ * must go through `workItemsService.updateStatus`, the gated 2.2.4 path that
+ * validates the transition against the project's workflow. Putting `status`
+ * back here re-opens the ungated dual-write hole this Subtask closed. The
+ * explanation-source state machine: supplying `explanationMd` while the current
+ * source is `ai_draft`, WITHOUT also setting `explanationSource`, auto-
+ * transitions the source to `user_edited`.
  */
 export interface UpdateWorkItemInput {
   parentId?: string | null;
@@ -122,7 +126,6 @@ export interface UpdateWorkItemInput {
   descriptionMd?: string | null;
   explanationMd?: string | null;
   explanationSource?: WorkItemExplanationSourceDto;
-  status?: string;
   assigneeId?: string | null;
   priority?: WorkItemPriorityDto;
   dueDate?: string | null; // ISO 8601

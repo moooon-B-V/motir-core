@@ -124,7 +124,9 @@ describe('cross-project links — service path (same workspace, different projec
     );
 
     expect(await workItemsService.isReady(itemAId, fx.ctx)).toBe(false);
-    await workItemsService.updateWorkItem(itemBId, { status: 'done' }, fx.ctx);
+    // 2.3.6/finding #46: status is no longer a free-form updateWorkItem patch —
+    // park the blocker at a terminal status via a direct write for setup.
+    await db.workItem.update({ where: { id: itemBId }, data: { status: 'done' } });
     expect(await workItemsService.isReady(itemAId, fx.ctx)).toBe(true);
   });
 

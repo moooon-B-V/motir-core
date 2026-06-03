@@ -633,10 +633,10 @@ describe('isReady', () => {
     );
     expect(await workItemsService.isReady(a.id, fx.ctx)).toBe(false);
 
-    await workItemsService.updateWorkItem(b.id, { status: 'done' }, fx.ctx);
+    await db.workItem.update({ where: { id: b.id }, data: { status: 'done' } });
     expect(await workItemsService.isReady(a.id, fx.ctx)).toBe(false); // C still open
 
-    await workItemsService.updateWorkItem(c.id, { status: 'done' }, fx.ctx);
+    await db.workItem.update({ where: { id: c.id }, data: { status: 'done' } });
     expect(await workItemsService.isReady(a.id, fx.ctx)).toBe(true);
   });
 
@@ -669,7 +669,7 @@ describe('isReady', () => {
     );
 
     // C done, B still open → not ready.
-    await workItemsService.updateWorkItem(c.id, { status: 'done' }, fx.ctx);
+    await db.workItem.update({ where: { id: c.id }, data: { status: 'done' } });
     expect(await workItemsService.isReady(a.id, fx.ctx)).toBe(false);
 
     // Remove the open blocker B. The predicate must re-evaluate against the

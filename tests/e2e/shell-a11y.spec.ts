@@ -160,6 +160,45 @@ test.describe('@a11y shell accessibility', () => {
     ).toEqual([]);
   });
 
+  // The issue edit route (Subtask 2.3.6). Creates a project + an issue (via the
+  // create modal, reading its identifier off the success toast), then sweeps the
+  // /issues/[key]/edit page. STRICT — only the vendored `.w-md-editor` chrome is
+  // excluded (the same third-party subtree 2.3.5 excludes; the form's own
+  // controls + the Status/Parent/Assignee comboboxes are held to full AA).
+  test('the issue edit route has zero axe violations (WCAG 2.1 AA; third-party editor chrome excluded)', async ({
+    page,
+  }) => {
+    await signUp(page, 'e2e-edit-issue-a11y@example.com');
+    await createFirstProject(page, 'Mobile App');
+
+    await page.goto('/issues');
+    await page.getByRole('button', { name: 'Create issue' }).click();
+    await page.getByLabel('Title').fill('Editable issue');
+    await page.getByRole('button', { name: 'Create', exact: true }).click();
+
+    const toast = page.getByText(/ created$/);
+    await expect(toast).toBeVisible();
+    const identifier = ((await toast.textContent()) ?? '').replace(/ created$/, '').trim();
+    expect(identifier).toMatch(/^[A-Z]+-\d+$/);
+
+    await page.goto(`/issues/${identifier}/edit`);
+    await expect(page.getByRole('heading', { name: 'Edit issue' })).toBeVisible();
+    // Wait for the lazy MarkdownEditor to mount — until it does, its dynamic-
+    // import fallback ("Loading editor…") is on screen, and that transient
+    // placeholder would be swept. Once `.w-md-editor` is present the placeholder
+    // is gone (and the editor chrome itself is excluded below).
+    await expect(page.locator('.w-md-editor').first()).toBeVisible();
+
+    const results = await new AxeBuilder({ page })
+      .withTags(WCAG_TAGS)
+      .exclude('.w-md-editor')
+      .analyze();
+    expect(
+      results.violations,
+      formatViolations('/issues/[key]/edit', results.violations as AxeViolation[]),
+    ).toEqual([]);
+  });
+
   // /tokens is the public design-system specimen — not a shell-bearing route,
   // but it's where every primitive renders together, so an axe sweep here
   // catches regressions before they reach a real surface. Scanned without a

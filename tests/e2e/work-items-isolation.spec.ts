@@ -267,7 +267,7 @@ test.describe('@smoke work-items: revision feed isolation', () => {
 // ── Dependencies ─────────────────────────────────────────────────────────────
 
 test.describe('@smoke work-items: dependency / ready-set', () => {
-  test('is_blocked_by: blockers/blocking/isReady transition through done + unlink', async () => {
+  test('is_blocked_by: blockers/blocking/isReady transition through a terminal status + unlink', async () => {
     const a = await newUser('wi-dep-a@example.com');
     const p1 = await createProject(a, 'Dep', 'DEPP');
 
@@ -293,15 +293,19 @@ test.describe('@smoke work-items: dependency / ready-set', () => {
     const ready = async (): Promise<boolean> =>
       ((await (await isReady(a, x)).json()) as { ready: boolean }).ready;
 
+    // Resolve blockers via the GATED status path (2.3.6/finding #46: status is
+    // no longer a free-form body patch). `todo → cancelled` is a legal default
+    // transition, and `cancelled` is category=done → it resolves the block.
+    const resolve = (id: string) => a.ctx.patch(`${ITEMS}?id=${id}&status=cancelled`);
     expect(await ready(), 'X blocked by two open items').toBe(false);
-    expect((await patchWorkItem(a, y, { status: 'done' })).status()).toBe(200);
+    expect((await resolve(y)).status()).toBe(200);
     expect(await ready(), 'Z still open → X still blocked').toBe(false);
-    expect((await patchWorkItem(a, z, { status: 'done' })).status()).toBe(200);
-    expect(await ready(), 'both blockers done → X ready').toBe(true);
+    expect((await resolve(z)).status()).toBe(200);
+    expect(await ready(), 'both blockers terminal → X ready').toBe(true);
 
-    // Unlink X→Y; only Z remains (already done) → X stays ready.
+    // Unlink X→Y; only Z remains (already terminal) → X stays ready.
     expect((await unlink(a, linkXYId)).status()).toBe(204);
-    expect(await ready(), 'only Z remains, and Z is done').toBe(true);
+    expect(await ready(), 'only Z remains, and Z is terminal').toBe(true);
     const afterUnlink = (await (await blockers(a, x)).json()) as Array<{ id: string }>;
     expect(afterUnlink.map((r) => r.id)).toEqual([z]);
   });

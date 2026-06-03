@@ -24,7 +24,8 @@ export type WorkItemErrorTag =
   | 'REPORTER_NOT_IN_WORKSPACE'
   | 'ASSIGNEE_NOT_IN_WORKSPACE'
   | 'UNKNOWN_STATUS'
-  | 'ILLEGAL_TRANSITION';
+  | 'ILLEGAL_TRANSITION'
+  | 'STALE_WORK_ITEM';
 
 /**
  * Base class for every work-items typed error. Concrete subclasses set a
@@ -178,6 +179,23 @@ export class IllegalTransitionError extends WorkItemError {
   constructor(fromKey: string, toKey: string) {
     super(`Illegal status transition: "${fromKey}" → "${toKey}".`);
     this.name = 'IllegalTransitionError';
+  }
+}
+
+/**
+ * Optimistic-concurrency conflict (Subtask 2.3.6): the edit form submitted the
+ * `updatedAt` it read at render time, and by commit the row's `updatedAt` had
+ * moved — someone else edited the issue in between. A client error → 409. The
+ * UI surfaces "this issue was edited by someone else — refresh and retry";
+ * last-write-wins is the shipped behavior, but the user sees the conflict
+ * instead of silently clobbering the other edit.
+ */
+export class StaleWorkItemError extends WorkItemError {
+  readonly tag = 'STALE_WORK_ITEM' as const;
+  readonly code = 'STALE_WORK_ITEM' as const;
+  constructor() {
+    super('This issue was edited by someone else. Refresh and try again.');
+    this.name = 'StaleWorkItemError';
   }
 }
 
