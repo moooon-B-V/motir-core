@@ -1,14 +1,78 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
-import {
-  CoreFieldsPanel,
-  type PersonRef,
-} from '@/app/(authed)/issues/[key]/_components/CoreFieldsPanel';
-import { IssueExplanation } from '@/app/(authed)/issues/[key]/_components/IssueExplanation';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { WorkItemDto } from '@/lib/dto/workItems';
+import type { WorkflowDto } from '@/lib/dto/workflows';
+import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 
-afterEach(cleanup);
+// The inline rail commits through the edit Server Actions + refreshes the route;
+// stub those, the parent-candidates fetch, the router, and the toast so the
+// panel drives in isolation.
+const { updateSpy, statusSpy, refreshSpy, toastSpy } = vi.hoisted(() => ({
+  updateSpy: vi.fn(),
+  statusSpy: vi.fn(),
+  refreshSpy: vi.fn(),
+  toastSpy: vi.fn(),
+}));
+vi.mock('@/app/(authed)/issues/[key]/edit/actions', () => ({
+  updateIssueAction: updateSpy,
+  changeStatusAction: statusSpy,
+}));
+vi.mock('@/app/(authed)/issues/actions', () => ({
+  listCandidateParentsAction: vi.fn().mockResolvedValue({ ok: true, candidates: [] }),
+}));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: refreshSpy }) }));
+vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ toast: toastSpy }) }));
+
+import { CoreFieldsPanel } from '@/app/(authed)/issues/[key]/_components/CoreFieldsPanel';
+import { IssueExplanation } from '@/app/(authed)/issues/[key]/_components/IssueExplanation';
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+const members: WorkspaceMemberDTO[] = [
+  { userId: 'u_assignee', name: 'Ada Lovelace', email: 'ada@example.com', role: 'member' },
+  { userId: 'u_reporter', name: 'Grace Hopper', email: 'grace@example.com', role: 'owner' },
+];
+
+const workflow: WorkflowDto = {
+  statuses: [
+    {
+      id: 's1',
+      projectId: 'proj_1',
+      key: 'todo',
+      label: 'To Do',
+      category: 'todo',
+      color: null,
+      position: 'a0',
+      isInitial: true,
+    },
+    {
+      id: 's2',
+      projectId: 'proj_1',
+      key: 'in_progress',
+      label: 'In Progress',
+      category: 'in_progress',
+      color: null,
+      position: 'a1',
+      isInitial: false,
+    },
+    {
+      id: 's3',
+      projectId: 'proj_1',
+      key: 'done',
+      label: 'Done',
+      category: 'done',
+      color: null,
+      position: 'a2',
+      isInitial: false,
+    },
+  ],
+  transitions: [],
+  policyMode: 'open',
+};
 
 // A fully-populated work item; per-test overrides exercise the empty states.
 function makeItem(overrides: Partial<WorkItemDto> = {}): WorkItemDto {
@@ -37,49 +101,51 @@ function makeItem(overrides: Partial<WorkItemDto> = {}): WorkItemDto {
   };
 }
 
-const assignee: PersonRef = { name: 'Ada Lovelace', email: 'ada@example.com' };
-const reporter: PersonRef = { name: 'Grace Hopper', email: 'grace@example.com' };
+function renderPanel(item = makeItem()) {
+  return render(
+    <CoreFieldsPanel item={item} members={members} workflow={workflow} reporterIsSelf />,
+  );
+}
 
-describe('CoreFieldsPanel', () => {
-  it('renders every field with its value', () => {
-    render(<CoreFieldsPanel item={makeItem()} assignee={assignee} reporter={reporter} />);
+describe('CoreFieldsPanel (inline rail)', () => {
+  it('renders the read-only fields + the current values of the editable controls', () => {
+    renderPanel();
 
-    // Type label, priority label
+    // Read-only: type, reporter, created/updated (deterministic en-US/UTC).
     expect(screen.getByText('Story')).toBeTruthy();
-    expect(screen.getByText('High')).toBeTruthy();
-
-    // Assignee + reporter names
-    expect(screen.getByText('Ada Lovelace')).toBeTruthy();
     expect(screen.getByText('Grace Hopper')).toBeTruthy();
-
-    // Due date (date-only, en-US/UTC) and estimate (minutes → human duration)
-    expect(screen.getByText('Jun 10, 2026')).toBeTruthy();
-    expect(screen.getByText('1h 30m')).toBeTruthy();
-
-    // Created / updated render through the deterministic en-US/UTC formatter
-    // (the same string on server + client — no hydration mismatch).
     expect(screen.getByText('Jun 1, 02:45 PM UTC')).toBeTruthy();
     expect(screen.getByText('Jun 3, 09:30 AM UTC')).toBeTruthy();
 
-    // The field labels themselves are present.
-    expect(screen.getByText('Assignee')).toBeTruthy();
-    expect(screen.getByText('Reporter')).toBeTruthy();
+    // Editable: priority select reflects the current value; due/estimate inputs
+    // are seeded; the status + assignee pickers render.
+    expect((screen.getByLabelText('Priority') as HTMLSelectElement).value).toBe('high');
+    expect((screen.getByLabelText('Due date') as HTMLInputElement).value).toBe('2026-06-10');
+    expect((screen.getByLabelText('Estimate (minutes)') as HTMLInputElement).value).toBe('90');
+    expect(screen.getByRole('combobox', { name: /status/i })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: /assignee/i })).toBeTruthy();
   });
 
-  it('shows the documented empty states for null assignee / due date / estimate', () => {
-    render(
-      <CoreFieldsPanel
-        item={makeItem({ assigneeId: null, dueDate: null, estimateMinutes: null })}
-        assignee={null}
-        reporter={reporter}
-      />,
-    );
+  it('commits a priority change through updateIssueAction', () => {
+    updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-03T10:00:00.000Z' });
+    renderPanel();
 
-    expect(screen.getByText('Unassigned')).toBeTruthy();
-    expect(screen.getByText('No due date')).toBeTruthy();
-    expect(screen.getByText('No estimate')).toBeTruthy();
-    // Reporter is still resolved.
-    expect(screen.getByText('Grace Hopper')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Priority'), { target: { value: 'low' } });
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'wi_1', priority: 'low' }),
+    );
+  });
+
+  it('commits an estimate edit on blur (and not on every keystroke)', () => {
+    updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-03T10:00:00.000Z' });
+    renderPanel();
+
+    const estimate = screen.getByLabelText('Estimate (minutes)');
+    fireEvent.change(estimate, { target: { value: '120' } });
+    expect(updateSpy).not.toHaveBeenCalled(); // no per-keystroke patch
+    fireEvent.blur(estimate);
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ estimateMinutes: 120 }));
   });
 });
 

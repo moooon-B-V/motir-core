@@ -327,3 +327,27 @@ body {
   margin: 0;
   min-height: 100vh;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   @uiw/react-md-editor — drive the editor's chrome off OUR theme tokens so its
+   canvas, text, borders, and toolbar follow light/dark via [data-theme],
+   independent of the library's bundled [data-color-mode] rules (which left the
+   editor text black in dark mode — Subtask 2.4.2 follow-up). We override the
+   library's documented CSS variables rather than fighting its DOM, so syntax
+   token colors still work; only the base canvas/fg follow our theme.
+   ═══════════════════════════════════════════════════════════════════════ */
+.w-md-editor {
+  --color-canvas-default: var(--color-background);
+  --color-canvas-subtle: var(--color-surface);
+  --color-fg-default: var(--color-foreground);
+  --color-fg-muted: var(--color-slate);
+  --color-fg-subtle: var(--color-slate);
+  --color-border-default: var(--color-hairline);
+  --color-border-muted: var(--color-hairline);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+.w-md-editor-toolbar {
+  background-color: var(--color-surface);
+  border-color: var(--color-hairline);
+}

@@ -9,7 +9,7 @@ import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import { MarkdownView } from '@/components/ui/MarkdownView';
-import { CoreFieldsPanel, type PersonRef } from './_components/CoreFieldsPanel';
+import { CoreFieldsPanel } from './_components/CoreFieldsPanel';
 import { ContentSectionCard } from './_components/ContentSectionCard';
 import { IssueExplanation } from './_components/IssueExplanation';
 
@@ -56,16 +56,10 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
   const { item } = detail;
   const TypeIcon = ISSUE_TYPE_META[item.kind].icon;
 
-  // Resolve assignee / reporter ids to display names via the workspace member
-  // list (the shipped pattern the edit route uses — getIssueDetail carries only
-  // ids, no user objects). A member who has since left the workspace resolves to
-  // null and renders as "Unassigned" / blank.
+  // Members back the inline assignee picker + reporter display (getIssueDetail
+  // carries ids only); the workflow (already in the detail bundle) backs the
+  // inline status picker's legal-transition set.
   const members = await workspacesService.listMembers(ctx.workspaceId, ctx.userId);
-  const memberById = new Map(members.map((m) => [m.userId, m]));
-  const toPersonRef = (userId: string | null): PersonRef | null => {
-    const m = userId ? memberById.get(userId) : undefined;
-    return m ? { name: m.name, email: m.email } : null;
-  };
 
   return (
     <div className="mx-auto flex max-w-[64rem] flex-col gap-6">
@@ -110,8 +104,8 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
         <aside className="flex flex-col gap-4">
           <CoreFieldsPanel
             item={item}
-            assignee={toPersonRef(item.assigneeId)}
-            reporter={toPersonRef(item.reporterId)}
+            members={members}
+            workflow={detail.workflow}
             reporterIsSelf={item.reporterId === ctx.userId}
           />
           {/* 2.4.3: parent breadcrumb. 2.4.4: inline status + assignee controls.

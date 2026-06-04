@@ -29,6 +29,7 @@ export function ContentSectionCard({
 }: ContentSectionCardProps) {
   return (
     <Card
+      className="shadow-(--shadow-card)"
       header={
         <div className="flex items-center gap-2">
           <h2 className="text-foreground font-sans text-base font-semibold">{title}</h2>
