@@ -1,0 +1,992 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Link management — add / remove relationship links (2.4.8 → 2.4.9)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the LINK-MANAGEMENT interaction (Subtask
+      2.4.8 → built by 2.4.9). Extends the approved relationships.mock.html (2.4.7)
+      with the add / remove affordances the read-only panel deferred. Backend
+      already exists: workItemsService.linkWorkItems / unlinkWorkItems (1.4.4) +
+      the typed trigger errors. Built FROM the real design system — tokens copied
+      1:1 from app/globals.css, markup mirrors the shipped Combobox (2.3.4),
+      Button, Pill, Card, SectionLabel, IssueTypeIcon. No Pencil→code gap.
+
+      Panels: (0) entry point + per-row remove · (1) add form open + kind menu ·
+      (2) issue-search combobox typing · (3) selected + Add, and the inline error
+      states · (4) remove confirm. Toggle dark to confirm token parity.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied from app/globals.css (light) ───── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-card: 12px;
+        --radius-badge: 9999px;
+        --radius-md: 8px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-border: var(--color-border);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-danger: var(--color-destructive);
+        --el-warning: var(--color-warning);
+        --el-success: var(--color-success);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+      }
+
+      /* ── Mock chrome (NOT part of the design) ───────────────────────────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 80px;
+      }
+      .review-head {
+        max-width: 760px;
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-muted);
+        margin: 30px 0 10px;
+      }
+
+      /* ── Primitive classes (faithful to components/ui/*) ────────────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        box-shadow: var(--shadow-card);
+      }
+      .section-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      .section-head h2 {
+        font-family: var(--font-sans);
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .section-head .gloss {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .section-head .head-right {
+        margin-left: auto;
+      }
+      .section-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-muted);
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        padding: 2px 10px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill--planned {
+        background: var(--el-tint-lavender);
+      }
+      .pill--inprogress {
+        background: var(--el-tint-sky);
+      }
+      .pill--done {
+        background: var(--el-tint-mint);
+      }
+      .type-icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+
+      /* Buttons (components/ui/Button.tsx) */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-md);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 600;
+        padding: 7px 14px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn--primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn--primary[disabled] {
+        opacity: 0.5;
+      }
+      .btn--ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn--ghost:hover {
+        background: var(--el-surface);
+      }
+      .btn--sm {
+        font-size: 13px;
+        padding: 5px 10px;
+      }
+      /* the panel header "+ Link issue" entry point (a quiet ghost button) */
+      .add-entry {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-link);
+        background: transparent;
+        border: 0;
+        cursor: pointer;
+        padding: 2px 4px;
+        border-radius: var(--radius-md);
+      }
+      .add-entry svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* Link row (mirrors RelationshipsPanel LinkRow — id+title baseline, icon/pill centered) */
+      .link-list {
+        list-style: none;
+        margin: 0 -8px;
+        padding: 0;
+      }
+      .link-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: var(--radius-md);
+      }
+      .link-row:hover {
+        background: var(--el-surface);
+      }
+      .lr-main {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .lr-id {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .lr-title {
+        font-size: 14px;
+        color: var(--el-text);
+        margin-left: 8px;
+      }
+      /* per-row remove (the × button — quiet, AA-safe, danger on hover) */
+      .row-remove {
+        flex: none;
+        width: 24px;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-md);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .row-remove svg {
+        width: 15px;
+        height: 15px;
+      }
+      .row-remove:hover {
+        background: var(--el-tint-rose);
+        color: var(--el-danger);
+      }
+
+      .group {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+      .group + .group {
+        margin-top: 16px;
+      }
+      .group-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 8px;
+      }
+      .group-count {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      /* ── Add-link form (the new interaction) ────────────────────────────── */
+      .addlink {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-md);
+        background: var(--el-surface-soft);
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .addlink-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      /* kind selector — a Combobox/Popover trigger (role=combobox button) */
+      .kind-select {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex: none;
+        min-width: 124px;
+        justify-content: space-between;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-md);
+        background: var(--el-page-bg);
+        padding: 8px 10px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .kind-select svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+      }
+      /* the issue-search Combobox (input + anchored listbox) */
+      .combo {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+      }
+      .combo-input {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-md);
+        background: var(--el-page-bg);
+        padding: 8px 10px;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .combo-input.is-focused {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .combo-input svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .combo-input .placeholder {
+        color: var(--el-text-muted);
+      }
+      .combo-input .typed {
+        color: var(--el-text);
+      }
+      .combo-list {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+        z-index: 5;
+        list-style: none;
+        margin: 0;
+      }
+      .combo-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 8px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .combo-option.is-active {
+        background: var(--el-surface);
+      }
+      .combo-empty {
+        padding: 10px 8px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        font-style: italic;
+      }
+      /* selected issue chip (the chosen target before Add) */
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-md);
+        padding: 4px 8px;
+        font-size: 13px;
+        color: var(--el-text);
+        flex: 1;
+        min-width: 0;
+      }
+      .chip .lr-id {
+        font-size: 12px;
+      }
+      .addlink-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-left: auto;
+      }
+      /* inline error — a rose tint banner, AA-safe (strong text, danger icon) */
+      .inline-error {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        background: var(--el-tint-rose);
+        border-radius: var(--radius-md);
+        padding: 8px 10px;
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .inline-error svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-danger);
+        flex: none;
+        margin-top: 1px;
+      }
+      /* remove confirm popover */
+      .confirm {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-md);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+        padding: 12px;
+        max-width: 280px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .confirm p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .confirm .row {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+      .btn--danger {
+        background: var(--el-danger);
+        color: #fff;
+      }
+      .muted {
+        color: var(--el-text-muted);
+        font-size: 12px;
+      }
+      .kind-menu {
+        list-style: none;
+        margin: 6px 0 0;
+        padding: 4px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-elevated);
+        background: var(--el-page-bg);
+        width: 200px;
+      }
+      .kind-menu li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 8px;
+        border-radius: 6px;
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .kind-menu li.is-active {
+        background: var(--el-surface);
+      }
+      .kind-menu li .check {
+        margin-left: auto;
+        color: var(--el-accent);
+      }
+      .kind-menu li .check svg {
+        width: 15px;
+        height: 15px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Link management — add / remove relationship links</h1>
+        <p>
+          Story 2.4 · design for 2.4.9. Extends relationships.mock.html (2.4.7) with the add/remove
+          UI.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-chev"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20" />
+          <path d="M12 8v4" />
+          <path d="M12 16h0.01" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ═══════════ PANEL 0 — entry point + per-row remove ═══════════ -->
+    <div class="panel-label">
+      0 · Entry point — "+ Link issue" replaces the 2.4.5 read-only note; each row gets a quiet
+      remove (×) on hover
+    </div>
+    <div class="panel">
+      <section class="card">
+        <div class="section-head">
+          <h2>Relationships</h2>
+          <span class="gloss">— dependencies &amp; links</span>
+          <span class="head-right">
+            <button class="add-entry">
+              <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Link issue
+            </button>
+          </span>
+        </div>
+        <div class="stack">
+          <div class="group">
+            <div class="group-head">
+              <span class="section-label">Blocked by</span><span class="group-count">1</span>
+            </div>
+            <ul class="link-list">
+              <li class="link-row">
+                <span class="type-icon t-task"
+                  ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                ></span>
+                <span class="lr-main"
+                  ><span class="lr-id">PROD-3</span
+                  ><span class="lr-title">Set up Google OAuth credentials</span></span
+                >
+                <span class="pill pill--planned">To Do</span>
+                <button class="row-remove" title="Remove link" aria-label="Remove link to PROD-3">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                </button>
+              </li>
+            </ul>
+          </div>
+          <div class="group">
+            <div class="group-head">
+              <span class="section-label">Relates to</span><span class="group-count">1</span>
+            </div>
+            <ul class="link-list">
+              <li class="link-row">
+                <span class="type-icon t-story"
+                  ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                ></span>
+                <span class="lr-main"
+                  ><span class="lr-id">PROD-19</span
+                  ><span class="lr-title">Session &amp; cookie hardening</span></span
+                >
+                <span class="pill pill--inprogress">In Progress</span>
+                <button class="row-remove" title="Remove link" aria-label="Remove link to PROD-19">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                </button>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ═══════════ PANEL 1 — add form open + kind menu ═══════════ -->
+    <div class="panel-label">
+      1 · Add form open — the kind dropdown (5 link kinds) + the empty issue-search combobox
+    </div>
+    <div class="panel">
+      <section class="card">
+        <div class="section-head">
+          <h2>Relationships</h2>
+          <span class="gloss">— dependencies &amp; links</span>
+          <span class="head-right"
+            ><button class="add-entry">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>Cancel
+            </button></span
+          >
+        </div>
+        <div class="addlink">
+          <div class="addlink-row">
+            <button class="kind-select">
+              Blocked by <svg viewBox="0 0 24 24"><use href="#i-chev" /></svg>
+            </button>
+            <div class="combo">
+              <div class="combo-input">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg
+                ><span class="placeholder">Search an issue…</span>
+              </div>
+            </div>
+            <div class="addlink-actions">
+              <button class="btn btn--primary btn--sm" disabled>Add</button>
+              <button class="btn btn--ghost btn--sm">Cancel</button>
+            </div>
+          </div>
+          <ul class="kind-menu">
+            <li class="is-active">
+              Blocked by
+              <span class="check"
+                ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+              ></span>
+            </li>
+            <li>Blocks</li>
+            <li>Relates to</li>
+            <li>Duplicates</li>
+            <li>Clones</li>
+          </ul>
+        </div>
+      </section>
+    </div>
+
+    <!-- ═══════════ PANEL 2 — combobox typing ═══════════ -->
+    <div class="panel-label">
+      2 · Issue-search combobox typing — candidate results (own-workspace; excludes self +
+      already-linked)
+    </div>
+    <div class="panel">
+      <section class="card">
+        <div class="section-head">
+          <h2>Relationships</h2>
+          <span class="gloss">— dependencies &amp; links</span>
+        </div>
+        <div class="addlink">
+          <div class="addlink-row">
+            <button class="kind-select">
+              Blocks <svg viewBox="0 0 24 24"><use href="#i-chev" /></svg>
+            </button>
+            <div class="combo">
+              <div class="combo-input is-focused">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg
+                ><span class="typed">oauth</span>
+              </div>
+              <ul class="combo-list">
+                <li class="combo-option is-active">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                  ><span class="lr-id">PROD-31</span
+                  ><span class="lr-title">Ship social sign-in to beta</span>
+                </li>
+                <li class="combo-option">
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                  ><span class="lr-id">PROD-8</span
+                  ><span class="lr-title">Callback drops the state param on retry</span>
+                </li>
+                <li class="combo-option">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                  ><span class="lr-id">PROD-44</span
+                  ><span class="lr-title">OAuth consent screen copy</span>
+                </li>
+              </ul>
+            </div>
+            <div class="addlink-actions">
+              <button class="btn btn--primary btn--sm" disabled>Add</button>
+              <button class="btn btn--ghost btn--sm">Cancel</button>
+            </div>
+          </div>
+        </div>
+        <p class="muted" style="margin: 8px 0 0">
+          Empty results show: <em>No matching issues.</em>
+        </p>
+      </section>
+    </div>
+
+    <!-- ═══════════ PANEL 3 — selected + Add enabled, and the error states ═══════════ -->
+    <div class="panel-label">
+      3 · Issue selected → Add enabled · and the inline error states the triggers surface
+    </div>
+    <div class="panel">
+      <section class="card">
+        <div class="section-head">
+          <h2>Relationships</h2>
+          <span class="gloss">— dependencies &amp; links</span>
+        </div>
+        <div class="addlink">
+          <div class="addlink-row">
+            <button class="kind-select">
+              Blocked by <svg viewBox="0 0 24 24"><use href="#i-chev" /></svg>
+            </button>
+            <span class="chip"
+              ><span class="type-icon t-bug"
+                ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+              ><span class="lr-id">PROD-8</span
+              ><span class="lr-title">Callback drops the state param</span
+              ><button
+                class="row-remove"
+                aria-label="Clear selection"
+                style="width: 20px; height: 20px"
+              >
+                <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+            ></span>
+            <div class="addlink-actions">
+              <button class="btn btn--primary btn--sm">Add</button>
+              <button class="btn btn--ghost btn--sm">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <p class="muted" style="margin: 18px 0 8px">
+          Inline errors (from the 1.4.4 trigger errors — nothing persists):
+        </p>
+        <div class="stack">
+          <div class="inline-error">
+            <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+            ><span><strong>PROD-42 can’t link to itself.</strong> Pick a different issue.</span>
+          </div>
+          <div class="inline-error">
+            <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+            ><span
+              ><strong>This link already exists.</strong> PROD-42 already blocked by PROD-8.</span
+            >
+          </div>
+          <div class="inline-error">
+            <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+            ><span
+              ><strong>That would create a dependency cycle.</strong> PROD-8 already depends on
+              PROD-42.</span
+            >
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ═══════════ PANEL 4 — remove confirm ═══════════ -->
+    <div class="panel-label">
+      4 · Remove — the × opens a confirm (a relates-to removal drops both reciprocal rows)
+    </div>
+    <div class="panel">
+      <section class="card">
+        <div class="section-head">
+          <h2>Relationships</h2>
+          <span class="gloss">— dependencies &amp; links</span>
+        </div>
+        <div class="group">
+          <div class="group-head">
+            <span class="section-label">Blocked by</span><span class="group-count">1</span>
+          </div>
+          <ul class="link-list">
+            <li class="link-row" style="background: var(--el-surface)">
+              <span class="type-icon t-task"
+                ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+              ></span>
+              <span class="lr-main"
+                ><span class="lr-id">PROD-3</span
+                ><span class="lr-title">Set up Google OAuth credentials</span></span
+              >
+              <span class="pill pill--planned">To Do</span>
+              <button
+                class="row-remove"
+                style="background: var(--el-tint-rose); color: var(--el-danger)"
+                aria-label="Remove link to PROD-3"
+              >
+                <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+              </button>
+            </li>
+          </ul>
+        </div>
+        <div style="display: flex; justify-content: flex-end; margin-top: 8px">
+          <div class="confirm">
+            <p>
+              Remove the <strong>blocked-by</strong> link to <span class="lr-id">PROD-3</span>? The
+              issue isn’t deleted — only the link.
+            </p>
+            <div class="row">
+              <button class="btn btn--ghost btn--sm">Cancel</button>
+              <button class="btn btn--danger btn--sm">Remove link</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

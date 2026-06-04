@@ -9,6 +9,7 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | Create issue modal                            | `create.pen` + `create.png`                 | type/parent/title/description/priority + optional Explanation (panel 3).                                           |
 | Tree / list                                   | `tree.pen` + `tree.png`                     | issue tree rows.                                                                                                   |
 | **Relationships panel + ready/blocked badge** | **`relationships.mock.html`** (HTML mockup) | The element `detail.pen` does NOT specify. See below.                                                              |
+| **Link management (add / remove links)**      | **`links.mock.html`** (HTML mockup)         | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                 |
 
 ---
 
@@ -86,3 +87,73 @@ block.
 Link **create/remove** UI (the "Manage" affordance) is Epic 5 collaboration —
 this surface reads links only. `ReadinessBadge` is built reusable for Epic 3
 boards + Epic 6 reports.
+
+---
+
+## Link management — add / remove relationship links (Story 2.4 · 2.4.8 → 2.4.9)
+
+`links.mock.html` extends the relationships panel with the add/remove
+interaction 2.4.5 deferred (it was read-only). Backend already ships —
+`workItemsService.linkWorkItems` / `unlinkWorkItems` (1.4.4) + the typed trigger
+errors. Mirror product: Jira's "Link issue" affordance on the issue detail view.
+
+### Entry point
+
+The read-only "Manage in Epic 5" header note is REPLACED by a quiet **"+ Link
+issue"** button (`--el-link`, `Plus` icon) in the relationships card header.
+Clicking it reveals the inline add form at the top of the card body (above the
+banner/groups); it toggles to a "Cancel" affordance while open.
+
+### Add form (inline, not a modal)
+
+A `--el-surface-soft` bordered block holding one row:
+
+- **Kind selector** — a `Combobox`/`Popover` trigger (`role="combobox"`) showing
+  the current kind + chevron; the menu lists the five kinds **Blocked by ·
+  Blocks · Relates to · Duplicates · Clones** (default "Blocked by"), the active
+  one check-marked. Maps to `WorkItemLinkKindDto` (note: "blocks" is the inverse
+  direction of `is_blocked_by` — the action layer flips from/to accordingly).
+- **Issue-search Combobox** (the shipped 2.3.4 `Combobox`, listbox-combobox, not
+  Radix Popover) — `Search` icon + input; the anchored `role="listbox"` shows
+  candidate rows (type icon · identifier · title) from a workspace-scoped
+  `listLinkCandidates` read (excludes self + already-linked; cross-project
+  allowed per the link model). Empty results → muted "No matching issues."
+- **Actions** — `Button variant="primary"` **Add** (disabled until an issue is
+  selected) + ghost **Cancel**.
+- A selected target shows as a **chip** (icon · id · title · clear ×) replacing
+  the input until cleared.
+
+### Errors (inline, AA-safe)
+
+The 1.4.4 trigger errors round-trip to an inline **rose-tint banner**
+(`--el-tint-rose` bg + `--el-text-strong` text + a `CircleAlert` in `--el-danger`
+— finding #35, not red text on white): **self-link** ("PROD-N can't link to
+itself"), **duplicate** ("This link already exists"), **cycle** ("That would
+create a dependency cycle"), **cross-workspace** (candidate list already
+prevents it, but the trigger backstops). Nothing persists on error.
+
+### Remove
+
+Each link row gains a quiet **× remove** button (`--el-text-muted`, hover →
+`--el-tint-rose`/`--el-danger`) at the row end. Clicking opens a small **confirm
+popover** ("Remove the blocked-by link to PROD-N? The issue isn't deleted — only
+the link.") with a `--el-danger` Remove + ghost Cancel. Removing a `relates_to`
+link drops both reciprocal rows (the service already does this).
+
+### Tokens / a11y
+
+- Reuses the relationships row grammar (id+title baseline, icon/pill centered).
+- All new surfaces route through `--el-*`; the add combobox reuses the 2.3.4
+  `Combobox` a11y (clears the STRICT axe sweep). Errors use strong-on-tint (AA),
+  NOT `--el-danger` text on white. Light + dark parity (toggle in the mock).
+
+### States in the mockup
+
+Panels: **(0)** entry point + per-row remove · **(1)** add form open + kind menu ·
+**(2)** combobox typing (candidates) · **(3)** selected → Add enabled + the inline
+error states · **(4)** remove confirm.
+
+### Out of scope
+
+Bulk-link / link from the list/board surfaces (Epic 3/2.5), and a typed
+relationship beyond the five kinds, are not in 2.4.9.
