@@ -106,6 +106,7 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
             item={item}
             members={members}
             workflow={detail.workflow}
+            parent={detail.parent}
             reporterIsSelf={item.reporterId === ctx.userId}
           />
           {/* 2.4.3: parent breadcrumb. 2.4.4: inline status + assignee controls.

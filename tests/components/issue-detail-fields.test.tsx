@@ -103,44 +103,71 @@ function makeItem(overrides: Partial<WorkItemDto> = {}): WorkItemDto {
 
 function renderPanel(item = makeItem()) {
   return render(
-    <CoreFieldsPanel item={item} members={members} workflow={workflow} reporterIsSelf />,
+    <CoreFieldsPanel
+      item={item}
+      members={members}
+      workflow={workflow}
+      parent={null}
+      reporterIsSelf
+    />,
   );
 }
 
 describe('CoreFieldsPanel (inline rail)', () => {
-  it('renders the read-only fields + the current values of the editable controls', () => {
+  it('DISPLAYS each field value (controls are hidden until the chevron is clicked)', () => {
     renderPanel();
 
-    // Read-only: type, reporter, created/updated (deterministic en-US/UTC).
+    // Displayed values: status pill (To Do), type, priority pill (High),
+    // reporter, due date, estimate, created/updated.
+    expect(screen.getByText('To Do')).toBeTruthy();
     expect(screen.getByText('Story')).toBeTruthy();
+    expect(screen.getByText('High')).toBeTruthy();
     expect(screen.getByText('Grace Hopper')).toBeTruthy();
+    expect(screen.getByText('Jun 10, 2026')).toBeTruthy();
+    expect(screen.getByText('1h 30m')).toBeTruthy();
     expect(screen.getByText('Jun 1, 02:45 PM UTC')).toBeTruthy();
-    expect(screen.getByText('Jun 3, 09:30 AM UTC')).toBeTruthy();
 
-    // Editable: priority select reflects the current value; due/estimate inputs
-    // are seeded; the status + assignee pickers render.
-    expect((screen.getByLabelText('Priority') as HTMLSelectElement).value).toBe('high');
-    expect((screen.getByLabelText('Due date') as HTMLInputElement).value).toBe('2026-06-10');
-    expect((screen.getByLabelText('Estimate (minutes)') as HTMLInputElement).value).toBe('90');
-    expect(screen.getByRole('combobox', { name: /status/i })).toBeTruthy();
-    expect(screen.getByRole('combobox', { name: /assignee/i })).toBeTruthy();
+    // No edit control is mounted until its chevron is used.
+    expect(screen.queryByLabelText('Priority')).toBeNull();
+    expect(screen.queryByLabelText('Estimate (minutes)')).toBeNull();
+
+    // Each editable field exposes an "Edit <field>" chevron; reporter does not.
+    expect(screen.getByRole('button', { name: 'Edit Priority' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Edit Type' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Edit Reporter/i })).toBeNull();
   });
 
-  it('commits a priority change through updateIssueAction', () => {
+  it('reveals + commits a priority change through updateIssueAction', () => {
     updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-03T10:00:00.000Z' });
     renderPanel();
 
-    fireEvent.change(screen.getByLabelText('Priority'), { target: { value: 'low' } });
+    expect(screen.queryByLabelText('Priority')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Priority' }));
+    const select = screen.getByLabelText('Priority') as HTMLSelectElement;
+    expect(select.value).toBe('high');
+    fireEvent.change(select, { target: { value: 'low' } });
 
     expect(updateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'wi_1', priority: 'low' }),
     );
   });
 
+  it('reveals + commits a type change (kind is editable) through updateIssueAction', () => {
+    updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-03T10:00:00.000Z' });
+    renderPanel();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Type' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Type' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Task' }));
+
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ id: 'wi_1', kind: 'task' }));
+  });
+
   it('commits an estimate edit on blur (and not on every keystroke)', () => {
     updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-03T10:00:00.000Z' });
     renderPanel();
 
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Estimate' }));
     const estimate = screen.getByLabelText('Estimate (minutes)');
     fireEvent.change(estimate, { target: { value: '120' } });
     expect(updateSpy).not.toHaveBeenCalled(); // no per-keystroke patch

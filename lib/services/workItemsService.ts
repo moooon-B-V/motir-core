@@ -246,6 +246,7 @@ export const workItemsService = {
   ): Promise<WorkItemDto> {
     const PATCH_KEYS: readonly (keyof UpdateWorkItemInput)[] = [
       'parentId',
+      'kind',
       'title',
       'descriptionMd',
       'explanationMd',
@@ -352,17 +353,38 @@ export const workItemsService = {
         diff.explanationSource = { from: current.explanationSource, to: effectiveSource };
       }
 
-      // Re-parent: same-project + kind pre-flight (DB trigger backstops
-      // cycle/depth/kind on the write).
-      if (patch.parentId !== undefined && patch.parentId !== current.parentId) {
-        if (patch.parentId === null) {
-          assertValidParent(null, current.kind);
+      // ── Kind / parent re-validation ───────────────────────────────────
+      // `kind` is mutable (user directive). A kind OR parent change must keep
+      // BOTH sides of the kind-parent matrix legal: (1) the effective
+      // (parent, kind) pair, and (2) the new kind must legally parent every
+      // existing child. (DB trigger backstops cycle/depth/kind on the write;
+      // cross-project parenting has no trigger, so it's checked here.)
+      const nextKind = patch.kind !== undefined ? patch.kind : current.kind;
+      const nextParentId = patch.parentId !== undefined ? patch.parentId : current.parentId;
+      const kindChanged = patch.kind !== undefined && patch.kind !== current.kind;
+      const parentChanged = patch.parentId !== undefined && patch.parentId !== current.parentId;
+
+      if (kindChanged || parentChanged) {
+        if (nextParentId === null) {
+          assertValidParent(null, nextKind);
         } else {
-          const parent = await workItemRepository.findById(patch.parentId, tx);
-          if (!parent) throw new WorkItemNotFoundError(patch.parentId);
+          const parent = await workItemRepository.findById(nextParentId, tx);
+          if (!parent) throw new WorkItemNotFoundError(nextParentId);
           if (parent.projectId !== current.projectId) throw new CrossProjectParentError();
-          assertValidParent(parent.kind, current.kind);
+          assertValidParent(parent.kind, nextKind);
         }
+      }
+
+      if (kindChanged) {
+        const children = await workItemRepository.findChildren(id, tx);
+        for (const child of children) {
+          assertValidParent(nextKind, child.kind); // new kind must parent each child
+        }
+        update.kind = patch.kind;
+        diff.kind = { from: current.kind, to: patch.kind };
+      }
+
+      if (parentChanged) {
         update.parentId = patch.parentId;
         diff.parentId = { from: current.parentId, to: patch.parentId };
       }
