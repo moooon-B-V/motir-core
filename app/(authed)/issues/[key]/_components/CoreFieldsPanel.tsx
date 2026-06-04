@@ -10,6 +10,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { cn } from '@/lib/utils/cn';
 import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
 import { Pill, type PillProps } from '@/components/ui/Pill';
 import { useToast } from '@/components/ui/Toast';
 import { StatusPicker } from '@/components/issues/StatusPicker';
@@ -301,14 +302,13 @@ export function CoreFieldsPanel({
         onToggle={() => (editing === 'dueDate' ? commitDue() : setEditing('dueDate'))}
       >
         {editing === 'dueDate' ? (
-          <input
+          <Input
             type="date"
-            className="border-(--el-border) bg-(--el-page-bg) focus-visible:ring-(--focus-ring-color) w-full rounded-md border px-2 py-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none"
+            aria-label="Due date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
             onBlur={commitDue}
             disabled={isPending}
-            aria-label="Due date"
             autoFocus
           />
         ) : item.dueDate ? (
@@ -327,15 +327,14 @@ export function CoreFieldsPanel({
         onToggle={() => (editing === 'estimate' ? commitEstimate() : setEditing('estimate'))}
       >
         {editing === 'estimate' ? (
-          <input
+          <Input
             type="number"
             min={0}
-            className="border-(--el-border) bg-(--el-page-bg) focus-visible:ring-(--focus-ring-color) w-full rounded-md border px-2 py-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none"
+            aria-label="Estimate (minutes)"
             value={estimate}
             onChange={(e) => setEstimate(e.target.value)}
             onBlur={commitEstimate}
             disabled={isPending}
-            aria-label="Estimate (minutes)"
             autoFocus
           />
         ) : item.estimateMinutes != null ? (

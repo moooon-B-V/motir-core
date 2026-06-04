@@ -240,30 +240,28 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
           <PriorityPicker value={priority} onChange={setPriority} disabled={isPending} />
         </div>
 
-        <label className="flex flex-col gap-1 font-sans text-sm">
+        <div className="flex flex-col gap-1 font-sans text-sm">
           <span className="text-(--el-text) font-medium">Due date</span>
-          <input
+          <Input
             type="date"
-            className="border-(--el-border) bg-(--el-page-bg) rounded-md border px-3 py-2 text-sm"
+            aria-label="Due date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
             disabled={isPending}
-            aria-label="Due date"
           />
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1 font-sans text-sm">
+        <div className="flex flex-col gap-1 font-sans text-sm">
           <span className="text-(--el-text) font-medium">Estimate (minutes)</span>
-          <input
+          <Input
             type="number"
             min={0}
-            className="border-(--el-border) bg-(--el-page-bg) rounded-md border px-3 py-2 text-sm"
+            aria-label="Estimate (minutes)"
             value={estimate}
             onChange={(e) => setEstimate(e.target.value)}
             disabled={isPending}
-            aria-label="Estimate (minutes)"
           />
-        </label>
+        </div>
       </div>
 
       {/* Editable now (the design treats explanation as a first-class authored
