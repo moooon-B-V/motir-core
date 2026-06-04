@@ -3,11 +3,15 @@ import { notFound, redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { workspacesService } from '@/lib/services/workspacesService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import { MarkdownView } from '@/components/ui/MarkdownView';
+import { CoreFieldsPanel } from './_components/CoreFieldsPanel';
+import { ContentSectionCard } from './_components/ContentSectionCard';
+import { IssueExplanation } from './_components/IssueExplanation';
 
 // The issue DETAIL route (Story 2.4 · Subtask 2.4.1). Server Component:
 // resolves the active project (the shipped active-project model — finding #50,
@@ -52,6 +56,11 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
   const { item } = detail;
   const TypeIcon = ISSUE_TYPE_META[item.kind].icon;
 
+  // Members back the inline assignee picker + reporter display (getIssueDetail
+  // carries ids only); the workflow (already in the detail bundle) backs the
+  // inline status picker's legal-transition set.
+  const members = await workspacesService.listMembers(ctx.workspaceId, ctx.userId);
+
   return (
     <div className="mx-auto flex max-w-[64rem] flex-col gap-6">
       {/* Header — type icon · identifier · status · title + Edit link */}
@@ -73,22 +82,36 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
       {/* Body — two columns; later subtasks fill the regions. */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_18rem]">
         <main className="flex flex-col gap-6">
-          <section aria-label="Description">
+          <ContentSectionCard
+            title="Description"
+            subtitle="what to do"
+            editHref={`/issues/${item.identifier}/edit`}
+          >
             {item.descriptionMd ? (
               <MarkdownView value={item.descriptionMd} aria-label="Issue description" />
             ) : (
-              <p className="text-muted-foreground font-sans text-sm italic">No description.</p>
+              <p className="font-sans text-sm text-(--color-slate) italic">No description yet.</p>
             )}
-          </section>
-          {/* 2.4.2: explanation (read-only + AI-drafted badge). 2.4.3: child list.
-              Epic 5 extension slots: comments · activity. */}
+          </ContentSectionCard>
+          <IssueExplanation
+            explanationMd={item.explanationMd}
+            explanationSource={item.explanationSource}
+            editHref={`/issues/${item.identifier}/edit`}
+          />
+          {/* 2.4.3: child list. Epic 5 extension slots: comments · activity. */}
         </main>
 
         <aside className="flex flex-col gap-4">
-          {/* 2.4.2: core-fields panel (type · priority · assignee · reporter ·
-              due · estimate · created/updated). 2.4.3: parent breadcrumb.
-              2.4.4: inline status + assignee controls. 2.4.5: relationships +
-              readiness badge. Epic 5: custom fields · attachments. */}
+          <CoreFieldsPanel
+            item={item}
+            members={members}
+            workflow={detail.workflow}
+            parent={detail.parent}
+            reporterIsSelf={item.reporterId === ctx.userId}
+          />
+          {/* 2.4.3: parent breadcrumb. 2.4.4: inline status + assignee controls.
+              2.4.5: relationships + readiness badge. Epic 5: custom fields ·
+              attachments. */}
         </aside>
       </div>
     </div>

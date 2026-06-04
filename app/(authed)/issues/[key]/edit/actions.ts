@@ -12,7 +12,7 @@ import {
   UnknownStatusError,
   WorkItemError,
 } from '@/lib/workItems/errors';
-import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
+import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 
 // Server Actions for the issue edit form (Subtask 2.3.6). Two DISTINCT paths —
 // the whole point of closing finding #46: non-status fields go through
@@ -26,8 +26,13 @@ const ISSUES_PATH = '/issues';
 export interface UpdateIssueInput {
   id: string;
   expectedUpdatedAt: string;
+  kind?: WorkItemKindDto;
   title?: string;
   descriptionMd?: string | null;
+  // The "why this matters" axis. Editing it here routes through updateWorkItem's
+  // explanationSource state machine (editing an ai_draft auto-flips it to
+  // user_edited; a user_authored one stays user_authored).
+  explanationMd?: string | null;
   parentId?: string | null;
   assigneeId?: string | null;
   priority?: WorkItemPriorityDto;
@@ -56,8 +61,10 @@ export async function updateIssueAction(input: UpdateIssueInput): Promise<IssueA
     const updated = await workItemsService.updateWorkItem(
       input.id,
       {
+        kind: input.kind,
         title: input.title,
         descriptionMd: input.descriptionMd,
+        explanationMd: input.explanationMd,
         parentId: input.parentId,
         assigneeId: input.assigneeId,
         priority: input.priority,

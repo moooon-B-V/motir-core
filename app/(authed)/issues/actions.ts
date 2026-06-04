@@ -29,6 +29,11 @@ export interface CreateIssueInput {
   kind: WorkItemKindDto;
   title: string;
   descriptionMd?: string | null;
+  // The "why this matters" axis (Story 1.4). Optional at create time (the modal
+  // exposes it as a collapsible section per design/work-items/create.png); when
+  // a human types it, the service defaults explanationSource to user_authored.
+  // AI drafting ("Draft with AI") is the Epic-7 planning layer.
+  explanationMd?: string | null;
   priority?: WorkItemPriorityDto;
   // Accepted for forward-compat but NOT yet surfaced in the modal: the filtered
   // parent picker is 2.3.4, the assignee combobox a later subtask. Until those
@@ -60,6 +65,7 @@ export async function createIssueAction(input: CreateIssueInput): Promise<Create
         kind: input.kind,
         title,
         descriptionMd: input.descriptionMd?.trim() ? input.descriptionMd : null,
+        explanationMd: input.explanationMd?.trim() ? input.explanationMd : null,
         parentId: input.parentId ?? null,
         assigneeId: input.assigneeId ?? null,
         ...(input.priority ? { priority: input.priority } : {}),

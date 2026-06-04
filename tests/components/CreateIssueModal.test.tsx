@@ -24,10 +24,23 @@ vi.mock('@/lib/auth/client', () => ({ signOut: vi.fn() }));
 vi.mock('@/app/(authed)/_actions', () => ({ switchWorkspaceAction: vi.fn() }));
 vi.mock('@/app/(authed)/_project-actions', () => ({ setActiveProjectAction: vi.fn() }));
 // The modal now renders the real MarkdownEditor (client-only Tiptap WYSIWYG) —
-// stub it to a labelled textarea so the Description assertions still work.
+// stub it to a textarea labelled by its `label` prop so the Description AND
+// Explanation editors are individually addressable.
 vi.mock('@/components/ui/MarkdownEditor', () => ({
-  MarkdownEditor: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
-    <textarea aria-label="Description" value={value} onChange={(e) => onChange(e.target.value)} />
+  MarkdownEditor: ({
+    value,
+    onChange,
+    label,
+  }: {
+    value: string;
+    onChange: (v: string) => void;
+    label?: string;
+  }) => (
+    <textarea
+      aria-label={label ?? 'Description'}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
   ),
 }));
 vi.mock('@/lib/blob/uploadClient', () => ({ uploadIssueAttachment: vi.fn() }));
@@ -135,6 +148,7 @@ describe('CreateIssueModal — validation + submit', () => {
       kind: 'bug',
       title: 'Login is broken',
       descriptionMd: 'Repro steps…',
+      explanationMd: null,
       priority: 'high',
       parentId: null,
     });
@@ -142,6 +156,28 @@ describe('CreateIssueModal — validation + submit', () => {
     await waitFor(() => expect(screen.getByText('WFD-7 created')).toBeTruthy());
     expect(refresh).toHaveBeenCalled();
     await waitFor(() => expect(modalHeading()).toBeNull());
+  });
+
+  it('expands the optional explanation section and submits its markdown', async () => {
+    createIssueActionSpy.mockResolvedValue({ ok: true, id: 'wi_2', identifier: 'WFD-8' });
+    openModal();
+
+    // Collapsed by default — the editor isn't mounted until expanded.
+    expect(screen.queryByLabelText('Explanation')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Explanation' }));
+
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Add OAuth' } });
+    fireEvent.change(screen.getByLabelText('Explanation'), {
+      target: { value: 'Why it matters: fewer drop-offs.' },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    });
+
+    expect(createIssueActionSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ explanationMd: 'Why it matters: fewer drop-offs.' }),
+    );
   });
 
   it('an error result keeps the modal open and toasts the message', async () => {

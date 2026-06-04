@@ -11,6 +11,7 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils/cn';
+import { formatDateTime } from '@/lib/utils/datetime';
 import type { JobRunDTO, JobRunDlqDTO, JobRunStatus } from '@/lib/dto/jobs';
 import { replayDlqAction } from '../actions';
 
@@ -59,20 +60,9 @@ function buildHref(params: { tab: JobsTab; status?: JobRunStatus | 'all'; page?:
 }
 
 // ── Formatting helpers ──────────────────────────────────────────────────────
-function formatDateTime(iso: string): string {
-  // Pinned locale + timezone (en-US / UTC) so the string is IDENTICAL when
-  // rendered on the server and re-rendered on the client — a runtime-default
-  // locale/timezone (`toLocaleString(undefined, …)`) differs between the two
-  // and triggers a React hydration mismatch. UTC is the right default for an
-  // operator/audit surface anyway; the trailing "UTC" makes the zone explicit.
-  return `${new Date(iso).toLocaleString('en-US', {
-    timeZone: 'UTC',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })} UTC`;
-}
+// `formatDateTime` (deterministic en-US/UTC, the 1.6.5 hydration fix) is now the
+// shared `@/lib/utils/datetime` formatter — reused, not re-derived (the issue
+// detail page renders audit timestamps through the same module).
 
 function formatDuration(ms: number | null): string {
   if (ms === null) return '—';

@@ -142,6 +142,11 @@ export interface CreateWorkItemInput {
  */
 export interface UpdateWorkItemInput {
   parentId?: string | null;
+  // `kind` is now mutable (user directive): changing an issue's type is
+  // re-validated against its CURRENT parent and ALL its children via the
+  // kind-parent matrix (`assertValidParent`), so a change that would orphan an
+  // illegal parent/child pair is rejected (IllegalParentTypeError → 422).
+  kind?: WorkItemKindDto;
   title?: string;
   descriptionMd?: string | null;
   explanationMd?: string | null;
