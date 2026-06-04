@@ -1,28 +1,22 @@
 import Link from 'next/link';
-import { Link2 } from 'lucide-react';
-import type { ReadinessVerdictDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
+import type { ReadinessVerdictDto, RelationshipLinkDto } from '@/lib/dto/workItems';
 import type { WorkflowDto, StatusCategoryDto } from '@/lib/dto/workflows';
 import { ContentSectionCard } from './ContentSectionCard';
+import { AddLinkControl } from './AddLinkControl';
+import { RemoveLinkButton } from './RemoveLinkButton';
 import { Pill, type PillProps } from '@/components/ui/Pill';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 
-// The relationships panel on the issue detail page (Story 2.4 · Subtask 2.4.5),
-// per `design/work-items/relationships.mock.html`: a LEFT-column section card
-// (sibling of Description / Explanation / Activity, after Explanation), NOT a
-// rail field-box — relationships is a grouped, multi-row list that needs the
-// content width. READ-ONLY (creating/removing links is Epic 5 collaboration; the
-// muted "Manage in Epic 5" header note is the documented extension slot).
-//
-// At the top sits the ready/blocked banner (`ReadinessBadge`), fed the service
-// `readiness` verdict — its first PRODUCTION wiring (2.2.6 / finding #21). It
-// renders only when the item HAS blockers (a "blocked by" in-edge); an item
-// nothing blocks has no readiness signal to show. Below it, the work_item_link
-// edges (1.4.3) group by kind — blocked-by / blocks / relates-to / duplicates /
-// clones — each linked item a navigable row (type icon · identifier · title ·
-// status pill), mirroring the 2.4.3 ChildList row grammar. No links at all → a
-// muted empty state, never blank.
+// The relationships panel on the issue detail page (Story 2.4 · Subtasks 2.4.5
+// + 2.4.9), per `design/work-items/relationships.mock.html` + `links.mock.html`:
+// a LEFT-column section card grouping the work_item_link edges by kind
+// (blocked-by / blocks / relates-to / duplicates / clones), with the
+// ready/blocked banner at the top. READ surface from 2.4.5; 2.4.9 makes it
+// EDITABLE on the detail page (`editable`): a "+ Link issue" add control + a
+// per-row remove. The EDIT page reuses it read-only (no add/remove) so an editor
+// keeps dependency context without managing links there.
 
 const STATUS_TONE: Record<StatusCategoryDto, NonNullable<PillProps['status']>> = {
   todo: 'planned',
@@ -31,37 +25,46 @@ const STATUS_TONE: Record<StatusCategoryDto, NonNullable<PillProps['status']>> =
 };
 
 export interface RelationshipsPanelProps {
-  blockedBy: WorkItemSummaryDto[];
-  blocks: WorkItemSummaryDto[];
-  relatesTo: WorkItemSummaryDto[];
-  duplicates: WorkItemSummaryDto[];
-  clones: WorkItemSummaryDto[];
+  blockedBy: RelationshipLinkDto[];
+  blocks: RelationshipLinkDto[];
+  relatesTo: RelationshipLinkDto[];
+  duplicates: RelationshipLinkDto[];
+  clones: RelationshipLinkDto[];
   readiness: ReadinessVerdictDto;
   /** The item's project workflow — classifies a linked status into a Pill tone. */
   workflow: WorkflowDto;
+  /** When set, render the add control + per-row remove (the detail page). The
+   *  edit page omits these (read-only). Requires currentItemId + identifier. */
+  editable?: boolean;
+  currentItemId?: string;
+  identifier?: string;
 }
 
-// One linked item: a row navigating to its own detail page. The identifier and
-// title share an inline text baseline (they're inline siblings inside one
-// truncating block), while the icon / dot / pill are vertically centered — the
-// alignment the design specifies. A status the bundled workflow knows renders as
-// a lifecycle Pill; a cross-project status it doesn't classify falls back to a
-// neutral chip (the link target can live in another project).
+// One linked item: a navigable row (id+title share an inline baseline, icon/pill
+// centered — the alignment the design specifies). When editable, a remove button
+// sits OUTSIDE the link (an interactive control can't nest inside an anchor).
 function LinkRow({
-  item,
+  link,
   workflow,
   isOpenBlocker,
+  editable,
+  identifier,
+  relationshipLabel,
 }: {
-  item: WorkItemSummaryDto;
+  link: RelationshipLinkDto;
   workflow: WorkflowDto;
   isOpenBlocker?: boolean;
+  editable?: boolean;
+  identifier?: string;
+  relationshipLabel: string;
 }) {
+  const { item } = link;
   const statusMeta = workflow.statuses.find((s) => s.key === item.status);
   return (
-    <li>
+    <li className="hover:bg-(--el-surface) flex items-center gap-1 rounded-md pr-1">
       <Link
         href={`/issues/${item.identifier}`}
-        className="hover:bg-(--el-surface) group flex items-center gap-2 rounded-md px-2 py-1.5 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        className="group flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
         {isOpenBlocker ? (
           <span
@@ -87,6 +90,14 @@ function LinkRow({
           </Pill>
         )}
       </Link>
+      {editable && identifier ? (
+        <RemoveLinkButton
+          linkId={link.linkId}
+          identifier={identifier}
+          relationshipLabel={relationshipLabel}
+          targetIdentifier={item.identifier}
+        />
+      ) : null}
     </li>
   );
 }
@@ -99,6 +110,9 @@ export function RelationshipsPanel({
   clones,
   readiness,
   workflow,
+  editable,
+  currentItemId,
+  identifier,
 }: RelationshipsPanelProps) {
   const groups = [
     { key: 'blocked_by', label: 'Blocked by', items: blockedBy, blockerGroup: true },
@@ -110,19 +124,15 @@ export function RelationshipsPanel({
   const nonEmpty = groups.filter((g) => g.items.length > 0);
   const hasBlockers = blockedBy.length > 0;
   const openBlockerIds = new Set(readiness.openBlockers.map((b) => b.id));
+  const canEdit = Boolean(editable && currentItemId && identifier);
 
   return (
-    <ContentSectionCard
-      title="Relationships"
-      subtitle="dependencies & links"
-      headerRight={
-        <span className="text-(--el-text-muted) inline-flex items-center gap-1.5 font-sans text-xs">
-          <Link2 className="h-3.5 w-3.5" aria-hidden />
-          Manage in Epic 5
-        </span>
-      }
-    >
+    <ContentSectionCard title="Relationships" subtitle="dependencies & links">
       <div className="flex flex-col gap-4">
+        {canEdit ? (
+          <AddLinkControl currentItemId={currentItemId!} identifier={identifier!} />
+        ) : null}
+
         {/* Readiness reads off the dependency in-edges, so it shows only when
             there ARE blockers — an item nothing blocks has no signal to give. */}
         {hasBlockers ? (
@@ -149,12 +159,15 @@ export function RelationshipsPanel({
                 </span>
               </div>
               <ul className="flex flex-col">
-                {group.items.map((item) => (
+                {group.items.map((link) => (
                   <LinkRow
-                    key={item.id}
-                    item={item}
+                    key={link.linkId}
+                    link={link}
                     workflow={workflow}
-                    isOpenBlocker={group.blockerGroup && openBlockerIds.has(item.id)}
+                    isOpenBlocker={group.blockerGroup && openBlockerIds.has(link.item.id)}
+                    editable={canEdit}
+                    identifier={identifier}
+                    relationshipLabel={group.label}
                   />
                 ))}
               </ul>

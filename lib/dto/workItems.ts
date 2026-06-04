@@ -74,17 +74,26 @@ export interface WorkItemSummaryDto {
  * EXCLUDES the item itself (a top-level item has `ancestors: []`); `parent` is
  * the immediate parent, kept as its own field so the 2.4.2 rail need not
  * re-derive it. `blockedBy` = items THIS item is blocked by; `blocks` = it blocks.
+ * Each relationship group is a {@link RelationshipLinkDto} — the linked item
+ * summary PLUS the `work_item_link.id` of the edge, so the 2.4.9 inline remove
+ * can target the exact link without re-deriving it.
  */
+export interface RelationshipLinkDto {
+  /** The `work_item_link.id` of THIS edge — what `unlinkWorkItems` deletes. */
+  linkId: string;
+  item: WorkItemSummaryDto;
+}
+
 export interface IssueDetailDto {
   item: WorkItemDto;
   ancestors: WorkItemSummaryDto[];
   parent: WorkItemSummaryDto | null;
   children: WorkItemSummaryDto[];
-  blockedBy: WorkItemSummaryDto[];
-  blocks: WorkItemSummaryDto[];
-  relatesTo: WorkItemSummaryDto[];
-  duplicates: WorkItemSummaryDto[];
-  clones: WorkItemSummaryDto[];
+  blockedBy: RelationshipLinkDto[];
+  blocks: RelationshipLinkDto[];
+  relatesTo: RelationshipLinkDto[];
+  duplicates: RelationshipLinkDto[];
+  clones: RelationshipLinkDto[];
   readiness: ReadinessVerdictDto;
   workflow: WorkflowDto;
 }

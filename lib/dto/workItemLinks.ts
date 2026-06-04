@@ -44,3 +44,13 @@ export interface LinkWorkItemsInput {
   toId: string;
   kind: WorkItemLinkKindDto;
 }
+
+/**
+ * The FIVE UI-facing relationship kinds shown in the link-management surface
+ * (2.4.8 design / 2.4.9). Distinct from the four STORAGE kinds
+ * ({@link WorkItemLinkKindDto}): `blocked_by` and `blocks` are the two
+ * DIRECTIONS of the single `is_blocked_by` storage edge — the action layer maps
+ * a (current item, target, relationship) triple to the directed
+ * {@link LinkWorkItemsInput} (see `lib/workItems/linkRelationships.ts`).
+ */
+export type RelationshipKind = 'blocked_by' | 'blocks' | 'relates_to' | 'duplicates' | 'clones';

@@ -107,7 +107,8 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
             editHref={`/issues/${item.identifier}/edit`}
           />
           {/* 2.4.5: the relationships section + ready/blocked banner — a left-
-              column section card (per the approved mockup), after Explanation. */}
+              column section card (per the approved mockup), after Explanation.
+              2.4.9: editable here (add control + per-row remove). */}
           <RelationshipsPanel
             blockedBy={detail.blockedBy}
             blocks={detail.blocks}
@@ -116,6 +117,9 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
             clones={detail.clones}
             readiness={detail.readiness}
             workflow={detail.workflow}
+            editable
+            currentItemId={item.id}
+            identifier={item.identifier}
           />
           {/* 2.4.3: direct children (a leaf renders nothing). Epic 5 extension
               slots: comments · activity. */}

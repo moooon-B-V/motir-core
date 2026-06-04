@@ -61,7 +61,7 @@ describe('workItemsService.getIssueDetail (2.4.1)', () => {
     expect(detail.ancestors.map((a) => a.identifier)).toEqual([epic.identifier, story.identifier]);
     expect(detail.ancestors.at(-1)?.identifier).toBe(detail.parent?.identifier);
     expect(detail.children.map((c) => c.identifier)).toEqual([subtask.identifier]);
-    expect(detail.blockedBy.map((b) => b.identifier)).toEqual([blocker.identifier]);
+    expect(detail.blockedBy.map((b) => b.item.identifier)).toEqual([blocker.identifier]);
     expect(detail.blocks).toEqual([]);
     expect(detail.workflow.statuses.length).toBeGreaterThan(0);
 
@@ -71,7 +71,7 @@ describe('workItemsService.getIssueDetail (2.4.1)', () => {
       blocker.identifier,
       fx.ctx,
     );
-    expect(blockerDetail.blocks.map((b) => b.identifier)).toEqual([task.identifier]);
+    expect(blockerDetail.blocks.map((b) => b.item.identifier)).toEqual([task.identifier]);
     expect(blockerDetail.blockedBy).toEqual([]);
 
     // The deepest item walks the full 3-ancestor chain (Epic → Story → Task),
@@ -163,11 +163,11 @@ describe('workItemsService.getIssueDetail (2.4.1)', () => {
     );
 
     const detail = await workItemsService.getIssueDetail(fx.projectId, subject.identifier, fx.ctx);
-    expect(detail.blockedBy.map((b) => b.identifier)).toEqual([blocker.identifier]);
-    expect(detail.blocks.map((b) => b.identifier)).toEqual([blocked.identifier]);
-    expect(detail.relatesTo.map((b) => b.identifier)).toEqual([related.identifier]);
-    expect(detail.duplicates.map((b) => b.identifier)).toEqual([dup.identifier]);
-    expect(detail.clones.map((b) => b.identifier)).toEqual([clone.identifier]);
+    expect(detail.blockedBy.map((b) => b.item.identifier)).toEqual([blocker.identifier]);
+    expect(detail.blocks.map((b) => b.item.identifier)).toEqual([blocked.identifier]);
+    expect(detail.relatesTo.map((b) => b.item.identifier)).toEqual([related.identifier]);
+    expect(detail.duplicates.map((b) => b.item.identifier)).toEqual([dup.identifier]);
+    expect(detail.clones.map((b) => b.item.identifier)).toEqual([clone.identifier]);
 
     // The blocker is still in its initial (non-terminal) status → blocked, and
     // the verdict NAMES the open blocker so the banner reads "Waiting on … <id>".
@@ -208,7 +208,7 @@ describe('workItemsService.getIssueDetail (2.4.1)', () => {
     expect(readyView.readiness.ready).toBe(true);
     expect(readyView.readiness.openBlockers).toEqual([]);
     // Still listed as a relationship — resolved, but the edge is unchanged.
-    expect(readyView.blockedBy.map((b) => b.identifier)).toEqual([blocker.identifier]);
+    expect(readyView.blockedBy.map((b) => b.item.identifier)).toEqual([blocker.identifier]);
   });
 
   it('an item with no links → every group empty + a trivially-ready verdict', async () => {
@@ -241,6 +241,62 @@ describe('workItemsService.getIssueDetail (2.4.1)', () => {
     // A never-existed identifier → 404.
     await expect(
       workItemsService.getIssueDetail(fxA.projectId, 'PROD-9999', fxA.ctx),
+    ).rejects.toThrow(WorkItemNotFoundError);
+  });
+});
+
+describe('workItemsService.listLinkCandidates (2.4.9)', () => {
+  it('excludes self + already-linked-by-relationship, and is direction-aware per kind', async () => {
+    const fx = await makeWorkItemFixture();
+    const make = (title: string) =>
+      workItemsService.createWorkItem({ projectId: fx.projectId, kind: 'task', title }, fx.ctx);
+    const subject = await make('Subject');
+    const a = await make('Alpha');
+    const b = await make('Beta');
+
+    // subject is_blocked_by A.
+    await workItemsService.linkWorkItems(
+      { fromId: subject.id, toId: a.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+
+    const ids = async (rel: 'blocked_by' | 'blocks' | 'relates_to') =>
+      (await workItemsService.listLinkCandidates(subject.id, rel, fx.ctx)).map((c) => c.id);
+
+    // Self is always excluded.
+    expect(await ids('blocked_by')).not.toContain(subject.id);
+    // A is already a blocked-by target → excluded for THAT relationship…
+    expect(await ids('blocked_by')).not.toContain(a.id);
+    // …but available for a DIFFERENT relationship (you can also relate to it).
+    expect(await ids('relates_to')).toContain(a.id);
+    // B is unlinked → a candidate for any relationship.
+    expect(await ids('blocked_by')).toContain(b.id);
+
+    // Direction: "blocks" excludes items that already block the subject (the
+    // reverse is_blocked_by in-edge), not its out-edges. A blocks nothing yet,
+    // so A is a candidate for "blocks".
+    expect(await ids('blocks')).toContain(a.id);
+  });
+
+  it('is workspace-scoped — a foreign item is never a candidate, and a foreign current item 404s', async () => {
+    const fx = await makeWorkItemFixture();
+    const subject = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Subject' },
+      fx.ctx,
+    );
+
+    const other = await makeWorkItemFixture();
+    const foreign = await workItemsService.createWorkItem(
+      { projectId: other.projectId, kind: 'task', title: 'Foreign' },
+      other.ctx,
+    );
+
+    const candidates = await workItemsService.listLinkCandidates(subject.id, 'relates_to', fx.ctx);
+    expect(candidates.map((c) => c.id)).not.toContain(foreign.id);
+
+    // A cross-workspace current item → 404 (no leak).
+    await expect(
+      workItemsService.listLinkCandidates(foreign.id, 'relates_to', fx.ctx),
     ).rejects.toThrow(WorkItemNotFoundError);
   });
 });
