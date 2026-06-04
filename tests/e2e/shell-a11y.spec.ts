@@ -313,7 +313,7 @@ test.describe('@a11y shell accessibility', () => {
   test('the /tokens/tree-table specimen is axe-clean (WCAG 2.1 AA; strict)', async ({ page }) => {
     await page.goto('/tokens/tree-table');
     await expect(page.getByRole('heading', { name: 'Tree table', level: 1 })).toBeVisible();
-    await expect(page.getByRole('treegrid', { name: 'Issues' })).toBeVisible();
+    await expect(page.getByRole('treegrid', { name: 'Issues', exact: true })).toBeVisible();
 
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     expect(
