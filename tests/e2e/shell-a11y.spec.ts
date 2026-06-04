@@ -301,6 +301,27 @@ test.describe('@a11y shell accessibility', () => {
     ).toEqual([]);
   });
 
+  // The TreeTable primitive specimen (Subtask 2.5.2). Renders the hierarchical
+  // issue tree-grid (populated, depth 4) + an empty variant. Public, no session.
+  //
+  // STRICT — zero exclusions, color-contrast ENABLED: unlike the markdown-editor
+  // specimen there is no third-party chrome and no specimen-display tint here.
+  // The whole `role="treegrid"` (rows with aria-level/expanded/posinset/setsize,
+  // the gridcells, the stretched row links, the AA-safe status Pills) is held to
+  // full WCAG 2.1 AA, so the treegrid semantics are proven on the real markup
+  // before the /issues route (2.5.3) inherits them.
+  test('the /tokens/tree-table specimen is axe-clean (WCAG 2.1 AA; strict)', async ({ page }) => {
+    await page.goto('/tokens/tree-table');
+    await expect(page.getByRole('heading', { name: 'Tree table', level: 1 })).toBeVisible();
+    await expect(page.getByRole('treegrid', { name: 'Issues' })).toBeVisible();
+
+    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    expect(
+      results.violations,
+      formatViolations('/tokens/tree-table', results.violations as AxeViolation[]),
+    ).toEqual([]);
+  });
+
   // The actual subject of PRODECT_FINDINGS #35: the Pill `status`/`severity`
   // matrix. Scoped color-contrast sweep over JUST the Pill specimen section,
   // with the rule ENABLED — proves every colored tone clears WCAG AA now that
