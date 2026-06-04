@@ -106,6 +106,7 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
             item={item}
             assignee={toPersonRef(item.assigneeId)}
             reporter={toPersonRef(item.reporterId)}
+            reporterIsSelf={item.reporterId === ctx.userId}
           />
           {/* 2.4.3: parent breadcrumb. 2.4.4: inline status + assignee controls.
               2.4.5: relationships + readiness badge. Epic 5: custom fields ·

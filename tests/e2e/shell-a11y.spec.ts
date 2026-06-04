@@ -232,8 +232,9 @@ test.describe('@a11y shell accessibility', () => {
 
     await page.goto(`/issues/${identifier}`);
     await expect(page.getByRole('heading', { name: 'Detail-view issue' })).toBeVisible();
-    // The metadata panel is part of the populated content the sweep must cover.
-    await expect(page.getByRole('region', { name: 'Details' })).toBeVisible();
+    // The metadata rail (its field boxes) is part of the populated content the
+    // sweep must cover — wait for a field label to confirm it has rendered.
+    await expect(page.getByText('Reporter')).toBeVisible();
 
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     expect(
