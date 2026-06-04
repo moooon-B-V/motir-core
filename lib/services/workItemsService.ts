@@ -815,8 +815,11 @@ export const workItemsService = {
       throw new WorkItemNotFoundError(identifier);
     }
 
-    const [parentRow, childRows, blockedByLinks, blocksLinks, workflow] = await Promise.all([
-      item.parentId ? workItemRepository.findById(item.parentId) : Promise.resolve(null),
+    const [ancestorRows, childRows, blockedByLinks, blocksLinks, workflow] = await Promise.all([
+      // The breadcrumb chain (root→self, item excluded) — one CTE, workspace-
+      // scoped. The immediate parent is `ancestors`' last element; we surface it
+      // separately too so the 2.4.2 rail's Parent field need not re-derive it.
+      workItemRepository.findAncestors(item.id, ctx.workspaceId),
       workItemRepository.findChildren(item.id),
       workItemLinkRepository.findByFromItem(item.id, 'is_blocked_by'),
       workItemLinkRepository.findByToItem(item.id, 'is_blocked_by'),
@@ -828,9 +831,12 @@ export const workItemsService = {
       workItemRepository.findByIds(blocksLinks.map((l) => l.fromId)),
     ]);
 
+    const ancestors = ancestorRows.map(toWorkItemSummaryDto);
+
     return {
       item: toWorkItemDto(item),
-      parent: parentRow ? toWorkItemSummaryDto(parentRow) : null,
+      ancestors,
+      parent: ancestors.at(-1) ?? null,
       children: childRows.map(toWorkItemSummaryDto),
       blockedBy: blockerRows.map(toWorkItemSummaryDto),
       blocks: blockingRows.map(toWorkItemSummaryDto),

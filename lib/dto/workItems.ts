@@ -65,14 +65,19 @@ export interface WorkItemSummaryDto {
 /**
  * The aggregate read backing the issue DETAIL page (Story 2.4 · Subtask 2.4.1).
  * One service call assembles everything the page renders in a single round-trip:
- * the work item, its immediate parent + direct children (for the breadcrumb /
- * child list — 2.4.3), its blocked-by / blocks dependency links resolved to
- * summaries (the relationships panel + readiness badge — 2.4.5), and the
- * project's workflow (the status control's legal-transition source — 2.4.4).
- * `blockedBy` = items THIS item is blocked by; `blocks` = items it blocks.
+ * the work item, its full ANCESTOR chain (root→self, backing the parent
+ * breadcrumb — 2.4.3) + its immediate parent (the rail's Parent field — 2.4.2)
+ * + direct children (the child list — 2.4.3), its blocked-by / blocks
+ * dependency links resolved to summaries (the relationships panel + readiness
+ * badge — 2.4.5), and the project's workflow (the status control's
+ * legal-transition source — 2.4.4). `ancestors` is ordered root→self and
+ * EXCLUDES the item itself (a top-level item has `ancestors: []`); `parent` is
+ * the immediate parent, kept as its own field so the 2.4.2 rail need not
+ * re-derive it. `blockedBy` = items THIS item is blocked by; `blocks` = it blocks.
  */
 export interface IssueDetailDto {
   item: WorkItemDto;
+  ancestors: WorkItemSummaryDto[];
   parent: WorkItemSummaryDto | null;
   children: WorkItemSummaryDto[];
   blockedBy: WorkItemSummaryDto[];
