@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, Sparkles } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
@@ -50,6 +50,16 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
   const [titleError, setTitleError] = useState<string | null>(null);
   const [parentError, setParentError] = useState<string | null>(null);
 
+  // Reveal the Explanation editor when it's expanded: the field area scrolls
+  // (the dialog height is fixed), so bring the section into view rather than
+  // leaving it below the fold.
+  const explanationRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (explanationOpen) {
+      explanationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [explanationOpen]);
+
   const trimmedTitle = title.trim();
   const canSubmit = trimmedTitle.length > 0 && trimmedTitle.length <= MAX_TITLE_LENGTH;
 
@@ -58,6 +68,8 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
     setParentId(null);
     setTitle('');
     setDescription('');
+    setExplanation('');
+    setExplanationOpen(false);
     setPriority('medium');
     setTitleError(null);
     setParentError(null);
@@ -113,125 +125,132 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
       size="lg"
       title="Create issue"
     >
-      <form className="mt-4 flex flex-col gap-3" onSubmit={handleSubmit}>
-        <div className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-(--el-text) font-medium">Type</span>
-          <TypePicker
-            value={kind}
-            onChange={(v) => {
-              setKind(v);
-              setParentError(null); // a type change re-scopes the parent picker
+      <form className="mt-4 flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
+        {/* Scrollable field area — the dialog height is fixed (Modal caps at
+            90vh), so the fields scroll and the footer below stays pinned.
+            `overflow-y-auto` also clips the X axis, so pad (p-1.5) + pull the
+            margin back (-m-1.5) to give focus rings (ring-2 + offset-2 ≈ 4px)
+            room instead of clipping them against the scroll edge. */}
+        <div className="-m-1.5 flex flex-col gap-3 overflow-y-auto p-1.5">
+          <div className="flex flex-col gap-1 font-sans text-sm">
+            <span className="text-(--el-text) font-medium">Type</span>
+            <TypePicker
+              value={kind}
+              onChange={(v) => {
+                setKind(v);
+                setParentError(null); // a type change re-scopes the parent picker
+              }}
+              disabled={isPending}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1 font-sans text-sm">
+            <span className="text-(--el-text) font-medium">Parent</span>
+            <ParentPicker
+              childType={kind}
+              value={parentId}
+              onChange={(id) => {
+                setParentId(id);
+                setParentError(null);
+              }}
+              error={parentError}
+              disabled={isPending}
+            />
+          </div>
+
+          <Input
+            label="Title"
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              if (titleError) setTitleError(null);
             }}
+            error={titleError ?? undefined}
+            maxLength={MAX_TITLE_LENGTH}
+            placeholder="Summarize the work in a line"
             disabled={isPending}
+            autoFocus
+            required
           />
-        </div>
 
-        <div className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-(--el-text) font-medium">Parent</span>
-          <ParentPicker
-            childType={kind}
-            value={parentId}
-            onChange={(id) => {
-              setParentId(id);
-              setParentError(null);
-            }}
-            error={parentError}
-            disabled={isPending}
-          />
-        </div>
-
-        <Input
-          label="Title"
-          value={title}
-          onChange={(e) => {
-            setTitle(e.target.value);
-            if (titleError) setTitleError(null);
-          }}
-          error={titleError ?? undefined}
-          maxLength={MAX_TITLE_LENGTH}
-          placeholder="Summarize the work in a line"
-          disabled={isPending}
-          autoFocus
-          required
-        />
-
-        {/* The MarkdownEditor (min, with file upload) renders its own label
+          {/* The MarkdownEditor (min, with file upload) renders its own label
             (also its aria-label) — no external span, else it shows twice. */}
-        <MarkdownEditor
-          label="Description"
-          value={description}
-          onChange={setDescription}
-          size="min"
-          onFileUpload={uploadIssueAttachment}
-        />
+          <MarkdownEditor
+            label="Description"
+            value={description}
+            onChange={setDescription}
+            size="min"
+            onFileUpload={uploadIssueAttachment}
+          />
 
-        {/* Explanation — the "why this matters" axis (Story 1.4), per
+          {/* Explanation — the "why this matters" axis (Story 1.4), per
             design/work-items/create.png panel 3: a collapsible, OPTIONAL
             markdown section. "Draft with AI" is the Epic-7 planning layer
             (disabled until it ships); a human can author it here today. */}
-        <div className="flex flex-col gap-1.5 font-sans text-sm">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setExplanationOpen((o) => !o)}
-              aria-expanded={explanationOpen}
-              className="text-(--el-text) flex items-center gap-1.5 font-medium focus-visible:outline-none"
-              disabled={isPending}
-            >
-              <ChevronDown
-                className={cn('h-4 w-4 transition-transform', !explanationOpen && '-rotate-90')}
-                aria-hidden
-              />
-              Explanation
-            </button>
-            <span className="text-(--el-text-secondary)">— why this matters (optional)</span>
-            {explanationOpen ? (
-              <Button
+          <div ref={explanationRef} className="flex scroll-mt-2 flex-col gap-1.5 font-sans text-sm">
+            <div className="flex items-center gap-2">
+              <button
                 type="button"
-                size="sm"
-                variant="secondary"
-                leftIcon={<Sparkles className="h-3.5 w-3.5" />}
-                className="ml-auto"
-                disabled
-                title="AI drafting arrives with the planning layer (Epic 7)"
+                onClick={() => setExplanationOpen((o) => !o)}
+                aria-expanded={explanationOpen}
+                className="text-(--el-text) flex items-center gap-1.5 font-medium focus-visible:outline-none"
+                disabled={isPending}
               >
-                Draft with AI
-              </Button>
-            ) : null}
+                <ChevronDown
+                  className={cn('h-4 w-4 transition-transform', !explanationOpen && '-rotate-90')}
+                  aria-hidden
+                />
+                Explanation
+              </button>
+              <span className="text-(--el-text-secondary)">— why this matters (optional)</span>
+              {explanationOpen ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  leftIcon={<Sparkles className="h-3.5 w-3.5" />}
+                  className="ml-auto"
+                  disabled
+                  title="AI drafting arrives with the planning layer (Epic 7)"
+                >
+                  Draft with AI
+                </Button>
+              ) : null}
+            </div>
+            {explanationOpen ? (
+              <MarkdownEditor
+                label="Explanation"
+                value={explanation}
+                onChange={setExplanation}
+                size="min"
+                onFileUpload={uploadIssueAttachment}
+              />
+            ) : (
+              <span className="text-xs text-(--el-text-secondary)">
+                Skip this — explanation can be drafted with AI or added after creating.
+              </span>
+            )}
           </div>
-          {explanationOpen ? (
-            <MarkdownEditor
-              label="Explanation"
-              value={explanation}
-              onChange={setExplanation}
-              size="min"
-              onFileUpload={uploadIssueAttachment}
-            />
-          ) : (
-            <span className="text-xs text-(--el-text-secondary)">
-              Skip this — explanation can be drafted with AI or added after creating.
-            </span>
-          )}
+
+          <label className="flex flex-col gap-1 font-sans text-sm">
+            <span className="text-(--el-text) font-medium">Priority</span>
+            <select
+              className="border-(--el-border) bg-(--el-page-bg) rounded-md border px-3 py-2 text-sm"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as WorkItemPriorityDto)}
+              disabled={isPending}
+              aria-label="Priority"
+            >
+              {PRIORITY_OPTIONS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
-        <label className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-(--el-text) font-medium">Priority</span>
-          <select
-            className="border-(--el-border) bg-(--el-page-bg) rounded-md border px-3 py-2 text-sm"
-            value={priority}
-            onChange={(e) => setPriority(e.target.value as WorkItemPriorityDto)}
-            disabled={isPending}
-            aria-label="Priority"
-          >
-            {PRIORITY_OPTIONS.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <Modal.Footer>
+        <Modal.Footer className="shrink-0">
           <Button type="button" variant="ghost" onClick={close} disabled={isPending}>
             Cancel
           </Button>

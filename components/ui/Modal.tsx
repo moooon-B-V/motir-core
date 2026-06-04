@@ -31,6 +31,11 @@ const contentVariants = cva(
     'shadow-(--shadow-modal) border border-(--el-border)',
     'p-(--spacing-card-padding)',
     'focus:outline-none',
+    // Never exceed the viewport: cap height and lay out as a column so a
+    // consumer can give its body `flex-1 overflow-y-auto` and pin a footer,
+    // instead of the dialog growing off-screen (e.g. the create modal's
+    // expandable Explanation pushing the Create button out of view).
+    'flex max-h-[90vh] flex-col overflow-hidden',
   ),
   {
     variants: {
@@ -93,7 +98,7 @@ function ModalRoot({
           {...(description ? {} : { 'aria-describedby': undefined })}
         >
           {title || description ? (
-            <div className="mb-(--spacing-md)">
+            <div className="mb-(--spacing-md) shrink-0">
               {title ? (
                 <Dialog.Title className="font-serif text-xl font-semibold text-(--el-text)">
                   {title}
