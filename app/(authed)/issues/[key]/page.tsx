@@ -15,6 +15,7 @@ import { ContentSectionCard } from './_components/ContentSectionCard';
 import { IssueExplanation } from './_components/IssueExplanation';
 import { ParentBreadcrumb } from './_components/ParentBreadcrumb';
 import { ChildList } from './_components/ChildList';
+import { RelationshipsPanel } from './_components/RelationshipsPanel';
 
 // The issue DETAIL route (Story 2.4 · Subtask 2.4.1). Server Component:
 // resolves the active project (the shipped active-project model — finding #50,
@@ -105,6 +106,17 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
             explanationSource={item.explanationSource}
             editHref={`/issues/${item.identifier}/edit`}
           />
+          {/* 2.4.5: the relationships section + ready/blocked banner — a left-
+              column section card (per the approved mockup), after Explanation. */}
+          <RelationshipsPanel
+            blockedBy={detail.blockedBy}
+            blocks={detail.blocks}
+            relatesTo={detail.relatesTo}
+            duplicates={detail.duplicates}
+            clones={detail.clones}
+            readiness={detail.readiness}
+            workflow={detail.workflow}
+          />
           {/* 2.4.3: direct children (a leaf renders nothing). Epic 5 extension
               slots: comments · activity. */}
           <ChildList items={detail.children} workflow={detail.workflow} members={members} />
@@ -119,8 +131,7 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
             reporterIsSelf={item.reporterId === ctx.userId}
           />
           {/* The 2.4.3 parent breadcrumb lives in the header (per detail.png),
-              not here. 2.4.5: relationships + readiness badge. Epic 5: custom
-              fields · attachments. */}
+              not here. Epic 5: custom fields · attachments. */}
         </aside>
       </div>
     </div>
