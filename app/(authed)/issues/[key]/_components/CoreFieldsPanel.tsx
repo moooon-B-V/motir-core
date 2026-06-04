@@ -3,7 +3,7 @@
 import { useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowDown, ArrowUp, Calendar, ChevronDown, Clock, Minus } from 'lucide-react';
+import { Calendar, ChevronDown, Clock } from 'lucide-react';
 import type {
   WorkItemDto,
   WorkItemKindDto,
@@ -24,6 +24,7 @@ import { TypePicker } from '@/components/issues/TypePicker';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
 import { PRIORITY_LABELS } from '@/lib/issues/priority';
+import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import { formatDateTime, formatDate } from '@/lib/utils/datetime';
 import { formatDurationMinutes } from '@/lib/utils/duration';
 import { changeStatusAction, updateIssueAction, type UpdateIssueInput } from '../edit/actions';
@@ -55,16 +56,8 @@ const STATUS_TONE: Record<StatusCategoryDto, NonNullable<PillProps['status']>> =
   done: 'done',
 };
 
-const PRIORITY_PILL: Record<
-  WorkItemPriorityDto,
-  { pill: Partial<PillProps>; icon: typeof ArrowUp }
-> = {
-  highest: { pill: { severity: 'danger' }, icon: ArrowUp },
-  high: { pill: { severity: 'warning' }, icon: ArrowUp },
-  medium: { pill: { tone: 'neutral' }, icon: Minus },
-  low: { pill: { severity: 'info' }, icon: ArrowDown },
-  lowest: { pill: { tone: 'neutral' }, icon: ArrowDown },
-};
+// Priority chip presentation now lives in the shared `PRIORITY_META` (reused by
+// the issue-list row, 2.5.3) — imported above.
 
 function Avatar({ name }: { name: string }) {
   return (
@@ -194,7 +187,7 @@ export function CoreFieldsPanel({
   }
 
   const muted = (text: string) => <span className="text-(--el-text-secondary) italic">{text}</span>;
-  const priorityPill = PRIORITY_PILL[item.priority];
+  const priorityPill = PRIORITY_META[item.priority];
 
   return (
     <div className="flex flex-col gap-3">

@@ -1,4 +1,4 @@
-import { Prisma, type WorkItem, type WorkItemKind } from '@prisma/client';
+import { Prisma, type WorkItem, type WorkItemKind, type WorkItemPriority } from '@prisma/client';
 import { db } from '@/lib/db';
 import {
   DepthLimitExceededError,
@@ -59,7 +59,11 @@ export interface WorkItemForestRow {
   identifier: string;
   title: string;
   status: string;
+  priority: WorkItemPriority;
   assigneeId: string | null;
+  reporterId: string;
+  dueDate: Date | null;
+  estimateMinutes: number | null;
   depth: number;
   matched: boolean;
 }
@@ -377,7 +381,8 @@ export const workItemRepository = {
     return client.$queryRaw<WorkItemForestRow[]>`
       WITH RECURSIVE forest AS (
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
-               w."title", w."status", w."assigneeId", 1 AS depth
+               w."title", w."status", w."priority", w."assigneeId", w."reporterId",
+               w."dueDate", w."estimateMinutes", 1 AS depth
           FROM "work_item" w
           WHERE w."projectId" = ${projectId}
             AND w."workspaceId" = ${workspaceId}
@@ -385,7 +390,8 @@ export const workItemRepository = {
             AND w."archivedAt" IS NULL
         UNION ALL
         SELECT c."id", c."parentId", c."kind", c."key", c."identifier",
-               c."title", c."status", c."assigneeId", p.depth + 1
+               c."title", c."status", c."priority", c."assigneeId", c."reporterId",
+               c."dueDate", c."estimateMinutes", p.depth + 1
           FROM "work_item" c
           JOIN forest p ON c."parentId" = p."id"
           WHERE c."projectId" = ${projectId}
@@ -394,14 +400,18 @@ export const workItemRepository = {
       )
       SELECT f."id",
              f."parentId",
-             f."kind"::text   AS "kind",
+             f."kind"::text       AS "kind",
              f."key",
              f."identifier",
              f."title",
              f."status",
+             f."priority"::text   AS "priority",
              f."assigneeId",
-             f.depth::int     AS "depth",
-             (${matched})     AS "matched"
+             f."reporterId",
+             f."dueDate",
+             f."estimateMinutes",
+             f.depth::int         AS "depth",
+             (${matched})         AS "matched"
         FROM forest f
         ORDER BY f.depth ASC, f."key" ASC`;
   },

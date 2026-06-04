@@ -247,7 +247,7 @@ export function TreeTable<Row>({
         <div role="rowgroup">
           <div
             role="row"
-            className="sticky top-0 z-20 grid items-center border-b border-(--el-border) bg-(--el-surface-soft) pr-7 pl-4"
+            className="sticky top-0 z-20 grid items-center gap-x-4 border-b border-(--el-border) bg-(--el-surface-soft) pr-7 pl-4"
             style={{ gridTemplateColumns: gridTemplate, height: 40 }}
           >
             {columns.map((col) => (
@@ -289,7 +289,7 @@ export function TreeTable<Row>({
                   data-testid={testId}
                   onKeyDown={(e) => onRowKeyDown(e, row, index)}
                   onFocus={() => setFocusedId(row.id)}
-                  className="group relative grid items-center border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:-outline-offset-2"
+                  className="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:-outline-offset-2"
                   style={{ gridTemplateColumns: gridTemplate, height: 40 }}
                 >
                   {/* Tree column — indent + chevron slot + the consumer's cell. */}

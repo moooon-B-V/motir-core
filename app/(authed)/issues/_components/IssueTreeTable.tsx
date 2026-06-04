@@ -5,12 +5,16 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Pill, type PillProps } from '@/components/ui/Pill';
 import { TreeTable, type TreeTableColumn, type TreeTableRow } from '@/components/ui/TreeTable';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
+import { PRIORITY_LABELS } from '@/lib/issues/priority';
+import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import type { IssueRowData } from './issueRows';
 
 // The /issues list table (Subtask 2.5.3) — the client wrapper that composes the
 // generic TreeTable primitive (2.5.2) with the issue-specific cells from
 // design/work-items/tree.png: TITLE (type icon + identifier + title), ASSIGNEE
-// (avatar + name / "Unassigned"), STATUS (Pill by lifecycle category). The whole
+// (avatar + name / "Unassigned"), STATUS (Pill by lifecycle category) — plus the
+// remaining core-fields the detail page shows, surfaced as columns: PRIORITY
+// (the shared priority chip), REPORTER (avatar + name), DUE, ESTIMATE. The whole
 // row links to the issue's detail page. Expand/collapse is client-held; the
 // default expands the roots one level (matching the mockup), with no per-row
 // persistence in v1. Inline status/assignee editing layers onto these cells in
@@ -52,9 +56,23 @@ const COLUMNS: TreeTableColumn<IssueRowData>[] = [
     ),
   },
   {
+    key: 'priority',
+    header: 'Priority',
+    width: 120,
+    cell: (r) => {
+      const meta = PRIORITY_META[r.priority];
+      return (
+        <Pill {...meta.pill}>
+          <meta.icon className="h-3 w-3" aria-hidden />
+          {PRIORITY_LABELS[r.priority]}
+        </Pill>
+      );
+    },
+  },
+  {
     key: 'assignee',
     header: 'Assignee',
-    width: 160,
+    width: 150,
     cell: (r) =>
       r.assigneeName ? (
         <span className="flex min-w-0 items-center gap-2">
@@ -63,6 +81,40 @@ const COLUMNS: TreeTableColumn<IssueRowData>[] = [
         </span>
       ) : (
         <span className="text-(--el-text-muted)">Unassigned</span>
+      ),
+  },
+  {
+    key: 'reporter',
+    header: 'Reporter',
+    width: 150,
+    cell: (r) => (
+      <span className="flex min-w-0 items-center gap-2">
+        <Avatar name={r.reporterName} />
+        <span className="truncate text-(--el-text-secondary)">{r.reporterName}</span>
+      </span>
+    ),
+  },
+  {
+    key: 'due',
+    header: 'Due',
+    width: 120,
+    cell: (r) =>
+      r.dueLabel ? (
+        <span className="truncate text-(--el-text-secondary)">{r.dueLabel}</span>
+      ) : (
+        <span className="text-(--el-text-muted)">—</span>
+      ),
+  },
+  {
+    key: 'estimate',
+    header: 'Est.',
+    width: 90,
+    align: 'end',
+    cell: (r) =>
+      r.estimateLabel ? (
+        <span className="truncate text-(--el-text-secondary)">{r.estimateLabel}</span>
+      ) : (
+        <span className="text-(--el-text-muted)">—</span>
       ),
   },
   {

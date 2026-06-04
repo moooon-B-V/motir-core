@@ -56,7 +56,13 @@ describe('issues page data shaping (toIssueRows over the live reads)', () => {
     await db.workItem.update({ where: { id: epic.id }, data: { status: 'todo' } });
     await db.workItem.update({
       where: { id: story.id },
-      data: { status: 'in_progress', assigneeId: fx.ownerId },
+      data: {
+        status: 'in_progress',
+        assigneeId: fx.ownerId,
+        priority: 'high',
+        dueDate: new Date('2026-06-04T00:00:00.000Z'),
+        estimateMinutes: 90,
+      },
     });
 
     const rows = await loadRows(fx);
@@ -76,6 +82,18 @@ describe('issues page data shaping (toIssueRows over the live reads)', () => {
     expect(s.data.statusCategory).toBe('in_progress');
     // Assignee id resolved to the member's display name.
     expect(s.data.assigneeName).toBe(fx.owner.name || fx.owner.email);
+
+    // The detail-page core fields surfaced on the row: priority passes through;
+    // reporter id → name; due date + estimate are pre-formatted server-side.
+    expect(s.data.priority).toBe('high');
+    expect(s.data.reporterName).toBe(fx.owner.name || fx.owner.email);
+    expect(s.data.dueLabel).toBe('Jun 4, 2026');
+    expect(s.data.estimateLabel).toBe('1h 30m');
+
+    // The epic has no due/estimate → null labels; default priority 'medium'.
+    expect(e.data.priority).toBe('medium');
+    expect(e.data.dueLabel).toBeNull();
+    expect(e.data.estimateLabel).toBeNull();
 
     // The epic (status 'todo') resolves to the To Do label/category, unassigned.
     expect(e.data.statusLabel).toBe('To Do');

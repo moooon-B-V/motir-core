@@ -89,8 +89,9 @@ export function toWorkItemSubtreeDto(row: WorkItemSubtreeRow): WorkItemSubtreeDt
  * columns) plus its ALREADY-BUILT `children` array into a `WorkItemTreeNodeDto`.
  * The nesting / sibling-ordering / ancestor-retention pruning are the service's
  * tree work (workItemsService.getProjectTree); this mapper just shapes a single
- * node and keeps `hasChildren` consistent with the children it was handed. No
- * date normalization needed — the projection carries no Date columns.
+ * node and keeps `hasChildren` consistent with the children it was handed.
+ * `dueDate` is the projection's one Date column — normalized to a wire-safe
+ * ISO string here (matching `toWorkItemDto`).
  */
 export function toWorkItemTreeNodeDto(
   row: WorkItemForestRow,
@@ -104,7 +105,11 @@ export function toWorkItemTreeNodeDto(
     identifier: row.identifier,
     title: row.title,
     status: row.status,
+    priority: row.priority,
     assigneeId: row.assigneeId,
+    reporterId: row.reporterId,
+    dueDate: row.dueDate ? row.dueDate.toISOString() : null,
+    estimateMinutes: row.estimateMinutes,
     depth: row.depth,
     hasChildren: children.length > 0,
     matched: row.matched,

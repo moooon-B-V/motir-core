@@ -65,7 +65,7 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
   const members = await workspacesService.listMembers(ctx.workspaceId, ctx.userId);
 
   return (
-    <div className="mx-auto flex max-w-[64rem] flex-col gap-6">
+    <div className="flex flex-col gap-6">
       {/* Header — type icon · identifier · parent breadcrumb · status · title +
           Edit link. The breadcrumb (2.4.3) renders the ancestor chain right
           after the identifier, per the detail.png eyebrow. */}
