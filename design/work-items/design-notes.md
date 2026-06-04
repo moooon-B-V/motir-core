@@ -147,13 +147,30 @@ link drops both reciprocal rows (the service already does this).
   `Combobox` a11y (clears the STRICT axe sweep). Errors use strong-on-tint (AA),
   NOT `--el-danger` text on white. Light + dark parity (toggle in the mock).
 
+### Create modal — Linked issues (panel 5)
+
+`create.pen` ALSO designs a **"Linked issues"** section in the create modal (a
+relationship-kind chip + a linked row + an "Add link" affordance + "Choose a
+relationship") — but it was **never built** (2.3.3/2.3.4 shipped the modal
+without it). It reuses the SAME kind selector + issue-search `Combobox` + remove
+affordance as the detail panel, so the design is shared. The one real
+difference is **timing**: at create the issue has no id yet, so chosen links are
+**collected in form state** (rendered as pending rows with a relationship-kind
+chip) and **written when the issue is created** — in / right after
+`createWorkItem`, in the same flow — NOT immediately. Errors that need the new
+id (cycle) are validated on create; self-link is impossible (no id yet);
+duplicate is prevented in the pending list. This is a distinct code path from
+the detail-page immediate write, so it's its own subtask (**2.4.10**), built on
+the same AddLink control (2.4.9) + this design.
+
 ### States in the mockup
 
 Panels: **(0)** entry point + per-row remove · **(1)** add form open + kind menu ·
 **(2)** combobox typing (candidates) · **(3)** selected → Add enabled + the inline
-error states · **(4)** remove confirm.
+error states · **(4)** remove confirm · **(5)** the create-modal Linked-issues
+section (collect-then-write-on-create).
 
 ### Out of scope
 
 Bulk-link / link from the list/board surfaces (Epic 3/2.5), and a typed
-relationship beyond the five kinds, are not in 2.4.9.
+relationship beyond the five kinds, are not in 2.4.9 / 2.4.10.

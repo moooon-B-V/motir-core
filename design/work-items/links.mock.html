@@ -15,7 +15,7 @@
 
       Panels: (0) entry point + per-row remove · (1) add form open + kind menu ·
       (2) issue-search combobox typing · (3) selected + Add, and the inline error
-      states · (4) remove confirm. Toggle dark to confirm token parity.
+      states · (4) remove confirm · (5) the create-modal Linked-issues section. Toggle dark to confirm token parity.
     -->
     <style>
       /* ── Tier 0 + Tier 3 tokens — copied from app/globals.css (light) ───── */
@@ -985,6 +985,97 @@
               <button class="btn btn--danger btn--sm">Remove link</button>
             </div>
           </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ═══════════ PANEL 5 — create modal · Linked issues ═══════════ -->
+    <div class="panel-label">
+      5 · Create modal — the "Linked issues" section (designed in create.pen, never built). Links
+      are COLLECTED in form state and written when the issue is created (no id yet), reusing the
+      same kind selector + issue-search combobox.
+    </div>
+    <div class="panel" style="max-width: 540px">
+      <section class="card" style="padding: 0">
+        <div
+          style="
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--el-border);
+            font-family: var(--font-sans);
+            font-size: 16px;
+            font-weight: 600;
+          "
+        >
+          New issue
+        </div>
+        <div style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px">
+          <div
+            style="
+              border: 1px dashed var(--el-border);
+              border-radius: 8px;
+              padding: 10px 12px;
+              color: var(--el-text-muted);
+              font-size: 13px;
+            "
+          >
+            Title · Type · Priority · Parent · Assignee · Description · Explanation (above)
+          </div>
+
+          <!-- the Linked issues section -->
+          <div class="group" style="gap: 8px">
+            <span class="section-label">Linked issues</span>
+            <ul class="link-list" style="margin: 0">
+              <li class="link-row" style="padding: 6px 0">
+                <span
+                  class="pill"
+                  style="background: var(--el-surface); border-color: var(--el-border)"
+                  >Blocks</span
+                >
+                <span class="type-icon t-task" style="margin-left: 4px"
+                  ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                ></span>
+                <span class="lr-main"
+                  ><span class="lr-id">PROD-41</span
+                  ><span class="lr-title">Set up OAuth credentials</span></span
+                >
+                <button class="row-remove" aria-label="Remove pending link">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                </button>
+              </li>
+            </ul>
+            <!-- inline add row — same controls as the detail panel -->
+            <div class="addlink" style="padding: 10px">
+              <div class="addlink-row">
+                <button class="kind-select" style="min-width: 112px">
+                  Blocks <svg viewBox="0 0 24 24"><use href="#i-chev" /></svg>
+                </button>
+                <div class="combo">
+                  <div class="combo-input">
+                    <svg viewBox="0 0 24 24"><use href="#i-search" /></svg
+                    ><span class="placeholder">Search an issue…</span>
+                  </div>
+                </div>
+                <div class="addlink-actions">
+                  <button class="btn btn--primary btn--sm" disabled>Add</button>
+                </div>
+              </div>
+            </div>
+            <span class="muted"
+              >Choose a relationship · links are created together with the issue.</span
+            >
+          </div>
+        </div>
+        <div
+          style="
+            padding: 14px 20px;
+            border-top: 1px solid var(--el-border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+          "
+        >
+          <button class="btn btn--ghost btn--sm">Cancel</button>
+          <button class="btn btn--primary btn--sm">Create issue</button>
         </div>
       </section>
     </div>
