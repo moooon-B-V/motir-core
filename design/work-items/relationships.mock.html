@@ -279,12 +279,19 @@
       }
       .link-row {
         display: flex;
-        align-items: center;
+        /* baseline so the smaller mono identifier sits on the SAME line as the
+           title; the icon / pill / dot are re-centered via align-self below */
+        align-items: baseline;
         gap: 8px;
         padding: 6px 8px;
         border-radius: var(--radius-md);
         text-decoration: none;
         color: inherit;
+      }
+      .link-row > .type-icon,
+      .link-row > .pill,
+      .link-row > .lr-open-dot {
+        align-self: center;
       }
       .link-row:hover {
         background: var(--el-surface);
@@ -303,8 +310,9 @@
         color: var(--el-text);
         flex: 1;
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        /* one line; no overflow:hidden so the text baseline (not the bottom
+           edge) participates in the row's baseline alignment. The 2.4.5 code
+           truncates the title inside a min-w-0 child to keep both. */
         white-space: nowrap;
       }
       .lr-open-dot {
