@@ -54,6 +54,12 @@ keeps dependency context while editing.
   blocker** (non-terminal, in the Blocked-by group) carries a small
   `--color-warning` dot before its icon so the banner's named blockers are
   locatable in the list.
+  - **Alignment:** the identifier and title share a **baseline** (the smaller
+    mono id sits on the title's line, not vertically centered against it); the
+    icon, dot, and status pill are vertically centered. In code (2.4.5) use
+    `items-baseline` on the row with the icon/pill `self-center`, and truncate
+    the title inside a `min-w-0` child so it keeps both the ellipsis and the
+    text baseline.
 - **Empty** (no links at all) → muted italic `No linked issues yet.` (never
   blank), and no readiness banner.
 
