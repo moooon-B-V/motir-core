@@ -34,6 +34,7 @@ import type {
   CreateWorkItemInput,
   IssueDetailDto,
   ProjectTreeFilter,
+  RelationshipLinkDto,
   UpdateWorkItemInput,
   WorkItemDto,
   WorkItemKindDto,
@@ -42,7 +43,11 @@ import type {
   WorkItemSubtreeDto,
   WorkItemTreeNodeDto,
 } from '@/lib/dto/workItems';
-import type { LinkWorkItemsInput, WorkItemLinkDto } from '@/lib/dto/workItemLinks';
+import type {
+  LinkWorkItemsInput,
+  RelationshipKind,
+  WorkItemLinkDto,
+} from '@/lib/dto/workItemLinks';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // Work-items service — the business-logic surface Epic 2's route handlers
@@ -85,6 +90,25 @@ async function assertAssigneeMember(userId: string, workspaceId: string): Promis
 /** Stable, deterministic ordering for summary lists resolved via findByIds. */
 function byKeyAsc(a: WorkItem, b: WorkItem): number {
   return a.key - b.key;
+}
+
+/**
+ * Pair each resolved linked item (key-ASC) with the `work_item_link.id` of the
+ * edge that points at it, so the 2.4.9 inline remove can target the exact link.
+ * `endpoint` is which end of the edge holds the linked item: `toId` for OUT
+ * edges (blocked-by / relates-to / duplicates / clones), `fromId` for the
+ * reverse IN edge (blocks). The (item, endpoint, kind) triple is unique, so the
+ * map is 1:1.
+ */
+function toRelationshipLinks(
+  links: ReadonlyArray<{ id: string; fromId: string; toId: string }>,
+  rows: WorkItem[],
+  endpoint: 'fromId' | 'toId',
+): RelationshipLinkDto[] {
+  const linkIdByItem = new Map(links.map((l) => [l[endpoint], l.id]));
+  return rows
+    .sort(byKeyAsc)
+    .map((r) => ({ linkId: linkIdByItem.get(r.id) ?? '', item: toWorkItemSummaryDto(r) }));
 }
 
 /** A revision-diff cell. */
@@ -998,8 +1022,10 @@ export const workItemsService = {
       ]);
 
     const ancestors = ancestorRows.map(toWorkItemSummaryDto);
-    const blockedBy = blockerRows.sort(byKeyAsc).map(toWorkItemSummaryDto);
-    const openBlockers = blockedBy.filter((b) => readiness.openBlockerIds.has(b.id));
+    const blockedBy = toRelationshipLinks(blockedByLinks, blockerRows, 'toId');
+    const openBlockers = blockedBy
+      .filter((l) => readiness.openBlockerIds.has(l.item.id))
+      .map((l) => l.item);
 
     return {
       item: toWorkItemDto(item),
@@ -1007,10 +1033,10 @@ export const workItemsService = {
       parent: ancestors.at(-1) ?? null,
       children: childRows.map(toWorkItemSummaryDto),
       blockedBy,
-      blocks: blockingRows.sort(byKeyAsc).map(toWorkItemSummaryDto),
-      relatesTo: relatesRows.sort(byKeyAsc).map(toWorkItemSummaryDto),
-      duplicates: duplicatesRows.sort(byKeyAsc).map(toWorkItemSummaryDto),
-      clones: clonesRows.sort(byKeyAsc).map(toWorkItemSummaryDto),
+      blocks: toRelationshipLinks(blocksLinks, blockingRows, 'fromId'),
+      relatesTo: toRelationshipLinks(relatesLinks, relatesRows, 'toId'),
+      duplicates: toRelationshipLinks(duplicatesLinks, duplicatesRows, 'toId'),
+      clones: toRelationshipLinks(clonesLinks, clonesRows, 'toId'),
       readiness: { ready: readiness.ready, openBlockers },
       workflow,
     };
@@ -1063,4 +1089,47 @@ export const workItemsService = {
     if (!link || link.workspaceId !== ctx.workspaceId) throw new WorkItemLinkNotFoundError(linkId);
     return toWorkItemLinkDto(link);
   },
+
+  /**
+   * Candidate targets for the link picker (Subtask 2.4.9): non-archived items in
+   * the caller's WORKSPACE (cross-project — the link model allows it), excluding
+   * the current item itself AND any already linked to it by the chosen
+   * relationship (direction-aware, so the picker won't offer a duplicate; the
+   * trigger still backstops a forged one). Tenant-gated on the current item
+   * (cross-workspace / missing → 404). Bounded to LINK_CANDIDATE_LIMIT; the
+   * picker's Combobox filters by identifier/title client-side (full server
+   * search is Epic 6).
+   */
+  async listLinkCandidates(
+    currentItemId: string,
+    relationship: RelationshipKind,
+    ctx: ServiceContext,
+  ): Promise<WorkItemSummaryDto[]> {
+    const item = await workItemRepository.findById(currentItemId);
+    if (!item || item.workspaceId !== ctx.workspaceId) {
+      throw new WorkItemNotFoundError(currentItemId);
+    }
+
+    const linkedIds =
+      relationship === 'blocks'
+        ? (await workItemLinkRepository.findByToItem(currentItemId, 'is_blocked_by')).map(
+            (l) => l.fromId,
+          )
+        : (
+            await workItemLinkRepository.findByFromItem(
+              currentItemId,
+              relationship === 'blocked_by' ? 'is_blocked_by' : relationship,
+            )
+          ).map((l) => l.toId);
+
+    const rows = await workItemRepository.findLinkCandidates(
+      ctx.workspaceId,
+      [currentItemId, ...linkedIds],
+      LINK_CANDIDATE_LIMIT,
+    );
+    return rows.map(toWorkItemSummaryDto);
+  },
 };
+
+/** Upper bound on the link-picker candidate list (the Combobox filters it). */
+const LINK_CANDIDATE_LIMIT = 50;
