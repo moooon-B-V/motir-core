@@ -4,12 +4,7 @@ import { useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Calendar, ChevronDown, Clock } from 'lucide-react';
-import type {
-  WorkItemDto,
-  WorkItemKindDto,
-  WorkItemPriorityDto,
-  WorkItemSummaryDto,
-} from '@/lib/dto/workItems';
+import type { WorkItemDto, WorkItemKindDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { WorkflowDto, StatusCategoryDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { IssueType } from '@/lib/issues/parentRules';
@@ -19,6 +14,7 @@ import { Pill, type PillProps } from '@/components/ui/Pill';
 import { useToast } from '@/components/ui/Toast';
 import { StatusPicker } from '@/components/issues/StatusPicker';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
+import { PriorityPicker } from '@/components/issues/PriorityPicker';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { TypePicker } from '@/components/issues/TypePicker';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -229,20 +225,11 @@ export function CoreFieldsPanel({
         onToggle={() => toggle('priority')}
       >
         {editing === 'priority' ? (
-          <select
-            className="border-(--el-border) bg-(--el-page-bg) focus-visible:ring-(--focus-ring-color) w-full rounded-md border px-2 py-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none"
+          <PriorityPicker
             value={item.priority}
-            onChange={(e) => patch({ priority: e.target.value as WorkItemPriorityDto })}
+            onChange={(priority) => patch({ priority })}
             disabled={isPending}
-            aria-label="Priority"
-            autoFocus
-          >
-            {(Object.keys(PRIORITY_LABELS) as WorkItemPriorityDto[]).map((p) => (
-              <option key={p} value={p}>
-                {PRIORITY_LABELS[p]}
-              </option>
-            ))}
-          </select>
+          />
         ) : (
           <Pill {...priorityPill.pill}>
             <priorityPill.icon className="h-3 w-3" aria-hidden />

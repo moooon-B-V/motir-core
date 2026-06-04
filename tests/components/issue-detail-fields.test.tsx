@@ -143,9 +143,10 @@ describe('CoreFieldsPanel (inline rail)', () => {
 
     expect(screen.queryByLabelText('Priority')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Edit Priority' }));
-    const select = screen.getByLabelText('Priority') as HTMLSelectElement;
-    expect(select.value).toBe('high');
-    fireEvent.change(select, { target: { value: 'low' } });
+    // Priority now uses the shared Combobox picker (like Type/Assignee), not a
+    // native <select> — drive it the same way: open, pick the option.
+    fireEvent.click(screen.getByRole('combobox', { name: 'Priority' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Low' }));
 
     expect(updateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'wi_1', priority: 'low' }),

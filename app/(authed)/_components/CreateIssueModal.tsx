@@ -12,8 +12,8 @@ import { uploadIssueAttachment } from '@/lib/blob/uploadClient';
 import { cn } from '@/lib/utils/cn';
 import { TypePicker } from '@/components/issues/TypePicker';
 import { ParentPicker } from '@/components/issues/ParentPicker';
+import { PriorityPicker } from '@/components/issues/PriorityPicker';
 import { createIssueAction } from '../issues/actions';
-import { PRIORITY_OPTIONS } from '@/lib/issues/priority';
 import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 
 // The create-issue modal (Subtask 2.3.3, pickers wired in 2.3.4). Collects the
@@ -232,22 +232,10 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
             )}
           </div>
 
-          <label className="flex flex-col gap-1 font-sans text-sm">
+          <div className="flex flex-col gap-1 font-sans text-sm">
             <span className="text-(--el-text) font-medium">Priority</span>
-            <select
-              className="border-(--el-border) bg-(--el-page-bg) rounded-md border px-3 py-2 text-sm"
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as WorkItemPriorityDto)}
-              disabled={isPending}
-              aria-label="Priority"
-            >
-              {PRIORITY_OPTIONS.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
+            <PriorityPicker value={priority} onChange={setPriority} disabled={isPending} />
+          </div>
         </div>
 
         <Modal.Footer className="shrink-0">

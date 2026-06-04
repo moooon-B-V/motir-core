@@ -137,7 +137,9 @@ describe('CreateIssueModal — validation + submit', () => {
     fireEvent.click(screen.getByRole('option', { name: 'Bug' }));
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Login is broken' } });
     fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Repro steps…' } });
-    fireEvent.change(screen.getByLabelText('Priority'), { target: { value: 'high' } });
+    // Priority is the combobox picker now (like Type) — open it and choose High.
+    fireEvent.click(screen.getByRole('combobox', { name: 'Priority' }));
+    fireEvent.click(screen.getByRole('option', { name: 'High' }));
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Create' }));
