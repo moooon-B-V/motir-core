@@ -57,9 +57,9 @@ export function RemoveLinkButton({
       >
         <X className="h-[15px] w-[15px]" aria-hidden />
       </Popover.Trigger>
-      <Popover.Content className="w-72">
-        <div className="flex flex-col gap-3">
-          <p className="text-(--el-text) font-sans text-sm">
+      <Popover.Content width={300} align="end">
+        <div className="flex flex-col gap-3 p-3.5">
+          <p className="text-(--el-text) font-sans text-sm leading-snug">
             Remove the {relationshipLabel.toLowerCase()} link to{' '}
             <span className="font-mono text-xs">{targetIdentifier}</span>? The issue isn’t deleted —
             only the link.
