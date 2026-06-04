@@ -27,7 +27,7 @@ export default async function IssuesPage() {
   const ctx = await getActiveProject();
   if (!ctx) {
     return (
-      <div className="mx-auto flex max-w-[64rem] flex-col gap-6">
+      <div className="flex flex-col gap-6">
         <header className="flex flex-col gap-1">
           <h1 className="font-serif text-2xl font-semibold text-(--el-text)">Issues</h1>
         </header>
@@ -40,7 +40,7 @@ export default async function IssuesPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-[64rem] flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="font-serif text-2xl font-semibold text-(--el-text)">Issues</h1>
