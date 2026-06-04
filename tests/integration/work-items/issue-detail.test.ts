@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture } from '../../fixtures';
@@ -55,6 +56,10 @@ describe('workItemsService.getIssueDetail (2.4.1)', () => {
     expect(detail.item.identifier).toBe(task.identifier);
     expect(detail.item.title).toBe('The task');
     expect(detail.parent?.identifier).toBe(story.identifier);
+    // Ancestor breadcrumb chain: root→self, item excluded (the task's lineage
+    // is Epic → Story). `parent` is the chain's last element.
+    expect(detail.ancestors.map((a) => a.identifier)).toEqual([epic.identifier, story.identifier]);
+    expect(detail.ancestors.at(-1)?.identifier).toBe(detail.parent?.identifier);
     expect(detail.children.map((c) => c.identifier)).toEqual([subtask.identifier]);
     expect(detail.blockedBy.map((b) => b.identifier)).toEqual([blocker.identifier]);
     expect(detail.blocks).toEqual([]);
@@ -68,6 +73,20 @@ describe('workItemsService.getIssueDetail (2.4.1)', () => {
     );
     expect(blockerDetail.blocks.map((b) => b.identifier)).toEqual([task.identifier]);
     expect(blockerDetail.blockedBy).toEqual([]);
+
+    // The deepest item walks the full 3-ancestor chain (Epic → Story → Task),
+    // root→self; its own child list is empty (a leaf shows nothing).
+    const subtaskDetail = await workItemsService.getIssueDetail(
+      fx.projectId,
+      subtask.identifier,
+      fx.ctx,
+    );
+    expect(subtaskDetail.ancestors.map((a) => a.identifier)).toEqual([
+      epic.identifier,
+      story.identifier,
+      task.identifier,
+    ]);
+    expect(subtaskDetail.children).toEqual([]);
   });
 
   it('a top-level item with no children returns parent=null, children=[]', async () => {
@@ -78,8 +97,32 @@ describe('workItemsService.getIssueDetail (2.4.1)', () => {
     );
     const detail = await workItemsService.getIssueDetail(fx.projectId, epic.identifier, fx.ctx);
     expect(detail.parent).toBeNull();
+    expect(detail.ancestors).toEqual([]); // top-level → no breadcrumb
     expect(detail.children).toEqual([]);
     expect(detail.blockedBy).toEqual([]);
+  });
+
+  it('findAncestors is workspace-scoped — a foreign workspaceId yields no chain', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'Epic' },
+      fx.ctx,
+    );
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Story', parentId: epic.id },
+      fx.ctx,
+    );
+
+    // Correct workspace → the chain resolves (root→self).
+    const own = await workItemRepository.findAncestors(story.id, fx.ctx.workspaceId);
+    expect(own.map((a) => a.identifier)).toEqual([epic.identifier]);
+
+    // A different workspace's id filters out even the anchor row, so a
+    // cross-tenant probe gets an empty chain — no ancestor identifiers/titles
+    // leak across workspaces.
+    const otherWs = await makeWorkItemFixture();
+    const foreign = await workItemRepository.findAncestors(story.id, otherWs.ctx.workspaceId);
+    expect(foreign).toEqual([]);
   });
 
   it('a cross-workspace or unknown identifier → WorkItemNotFoundError (no existence leak)', async () => {

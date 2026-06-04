@@ -260,6 +260,43 @@ export const workItemRepository = {
   },
 
   /**
+   * The ANCESTOR chain of a work item — its parent, grandparent, … up to the
+   * root — in ONE round-trip via a recursive CTE walking UP the `parentId`
+   * edge (the inverse of `findSubtree`). Excludes the item itself; returns the
+   * ancestors ordered ROOT→self (the immediate parent LAST), which is the order
+   * the detail-page breadcrumb renders (Subtask 2.4.3). The walk is naturally
+   * bounded — it stops at the root (`parentId IS NULL`) and the tree depth is
+   * capped at 4 (Story 1.4) — so this is a short, fixed-length parent walk, not
+   * an unbounded recursion.
+   *
+   * `workspaceId` is filtered on BOTH the anchor and the recursive step, so a
+   * cross-workspace ancestor can never leak into the chain (the primary tenant
+   * gate per finding #26 — RLS is inert under the dev/CI superuser). `w.*`
+   * carries every WorkItem column so the service maps each ancestor with the
+   * shared `toWorkItemSummaryDto`; the CTE-internal `depth` only orders the
+   * result and is ignored by the caller.
+   */
+  async findAncestors(
+    itemId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem[]> {
+    const client = tx ?? db;
+    return client.$queryRaw<WorkItem[]>`
+      WITH RECURSIVE ancestors AS (
+        SELECT w.*, 0 AS depth
+          FROM "work_item" w
+          WHERE w."id" = ${itemId} AND w."workspaceId" = ${workspaceId}
+        UNION ALL
+        SELECT p.*, a.depth + 1
+          FROM "work_item" p
+          JOIN ancestors a ON p."id" = a."parentId"
+          WHERE p."workspaceId" = ${workspaceId}
+      )
+      SELECT * FROM ancestors WHERE depth > 0 ORDER BY depth DESC`;
+  },
+
+  /**
    * Create a work item. Required `tx`. The DB triggers validate the
    * kind-parent matrix + depth on insert; their SQLSTATE-23514 rejections and
    * a P2002 unique violation are translated to typed errors here.

@@ -12,6 +12,8 @@ import { MarkdownView } from '@/components/ui/MarkdownView';
 import { CoreFieldsPanel } from './_components/CoreFieldsPanel';
 import { ContentSectionCard } from './_components/ContentSectionCard';
 import { IssueExplanation } from './_components/IssueExplanation';
+import { ParentBreadcrumb } from './_components/ParentBreadcrumb';
+import { ChildList } from './_components/ChildList';
 
 // The issue DETAIL route (Story 2.4 · Subtask 2.4.1). Server Component:
 // resolves the active project (the shipped active-project model — finding #50,
@@ -63,11 +65,14 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
 
   return (
     <div className="mx-auto flex max-w-[64rem] flex-col gap-6">
-      {/* Header — type icon · identifier · status · title + Edit link */}
+      {/* Header — type icon · identifier · parent breadcrumb · status · title +
+          Edit link. The breadcrumb (2.4.3) renders the ancestor chain right
+          after the identifier, per the detail.png eyebrow. */}
       <header className="flex flex-col gap-2">
-        <div className="flex items-center gap-3">
-          <TypeIcon className="text-muted-foreground h-5 w-5" aria-hidden />
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <TypeIcon className="text-muted-foreground h-5 w-5 shrink-0" aria-hidden />
           <span className="text-muted-foreground font-mono text-sm">{item.identifier}</span>
+          <ParentBreadcrumb ancestors={detail.ancestors} />
           <Pill tone="neutral">{item.status}</Pill>
           <Link
             href={`/issues/${item.identifier}/edit`}
@@ -98,7 +103,9 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
             explanationSource={item.explanationSource}
             editHref={`/issues/${item.identifier}/edit`}
           />
-          {/* 2.4.3: child list. Epic 5 extension slots: comments · activity. */}
+          {/* 2.4.3: direct children (a leaf renders nothing). Epic 5 extension
+              slots: comments · activity. */}
+          <ChildList items={detail.children} workflow={detail.workflow} members={members} />
         </main>
 
         <aside className="flex flex-col gap-4">
@@ -109,9 +116,9 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
             parent={detail.parent}
             reporterIsSelf={item.reporterId === ctx.userId}
           />
-          {/* 2.4.3: parent breadcrumb. 2.4.4: inline status + assignee controls.
-              2.4.5: relationships + readiness badge. Epic 5: custom fields ·
-              attachments. */}
+          {/* The 2.4.3 parent breadcrumb lives in the header (per detail.png),
+              not here. 2.4.5: relationships + readiness badge. Epic 5: custom
+              fields · attachments. */}
         </aside>
       </div>
     </div>
