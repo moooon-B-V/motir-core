@@ -38,18 +38,18 @@ const pillVariants = cva(
       // hue-on-tint TEXT failed WCAG AA (≈2.5–3.8:1 light, 3.2–4.0:1 dark);
       // charcoal-on-tint clears ~10:1 in both modes (PRODECT_FINDINGS #35).
       status: {
-        planned: 'bg-(--color-tint-lavender) text-(--color-charcoal) border-transparent',
-        'in-progress': 'bg-(--color-tint-sky) text-(--color-charcoal) border-transparent',
-        done: 'bg-(--color-tint-mint) text-(--color-charcoal) border-transparent',
+        planned: 'bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent',
+        'in-progress': 'bg-(--el-tint-sky) text-(--el-text-strong) border-transparent',
+        done: 'bg-(--el-tint-mint) text-(--el-text-strong) border-transparent',
       },
       severity: {
-        info: 'bg-(--color-tint-sky) text-(--color-charcoal) border-transparent',
-        success: 'bg-(--color-tint-mint) text-(--color-charcoal) border-transparent',
-        warning: 'bg-(--color-tint-peach) text-(--color-charcoal) border-transparent',
-        danger: 'bg-(--color-tint-rose) text-(--color-charcoal) border-transparent',
+        info: 'bg-(--el-tint-sky) text-(--el-text-strong) border-transparent',
+        success: 'bg-(--el-tint-mint) text-(--el-text-strong) border-transparent',
+        warning: 'bg-(--el-tint-peach) text-(--el-text-strong) border-transparent',
+        danger: 'bg-(--el-tint-rose) text-(--el-text-strong) border-transparent',
       },
       tone: {
-        neutral: 'bg-(--color-surface) text-(--color-slate) border-(--color-hairline)',
+        neutral: 'bg-(--el-surface) text-(--el-text-secondary) border-(--el-border)',
       },
     },
     defaultVariants: {},

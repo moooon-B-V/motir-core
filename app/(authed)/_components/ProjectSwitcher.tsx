@@ -71,8 +71,8 @@ export function ProjectSwitcher({
             // border + surface fill while the popover is open.
             className={cn(
               'w-full',
-              open && 'bg-surface border border-(--color-primary)',
-              !active && 'text-muted-foreground',
+              open && 'bg-(--el-surface) border border-(--el-accent)',
+              !active && 'text-(--el-text-muted)',
             )}
           >
             <span className="flex w-full items-center gap-2">
@@ -86,13 +86,13 @@ export function ProjectSwitcher({
                   Archived
                 </Pill>
               ) : null}
-              <ChevronDown className="text-muted-foreground h-4 w-4 shrink-0" aria-hidden />
+              <ChevronDown className="text-(--el-text-muted) h-4 w-4 shrink-0" aria-hidden />
             </span>
           </Button>
         </Popover.Trigger>
         <Popover.Content align="start" width={320} className="py-1">
           <div className="px-3 pb-1 pt-2">
-            <span className="text-muted-foreground font-mono text-xs uppercase tracking-wider">
+            <span className="text-(--el-text-muted) font-mono text-xs uppercase tracking-wider">
               Projects
             </span>
           </div>
@@ -107,19 +107,19 @@ export function ProjectSwitcher({
                     disabled={isPending}
                     className={cn(
                       'flex w-full items-center gap-2 rounded-(--radius-sm) px-2 py-2 text-left',
-                      'hover:bg-surface focus-visible:bg-surface focus-visible:outline-none',
+                      'hover:bg-(--el-surface) focus-visible:bg-(--el-surface) focus-visible:outline-none',
                       'disabled:pointer-events-none disabled:opacity-50',
-                      isActive && 'bg-surface',
+                      isActive && 'bg-(--el-surface)',
                     )}
                   >
                     <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center">
                       {isActive ? (
-                        <Check className="h-4 w-4" style={{ color: 'var(--color-primary)' }} />
+                        <Check className="h-4 w-4" style={{ color: 'var(--el-accent)' }} />
                       ) : null}
                     </span>
                     <span
                       className={cn(
-                        'flex-1 truncate font-sans text-sm text-foreground',
+                        'flex-1 truncate font-sans text-sm text-(--el-text)',
                         isActive && 'font-semibold',
                       )}
                     >
@@ -130,14 +130,14 @@ export function ProjectSwitcher({
               );
             })}
           </ul>
-          <div className="my-1 h-px bg-(--color-hairline)" />
+          <div className="my-1 h-px bg-(--el-border)" />
           <div className="px-1 pb-1">
             <button
               type="button"
               onClick={openCreate}
-              className="hover:bg-surface focus-visible:bg-surface flex w-full items-center gap-2 rounded-(--radius-sm) px-2 py-2 text-left font-sans text-sm text-foreground focus-visible:outline-none"
+              className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-sm) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
             >
-              <Plus className="text-muted-foreground h-4 w-4" aria-hidden />
+              <Plus className="text-(--el-text-muted) h-4 w-4" aria-hidden />
               Create project
             </button>
           </div>

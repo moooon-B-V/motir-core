@@ -41,7 +41,7 @@ export function Tooltip({
             sideOffset={6}
             className={cn(
               'z-50 select-none rounded-(--radius-sm)',
-              'bg-foreground text-background',
+              'bg-(--el-text) text-(--el-text-inverted)',
               'px-2 py-1 font-sans text-xs',
               'shadow-(--shadow-elevated)',
               'data-[state=delayed-open]:animate-in data-[state=closed]:animate-out fade-in-0 fade-out-0',
@@ -49,7 +49,7 @@ export function Tooltip({
             )}
           >
             {content}
-            <RadixTooltip.Arrow className="fill-foreground" />
+            <RadixTooltip.Arrow className="fill-(--el-text)" />
           </RadixTooltip.Content>
         </RadixTooltip.Portal>
       </RadixTooltip.Root>

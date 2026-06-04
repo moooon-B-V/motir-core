@@ -21,20 +21,17 @@ export function ArchiveProjectCard({
   return (
     <>
       <Card
-        className="border-2 border-(--color-destructive)"
+        className="border-2 border-(--el-danger)"
         header={
-          <h2
-            className="font-sans text-base font-semibold"
-            style={{ color: 'var(--color-destructive)' }}
-          >
+          <h2 className="font-sans text-base font-semibold" style={{ color: 'var(--el-danger)' }}>
             Danger zone
           </h2>
         }
       >
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="font-sans text-sm font-medium text-foreground">Archive project</p>
-            <p className="text-muted-foreground font-sans text-xs">
+            <p className="font-sans text-sm font-medium text-(--el-text)">Archive project</p>
+            <p className="text-(--el-text-muted) font-sans text-xs">
               Hides this project from the switcher and lists. Work items and history are preserved.
             </p>
           </div>

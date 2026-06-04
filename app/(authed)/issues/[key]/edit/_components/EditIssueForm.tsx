@@ -11,6 +11,7 @@ import { uploadIssueAttachment } from '@/lib/blob/uploadClient';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { StatusPicker } from '@/components/issues/StatusPicker';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
+import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { WorkItemDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
@@ -64,7 +65,6 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
   // A frozen snapshot of what's on the server, so we only submit real changes.
   const initial = issue;
   const typeMeta = ISSUE_TYPE_META[issue.kind as IssueType];
-  const TypeIcon = typeMeta.icon;
   const reporter = members.find((m) => m.userId === issue.reporterId);
 
   const nonStatusDirty =
@@ -138,19 +138,15 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
   return (
     <form className="flex w-full flex-col gap-4" onSubmit={handleSubmit}>
       <div className="flex items-center gap-2">
-        <TypeIcon
-          className="h-4 w-4"
-          aria-hidden
-          style={{ color: `var(--color-${typeMeta.colorToken})` }}
-        />
-        <span className="text-muted-foreground font-mono text-sm">{issue.identifier}</span>
+        <IssueTypeIcon type={issue.kind as IssueType} className="h-4 w-4" />
+        <span className="text-(--el-text-muted) font-mono text-sm">{issue.identifier}</span>
         <Pill tone="neutral">{typeMeta.label}</Pill>
       </div>
 
       {stale ? (
         <div
           role="alert"
-          className="border-(--color-destructive) bg-card text-foreground flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+          className="border-(--el-danger) bg-card text-(--el-text) flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
         >
           <span>This issue was edited by someone else. Refresh to see the latest.</span>
           <Button type="button" variant="secondary" size="sm" onClick={() => router.refresh()}>
@@ -184,7 +180,7 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-foreground font-medium">Status</span>
+          <span className="text-(--el-text) font-medium">Status</span>
           <StatusPicker
             statuses={workflow.statuses}
             transitions={workflow.transitions}
@@ -200,7 +196,7 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
         </div>
 
         <div className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-foreground font-medium">Parent</span>
+          <span className="text-(--el-text) font-medium">Parent</span>
           <ParentPicker
             childType={issue.kind as IssueType}
             value={parentId}
@@ -214,7 +210,7 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
         </div>
 
         <div className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-foreground font-medium">Assignee</span>
+          <span className="text-(--el-text) font-medium">Assignee</span>
           <AssigneePicker
             members={members}
             value={assigneeId}
@@ -224,9 +220,9 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
         </div>
 
         <label className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-foreground font-medium">Priority</span>
+          <span className="text-(--el-text) font-medium">Priority</span>
           <select
-            className="border-border bg-background rounded-md border px-3 py-2 text-sm"
+            className="border-(--el-border) bg-(--el-page-bg) rounded-md border px-3 py-2 text-sm"
             value={priority}
             onChange={(e) => setPriority(e.target.value as WorkItemPriorityDto)}
             disabled={isPending}
@@ -241,10 +237,10 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
         </label>
 
         <label className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-foreground font-medium">Due date</span>
+          <span className="text-(--el-text) font-medium">Due date</span>
           <input
             type="date"
-            className="border-border bg-background rounded-md border px-3 py-2 text-sm"
+            className="border-(--el-border) bg-(--el-page-bg) rounded-md border px-3 py-2 text-sm"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
             disabled={isPending}
@@ -253,11 +249,11 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
         </label>
 
         <label className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-foreground font-medium">Estimate (minutes)</span>
+          <span className="text-(--el-text) font-medium">Estimate (minutes)</span>
           <input
             type="number"
             min={0}
-            className="border-border bg-background rounded-md border px-3 py-2 text-sm"
+            className="border-(--el-border) bg-(--el-page-bg) rounded-md border px-3 py-2 text-sm"
             value={estimate}
             onChange={(e) => setEstimate(e.target.value)}
             disabled={isPending}
@@ -267,8 +263,9 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
       </div>
 
       <div className="flex flex-col gap-1 font-sans text-sm">
-        <span className="text-foreground flex items-center gap-2 font-medium">
-          Explanation <span className="text-(--color-slate) font-normal">— why it matters</span>
+        <span className="text-(--el-text) flex items-center gap-2 font-medium">
+          Explanation{' '}
+          <span className="text-(--el-text-secondary) font-normal">— why it matters</span>
           {issue.explanationSource === 'ai_draft' ? <Pill severity="info">AI-drafted</Pill> : null}
         </span>
         {/* Editable now (the design treats explanation as a first-class authored
@@ -283,7 +280,7 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
         />
       </div>
 
-      <div className="text-muted-foreground font-sans text-xs">
+      <div className="text-(--el-text-muted) font-sans text-xs">
         Reporter: {reporter ? reporter.name : issue.reporterId} · created{' '}
         {issue.createdAt.slice(0, 10)}
       </div>

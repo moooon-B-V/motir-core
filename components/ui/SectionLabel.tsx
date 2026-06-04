@@ -32,7 +32,7 @@ export const SectionLabel = forwardRef<HTMLDivElement, SectionLabelProps>(functi
     <div
       ref={ref}
       className={cn(
-        'font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-(--color-muted-foreground)',
+        'font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-(--el-text-muted)',
         className,
       )}
       {...rest}

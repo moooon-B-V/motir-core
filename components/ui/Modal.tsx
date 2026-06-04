@@ -27,8 +27,8 @@ import { cn } from '@/lib/utils/cn';
 const contentVariants = cva(
   cn(
     'fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2',
-    'w-[90vw] rounded-(--radius-modal) bg-background',
-    'shadow-(--shadow-modal) border border-(--color-hairline)',
+    'w-[90vw] rounded-(--radius-modal) bg-(--el-page-bg)',
+    'shadow-(--shadow-modal) border border-(--el-border)',
     'p-(--spacing-card-padding)',
     'focus:outline-none',
   ),
@@ -95,12 +95,12 @@ function ModalRoot({
           {title || description ? (
             <div className="mb-(--spacing-md)">
               {title ? (
-                <Dialog.Title className="font-serif text-xl font-semibold text-foreground">
+                <Dialog.Title className="font-serif text-xl font-semibold text-(--el-text)">
                   {title}
                 </Dialog.Title>
               ) : null}
               {description ? (
-                <Dialog.Description className="text-muted-foreground mt-1 font-sans text-sm">
+                <Dialog.Description className="text-(--el-text-muted) mt-1 font-sans text-sm">
                   {description}
                 </Dialog.Description>
               ) : null}
@@ -113,7 +113,7 @@ function ModalRoot({
           {!hideClose ? (
             <Dialog.Close
               aria-label="Close"
-              className="text-muted-foreground hover:text-foreground absolute right-3 top-3 rounded-(--radius-sm) p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+              className="text-(--el-text-muted) hover:text-(--el-text) absolute right-3 top-3 rounded-(--radius-sm) p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
             >
               <X className="h-4 w-4" />
             </Dialog.Close>
@@ -130,7 +130,7 @@ const ModalFooter = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivEleme
       <div
         ref={ref}
         className={cn(
-          'border-(--color-hairline) mt-(--spacing-md) flex items-center justify-end gap-2 border-t pt-(--spacing-md)',
+          'border-(--el-border) mt-(--spacing-md) flex items-center justify-end gap-2 border-t pt-(--spacing-md)',
           className,
         )}
         {...rest}

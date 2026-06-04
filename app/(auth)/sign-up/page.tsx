@@ -162,10 +162,10 @@ function SignUpForm() {
             autoFocus
           />
           {emailExists ? (
-            <p className="-mt-2 font-sans text-sm text-foreground">
+            <p className="-mt-2 font-sans text-sm text-(--el-text)">
               <Link
                 href={{ pathname: '/sign-in' }}
-                className="font-medium text-(--color-link) hover:text-(--color-link-pressed) focus-visible:outline-none focus-visible:underline"
+                className="font-medium text-(--el-link) hover:text-(--el-link-pressed) focus-visible:outline-none focus-visible:underline"
               >
                 Sign in instead →
               </Link>
@@ -180,14 +180,14 @@ function SignUpForm() {
         <form onSubmit={onCreateAccount} className="flex flex-col gap-5" noValidate>
           {/* Identity recap — read-only, click "Edit" to flip back. */}
           <div className="flex flex-col gap-1.5">
-            <div className="flex h-(--height-input) w-full items-center gap-2 rounded-(--radius-input) bg-surface px-(--spacing-input-x)">
-              <Mail className="text-muted-foreground h-5 w-5" aria-hidden />
-              <span className="flex-1 truncate font-sans text-sm text-foreground">{email}</span>
+            <div className="flex h-(--height-input) w-full items-center gap-2 rounded-(--radius-input) bg-(--el-surface) px-(--spacing-input-x)">
+              <Mail className="text-(--el-text-muted) h-5 w-5" aria-hidden />
+              <span className="flex-1 truncate font-sans text-sm text-(--el-text)">{email}</span>
             </div>
             <button
               type="button"
               onClick={() => setStep('identity')}
-              className="self-start font-sans text-xs text-(--color-link) hover:text-(--color-link-pressed) focus-visible:outline-none focus-visible:underline"
+              className="self-start font-sans text-xs text-(--el-link) hover:text-(--el-link-pressed) focus-visible:outline-none focus-visible:underline"
             >
               Edit
             </button>
@@ -206,7 +206,7 @@ function SignUpForm() {
                 type="button"
                 onClick={() => setShowPassword((s) => !s)}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
-                className="inline-flex h-6 w-6 items-center justify-center rounded-(--radius-xs) text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-(--radius-xs) text-(--el-text-muted) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
               >
                 {showPassword ? (
                   <EyeOff className="h-4 w-4" aria-hidden />
@@ -243,11 +243,11 @@ function FooterLink({
   href: string;
 }) {
   return (
-    <p className="font-sans text-sm text-foreground">
+    <p className="font-sans text-sm text-(--el-text)">
       {prompt}{' '}
       <Link
         href={href}
-        className="font-medium text-(--color-link) hover:text-(--color-link-pressed) focus-visible:outline-none focus-visible:underline"
+        className="font-medium text-(--el-link) hover:text-(--el-link-pressed) focus-visible:outline-none focus-visible:underline"
       >
         {linkText}
       </Link>

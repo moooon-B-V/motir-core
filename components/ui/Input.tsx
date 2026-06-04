@@ -36,16 +36,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     <FormField label={label} error={error} helperText={helperText} htmlFor={inputId}>
       <div
         className={cn(
-          'flex h-(--height-input) w-full items-center gap-2 rounded-(--radius-input) border bg-background',
+          'flex h-(--height-input) w-full items-center gap-2 rounded-(--radius-input) border bg-(--el-page-bg)',
           'px-(--spacing-input-x)',
           'transition-colors',
           'focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:ring-offset-2 focus-within:ring-offset-background',
-          hasError ? 'border-(--color-destructive)' : 'border-(--color-hairline-strong)',
+          hasError ? 'border-(--el-danger)' : 'border-(--el-border-strong)',
           disabled && 'cursor-not-allowed opacity-50',
         )}
       >
         {addonStart ? (
-          <span aria-hidden className="text-muted-foreground inline-flex">
+          <span aria-hidden className="text-(--el-text-muted) inline-flex">
             {addonStart}
           </span>
         ) : null}
@@ -56,14 +56,14 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           aria-describedby={describedBy}
           disabled={disabled}
           className={cn(
-            'flex-1 bg-transparent font-sans text-sm text-foreground outline-none placeholder:text-muted-foreground',
+            'flex-1 bg-transparent font-sans text-sm text-(--el-text) outline-none placeholder:text-(--el-text-muted)',
             'disabled:cursor-not-allowed',
             className,
           )}
           {...rest}
         />
         {addonEnd ? (
-          <span aria-hidden className="text-muted-foreground inline-flex">
+          <span aria-hidden className="text-(--el-text-muted) inline-flex">
             {addonEnd}
           </span>
         ) : null}

@@ -26,7 +26,7 @@ function statusDot(s: WorkflowStatusDto) {
   return (
     <span
       aria-hidden
-      className="border-border h-2.5 w-2.5 shrink-0 rounded-full border"
+      className="border-(--el-border) h-2.5 w-2.5 shrink-0 rounded-full border"
       style={{ backgroundColor: color }}
     />
   );
@@ -81,7 +81,7 @@ export function StatusPicker({
         disabled={disabled}
       />
       {error ? (
-        <p className="text-(--color-destructive) text-xs" role="alert">
+        <p className="text-(--el-danger) text-xs" role="alert">
           {error}
         </p>
       ) : null}

@@ -97,7 +97,7 @@ function TabStrip({
   if (showSystemTab) tabs.push({ tab: 'system', label: 'System' });
 
   return (
-    <nav aria-label="Job run views" className="flex gap-1 border-b border-(--color-hairline)">
+    <nav aria-label="Job run views" className="flex gap-1 border-b border-(--el-border)">
       {tabs.map(({ tab, label, badge }) => {
         const active = tab === activeTab;
         return (
@@ -110,8 +110,8 @@ function TabStrip({
               '-mb-px border-b-2 transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
               active
-                ? 'border-(--color-primary) text-foreground'
-                : 'border-transparent text-(--color-muted-foreground) hover:text-foreground',
+                ? 'border-(--el-accent) text-(--el-text)'
+                : 'border-transparent text-(--el-text-muted) hover:text-(--el-text)',
             )}
           >
             {label}
@@ -141,8 +141,8 @@ function StatusFilter({ activeTab, status }: { activeTab: JobsTab; status?: JobR
               'rounded-(--radius-badge) border px-2.5 py-0.5 font-sans text-xs font-medium transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
               active
-                ? 'border-(--color-primary) bg-(--color-tint-lavender) text-(--color-charcoal)'
-                : 'border-(--color-hairline) text-(--color-slate) hover:bg-(--color-surface)',
+                ? 'border-(--el-accent) bg-(--el-tint-lavender) text-(--el-text-strong)'
+                : 'border-(--el-border) text-(--el-text-secondary) hover:bg-(--el-surface)',
             )}
           >
             {label}
@@ -156,7 +156,7 @@ function StatusFilter({ activeTab, status }: { activeTab: JobsTab; status?: JobR
 // ── Detail dialog ───────────────────────────────────────────────────────────
 function JsonBlock({ value }: { value: unknown }) {
   return (
-    <pre className="max-h-[40vh] overflow-auto rounded-(--radius-sm) bg-(--color-surface) p-3 font-mono text-xs text-foreground">
+    <pre className="max-h-[40vh] overflow-auto rounded-(--radius-sm) bg-(--el-surface) p-3 font-mono text-xs text-(--el-text)">
       {JSON.stringify(value, null, 2)}
     </pre>
   );
@@ -168,7 +168,7 @@ function Th({ children, className }: { children: ReactNode; className?: string }
     <th
       scope="col"
       className={cn(
-        'px-3 py-2 text-left font-sans text-xs font-semibold text-(--color-muted-foreground)',
+        'px-3 py-2 text-left font-sans text-xs font-semibold text-(--el-text-muted)',
         className,
       )}
     >
@@ -179,7 +179,7 @@ function Th({ children, className }: { children: ReactNode; className?: string }
 
 function Td({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <td className={cn('px-3 py-2 align-middle font-sans text-sm text-foreground', className)}>
+    <td className={cn('px-3 py-2 align-middle font-sans text-sm text-(--el-text)', className)}>
       {children}
     </td>
   );
@@ -187,7 +187,7 @@ function Td({ children, className }: { children: ReactNode; className?: string }
 
 function TableShell({ caption, children }: { caption: string; children: ReactNode }) {
   return (
-    <div className="overflow-x-auto rounded-(--radius-card) border border-(--color-hairline)">
+    <div className="overflow-x-auto rounded-(--radius-card) border border-(--el-border)">
       <table className="w-full border-collapse">
         <caption className="sr-only">{caption}</caption>
         {children}
@@ -201,7 +201,7 @@ function RunsTable({ runs }: { runs: JobRunDTO[] }) {
   return (
     <>
       <TableShell caption="Background job runs">
-        <thead className="border-b border-(--color-hairline) bg-(--color-surface)">
+        <thead className="border-b border-(--el-border) bg-(--el-surface)">
           <tr>
             <Th>Status</Th>
             <Th>Function</Th>
@@ -217,7 +217,7 @@ function RunsTable({ runs }: { runs: JobRunDTO[] }) {
           {runs.map((run) => (
             <tr
               key={run.id}
-              className="border-b border-(--color-hairline) last:border-0 hover:bg-(--color-surface)"
+              className="border-b border-(--el-border) last:border-0 hover:bg-(--el-surface)"
             >
               <Td>
                 <Pill severity={statusSeverity(run.status)}>{run.status}</Pill>
@@ -227,7 +227,7 @@ function RunsTable({ runs }: { runs: JobRunDTO[] }) {
               <Td className="text-right tabular-nums">{run.attempt}</Td>
               <Td className="whitespace-nowrap">{formatDateTime(run.startedAt)}</Td>
               <Td className="text-right tabular-nums">{formatDuration(run.durationMs)}</Td>
-              <Td className="max-w-[16rem] truncate text-(--color-muted-foreground)">
+              <Td className="max-w-[16rem] truncate text-(--el-text-muted)">
                 {run.failure ? firstLine(run.failure.message) : '—'}
               </Td>
               <Td className="text-right">
@@ -280,7 +280,7 @@ function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean })
   return (
     <>
       <TableShell caption="Dead-letter queue">
-        <thead className="border-b border-(--color-hairline) bg-(--color-surface)">
+        <thead className="border-b border-(--el-border) bg-(--el-surface)">
           <tr>
             <Th>Function</Th>
             <Th>Event</Th>
@@ -309,14 +309,14 @@ function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean })
             return (
               <tr
                 key={row.id}
-                className="border-b border-(--color-hairline) last:border-0 hover:bg-(--color-surface)"
+                className="border-b border-(--el-border) last:border-0 hover:bg-(--el-surface)"
               >
                 <Td className="font-mono text-xs">{row.functionId}</Td>
                 <Td className="font-mono text-xs">{row.eventName}</Td>
                 <Td className="text-right tabular-nums">{row.attempts}</Td>
                 <Td className="whitespace-nowrap">{formatDateTime(row.firstFailedAt)}</Td>
                 <Td className="whitespace-nowrap">{formatDateTime(row.lastFailedAt)}</Td>
-                <Td className="whitespace-nowrap text-(--color-muted-foreground)">
+                <Td className="whitespace-nowrap text-(--el-text-muted)">
                   {row.replayedAt ? formatDateTime(row.replayedAt) : '—'}
                 </Td>
                 <Td>
@@ -351,11 +351,11 @@ function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean })
         {detail ? (
           <div className="flex flex-col gap-4">
             <div>
-              <h3 className="mb-1 font-sans text-sm font-semibold text-foreground">Failure</h3>
+              <h3 className="mb-1 font-sans text-sm font-semibold text-(--el-text)">Failure</h3>
               <JsonBlock value={detail.failure} />
             </div>
             <div>
-              <h3 className="mb-1 font-sans text-sm font-semibold text-foreground">
+              <h3 className="mb-1 font-sans text-sm font-semibold text-(--el-text)">
                 Event payload
               </h3>
               <JsonBlock value={detail.eventData} />
@@ -382,7 +382,7 @@ function Pagination({
   if (page <= 1 && !hasNext) return null;
   return (
     <div className="flex items-center justify-between font-sans text-sm">
-      <span className="text-(--color-muted-foreground)">Page {page}</span>
+      <span className="text-(--el-text-muted)">Page {page}</span>
       <div className="flex gap-2">
         {page > 1 ? (
           <Link href={buildHref({ tab: activeTab, status, page: page - 1 })}>

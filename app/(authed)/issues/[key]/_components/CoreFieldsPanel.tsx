@@ -21,6 +21,7 @@ import { StatusPicker } from '@/components/issues/StatusPicker';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { TypePicker } from '@/components/issues/TypePicker';
+import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
 import { PRIORITY_LABELS } from '@/lib/issues/priority';
 import { formatDateTime, formatDate } from '@/lib/utils/datetime';
@@ -68,7 +69,7 @@ const PRIORITY_PILL: Record<
 function Avatar({ name }: { name: string }) {
   return (
     <span
-      className="bg-foreground text-background inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
+      className="bg-(--el-text) text-(--el-text-inverted) inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
       aria-hidden
     >
       {name.charAt(0).toUpperCase()}
@@ -96,7 +97,7 @@ function FieldCard({
   return (
     <Card className="px-3.5 py-2.5 shadow-(--shadow-card)">
       <div className="flex items-start justify-between gap-2">
-        <div className="font-sans text-[11px] font-semibold tracking-wide text-(--color-slate) uppercase">
+        <div className="font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
           {label}
         </div>
         {editable ? (
@@ -110,7 +111,7 @@ function FieldCard({
             onClick={onToggle}
             aria-expanded={editing}
             aria-label={`${editing ? 'Close' : 'Edit'} ${label}`}
-            className="-mt-0.5 rounded p-0.5 text-(--color-slate) hover:text-foreground focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            className="-mt-0.5 rounded p-0.5 text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >
             <ChevronDown
               className={cn('h-4 w-4 transition-transform', editing && 'rotate-180')}
@@ -119,7 +120,7 @@ function FieldCard({
           </button>
         ) : null}
       </div>
-      <div className="text-foreground mt-1.5 font-sans text-sm">{children}</div>
+      <div className="text-(--el-text) mt-1.5 font-sans text-sm">{children}</div>
     </Card>
   );
 }
@@ -142,7 +143,6 @@ export function CoreFieldsPanel({
   );
 
   const typeMeta = ISSUE_TYPE_META[item.kind];
-  const TypeIcon = typeMeta.icon;
   const reporter = members.find((m) => m.userId === item.reporterId);
   const assignee = members.find((m) => m.userId === item.assigneeId);
   const statusMeta = workflow.statuses.find((s) => s.key === item.status);
@@ -193,7 +193,7 @@ export function CoreFieldsPanel({
     else setEditing(null);
   }
 
-  const muted = (text: string) => <span className="text-(--color-slate) italic">{text}</span>;
+  const muted = (text: string) => <span className="text-(--el-text-secondary) italic">{text}</span>;
   const priorityPill = PRIORITY_PILL[item.priority];
 
   return (
@@ -224,7 +224,7 @@ export function CoreFieldsPanel({
           />
         ) : (
           <span className="flex items-center gap-1.5">
-            <TypeIcon className="h-4 w-4" aria-hidden />
+            <IssueTypeIcon type={item.kind as IssueType} className="h-4 w-4" />
             {typeMeta.label}
           </span>
         )}
@@ -237,7 +237,7 @@ export function CoreFieldsPanel({
       >
         {editing === 'priority' ? (
           <select
-            className="border-border bg-background focus-visible:ring-(--focus-ring-color) w-full rounded-md border px-2 py-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none"
+            className="border-(--el-border) bg-(--el-page-bg) focus-visible:ring-(--focus-ring-color) w-full rounded-md border px-2 py-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none"
             value={item.priority}
             onChange={(e) => patch({ priority: e.target.value as WorkItemPriorityDto })}
             disabled={isPending}
@@ -305,7 +305,9 @@ export function CoreFieldsPanel({
             href={`/issues/${parent.identifier}`}
             className="flex items-center gap-1.5 hover:underline"
           >
-            <span className="text-(--color-slate) font-mono text-xs">{parent.identifier}</span>
+            <span className="text-(--el-text-secondary) font-mono text-xs">
+              {parent.identifier}
+            </span>
             <span className="truncate">{parent.title}</span>
           </Link>
         ) : (
@@ -321,7 +323,7 @@ export function CoreFieldsPanel({
         {editing === 'dueDate' ? (
           <input
             type="date"
-            className="border-border bg-background focus-visible:ring-(--focus-ring-color) w-full rounded-md border px-2 py-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none"
+            className="border-(--el-border) bg-(--el-page-bg) focus-visible:ring-(--focus-ring-color) w-full rounded-md border px-2 py-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
             onBlur={commitDue}
@@ -331,7 +333,7 @@ export function CoreFieldsPanel({
           />
         ) : item.dueDate ? (
           <span className="flex items-center gap-1.5">
-            <Calendar className="h-4 w-4 text-(--color-slate)" aria-hidden />
+            <Calendar className="h-4 w-4 text-(--el-text-secondary)" aria-hidden />
             {formatDate(item.dueDate)}
           </span>
         ) : (
@@ -348,7 +350,7 @@ export function CoreFieldsPanel({
           <input
             type="number"
             min={0}
-            className="border-border bg-background focus-visible:ring-(--focus-ring-color) w-full rounded-md border px-2 py-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none"
+            className="border-(--el-border) bg-(--el-page-bg) focus-visible:ring-(--focus-ring-color) w-full rounded-md border px-2 py-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none"
             value={estimate}
             onChange={(e) => setEstimate(e.target.value)}
             onBlur={commitEstimate}
@@ -358,7 +360,7 @@ export function CoreFieldsPanel({
           />
         ) : item.estimateMinutes != null ? (
           <span className="flex items-center gap-1.5">
-            <Clock className="h-4 w-4 text-(--color-slate)" aria-hidden />
+            <Clock className="h-4 w-4 text-(--el-text-secondary)" aria-hidden />
             {formatDurationMinutes(item.estimateMinutes)}
           </span>
         ) : (
@@ -367,14 +369,14 @@ export function CoreFieldsPanel({
       </FieldCard>
 
       {/* Created / updated — read-only audit fields (deterministic en-US/UTC). */}
-      <dl className="flex flex-col gap-1 px-1 pt-1 font-sans text-xs text-(--color-slate)">
+      <dl className="flex flex-col gap-1 px-1 pt-1 font-sans text-xs text-(--el-text-secondary)">
         <div className="flex justify-between gap-2">
           <dt>Created</dt>
-          <dd className="text-foreground">{formatDateTime(item.createdAt)}</dd>
+          <dd className="text-(--el-text)">{formatDateTime(item.createdAt)}</dd>
         </div>
         <div className="flex justify-between gap-2">
           <dt>Updated</dt>
-          <dd className="text-foreground">{formatDateTime(item.updatedAt)}</dd>
+          <dd className="text-(--el-text)">{formatDateTime(item.updatedAt)}</dd>
         </div>
       </dl>
     </div>

@@ -32,11 +32,11 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: 'bg-primary text-primary-foreground hover:opacity-90',
+        primary: 'bg-(--el-accent) text-(--el-accent-text) hover:opacity-90',
         secondary:
-          'bg-transparent text-foreground border border-(--color-hairline-strong) hover:bg-surface',
-        ghost: 'bg-transparent text-foreground hover:bg-surface',
-        danger: 'bg-(--color-destructive) text-(--color-destructive-foreground) hover:opacity-90',
+          'bg-transparent text-(--el-text) border border-(--el-border-strong) hover:bg-(--el-surface)',
+        ghost: 'bg-transparent text-(--el-text) hover:bg-(--el-surface)',
+        danger: 'bg-(--el-danger) text-(--el-danger-text) hover:opacity-90',
       },
       size: {
         sm: 'h-(--height-btn-sm) px-3 text-xs',

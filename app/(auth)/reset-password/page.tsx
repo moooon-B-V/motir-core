@@ -71,16 +71,16 @@ export default function ResetPasswordPage() {
         <div className="flex flex-col gap-4">
           <Link
             href="/sign-in"
-            className="inline-flex h-(--height-btn-lg) w-full items-center justify-center rounded-(--radius-btn) border border-(--color-hairline-strong) bg-transparent px-6 font-sans text-base font-medium text-foreground transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="inline-flex h-(--height-btn-lg) w-full items-center justify-center rounded-(--radius-btn) border border-(--el-border-strong) bg-transparent px-6 font-sans text-base font-medium text-(--el-text) transition-colors hover:bg-(--el-surface) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Back to sign in
           </Link>
-          <p className="text-muted-foreground font-sans text-sm">
+          <p className="text-(--el-text-muted) font-sans text-sm">
             Didn’t get it?{' '}
             <button
               type="button"
               onClick={() => setState('request')}
-              className="font-medium text-(--color-link) hover:text-(--color-link-pressed) focus-visible:outline-none focus-visible:underline"
+              className="font-medium text-(--el-link) hover:text-(--el-link-pressed) focus-visible:outline-none focus-visible:underline"
             >
               Check spam, or try another email.
             </button>
@@ -115,7 +115,7 @@ export default function ResetPasswordPage() {
         </Button>
         <Link
           href="/sign-in"
-          className="inline-flex h-(--height-btn-lg) w-full items-center justify-center rounded-(--radius-btn) border border-(--color-hairline-strong) bg-transparent px-6 font-sans text-base font-medium text-foreground transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="inline-flex h-(--height-btn-lg) w-full items-center justify-center rounded-(--radius-btn) border border-(--el-border-strong) bg-transparent px-6 font-sans text-base font-medium text-(--el-text) transition-colors hover:bg-(--el-surface) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Back to sign in
         </Link>

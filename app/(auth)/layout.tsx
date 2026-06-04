@@ -21,9 +21,9 @@ import { type ReactNode } from 'react';
  */
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-screen w-full items-center justify-center overflow-x-clip bg-surface px-6 py-12 sm:px-10">
+    <div className="flex min-h-screen w-full items-center justify-center overflow-x-clip bg-(--el-surface) px-6 py-12 sm:px-10">
       <main className="w-full max-w-[28rem]">
-        <div className="rounded-(--radius-card) bg-background px-6 py-10 shadow-(--shadow-elevated) sm:px-10">
+        <div className="rounded-(--radius-card) bg-(--el-page-bg) px-6 py-10 shadow-(--shadow-elevated) sm:px-10">
           {children}
         </div>
       </main>

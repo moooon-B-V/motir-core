@@ -73,13 +73,13 @@ function NewPasswordForm() {
         <div className="flex flex-col gap-4">
           <Link
             href="/reset-password"
-            className="inline-flex h-(--height-btn-lg) w-full items-center justify-center rounded-(--radius-btn) bg-primary px-6 font-sans text-base font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="inline-flex h-(--height-btn-lg) w-full items-center justify-center rounded-(--radius-btn) bg-(--el-accent) px-6 font-sans text-base font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Request a new link
           </Link>
           <Link
             href="/sign-in"
-            className="inline-flex h-(--height-btn-lg) w-full items-center justify-center rounded-(--radius-btn) border border-(--color-hairline-strong) bg-transparent px-6 font-sans text-base font-medium text-foreground transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="inline-flex h-(--height-btn-lg) w-full items-center justify-center rounded-(--radius-btn) border border-(--el-border-strong) bg-transparent px-6 font-sans text-base font-medium text-(--el-text) transition-colors hover:bg-(--el-surface) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Back to sign in
           </Link>
@@ -93,7 +93,7 @@ function NewPasswordForm() {
       <AuthShell headline="Password updated" subhead="You can now sign in with your new password.">
         <Link
           href="/sign-in"
-          className="inline-flex h-(--height-btn-lg) w-full items-center justify-center rounded-(--radius-btn) bg-primary px-6 font-sans text-base font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="inline-flex h-(--height-btn-lg) w-full items-center justify-center rounded-(--radius-btn) bg-(--el-accent) px-6 font-sans text-base font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Continue to sign in
         </Link>
@@ -159,7 +159,7 @@ function NewPasswordForm() {
               type="button"
               onClick={() => setShowPassword((s) => !s)}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-(--radius-xs) text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-(--radius-xs) text-(--el-text-muted) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
             >
               {showPassword ? (
                 <EyeOff className="h-4 w-4" aria-hidden />

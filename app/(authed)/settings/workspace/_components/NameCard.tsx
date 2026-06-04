@@ -30,7 +30,7 @@ export function NameCard({ initialName }: { initialName: string }) {
     <Card
       header={
         <div>
-          <h2 className="font-sans text-base font-semibold text-foreground">Workspace name</h2>
+          <h2 className="font-sans text-base font-semibold text-(--el-text)">Workspace name</h2>
         </div>
       }
     >

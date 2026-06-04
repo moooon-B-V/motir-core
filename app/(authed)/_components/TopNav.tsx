@@ -26,7 +26,7 @@ export interface TopNavProps {
 
 export function TopNav({ workspaces, activeWorkspaceId, user }: TopNavProps) {
   return (
-    <header className="border-(--color-hairline) bg-background sticky top-0 z-30 border-b">
+    <header className="border-(--el-border) bg-(--el-page-bg) sticky top-0 z-30 border-b">
       {/* `aria-label` names this landmark distinctly from the sidebar's
           "Primary" nav — two unnamed <nav> landmarks fail axe's
           landmark-unique rule and leave screen-reader users unable to tell the

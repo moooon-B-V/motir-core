@@ -356,6 +356,84 @@ proved itself in the doooo codebase (`/Users/yuezhu/projects/doooo/CLAUDE.md`).
 
 ---
 
+## ⚠️ Colour flows through `--el-*` element tokens, NEVER `--color-*` directly
+
+**EXTREMELY IMPORTANT: A component references the Tier-3 `--el-*` element
+tokens for every colour it renders. It MUST NOT reach for a Tier-0
+`--color-*` token — neither the arbitrary form `text-(--color-slate)` nor
+the Tailwind utilities auto-generated from `--color-*` (`text-foreground`,
+`bg-surface`, `text-muted-foreground`, `border-border`, `bg-primary`, …),
+all of which resolve straight to Tier 0 and bypass the swap layer.**
+
+`app/globals.css` is layered (see its header comment):
+
+- **Tier 0 — `--color-*`** raw palette values (`--color-foreground`,
+  `--color-slate`, `--color-accent`, `--color-tint-*`, …). Light defaults
+  in `@theme`; `[data-theme="dark"]` flips them.
+- **Tier 3 — `--el-*`** the _semantic element tokens_ components consume.
+  This is the single layer a future `data-palette="…"` overrides to
+  re-skin the whole app without touching one component.
+
+So in JSX, use arbitrary-value utilities pointing at `--el-*`:
+
+```tsx
+// ✅ right — routed through the swap layer
+<p className="text-(--el-text-muted)">caption</p>
+<div className="bg-(--el-surface) border-(--el-border)">…</div>
+<Icon className="text-(--el-type-task)" />            // issue-type hue
+
+// ❌ wrong — Tier-0 utilities / arbitrary --color-* bypass --el-*
+<p className="text-muted-foreground">caption</p>
+<div className="bg-surface border-border">…</div>
+<span className="text-(--color-slate)">…</span>
+```
+
+### The token map (what to reach for)
+
+| Need                                        | `--el-*` token                                                                     |
+| ------------------------------------------- | ---------------------------------------------------------------------------------- |
+| primary text / ink                          | `--el-text`                                                                        |
+| emphasis, AA text on a tint                 | `--el-text-strong`                                                                 |
+| secondary copy                              | `--el-text-secondary`                                                              |
+| muted / caption                             | `--el-text-muted`                                                                  |
+| tertiary / footer · faint label             | `--el-text-tertiary` · `--el-text-faint`                                           |
+| text on an ink/accent fill                  | `--el-text-inverted`                                                               |
+| CTA accent · its text · pressed             | `--el-accent` · `--el-accent-text` · `--el-accent-pressed`                         |
+| brand-pink decorative highlight             | `--el-highlight`                                                                   |
+| section surface · quieter · faint fill      | `--el-surface` · `--el-surface-soft` · `--el-muted`                                |
+| border · soft · strong                      | `--el-border` · `--el-border-soft` · `--el-border-strong`                          |
+| link · pressed                              | `--el-link` · `--el-link-pressed`                                                  |
+| danger/success/warning/info (+ danger text) | `--el-danger` / `--el-success` / `--el-warning` / `--el-info` (`--el-danger-text`) |
+| pastel tints                                | `--el-tint-{peach,rose,mint,lavender,sky,yellow}`                                  |
+| **issue-type hue (by kind)**                | `--el-type-{epic,story,task,bug,subtask}`                                          |
+
+### Rules
+
+- ✅ **Reference `--el-*`.** Need a colour not exposed yet? ADD the `--el-*`
+  token to globals.css Tier 3 (mapping it to the right `--color-*`) and
+  consume that — the per-component growth pattern (notes.html mistake #20).
+- ✅ **Use the palette's colour, not just grey + primary (finding #54).**
+  Issue-type icons take their type's hue via `--el-type-*` (prefer the
+  `IssueTypeIcon` component, which applies it); status/priority go through
+  `Pill`'s tones; feature surfaces use the pastel tints. A screen that is
+  _only_ grey + primary purple is the finding-#54 tell.
+- ✅ **AA contrast holds** — colored chips put the hue in the tint
+  BACKGROUND with `--el-text-strong` text (finding #35); never tint a
+  page-level surface.
+- ❌ `text-foreground` / `bg-surface` / `text-muted-foreground` /
+  `border-border` / `bg-primary` and friends — Tier-0 utilities, forbidden
+  in component code.
+- ❌ `text-(--color-*)` / `bg-(--color-*)` arbitrary values — Tier-0,
+  forbidden. (`--focus-ring-color` is a semantic `@theme` token, not a
+  `--color-*`, so `ring-(--focus-ring-color)` is fine.)
+- ❌ Only `globals.css` (the Tier-0→Tier-3 wiring) and the `/tokens`
+  specimen route name `--color-*` directly.
+
+This rule was adopted after finding #54 (the UI had collapsed to grey +
+primary because almost every component referenced Tier 0 directly).
+
+---
+
 ## Project conventions (non-architecture)
 
 - **Manual merge mode.** Subtask PRs open as drafts targeting `main`; the

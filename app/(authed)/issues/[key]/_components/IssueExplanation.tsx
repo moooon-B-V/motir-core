@@ -41,7 +41,7 @@ export function IssueExplanation({
       {explanationMd ? (
         <MarkdownView value={explanationMd} aria-label="Issue explanation" />
       ) : (
-        <p className="font-sans text-sm text-(--color-slate) italic">No explanation yet.</p>
+        <p className="font-sans text-sm text-(--el-text-secondary) italic">No explanation yet.</p>
       )}
     </ContentSectionCard>
   );

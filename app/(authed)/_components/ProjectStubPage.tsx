@@ -33,7 +33,7 @@ export async function ProjectStubPage({ title, comingIn }: ProjectStubPageProps)
   return (
     <div className="space-y-2">
       <h1 className="font-serif text-2xl">{title}</h1>
-      <p className="text-muted-foreground">Coming in {comingIn}.</p>
+      <p className="text-(--el-text-muted)">Coming in {comingIn}.</p>
     </div>
   );
 }

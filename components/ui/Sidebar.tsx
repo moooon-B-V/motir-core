@@ -98,11 +98,11 @@ function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boo
         aria-label={item.label}
         className={cn(
           'mx-auto flex h-9 w-9 items-center justify-center rounded-(--radius-sm)',
-          'text-(--color-muted-foreground) transition-colors',
-          'hover:bg-(--el-sidebar-item-bg-hover) hover:text-foreground',
+          'text-(--el-text-muted) transition-colors',
+          'hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
           isActive &&
-            'bg-(--el-sidebar-item-bg-active) text-(--color-primary) shadow-(--shadow-subtle) border border-(--el-sidebar-border)',
+            'bg-(--el-sidebar-item-bg-active) text-(--el-accent) shadow-(--shadow-subtle) border border-(--el-sidebar-border)',
         )}
       >
         <span aria-hidden className="inline-flex [&_svg]:h-[18px] [&_svg]:w-[18px]">
@@ -126,22 +126,22 @@ function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boo
         'font-sans text-sm transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
         isActive
-          ? 'bg-(--el-sidebar-item-bg-active) font-medium text-foreground shadow-(--shadow-subtle) border border-(--el-sidebar-border)'
-          : 'text-(--color-slate) hover:bg-(--el-sidebar-item-bg-hover) hover:text-foreground',
+          ? 'bg-(--el-sidebar-item-bg-active) font-medium text-(--el-text) shadow-(--shadow-subtle) border border-(--el-sidebar-border)'
+          : 'text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)',
       )}
     >
       <span
         aria-hidden
         className={cn(
           'inline-flex shrink-0 [&_svg]:h-[18px] [&_svg]:w-[18px]',
-          isActive ? 'text-(--color-primary)' : 'text-(--color-muted-foreground)',
+          isActive ? 'text-(--el-accent)' : 'text-(--el-text-muted)',
         )}
       >
         {item.icon}
       </span>
       <span className="flex-1 truncate">{item.label}</span>
       {item.kbd ? (
-        <kbd className="rounded-(--radius-xs) border border-(--el-sidebar-border) bg-background px-1.5 py-0.5 font-mono text-[10px] text-(--color-muted-foreground)">
+        <kbd className="rounded-(--radius-xs) border border-(--el-sidebar-border) bg-(--el-page-bg) px-1.5 py-0.5 font-mono text-[10px] text-(--el-text-muted)">
           {item.kbd}
         </kbd>
       ) : null}
@@ -179,7 +179,7 @@ function SidebarSectionFrame({
           <SectionLabel label={section.label} />
           <ChevronDown
             aria-hidden
-            className="h-3.5 w-3.5 text-(--color-muted-foreground) transition-transform group-data-[state=closed]:-rotate-90"
+            className="h-3.5 w-3.5 text-(--el-text-muted) transition-transform group-data-[state=closed]:-rotate-90"
           />
         </Collapsible.Trigger>
         <Collapsible.Content className="overflow-hidden data-[state=closed]:animate-out data-[state=open]:animate-in">

@@ -41,8 +41,8 @@ export default async function WorkspaceSettingsPage() {
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-serif text-3xl font-semibold text-foreground">Workspace settings</h1>
-        <p className="text-muted-foreground font-sans text-sm">
+        <h1 className="font-serif text-3xl font-semibold text-(--el-text)">Workspace settings</h1>
+        <p className="text-(--el-text-muted) font-sans text-sm">
           Manage your workspace name, members, and lifecycle.
         </p>
       </header>

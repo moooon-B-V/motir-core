@@ -5,7 +5,8 @@ import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
-import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
+import type { IssueType } from '@/lib/issues/parentRules';
+import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import { MarkdownView } from '@/components/ui/MarkdownView';
@@ -56,7 +57,6 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
   }
 
   const { item } = detail;
-  const TypeIcon = ISSUE_TYPE_META[item.kind].icon;
 
   // Members back the inline assignee picker + reporter display (getIssueDetail
   // carries ids only); the workflow (already in the detail bundle) backs the
@@ -70,18 +70,18 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
           after the identifier, per the detail.png eyebrow. */}
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <TypeIcon className="text-muted-foreground h-5 w-5 shrink-0" aria-hidden />
-          <span className="text-muted-foreground font-mono text-sm">{item.identifier}</span>
+          <IssueTypeIcon type={item.kind as IssueType} className="h-5 w-5 shrink-0" />
+          <span className="text-(--el-text-muted) font-mono text-sm">{item.identifier}</span>
           <ParentBreadcrumb ancestors={detail.ancestors} />
           <Pill tone="neutral">{item.status}</Pill>
           <Link
             href={`/issues/${item.identifier}/edit`}
-            className="border-border text-foreground hover:bg-surface ml-auto rounded-md border px-3 py-1.5 font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            className="border-(--el-border) text-(--el-text) hover:bg-(--el-surface) ml-auto rounded-md border px-3 py-1.5 font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >
             Edit
           </Link>
         </div>
-        <h1 className="text-foreground font-serif text-2xl font-semibold">{item.title}</h1>
+        <h1 className="text-(--el-text) font-serif text-2xl font-semibold">{item.title}</h1>
       </header>
 
       {/* Body — two columns; later subtasks fill the regions. */}
@@ -95,7 +95,9 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
             {item.descriptionMd ? (
               <MarkdownView value={item.descriptionMd} aria-label="Issue description" />
             ) : (
-              <p className="font-sans text-sm text-(--color-slate) italic">No description yet.</p>
+              <p className="font-sans text-sm text-(--el-text-secondary) italic">
+                No description yet.
+              </p>
             )}
           </ContentSectionCard>
           <IssueExplanation

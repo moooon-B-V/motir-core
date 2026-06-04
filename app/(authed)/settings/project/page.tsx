@@ -31,8 +31,8 @@ export default async function ProjectSettingsPage() {
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-serif text-3xl font-semibold text-foreground">Project settings</h1>
-        <p className="text-muted-foreground font-sans text-sm">
+        <h1 className="font-serif text-3xl font-semibold text-(--el-text)">Project settings</h1>
+        <p className="text-(--el-text-muted) font-sans text-sm">
           Manage the active project&apos;s lifecycle.
         </p>
       </header>

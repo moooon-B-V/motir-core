@@ -31,7 +31,7 @@ export function FormField({
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
       {label ? (
-        <label htmlFor={htmlFor} className="font-sans text-sm font-medium text-foreground">
+        <label htmlFor={htmlFor} className="font-sans text-sm font-medium text-(--el-text)">
           {label}
         </label>
       ) : null}
@@ -41,12 +41,12 @@ export function FormField({
           id={describedById}
           role="alert"
           className="font-sans text-xs"
-          style={{ color: 'var(--color-destructive)' }}
+          style={{ color: 'var(--el-danger)' }}
         >
           {error}
         </p>
       ) : helperText ? (
-        <p id={describedById} className="text-muted-foreground font-sans text-xs">
+        <p id={describedById} className="text-(--el-text-muted) font-sans text-xs">
           {helperText}
         </p>
       ) : null}

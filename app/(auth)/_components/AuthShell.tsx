@@ -18,10 +18,10 @@ export function AuthShell({
   return (
     <section className="flex flex-col gap-8">
       <header className="flex flex-col gap-3">
-        <h1 className="font-serif text-4xl font-semibold leading-tight tracking-tight text-foreground sm:text-5xl">
+        <h1 className="font-serif text-4xl font-semibold leading-tight tracking-tight text-(--el-text) sm:text-5xl">
           {headline}
         </h1>
-        {subhead ? <p className="text-muted-foreground font-sans text-base">{subhead}</p> : null}
+        {subhead ? <p className="text-(--el-text-muted) font-sans text-base">{subhead}</p> : null}
       </header>
       {children}
     </section>
@@ -40,9 +40,9 @@ export function OrDivider() {
       aria-orientation="horizontal"
       aria-label="or"
     >
-      <span className="h-px flex-1 bg-(--color-hairline)" aria-hidden />
-      <span className="text-muted-foreground font-sans text-xs uppercase tracking-wider">OR</span>
-      <span className="h-px flex-1 bg-(--color-hairline)" aria-hidden />
+      <span className="h-px flex-1 bg-(--el-border)" aria-hidden />
+      <span className="text-(--el-text-muted) font-sans text-xs uppercase tracking-wider">OR</span>
+      <span className="h-px flex-1 bg-(--el-border)" aria-hidden />
     </div>
   );
 }
@@ -59,8 +59,8 @@ export function FormAlert({ children }: { children: ReactNode }) {
       aria-live="polite"
       className="flex items-start gap-2 rounded-(--radius-input) px-(--spacing-input-x) py-(--spacing-sm) font-sans text-sm"
       style={{
-        backgroundColor: 'color-mix(in srgb, var(--color-destructive) 12%, transparent)',
-        color: 'var(--color-destructive)',
+        backgroundColor: 'color-mix(in srgb, var(--el-danger) 12%, transparent)',
+        color: 'var(--el-danger)',
       }}
     >
       <span aria-hidden className="inline-flex h-5 w-5 shrink-0 items-center justify-center">

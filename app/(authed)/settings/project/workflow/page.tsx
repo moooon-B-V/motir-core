@@ -37,8 +37,8 @@ export default async function ProjectWorkflowPage() {
   return (
     <div className="mx-auto flex max-w-[48rem] flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-serif text-3xl font-semibold text-foreground">Workflow</h1>
-        <p className="text-muted-foreground font-sans text-sm">
+        <h1 className="font-serif text-3xl font-semibold text-(--el-text)">Workflow</h1>
+        <p className="text-(--el-text-muted) font-sans text-sm">
           The statuses an issue can hold in <strong>{ctx.project.name}</strong>, and the legal moves
           between them. {isAdmin ? 'Edit them here.' : 'Only a project admin can edit these.'}
         </p>

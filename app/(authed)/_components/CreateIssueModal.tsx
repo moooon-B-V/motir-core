@@ -115,7 +115,7 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
     >
       <form className="mt-4 flex flex-col gap-3" onSubmit={handleSubmit}>
         <div className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-foreground font-medium">Type</span>
+          <span className="text-(--el-text) font-medium">Type</span>
           <TypePicker
             value={kind}
             onChange={(v) => {
@@ -127,7 +127,7 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
         </div>
 
         <div className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-foreground font-medium">Parent</span>
+          <span className="text-(--el-text) font-medium">Parent</span>
           <ParentPicker
             childType={kind}
             value={parentId}
@@ -175,7 +175,7 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
               type="button"
               onClick={() => setExplanationOpen((o) => !o)}
               aria-expanded={explanationOpen}
-              className="text-foreground flex items-center gap-1.5 font-medium focus-visible:outline-none"
+              className="text-(--el-text) flex items-center gap-1.5 font-medium focus-visible:outline-none"
               disabled={isPending}
             >
               <ChevronDown
@@ -184,7 +184,7 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
               />
               Explanation
             </button>
-            <span className="text-(--color-slate)">— why this matters (optional)</span>
+            <span className="text-(--el-text-secondary)">— why this matters (optional)</span>
             {explanationOpen ? (
               <Button
                 type="button"
@@ -208,16 +208,16 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
               onFileUpload={uploadIssueAttachment}
             />
           ) : (
-            <span className="text-xs text-(--color-slate)">
+            <span className="text-xs text-(--el-text-secondary)">
               Skip this — explanation can be drafted with AI or added after creating.
             </span>
           )}
         </div>
 
         <label className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-foreground font-medium">Priority</span>
+          <span className="text-(--el-text) font-medium">Priority</span>
           <select
-            className="border-border bg-background rounded-md border px-3 py-2 text-sm"
+            className="border-(--el-border) bg-(--el-page-bg) rounded-md border px-3 py-2 text-sm"
             value={priority}
             onChange={(e) => setPriority(e.target.value as WorkItemPriorityDto)}
             disabled={isPending}

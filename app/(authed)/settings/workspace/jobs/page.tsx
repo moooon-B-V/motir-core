@@ -101,8 +101,8 @@ export default async function WorkspaceJobsPage({ searchParams }: JobsPageProps)
   return (
     <div className="mx-auto flex max-w-[60rem] flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-serif text-3xl font-semibold text-foreground">Job runs</h1>
-        <p className="text-muted-foreground font-sans text-sm">
+        <h1 className="font-serif text-3xl font-semibold text-(--el-text)">Job runs</h1>
+        <p className="text-(--el-text-muted) font-sans text-sm">
           Background jobs for this workspace — delivery of invites &amp; password resets, and any
           scheduled work. Failed jobs land in the dead-letter queue, where an owner can replay them.
         </p>
