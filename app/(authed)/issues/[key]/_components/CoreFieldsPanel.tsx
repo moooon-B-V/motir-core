@@ -102,6 +102,11 @@ function FieldCard({
         {editable ? (
           <button
             type="button"
+            // Don't steal focus on click: otherwise clicking the chevron to
+            // collapse a focused free-text field (due/estimate) blurs it first,
+            // which closes edit mode, and the click then re-opens it — the field
+            // never collapses. Keyboard users still reach it via Tab.
+            onMouseDown={(e) => e.preventDefault()}
             onClick={onToggle}
             aria-expanded={editing}
             aria-label={`${editing ? 'Close' : 'Edit'} ${label}`}
@@ -172,6 +177,20 @@ export function CoreFieldsPanel({
         toast({ variant: 'error', title: res.error });
       }
     });
+  }
+
+  // Free-text fields (due/estimate) commit explicitly: on blur (click/tab away)
+  // AND when the chevron collapses them (the chevron no longer blurs the input).
+  // patch() closes edit mode on a real change; otherwise just close.
+  function commitDue() {
+    const next = dueDate ? new Date(`${dueDate}T00:00:00.000Z`).toISOString() : null;
+    if (next !== item.dueDate) patch({ dueDate: next });
+    else setEditing(null);
+  }
+  function commitEstimate() {
+    const next = estimate === '' ? null : Number(estimate);
+    if (next !== item.estimateMinutes) patch({ estimateMinutes: next });
+    else setEditing(null);
   }
 
   const muted = (text: string) => <span className="text-(--color-slate) italic">{text}</span>;
@@ -297,7 +316,7 @@ export function CoreFieldsPanel({
       <FieldCard
         label="Due date"
         editing={editing === 'dueDate'}
-        onToggle={() => toggle('dueDate')}
+        onToggle={() => (editing === 'dueDate' ? commitDue() : setEditing('dueDate'))}
       >
         {editing === 'dueDate' ? (
           <input
@@ -305,11 +324,7 @@ export function CoreFieldsPanel({
             className="border-border bg-background focus-visible:ring-(--focus-ring-color) w-full rounded-md border px-2 py-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
-            onBlur={() => {
-              const next = dueDate ? new Date(`${dueDate}T00:00:00.000Z`).toISOString() : null;
-              if (next !== item.dueDate) patch({ dueDate: next });
-              else setEditing(null);
-            }}
+            onBlur={commitDue}
             disabled={isPending}
             aria-label="Due date"
             autoFocus
@@ -327,7 +342,7 @@ export function CoreFieldsPanel({
       <FieldCard
         label="Estimate"
         editing={editing === 'estimate'}
-        onToggle={() => toggle('estimate')}
+        onToggle={() => (editing === 'estimate' ? commitEstimate() : setEditing('estimate'))}
       >
         {editing === 'estimate' ? (
           <input
@@ -336,11 +351,7 @@ export function CoreFieldsPanel({
             className="border-border bg-background focus-visible:ring-(--focus-ring-color) w-full rounded-md border px-2 py-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none"
             value={estimate}
             onChange={(e) => setEstimate(e.target.value)}
-            onBlur={() => {
-              const next = estimate === '' ? null : Number(estimate);
-              if (next !== item.estimateMinutes) patch({ estimateMinutes: next });
-              else setEditing(null);
-            }}
+            onBlur={commitEstimate}
             disabled={isPending}
             aria-label="Estimate (minutes)"
             autoFocus
