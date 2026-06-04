@@ -54,9 +54,9 @@
         --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
         --spacing-card-padding: 24px;
 
-        --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         --font-serif: Georgia, serif;
-        --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
 
         /* Tier 3 — semantic element tokens (the layer components consume) */
         --el-page-bg: var(--color-background);
@@ -80,7 +80,7 @@
         --el-type-subtask: var(--color-accent-teal);
         --focus-ring-color: var(--color-primary);
       }
-      [data-theme="dark"] {
+      [data-theme='dark'] {
         --color-background: #0f0f0f;
         --color-foreground: #f3f4f6;
         --color-surface: #1a1a1a;
@@ -103,7 +103,9 @@
       }
 
       /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
-      * { box-sizing: border-box; }
+      * {
+        box-sizing: border-box;
+      }
       body {
         margin: 0;
         background: var(--el-surface);
@@ -120,19 +122,40 @@
         justify-content: space-between;
         gap: 16px;
       }
-      .review-head h1 { font-family: var(--font-serif); font-size: 22px; margin: 0; }
-      .review-head p { margin: 4px 0 0; color: var(--el-text-secondary); font-size: 13px; }
-      .toggle {
-        font-family: var(--font-sans); font-size: 13px; font-weight: 600;
-        padding: 8px 14px; border-radius: var(--radius-md);
-        border: 1px solid var(--el-border); background: var(--el-page-bg);
-        color: var(--el-text); cursor: pointer;
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
       }
-      .panel { max-width: 1040px; margin: 0 auto 14px; }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel {
+        max-width: 1040px;
+        margin: 0 auto 14px;
+      }
       .panel-label {
-        font-family: var(--font-mono); font-size: 11px; font-weight: 600;
-        text-transform: uppercase; letter-spacing: 0.06em;
-        color: var(--el-text-faint); margin: 28px 0 10px; padding-left: 2px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 28px 0 10px;
+        padding-left: 2px;
       }
 
       /* ── Faithful primitive classes ─────────────────────────────────────── */
@@ -145,152 +168,499 @@
         box-shadow: var(--shadow-card);
       }
       /* ContentSectionCard header row */
-      .section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
-      .section-head h2 { font-family: var(--font-sans); font-size: 16px; font-weight: 600; margin: 0; color: var(--el-text); }
-      .section-head .gloss { font-size: 14px; color: var(--el-text-secondary); }
-      .section-head .head-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-      .manage-note { font-size: 12px; color: var(--el-text-faint); display: inline-flex; align-items: center; gap: 5px; }
+      .section-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      .section-head h2 {
+        font-family: var(--font-sans);
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .section-head .gloss {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .section-head .head-right {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .manage-note {
+        font-size: 12px;
+        color: var(--el-text-faint);
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
 
       /* SectionLabel (components/ui/SectionLabel.tsx) */
       .section-label {
-        font-family: var(--font-mono); font-size: 11px; font-weight: 600;
-        text-transform: uppercase; letter-spacing: 0.06em; color: var(--el-text-muted);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-muted);
       }
 
       /* Pill (components/ui/Pill.tsx): hue in tint background, --el-text-strong text */
       .pill {
-        display: inline-flex; align-items: center; gap: 4px;
-        border-radius: var(--radius-badge); padding: 2px 10px;
-        font-family: var(--font-sans); font-size: 12px; font-weight: 500;
-        border: 1px solid transparent; color: var(--el-text-strong); white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: 2px 10px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
       }
-      .pill--planned { background: var(--el-tint-lavender); }
-      .pill--inprogress { background: var(--el-tint-sky); }
-      .pill--done { background: var(--el-tint-mint); }
-      .pill--warning { background: var(--el-tint-peach); }
-      .pill--success { background: var(--el-tint-mint); }
-      .pill--neutral { background: var(--el-surface); color: var(--el-text-secondary); border-color: var(--el-border); }
+      .pill--planned {
+        background: var(--el-tint-lavender);
+      }
+      .pill--inprogress {
+        background: var(--el-tint-sky);
+      }
+      .pill--done {
+        background: var(--el-tint-mint);
+      }
+      .pill--warning {
+        background: var(--el-tint-peach);
+      }
+      .pill--success {
+        background: var(--el-tint-mint);
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
 
       /* IssueTypeIcon — lucide glyph in the type hue */
-      .type-icon { width: 16px; height: 16px; flex: none; }
-      .type-icon svg { width: 100%; height: 100%; display: block; }
-      .t-epic { color: var(--el-type-epic); }
-      .t-story { color: var(--el-type-story); }
-      .t-task { color: var(--el-type-task); }
-      .t-bug { color: var(--el-type-bug); }
-      .t-subtask { color: var(--el-type-subtask); }
+      .type-icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
 
       /* Linked-item row (mirrors the 2.4.3 ChildList row) */
-      .link-list { list-style: none; margin: 0 0 0 -8px; padding: 0; }
-      .link-row {
-        display: flex; align-items: center; gap: 8px;
-        padding: 6px 8px; border-radius: var(--radius-md);
-        text-decoration: none; color: inherit;
+      .link-list {
+        list-style: none;
+        margin: 0 0 0 -8px;
+        padding: 0;
       }
-      .link-row:hover { background: var(--el-surface); }
-      .link-row:hover .lr-title { text-decoration: underline; }
-      .lr-id { font-family: var(--font-mono); font-size: 12px; color: var(--el-text-muted); flex: none; }
-      .lr-title { font-size: 14px; color: var(--el-text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .lr-open-dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--color-warning); flex: none; }
+      .link-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: var(--radius-md);
+        text-decoration: none;
+        color: inherit;
+      }
+      .link-row:hover {
+        background: var(--el-surface);
+      }
+      .link-row:hover .lr-title {
+        text-decoration: underline;
+      }
+      .lr-id {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .lr-title {
+        font-size: 14px;
+        color: var(--el-text);
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .lr-open-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        background: var(--color-warning);
+        flex: none;
+      }
 
-      .group { display: flex; flex-direction: column; gap: 2px; }
-      .group + .group { margin-top: 16px; }
-      .group-head { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
-      .group-count { font-family: var(--font-mono); font-size: 11px; color: var(--el-text-faint); }
+      .group {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .group + .group {
+        margin-top: 16px;
+      }
+      .group-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 2px;
+      }
+      .group-count {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-faint);
+      }
 
-      .stack { display: flex; flex-direction: column; gap: 16px; }
-      .empty { font-size: 14px; color: var(--el-text-secondary); font-style: italic; }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .empty {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        font-style: italic;
+      }
 
       /* Readiness banner — the prominent ready/blocked treatment */
       .readiness {
-        display: flex; align-items: flex-start; gap: 10px;
-        padding: 12px 14px; border-radius: var(--radius-md);
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: var(--radius-md);
         border: 1px solid transparent;
       }
-      .readiness--blocked { background: var(--el-tint-peach); }
-      .readiness--ready { background: var(--el-tint-mint); }
-      .readiness .r-icon { width: 18px; height: 18px; flex: none; margin-top: 1px; }
-      .readiness--blocked .r-icon { color: var(--color-warning); }
-      .readiness--ready .r-icon { color: var(--color-success); }
-      .readiness .r-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-      .r-title { font-size: 14px; font-weight: 600; color: var(--el-text-strong); }
-      .r-detail { font-size: 13px; color: var(--el-text-strong); opacity: 0.85; }
-      .r-detail a { color: var(--el-link); text-decoration: none; font-family: var(--font-mono); font-size: 12px; }
-      .r-detail a:hover { text-decoration: underline; }
+      .readiness--blocked {
+        background: var(--el-tint-peach);
+      }
+      .readiness--ready {
+        background: var(--el-tint-mint);
+      }
+      .readiness .r-icon {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .readiness--blocked .r-icon {
+        color: var(--color-warning);
+      }
+      .readiness--ready .r-icon {
+        color: var(--color-success);
+      }
+      .readiness .r-body {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .r-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .r-detail {
+        font-size: 13px;
+        color: var(--el-text-strong);
+        opacity: 0.85;
+      }
+      .r-detail a {
+        color: var(--el-link);
+        text-decoration: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+      .r-detail a:hover {
+        text-decoration: underline;
+      }
 
       /* Two-column detail skeleton (placement panel) */
-      .detail-grid { display: grid; grid-template-columns: 1fr 288px; gap: 24px; }
-      .col { display: flex; flex-direction: column; gap: 16px; }
-      .ghost {
-        border: 1px dashed var(--el-border); border-radius: var(--radius-card);
-        padding: 16px 18px; color: var(--el-text-faint); font-size: 13px; background: transparent;
+      .detail-grid {
+        display: grid;
+        grid-template-columns: 1fr 288px;
+        gap: 24px;
       }
-      .ghost strong { color: var(--el-text-secondary); font-weight: 600; }
-      .rail-box { background: var(--el-page-bg); border: 1px solid var(--el-border); border-radius: var(--radius-card); padding: 12px 14px; }
-      .rail-label { font-family: var(--font-mono); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--el-text-muted); }
+      .col {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .ghost {
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 16px 18px;
+        color: var(--el-text-faint);
+        font-size: 13px;
+        background: transparent;
+      }
+      .ghost strong {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+      .rail-box {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+      }
+      .rail-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-muted);
+      }
 
       /* Edit-form context */
-      .field-label { font-size: 13px; font-weight: 600; color: var(--el-text); margin-bottom: 6px; display: block; }
-      .input-ghost { border: 1px solid var(--el-border); border-radius: var(--radius-md); padding: 10px 12px; color: var(--el-text-faint); font-size: 14px; background: var(--el-page-bg); }
-      .divider { height: 1px; background: var(--el-border); margin: 4px 0; border: 0; }
+      .field-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin-bottom: 6px;
+        display: block;
+      }
+      .input-ghost {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-md);
+        padding: 10px 12px;
+        color: var(--el-text-faint);
+        font-size: 14px;
+        background: var(--el-page-bg);
+      }
+      .divider {
+        height: 1px;
+        background: var(--el-border);
+        margin: 4px 0;
+        border: 0;
+      }
     </style>
   </head>
   <body>
     <div class="review-head">
       <div>
         <h1>Relationships panel + ready/blocked badge</h1>
-        <p>Story 2.4 · design for 2.4.5 (detail) + the edit-page related issues. Built from the real design system tokens/primitives.</p>
+        <p>
+          Story 2.4 · design for 2.4.5 (detail) + the edit-page related issues. Built from the real
+          design system tokens/primitives.
+        </p>
       </div>
-      <button class="toggle" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">Toggle dark</button>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
     </div>
 
     <!-- lucide icon defs (24×24 stroke, used by <use>) -->
     <svg width="0" height="0" style="position: absolute" aria-hidden="true">
       <defs>
-        <g id="i-zap" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></g>
-        <g id="i-book" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></g>
-        <g id="i-task" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></g>
-        <g id="i-bug" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/></g>
-        <g id="i-subtask" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344"/><path d="m9 11 3 3L22 4"/></g>
-        <g id="i-link" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></g>
-        <g id="i-alert" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></g>
-        <g id="i-check" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></g>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <g
+          id="i-subtask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-link"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M9 17H7A5 5 0 0 1 7 7h2" />
+          <path d="M15 7h2a5 5 0 1 1 0 10h-2" />
+          <line x1="8" x2="16" y1="12" y2="12" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" x2="12" y1="8" y2="12" />
+          <line x1="12" x2="12.01" y1="16" y2="16" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
       </defs>
     </svg>
 
     <!-- ════════════════ PANEL 0 — placement in the detail page ════════════════ -->
-    <div class="panel-label">0 · Placement — the new "Relationships" section in the detail page (left column, after Explanation, before Activity)</div>
+    <div class="panel-label">
+      0 · Placement — the new "Relationships" section in the detail page (left column, after
+      Explanation, before Activity)
+    </div>
     <div class="panel">
       <div class="detail-grid">
         <div class="col">
-          <div class="ghost"><strong>Description</strong> — what to do <span style="float:right">(2.4.1/2.4.2)</span></div>
-          <div class="ghost"><strong>Explanation</strong> — why this matters <span style="float:right">(2.4.2)</span></div>
+          <div class="ghost">
+            <strong>Description</strong> — what to do
+            <span style="float: right">(2.4.1/2.4.2)</span>
+          </div>
+          <div class="ghost">
+            <strong>Explanation</strong> — why this matters
+            <span style="float: right">(2.4.2)</span>
+          </div>
 
           <!-- THE NEW ELEMENT -->
           <section class="card" aria-label="Relationships">
             <div class="section-head">
               <h2>Relationships</h2>
               <span class="gloss">— dependencies &amp; links</span>
-              <span class="head-right"><span class="manage-note"><svg class="type-icon" style="width:13px;height:13px"><use href="#i-link"/></svg>Manage in Epic 5</span></span>
+              <span class="head-right"
+                ><span class="manage-note"
+                  ><svg class="type-icon" style="width: 13px; height: 13px">
+                    <use href="#i-link" /></svg
+                  >Manage in Epic 5</span
+                ></span
+              >
             </div>
             <div class="stack">
               <div class="readiness readiness--blocked">
-                <svg class="r-icon"><use href="#i-alert"/></svg>
+                <svg class="r-icon"><use href="#i-alert" /></svg>
                 <div class="r-body">
                   <span class="r-title">Blocked</span>
                   <span class="r-detail">Waiting on 1 issue — <a href="#">PROD-3</a></span>
                 </div>
               </div>
               <div class="group">
-                <div class="group-head"><span class="section-label">Blocked by</span><span class="group-count">1</span></div>
+                <div class="group-head">
+                  <span class="section-label">Blocked by</span><span class="group-count">1</span>
+                </div>
                 <ul class="link-list">
-                  <li><a class="link-row" href="#"><span class="lr-open-dot" title="open"></span><span class="type-icon t-task"><svg><use href="#i-task"/></svg></span><span class="lr-id">PROD-3</span><span class="lr-title">Set up Google OAuth credentials</span><span class="pill pill--planned">To Do</span></a></li>
+                  <li>
+                    <a class="link-row" href="#"
+                      ><span class="lr-open-dot" title="open"></span
+                      ><span class="type-icon t-task"
+                        ><svg><use href="#i-task" /></svg></span
+                      ><span class="lr-id">PROD-3</span
+                      ><span class="lr-title">Set up Google OAuth credentials</span
+                      ><span class="pill pill--planned">To Do</span></a
+                    >
+                  </li>
                 </ul>
               </div>
               <div class="group">
-                <div class="group-head"><span class="section-label">Relates to</span><span class="group-count">1</span></div>
+                <div class="group-head">
+                  <span class="section-label">Relates to</span><span class="group-count">1</span>
+                </div>
                 <ul class="link-list">
-                  <li><a class="link-row" href="#"><span class="type-icon t-story"><svg><use href="#i-book"/></svg></span><span class="lr-id">PROD-19</span><span class="lr-title">Session & cookie hardening</span><span class="pill pill--inprogress">In Progress</span></a></li>
+                  <li>
+                    <a class="link-row" href="#"
+                      ><span class="type-icon t-story"
+                        ><svg><use href="#i-book" /></svg></span
+                      ><span class="lr-id">PROD-19</span
+                      ><span class="lr-title">Session & cookie hardening</span
+                      ><span class="pill pill--inprogress">In Progress</span></a
+                    >
+                  </li>
                 </ul>
               </div>
             </div>
@@ -302,50 +672,110 @@
           <div class="rail-box"><div class="rail-label">Status</div></div>
           <div class="rail-box"><div class="rail-label">Assignee</div></div>
           <div class="rail-box"><div class="rail-label">Parent</div></div>
-          <div class="ghost" style="text-align:center">core-fields rail (2.4.2)</div>
+          <div class="ghost" style="text-align: center">core-fields rail (2.4.2)</div>
         </div>
       </div>
     </div>
 
     <!-- ════════════════ PANEL 1 — Blocked ════════════════ -->
-    <div class="panel-label">1 · Blocked — one or more blockers are non-terminal (badge names them)</div>
-    <div class="panel" style="max-width:680px">
+    <div class="panel-label">
+      1 · Blocked — one or more blockers are non-terminal (badge names them)
+    </div>
+    <div class="panel" style="max-width: 680px">
       <section class="card" aria-label="Relationships">
         <div class="section-head">
-          <h2>Relationships</h2><span class="gloss">— dependencies &amp; links</span>
-          <span class="head-right"><span class="manage-note"><svg class="type-icon" style="width:13px;height:13px"><use href="#i-link"/></svg>Manage in Epic 5</span></span>
+          <h2>Relationships</h2>
+          <span class="gloss">— dependencies &amp; links</span>
+          <span class="head-right"
+            ><span class="manage-note"
+              ><svg class="type-icon" style="width: 13px; height: 13px"><use href="#i-link" /></svg
+              >Manage in Epic 5</span
+            ></span
+          >
         </div>
         <div class="stack">
           <div class="readiness readiness--blocked">
-            <svg class="r-icon"><use href="#i-alert"/></svg>
+            <svg class="r-icon"><use href="#i-alert" /></svg>
             <div class="r-body">
               <span class="r-title">Blocked</span>
-              <span class="r-detail">Waiting on 2 issues — <a href="#">PROD-3</a>, <a href="#">PROD-8</a></span>
+              <span class="r-detail"
+                >Waiting on 2 issues — <a href="#">PROD-3</a>, <a href="#">PROD-8</a></span
+              >
             </div>
           </div>
           <div class="group">
-            <div class="group-head"><span class="section-label">Blocked by</span><span class="group-count">2</span></div>
+            <div class="group-head">
+              <span class="section-label">Blocked by</span><span class="group-count">2</span>
+            </div>
             <ul class="link-list">
-              <li><a class="link-row" href="#"><span class="lr-open-dot" title="open"></span><span class="type-icon t-task"><svg><use href="#i-task"/></svg></span><span class="lr-id">PROD-3</span><span class="lr-title">Set up Google OAuth credentials</span><span class="pill pill--planned">To Do</span></a></li>
-              <li><a class="link-row" href="#"><span class="lr-open-dot" title="open"></span><span class="type-icon t-bug"><svg><use href="#i-bug"/></svg></span><span class="lr-id">PROD-8</span><span class="lr-title">Callback drops the state param on retry</span><span class="pill pill--inprogress">In Progress</span></a></li>
+              <li>
+                <a class="link-row" href="#"
+                  ><span class="lr-open-dot" title="open"></span
+                  ><span class="type-icon t-task"
+                    ><svg><use href="#i-task" /></svg></span
+                  ><span class="lr-id">PROD-3</span
+                  ><span class="lr-title">Set up Google OAuth credentials</span
+                  ><span class="pill pill--planned">To Do</span></a
+                >
+              </li>
+              <li>
+                <a class="link-row" href="#"
+                  ><span class="lr-open-dot" title="open"></span
+                  ><span class="type-icon t-bug"
+                    ><svg><use href="#i-bug" /></svg></span
+                  ><span class="lr-id">PROD-8</span
+                  ><span class="lr-title">Callback drops the state param on retry</span
+                  ><span class="pill pill--inprogress">In Progress</span></a
+                >
+              </li>
             </ul>
           </div>
           <div class="group">
-            <div class="group-head"><span class="section-label">Blocks</span><span class="group-count">1</span></div>
+            <div class="group-head">
+              <span class="section-label">Blocks</span><span class="group-count">1</span>
+            </div>
             <ul class="link-list">
-              <li><a class="link-row" href="#"><span class="type-icon t-story"><svg><use href="#i-book"/></svg></span><span class="lr-id">PROD-31</span><span class="lr-title">Ship social sign-in to beta</span><span class="pill pill--planned">To Do</span></a></li>
+              <li>
+                <a class="link-row" href="#"
+                  ><span class="type-icon t-story"
+                    ><svg><use href="#i-book" /></svg></span
+                  ><span class="lr-id">PROD-31</span
+                  ><span class="lr-title">Ship social sign-in to beta</span
+                  ><span class="pill pill--planned">To Do</span></a
+                >
+              </li>
             </ul>
           </div>
           <div class="group">
-            <div class="group-head"><span class="section-label">Relates to</span><span class="group-count">1</span></div>
+            <div class="group-head">
+              <span class="section-label">Relates to</span><span class="group-count">1</span>
+            </div>
             <ul class="link-list">
-              <li><a class="link-row" href="#"><span class="type-icon t-story"><svg><use href="#i-book"/></svg></span><span class="lr-id">PROD-19</span><span class="lr-title">Session &amp; cookie hardening</span><span class="pill pill--inprogress">In Progress</span></a></li>
+              <li>
+                <a class="link-row" href="#"
+                  ><span class="type-icon t-story"
+                    ><svg><use href="#i-book" /></svg></span
+                  ><span class="lr-id">PROD-19</span
+                  ><span class="lr-title">Session &amp; cookie hardening</span
+                  ><span class="pill pill--inprogress">In Progress</span></a
+                >
+              </li>
             </ul>
           </div>
           <div class="group">
-            <div class="group-head"><span class="section-label">Duplicates</span><span class="group-count">1</span></div>
+            <div class="group-head">
+              <span class="section-label">Duplicates</span><span class="group-count">1</span>
+            </div>
             <ul class="link-list">
-              <li><a class="link-row" href="#"><span class="type-icon t-task"><svg><use href="#i-task"/></svg></span><span class="lr-id">PROD-2</span><span class="lr-title">Add "Sign in with Google"</span><span class="pill pill--done">Done</span></a></li>
+              <li>
+                <a class="link-row" href="#"
+                  ><span class="type-icon t-task"
+                    ><svg><use href="#i-task" /></svg></span
+                  ><span class="lr-id">PROD-2</span
+                  ><span class="lr-title">Add "Sign in with Google"</span
+                  ><span class="pill pill--done">Done</span></a
+                >
+              </li>
             </ul>
           </div>
         </div>
@@ -353,25 +783,43 @@
     </div>
 
     <!-- ════════════════ PANEL 2 — Ready ════════════════ -->
-    <div class="panel-label">2 · Ready — every blocker reached a terminal status (done OR cancelled)</div>
-    <div class="panel" style="max-width:680px">
+    <div class="panel-label">
+      2 · Ready — every blocker reached a terminal status (done OR cancelled)
+    </div>
+    <div class="panel" style="max-width: 680px">
       <section class="card" aria-label="Relationships">
         <div class="section-head">
-          <h2>Relationships</h2><span class="gloss">— dependencies &amp; links</span>
-          <span class="head-right"><span class="manage-note"><svg class="type-icon" style="width:13px;height:13px"><use href="#i-link"/></svg>Manage in Epic 5</span></span>
+          <h2>Relationships</h2>
+          <span class="gloss">— dependencies &amp; links</span>
+          <span class="head-right"
+            ><span class="manage-note"
+              ><svg class="type-icon" style="width: 13px; height: 13px"><use href="#i-link" /></svg
+              >Manage in Epic 5</span
+            ></span
+          >
         </div>
         <div class="stack">
           <div class="readiness readiness--ready">
-            <svg class="r-icon"><use href="#i-check"/></svg>
+            <svg class="r-icon"><use href="#i-check" /></svg>
             <div class="r-body">
               <span class="r-title">Ready to start</span>
               <span class="r-detail">All blockers resolved</span>
             </div>
           </div>
           <div class="group">
-            <div class="group-head"><span class="section-label">Blocked by</span><span class="group-count">1</span></div>
+            <div class="group-head">
+              <span class="section-label">Blocked by</span><span class="group-count">1</span>
+            </div>
             <ul class="link-list">
-              <li><a class="link-row" href="#"><span class="type-icon t-task"><svg><use href="#i-task"/></svg></span><span class="lr-id">PROD-3</span><span class="lr-title">Set up Google OAuth credentials</span><span class="pill pill--done">Done</span></a></li>
+              <li>
+                <a class="link-row" href="#"
+                  ><span class="type-icon t-task"
+                    ><svg><use href="#i-task" /></svg></span
+                  ><span class="lr-id">PROD-3</span
+                  ><span class="lr-title">Set up Google OAuth credentials</span
+                  ><span class="pill pill--done">Done</span></a
+                >
+              </li>
             </ul>
           </div>
         </div>
@@ -379,40 +827,76 @@
     </div>
 
     <!-- ════════════════ PANEL 3 — No links ════════════════ -->
-    <div class="panel-label">3 · No links — muted empty state, never blank (no readiness badge, since nothing blocks it)</div>
-    <div class="panel" style="max-width:680px">
+    <div class="panel-label">
+      3 · No links — muted empty state, never blank (no readiness badge, since nothing blocks it)
+    </div>
+    <div class="panel" style="max-width: 680px">
       <section class="card" aria-label="Relationships">
         <div class="section-head">
-          <h2>Relationships</h2><span class="gloss">— dependencies &amp; links</span>
-          <span class="head-right"><span class="manage-note"><svg class="type-icon" style="width:13px;height:13px"><use href="#i-link"/></svg>Manage in Epic 5</span></span>
+          <h2>Relationships</h2>
+          <span class="gloss">— dependencies &amp; links</span>
+          <span class="head-right"
+            ><span class="manage-note"
+              ><svg class="type-icon" style="width: 13px; height: 13px"><use href="#i-link" /></svg
+              >Manage in Epic 5</span
+            ></span
+          >
         </div>
         <p class="empty">No linked issues yet.</p>
       </section>
     </div>
 
     <!-- ════════════════ PANEL 4 — Edit page ════════════════ -->
-    <div class="panel-label">4 · Edit page — the same Related-issues block, read-only, so the editor keeps dependency context (link editing is Epic 5)</div>
-    <div class="panel" style="max-width:680px">
+    <div class="panel-label">
+      4 · Edit page — the same Related-issues block, read-only, so the editor keeps dependency
+      context (link editing is Epic 5)
+    </div>
+    <div class="panel" style="max-width: 680px">
       <section class="card" aria-label="Edit issue">
-        <div class="section-head"><h2>Edit issue</h2><span class="gloss">PROD-42</span></div>
+        <div class="section-head">
+          <h2>Edit issue</h2>
+          <span class="gloss">PROD-42</span>
+        </div>
         <div class="stack">
-          <div><span class="field-label">Title</span><div class="input-ghost">Add Google OAuth to sign-in</div></div>
-          <div><span class="field-label">Status</span><div class="input-ghost">In Progress ▾</div></div>
+          <div>
+            <span class="field-label">Title</span>
+            <div class="input-ghost">Add Google OAuth to sign-in</div>
+          </div>
+          <div>
+            <span class="field-label">Status</span>
+            <div class="input-ghost">In Progress ▾</div>
+          </div>
           <hr class="divider" />
           <!-- read-only related-issues, mirrors the detail panel grouping -->
           <div>
-            <div class="section-head" style="margin-bottom:10px">
-              <span class="section-label" style="font-size:12px">Related issues</span>
-              <span class="head-right"><span class="manage-note">read-only · manage in Epic 5</span></span>
+            <div class="section-head" style="margin-bottom: 10px">
+              <span class="section-label" style="font-size: 12px">Related issues</span>
+              <span class="head-right"
+                ><span class="manage-note">read-only · manage in Epic 5</span></span
+              >
             </div>
-            <div class="readiness readiness--blocked" style="margin-bottom:12px">
-              <svg class="r-icon"><use href="#i-alert"/></svg>
-              <div class="r-body"><span class="r-title">Blocked</span><span class="r-detail">Waiting on 1 issue — <a href="#">PROD-3</a></span></div>
+            <div class="readiness readiness--blocked" style="margin-bottom: 12px">
+              <svg class="r-icon"><use href="#i-alert" /></svg>
+              <div class="r-body">
+                <span class="r-title">Blocked</span
+                ><span class="r-detail">Waiting on 1 issue — <a href="#">PROD-3</a></span>
+              </div>
             </div>
             <div class="group">
-              <div class="group-head"><span class="section-label">Blocked by</span><span class="group-count">1</span></div>
+              <div class="group-head">
+                <span class="section-label">Blocked by</span><span class="group-count">1</span>
+              </div>
               <ul class="link-list">
-                <li><a class="link-row" href="#"><span class="lr-open-dot" title="open"></span><span class="type-icon t-task"><svg><use href="#i-task"/></svg></span><span class="lr-id">PROD-3</span><span class="lr-title">Set up Google OAuth credentials</span><span class="pill pill--planned">To Do</span></a></li>
+                <li>
+                  <a class="link-row" href="#"
+                    ><span class="lr-open-dot" title="open"></span
+                    ><span class="type-icon t-task"
+                      ><svg><use href="#i-task" /></svg></span
+                    ><span class="lr-id">PROD-3</span
+                    ><span class="lr-title">Set up Google OAuth credentials</span
+                    ><span class="pill pill--planned">To Do</span></a
+                  >
+                </li>
               </ul>
             </div>
           </div>
