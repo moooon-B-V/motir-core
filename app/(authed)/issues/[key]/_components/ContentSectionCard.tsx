@@ -15,6 +15,9 @@ export interface ContentSectionCardProps {
   subtitle?: string;
   /** Extra header content after the title (e.g. the AI-drafted badge). */
   headerExtra?: ReactNode;
+  /** Right-aligned header content (e.g. the read-only "Manage in Epic 5" note).
+   * Mutually exclusive with `editHref` — both claim the header's far end. */
+  headerRight?: ReactNode;
   /** When set, an "Edit" link is shown at the header's end. */
   editHref?: string;
   children: ReactNode;
@@ -24,6 +27,7 @@ export function ContentSectionCard({
   title,
   subtitle,
   headerExtra,
+  headerRight,
   editHref,
   children,
 }: ContentSectionCardProps) {
@@ -37,6 +41,7 @@ export function ContentSectionCard({
             <span className="font-sans text-sm text-(--el-text-secondary)">— {subtitle}</span>
           ) : null}
           {headerExtra}
+          {headerRight ? <div className="ml-auto flex items-center">{headerRight}</div> : null}
           {editHref ? (
             <Link
               href={editHref}

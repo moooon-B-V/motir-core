@@ -859,15 +859,43 @@ export const workItemsService = {
    * Two queries total, no N+1: one for the blocker `(status, projectId)` rows,
    * one batched `getTerminalStatusKeysByProjects` for every blocker-project's
    * terminal set. A blocker is OPEN unless its status is in its project's set.
+   *
+   * Thin boolean projection of {@link getReadiness} — the single source of the
+   * per-project terminal logic. Callers that only need the yes/no (the Epic-7
+   * ready-set engine — finding #42) use this; callers that must NAME the open
+   * blockers (the 2.4.5 banner) use `getReadiness`.
    */
   async isReady(workItemId: string, ctx: ServiceContext): Promise<boolean> {
+    return (await this.getReadiness(workItemId, ctx)).ready;
+  },
+
+  /**
+   * The full readiness verdict: not just WHETHER the item is ready, but WHICH
+   * `is_blocked_by` blockers are still open (non-terminal). Same per-project
+   * terminal classification as `isReady` (2.2.6 / finding #21) — a blocker is
+   * resolved iff its status is in ITS OWN project's `category = done` set, so
+   * `done` and `cancelled` both count and a live recategorization re-judges it.
+   * Returns `openBlockerIds` (a Set, for an O(1) membership filter at the call
+   * site) so the relationships surface can highlight exactly the open blockers
+   * without re-running the classification. An item with no blockers → ready,
+   * empty set. Two queries total, no N+1 (see `isReady`).
+   */
+  async getReadiness(
+    workItemId: string,
+    ctx: ServiceContext,
+  ): Promise<{ ready: boolean; openBlockerIds: Set<string> }> {
     const blockers = await workItemLinkRepository.findBlockerStates(workItemId);
-    if (blockers.length === 0) return true;
+    if (blockers.length === 0) return { ready: true, openBlockerIds: new Set() };
     const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
       blockers.map((b) => b.projectId),
       ctx.workspaceId,
     );
-    return blockers.every((b) => terminalByProject.get(b.projectId)?.has(b.status) ?? false);
+    const openBlockerIds = new Set(
+      blockers
+        .filter((b) => !(terminalByProject.get(b.projectId)?.has(b.status) ?? false))
+        .map((b) => b.id),
+    );
+    return { ready: openBlockerIds.size === 0, openBlockerIds };
   },
 
   /**
@@ -908,16 +936,23 @@ export const workItemsService = {
   },
 
   /**
-   * The aggregate read backing the issue DETAIL page (Subtask 2.4.1): one
-   * service call assembling the item + its immediate parent + direct children +
-   * its blocked-by / blocks dependency links (resolved to summaries) + the
-   * project's workflow. Tenant gate FIRST (cross-workspace / missing identifier
-   * → WorkItemNotFoundError → 404, no existence leak), then the rest fans out
-   * in parallel. `blockedBy` = items this item `is_blocked_by` (its OUT edges of
-   * that kind); `blocks` = items blocked by it (the IN edges). All reads are
-   * within one workspace (children/parent share the project; the link targets
-   * are resolved by id and rendered read-only here — the relationships panel's
-   * grouping + readiness verdict layer on top in 2.4.5).
+   * The aggregate read backing the issue DETAIL page (Subtask 2.4.1, grown by
+   * 2.4.5): one service call assembling the item + its immediate parent +
+   * direct children + ALL of its relationship links (resolved to summaries,
+   * grouped by kind) + a readiness verdict + the project's workflow. Tenant gate
+   * FIRST (cross-workspace / missing identifier → WorkItemNotFoundError → 404,
+   * no existence leak), then the rest fans out in parallel.
+   *
+   * Link groups: `blockedBy` = items this item `is_blocked_by` (its OUT edges of
+   * that kind); `blocks` = items blocked by it (the IN edges); `relatesTo` /
+   * `duplicates` / `clones` = its OUT edges of those kinds (`relates_to` persists
+   * a reciprocal row, so its OUT set already covers both directions). Each group
+   * is `key ASC`-ordered. `readiness` is the 2.4.5 ready/blocked verdict —
+   * `getReadiness` classifies each blocker against ITS OWN project's terminal set
+   * (2.2.6 / finding #21), and `openBlockers` re-projects the open ids back onto
+   * the resolved `blockedBy` summaries so the banner can name them without a
+   * second pass. Link targets can be cross-project; they're resolved by id and
+   * rendered read-only here (link MANAGEMENT is a later surface — Epic 5).
    */
   async getIssueDetail(
     projectId: string,
@@ -929,7 +964,16 @@ export const workItemsService = {
       throw new WorkItemNotFoundError(identifier);
     }
 
-    const [ancestorRows, childRows, blockedByLinks, blocksLinks, workflow] = await Promise.all([
+    const [
+      ancestorRows,
+      childRows,
+      blockedByLinks,
+      blocksLinks,
+      relatesLinks,
+      duplicatesLinks,
+      clonesLinks,
+      workflow,
+    ] = await Promise.all([
       // The breadcrumb chain (root→self, item excluded) — one CTE, workspace-
       // scoped. The immediate parent is `ancestors`' last element; we surface it
       // separately too so the 2.4.2 rail's Parent field need not re-derive it.
@@ -937,23 +981,37 @@ export const workItemsService = {
       workItemRepository.findChildren(item.id),
       workItemLinkRepository.findByFromItem(item.id, 'is_blocked_by'),
       workItemLinkRepository.findByToItem(item.id, 'is_blocked_by'),
+      workItemLinkRepository.findByFromItem(item.id, 'relates_to'),
+      workItemLinkRepository.findByFromItem(item.id, 'duplicates'),
+      workItemLinkRepository.findByFromItem(item.id, 'clones'),
       workflowsService.getWorkflow(projectId, ctx.workspaceId),
     ]);
 
-    const [blockerRows, blockingRows] = await Promise.all([
-      workItemRepository.findByIds(blockedByLinks.map((l) => l.toId)),
-      workItemRepository.findByIds(blocksLinks.map((l) => l.fromId)),
-    ]);
+    const [blockerRows, blockingRows, relatesRows, duplicatesRows, clonesRows, readiness] =
+      await Promise.all([
+        workItemRepository.findByIds(blockedByLinks.map((l) => l.toId)),
+        workItemRepository.findByIds(blocksLinks.map((l) => l.fromId)),
+        workItemRepository.findByIds(relatesLinks.map((l) => l.toId)),
+        workItemRepository.findByIds(duplicatesLinks.map((l) => l.toId)),
+        workItemRepository.findByIds(clonesLinks.map((l) => l.toId)),
+        this.getReadiness(item.id, ctx),
+      ]);
 
     const ancestors = ancestorRows.map(toWorkItemSummaryDto);
+    const blockedBy = blockerRows.sort(byKeyAsc).map(toWorkItemSummaryDto);
+    const openBlockers = blockedBy.filter((b) => readiness.openBlockerIds.has(b.id));
 
     return {
       item: toWorkItemDto(item),
       ancestors,
       parent: ancestors.at(-1) ?? null,
       children: childRows.map(toWorkItemSummaryDto),
-      blockedBy: blockerRows.map(toWorkItemSummaryDto),
-      blocks: blockingRows.map(toWorkItemSummaryDto),
+      blockedBy,
+      blocks: blockingRows.sort(byKeyAsc).map(toWorkItemSummaryDto),
+      relatesTo: relatesRows.sort(byKeyAsc).map(toWorkItemSummaryDto),
+      duplicates: duplicatesRows.sort(byKeyAsc).map(toWorkItemSummaryDto),
+      clones: clonesRows.sort(byKeyAsc).map(toWorkItemSummaryDto),
+      readiness: { ready: readiness.ready, openBlockers },
       workflow,
     };
   },
