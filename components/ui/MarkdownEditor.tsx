@@ -1,135 +1,101 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import dynamic from 'next/dynamic';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEditor, EditorContent, type Editor } from '@tiptap/react';
+import { StarterKit } from '@tiptap/starter-kit';
+import { Image } from '@tiptap/extension-image';
+import { TaskList } from '@tiptap/extension-task-list';
+import { TaskItem } from '@tiptap/extension-task-item';
+import { Markdown } from 'tiptap-markdown';
 import {
-  bold,
-  italic,
-  strikethrough,
-  hr,
-  divider,
-  title,
-  link,
-  quote,
-  code,
-  codeBlock,
-  image,
-  unorderedListCommand,
-  orderedListCommand,
-  checkedListCommand,
-  table,
-  codeEdit,
-  codePreview,
-  type ICommand,
-} from '@uiw/react-md-editor/commands';
-import '@uiw/react-md-editor/markdown-editor.css';
+  Bold,
+  Italic,
+  Strikethrough,
+  Code,
+  Code2,
+  Heading2,
+  List,
+  ListOrdered,
+  ListChecks,
+  Link as LinkIcon,
+  Quote,
+  Paperclip,
+} from 'lucide-react';
 import { useOptionalTheme } from '@/lib/contexts/theme-context';
 import { ALLOWED_UPLOAD_TYPES, isImageType } from '@/lib/blob/allowlist';
+import { cn } from '@/lib/utils/cn';
 import { MarkdownView } from './MarkdownView';
+import './markdown-editor.css';
 
-// MarkdownEditor — the rich-text editor over Story 1.4's `descriptionMd`
-// storage shape (Subtask 2.3.5). The source of truth is Markdown TEXT (not a
-// CRDT, not ProseMirror JSON, not HTML); concurrent multi-user editing is out
-// of v1 scope (last-write-wins, surfaced with optimistic-concurrency rejection
-// in 2.3.6's edit form).
+// MarkdownEditor — the WYSIWYG editor over Story 1.4's `descriptionMd` storage
+// shape (Subtask 2.3.5, rebuilt as a true rendered-view editor in 2.3.10,
+// finding #53). The source of truth is — still — Markdown TEXT. The user edits
+// the RENDERED document inline (no split source/preview pane); Markdown is the
+// load + save boundary, never shown raw.
 //
-// Library: `@uiw/react-md-editor` — the most-downloaded React Markdown editor
-// (MIT). It pairs natively with our `react-markdown` render path: the live
-// preview is overridden to render through `MarkdownView` / `renderMarkdown`,
-// so the editing preview and the read surface share the ONE pipeline (no
-// Tiptap-style lossy ProseMirror↔Markdown serialization).
+// Library: Tiptap v3 (ProseMirror) + `tiptap-markdown`. `tiptap-markdown` makes
+// the editor's canonical serialization Markdown: it parses the incoming
+// `descriptionMd` into the ProseMirror document on load and serializes back to
+// Markdown via `editor.storage.markdown.getMarkdown()` on every edit. The
+// round-trip fidelity over our supported feature set (headings, bold, italic,
+// strike, links, ordered/unordered/TASK lists, inline code, code blocks,
+// blockquotes) is pinned by a unit test — that test is the library-choice gate.
+// Tables are intentionally out of v1 scope (tiptap-markdown's table round-trip
+// is lossy); typing a Markdown table degrades to text rather than corrupting.
 //
-// SSR: the editor touches the DOM at module load, so it's pulled in via
-// `next/dynamic({ ssr: false })`. The command set is isomorphic (pure data +
-// icon components) and imported statically so the toolbar config is
-// deterministic and unit-testable without mounting the editor.
-
-// Loaded client-only — the editor reads `window`/`document` at module init.
-const MDEditor = dynamic(() => import('@uiw/react-md-editor'), {
-  ssr: false,
-  loading: () => (
-    <div
-      className="border-border bg-surface text-muted-foreground flex items-center rounded-md border px-3 py-2 text-sm"
-      aria-hidden
-    >
-      Loading editor…
-    </div>
-  ),
-});
-
-// Compact toolbar for the `min` variant (the create modal). A focused set —
-// the formatting users reach for inline — plus the edit/preview tab toggle.
-const MIN_COMMANDS: ICommand[] = [bold, italic, code, link];
-// Full toolbar for the `full` variant (the edit form): the complete set.
-const FULL_COMMANDS: ICommand[] = [
-  bold,
-  italic,
-  strikethrough,
-  hr,
-  divider,
-  title,
-  link,
-  quote,
-  code,
-  codeBlock,
-  image,
-  divider,
-  unorderedListCommand,
-  orderedListCommand,
-  checkedListCommand,
-  divider,
-  table,
-];
-// Right-aligned edit/preview tab toggle, shared by both editable variants.
-const TAB_COMMANDS: ICommand[] = [codeEdit, codePreview];
+// SSR: `immediatelyRender: false` is Tiptap v3's first-class SSR switch — the
+// editor builds its view on the client only, so there's no `next/dynamic`
+// wrapper and no hydration mismatch (it supersedes 2.3.5's dynamic import).
+//
+// Safety: `html: false` on the Markdown extension means any raw HTML in the
+// source (or pasted) is treated as plain text, never rendered — there is no
+// HTML/script injection surface through the editor.
 
 type Size = 'min' | 'full';
 
-interface EditorConfig {
-  preview: 'live' | 'edit' | 'preview';
-  hideToolbar: boolean;
-  height: number;
-  commands: ICommand[];
-  extraCommands: ICommand[];
-}
-
 /**
- * Pure mapping from the public (`size`, `readOnly`) surface to the underlying
- * editor's toolbar/preview/height config. Exported so the contract is unit-
- * testable without mounting the (heavy, DOM-bound) editor.
+ * The canonical extension set. Exported so the round-trip fidelity test builds a
+ * headless editor over the EXACT same schema the UI uses — the test would be
+ * meaningless against a different extension list.
  *
- * - `readOnly` → no toolbar, no tabs, preview-only render.
- * - `min`      → compact toolbar + edit/preview tabs, ~6 lines, edit-first.
- * - `full`     → full toolbar + edit/preview tabs, ~16 lines, live split-pane.
+ * Markdown is the document model: `html: false` keeps raw HTML inert, and
+ * `linkify`/`breaks` stay off so serialization matches our stored Markdown
+ * conventions rather than markdown-it's permissive defaults.
  */
-export function editorConfigFor(size: Size, readOnly: boolean): EditorConfig {
-  if (readOnly) {
-    return { preview: 'preview', hideToolbar: true, height: 200, commands: [], extraCommands: [] };
-  }
-  if (size === 'min') {
-    return {
-      preview: 'edit',
-      hideToolbar: false,
-      height: 160,
-      commands: MIN_COMMANDS,
-      extraCommands: TAB_COMMANDS,
-    };
-  }
-  return {
-    preview: 'live',
-    hideToolbar: false,
-    height: 420,
-    commands: FULL_COMMANDS,
-    extraCommands: TAB_COMMANDS,
-  };
+export function buildEditorExtensions() {
+  return [
+    StarterKit.configure({
+      heading: { levels: [1, 2, 3] },
+      link: { openOnClick: false },
+    }),
+    Image.configure({ inline: false, allowBase64: false }),
+    TaskList,
+    TaskItem.configure({ nested: true }),
+    Markdown.configure({
+      html: false,
+      linkify: false,
+      breaks: false,
+      transformPastedText: true,
+      transformCopiedText: true,
+    }),
+  ];
+}
+
+/** Read the current document back as Markdown (tiptap-markdown storage). */
+function getMarkdown(editor: Editor): string {
+  const storage = (editor.storage as unknown as Record<string, unknown>).markdown as
+    | { getMarkdown?: () => string }
+    | undefined;
+  return storage?.getMarkdown?.() ?? '';
 }
 
 /**
- * First allowed file in a clipboard/drop payload, or null (2.3.7, finding #52:
- * ANY allowed file, not just images). Restricted to the shared upload allowlist
- * the endpoint enforces server-side — so an unsupported type falls through to
- * the editor's normal paste rather than kicking off an upload the server would
- * reject. Images embed inline (`![]`); other allowed files insert as links.
+ * First allowed file in a clipboard/drop/picker payload, or null (2.3.7,
+ * finding #52: ANY allowed file, not just images). Restricted to the shared
+ * upload allowlist the endpoint enforces server-side — an unsupported type
+ * falls through to the editor's normal paste rather than kicking off an upload
+ * the server would reject. Images embed as an inline image node; other allowed
+ * files insert as a link.
  */
 function pickAllowedFile(files: FileList | null | undefined): File | null {
   if (!files) return null;
@@ -149,14 +115,14 @@ export interface MarkdownEditorProps {
   /** Size variant. `min` for the create modal, `full` for the edit form. */
   size?: Size;
   /**
-   * Persist a pasted/dropped FILE (2.3.7, finding #52 — any allowed type, not
-   * just images) and resolve to its URL. The editor splices an image as `![]`
-   * (inline) and any other file as `[]` (a link), by the File's MIME. Omit to
-   * disable uploads — paste/drop then surfaces a polite inline notice and the
-   * file is NOT inserted (never silently dropped).
+   * Persist a pasted/dropped/picked FILE (2.3.7, finding #52 — any allowed
+   * type, not just images) and resolve to its URL. An image inserts as an
+   * inline image node; any other file inserts as a link, by the File's MIME.
+   * Omit to disable uploads — paste/drop/attach then surfaces a polite inline
+   * notice and the file is NOT inserted (never silently dropped).
    */
   onFileUpload?: (file: File) => Promise<string>;
-  /** Render read-only (no toolbar, no tabs — preview only). */
+  /** Render read-only — the rendered document with no toolbar or editing. */
   readOnly?: boolean;
 }
 
@@ -170,125 +136,284 @@ export function MarkdownEditor({
 }: MarkdownEditorProps) {
   const theme = useOptionalTheme();
   const colorMode = theme?.resolvedPattern ?? 'light';
-  const config = useMemo(() => editorConfigFor(size, readOnly), [size, readOnly]);
 
   const [notice, setNotice] = useState<string | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Latest value + a monotonic token counter, read inside the async upload
-  // callback without re-subscribing it on every keystroke. Synced via effect
-  // (never written during render) so the upload continuation that runs after a
-  // placeholder insert always replaces against the current document.
-  const valueRef = useRef(value);
-  useEffect(() => {
-    valueRef.current = value;
-  }, [value]);
-  const uploadSeq = useRef(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const showNotice = useCallback((message: string) => {
     setNotice(message);
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
     noticeTimer.current = setTimeout(() => setNotice(null), 6000);
   }, []);
+  useEffect(() => () => void (noticeTimer.current && clearTimeout(noticeTimer.current)), []);
 
-  // Splice text into the controlled value at the textarea's caret (falling back
-  // to append when the caret isn't available).
-  const spliceAtCaret = useCallback(
-    (textarea: HTMLTextAreaElement | null, insert: string) => {
-      const current = valueRef.current;
-      const start = textarea?.selectionStart ?? current.length;
-      const end = textarea?.selectionEnd ?? current.length;
-      const next = current.slice(0, start) + insert + current.slice(end);
-      valueRef.current = next;
-      onChange(next);
+  // Latest `onChange` read inside Tiptap's `onUpdate` without re-creating the
+  // editor on every parent render. Synced via effect, never written in render.
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  const editor = useEditor({
+    immediatelyRender: false,
+    editable: !readOnly,
+    extensions: buildEditorExtensions(),
+    content: value,
+    editorProps: {
+      attributes: {
+        class: 'prodect-prose',
+        role: 'textbox',
+        'aria-multiline': 'true',
+        'aria-label': label,
+      },
+      handlePaste: (_view, event) => {
+        const file = pickAllowedFile(event.clipboardData?.files);
+        if (!file) return false; // not an allowed file — let the editor paste
+        event.preventDefault();
+        void handleFileRef.current(file);
+        return true;
+      },
+      handleDrop: (_view, event) => {
+        const file = pickAllowedFile((event as DragEvent).dataTransfer?.files);
+        if (!file) return false;
+        event.preventDefault();
+        void handleFileRef.current(file);
+        return true;
+      },
     },
-    [onChange],
-  );
+    onUpdate: ({ editor }) => onChangeRef.current(getMarkdown(editor)),
+  });
 
-  const uploadFile = useCallback(
-    async (file: File, textarea: HTMLTextAreaElement | null) => {
+  // Reflect readOnly toggles onto a live editor (it's created once).
+  useEffect(() => {
+    editor?.setEditable(!readOnly);
+  }, [editor, readOnly]);
+
+  // Controlled sync: when the parent's `value` diverges from what the editor
+  // holds (e.g. a form reset, or programmatic set), reparse the Markdown WITHOUT
+  // emitting an update (which would echo back into `onChange` and loop).
+  useEffect(() => {
+    if (!editor) return;
+    if (value !== getMarkdown(editor)) {
+      editor.commands.setContent(value, { emitUpdate: false });
+    }
+  }, [editor, value]);
+
+  const handleFile = useCallback(
+    async (file: File) => {
+      if (!editor) return;
       if (!onFileUpload) {
         showNotice("File uploads aren't enabled here.");
         return;
       }
-      // Image embeds inline (`![]`); any other file inserts as a link (`[]`).
-      const image = isImageType(file.type);
-      const md = (target: string) =>
-        image ? `![${file.name}](${target})` : `[${file.name}](${target})`;
-      // Unique placeholder per upload so concurrent pastes don't collide and a
-      // later edit elsewhere in the doc doesn't shift the wrong token.
-      const token = `uploading:${++uploadSeq.current}`;
-      const placeholder = md(token).replace(file.name, `Uploading ${file.name}…`);
-      spliceAtCaret(textarea, placeholder);
+      showNotice(`Uploading ${file.name}…`);
       try {
         const url = await onFileUpload(file);
-        valueRef.current = valueRef.current.replace(placeholder, md(url));
-        onChange(valueRef.current);
+        if (isImageType(file.type)) {
+          editor.chain().focus().setImage({ src: url, alt: file.name }).run();
+        } else {
+          // Insert a link node, then a plain space so the link mark doesn't
+          // bleed into whatever the user types next.
+          editor
+            .chain()
+            .focus()
+            .insertContent({
+              type: 'text',
+              text: file.name,
+              marks: [{ type: 'link', attrs: { href: url } }],
+            })
+            .insertContent(' ')
+            .run();
+        }
+        setNotice(null);
       } catch (err) {
-        // Revert the placeholder and tell the user — never leave a dangling
-        // "Uploading…" marker and never silently drop the file.
-        valueRef.current = valueRef.current.replace(placeholder, '');
-        onChange(valueRef.current);
+        // Never silently drop the file — tell the user.
         showNotice(err instanceof Error ? err.message : 'Upload failed — please try again.');
       }
     },
-    [onFileUpload, onChange, showNotice, spliceAtCaret],
+    [editor, onFileUpload, showNotice],
   );
 
-  const handlePaste = useCallback(
-    (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-      const file = pickAllowedFile(event.clipboardData?.files);
-      if (!file) return; // not an allowed file — let the editor paste normally
-      event.preventDefault();
-      void uploadFile(file, event.currentTarget);
+  // Stable ref so the editor's (create-time) paste/drop handlers always call the
+  // latest upload closure without re-instantiating the editor.
+  const handleFileRef = useRef(handleFile);
+  useEffect(() => {
+    handleFileRef.current = handleFile;
+  }, [handleFile]);
+
+  const onAttachClick = useCallback(() => fileInputRef.current?.click(), []);
+  const onFileInputChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = pickAllowedFile(event.target.files);
+      event.target.value = ''; // allow re-picking the same file
+      if (file) void handleFile(file);
+      else showNotice("That file type isn't supported.");
     },
-    [uploadFile],
-  );
-
-  const handleDrop = useCallback(
-    (event: React.DragEvent<HTMLTextAreaElement>) => {
-      const file = pickAllowedFile(event.dataTransfer?.files);
-      if (!file) return;
-      event.preventDefault();
-      void uploadFile(file, event.currentTarget);
-    },
-    [uploadFile],
-  );
-
-  // Render the editor's preview pane through OUR single render module so the
-  // edit-time preview and the read surface (MarkdownView) can never diverge.
-  const previewRenderer = useCallback(
-    (source: string): ReactElement => <MarkdownView value={source} />,
-    [],
+    [handleFile, showNotice],
   );
 
   return (
     // suppressHydrationWarning: `colorMode` is 'light' on the server (the theme
     // provider's stable SSR snapshot) but resolves to the OS preference on the
-    // client — an intentional, sanctioned attribute mismatch (same pattern the
-    // ThemeProvider uses for <html data-theme>), not a bug to reconcile.
+    // client — an intentional, sanctioned attribute mismatch, not a bug.
     <div className="flex flex-col gap-1" data-color-mode={colorMode} suppressHydrationWarning>
       <span className="text-foreground font-sans text-sm font-medium">{label}</span>
-      <MDEditor
-        value={value}
-        onChange={(next) => onChange(next ?? '')}
-        height={config.height}
-        preview={config.preview}
-        hideToolbar={config.hideToolbar}
-        commands={config.commands}
-        extraCommands={config.extraCommands}
-        data-color-mode={colorMode}
-        components={{ preview: previewRenderer }}
-        textareaProps={{
-          'aria-label': label,
-          readOnly,
-          onPaste: readOnly ? undefined : handlePaste,
-          onDrop: readOnly ? undefined : handleDrop,
-        }}
-      />
+      {readOnly ? (
+        <div className="border-border bg-surface rounded-md border px-3 py-2">
+          <MarkdownView value={value} />
+        </div>
+      ) : (
+        <div className="border-border bg-surface focus-within:border-accent rounded-md border transition-colors">
+          <Toolbar
+            editor={editor}
+            size={size}
+            canUpload={Boolean(onFileUpload)}
+            onAttach={onAttachClick}
+          />
+          <div
+            className={cn(
+              'overflow-y-auto px-3 py-2',
+              size === 'min' ? 'min-h-[8rem]' : 'min-h-[22rem]',
+            )}
+          >
+            {editor && <EditorContent editor={editor} />}
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ALLOWED_UPLOAD_TYPES.join(',')}
+            className="hidden"
+            onChange={onFileInputChange}
+            tabIndex={-1}
+            aria-hidden
+          />
+        </div>
+      )}
       {notice && (
         <p role="status" aria-live="polite" className="text-muted-foreground text-xs">
           {notice}
         </p>
+      )}
+    </div>
+  );
+}
+
+type IconType = typeof Bold;
+
+interface ToolbarButtonDef {
+  icon: IconType;
+  label: string;
+  run: () => void;
+}
+
+function Toolbar({
+  editor,
+  size,
+  canUpload,
+  onAttach,
+}: {
+  editor: Editor | null;
+  size: Size;
+  canUpload: boolean;
+  onAttach: () => void;
+}) {
+  // First paint (SSR / pre-hydration) the editor is null — render a stable
+  // placeholder bar of the same height so layout doesn't jump.
+  if (!editor) return <div className="border-border h-9 border-b" aria-hidden />;
+
+  const setLink = () => {
+    const previous = editor.getAttributes('link').href as string | undefined;
+    const url = window.prompt('Link URL', previous ?? '');
+    if (url === null) return; // cancelled
+    if (url === '') {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      return;
+    }
+    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+  };
+
+  const bold: ToolbarButtonDef = {
+    icon: Bold,
+    label: 'Bold',
+    run: () => editor.chain().focus().toggleBold().run(),
+  };
+  const italic: ToolbarButtonDef = {
+    icon: Italic,
+    label: 'Italic',
+    run: () => editor.chain().focus().toggleItalic().run(),
+  };
+  const inlineCode: ToolbarButtonDef = {
+    icon: Code,
+    label: 'Inline code',
+    run: () => editor.chain().focus().toggleCode().run(),
+  };
+  const linkBtn: ToolbarButtonDef = { icon: LinkIcon, label: 'Link', run: setLink };
+
+  const fullExtras: ToolbarButtonDef[] = [
+    {
+      icon: Strikethrough,
+      label: 'Strikethrough',
+      run: () => editor.chain().focus().toggleStrike().run(),
+    },
+    {
+      icon: Heading2,
+      label: 'Heading',
+      run: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
+    },
+    { icon: Quote, label: 'Quote', run: () => editor.chain().focus().toggleBlockquote().run() },
+    { icon: Code2, label: 'Code block', run: () => editor.chain().focus().toggleCodeBlock().run() },
+    {
+      icon: List,
+      label: 'Bulleted list',
+      run: () => editor.chain().focus().toggleBulletList().run(),
+    },
+    {
+      icon: ListOrdered,
+      label: 'Numbered list',
+      run: () => editor.chain().focus().toggleOrderedList().run(),
+    },
+    {
+      icon: ListChecks,
+      label: 'Task list',
+      run: () => editor.chain().focus().toggleTaskList().run(),
+    },
+  ];
+
+  const buttons: ToolbarButtonDef[] =
+    size === 'min' ? [bold, italic, inlineCode, linkBtn] : [bold, italic, ...fullExtras, linkBtn];
+
+  return (
+    <div
+      role="toolbar"
+      aria-label="Formatting"
+      className="border-border flex flex-wrap items-center gap-0.5 border-b px-1.5 py-1"
+    >
+      {buttons.map((b) => {
+        const Icon = b.icon;
+        return (
+          <button
+            key={b.label}
+            type="button"
+            aria-label={b.label}
+            title={b.label}
+            onClick={b.run}
+            className="text-muted-foreground hover:bg-background hover:text-foreground focus-visible:ring-accent rounded p-1.5 focus-visible:ring-2 focus-visible:outline-none"
+          >
+            <Icon className="h-4 w-4" aria-hidden />
+          </button>
+        );
+      })}
+      {canUpload && (
+        <button
+          type="button"
+          aria-label="Attach file"
+          title="Attach file"
+          onClick={onAttach}
+          className="text-muted-foreground hover:bg-background hover:text-foreground focus-visible:ring-accent rounded p-1.5 focus-visible:ring-2 focus-visible:outline-none"
+        >
+          <Paperclip className="h-4 w-4" aria-hidden />
+        </button>
       )}
     </div>
   );

@@ -142,14 +142,14 @@ test.describe('@a11y shell accessibility', () => {
 
     await page.getByRole('button', { name: 'Create issue' }).click();
     await expect(page.getByRole('heading', { name: 'Create issue' })).toBeVisible();
-    // 2.3.7 swapped the textarea stub for the real MarkdownEditor — wait for it
-    // to mount (so its "Loading editor…" placeholder isn't swept) and exclude
-    // the vendored `.w-md-editor` chrome (same as the 2.3.5 specimen sweep).
-    await expect(page.locator('.w-md-editor').first()).toBeVisible();
+    // The real MarkdownEditor (2.3.10: a Tiptap WYSIWYG) — wait for its
+    // contenteditable to mount, then exclude only the third-party `.ProseMirror`
+    // surface. Our own toolbar (labelled buttons) + label + notice stay swept.
+    await expect(page.locator('.ProseMirror').first()).toBeVisible();
 
     const modalResults = await new AxeBuilder({ page })
       .withTags(WCAG_TAGS)
-      .exclude('.w-md-editor')
+      .exclude('.ProseMirror')
       .analyze();
     expect(
       modalResults.violations,
@@ -162,7 +162,7 @@ test.describe('@a11y shell accessibility', () => {
 
     const listboxResults = await new AxeBuilder({ page })
       .withTags(WCAG_TAGS)
-      .exclude('.w-md-editor')
+      .exclude('.ProseMirror')
       .analyze();
     expect(
       listboxResults.violations,
@@ -172,9 +172,9 @@ test.describe('@a11y shell accessibility', () => {
 
   // The issue edit route (Subtask 2.3.6). Creates a project + an issue (via the
   // create modal, reading its identifier off the success toast), then sweeps the
-  // /issues/[key]/edit page. STRICT — only the vendored `.w-md-editor` chrome is
-  // excluded (the same third-party subtree 2.3.5 excludes; the form's own
-  // controls + the Status/Parent/Assignee comboboxes are held to full AA).
+  // /issues/[key]/edit page. STRICT — only the third-party `.ProseMirror`
+  // contenteditable is excluded; the editor's own toolbar + the form's controls
+  // + the Status/Parent/Assignee comboboxes are held to full AA.
   test('the issue edit route has zero axe violations (WCAG 2.1 AA; third-party editor chrome excluded)', async ({
     page,
   }) => {
@@ -193,15 +193,12 @@ test.describe('@a11y shell accessibility', () => {
 
     await page.goto(`/issues/${identifier}/edit`);
     await expect(page.getByRole('heading', { name: 'Edit issue' })).toBeVisible();
-    // Wait for the lazy MarkdownEditor to mount — until it does, its dynamic-
-    // import fallback ("Loading editor…") is on screen, and that transient
-    // placeholder would be swept. Once `.w-md-editor` is present the placeholder
-    // is gone (and the editor chrome itself is excluded below).
-    await expect(page.locator('.w-md-editor').first()).toBeVisible();
+    // Wait for the Tiptap editor's contenteditable to mount before sweeping.
+    await expect(page.locator('.ProseMirror').first()).toBeVisible();
 
     const results = await new AxeBuilder({ page })
       .withTags(WCAG_TAGS)
-      .exclude('.w-md-editor')
+      .exclude('.ProseMirror')
       .analyze();
     expect(
       results.violations,
@@ -276,16 +273,13 @@ test.describe('@a11y shell accessibility', () => {
   // variant (min / full / read-only) + the MarkdownView render path. Public,
   // no session.
   //
-  // The `.w-md-editor` subtree is EXCLUDED: it's vendored third-party DOM from
-  // @uiw/react-md-editor we don't own and won't fork. Its toolbar SVG icons set
-  // role="img" without a per-svg title (svg-img-alt — but each toolbar BUTTON
-  // carries an aria-label, so the controls are AT-usable), and its markdown
-  // PREVIEW pane strips link underlines (link-in-text-block). Everything that
-  // IS our code stays in the strict sweep: the page chrome, the editor's label
-  // + status notice, and the standalone MarkdownView render path (whose links
-  // keep their underline and pass link-in-text-block). This mirrors the /tokens
-  // precedent of holding specimen/third-party artifacts to a narrower bar than
-  // shipped product UI.
+  // The `.ProseMirror` subtree is EXCLUDED: it's the third-party Tiptap
+  // contenteditable surface we don't own. Everything that IS our code stays in
+  // the strict sweep: the page chrome, the editor's toolbar (labelled buttons),
+  // its label + status notice, and the standalone MarkdownView render path
+  // (whose links keep their underline and pass link-in-text-block). This mirrors
+  // the /tokens precedent of holding specimen/third-party artifacts to a
+  // narrower bar than shipped product UI.
   //
   // `color-contrast` is excluded on the same basis as the /tokens sweep (the
   // syntax-highlight tints in the rendered sample are specimen display).
@@ -294,10 +288,11 @@ test.describe('@a11y shell accessibility', () => {
   }) => {
     await page.goto('/tokens/markdown-editor');
     await expect(page.getByRole('heading', { name: 'Markdown editor', level: 1 })).toBeVisible();
+    await expect(page.locator('.ProseMirror').first()).toBeVisible();
 
     const results = await new AxeBuilder({ page })
       .withTags(WCAG_TAGS)
-      .exclude('.w-md-editor')
+      .exclude('.ProseMirror')
       .disableRules(['color-contrast'])
       .analyze();
     expect(

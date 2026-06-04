@@ -1,4 +1,5 @@
 import { renderMarkdown } from '@/lib/markdown/render';
+import './markdown-editor.css';
 
 // MarkdownView — the read-only render surface for work-item Markdown content
 // (descriptionMd / explanationMd). Story 1.4 fixed the storage shape (Markdown
@@ -13,10 +14,10 @@ import { renderMarkdown } from '@/lib/markdown/render';
 // editing surface and the read surface can never drift. A grep guard in the
 // test suite enforces that no other file imports `react-markdown` directly.
 //
-// The `wmde-markdown` class hooks the GitHub-flavored markdown typography that
-// ships with `@uiw/react-md-editor` (loaded by the MarkdownEditor); when this
-// component renders without the editor on the page it degrades to unstyled-but-
-// semantic HTML rather than breaking.
+// Typography comes from the shared `prodect-prose` styles (markdown-editor.css)
+// — the SAME content styles the WYSIWYG editor uses (2.3.10), so the read
+// surface and the edit surface share one look. The legacy `wmde-markdown` class
+// is kept as a stable styling/test hook.
 
 export interface MarkdownViewProps {
   /** The raw Markdown source to render. */
@@ -32,7 +33,10 @@ export function MarkdownView({ value, className, ...rest }: MarkdownViewProps) {
   // so every render surface — this view, the editor preview, the server render —
   // gets it from the ONE module.
   return (
-    <div className={['wmde-markdown', className].filter(Boolean).join(' ')} {...rest}>
+    <div
+      className={['wmde-markdown', 'prodect-prose', className].filter(Boolean).join(' ')}
+      {...rest}
+    >
       {renderMarkdown(value)}
     </div>
   );

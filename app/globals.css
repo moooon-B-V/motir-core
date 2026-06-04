@@ -327,35 +327,3 @@ body {
   margin: 0;
   min-height: 100vh;
 }
-
-/* ═══════════════════════════════════════════════════════════════════════
-   @uiw/react-md-editor + @uiw/react-markdown-preview — bind the library's color
-   variables to OUR theme tokens so the editor (and the read-only MarkdownView)
-   follow the APP theme via [data-theme].
-
-   ROOT CAUSE this fixes: the library defines --color-canvas-default /
-   --color-fg-default inside `@media (prefers-color-scheme: dark|light)` blocks
-   (and again under [data-color-mode]). The media-query rules track the OS, not
-   our app theme — so a user whose OS is dark gets a BLACK editor canvas even
-   with the app toggled to light ("the text area goes black"). We re-declare the
-   same vars on the same .wmde-markdown(-var)/.w-md-editor targets with
-   !important, driven by our tokens (which switch on [data-theme]), so they beat
-   BOTH the prefers-color-scheme media query and the [data-color-mode] rules.
-   Syntax-token (prettylights) colors are left to the library.
-   ═══════════════════════════════════════════════════════════════════════ */
-.wmde-markdown,
-.wmde-markdown-var,
-.w-md-editor {
-  --color-canvas-default: var(--color-background) !important;
-  --color-canvas-subtle: var(--color-surface) !important;
-  --color-fg-default: var(--color-foreground) !important;
-  --color-fg-muted: var(--color-slate) !important;
-  --color-fg-subtle: var(--color-slate) !important;
-  --color-border-default: var(--color-hairline) !important;
-  --color-border-muted: var(--color-hairline) !important;
-  --md-editor-background-color: var(--color-background) !important;
-}
-.w-md-editor-toolbar {
-  background-color: var(--color-surface);
-  border-color: var(--color-hairline);
-}

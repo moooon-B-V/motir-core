@@ -1,0 +1,85 @@
+/* Content styles for the WYSIWYG editor (Subtask 2.3.10). The editor edits the
+   RENDERED view — these give typed Markdown its inline appearance (headings,
+   bold, lists, code, quotes, task lists). Scoped to `.prodect-prose` so they
+   never leak. Colors come from the design-system custom properties so dark mode
+   works via the `data-color-mode` wrapper. */
+.prodect-prose {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--color-foreground);
+}
+.prodect-prose:focus {
+  outline: none;
+}
+.prodect-prose > * + * {
+  margin-top: 0.6em;
+}
+.prodect-prose h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.prodect-prose h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.prodect-prose h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.prodect-prose strong {
+  font-weight: 600;
+}
+.prodect-prose em {
+  font-style: italic;
+}
+.prodect-prose a {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+.prodect-prose ul,
+.prodect-prose ol {
+  padding-left: 1.5rem;
+}
+.prodect-prose ul {
+  list-style: disc;
+}
+.prodect-prose ol {
+  list-style: decimal;
+}
+.prodect-prose blockquote {
+  border-left: 3px solid var(--color-hairline);
+  padding-left: 0.75rem;
+  color: var(--color-muted-foreground);
+}
+.prodect-prose code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85em;
+  background: var(--color-surface);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+.prodect-prose pre {
+  background: var(--color-surface);
+  padding: 0.75rem;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+.prodect-prose pre code {
+  background: transparent;
+  padding: 0;
+}
+.prodect-prose img {
+  max-width: 100%;
+  border-radius: 6px;
+}
+.prodect-prose ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0.25rem;
+}
+.prodect-prose ul[data-type='taskList'] li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}

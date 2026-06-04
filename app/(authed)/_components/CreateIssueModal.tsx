@@ -155,18 +155,15 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
           required
         />
 
-        <div className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-foreground font-medium">Description</span>
-          {/* 2.3.7: swaps the 2.3.3 textarea stub for the real MarkdownEditor
-              (min) with file upload — paste/drop an image (inline) or a file (link). */}
-          <MarkdownEditor
-            label="Description"
-            value={description}
-            onChange={setDescription}
-            size="min"
-            onFileUpload={uploadIssueAttachment}
-          />
-        </div>
+        {/* The MarkdownEditor (min, with file upload) renders its own label
+            (also its aria-label) — no external span, else it shows twice. */}
+        <MarkdownEditor
+          label="Description"
+          value={description}
+          onChange={setDescription}
+          size="min"
+          onFileUpload={uploadIssueAttachment}
+        />
 
         {/* Explanation — the "why this matters" axis (Story 1.4), per
             design/work-items/create.png panel 3: a collapsible, OPTIONAL
