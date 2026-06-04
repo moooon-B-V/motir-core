@@ -34,14 +34,14 @@ export function ShortcutsCheatsheet({
             key={shortcut.combo}
             className="flex items-center justify-between gap-4 rounded-(--radius-sm) px-1 py-1.5"
           >
-            <span className="font-sans text-sm text-foreground">{shortcut.label}</span>
+            <span className="font-sans text-sm text-(--el-text)">{shortcut.label}</span>
             <span className="flex shrink-0 items-center gap-1">
               {shortcut.keys.map((key, i) => (
                 <Fragment key={key}>
                   {i > 0 ? (
-                    <span className="text-muted-foreground font-mono text-xs">+</span>
+                    <span className="text-(--el-text-muted) font-mono text-xs">+</span>
                   ) : null}
-                  <kbd className="text-muted-foreground rounded-(--radius-xs) border border-(--color-hairline) bg-surface px-1.5 py-0.5 font-mono text-xs">
+                  <kbd className="text-(--el-text-muted) rounded-(--radius-xs) border border-(--el-border) bg-(--el-surface) px-1.5 py-0.5 font-mono text-xs">
                     {displayKey(key)}
                   </kbd>
                 </Fragment>

@@ -39,20 +39,17 @@ export function DangerZoneCard({ workspaceName, isLastMember }: DangerZoneCardPr
 
   return (
     <Card
-      className="border-2 border-(--color-destructive)"
+      className="border-2 border-(--el-danger)"
       header={
-        <h2
-          className="font-sans text-base font-semibold"
-          style={{ color: 'var(--color-destructive)' }}
-        >
+        <h2 className="font-sans text-base font-semibold" style={{ color: 'var(--el-danger)' }}>
           Danger zone
         </h2>
       }
     >
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="font-sans text-sm font-medium text-foreground">Leave workspace</p>
-          <p className="text-muted-foreground font-sans text-xs">
+          <p className="font-sans text-sm font-medium text-(--el-text)">Leave workspace</p>
+          <p className="text-(--el-text-muted) font-sans text-xs">
             You&apos;ll lose access to all data in this workspace.
           </p>
         </div>
@@ -66,12 +63,12 @@ export function DangerZoneCard({ workspaceName, isLastMember }: DangerZoneCardPr
         )}
       </div>
 
-      <div className="my-4 h-px bg-(--color-hairline)" />
+      <div className="my-4 h-px bg-(--el-border)" />
 
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="font-sans text-sm font-medium text-foreground">Delete workspace</p>
-          <p className="text-muted-foreground font-sans text-xs">
+          <p className="font-sans text-sm font-medium text-(--el-text)">Delete workspace</p>
+          <p className="text-(--el-text-muted) font-sans text-xs">
             Permanently delete this workspace and all its data. This cannot be undone.
           </p>
         </div>
@@ -127,15 +124,15 @@ function DeleteConfirmModal({
       <div className="mb-(--spacing-md) flex items-start gap-3">
         <span
           className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-          style={{ backgroundColor: 'var(--color-tint-rose)' }}
+          style={{ backgroundColor: 'var(--el-tint-rose)' }}
         >
-          <TriangleAlert className="h-5 w-5" style={{ color: 'var(--color-destructive)' }} />
+          <TriangleAlert className="h-5 w-5" style={{ color: 'var(--el-danger)' }} />
         </span>
         <div>
-          <h2 className="font-serif text-xl font-semibold text-foreground">
+          <h2 className="font-serif text-xl font-semibold text-(--el-text)">
             Delete {workspaceName}?
           </h2>
-          <p className="text-muted-foreground mt-1 font-sans text-sm">
+          <p className="text-(--el-text-muted) mt-1 font-sans text-sm">
             This will permanently delete the workspace and all its data (projects, work items,
             members). This action cannot be undone.
           </p>

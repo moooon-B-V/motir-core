@@ -2,9 +2,9 @@ import Link from 'next/link';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { WorkflowDto, StatusCategoryDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
-import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
 import { ContentSectionCard } from './ContentSectionCard';
 import { Pill, type PillProps } from '@/components/ui/Pill';
+import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 
 // The child list on the issue detail page (Story 2.4 · Subtask 2.4.3): the
 // item's DIRECT children (one level — the `getIssueDetail` bundle's `children`,
@@ -30,7 +30,7 @@ const STATUS_TONE: Record<StatusCategoryDto, NonNullable<PillProps['status']>> =
 function Avatar({ name }: { name: string }) {
   return (
     <span
-      className="bg-foreground text-background inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+      className="bg-(--el-text) text-(--el-text-inverted) inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
       aria-hidden
     >
       {name.charAt(0).toUpperCase()}
@@ -54,8 +54,6 @@ export function ChildList({ items, workflow, members }: ChildListProps) {
     >
       <ul className="-my-1 flex flex-col">
         {items.map((child) => {
-          const meta = ISSUE_TYPE_META[child.kind];
-          const Icon = meta.icon;
           const statusMeta = workflow.statuses.find((s) => s.key === child.status);
           const assignee = child.assigneeId
             ? members.find((m) => m.userId === child.assigneeId)
@@ -64,13 +62,13 @@ export function ChildList({ items, workflow, members }: ChildListProps) {
             <li key={child.id}>
               <Link
                 href={`/issues/${child.identifier}`}
-                className="hover:bg-surface group flex items-center gap-3 rounded-md px-2 py-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                className="hover:bg-(--el-surface) group flex items-center gap-3 rounded-md px-2 py-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
               >
-                <Icon className="text-muted-foreground h-4 w-4 shrink-0" aria-hidden />
-                <span className="text-muted-foreground shrink-0 font-mono text-xs">
+                <IssueTypeIcon type={child.kind} className="h-4 w-4 shrink-0" />
+                <span className="text-(--el-text-muted) shrink-0 font-mono text-xs">
                   {child.identifier}
                 </span>
-                <span className="text-foreground min-w-0 flex-1 truncate font-sans text-sm group-hover:underline">
+                <span className="text-(--el-text) min-w-0 flex-1 truncate font-sans text-sm group-hover:underline">
                   {child.title}
                 </span>
                 {statusMeta ? (

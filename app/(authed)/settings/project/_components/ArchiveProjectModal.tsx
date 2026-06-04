@@ -64,15 +64,15 @@ export function ArchiveProjectModal({
       <div className="mb-(--spacing-md) flex items-start gap-3">
         <span
           className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-          style={{ backgroundColor: 'var(--color-tint-rose)' }}
+          style={{ backgroundColor: 'var(--el-tint-rose)' }}
         >
-          <TriangleAlert className="h-5 w-5" style={{ color: 'var(--color-destructive)' }} />
+          <TriangleAlert className="h-5 w-5" style={{ color: 'var(--el-danger)' }} />
         </span>
         <div>
-          <h2 className="font-serif text-xl font-semibold text-foreground">
+          <h2 className="font-serif text-xl font-semibold text-(--el-text)">
             Archive {projectName}?
           </h2>
-          <p className="text-muted-foreground mt-1 font-sans text-sm">
+          <p className="text-(--el-text-muted) mt-1 font-sans text-sm">
             Archiving hides this project from the switcher and lists. Its work items and history are
             preserved — you can restore the project later. This does not delete any data.
           </p>

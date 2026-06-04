@@ -187,7 +187,7 @@ export function Combobox<T extends string>({
         onClick={() => (open ? setOpen(false) : openMenu())}
         onKeyDown={onTriggerKeyDown}
         className={cn(
-          'border-border bg-background flex h-9 w-full items-center gap-2 rounded-md border px-3 text-sm',
+          'border-(--el-border) bg-(--el-page-bg) flex h-9 w-full items-center gap-2 rounded-md border px-3 text-sm',
           'focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2',
           'disabled:opacity-50',
           className,
@@ -196,24 +196,24 @@ export function Combobox<T extends string>({
         {selected ? (
           <>
             {selected.icon ? <span aria-hidden>{selected.icon}</span> : null}
-            <span className="text-foreground truncate">{selected.label}</span>
+            <span className="text-(--el-text) truncate">{selected.label}</span>
             {selected.secondary ? (
-              <span className="text-muted-foreground ml-auto truncate text-xs">
+              <span className="text-(--el-text-muted) ml-auto truncate text-xs">
                 {selected.secondary}
               </span>
             ) : null}
           </>
         ) : (
-          <span className="text-muted-foreground truncate">{placeholder}</span>
+          <span className="text-(--el-text-muted) truncate">{placeholder}</span>
         )}
-        <ChevronsUpDown className="text-muted-foreground ml-auto h-4 w-4 shrink-0" aria-hidden />
+        <ChevronsUpDown className="text-(--el-text-muted) ml-auto h-4 w-4 shrink-0" aria-hidden />
       </button>
 
       {open ? (
         <div
           className={cn(
-            'absolute left-0 right-0 top-full z-50 mt-1 rounded-(--radius-card) bg-background p-1',
-            'shadow-(--shadow-elevated) border border-(--color-hairline)',
+            'absolute left-0 right-0 top-full z-50 mt-1 rounded-(--radius-card) bg-(--el-page-bg) p-1',
+            'shadow-(--shadow-elevated) border border-(--el-border)',
           )}
         >
           {searchable ? (
@@ -232,7 +232,7 @@ export function Combobox<T extends string>({
               }}
               onKeyDown={onListKeyDown}
               placeholder={searchPlaceholder}
-              className="border-border bg-background mb-1 w-full rounded-(--radius-sm) border px-2.5 py-1.5 text-sm focus-visible:outline-none"
+              className="border-(--el-border) bg-(--el-page-bg) mb-1 w-full rounded-(--radius-sm) border px-2.5 py-1.5 text-sm focus-visible:outline-none"
             />
           ) : null}
           <div
@@ -246,9 +246,9 @@ export function Combobox<T extends string>({
             className="max-h-64 overflow-y-auto focus:outline-none"
           >
             {loading ? (
-              <p className="text-muted-foreground px-2.5 py-2 text-sm">{loadingText}</p>
+              <p className="text-(--el-text-muted) px-2.5 py-2 text-sm">{loadingText}</p>
             ) : filtered.length === 0 ? (
-              <p className="text-muted-foreground px-2.5 py-2 text-sm">{emptyText}</p>
+              <p className="text-(--el-text-muted) px-2.5 py-2 text-sm">{emptyText}</p>
             ) : (
               filtered.map((opt, i) => {
                 const isSelected = opt.value === value;
@@ -263,13 +263,13 @@ export function Combobox<T extends string>({
                     onClick={() => commit(i)}
                     className={cn(
                       'flex cursor-pointer items-center gap-2 rounded-(--radius-sm) px-2.5 py-1.5 text-sm',
-                      isActive ? 'bg-surface text-foreground' : 'text-foreground',
+                      isActive ? 'bg-(--el-surface) text-(--el-text)' : 'text-(--el-text)',
                     )}
                   >
                     {opt.icon ? <span aria-hidden>{opt.icon}</span> : null}
                     <span className="truncate">{opt.label}</span>
                     {opt.secondary ? (
-                      <span className="text-muted-foreground ml-auto truncate text-xs">
+                      <span className="text-(--el-text-muted) ml-auto truncate text-xs">
                         {opt.secondary}
                       </span>
                     ) : null}

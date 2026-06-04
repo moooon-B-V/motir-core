@@ -143,11 +143,11 @@ export function WorkflowEditor({
   return (
     <div className="flex flex-col gap-5">
       {/* Policy mode */}
-      <section className="border-border bg-card flex flex-col gap-2 rounded-lg border p-4">
+      <section className="border-(--el-border) bg-card flex flex-col gap-2 rounded-lg border p-4">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="font-sans text-sm font-semibold text-foreground">Transition policy</h2>
-            <p className="text-muted-foreground font-sans text-xs">
+            <h2 className="font-sans text-sm font-semibold text-(--el-text)">Transition policy</h2>
+            <p className="text-(--el-text-muted) font-sans text-xs">
               {policyMode === 'open'
                 ? 'Open mode: any status can transition to any other.'
                 : 'Restricted mode: only the transitions below are allowed.'}
@@ -158,7 +158,7 @@ export function WorkflowEditor({
           <div
             role="group"
             aria-label="Transition policy mode"
-            className="border-border bg-background inline-flex shrink-0 rounded-md border p-0.5"
+            className="border-(--el-border) bg-(--el-page-bg) inline-flex shrink-0 rounded-md border p-0.5"
           >
             {(['restricted', 'open'] as const).map((mode) => {
               const active = policyMode === mode;
@@ -174,8 +174,8 @@ export function WorkflowEditor({
                   }}
                   className={`rounded px-3 py-1 font-sans text-xs font-medium transition-colors disabled:opacity-50 ${
                     active
-                      ? 'bg-foreground text-background'
-                      : 'text-muted-foreground hover:text-foreground'
+                      ? 'bg-(--el-text) text-(--el-text-inverted)'
+                      : 'text-(--el-text-muted) hover:text-(--el-text)'
                   }`}
                 >
                   {mode === 'restricted' ? 'Restricted' : 'Open'}
@@ -188,7 +188,7 @@ export function WorkflowEditor({
 
       {/* Tabs */}
       <div
-        className="border-border flex gap-1 border-b"
+        className="border-(--el-border) flex gap-1 border-b"
         role="tablist"
         aria-label="Workflow editor"
       >
@@ -199,8 +199,8 @@ export function WorkflowEditor({
             aria-selected={tab === t}
             className={`-mb-px border-b-2 px-3 py-2 font-sans text-sm font-medium ${
               tab === t
-                ? 'border-foreground text-foreground'
-                : 'text-muted-foreground border-transparent'
+                ? 'border-(--el-text) text-(--el-text)'
+                : 'text-(--el-text-muted) border-transparent'
             }`}
             onClick={() => setTab(t)}
           >
@@ -217,14 +217,14 @@ export function WorkflowEditor({
               return (
                 <li
                   key={s.id}
-                  className="border-border bg-card flex items-center gap-3 rounded-lg border p-3"
+                  className="border-(--el-border) bg-card flex items-center gap-3 rounded-lg border p-3"
                 >
                   <span
                     aria-hidden
-                    className="h-3 w-3 shrink-0 rounded-full border border-border"
+                    className="h-3 w-3 shrink-0 rounded-full border border-(--el-border)"
                     style={s.color ? { backgroundColor: s.color } : undefined}
                   />
-                  <span className="font-sans text-sm font-medium text-foreground">{s.label}</span>
+                  <span className="font-sans text-sm font-medium text-(--el-text)">{s.label}</span>
                   <CategoryPill category={s.category} />
                   {s.isInitial && <Pill tone="neutral">Initial</Pill>}
                   {isDefault && <Pill tone="neutral">Default</Pill>}
@@ -314,15 +314,17 @@ export function WorkflowEditor({
           )}
           <div className="overflow-x-auto">
             <table className="border-collapse font-sans text-xs">
-              <caption className="text-muted-foreground mb-2 text-left text-xs">
+              <caption className="text-(--el-text-muted) mb-2 text-left text-xs">
                 Each cell is a legal move from the row status to the column status.
                 {policyMode === 'open' && ' (Ignored while policy is Open.)'}
               </caption>
               <thead>
                 <tr>
-                  <th className="text-muted-foreground p-2 text-left font-medium">From ↓ / To →</th>
+                  <th className="text-(--el-text-muted) p-2 text-left font-medium">
+                    From ↓ / To →
+                  </th>
                   {statuses.map((to) => (
-                    <th key={to.id} scope="col" className="text-muted-foreground p-2 font-medium">
+                    <th key={to.id} scope="col" className="text-(--el-text-muted) p-2 font-medium">
                       {to.label}
                     </th>
                   ))}
@@ -331,7 +333,7 @@ export function WorkflowEditor({
               <tbody>
                 {statuses.map((from) => (
                   <tr key={from.id}>
-                    <th scope="row" className="text-foreground p-2 text-left font-medium">
+                    <th scope="row" className="text-(--el-text) p-2 text-left font-medium">
                       {from.label}
                     </th>
                     {statuses.map((to) => {
@@ -340,7 +342,7 @@ export function WorkflowEditor({
                       return (
                         <td key={to.id} className="p-1 text-center">
                           {self ? (
-                            <span aria-hidden className="text-muted-foreground">
+                            <span aria-hidden className="text-(--el-text-muted)">
                               —
                             </span>
                           ) : (
@@ -353,8 +355,8 @@ export function WorkflowEditor({
                               onClick={() => toggleTransition(from, to)}
                               className={`h-6 w-6 rounded border ${
                                 on
-                                  ? 'border-foreground bg-foreground text-background'
-                                  : 'border-border text-transparent'
+                                  ? 'border-(--el-text) bg-(--el-text) text-(--el-text-inverted)'
+                                  : 'border-(--el-border) text-transparent'
                               } disabled:opacity-50`}
                             >
                               {on ? '✓' : '·'}
@@ -431,10 +433,10 @@ export function WorkflowEditor({
 
       {restoreOpen && (
         <Modal open={restoreOpen} onOpenChange={setRestoreOpen} size="md">
-          <h2 className="font-serif text-xl font-semibold text-foreground">
+          <h2 className="font-serif text-xl font-semibold text-(--el-text)">
             Restore default transitions?
           </h2>
-          <p className="text-muted-foreground mt-2 font-sans text-sm">
+          <p className="text-(--el-text-muted) mt-2 font-sans text-sm">
             This re-adds the standard transitions (the allowed moves between statuses) that are
             missing from this project&apos;s workflow. It does <strong>not</strong>&nbsp;remove any
             transitions you added, and it doesn&apos;t touch your statuses — nothing you&apos;ve set
@@ -504,18 +506,18 @@ function ReassignModal({
   const noun = count === 1 ? 'work item' : 'work items';
   return (
     <Modal open onOpenChange={(o) => !o && onCancel()} size="md">
-      <h2 className="font-serif text-xl font-semibold text-foreground">Delete “{status.label}”</h2>
+      <h2 className="font-serif text-xl font-semibold text-(--el-text)">Delete “{status.label}”</h2>
       <p
-        className="text-muted-foreground mt-2 font-sans text-sm"
+        className="text-(--el-text-muted) mt-2 font-sans text-sm"
         data-testid="reassign-affected-count"
       >
         {count} {noun} still use this status. Choose a status to move {count === 1 ? 'it' : 'them'}{' '}
         to — then “{status.label}” is removed.
       </p>
       <label className="mt-4 flex flex-col gap-1">
-        <span className="font-sans text-sm font-medium text-foreground">Move items to</span>
+        <span className="font-sans text-sm font-medium text-(--el-text)">Move items to</span>
         <select
-          className="border-border bg-card text-foreground rounded-md border px-3 py-2 font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          className="border-(--el-border) bg-card text-(--el-text) rounded-md border px-3 py-2 font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           value={targetId}
           onChange={(e) => setTargetId(e.target.value)}
         >
@@ -587,7 +589,7 @@ function StatusFormModal({
 
   return (
     <Modal open={open} onOpenChange={onOpenChange} size="md">
-      <h2 className="font-serif text-xl font-semibold text-foreground">{title}</h2>
+      <h2 className="font-serif text-xl font-semibold text-(--el-text)">{title}</h2>
       <form
         className="mt-4 flex flex-col gap-3"
         onSubmit={(e) => {
@@ -603,8 +605,8 @@ function StatusFormModal({
         }}
       >
         {colorOnly && (
-          <p className="text-muted-foreground font-sans text-sm">
-            <span className="text-foreground font-medium">{initial?.label}</span> is a default
+          <p className="text-(--el-text-muted) font-sans text-sm">
+            <span className="text-(--el-text) font-medium">{initial?.label}</span> is a default
             status — only its color can be changed.
           </p>
         )}
@@ -629,9 +631,9 @@ function StatusFormModal({
         )}
         {!colorOnly && (
           <label className="flex flex-col gap-1 font-sans text-sm">
-            <span className="text-foreground font-medium">Category</span>
+            <span className="text-(--el-text) font-medium">Category</span>
             <select
-              className="border-border bg-background rounded-md border px-3 py-2 text-sm"
+              className="border-(--el-border) bg-(--el-page-bg) rounded-md border px-3 py-2 text-sm"
               value={category}
               onChange={(e) => setCategory(e.target.value as StatusCategoryDto)}
               disabled={isPending}
@@ -658,7 +660,7 @@ function StatusFormModal({
               onChange={(e) => setIsInitial(e.target.checked)}
               disabled={isPending}
             />
-            <span className="text-foreground">Make this the initial status</span>
+            <span className="text-(--el-text)">Make this the initial status</span>
           </label>
         )}
         <Modal.Footer>

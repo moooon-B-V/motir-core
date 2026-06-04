@@ -6,6 +6,7 @@ import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
 import { allowedParentKinds, type IssueType } from '@/lib/issues/parentRules';
 import { listCandidateParentsAction } from '@/app/(authed)/issues/actions';
 import type { WorkItemKindDto } from '@/lib/dto/workItems';
+import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 
 // The parent picker (Subtask 2.3.4): an async Combobox that surfaces 2.1.2's
 // kind-parent rule AS CONSTRUCTIBILITY — only legal parents for the current
@@ -17,9 +18,7 @@ import type { WorkItemKindDto } from '@/lib/dto/workItems';
 const NONE = '__none__';
 
 function kindIcon(kind: WorkItemKindDto) {
-  const meta = ISSUE_TYPE_META[kind];
-  const Icon = meta.icon;
-  return <Icon className="h-4 w-4" style={{ color: `var(--color-${meta.colorToken})` }} />;
+  return <IssueTypeIcon type={kind} className="h-4 w-4" />;
 }
 
 export interface ParentPickerProps {
@@ -134,11 +133,11 @@ export function ParentPicker({
         disabled={disabled}
       />
       {error ? (
-        <p className="text-(--color-destructive) text-xs" role="alert">
+        <p className="text-(--el-danger) text-xs" role="alert">
           {error}
         </p>
       ) : notice ? (
-        <p className="text-muted-foreground text-xs">{notice}</p>
+        <p className="text-(--el-text-muted) text-xs">{notice}</p>
       ) : null}
     </div>
   );

@@ -49,18 +49,18 @@ export const ErrorState = forwardRef<HTMLDivElement, ErrorStateProps>(function E
     >
       <div
         className="mb-(--spacing-md) inline-flex h-12 w-12 items-center justify-center"
-        style={{ color: 'var(--color-destructive)' }}
+        style={{ color: 'var(--el-danger)' }}
       >
         <AlertTriangle className="h-12 w-12" aria-hidden />
       </div>
-      <h2 className="font-serif text-xl text-foreground">{title}</h2>
+      <h2 className="font-serif text-xl text-(--el-text)">{title}</h2>
       {description ? (
-        <p className="text-muted-foreground mt-(--spacing-sm) max-w-prose font-sans text-sm">
+        <p className="text-(--el-text-muted) mt-(--spacing-sm) max-w-prose font-sans text-sm">
           {description}
         </p>
       ) : null}
       {showErrorDetail ? (
-        <pre className="bg-surface text-muted-foreground mt-(--spacing-md) max-w-full overflow-x-auto rounded-(--radius-sm) px-2 py-1 text-left font-mono text-xs">
+        <pre className="bg-(--el-surface) text-(--el-text-muted) mt-(--spacing-md) max-w-full overflow-x-auto rounded-(--radius-sm) px-2 py-1 text-left font-mono text-xs">
           {error.message}
         </pre>
       ) : null}

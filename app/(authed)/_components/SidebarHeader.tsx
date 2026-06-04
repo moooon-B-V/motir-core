@@ -49,7 +49,7 @@ export function SidebarHeader({ activeProject, projects, collapsed = false }: Si
           aria-label={hasProject ? 'Active project' : 'Create your first project'}
           onClick={hasProject ? undefined : () => setCreateOpen(true)}
           className={cn(
-            'bg-primary text-primary-foreground mx-auto flex h-8 w-8 items-center justify-center',
+            'bg-(--el-accent) text-(--el-accent-text) mx-auto flex h-8 w-8 items-center justify-center',
             'rounded-(--radius-sm) font-sans text-sm font-semibold',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
             hasProject && 'pointer-events-none',
@@ -75,12 +75,12 @@ export function SidebarHeader({ activeProject, projects, collapsed = false }: Si
           aria-label="Create your first project"
           className="flex items-center gap-2 p-2"
         >
-          <span className="bg-primary text-primary-foreground flex h-7 w-7 shrink-0 items-center justify-center rounded-(--radius-xs)">
+          <span className="bg-(--el-accent) text-(--el-accent-text) flex h-7 w-7 shrink-0 items-center justify-center rounded-(--radius-xs)">
             <Plus className="h-4 w-4" aria-hidden />
           </span>
           <span className="min-w-0 flex-1">
             <SectionLabel label="Project" />
-            <span className="text-foreground block truncate font-sans text-sm font-medium">
+            <span className="text-(--el-text) block truncate font-sans text-sm font-medium">
               Create your first project
             </span>
           </span>

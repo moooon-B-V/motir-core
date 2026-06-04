@@ -27,10 +27,10 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <h1 className="font-serif text-3xl font-semibold text-foreground">Dashboard</h1>
-      <p className="text-muted-foreground mt-2 font-sans text-sm">
-        Active project: <strong className="text-foreground">{project.project.name}</strong>
-        <span className="text-muted-foreground font-mono"> ({project.project.identifier})</span>
+      <h1 className="font-serif text-3xl font-semibold text-(--el-text)">Dashboard</h1>
+      <p className="text-(--el-text-muted) mt-2 font-sans text-sm">
+        Active project: <strong className="text-(--el-text)">{project.project.name}</strong>
+        <span className="text-(--el-text-muted) font-mono"> ({project.project.identifier})</span>
       </p>
     </div>
   );

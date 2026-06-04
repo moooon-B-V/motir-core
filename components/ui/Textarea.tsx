@@ -34,12 +34,12 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         aria-describedby={describedBy}
         disabled={disabled}
         className={cn(
-          'w-full resize-y rounded-(--radius-input) border bg-background',
+          'w-full resize-y rounded-(--radius-input) border bg-(--el-page-bg)',
           'px-(--spacing-input-x) py-(--spacing-input-y)',
-          'font-sans text-sm text-foreground placeholder:text-muted-foreground',
+          'font-sans text-sm text-(--el-text) placeholder:text-(--el-text-muted)',
           'transition-colors',
           'focus:outline-none focus:ring-2 focus:ring-(--focus-ring-color) focus:ring-offset-2 focus:ring-offset-background',
-          hasError ? 'border-(--color-destructive)' : 'border-(--color-hairline-strong)',
+          hasError ? 'border-(--el-danger)' : 'border-(--el-border-strong)',
           'disabled:cursor-not-allowed disabled:opacity-50',
           className,
         )}

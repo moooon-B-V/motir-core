@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils/cn';
 const toastVariants = cva(
   cn(
     'pointer-events-auto flex items-start gap-3',
-    'rounded-(--radius-card) border bg-background',
+    'rounded-(--radius-card) border bg-(--el-page-bg)',
     'px-(--spacing-md) py-(--spacing-sm)',
     'shadow-(--shadow-elevated)',
     'data-[state=open]:animate-in data-[state=closed]:animate-out',
@@ -31,10 +31,10 @@ const toastVariants = cva(
   {
     variants: {
       variant: {
-        info: 'border-(--color-info)',
-        success: 'border-(--color-success)',
-        warning: 'border-(--color-warning)',
-        error: 'border-(--color-destructive)',
+        info: 'border-(--el-info)',
+        success: 'border-(--el-success)',
+        warning: 'border-(--el-warning)',
+        error: 'border-(--el-danger)',
       },
     },
     defaultVariants: { variant: 'info' },
@@ -64,10 +64,10 @@ const ICONS: Record<ToastVariant, typeof Info> = {
 };
 
 const ICON_COLOR_VAR: Record<ToastVariant, string> = {
-  info: 'var(--color-info)',
-  success: 'var(--color-success)',
-  warning: 'var(--color-warning)',
-  error: 'var(--color-destructive)',
+  info: 'var(--el-info)',
+  success: 'var(--el-success)',
+  warning: 'var(--el-warning)',
+  error: 'var(--el-danger)',
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -105,18 +105,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 <Icon className="h-4 w-4" style={{ color: ICON_COLOR_VAR[t.variant] }} />
               </span>
               <div className="flex-1">
-                <RadixToast.Title className="font-sans text-sm font-medium text-foreground">
+                <RadixToast.Title className="font-sans text-sm font-medium text-(--el-text)">
                   {t.title}
                 </RadixToast.Title>
                 {t.description ? (
-                  <RadixToast.Description className="text-muted-foreground mt-0.5 font-sans text-xs">
+                  <RadixToast.Description className="text-(--el-text-muted) mt-0.5 font-sans text-xs">
                     {t.description}
                   </RadixToast.Description>
                 ) : null}
               </div>
               <RadixToast.Close
                 aria-label="Close"
-                className="text-muted-foreground hover:text-foreground rounded-(--radius-sm) p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                className="text-(--el-text-muted) hover:text-(--el-text) rounded-(--radius-sm) p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
               >
                 <X className="h-3.5 w-3.5" />
               </RadixToast.Close>

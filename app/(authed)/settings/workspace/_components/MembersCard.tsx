@@ -35,7 +35,7 @@ export function MembersCard({
       header={
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h2 className="font-sans text-base font-semibold text-foreground">Members</h2>
+            <h2 className="font-sans text-base font-semibold text-(--el-text)">Members</h2>
             {/* A member count is metadata, not an "info" severity state — so the
                 neutral tone is the right semantics here (independent of #35,
                 now resolved: all colored tones clear WCAG AA too). */}
@@ -105,16 +105,16 @@ function MemberRow({
   }
 
   return (
-    <li className="border-(--color-hairline-soft) flex items-center gap-3 border-b py-3 last:border-b-0">
-      <span className="bg-foreground text-background inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-sans text-xs font-semibold">
+    <li className="border-(--el-border-soft) flex items-center gap-3 border-b py-3 last:border-b-0">
+      <span className="bg-(--el-text) text-(--el-text-inverted) inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-sans text-xs font-semibold">
         {initial}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate font-sans text-sm font-medium text-foreground">
+        <p className="truncate font-sans text-sm font-medium text-(--el-text)">
           {member.name}
-          {isSelf ? <span className="text-muted-foreground font-normal"> (you)</span> : null}
+          {isSelf ? <span className="text-(--el-text-muted) font-normal"> (you)</span> : null}
         </p>
-        <p className="text-muted-foreground truncate font-sans text-xs">{member.email}</p>
+        <p className="text-(--el-text-muted) truncate font-sans text-xs">{member.email}</p>
       </div>
       {/* A role is a category label, not an "info" severity — neutral tone
           (AA-contrast-safe; see finding #35). */}

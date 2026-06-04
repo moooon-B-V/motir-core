@@ -96,7 +96,7 @@ export function SidebarDrawer({ header, children, width = 300, className }: Side
             <div className="min-w-0 flex-1">{header}</div>
             <Dialog.Close
               aria-label="Close navigation"
-              className="rounded-(--radius-sm) p-1 text-(--color-muted-foreground) transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+              className="rounded-(--radius-sm) p-1 text-(--el-text-muted) transition-colors hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
             >
               <X className="h-5 w-5" />
             </Dialog.Close>

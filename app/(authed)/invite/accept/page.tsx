@@ -15,7 +15,7 @@ function InviteCard({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-[60vh] w-full items-center justify-center px-2 py-6">
       <div className="w-full max-w-[28rem]">
-        <div className="rounded-(--radius-card) bg-background px-6 py-10 shadow-(--shadow-elevated) sm:px-10">
+        <div className="rounded-(--radius-card) bg-(--el-page-bg) px-6 py-10 shadow-(--shadow-elevated) sm:px-10">
           {children}
         </div>
       </div>

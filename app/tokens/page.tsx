@@ -16,6 +16,8 @@ import {
   Users,
 } from 'lucide-react';
 import { useTheme } from '@/lib/contexts/theme-context';
+import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { ISSUE_TYPES } from '@/lib/issues/parentRules';
 import { useToast } from '@/components/ui/Toast';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -413,6 +415,36 @@ export default function TokensPage() {
         >
           {COLOR_TOKENS.map((c) => (
             <Swatch key={c.name} name={c.name} label={c.label} />
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Issue type colours (--el-type-*)">
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+            gap: 'var(--spacing-md)',
+          }}
+        >
+          {ISSUE_TYPES.map((t) => (
+            <div
+              key={t}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--spacing-sm)',
+                padding: 'var(--spacing-sm)',
+                border: '1px solid var(--el-border)',
+                borderRadius: 'var(--radius-card)',
+              }}
+            >
+              <IssueTypeIcon type={t} className="h-5 w-5" />
+              <div className="font-mono text-xs">
+                <div style={{ color: 'var(--el-page-text)', textTransform: 'capitalize' }}>{t}</div>
+                <div style={{ color: 'var(--el-page-text-muted)' }}>--el-type-{t}</div>
+              </div>
+            </div>
           ))}
         </div>
       </Section>

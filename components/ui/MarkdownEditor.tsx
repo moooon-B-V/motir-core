@@ -258,13 +258,13 @@ export function MarkdownEditor({
     // provider's stable SSR snapshot) but resolves to the OS preference on the
     // client — an intentional, sanctioned attribute mismatch, not a bug.
     <div className="flex flex-col gap-1" data-color-mode={colorMode} suppressHydrationWarning>
-      <span className="text-foreground font-sans text-sm font-medium">{label}</span>
+      <span className="text-(--el-text) font-sans text-sm font-medium">{label}</span>
       {readOnly ? (
-        <div className="border-border bg-surface rounded-md border px-3 py-2">
+        <div className="border-(--el-border) bg-(--el-surface) rounded-md border px-3 py-2">
           <MarkdownView value={value} />
         </div>
       ) : (
-        <div className="border-border bg-surface focus-within:border-accent rounded-md border transition-colors">
+        <div className="border-(--el-border) bg-(--el-surface) focus-within:border-(--el-highlight) rounded-md border transition-colors">
           <Toolbar
             editor={editor}
             size={size}
@@ -291,7 +291,7 @@ export function MarkdownEditor({
         </div>
       )}
       {notice && (
-        <p role="status" aria-live="polite" className="text-muted-foreground text-xs">
+        <p role="status" aria-live="polite" className="text-(--el-text-muted) text-xs">
           {notice}
         </p>
       )}
@@ -320,7 +320,7 @@ function Toolbar({
 }) {
   // First paint (SSR / pre-hydration) the editor is null — render a stable
   // placeholder bar of the same height so layout doesn't jump.
-  if (!editor) return <div className="border-border h-9 border-b" aria-hidden />;
+  if (!editor) return <div className="border-(--el-border) h-9 border-b" aria-hidden />;
 
   const setLink = () => {
     const previous = editor.getAttributes('link').href as string | undefined;
@@ -387,7 +387,7 @@ function Toolbar({
     <div
       role="toolbar"
       aria-label="Formatting"
-      className="border-border flex flex-wrap items-center gap-0.5 border-b px-1.5 py-1"
+      className="border-(--el-border) flex flex-wrap items-center gap-0.5 border-b px-1.5 py-1"
     >
       {buttons.map((b) => {
         const Icon = b.icon;
@@ -398,7 +398,7 @@ function Toolbar({
             aria-label={b.label}
             title={b.label}
             onClick={b.run}
-            className="text-muted-foreground hover:bg-background hover:text-foreground focus-visible:ring-accent rounded p-1.5 focus-visible:ring-2 focus-visible:outline-none"
+            className="text-(--el-text-muted) hover:bg-(--el-page-bg) hover:text-(--el-text) focus-visible:ring-(--el-highlight) rounded p-1.5 focus-visible:ring-2 focus-visible:outline-none"
           >
             <Icon className="h-4 w-4" aria-hidden />
           </button>
@@ -410,7 +410,7 @@ function Toolbar({
           aria-label="Attach file"
           title="Attach file"
           onClick={onAttach}
-          className="text-muted-foreground hover:bg-background hover:text-foreground focus-visible:ring-accent rounded p-1.5 focus-visible:ring-2 focus-visible:outline-none"
+          className="text-(--el-text-muted) hover:bg-(--el-page-bg) hover:text-(--el-text) focus-visible:ring-(--el-highlight) rounded p-1.5 focus-visible:ring-2 focus-visible:outline-none"
         >
           <Paperclip className="h-4 w-4" aria-hidden />
         </button>

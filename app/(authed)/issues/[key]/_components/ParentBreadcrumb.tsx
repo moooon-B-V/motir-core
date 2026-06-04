@@ -2,6 +2,7 @@ import { Fragment } from 'react';
 import Link from 'next/link';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
+import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 
 // The parent breadcrumb on the issue detail page (Story 2.4 · Subtask 2.4.3),
 // per the mockup `design/work-items/detail.png`: the eyebrow row reads
@@ -28,17 +29,16 @@ export function ParentBreadcrumb({ ancestors }: { ancestors: WorkItemSummaryDto[
     >
       {ancestors.map((ancestor) => {
         const meta = ISSUE_TYPE_META[ancestor.kind];
-        const Icon = meta.icon;
         return (
           <Fragment key={ancestor.id}>
-            <span className="text-(--color-slate)" aria-hidden>
+            <span className="text-(--el-text-secondary)" aria-hidden>
               ·
             </span>
             <Link
               href={`/issues/${ancestor.identifier}`}
-              className="text-muted-foreground hover:text-foreground flex min-w-0 items-center gap-1 rounded font-sans text-sm hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              className="text-(--el-text-muted) hover:text-(--el-text) flex min-w-0 items-center gap-1 rounded font-sans text-sm hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             >
-              <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <IssueTypeIcon type={ancestor.kind} className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">
                 {meta.label}: {ancestor.title}
               </span>

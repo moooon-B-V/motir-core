@@ -72,7 +72,7 @@ export function ColorSwatchPicker({
 
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-foreground font-sans text-sm font-medium">{label}</span>
+      <span className="text-(--el-text) font-sans text-sm font-medium">{label}</span>
       <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
         {STATUS_COLOR_SWATCHES.map((opt, i) => {
           const checked = opt.value === value;
@@ -91,12 +91,12 @@ export function ColorSwatchPicker({
               disabled={disabled}
               onClick={() => onChange(opt.value)}
               onKeyDown={(e) => onKeyDown(e, i)}
-              className={`flex h-7 w-7 items-center justify-center rounded-full border border-border transition-shadow focus-visible:ring-foreground focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-50 ${
-                checked ? 'ring-foreground ring-2 ring-offset-2' : ''
+              className={`flex h-7 w-7 items-center justify-center rounded-full border border-(--el-border) transition-shadow focus-visible:ring-(--el-text) focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-50 ${
+                checked ? 'ring-(--el-text) ring-2 ring-offset-2' : ''
               }`}
               style={opt.value ? { backgroundColor: opt.value } : undefined}
             >
-              {opt.value === null && <Ban className="text-muted-foreground h-4 w-4" aria-hidden />}
+              {opt.value === null && <Ban className="text-(--el-text-muted) h-4 w-4" aria-hidden />}
             </button>
           );
         })}

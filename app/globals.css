@@ -264,38 +264,84 @@
    layer future palettes (data-palette="...") will override to swap the
    look without touching component code.
 
-   MINIMAL by design — only what app/page.tsx + /tokens currently use.
-   Each new component (Button, Input, Card, ...) adds its own --el-*
-   tokens as it lands. See notes.html mistake #20.
+   The COMPLETE semantic element-token layer (finding #54). Every colour a
+   component renders flows through one of these — never a Tier-0 --color-*
+   nor an auto-generated --color-* utility (text-foreground / bg-surface /
+   text-muted-foreground), which bypass this swap layer. When a surface needs
+   a colour not exposed here, ADD the --el-* token (→ --color-*) and consume
+   that (the per-component growth pattern, notes.html mistake #20). All tokens
+   reference Tier-0 vars, so the Tier-1 dark block re-skins them automatically;
+   only concrete hexes (the sidebar hover lift) carry their own dark value.
    ═══════════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* Page-level */
+  /* ── Page ──────────────────────────────────────────────────────── */
   --el-page-bg: var(--color-background);
   --el-page-text: var(--color-foreground);
   --el-page-text-muted: var(--color-muted-foreground);
 
-  /* Accent (the active "color identity") */
+  /* ── Text scale (the warm-charcoal hierarchy, named by ROLE) ────── */
+  --el-text: var(--color-foreground); /* primary ink */
+  --el-text-strong: var(--color-charcoal); /* emphasis / AA-safe text on tints */
+  --el-text-secondary: var(--color-slate); /* secondary copy */
+  --el-text-muted: var(--color-muted-foreground); /* muted / captions */
+  --el-text-tertiary: var(--color-steel); /* tertiary / footers */
+  --el-text-faint: var(--color-stone); /* faint labels */
+  --el-text-inverted: var(--color-background); /* text on an ink / accent fill */
+
+  /* ── Accent (active CTA identity) + brand highlight ─────────────── */
   --el-accent: var(--color-primary);
   --el-accent-text: var(--color-primary-foreground);
+  --el-accent-pressed: var(--color-primary-pressed);
+  --el-highlight: var(--color-accent); /* brand pink — decorative accents */
 
-  /* Generic surface */
+  /* ── Surfaces ──────────────────────────────────────────────────── */
   --el-surface: var(--color-surface);
   --el-surface-soft: var(--color-surface-soft);
   --el-surface-text: var(--color-foreground);
+  --el-muted: var(--color-muted); /* faint fill — chips, code, inverted text */
 
-  /* Borders */
-  --el-border: var(--color-border);
+  /* ── Borders ───────────────────────────────────────────────────── */
+  --el-border: var(--color-border); /* default hairline */
+  --el-border-soft: var(--color-hairline-soft);
   --el-border-strong: var(--color-hairline-strong);
 
-  /* Code/mono (used by /tokens reference route) */
+  /* ── Links ─────────────────────────────────────────────────────── */
+  --el-link: var(--color-link);
+  --el-link-pressed: var(--color-link-pressed);
+
+  /* ── Semantic status ───────────────────────────────────────────── */
+  --el-danger: var(--color-destructive);
+  --el-danger-text: var(--color-destructive-foreground);
+  --el-success: var(--color-success);
+  --el-warning: var(--color-warning);
+  --el-info: var(--color-info);
+
+  /* ── Pastel tints (Pill tones, feature surfaces) ───────────────── */
+  --el-tint-peach: var(--color-tint-peach);
+  --el-tint-rose: var(--color-tint-rose);
+  --el-tint-mint: var(--color-tint-mint);
+  --el-tint-lavender: var(--color-tint-lavender);
+  --el-tint-sky: var(--color-tint-sky);
+  --el-tint-yellow: var(--color-tint-yellow);
+
+  /* ── Issue-type hues (work-item kind identity — finding #54) ────── */
+  /* The colour the UI was missing: each issue type renders its icon in its
+     own hue, matching ISSUE_TYPE_META.colorToken. */
+  --el-type-epic: var(--color-accent); /* pink */
+  --el-type-story: var(--color-accent-green);
+  --el-type-task: var(--color-info);
+  --el-type-bug: var(--color-destructive);
+  --el-type-subtask: var(--color-accent-teal);
+
+  /* ── Code/mono (used by /tokens reference route) ───────────────── */
   --el-code-bg: var(--color-muted);
   --el-code-text: var(--color-charcoal);
 
-  /* App shell — sidebar (Subtask 1.5.2). The shell mockup paints the
+  /* ── App shell — sidebar (Subtask 1.5.2). The shell mockup paints the
      sidebar rail on $--surface and the content area on $--background; the
      active nav row inverts that (a $--background row against the $--surface
-     rail) so the current page reads as inset into the page canvas. */
+     rail) so the current page reads as inset into the page canvas. ──── */
   --el-sidebar-bg: var(--color-surface); /* the rail — surface, distinct from the page canvas */
   --el-sidebar-border: var(--color-hairline); /* the 1px seam between rail and content */
   --el-sidebar-item-bg-hover: #eeede9; /* subtle hover lift — one shade darker than surface (light) */

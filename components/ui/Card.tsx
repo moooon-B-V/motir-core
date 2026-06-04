@@ -20,20 +20,20 @@ import { cn } from '@/lib/utils/cn';
  */
 const cardVariants = cva(
   cn(
-    'rounded-(--radius-card) border border-(--color-hairline)',
+    'rounded-(--radius-card) border border-(--el-border)',
     'p-(--spacing-card-padding)',
     'transition-shadow duration-(--transition-duration)',
   ),
   {
     variants: {
       tint: {
-        none: 'bg-background',
-        peach: 'bg-(--color-tint-peach) border-transparent',
-        rose: 'bg-(--color-tint-rose) border-transparent',
-        mint: 'bg-(--color-tint-mint) border-transparent',
-        lavender: 'bg-(--color-tint-lavender) border-transparent',
-        sky: 'bg-(--color-tint-sky) border-transparent',
-        yellow: 'bg-(--color-tint-yellow) border-transparent',
+        none: 'bg-(--el-page-bg)',
+        peach: 'bg-(--el-tint-peach) border-transparent',
+        rose: 'bg-(--el-tint-rose) border-transparent',
+        mint: 'bg-(--el-tint-mint) border-transparent',
+        lavender: 'bg-(--el-tint-lavender) border-transparent',
+        sky: 'bg-(--el-tint-sky) border-transparent',
+        yellow: 'bg-(--el-tint-yellow) border-transparent',
       },
       clickable: {
         true: 'cursor-pointer hover:shadow-(--shadow-card) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background',
@@ -65,7 +65,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
       {header ? <div className="mb-(--spacing-md)">{header}</div> : null}
       <div>{children}</div>
       {footer ? (
-        <div className="border-(--color-hairline) mt-(--spacing-md) border-t pt-(--spacing-md)">
+        <div className="border-(--el-border) mt-(--spacing-md) border-t pt-(--spacing-md)">
           {footer}
         </div>
       ) : null}

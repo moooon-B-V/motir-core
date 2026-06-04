@@ -60,8 +60,8 @@ const PopoverContent = forwardRef<
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          'z-50 overflow-hidden rounded-(--radius-card) bg-background',
-          'shadow-(--shadow-elevated) border border-(--color-hairline)',
+          'z-50 overflow-hidden rounded-(--radius-card) bg-(--el-page-bg)',
+          'shadow-(--shadow-elevated) border border-(--el-border)',
           'focus:outline-none',
           'data-[state=open]:animate-in data-[state=closed]:animate-out fade-in-0 fade-out-0',
           className,

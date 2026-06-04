@@ -49,7 +49,7 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="font-serif text-2xl font-semibold text-foreground">Edit issue</h1>
+      <h1 className="font-serif text-2xl font-semibold text-(--el-text)">Edit issue</h1>
       <EditIssueForm issue={issue} workflow={workflow} members={members} />
     </div>
   );

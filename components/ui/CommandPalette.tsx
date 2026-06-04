@@ -85,8 +85,8 @@ export function CommandPalette({
           aria-describedby={undefined}
           className={cn(
             'fixed left-1/2 top-[15vh] z-50 w-[90vw] max-w-[40rem] -translate-x-1/2',
-            'overflow-hidden rounded-(--radius-modal) bg-background',
-            'border border-(--color-hairline) shadow-(--shadow-modal)',
+            'overflow-hidden rounded-(--radius-modal) bg-(--el-page-bg)',
+            'border border-(--el-border) shadow-(--shadow-modal)',
             'focus:outline-none',
           )}
         >
@@ -183,8 +183,8 @@ function PaletteBody({
 
   return (
     <div role="combobox" aria-expanded aria-haspopup="listbox" aria-controls={LISTBOX_ID}>
-      <div className="flex items-center gap-2 border-b border-(--color-hairline) px-4">
-        <Search className="text-muted-foreground h-4 w-4 shrink-0" aria-hidden />
+      <div className="flex items-center gap-2 border-b border-(--el-border) px-4">
+        <Search className="text-(--el-text-muted) h-4 w-4 shrink-0" aria-hidden />
         {/* A command palette must take focus the instant it opens. */}
         <input
           autoFocus
@@ -199,7 +199,7 @@ function PaletteBody({
           aria-label="Search commands"
           aria-controls={LISTBOX_ID}
           aria-activedescendant={activeIndex >= 0 ? optionId(activeIndex) : undefined}
-          className="h-12 w-full bg-transparent font-sans text-sm text-foreground placeholder:text-(--color-muted-foreground) focus:outline-none"
+          className="h-12 w-full bg-transparent font-sans text-sm text-(--el-text) placeholder:text-(--el-text-muted) focus:outline-none"
         />
       </div>
 
@@ -210,13 +210,13 @@ function PaletteBody({
         className="max-h-[50vh] overflow-y-auto py-2"
       >
         {flat.length === 0 ? (
-          <p className="text-muted-foreground px-4 py-6 text-center font-sans text-sm">
+          <p className="text-(--el-text-muted) px-4 py-6 text-center font-sans text-sm">
             No actions match.
           </p>
         ) : (
           visibleGroups.map((group) => (
             <div key={group.heading} className="px-2 pb-1">
-              <div className="text-muted-foreground px-2 pb-1 pt-2 font-mono text-[10px] uppercase tracking-wider">
+              <div className="text-(--el-text-muted) px-2 pb-1 pt-2 font-mono text-[10px] uppercase tracking-wider">
                 {group.heading}
               </div>
               <ul role="presentation" className="flex flex-col">
@@ -234,26 +234,26 @@ function PaletteBody({
                         onMouseMove={() => setHighlight(row.index)}
                         className={cn(
                           'flex w-full items-center gap-2 rounded-(--radius-sm) px-2 py-2 text-left',
-                          'font-sans text-sm text-foreground focus:outline-none',
-                          isActive && 'bg-surface',
+                          'font-sans text-sm text-(--el-text) focus:outline-none',
+                          isActive && 'bg-(--el-surface)',
                         )}
                       >
                         {action.icon ? (
                           <span
                             aria-hidden
-                            className="text-muted-foreground inline-flex h-4 w-4 shrink-0 items-center justify-center [&_svg]:h-4 [&_svg]:w-4"
+                            className="text-(--el-text-muted) inline-flex h-4 w-4 shrink-0 items-center justify-center [&_svg]:h-4 [&_svg]:w-4"
                           >
                             {action.icon}
                           </span>
                         ) : null}
                         <span className="flex-1 truncate">{action.label}</span>
                         {action.badge ? (
-                          <span className="text-muted-foreground shrink-0 rounded-(--radius-pill) bg-surface px-2 py-0.5 font-sans text-[10px] font-medium uppercase tracking-wide">
+                          <span className="text-(--el-text-muted) shrink-0 rounded-(--radius-pill) bg-(--el-surface) px-2 py-0.5 font-sans text-[10px] font-medium uppercase tracking-wide">
                             {action.badge}
                           </span>
                         ) : null}
                         {action.kbd ? (
-                          <kbd className="text-muted-foreground shrink-0 rounded-(--radius-xs) border border-(--color-hairline) px-1.5 py-0.5 font-mono text-[10px]">
+                          <kbd className="text-(--el-text-muted) shrink-0 rounded-(--radius-xs) border border-(--el-border) px-1.5 py-0.5 font-mono text-[10px]">
                             {action.kbd}
                           </kbd>
                         ) : null}
@@ -267,7 +267,7 @@ function PaletteBody({
         )}
       </div>
 
-      <div className="text-muted-foreground flex items-center gap-4 border-t border-(--color-hairline) px-4 py-2 font-sans text-[11px]">
+      <div className="text-(--el-text-muted) flex items-center gap-4 border-t border-(--el-border) px-4 py-2 font-sans text-[11px]">
         <span>
           <kbd className="font-mono">↑↓</kbd> to navigate
         </span>
