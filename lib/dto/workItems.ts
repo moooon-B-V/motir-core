@@ -106,6 +106,57 @@ export interface WorkItemSubtreeDto {
 }
 
 /**
+ * The optional filter `workItemsService.getProjectTree` (Subtask 2.5.1) applies
+ * to the project forest. Every field is optional; an absent field is "don't
+ * filter on this axis", so an all-absent filter ({}) returns the full tree.
+ * `assigneeId: null` is a MEANINGFUL value — it filters to UNASSIGNED items
+ * (the list-view "Unassigned" option), distinct from `assigneeId` absent
+ * ("any assignee"). `text` is a case-insensitive substring matched against
+ * BOTH `identifier` and `title`; an empty/whitespace-only string is treated
+ * as absent. The matching is context-preserving at the service layer: a node
+ * that matches retains its ancestor chain so the tree stays navigable (see
+ * `getProjectTree`), rather than a flat `WHERE` that would orphan children.
+ */
+export interface ProjectTreeFilter {
+  kind?: WorkItemKindDto;
+  status?: string;
+  assigneeId?: string | null;
+  text?: string;
+}
+
+/**
+ * A node of the project issue-tree (Subtask 2.5.1) — the wire shape backing
+ * the `/issues` list view's tree-table (Story 2.5). Unlike the flat
+ * `WorkItemSubtreeDto`, this nests: each node carries its `children` (same
+ * `key`-asc order as the roots). Per-row render fields the tree-table shows —
+ * `kind` (its type icon hue), `identifier`, `title`, `status` (the status
+ * pill), `assigneeId` (the assignee cell) — plus `depth` (1 for roots, for
+ * indentation) and `hasChildren` (drives the expand chevron — true iff this
+ * node has at least one child IN THE RETURNED forest).
+ *
+ * `matched` reflects the active filter: it is `true` for a node that itself
+ * matched the filter (or for EVERY node when no filter is active), and `false`
+ * for a node retained ONLY because a descendant matched — those ancestor rows
+ * render muted/non-matching so the tree stays navigable without pretending the
+ * ancestor was a hit. `hasChildren` and `children` are always consistent
+ * (`hasChildren === children.length > 0`).
+ */
+export interface WorkItemTreeNodeDto {
+  id: string;
+  parentId: string | null;
+  kind: WorkItemKindDto;
+  key: number;
+  identifier: string;
+  title: string;
+  status: string;
+  assigneeId: string | null;
+  depth: number;
+  hasChildren: boolean;
+  matched: boolean;
+  children: WorkItemTreeNodeDto[];
+}
+
+/**
  * Input to `workItemsService.createWorkItem` (Subtask 1.4.4). The reporter is
  * taken from the ServiceContext (`ctx.userId`), and key / identifier /
  * position are allocated by the service — so none of those appear here. The

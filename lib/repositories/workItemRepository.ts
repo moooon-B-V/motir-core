@@ -41,6 +41,29 @@ export interface WorkItemSubtreeRow {
   depth: number;
 }
 
+/**
+ * A row of `findProjectForest`'s recursive-CTE result (Subtask 2.5.1): the
+ * per-row render fields the tree-table shows (no Markdown blobs), the `depth`
+ * (1 = a root) for indentation, and `matched` — whether the row passed the
+ * supplied filter (always `true` when no filter is active). The service nests
+ * these into `WorkItemTreeNodeDto`s and, under an active filter, prunes to
+ * matched-or-has-matched-descendant (the context-preserving ancestor retention
+ * — a tree operation, kept out of the single-op repo). `kind` is cast to text
+ * in the query so `$queryRaw` returns the plain enum label.
+ */
+export interface WorkItemForestRow {
+  id: string;
+  parentId: string | null;
+  kind: WorkItemKind;
+  key: number;
+  identifier: string;
+  title: string;
+  status: string;
+  assigneeId: string | null;
+  depth: number;
+  matched: boolean;
+}
+
 export const workItemRepository = {
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<WorkItem | null> {
     const client = tx ?? db;
@@ -297,6 +320,93 @@ export const workItemRepository = {
   },
 
   /**
+   * The WHOLE non-archived issue forest of a project, in ONE round-trip via a
+   * recursive CTE walking DOWN the `parentId` edge from the roots
+   * (`parentId IS NULL`). Each row carries its `depth` (root = 1, for the
+   * tree-table's indentation) and the lighter render columns (no Markdown
+   * blobs). Backs `workItemsService.getProjectTree` (Subtask 2.5.1) — the read
+   * behind the `/issues` list view.
+   *
+   * `workspaceId` is filtered on BOTH the anchor and the recursive step (plus
+   * `projectId` on both), so a cross-workspace/-project row can never enter the
+   * forest even with RLS inert under the dev/CI superuser — the primary tenant
+   * gate per finding #26 (mirrors `findAncestors` / `findByProjectAndKinds`).
+   *
+   * The optional `filter` is applied NON-destructively: it does NOT remove rows
+   * (a flat `WHERE` would orphan children); instead every returned row carries a
+   * `matched` boolean — true when it satisfies every supplied filter axis (an
+   * empty filter marks all rows matched). The service nests the forest and, when
+   * a filter is active, prunes to matched-or-has-matched-descendant so a match
+   * keeps its ancestor chain for context. Each axis is a bound-param
+   * `Prisma.Sql` fragment (never string-interpolated); `assigneeId: null`
+   * filters to UNASSIGNED via `IS NOT DISTINCT FROM`; `text` is an escaped
+   * case-insensitive `ILIKE` over identifier + title.
+   */
+  async findProjectForest(
+    projectId: string,
+    workspaceId: string,
+    filter: {
+      kind?: WorkItemKind;
+      status?: string;
+      assigneeId?: string | null;
+      text?: string;
+    } = {},
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItemForestRow[]> {
+    const client = tx ?? db;
+
+    const predicates: Prisma.Sql[] = [];
+    if (filter.kind !== undefined) {
+      predicates.push(Prisma.sql`f."kind"::text = ${filter.kind}`);
+    }
+    if (filter.status !== undefined) {
+      predicates.push(Prisma.sql`f."status" = ${filter.status}`);
+    }
+    if (filter.assigneeId !== undefined) {
+      // `null` is the "Unassigned" filter; IS NOT DISTINCT FROM gives null=null.
+      predicates.push(Prisma.sql`f."assigneeId" IS NOT DISTINCT FROM ${filter.assigneeId}`);
+    }
+    const text = filter.text?.trim();
+    if (text) {
+      const pattern = `%${escapeLikePattern(text)}%`;
+      predicates.push(Prisma.sql`(f."identifier" ILIKE ${pattern} OR f."title" ILIKE ${pattern})`);
+    }
+    // No filter axis → every row matches (vacuously true).
+    const matched = predicates.length ? Prisma.join(predicates, ' AND ') : Prisma.sql`TRUE`;
+
+    return client.$queryRaw<WorkItemForestRow[]>`
+      WITH RECURSIVE forest AS (
+        SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
+               w."title", w."status", w."assigneeId", 1 AS depth
+          FROM "work_item" w
+          WHERE w."projectId" = ${projectId}
+            AND w."workspaceId" = ${workspaceId}
+            AND w."parentId" IS NULL
+            AND w."archivedAt" IS NULL
+        UNION ALL
+        SELECT c."id", c."parentId", c."kind", c."key", c."identifier",
+               c."title", c."status", c."assigneeId", p.depth + 1
+          FROM "work_item" c
+          JOIN forest p ON c."parentId" = p."id"
+          WHERE c."projectId" = ${projectId}
+            AND c."workspaceId" = ${workspaceId}
+            AND c."archivedAt" IS NULL
+      )
+      SELECT f."id",
+             f."parentId",
+             f."kind"::text   AS "kind",
+             f."key",
+             f."identifier",
+             f."title",
+             f."status",
+             f."assigneeId",
+             f.depth::int     AS "depth",
+             (${matched})     AS "matched"
+        FROM forest f
+        ORDER BY f.depth ASC, f."key" ASC`;
+  },
+
+  /**
    * Create a work item. Required `tx`. The DB triggers validate the
    * kind-parent matrix + depth on insert; their SQLSTATE-23514 rejections and
    * a P2002 unique violation are translated to typed errors here.
@@ -352,6 +462,17 @@ export const workItemRepository = {
  * P2002 → key conflict; P2025 → not found. Anything else is rethrown
  * unchanged. Always throws — return type is `never`.
  */
+/**
+ * Escape the LIKE/ILIKE metacharacters (`\`, `%`, `_`) in a user-supplied
+ * substring so `findProjectForest`'s text filter matches them LITERALLY — a
+ * search for "50%" finds the literal "50%", not "50<anything>". The value is
+ * still passed as a bound parameter (never string-interpolated), so this guards
+ * pattern semantics, not injection. Backslash is the default ILIKE ESCAPE.
+ */
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
 function translateWriteError(err: unknown, ctx?: { id?: string }): never {
   const message = extractMessage(err);
   const sqlState = extractSqlState(err);
