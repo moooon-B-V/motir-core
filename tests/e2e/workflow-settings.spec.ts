@@ -102,3 +102,22 @@ test('owner manages the workflow: defaults protected, custom status add + rename
   await page.getByRole('button', { name: 'Open', exact: true }).click();
   await expect(page.getByText('Open mode: any status can transition to any other.')).toBeVisible();
 });
+
+// Finding #47: the workflow route shipped with no nav entry point and was
+// reachable only by typing the URL. The project-settings page now carries a
+// Workflow card that links to it — this proves discoverability through the UI,
+// without a page.goto to the workflow route.
+test('workflow editor is reachable from the project-settings page (finding #47)', async ({
+  page,
+}) => {
+  await signUp(page, USER_EMAIL);
+  await seedActiveProject(USER_EMAIL);
+
+  await page.goto('/settings/project');
+  await expect(page.getByRole('heading', { name: 'Project settings' })).toBeVisible();
+
+  // The Workflow card is a navigation link; clicking it lands on the editor.
+  await page.getByRole('link', { name: /Workflow/ }).click();
+  await expect(page).toHaveURL(/\/settings\/project\/workflow$/);
+  await expect(page.getByRole('heading', { name: 'Workflow' })).toBeVisible();
+});

@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ArchiveProjectCard } from './_components/ArchiveProjectCard';
+import { WorkflowSettingsCard } from './_components/WorkflowSettingsCard';
 
 // Project settings — server component. Reads the active project context
 // and renders the cards. Only the archive card lands in 1.3.4; rename
@@ -33,9 +34,11 @@ export default async function ProjectSettingsPage() {
       <header className="flex flex-col gap-1">
         <h1 className="font-serif text-3xl font-semibold text-(--el-text)">Project settings</h1>
         <p className="text-(--el-text-muted) font-sans text-sm">
-          Manage the active project&apos;s lifecycle.
+          Configure the active project and manage its lifecycle.
         </p>
       </header>
+
+      <WorkflowSettingsCard />
 
       <ArchiveProjectCard
         projectId={project.projectId}
