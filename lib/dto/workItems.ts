@@ -82,7 +82,28 @@ export interface IssueDetailDto {
   children: WorkItemSummaryDto[];
   blockedBy: WorkItemSummaryDto[];
   blocks: WorkItemSummaryDto[];
+  relatesTo: WorkItemSummaryDto[];
+  duplicates: WorkItemSummaryDto[];
+  clones: WorkItemSummaryDto[];
+  readiness: ReadinessVerdictDto;
   workflow: WorkflowDto;
+}
+
+/**
+ * A readiness verdict for a work item (Subtask 2.4.5 — the first PRODUCTION
+ * wiring of 2.2.6's `isReady` / finding #21). `ready` is true iff EVERY
+ * `is_blocked_by` blocker has reached a TERMINAL status in ITS OWN project's
+ * workflow (`category = done`, so `done` AND `cancelled` count). An item with
+ * no blockers is trivially `ready`. `openBlockers` lists the non-terminal
+ * blockers (empty when `ready`) so a badge can NAME the reason it's blocked;
+ * each is the same `WorkItemSummaryDto` the relationships panel renders, so the
+ * page never re-derives which blockers are open. This is the presentational
+ * `ReadinessBadge`'s input — Epic 3 boards + Epic 6 reports consume the same
+ * verdict shape.
+ */
+export interface ReadinessVerdictDto {
+  ready: boolean;
+  openBlockers: WorkItemSummaryDto[];
 }
 
 /**

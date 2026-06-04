@@ -87,16 +87,22 @@ export const workItemLinkRepository = {
    *
    * A blocker can live in a DIFFERENT project than `workItemId` (cross-project
    * blocks are legal in the link model), so each blocker carries its own
-   * `projectId`. Read-only → `db` singleton.
+   * `projectId`. The blocker's `id` rides along too so a caller naming the OPEN
+   * blockers (the 2.4.5 readiness badge) can correlate this row back to the
+   * resolved blocker summary without a second lookup. Read-only → `db` singleton.
    */
   async findBlockerStates(
     workItemId: string,
-  ): Promise<Array<{ status: string; projectId: string }>> {
+  ): Promise<Array<{ id: string; status: string; projectId: string }>> {
     const rows = await db.workItemLink.findMany({
       where: { fromId: workItemId, kind: 'is_blocked_by' },
-      select: { toItem: { select: { status: true, projectId: true } } },
+      select: { toItem: { select: { id: true, status: true, projectId: true } } },
     });
-    return rows.map((r) => ({ status: r.toItem.status, projectId: r.toItem.projectId }));
+    return rows.map((r) => ({
+      id: r.toItem.id,
+      status: r.toItem.status,
+      projectId: r.toItem.projectId,
+    }));
   },
 
   /**

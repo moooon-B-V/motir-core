@@ -125,6 +125,107 @@ describe('workItemsService.getIssueDetail (2.4.1)', () => {
     expect(foreign).toEqual([]);
   });
 
+  // --- 2.4.5: relationship grouping + the readiness verdict ----------------
+
+  it('groups links by kind (blocked-by / blocks / relates-to / duplicates / clones) + verdict is "blocked" while a blocker is open', async () => {
+    const fx = await makeWorkItemFixture();
+    const make = (title: string) =>
+      workItemsService.createWorkItem({ projectId: fx.projectId, kind: 'task', title }, fx.ctx);
+
+    const subject = await make('Subject');
+    const blocker = await make('Upstream blocker');
+    const blocked = await make('Downstream blocked');
+    const related = await make('Related');
+    const dup = await make('Duplicate');
+    const clone = await make('Clone source');
+
+    // subject is_blocked_by blocker  → blockedBy
+    await workItemsService.linkWorkItems(
+      { fromId: subject.id, toId: blocker.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+    // blocked is_blocked_by subject  → subject "blocks" blocked (reverse edge)
+    await workItemsService.linkWorkItems(
+      { fromId: blocked.id, toId: subject.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+    await workItemsService.linkWorkItems(
+      { fromId: subject.id, toId: related.id, kind: 'relates_to' },
+      fx.ctx,
+    );
+    await workItemsService.linkWorkItems(
+      { fromId: subject.id, toId: dup.id, kind: 'duplicates' },
+      fx.ctx,
+    );
+    await workItemsService.linkWorkItems(
+      { fromId: subject.id, toId: clone.id, kind: 'clones' },
+      fx.ctx,
+    );
+
+    const detail = await workItemsService.getIssueDetail(fx.projectId, subject.identifier, fx.ctx);
+    expect(detail.blockedBy.map((b) => b.identifier)).toEqual([blocker.identifier]);
+    expect(detail.blocks.map((b) => b.identifier)).toEqual([blocked.identifier]);
+    expect(detail.relatesTo.map((b) => b.identifier)).toEqual([related.identifier]);
+    expect(detail.duplicates.map((b) => b.identifier)).toEqual([dup.identifier]);
+    expect(detail.clones.map((b) => b.identifier)).toEqual([clone.identifier]);
+
+    // The blocker is still in its initial (non-terminal) status → blocked, and
+    // the verdict NAMES the open blocker so the badge reads "Blocked by <id>".
+    expect(detail.readiness.ready).toBe(false);
+    expect(detail.readiness.openBlockers.map((b) => b.identifier)).toEqual([blocker.identifier]);
+  });
+
+  it('readiness flips to "ready" (empty openBlockers) once every blocker is terminal — cancelled counts (finding #21)', async () => {
+    const fx = await makeWorkItemFixture();
+    const subject = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Subject' },
+      fx.ctx,
+    );
+    const blocker = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Blocker' },
+      fx.ctx,
+    );
+    await workItemsService.linkWorkItems(
+      { fromId: subject.id, toId: blocker.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+
+    const blockedView = await workItemsService.getIssueDetail(
+      fx.projectId,
+      subject.identifier,
+      fx.ctx,
+    );
+    expect(blockedView.readiness.ready).toBe(false);
+
+    // `cancelled` is category=done in the default-seeded workflow, so a
+    // cancelled blocker is terminal → the verdict flips on the next read.
+    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'cancelled' } });
+    const readyView = await workItemsService.getIssueDetail(
+      fx.projectId,
+      subject.identifier,
+      fx.ctx,
+    );
+    expect(readyView.readiness.ready).toBe(true);
+    expect(readyView.readiness.openBlockers).toEqual([]);
+    // Still listed as a relationship — resolved, but the edge is unchanged.
+    expect(readyView.blockedBy.map((b) => b.identifier)).toEqual([blocker.identifier]);
+  });
+
+  it('an item with no links → every group empty + a trivially-ready verdict', async () => {
+    const fx = await makeWorkItemFixture();
+    const lonely = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Lonely' },
+      fx.ctx,
+    );
+    const detail = await workItemsService.getIssueDetail(fx.projectId, lonely.identifier, fx.ctx);
+    expect(detail.blockedBy).toEqual([]);
+    expect(detail.blocks).toEqual([]);
+    expect(detail.relatesTo).toEqual([]);
+    expect(detail.duplicates).toEqual([]);
+    expect(detail.clones).toEqual([]);
+    expect(detail.readiness).toEqual({ ready: true, openBlockers: [] });
+  });
+
   it('a cross-workspace or unknown identifier → WorkItemNotFoundError (no existence leak)', async () => {
     const fxA = await makeWorkItemFixture();
     const item = await workItemsService.createWorkItem(

@@ -15,6 +15,7 @@ import { ContentSectionCard } from './_components/ContentSectionCard';
 import { IssueExplanation } from './_components/IssueExplanation';
 import { ParentBreadcrumb } from './_components/ParentBreadcrumb';
 import { ChildList } from './_components/ChildList';
+import { RelationshipsPanel } from './_components/RelationshipsPanel';
 
 // The issue DETAIL route (Story 2.4 · Subtask 2.4.1). Server Component:
 // resolves the active project (the shipped active-project model — finding #50,
@@ -118,9 +119,18 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
             parent={detail.parent}
             reporterIsSelf={item.reporterId === ctx.userId}
           />
-          {/* The 2.4.3 parent breadcrumb lives in the header (per detail.png),
-              not here. 2.4.5: relationships + readiness badge. Epic 5: custom
-              fields · attachments. */}
+          {/* 2.4.5: dependency + link surface (read-only) with the ready/blocked
+              badge at its top. The 2.4.3 parent breadcrumb lives in the header
+              (per detail.png), not here. Epic 5: custom fields · attachments. */}
+          <RelationshipsPanel
+            blockedBy={detail.blockedBy}
+            blocks={detail.blocks}
+            relatesTo={detail.relatesTo}
+            duplicates={detail.duplicates}
+            clones={detail.clones}
+            readiness={detail.readiness}
+            workflow={detail.workflow}
+          />
         </aside>
       </div>
     </div>
