@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { CoreFieldsPanel, type PersonRef } from './_components/CoreFieldsPanel';
+import { ContentSectionCard } from './_components/ContentSectionCard';
 import { IssueExplanation } from './_components/IssueExplanation';
 
 // The issue DETAIL route (Story 2.4 · Subtask 2.4.1). Server Component:
@@ -87,16 +88,21 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
       {/* Body — two columns; later subtasks fill the regions. */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_18rem]">
         <main className="flex flex-col gap-6">
-          <section aria-label="Description">
+          <ContentSectionCard
+            title="Description"
+            subtitle="what to do"
+            editHref={`/issues/${item.identifier}/edit`}
+          >
             {item.descriptionMd ? (
               <MarkdownView value={item.descriptionMd} aria-label="Issue description" />
             ) : (
-              <p className="text-muted-foreground font-sans text-sm italic">No description.</p>
+              <p className="font-sans text-sm text-(--color-slate) italic">No description yet.</p>
             )}
-          </section>
+          </ContentSectionCard>
           <IssueExplanation
             explanationMd={item.explanationMd}
             explanationSource={item.explanationSource}
+            editHref={`/issues/${item.identifier}/edit`}
           />
           {/* 2.4.3: child list. Epic 5 extension slots: comments · activity. */}
         </main>

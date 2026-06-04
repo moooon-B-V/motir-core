@@ -83,9 +83,17 @@ describe('CoreFieldsPanel', () => {
   });
 });
 
+const EDIT_HREF = '/issues/PROD-7/edit';
+
 describe('IssueExplanation', () => {
   it('renders the AI-drafted badge for an ai_draft explanation', () => {
-    render(<IssueExplanation explanationMd="Because it matters." explanationSource="ai_draft" />);
+    render(
+      <IssueExplanation
+        explanationMd="Because it matters."
+        explanationSource="ai_draft"
+        editHref={EDIT_HREF}
+      />,
+    );
     expect(screen.getByText('AI-drafted')).toBeTruthy();
     expect(screen.getByText('Because it matters.')).toBeTruthy();
   });
@@ -95,16 +103,23 @@ describe('IssueExplanation', () => {
       <IssueExplanation
         explanationMd="Human-written rationale."
         explanationSource="user_authored"
+        editHref={EDIT_HREF}
       />,
     );
     expect(screen.queryByText('AI-drafted')).toBeNull();
     expect(screen.getByText('Human-written rationale.')).toBeTruthy();
   });
 
-  it('renders nothing when there is no explanation', () => {
-    const { container } = render(
-      <IssueExplanation explanationMd={null} explanationSource="user_authored" />,
+  it('shows the always-present section with an empty state when there is no explanation', () => {
+    render(
+      <IssueExplanation
+        explanationMd={null}
+        explanationSource="user_authored"
+        editHref={EDIT_HREF}
+      />,
     );
-    expect(container.firstChild).toBeNull();
+    // The section header is always present; the body is the empty state.
+    expect(screen.getByRole('heading', { name: 'Explanation' })).toBeTruthy();
+    expect(screen.getByText('No explanation yet.')).toBeTruthy();
   });
 });
