@@ -2,12 +2,14 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { ChevronDown, Sparkles } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
 import { uploadIssueAttachment } from '@/lib/blob/uploadClient';
+import { cn } from '@/lib/utils/cn';
 import { TypePicker } from '@/components/issues/TypePicker';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { createIssueAction } from '../issues/actions';
@@ -42,6 +44,8 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
   const [parentId, setParentId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [explanation, setExplanation] = useState('');
+  const [explanationOpen, setExplanationOpen] = useState(false);
   const [priority, setPriority] = useState<WorkItemPriorityDto>('medium');
   const [titleError, setTitleError] = useState<string | null>(null);
   const [parentError, setParentError] = useState<string | null>(null);
@@ -80,6 +84,7 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
         kind,
         title: trimmedTitle,
         descriptionMd: description.trim() ? description : null,
+        explanationMd: explanation.trim() ? explanation : null,
         priority,
         parentId,
       });
@@ -161,6 +166,55 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
             size="min"
             onFileUpload={uploadIssueAttachment}
           />
+        </div>
+
+        {/* Explanation — the "why this matters" axis (Story 1.4), per
+            design/work-items/create.png panel 3: a collapsible, OPTIONAL
+            markdown section. "Draft with AI" is the Epic-7 planning layer
+            (disabled until it ships); a human can author it here today. */}
+        <div className="flex flex-col gap-1.5 font-sans text-sm">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setExplanationOpen((o) => !o)}
+              aria-expanded={explanationOpen}
+              className="text-foreground flex items-center gap-1.5 font-medium focus-visible:outline-none"
+              disabled={isPending}
+            >
+              <ChevronDown
+                className={cn('h-4 w-4 transition-transform', !explanationOpen && '-rotate-90')}
+                aria-hidden
+              />
+              Explanation
+            </button>
+            <span className="text-(--color-slate)">— why this matters (optional)</span>
+            {explanationOpen ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                leftIcon={<Sparkles className="h-3.5 w-3.5" />}
+                className="ml-auto"
+                disabled
+                title="AI drafting arrives with the planning layer (Epic 7)"
+              >
+                Draft with AI
+              </Button>
+            ) : null}
+          </div>
+          {explanationOpen ? (
+            <MarkdownEditor
+              label="Explanation"
+              value={explanation}
+              onChange={setExplanation}
+              size="min"
+              onFileUpload={uploadIssueAttachment}
+            />
+          ) : (
+            <span className="text-xs text-(--color-slate)">
+              Skip this — explanation can be drafted with AI or added after creating.
+            </span>
+          )}
         </div>
 
         <label className="flex flex-col gap-1 font-sans text-sm">

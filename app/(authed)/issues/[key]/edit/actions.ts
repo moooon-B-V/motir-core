@@ -28,6 +28,10 @@ export interface UpdateIssueInput {
   expectedUpdatedAt: string;
   title?: string;
   descriptionMd?: string | null;
+  // The "why this matters" axis. Editing it here routes through updateWorkItem's
+  // explanationSource state machine (editing an ai_draft auto-flips it to
+  // user_edited; a user_authored one stays user_authored).
+  explanationMd?: string | null;
   parentId?: string | null;
   assigneeId?: string | null;
   priority?: WorkItemPriorityDto;
@@ -58,6 +62,7 @@ export async function updateIssueAction(input: UpdateIssueInput): Promise<IssueA
       {
         title: input.title,
         descriptionMd: input.descriptionMd,
+        explanationMd: input.explanationMd,
         parentId: input.parentId,
         assigneeId: input.assigneeId,
         priority: input.priority,
