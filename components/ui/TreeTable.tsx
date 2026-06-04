@@ -338,7 +338,12 @@ export function TreeTable<Row>({
                       <span className="h-4 w-4 shrink-0" aria-hidden />
                     )}
 
-                    <div className="relative z-10 flex min-w-0 flex-1 items-center">
+                    {/* The tree cell's content stays BELOW the stretched link
+                        (no z-raise) so clicking the title/identifier navigates
+                        the row — only genuinely interactive bits (the chevron
+                        above; inline-edit controls in 2.5.5) raise themselves
+                        with `relative z-10` to intercept their own clicks. */}
+                    <div className="flex min-w-0 flex-1 items-center">
                       {treeColumn?.cell(row.data)}
                     </div>
                   </div>
