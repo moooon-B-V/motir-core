@@ -69,7 +69,7 @@ export function ReadinessBadge({ ready, blockers = [], className }: ReadinessBad
                 {i > 0 ? ', ' : null}
                 <Link
                   href={b.href}
-                  className="text-(--el-link) font-mono text-xs hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                  className="text-(--el-text-strong) font-mono text-xs underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
                 >
                   {b.identifier}
                 </Link>

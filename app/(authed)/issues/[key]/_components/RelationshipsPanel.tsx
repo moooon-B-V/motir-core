@@ -116,7 +116,7 @@ export function RelationshipsPanel({
       title="Relationships"
       subtitle="dependencies & links"
       headerRight={
-        <span className="text-(--el-text-faint) inline-flex items-center gap-1.5 font-sans text-xs">
+        <span className="text-(--el-text-muted) inline-flex items-center gap-1.5 font-sans text-xs">
           <Link2 className="h-3.5 w-3.5" aria-hidden />
           Manage in Epic 5
         </span>
@@ -144,7 +144,7 @@ export function RelationshipsPanel({
             <div key={group.key} className="flex flex-col gap-1">
               <div className="flex items-center gap-2 px-2">
                 <SectionLabel label={group.label} />
-                <span className="text-(--el-text-faint) font-mono text-[11px]">
+                <span className="text-(--el-text-muted) font-mono text-[11px]">
                   {group.items.length}
                 </span>
               </div>
