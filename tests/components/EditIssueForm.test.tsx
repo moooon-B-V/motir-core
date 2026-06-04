@@ -88,7 +88,7 @@ afterEach(() => {
 });
 
 describe('EditIssueForm', () => {
-  it('renders the editable fields with type read-only', () => {
+  it('renders the editable fields, including an editable Type picker', () => {
     render(
       <ToastProvider>
         <EditIssueForm issue={issue} workflow={workflow} members={[]} />
@@ -98,8 +98,29 @@ describe('EditIssueForm', () => {
     expect(screen.getByRole('combobox', { name: 'Status' })).toBeTruthy();
     expect(screen.getByRole('combobox', { name: 'Parent' })).toBeTruthy();
     expect(screen.getByRole('combobox', { name: 'Assignee' })).toBeTruthy();
-    // Type is shown but NOT an editable control.
-    expect(screen.queryByRole('combobox', { name: 'Type' })).toBeNull();
+    // Type is now editable (kind is mutable; a change re-validates parent/children).
+    expect(screen.getByRole('combobox', { name: 'Type' })).toBeTruthy();
+  });
+
+  it('changing the Type submits the new kind via updateWorkItem', async () => {
+    updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-02T00:00:00.000Z' });
+
+    render(
+      <ToastProvider>
+        <EditIssueForm issue={issue} workflow={workflow} members={[]} />
+      </ToastProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Type' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Story' }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    });
+
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+    expect(updateSpy.mock.calls[0]![0]).toMatchObject({ id: 'wi_1', kind: 'story' });
+    expect(changeStatusSpy).not.toHaveBeenCalled();
   });
 
   it('a mixed edit (title + status) submits via BOTH server actions', async () => {

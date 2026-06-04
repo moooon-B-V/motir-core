@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Image } from '@tiptap/extension-image';
@@ -112,6 +112,12 @@ export interface MarkdownEditorProps {
   onChange: (value: string) => void;
   /** Accessible label for the editing surface (required — drives aria-label). */
   label: string;
+  /**
+   * Optional inline content rendered next to the visible label (e.g. a "— why
+   * it matters" gloss + an "AI-drafted" badge). Lets a caller enrich the field
+   * header WITHOUT adding a second external label that duplicates `label`.
+   */
+  labelAccessory?: ReactNode;
   /** Size variant. `min` for the create modal, `full` for the edit form. */
   size?: Size;
   /**
@@ -130,6 +136,7 @@ export function MarkdownEditor({
   value,
   onChange,
   label,
+  labelAccessory,
   size = 'full',
   onFileUpload,
   readOnly = false,
@@ -258,7 +265,10 @@ export function MarkdownEditor({
     // provider's stable SSR snapshot) but resolves to the OS preference on the
     // client — an intentional, sanctioned attribute mismatch, not a bug.
     <div className="flex flex-col gap-1" data-color-mode={colorMode} suppressHydrationWarning>
-      <span className="text-(--el-text) font-sans text-sm font-medium">{label}</span>
+      <span className="text-(--el-text) flex items-center gap-2 font-sans text-sm font-medium">
+        {label}
+        {labelAccessory}
+      </span>
       {readOnly ? (
         <div className="border-(--el-border) bg-(--el-surface) rounded-md border px-3 py-2">
           <MarkdownView value={value} />
