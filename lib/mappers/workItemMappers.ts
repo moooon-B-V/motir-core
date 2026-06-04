@@ -1,6 +1,11 @@
 import type { WorkItem } from '@prisma/client';
-import type { WorkItemSubtreeRow } from '@/lib/repositories/workItemRepository';
-import type { WorkItemDto, WorkItemSummaryDto, WorkItemSubtreeDto } from '@/lib/dto/workItems';
+import type { WorkItemForestRow, WorkItemSubtreeRow } from '@/lib/repositories/workItemRepository';
+import type {
+  WorkItemDto,
+  WorkItemSummaryDto,
+  WorkItemSubtreeDto,
+  WorkItemTreeNodeDto,
+} from '@/lib/dto/workItems';
 
 // Prisma → DTO converters for the work-item domain. The service calls these
 // just before returning so no Prisma row shape (Date objects, Decimal
@@ -75,5 +80,34 @@ export function toWorkItemSubtreeDto(row: WorkItemSubtreeRow): WorkItemSubtreeDt
     status: row.status,
     position: row.position,
     depth: row.depth,
+  };
+}
+
+/**
+ * Tree-node DTO (Subtask 2.5.1). Maps one `findProjectForest` projection row
+ * (already plain scalars — `kind` cast to text, `matched`/`assigneeId` direct
+ * columns) plus its ALREADY-BUILT `children` array into a `WorkItemTreeNodeDto`.
+ * The nesting / sibling-ordering / ancestor-retention pruning are the service's
+ * tree work (workItemsService.getProjectTree); this mapper just shapes a single
+ * node and keeps `hasChildren` consistent with the children it was handed. No
+ * date normalization needed — the projection carries no Date columns.
+ */
+export function toWorkItemTreeNodeDto(
+  row: WorkItemForestRow,
+  children: WorkItemTreeNodeDto[],
+): WorkItemTreeNodeDto {
+  return {
+    id: row.id,
+    parentId: row.parentId,
+    kind: row.kind,
+    key: row.key,
+    identifier: row.identifier,
+    title: row.title,
+    status: row.status,
+    assigneeId: row.assigneeId,
+    depth: row.depth,
+    hasChildren: children.length > 0,
+    matched: row.matched,
+    children,
   };
 }

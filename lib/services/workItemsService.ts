@@ -25,18 +25,22 @@ import {
   toWorkItemDto,
   toWorkItemSummaryDto,
   toWorkItemSubtreeDto,
+  toWorkItemTreeNodeDto,
 } from '@/lib/mappers/workItemMappers';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toWorkItemRevisionDto } from '@/lib/mappers/workItemRevisionMappers';
+import type { WorkItemForestRow } from '@/lib/repositories/workItemRepository';
 import type {
   CreateWorkItemInput,
   IssueDetailDto,
+  ProjectTreeFilter,
   UpdateWorkItemInput,
   WorkItemDto,
   WorkItemKindDto,
   WorkItemRevisionDto,
   WorkItemSummaryDto,
   WorkItemSubtreeDto,
+  WorkItemTreeNodeDto,
 } from '@/lib/dto/workItems';
 import type { LinkWorkItemsInput, WorkItemLinkDto } from '@/lib/dto/workItemLinks';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -132,6 +136,58 @@ export interface ListWorkItemsFilter {
   kind?: WorkItemKindDto;
   status?: string;
   assigneeId?: string | null;
+}
+
+/**
+ * Nest a flat `findProjectForest` projection into the `WorkItemTreeNodeDto`
+ * forest the `/issues` tree-table renders (Subtask 2.5.1). Roots (parentId
+ * null) and every sibling set are ordered by `key` asc — the stable PROD-N
+ * order. Every non-root row's parent is guaranteed present (the CTE walks DOWN
+ * from roots), so there are no dangling parents to drop.
+ *
+ * When `prune` is true (a filter is active) the tree is reduced to the
+ * context-preserving set: a node is kept iff it `matched` OR has a kept
+ * descendant — so a deep match drags its ancestor chain along (those ancestors
+ * carry `matched: false` → rendered muted), while an unmatched leaf with no
+ * matched descendants is dropped. This is the standard tree-filter that keeps
+ * the result navigable, NOT a flat filter that would orphan children. `prune`
+ * is false when no filter is active (every row is `matched` then anyway).
+ * `hasChildren` falls out of the PRUNED child set (via the mapper), so a
+ * chevron only shows when there is something left to expand.
+ */
+function assembleProjectForest(rows: WorkItemForestRow[], prune: boolean): WorkItemTreeNodeDto[] {
+  const childrenByParent = new Map<string, WorkItemForestRow[]>();
+  const roots: WorkItemForestRow[] = [];
+  for (const row of rows) {
+    if (row.parentId === null) {
+      roots.push(row);
+    } else {
+      const group = childrenByParent.get(row.parentId);
+      if (group) group.push(row);
+      else childrenByParent.set(row.parentId, [row]);
+    }
+  }
+  const byKey = (a: WorkItemForestRow, b: WorkItemForestRow): number => a.key - b.key;
+  roots.sort(byKey);
+  for (const group of childrenByParent.values()) group.sort(byKey);
+
+  const build = (row: WorkItemForestRow): WorkItemTreeNodeDto | null => {
+    const children: WorkItemTreeNodeDto[] = [];
+    for (const child of childrenByParent.get(row.id) ?? []) {
+      const node = build(child);
+      if (node) children.push(node);
+    }
+    // Ancestor retention: drop only an unmatched node with no surviving child.
+    if (prune && !row.matched && children.length === 0) return null;
+    return toWorkItemTreeNodeDto(row, children);
+  };
+
+  const forest: WorkItemTreeNodeDto[] = [];
+  for (const root of roots) {
+    const node = build(root);
+    if (node) forest.push(node);
+  }
+  return forest;
 }
 
 export const workItemsService = {
@@ -607,6 +663,64 @@ export const workItemsService = {
   async getWorkItemSubtree(rootId: string, _ctx: ServiceContext): Promise<WorkItemSubtreeDto[]> {
     const rows = await workItemRepository.findSubtree(rootId);
     return rows.map(toWorkItemSubtreeDto);
+  },
+
+  /**
+   * The project's WHOLE non-archived issue forest, nested into the tree the
+   * `/issues` list view renders (Subtask 2.5.1) — one recursive-CTE round-trip
+   * (no N+1), then in-memory nesting. Roots and siblings come back `key`-asc.
+   *
+   * Tenant gate (finding #26): the project must resolve AND belong to the active
+   * workspace, else `ProjectNotFoundError` (→ 404, no existence leak — a
+   * cross-tenant `projectId` is indistinguishable from a never-existed one). The
+   * forest read ALSO carries an explicit `workspaceId` on its anchor + recursive
+   * step, so a stray cross-workspace row can't enter even with RLS inert under
+   * the dev/CI superuser.
+   *
+   * The optional `filter` (kind / status / assignee / text) is CONTEXT-
+   * PRESERVING: matching nodes keep their ancestor chain (rendered muted) so the
+   * tree stays navigable. `assigneeId: null` filters to UNASSIGNED; a blank
+   * `text` is ignored. An empty project → `[]`; a no-filter call → the full
+   * forest with every node `matched`.
+   */
+  async getProjectTree(
+    projectId: string,
+    filter: ProjectTreeFilter,
+    ctx: ServiceContext,
+  ): Promise<WorkItemTreeNodeDto[]> {
+    const project = await projectRepository.findById(projectId);
+    if (!project || project.workspaceId !== ctx.workspaceId) {
+      throw new ProjectNotFoundError(projectId);
+    }
+
+    // Forward only the supplied axes (an absent axis is "don't filter"); a blank
+    // text quick-filter is treated as absent so trailing whitespace never hides
+    // the whole tree.
+    const repoFilter: {
+      kind?: WorkItemKindDto;
+      status?: string;
+      assigneeId?: string | null;
+      text?: string;
+    } = {};
+    if (filter.kind !== undefined) repoFilter.kind = filter.kind;
+    if (filter.status !== undefined) repoFilter.status = filter.status;
+    if (filter.assigneeId !== undefined) repoFilter.assigneeId = filter.assigneeId;
+    const text = filter.text?.trim();
+    if (text) repoFilter.text = text;
+
+    const rows = await workItemRepository.findProjectForest(
+      projectId,
+      project.workspaceId,
+      repoFilter,
+    );
+
+    const hasFilter =
+      repoFilter.kind !== undefined ||
+      repoFilter.status !== undefined ||
+      repoFilter.assigneeId !== undefined ||
+      repoFilter.text !== undefined;
+
+    return assembleProjectForest(rows, hasFilter);
   },
 
   /**
