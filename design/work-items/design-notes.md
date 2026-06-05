@@ -13,6 +13,7 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | **Relationships panel + ready/blocked badge**    | **`relationships.mock.html`** (HTML mockup) | The element `detail.pen` does NOT specify. See below.                                                                                   |
 | **Link management (add / remove links)**         | **`links.mock.html`** (HTML mockup)         | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                                      |
 | **DatePicker calendar (Due-date field)**         | **`datepicker.mock.html`** (HTML mockup)    | The design-system replacement for the native `<input type="date">` popup; consumed by the Due-date fields (2.4.11 → 2.4.12). See below. |
+| **Create modal — Due date field**                | **`create.mock.html`** (HTML mockup)        | Extends `create.pen` with a Due-date row (`DatePicker`, after Priority) — finding #56 / "mirror Jira" (2.3.11 → 2.3.12). See below.     |
 
 ---
 
@@ -512,3 +513,54 @@ operators** (boolean/JQL-style), and filtering by custom fields are **Epic 6**
 (saved views & advanced search) — the URL serialization 2.5.4 ships is the
 forward-compatible substrate they build on, not a throwaway. Sorting the
 filtered set is the **List view's** job (2.5.8), not the filter bar's.
+
+---
+
+## Create modal — Due date field (Story 2.3 · 2.3.11 → 2.3.12)
+
+`create.mock.html` extends the create-issue modal (2.3.3) with a **Due date**
+field — finding #56 ("yes, mirror Jira"). Jira's create dialog collects a Due
+date; Prodect's modal did not, and `create.pen` designs the modal with
+type/parent/title/description/priority (+ an **Assignee** field that was never
+built — finding #51) but **no Due date**. This pins where it goes and how it
+composes, so 2.3.12 isn't improvising (the design gate — `create.pen` omits it).
+
+### What's new (and what's reused)
+
+The field **reuses the shipped `DatePicker`** (2.4.11 design / 2.4.12 code) —
+no new component. The only new design decision is its **placement and label**:
+
+- **A "Due date" row placed right AFTER Priority** (and before "Linked issues"),
+  matching the shipped **edit form**'s field order (Priority → Due date →
+  Estimate, 2.3.6) and Jira's create dialog. It uses the modal's existing
+  label-over-control row grammar (same as Type / Parent / Priority).
+- The control is the **`DatePicker` trigger** — `Input`-styled field (calendar
+  glyph + value or "Select a date" placeholder + a Clear ×), opening the
+  `Popover` month grid. All states/tokens are exactly the `DatePicker`'s
+  (see the DatePicker section); nothing about the calendar changes here.
+- **Nullable** — Due date is optional at create; default is the placeholder, no
+  value. (Jira likewise lets you create without a due date.)
+
+### Behaviour (for 2.3.12)
+
+- The chosen date is **collected in the modal's form state** (an ISO
+  `YYYY-MM-DD` string, like the other create fields) and written when the issue
+  is created — passed through `createIssueAction` → `createWorkItem`. The
+  `work_item.dueDate` column already exists (the edit form writes it); this just
+  wires the create path to it. No new calendar behaviour.
+- UTC-safe conversion on submit (the same `${date}T00:00:00.000Z` the edit form
+  - detail rail use) — no local-tz off-by-one.
+
+### States in the mockup
+
+Panels: **(1)** the modal with Due date **empty** (placeholder, after Priority) ·
+**(2)** Due date **filled** (Jun 4, 2026) with the **calendar open** anchored
+under the field (the same grid the shipped `DatePicker` draws; selected Jun 4,
+today Jun 5). The other modal fields are drawn as representative controls (their
+real pickers are already shipped) — only the Due-date field is specified here.
+
+### Out of scope
+
+The `create.pen` **Assignee** field (designed, never built — finding #51) is NOT
+addressed here. Date ranges / relative presets / time-of-day stay out (the
+`DatePicker` is single-date only).

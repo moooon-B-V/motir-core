@@ -1,0 +1,814 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Create modal — Due date field (Story 2.3 · 2.3.11 → 2.3.12)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the create-issue modal's NEW Due-date field
+      (finding #56 — Yue: "mirror Jira"). create.pen designs the modal with
+      type/parent/title/description/priority (+ Assignee, never built — finding
+      #51) but NO Due date; this specifies where it goes and how it composes.
+
+      The Due-date field REUSES the shipped DatePicker primitive (2.4.11 design /
+      2.4.12 code) — the trigger + calendar markup/tokens below are copied 1:1
+      from datepicker.mock.html, so there is no new component here, only its
+      PLACEMENT in the modal: a "Due date" row right AFTER Priority, matching the
+      shipped edit form's Priority → Due date order and Jira's create dialog. Due
+      date is nullable (placeholder default).
+
+      The other modal fields are drawn as REPRESENTATIVE controls (their real
+      pickers — TypePicker / ParentPicker / PriorityPicker / MarkdownEditor /
+      CreateIssueLinksField — are already designed + shipped); they're here only
+      to show the Due-date field in context, not to re-spec them.
+
+      Panels: (1) modal with Due date EMPTY (placeholder) · (2) Due date FILLED
+      with the calendar OPEN (anchored under the field). Toggle dark for token
+      parity. Tokens copied 1:1 from app/globals.css. See design-notes.md.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-btn-md: 40px;
+        --focus-ring-color: var(--color-primary);
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 12px 40px rgba(15, 15, 15, 0.15);
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 120px;
+      }
+      .review-head {
+        max-width: 1040px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-row {
+        max-width: 1040px;
+        margin: 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 40px;
+        align-items: flex-start;
+        justify-content: center;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding-left: 2px;
+      }
+
+      /* ── Modal (components/ui/Modal.tsx) chrome ─────────────────────────── */
+      .modal {
+        position: relative;
+        width: 448px; /* max-w-[28rem] (size="md") */
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .modal-title {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0 0 var(--spacing-md);
+      }
+      .modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: transparent;
+        color: var(--el-text-muted);
+        border-radius: var(--radius-control);
+        cursor: pointer;
+      }
+      .modal-close:hover {
+        color: var(--el-text);
+      }
+      .modal-body {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-md);
+      }
+      .modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: var(--spacing-md);
+        padding-top: var(--spacing-md);
+        border-top: 1px solid var(--el-border);
+      }
+
+      /* ── Field row: the modal's label + control grammar ─────────────────── */
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field > label {
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      /* Representative control (the real pickers/editor — shown for context) */
+      .control {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .control .muted {
+        color: var(--el-text-muted);
+      }
+      .control .chev {
+        margin-left: auto;
+        color: var(--el-text-muted);
+      }
+      .control.textarea {
+        height: auto;
+        min-height: 76px;
+        align-items: flex-start;
+        padding: 10px var(--spacing-input-x);
+        color: var(--el-text-muted);
+      }
+      /* the row we're actually specifying — a quiet "new" marker in the chrome */
+      .field.is-new {
+        position: relative;
+      }
+      .field.is-new > label::after {
+        content: 'NEW · 2.3.11';
+        margin-left: 8px;
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--el-accent);
+        vertical-align: middle;
+      }
+      .link-entry {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-link);
+      }
+
+      /* ── Button (components/ui/Button.tsx) ──────────────────────────────── */
+      .btn {
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+
+      /* ── DatePicker trigger — copied 1:1 from datepicker.mock.html ──────────
+         The field is a CONTAINER (not itself a <button>): the calendar-open
+         affordance (.field-open) and the Clear button are SIBLINGS (never a
+         <button> inside a <button>). */
+      .trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        transition: border-color 0.12s ease;
+        text-align: left;
+      }
+      .field-open {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        min-width: 0;
+        cursor: pointer;
+      }
+      .trigger .cal-glyph {
+        color: var(--el-text-muted);
+        display: inline-flex;
+        flex: none;
+      }
+      .trigger .value {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--el-text);
+      }
+      .trigger .value.placeholder {
+        color: var(--el-text-muted);
+      }
+      .trigger .clear {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border-radius: var(--radius-control);
+        border: none;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .trigger .clear:hover {
+        background: var(--el-tint-rose);
+        color: var(--el-danger);
+      }
+      .trigger.is-focused {
+        border-color: var(--el-accent);
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: var(--focus-ring-offset);
+      }
+
+      /* ── Calendar popover — copied 1:1 from datepicker.mock.html ─────────── */
+      .anchored {
+        position: relative;
+      }
+      .calendar {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        z-index: 5;
+        width: 296px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 12px;
+      }
+      .cal-caption {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 2px 4px 10px;
+      }
+      .cal-caption .month {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .cal-nav {
+        display: inline-flex;
+        gap: 2px;
+      }
+      .nav-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        border: none;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .nav-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .cal-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 2px;
+      }
+      .dow {
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-faint);
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+      }
+      .day {
+        position: relative;
+        height: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--el-text);
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .day:hover {
+        background: var(--el-sidebar-item-bg-hover);
+      }
+      .day.is-outside {
+        color: var(--el-text-faint);
+      }
+      .day.is-today {
+        border-color: var(--el-border-strong);
+        font-weight: 700;
+      }
+      .day.is-today::after {
+        content: '';
+        position: absolute;
+        bottom: 5px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 4px;
+        height: 4px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+      }
+      .day.is-selected {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-weight: 700;
+        border-color: transparent;
+      }
+      .day.is-selected:hover {
+        background: var(--el-accent-pressed);
+      }
+      .day.is-focus {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: -1px;
+        z-index: 1;
+      }
+      .cal-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .foot-btn {
+        border: none;
+        background: transparent;
+        color: var(--el-link);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        padding: 4px 6px;
+        border-radius: var(--radius-control);
+      }
+      .foot-btn:hover {
+        background: var(--el-surface);
+      }
+      .foot-btn.muted {
+        color: var(--el-text-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Create modal — Due date field</h1>
+        <p>
+          Story 2.3 · design for 2.3.12 (finding #56 — mirror Jira). The new Due-date row reuses the
+          shipped DatePicker (2.4.11/2.4.12), placed after Priority. Built from the real tokens.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-calendar"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M8 2v4M16 2v4M3 10h18" />
+          <rect x="3" y="4" width="18" height="18" rx="2" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18M6 6l12 12" />
+        </g>
+        <g
+          id="i-chevL"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m15 18-6-6 6-6" />
+        </g>
+        <g
+          id="i-chevR"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </g>
+        <g
+          id="i-chevD"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14M12 5v14" />
+        </g>
+      </defs>
+    </svg>
+
+    <div class="panel-row">
+      <!-- ═══════════ PANEL 1 — Due date empty ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">1 · Create modal — Due date empty (placeholder)</div>
+        <div class="modal" role="dialog" aria-label="Create issue">
+          <button class="modal-close" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <h2 class="modal-title">Create issue</h2>
+          <div class="modal-body">
+            <div class="field">
+              <label>Type</label>
+              <div class="control">
+                <span>Story</span
+                ><span class="chev"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-chevD" /></svg
+                ></span>
+              </div>
+            </div>
+            <div class="field">
+              <label>Parent</label>
+              <div class="control">
+                <span class="muted">PROD-12 · Authentication epic</span
+                ><span class="chev"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-chevD" /></svg
+                ></span>
+              </div>
+            </div>
+            <div class="field">
+              <label>Title</label>
+              <div class="control"><span>Add “remember me” to the login form</span></div>
+            </div>
+            <div class="field">
+              <label>Description</label>
+              <div class="control textarea">Describe the work…</div>
+            </div>
+            <div class="field">
+              <label>Priority</label>
+              <div class="control">
+                <span>Medium</span
+                ><span class="chev"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-chevD" /></svg
+                ></span>
+              </div>
+            </div>
+            <!-- THE NEW FIELD — after Priority, before Linked issues -->
+            <div class="field is-new">
+              <label>Due date</label>
+              <div class="trigger">
+                <span class="field-open">
+                  <span class="cal-glyph"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-calendar" /></svg
+                  ></span>
+                  <span class="value placeholder">Select a date</span>
+                </span>
+              </div>
+            </div>
+            <div class="field">
+              <label>Linked issues</label>
+              <span class="link-entry"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#i-plus" /></svg> Link
+                issue</span
+              >
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Create issue</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════ PANEL 2 — Due date filled, calendar open ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">
+          2 · Due date filled · calendar open (anchored under the field)
+        </div>
+        <div class="modal" role="dialog" aria-label="Create issue">
+          <button class="modal-close" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <h2 class="modal-title">Create issue</h2>
+          <div class="modal-body">
+            <div class="field">
+              <label>Priority</label>
+              <div class="control">
+                <span>Medium</span
+                ><span class="chev"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-chevD" /></svg
+                ></span>
+              </div>
+            </div>
+            <div class="field is-new">
+              <label>Due date</label>
+              <div class="anchored">
+                <div class="trigger is-focused">
+                  <span class="field-open">
+                    <span class="cal-glyph"
+                      ><svg width="16" height="16" viewBox="0 0 24 24">
+                        <use href="#i-calendar" /></svg
+                    ></span>
+                    <span class="value">Jun 4, 2026</span>
+                  </span>
+                  <button class="clear" aria-label="Clear date">
+                    <svg width="14" height="14" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                  </button>
+                </div>
+                <div class="calendar" role="dialog" aria-label="Choose a date">
+                  <div class="cal-caption">
+                    <span class="month">June 2026</span>
+                    <div class="cal-nav">
+                      <button class="nav-btn" aria-label="Previous month">
+                        <svg width="18" height="18" viewBox="0 0 24 24">
+                          <use href="#i-chevL" />
+                        </svg>
+                      </button>
+                      <button class="nav-btn" aria-label="Next month">
+                        <svg width="18" height="18" viewBox="0 0 24 24">
+                          <use href="#i-chevR" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="cal-grid" role="grid" id="grid">
+                    <span class="dow">Su</span><span class="dow">Mo</span
+                    ><span class="dow">Tu</span> <span class="dow">We</span
+                    ><span class="dow">Th</span><span class="dow">Fr</span>
+                    <span class="dow">Sa</span>
+                    <!-- body rendered by JS (June 2026; selected Jun 4, today Jun 5) -->
+                  </div>
+                  <div class="cal-foot">
+                    <button class="foot-btn">Today</button>
+                    <button class="foot-btn muted">Clear</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="field" style="margin-top: 200px">
+              <label>Linked issues</label>
+              <span class="link-entry"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#i-plus" /></svg> Link
+                issue</span
+              >
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Create issue</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Static render of the open calendar (June 2026; selected Jun 4, today
+      // Jun 5) — the SAME grid the shipped DatePicker draws. The field markup is
+      // the design authority; this just fills the day cells so the reviewer sees
+      // the real calendar in the modal context.
+      const grid = document.getElementById('grid');
+      const view = { y: 2026, m: 5 }; // June (0-indexed)
+      const selected = '2026-6-4';
+      const today = '2026-6-5';
+      const first = new Date(Date.UTC(view.y, view.m, 1)).getUTCDay();
+      const start = new Date(Date.UTC(view.y, view.m, 1 - first));
+      for (let i = 0; i < 42; i++) {
+        const dt = new Date(
+          Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() + i),
+        );
+        const y = dt.getUTCFullYear();
+        const m = dt.getUTCMonth();
+        const d = dt.getUTCDate();
+        const key = `${y}-${m + 1}-${d}`;
+        const cell = document.createElement('span');
+        cell.className = 'day';
+        cell.textContent = d;
+        if (m !== view.m) cell.classList.add('is-outside');
+        if (key === today) cell.classList.add('is-today');
+        if (key === selected) cell.classList.add('is-selected', 'is-focus');
+        grid.appendChild(cell);
+      }
+    </script>
+  </body>
+</html>
