@@ -248,6 +248,46 @@ test.describe('@a11y shell accessibility', () => {
     ).toEqual([]);
   });
 
+  // The issue detail route with the LINK-MANAGEMENT add form open (Subtask
+  // 2.4.9, swept here as part of the 2.4.6 Story closer). The card's AC: the
+  // /issues/[key] route stays in the STRICT sweep "INCLUDING the open add-link
+  // combobox/dialog". STRICT — zero exclusions (no third-party editor on the
+  // detail page). Opens the "+ Link issue" form, then expands the Relationship
+  // listbox so the WAI-ARIA listbox-combobox (role="combobox" → role="listbox"
+  // of role="option" rows) is audited in its open state, mirroring the
+  // create-modal type-picker-open sweep above.
+  test('the issue detail route is axe-clean with the add-link form open (WCAG 2.1 AA; strict)', async ({
+    page,
+  }) => {
+    await signUp(page, 'e2e-detail-addlink-a11y@example.com');
+    await createFirstProject(page, 'Mobile App');
+
+    await page.goto('/issues');
+    await page.getByRole('button', { name: 'Create issue' }).click();
+    await page.getByLabel('Title').fill('Linkable issue');
+    await page.getByRole('button', { name: 'Create', exact: true }).click();
+
+    const toast = page.getByText(/ created$/);
+    await expect(toast).toBeVisible();
+    const identifier = ((await toast.textContent()) ?? '').replace(/ created$/, '').trim();
+    expect(identifier).toMatch(/^[A-Z]+-\d+$/);
+
+    await page.goto(`/issues/${identifier}`);
+    await expect(page.getByRole('heading', { name: 'Linkable issue', level: 1 })).toBeVisible();
+
+    // Open the add-link form, then expand the Relationship listbox.
+    await page.getByRole('button', { name: 'Link issue' }).click();
+    await expect(page.getByRole('combobox', { name: 'Issue to link' })).toBeVisible();
+    await page.getByRole('combobox', { name: 'Relationship' }).click();
+    await expect(page.getByRole('listbox', { name: 'Relationship' })).toBeVisible();
+
+    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    expect(
+      results.violations,
+      formatViolations('/issues/[key] (add-link form open)', results.violations as AxeViolation[]),
+    ).toEqual([]);
+  });
+
   // /tokens is the public design-system specimen — not a shell-bearing route,
   // but it's where every primitive renders together, so an axe sweep here
   // catches regressions before they reach a real surface. Scanned without a
