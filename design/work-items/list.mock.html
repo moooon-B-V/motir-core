@@ -1,0 +1,1585 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Flat sortable List view + the [Tree ▾] view switcher (Story 2.5 · 2.5.7 → 2.5.8)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the issue-list LIST view + the view-switcher
+      menu — the surface tree.png does NOT specify (it draws only the Tree view
+      and a DISABLED [Tree ▾] seam, shipped by 2.5.3 as forward-compatible).
+      Without this asset, 2.5.8 would be improvising UI — the planning-time
+      design gate. This is the design 2.5.8 builds against.
+
+      Built FROM the real design system: the token values below are copied 1:1
+      from app/globals.css (Tier-0 --color-* + Tier-3 --el-* + the shape tokens),
+      and the markup mirrors the SHIPPED primitives — Card, Pill (status tones +
+      the PRIORITY_META priority chip), IssueTypeIcon (lucide in the --el-type-*
+      hue), the initial-letter Avatar, EmptyState — and the SHIPPED column set of
+      IssueTreeTable (2.5.3): Title · Priority · Assignee · Reporter · Due · Est. ·
+      Status. The List reuses those exact cells un-nested, so 2.5.8 composes the
+      same row vocabulary with NO new primitive — only the flat layout + the
+      sortable headers + the switcher menu are new.
+
+      Covers (multi-panel): (0) the full List view in the page shell, default
+      sort key asc · (1) the [List ▾] switcher menu open · (2) re-sorted by a
+      different column (Priority desc) — the active-sort indicator moved + the
+      asc/desc caret · (3) the empty state · (4) the flat loading skeleton.
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1200px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 36px 0 10px;
+        padding-left: 2px;
+        max-width: 1200px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      /* ── Page shell — header + toolbar (mirrors app/(authed)/issues/page.tsx) ─ */
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin: 4px 0 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        position: relative;
+      }
+      /* Toolbar button — the shipped ToolbarButton shape (h-9 control) */
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .tb-btn .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn .caret {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      /* Filter is still the disabled placeholder seam (2.5.4 wires it) */
+      .tb-btn.is-disabled {
+        color: var(--el-text-muted);
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+      /* Primary "New issue" — Button variant="primary" */
+      .tb-btn.primary {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+      }
+      .tb-btn.primary .ic {
+        color: var(--el-accent-text);
+      }
+
+      /* View-switcher menu (Popover, role=menu) — built in 2.5.8 */
+      .switcher {
+        position: absolute;
+        top: calc(var(--height-control) + 6px);
+        z-index: 20;
+        min-width: 168px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      /* anchor the menu under the [List ▾] control (2nd toolbar button) */
+      .switcher.under-view {
+        right: 116px;
+      }
+      .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .menu-item .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .menu-item .label {
+        flex: 1;
+      }
+      .menu-item .check {
+        width: 16px;
+        height: 16px;
+        color: var(--el-accent);
+        flex: none;
+      }
+      .menu-item[aria-current='true'] {
+        background: var(--el-surface);
+        font-weight: 600;
+      }
+      .menu-item:hover {
+        background: var(--el-surface);
+      }
+
+      /* ── The flat List table ─────────────────────────────────────────────── */
+      /* Container chrome mirrors IssueTreeSkeleton / TreeTable (rounded, bordered) */
+      .list-table {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      /* Column grid — IDENTICAL to IssueTreeTable / IssueTreeSkeleton:
+         Title · Priority · Assignee · Reporter · Due · Est. · Status */
+      .lt-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 120px 150px 150px 120px 90px 130px;
+        align-items: center;
+        column-gap: 16px;
+        padding: 0 28px 0 16px;
+      }
+      .lt-head {
+        height: 40px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+      }
+      /* Sortable column header = a button. Hover surfaces the caret; the active
+         column shows the solid asc/desc caret + aria-sort on the cell. */
+      .th {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+      }
+      .th.end {
+        justify-content: flex-end;
+      }
+      .sort-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: none;
+        border: 0;
+        padding: 2px 0;
+        margin: 0;
+        cursor: pointer;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .sort-btn .caret {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        opacity: 0; /* hidden until hover / active */
+        color: var(--el-text-faint);
+        transition: opacity 0.12s ease;
+      }
+      .sort-btn:hover {
+        color: var(--el-text);
+      }
+      .sort-btn:hover .caret {
+        opacity: 0.55;
+      }
+      /* active sort column */
+      .th[aria-sort='ascending'] .sort-btn,
+      .th[aria-sort='descending'] .sort-btn {
+        color: var(--el-text);
+      }
+      .th[aria-sort='ascending'] .sort-btn .caret,
+      .th[aria-sort='descending'] .sort-btn .caret {
+        opacity: 1;
+        color: var(--el-text-secondary);
+      }
+
+      .lt-row {
+        height: 44px;
+        border-bottom: 1px solid var(--el-border);
+        text-decoration: none;
+        color: inherit;
+      }
+      .lt-row:last-child {
+        border-bottom: 0;
+      }
+      .lt-row:hover {
+        background: var(--el-surface);
+      }
+      .lt-row:hover .cell-title .ttl {
+        text-decoration: underline;
+      }
+
+      /* Title cell — IssueTypeIcon · mono identifier · title (no indent/chevron) */
+      .cell-title {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .cell-title .lr-id {
+        flex: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .cell-title .ttl {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+
+      .type-icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+
+      /* Avatar — initial-letter, mirrors IssueTreeTable's Avatar */
+      .avatar {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .cell-person {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .cell-person .nm {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .muted-cell {
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .cell-meta {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .end {
+        justify-content: flex-end;
+        text-align: right;
+      }
+
+      /* Pill (components/ui/Pill.tsx): hue in tint background, strong text */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: 2px 10px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill .pic {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .pill--planned {
+        background: var(--el-tint-lavender);
+      }
+      .pill--inprogress {
+        background: var(--el-tint-sky);
+      }
+      .pill--done {
+        background: var(--el-tint-mint);
+      }
+      .pill--warning {
+        background: var(--el-tint-peach);
+      }
+      .pill--danger {
+        background: var(--el-tint-rose);
+      }
+      .pill--info {
+        background: var(--el-tint-sky);
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+
+      /* EmptyState (components/ui/EmptyState.tsx) = Card + icon + action */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        box-shadow: var(--shadow-card);
+      }
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .empty .ic-wrap {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-muted);
+      }
+      .empty .ic-wrap svg {
+        width: 48px;
+        height: 48px;
+      }
+      .empty h3 {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 400;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 8px 0 0;
+        max-width: 48ch;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .empty .action {
+        margin-top: 16px;
+      }
+      .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 18px;
+        border-radius: var(--radius-btn);
+        border: 1px solid transparent;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .btn-primary .ic {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* Loading skeleton — FLAT (no indent/chevron), same columns */
+      .sk {
+        animation: pulse 1.6s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.55;
+        }
+      }
+      .bar {
+        display: block;
+        height: 12px;
+        border-radius: 4px;
+        background: var(--el-muted);
+      }
+      .chip-sk {
+        display: block;
+        height: 20px;
+        width: 64px;
+        border-radius: 9999px;
+        background: var(--el-muted);
+      }
+      .dot-sk {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        background: var(--el-muted);
+        flex: none;
+      }
+      .av-sk {
+        width: 22px;
+        height: 22px;
+        border-radius: 9999px;
+        background: var(--el-muted);
+        flex: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Flat sortable List view + the [Tree&nbsp;▾] view switcher</h1>
+        <p>
+          Story 2.5 · design for 2.5.7 → gating the 2.5.8 view-switcher. Extends tree.png with the
+          List mode it leaves unspecified. Built from the real design-system tokens / primitives.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke, used by <use>) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <!-- task = square-check-big -->
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <!-- subtask = list-checks -->
+        <g
+          id="i-subtask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </g>
+        <g
+          id="i-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+        </g>
+        <g
+          id="i-chevron-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m18 15-6-6-6 6" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-sliders"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="21" x2="14" y1="4" y2="4" />
+          <line x1="10" x2="3" y1="4" y2="4" />
+          <line x1="21" x2="12" y1="12" y2="12" />
+          <line x1="8" x2="3" y1="12" y2="12" />
+          <line x1="21" x2="16" y1="20" y2="20" />
+          <line x1="12" x2="3" y1="20" y2="20" />
+          <line x1="14" x2="14" y1="2" y2="6" />
+          <line x1="8" x2="8" y1="10" y2="14" />
+          <line x1="16" x2="16" y1="18" y2="22" />
+        </g>
+        <g
+          id="i-list-tree"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12h-8" />
+          <path d="M21 6H8" />
+          <path d="M21 18h-8" />
+          <path d="M3 6v4c0 1.1.9 2 2 2h3" />
+          <path d="M3 10v6c0 1.1.9 2 2 2h3" />
+        </g>
+        <g
+          id="i-list"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 5h.01" />
+          <path d="M3 12h.01" />
+          <path d="M3 19h.01" />
+          <path d="M8 5h13" />
+          <path d="M8 12h13" />
+          <path d="M8 19h13" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-inbox"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+          <path
+            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+          />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════ PANEL 0 — List view in the page shell (default sort key asc) ════════════ -->
+    <div class="panel-label">
+      0 · List view in the /issues shell — the [List&nbsp;▾] switcher active, the flat sortable
+      table, default sort KEY asc (the Title column orders by the mono identifier)
+    </div>
+    <div class="panel">
+      <div class="page-head">
+        <div>
+          <h2>Issues</h2>
+          <p class="sub">All issues in Prodect — Q3 launch</p>
+        </div>
+        <div class="toolbar">
+          <button class="tb-btn is-disabled" title="Filtering arrives in a later update">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter
+          </button>
+          <button class="tb-btn" aria-haspopup="menu" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-list" /></svg>List<svg
+              class="caret"
+              viewBox="0 0 24 24"
+            >
+              <use href="#i-chevron-down" />
+            </svg>
+          </button>
+          <button class="tb-btn primary">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+          </button>
+        </div>
+      </div>
+
+      <div class="list-table" role="table" aria-label="Issues">
+        <!-- header row -->
+        <div class="lt-grid lt-head" role="row">
+          <div class="th" role="columnheader" aria-sort="ascending">
+            <button class="sort-btn">
+              Title<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+          <div class="th" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Priority<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+          <div class="th" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Assignee<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+          <div class="th" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Reporter<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+          <div class="th" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Due<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+          <div class="th end" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Est.<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+          <div class="th" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Status<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- rows: flat, key asc -->
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg></span
+            ><span class="lr-id">PROD-12</span
+            ><span class="ttl">Q3 launch — Auth &amp; sign-in</span></span
+          >
+          <span class="pill pill--warning"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+          >
+          <span class="muted-cell">—</span>
+          <span class="cell-meta end muted-cell">—</span>
+          <span><span class="pill pill--inprogress">in-progress</span></span>
+        </a>
+
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-story"
+              ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+            ><span class="lr-id">PROD-23</span
+            ><span class="ttl">Email + password sign-in</span></span
+          >
+          <span class="pill pill--neutral"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+          >
+          <span class="cell-meta">Jun 12, 2026</span>
+          <span class="cell-meta end">8h</span>
+          <span><span class="pill pill--done">done</span></span>
+        </a>
+
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-story"
+              ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+            ><span class="lr-id">PROD-31</span><span class="ttl">Google OAuth sign-in</span></span
+          >
+          <span class="pill pill--warning"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+          >
+          <span class="muted-cell">—</span>
+          <span class="cell-meta end muted-cell">—</span>
+          <span><span class="pill pill--inprogress">in-progress</span></span>
+        </a>
+
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-task"
+              ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+            ><span class="lr-id">PROD-34</span
+            ><span class="ttl">Password reset email — copy + template</span></span
+          >
+          <span class="pill pill--neutral"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">R</span><span class="nm">Riya Shah</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+          >
+          <span class="cell-meta">Jun 9, 2026</span>
+          <span class="cell-meta end">3h</span>
+          <span><span class="pill pill--inprogress">in-review</span></span>
+        </a>
+
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-task"
+              ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+            ><span class="lr-id">PROD-41</span
+            ><span class="ttl">Set up Google Cloud OAuth credentials</span></span
+          >
+          <span class="pill pill--neutral"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span class="muted-cell">—</span>
+          <span class="cell-meta end">1h 30m</span>
+          <span><span class="pill pill--done">done</span></span>
+        </a>
+
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-task"
+              ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+            ><span class="lr-id">PROD-42</span
+            ><span class="ttl">Add Google OAuth to sign-in</span></span
+          >
+          <span class="pill pill--warning"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span class="cell-meta">Jun 16, 2026</span>
+          <span class="cell-meta end">4h</span>
+          <span><span class="pill pill--inprogress">in-progress</span></span>
+        </a>
+
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-bug"
+              ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+            ><span class="lr-id">PROD-49</span
+            ><span class="ttl">OAuth callback drops the `state` param on Safari ≤16</span></span
+          >
+          <span class="pill pill--danger"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>Highest</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">J</span><span class="nm">Jamal Tate</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span class="cell-meta">Jun 7, 2026</span>
+          <span class="cell-meta end">2h</span>
+          <span><span class="pill pill--inprogress">in-review</span></span>
+        </a>
+
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-subtask"
+              ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+            ><span class="lr-id">PROD-58</span
+            ><span class="ttl">Write E2E test: email-first user signs in with Google</span></span
+          >
+          <span class="pill pill--info"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg>Low</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span class="muted-cell">—</span>
+          <span class="cell-meta end">2h 30m</span>
+          <span><span class="pill pill--planned">todo</span></span>
+        </a>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 1 — the [List ▾] switcher menu OPEN ════════════ -->
+    <div class="panel-label">
+      1 · The view switcher open — [Tree] / [List] (2.5.8 replaces the disabled tree.png seam); the
+      active view is check-marked
+    </div>
+    <div class="panel">
+      <div class="page-head">
+        <div>
+          <h2>Issues</h2>
+          <p class="sub">All issues in Prodect — Q3 launch</p>
+        </div>
+        <div class="toolbar">
+          <button class="tb-btn is-disabled" title="Filtering arrives in a later update">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter
+          </button>
+          <button class="tb-btn" aria-haspopup="menu" aria-expanded="true">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-list" /></svg>List<svg
+              class="caret"
+              viewBox="0 0 24 24"
+            >
+              <use href="#i-chevron-down" />
+            </svg>
+          </button>
+          <button class="tb-btn primary">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+          </button>
+
+          <!-- the open menu, anchored under [List ▾] -->
+          <div class="switcher under-view" role="menu" aria-label="Switch view">
+            <div class="menu-item" role="menuitemradio" aria-current="false">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-list-tree" /></svg>
+              <span class="label">Tree</span>
+            </div>
+            <div class="menu-item" role="menuitemradio" aria-current="true">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-list" /></svg>
+              <span class="label">List</span>
+              <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="list-table" role="table" aria-label="Issues" style="opacity: 0.55">
+        <div class="lt-grid lt-head" role="row">
+          <div class="th" role="columnheader" aria-sort="ascending">
+            <button class="sort-btn">
+              Title<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+          <div class="th" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Priority<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+          <div class="th" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Assignee<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+          <div class="th" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Reporter<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+          <div class="th" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Due<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+          <div class="th end" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Est.<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+          <div class="th" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Status<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+        </div>
+        <div class="lt-grid lt-row" role="row">
+          <span class="cell-title"
+            ><span class="type-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg></span
+            ><span class="lr-id">PROD-12</span
+            ><span class="ttl">Q3 launch — Auth &amp; sign-in</span></span
+          >
+          <span class="pill pill--warning"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+          >
+          <span class="muted-cell">—</span>
+          <span class="cell-meta end muted-cell">—</span>
+          <span><span class="pill pill--inprogress">in-progress</span></span>
+        </div>
+        <div class="lt-grid lt-row" role="row">
+          <span class="cell-title"
+            ><span class="type-icon t-story"
+              ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+            ><span class="lr-id">PROD-23</span
+            ><span class="ttl">Email + password sign-in</span></span
+          >
+          <span class="pill pill--neutral"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+          >
+          <span class="cell-meta">Jun 12, 2026</span>
+          <span class="cell-meta end">8h</span>
+          <span><span class="pill pill--done">done</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 2 — re-sorted by PRIORITY desc ════════════ -->
+    <div class="panel-label">
+      2 · Sorted by PRIORITY ▾ (desc) — the active-sort indicator moves to the Priority header
+      (solid down caret + aria-sort="descending"); Title returns to the inactive hover-only state
+    </div>
+    <div class="panel">
+      <div class="list-table" role="table" aria-label="Issues">
+        <div class="lt-grid lt-head" role="row">
+          <div class="th" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Title<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+          <div class="th" role="columnheader" aria-sort="descending">
+            <button class="sort-btn">
+              Priority<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+          </div>
+          <div class="th" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Assignee<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+          <div class="th" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Reporter<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+          <div class="th" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Due<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+          <div class="th end" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Est.<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+          <div class="th" role="columnheader" aria-sort="none">
+            <button class="sort-btn">
+              Status<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+            </button>
+          </div>
+        </div>
+
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-bug"
+              ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+            ><span class="lr-id">PROD-49</span
+            ><span class="ttl">OAuth callback drops the `state` param on Safari ≤16</span></span
+          >
+          <span class="pill pill--danger"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>Highest</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">J</span><span class="nm">Jamal Tate</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span class="cell-meta">Jun 7, 2026</span>
+          <span class="cell-meta end">2h</span>
+          <span><span class="pill pill--inprogress">in-review</span></span>
+        </a>
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg></span
+            ><span class="lr-id">PROD-12</span
+            ><span class="ttl">Q3 launch — Auth &amp; sign-in</span></span
+          >
+          <span class="pill pill--warning"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+          >
+          <span class="muted-cell">—</span>
+          <span class="cell-meta end muted-cell">—</span>
+          <span><span class="pill pill--inprogress">in-progress</span></span>
+        </a>
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-story"
+              ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+            ><span class="lr-id">PROD-31</span><span class="ttl">Google OAuth sign-in</span></span
+          >
+          <span class="pill pill--warning"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+          >
+          <span class="muted-cell">—</span>
+          <span class="cell-meta end muted-cell">—</span>
+          <span><span class="pill pill--inprogress">in-progress</span></span>
+        </a>
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-task"
+              ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+            ><span class="lr-id">PROD-42</span
+            ><span class="ttl">Add Google OAuth to sign-in</span></span
+          >
+          <span class="pill pill--warning"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span class="cell-meta">Jun 16, 2026</span>
+          <span class="cell-meta end">4h</span>
+          <span><span class="pill pill--inprogress">in-progress</span></span>
+        </a>
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-story"
+              ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+            ><span class="lr-id">PROD-23</span
+            ><span class="ttl">Email + password sign-in</span></span
+          >
+          <span class="pill pill--neutral"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+          >
+          <span class="cell-meta">Jun 12, 2026</span>
+          <span class="cell-meta end">8h</span>
+          <span><span class="pill pill--done">done</span></span>
+        </a>
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-task"
+              ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+            ><span class="lr-id">PROD-34</span
+            ><span class="ttl">Password reset email — copy + template</span></span
+          >
+          <span class="pill pill--neutral"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">R</span><span class="nm">Riya Shah</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+          >
+          <span class="cell-meta">Jun 9, 2026</span>
+          <span class="cell-meta end">3h</span>
+          <span><span class="pill pill--inprogress">in-review</span></span>
+        </a>
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-task"
+              ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+            ><span class="lr-id">PROD-41</span
+            ><span class="ttl">Set up Google Cloud OAuth credentials</span></span
+          >
+          <span class="pill pill--neutral"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span class="muted-cell">—</span>
+          <span class="cell-meta end">1h 30m</span>
+          <span><span class="pill pill--done">done</span></span>
+        </a>
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-subtask"
+              ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+            ><span class="lr-id">PROD-58</span
+            ><span class="ttl">Write E2E test: email-first user signs in with Google</span></span
+          >
+          <span class="pill pill--info"
+            ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg>Low</span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span class="muted-cell">—</span>
+          <span class="cell-meta end">2h 30m</span>
+          <span><span class="pill pill--planned">todo</span></span>
+        </a>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 3 — empty state (List view) ════════════ -->
+    <div class="panel-label">
+      3 · Empty — reuses the tree's EmptyState verbatim (no delta); the view switcher doesn't change
+      an empty project
+    </div>
+    <div class="panel" style="max-width: 760px">
+      <div class="card empty">
+        <span class="ic-wrap"
+          ><svg viewBox="0 0 24 24"><use href="#i-inbox" /></svg
+        ></span>
+        <h3>No issues yet</h3>
+        <p>Create your first issue to start tracking work.</p>
+        <div class="action">
+          <button class="btn-primary">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 4 — loading skeleton (List view) ════════════ -->
+    <div class="panel-label">
+      4 · Loading — the same skeleton as the tree, but FLAT: no per-row indent + no chevron column
+      (the one delta from IssueTreeSkeleton)
+    </div>
+    <div class="panel">
+      <div class="list-table sk" aria-hidden="true">
+        <div class="lt-grid lt-head">
+          <span class="sort-btn" style="cursor: default">Title</span>
+          <span class="sort-btn" style="cursor: default">Priority</span>
+          <span class="sort-btn" style="cursor: default">Assignee</span>
+          <span class="sort-btn" style="cursor: default">Reporter</span>
+          <span class="sort-btn" style="cursor: default">Due</span>
+          <span class="sort-btn end" style="cursor: default; justify-content: flex-end">Est.</span>
+          <span class="sort-btn" style="cursor: default">Status</span>
+        </div>
+        <!-- 8 flat shimmer rows; row title widths vary, NO indent -->
+        <div class="lt-grid lt-row">
+          <span class="cell-title"
+            ><span class="dot-sk"></span><span class="bar" style="width: 56px"></span
+            ><span class="bar" style="width: 190px"></span
+          ></span>
+          <span class="chip-sk"></span>
+          <span class="cell-person"
+            ><span class="av-sk"></span><span class="bar" style="width: 64px"></span
+          ></span>
+          <span class="cell-person"
+            ><span class="av-sk"></span><span class="bar" style="width: 64px"></span
+          ></span>
+          <span class="bar" style="width: 64px"></span>
+          <span class="end" style="display: flex; justify-content: flex-end"
+            ><span class="bar" style="width: 36px"></span
+          ></span>
+          <span class="chip-sk" style="width: 80px"></span>
+        </div>
+        <div class="lt-grid lt-row">
+          <span class="cell-title"
+            ><span class="dot-sk"></span><span class="bar" style="width: 56px"></span
+            ><span class="bar" style="width: 240px"></span
+          ></span>
+          <span class="chip-sk"></span>
+          <span class="cell-person"
+            ><span class="av-sk"></span><span class="bar" style="width: 64px"></span
+          ></span>
+          <span class="cell-person"
+            ><span class="av-sk"></span><span class="bar" style="width: 64px"></span
+          ></span>
+          <span class="bar" style="width: 64px"></span>
+          <span class="end" style="display: flex; justify-content: flex-end"
+            ><span class="bar" style="width: 36px"></span
+          ></span>
+          <span class="chip-sk" style="width: 80px"></span>
+        </div>
+        <div class="lt-grid lt-row">
+          <span class="cell-title"
+            ><span class="dot-sk"></span><span class="bar" style="width: 56px"></span
+            ><span class="bar" style="width: 150px"></span
+          ></span>
+          <span class="chip-sk"></span>
+          <span class="cell-person"
+            ><span class="av-sk"></span><span class="bar" style="width: 64px"></span
+          ></span>
+          <span class="cell-person"
+            ><span class="av-sk"></span><span class="bar" style="width: 64px"></span
+          ></span>
+          <span class="bar" style="width: 64px"></span>
+          <span class="end" style="display: flex; justify-content: flex-end"
+            ><span class="bar" style="width: 36px"></span
+          ></span>
+          <span class="chip-sk" style="width: 80px"></span>
+        </div>
+        <div class="lt-grid lt-row">
+          <span class="cell-title"
+            ><span class="dot-sk"></span><span class="bar" style="width: 56px"></span
+            ><span class="bar" style="width: 210px"></span
+          ></span>
+          <span class="chip-sk"></span>
+          <span class="cell-person"
+            ><span class="av-sk"></span><span class="bar" style="width: 64px"></span
+          ></span>
+          <span class="cell-person"
+            ><span class="av-sk"></span><span class="bar" style="width: 64px"></span
+          ></span>
+          <span class="bar" style="width: 64px"></span>
+          <span class="end" style="display: flex; justify-content: flex-end"
+            ><span class="bar" style="width: 36px"></span
+          ></span>
+          <span class="chip-sk" style="width: 80px"></span>
+        </div>
+        <div class="lt-grid lt-row">
+          <span class="cell-title"
+            ><span class="dot-sk"></span><span class="bar" style="width: 56px"></span
+            ><span class="bar" style="width: 170px"></span
+          ></span>
+          <span class="chip-sk"></span>
+          <span class="cell-person"
+            ><span class="av-sk"></span><span class="bar" style="width: 64px"></span
+          ></span>
+          <span class="cell-person"
+            ><span class="av-sk"></span><span class="bar" style="width: 64px"></span
+          ></span>
+          <span class="bar" style="width: 64px"></span>
+          <span class="end" style="display: flex; justify-content: flex-end"
+            ><span class="bar" style="width: 36px"></span
+          ></span>
+          <span class="chip-sk" style="width: 80px"></span>
+        </div>
+        <div class="lt-grid lt-row">
+          <span class="cell-title"
+            ><span class="dot-sk"></span><span class="bar" style="width: 56px"></span
+            ><span class="bar" style="width: 230px"></span
+          ></span>
+          <span class="chip-sk"></span>
+          <span class="cell-person"
+            ><span class="av-sk"></span><span class="bar" style="width: 64px"></span
+          ></span>
+          <span class="cell-person"
+            ><span class="av-sk"></span><span class="bar" style="width: 64px"></span
+          ></span>
+          <span class="bar" style="width: 64px"></span>
+          <span class="end" style="display: flex; justify-content: flex-end"
+            ><span class="bar" style="width: 36px"></span
+          ></span>
+          <span class="chip-sk" style="width: 80px"></span>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

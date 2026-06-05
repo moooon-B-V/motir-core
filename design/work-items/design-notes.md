@@ -3,13 +3,14 @@
 Design reference for the `work-items` UI area. Each surface names the design
 asset it lives in, the primitives it composes from, copy strings, and placement.
 
-| Surface                                       | Asset                                       | Notes                                                                                                              |
-| --------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Issue detail page                             | `detail.pen` (Pencil) + `detail.png`        | header eyebrow + Description / Explanation / Activity (left) · core-fields rail (right). Built across 2.4.1–2.4.4. |
-| Create issue modal                            | `create.pen` + `create.png`                 | type/parent/title/description/priority + optional Explanation (panel 3).                                           |
-| Tree / list                                   | `tree.pen` + `tree.png`                     | issue tree rows.                                                                                                   |
-| **Relationships panel + ready/blocked badge** | **`relationships.mock.html`** (HTML mockup) | The element `detail.pen` does NOT specify. See below.                                                              |
-| **Link management (add / remove links)**      | **`links.mock.html`** (HTML mockup)         | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                 |
+| Surface                                       | Asset                                       | Notes                                                                                                                |
+| --------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Issue detail page                             | `detail.pen` (Pencil) + `detail.png`        | header eyebrow + Description / Explanation / Activity (left) · core-fields rail (right). Built across 2.4.1–2.4.4.   |
+| Create issue modal                            | `create.pen` + `create.png`                 | type/parent/title/description/priority + optional Explanation (panel 3).                                             |
+| Tree view (issue list, nested)                | `tree.pen` + `tree.png`                     | issue tree rows + the `[Filter]`·`[Tree ▾]`·`[+ New issue]` toolbar.                                                 |
+| **Flat sortable List view + view switcher**   | **`list.mock.html`** (HTML mockup)          | The List mode `tree.png` leaves unspecified (it draws only Tree + a disabled switcher seam). Gates 2.5.8. See below. |
+| **Relationships panel + ready/blocked badge** | **`relationships.mock.html`** (HTML mockup) | The element `detail.pen` does NOT specify. See below.                                                                |
+| **Link management (add / remove links)**      | **`links.mock.html`** (HTML mockup)         | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                   |
 
 ---
 
@@ -174,3 +175,130 @@ section (collect-then-write-on-create).
 
 Bulk-link / link from the list/board surfaces (Epic 3/2.5), and a typed
 relationship beyond the five kinds, are not in 2.4.9 / 2.4.10.
+
+---
+
+## Flat sortable List view + the `[Tree ▾]` view switcher (Story 2.5 · 2.5.7 → 2.5.8)
+
+`tree.png` designs only the **Tree** view and ships a **disabled** `[Tree ▾]`
+control as a forward-compatible seam (2.5.3's `IssueListToolbar`). It does NOT
+specify the **flat List mode** that control will toggle to, nor the open
+switcher menu. `list.mock.html` is the design asset for both — built from the
+live `--el-*` tokens + the shipped primitives, so the code subtask (**2.5.8**)
+composes the same primitives with no Pencil→code gap. Mirror product: Jira's
+issue-navigator "List" view + its view/sort headers.
+
+### What's new vs. the Tree (and what's reused verbatim)
+
+The List is the **same table as the Tree, un-nested and sortable**. Only three
+things are new; everything else is the shipped `IssueTreeTable` (2.5.3):
+
+- **Flat rows** — no indent, no chevron, no `treegrid` nesting. The rows are the
+  project's issues in the active sort order (the Tree's depth-first order is
+  gone).
+- **Sortable column headers** — each header is a sort button (see below).
+- **The switcher menu** — the `[Tree ▾]` control becomes a real menu.
+
+Reused **with zero new primitives** (satisfies the AC "no new visual primitive
+invented; consistent with tree.png"): the **whole column set** the shipped
+`IssueTreeTable` already renders, the cell vocabulary, the container chrome
+(`rounded-(--radius-card)` bordered box, `--el-surface-soft` header), and the
+whole-row link to `/issues/[identifier]`.
+
+### Columns — the SAME set the shipped Tree renders
+
+`IssueTreeTable` already renders seven columns (it went beyond `tree.png`'s
+three drawn columns — that shipped code is enforced reality, rung 2). The List
+**reuses that exact set and order**, so Tree↔List is column-identical and 2.5.8
+reuses the same `cell` render-props:
+
+| Column   | Width (px) | Cell                                                  | Sorts by                       |
+| -------- | ---------- | ----------------------------------------------------- | ------------------------------ |
+| Title    | `1fr`      | `IssueTypeIcon` (type hue) · mono identifier · title  | **issue key** (the default)    |
+| Priority | 120        | `PRIORITY_META` chip (`Pill` tone + direction icon)   | priority rank (highest→lowest) |
+| Assignee | 150        | initial-letter `Avatar` · name, or muted "Unassigned" | assignee name                  |
+| Reporter | 150        | initial-letter `Avatar` · name                        | reporter name                  |
+| Due      | 120        | formatted date, or muted `—`                          | due date                       |
+| Est.     | 90 (end)   | formatted duration, or muted `—` (right-aligned)      | estimate minutes               |
+| Status   | 130        | `Pill` by lifecycle category (the `STATUS_TONE` map)  | workflow status order          |
+
+Grid template (identical to `IssueTreeTable` / `IssueTreeSkeleton`):
+`minmax(0,1fr) 120px 150px 150px 120px 90px 130px`.
+
+**Decision — no NEW "Updated" column (the card offered Priority/Updated as
+optional extras).** Priority is already a Tree column, and the seven existing
+columns already give rich, meaningful sort axes — so the List earns its keep
+through _sorting the existing columns_, not by adding data. Adding `updated_at`
+would be new plumbing into `IssueRowData` + a new cell for marginal gain over
+the existing Due/Est/Priority sorts ("no complexity for nothing"). An **Updated**
+column (and column show/hide) belongs with Epic 6 saved-views, where recency
+sort earns its place; noted as the documented extension, not built here.
+
+### Sortable headers — the affordance
+
+- Each header is a **sort button** (`text-(--el-text-secondary)`, uppercase
+  11px, the existing header type) carrying a **caret** that is hidden by default.
+- **Hover** a header → the caret fades in faint (`--el-text-faint`, ~55%) and
+  the label goes to `--el-text` — the "this is sortable" affordance.
+- **Active column** → caret is solid (`--el-text-secondary`), `ChevronUp` for
+  **asc** / `ChevronDown` for **desc**, and the header cell carries
+  `aria-sort="ascending|descending"`. Inactive headers are `aria-sort="none"`.
+- **Default sort = `key` asc** — the **Title** column (the issue key is the mono
+  identifier leading that cell), matching 2.5.8's AC. The Title header shows the
+  active ascending caret on first paint.
+- **Interaction (built in 2.5.8):** clicking a header sorts by that column asc;
+  clicking the active header toggles asc↔desc; clicking another column moves the
+  active sort there (asc). **Single-column sort only** — multi-sort is Epic 6.
+- The right-aligned **Est.** column keeps its header + caret right-aligned.
+
+### View switcher menu
+
+The `[Tree ▾]` toolbar control (disabled placeholder in 2.5.3) becomes a real
+menu (a `Popover` / menu, `aria-haspopup="menu"`). The trigger shows the
+**active view's** label + icon (`ListTree` for Tree, `List` for List) + a
+`ChevronDown`. The open menu lists two `menuitemradio` rows:
+
+- **Tree** — `ListTree` icon + "Tree".
+- **List** — `List` icon + "List".
+
+The **active** row gets `--el-surface` bg, semibold weight, and a trailing
+`Check` in `--el-accent`. Menu container is `--radius-card` + `--shadow-elevated`;
+rows are `--radius-control` + `--spacing-control-*` padding (the shipped
+menu-row shape). View choice is **URL-driven** in 2.5.8 (`?view=tree|list`), so
+the trigger label reflects `?view` on load.
+
+### Empty + loading
+
+- **Empty** — reused **verbatim** from the Tree: the shipped `EmptyState`
+  ("No issues yet" / "Create your first issue to start tracking work." +
+  `NewIssueButton`). The switcher doesn't change an empty project; **no delta**.
+- **Loading** — the Tree's `IssueTreeSkeleton` with **one delta: the rows are
+  FLAT** — no per-row `INDENT` offset and no leading chevron block. Same column
+  grid, same header, same shimmer bars/chips/avatars, so there's no layout shift
+  on settle.
+
+### Tokens / a11y
+
+- Colour flows only through `--el-*`; status via `Pill`'s `status` tones,
+  priority via the shared `PRIORITY_META` chip (hue in the tint, `--el-text-strong`
+  text — finding #35 AA-safe), type icons take their `--el-type-*` hue.
+- Shape via the element-semantic tokens (`--radius-card` / `--radius-control` /
+  `--radius-badge`, `--spacing-control-*`, `--height-control`,
+  `--shadow-elevated`) so the List re-shapes under `data-display-style`.
+- **Sortable headers carry `aria-sort`** (2.5.8 wires the live value) — required
+  by the 2.5.6 strict shell-a11y sweep, which adds the List view to its scope.
+  Sort direction is conveyed by the caret glyph + `aria-sort` text, never colour
+  alone. Toggle dark mode in the mock to confirm token parity.
+
+### States in the mockup
+
+Panels: **(0)** the List view in the `/issues` shell (toolbar + flat table,
+default key asc) · **(1)** the switcher menu open (Tree / List, List checked) ·
+**(2)** re-sorted by Priority desc (the active-sort indicator moved + the desc
+caret) · **(3)** empty state · **(4)** the flat loading skeleton.
+
+### Out of scope (documented extension slots)
+
+Saved / named views, multi-column sort, column show/hide config, and an
+**Updated** column are **Epic 6** (saved views & advanced search) — not invented
+here. Bulk actions from the list are also out of scope for 2.5.8.
