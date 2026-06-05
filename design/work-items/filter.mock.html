@@ -1,0 +1,1337 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Filter bar — kind · status · assignee · text (Story 2.5 · 2.5.9 → 2.5.4)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the issue-list FILTER bar — the open
+      [Filter] surface tree.png does NOT specify (it draws only a DISABLED
+      [Filter] seam, shipped by 2.5.3 / list.mock.html as forward-compatible).
+      Without this asset, 2.5.4 would be improvising UI — the planning-time
+      design gate. This is the design 2.5.4 builds against.
+
+      Built FROM the real design system: the token values below are copied 1:1
+      from app/globals.css (Tier-0 --color-* + Tier-3 --el-* + the shape tokens),
+      and the markup composes the SHIPPED primitives — the toolbar ToolbarButton
+      (the same .tb-btn list.mock.html draws), the Combobox option-row + search
+      vocabulary (role="listbox" / role="option" rows with a trailing Check, the
+      bordered search input), IssueTypeIcon (lucide in the --el-type-* hue), the
+      StatusPicker status DOT (status.color ?? category var), the member-combobox
+      Avatar, and the Pill chrome. The popover surface reuses the EXACT card
+      chrome list.mock's view-switcher menu uses (--radius-card, --shadow-elevated).
+      NO new picker primitive — only the popover composition + the trigger's
+      active-count badge are new, which is what 2.5.4 wires.
+
+      Covers (multi-panel): (0) the Filter TRIGGER — closed-inactive vs.
+      closed-active (count badge), in the /issues toolbar · (1) the popover OPEN,
+      EMPTY (nothing selected, Clear hidden) · (2) the popover OPEN, POPULATED
+      (kind/status/assignee/text selections, Clear active, badge = 5) · (3) the
+      applied filter on the page — the active trigger + the context-preserving
+      tree (matching rows keep their muted ancestors). Toggle dark mode to
+      confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 10px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-info: var(--color-info);
+        --el-success: var(--color-success);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1100px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 36px auto 10px;
+        padding-left: 2px;
+        max-width: 1100px;
+      }
+
+      /* ── Page shell — header + toolbar (mirrors app/(authed)/issues/page.tsx) ─ */
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin: 4px 0 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        position: relative;
+      }
+      /* Toolbar button — the shipped ToolbarButton shape (h-control) */
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .tb-btn .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn .caret {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn.is-disabled {
+        color: var(--el-text-muted);
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+      .tb-btn.primary {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+      }
+      .tb-btn.primary .ic {
+        color: var(--el-accent-text);
+      }
+      /* Filter trigger, ACTIVE — a faint accent ring + accent icon while filters
+         apply, plus the count badge. AA: text stays --el-text on the page bg. */
+      .tb-btn.is-active {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+      }
+      .tb-btn.is-active .ic {
+        color: var(--el-accent);
+      }
+      /* active-filter COUNT badge — the number of active filter values; a small
+         accent chip after the label (the only NET-NEW affordance over the seam) */
+      .tb-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 11px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ── Filter popover — Popover anchored under the [Filter] trigger ──────── */
+      /* Container chrome === the view-switcher menu (list.mock.html): card radius,
+         hairline border, elevated shadow. Wider, with a scrolling body. */
+      .filter-pop {
+        position: absolute;
+        top: calc(var(--height-control) + 6px);
+        left: 0;
+        z-index: 20;
+        width: 320px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        overflow: hidden;
+      }
+      /* Header — title + the Clear-all reset (shown only when filters are active) */
+      .fp-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .fp-head .fp-title {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-muted);
+      }
+      .fp-clear {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: none;
+        border: 0;
+        padding: 2px 4px;
+        margin: -2px -4px;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .fp-clear:hover {
+        text-decoration: underline;
+      }
+      .fp-clear .ic {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+      .fp-clear[disabled] {
+        color: var(--el-text-faint);
+        cursor: default;
+        text-decoration: none;
+      }
+      .fp-body {
+        max-height: 440px;
+        overflow-y: auto;
+        padding: 6px;
+      }
+      /* The top-level TEXT quick-filter — the bordered Combobox search input. */
+      .fp-search {
+        position: relative;
+        margin: 6px 4px 8px;
+      }
+      .fp-search .si {
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+        pointer-events: none;
+      }
+      .fp-search input {
+        width: 100%;
+        height: var(--height-control);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 0 10px 0 32px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .fp-search input::placeholder {
+        color: var(--el-text-muted);
+      }
+      .fp-search input:focus-visible {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+
+      /* A facet group — section label + a listbox of option rows */
+      .fp-group {
+        padding: 6px 0;
+      }
+      .fp-group + .fp-group {
+        border-top: 1px solid var(--el-border);
+      }
+      .fp-group-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding: 4px 8px;
+      }
+      .fp-group-label .gc {
+        color: var(--el-text-muted);
+        font-weight: 600;
+      }
+
+      /* Option row — the Combobox option vocabulary, made multi-select: a leading
+         glyph (type icon / status dot / avatar), label (+ optional secondary), a
+         trailing Check when selected. role="option" aria-selected drives state. */
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .opt:hover {
+        background: var(--el-surface);
+      }
+      .opt[aria-selected='true'] {
+        background: var(--el-surface);
+      }
+      .opt .lbl {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .opt .sec {
+        flex: none;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        max-width: 130px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .opt .check {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-accent);
+        opacity: 0;
+      }
+      .opt[aria-selected='true'] .check {
+        opacity: 1;
+      }
+
+      /* Leading glyphs */
+      .type-icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+      /* StatusPicker dot — status.color ?? category var (todo→faint grey,
+         in_progress→info, done→success; In Review carries a custom color) */
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        flex: none;
+        border-radius: 9999px;
+        border: 1px solid var(--el-border);
+      }
+      .sd-todo {
+        background: var(--el-text-faint);
+      }
+      .sd-inprogress {
+        background: var(--el-info);
+      }
+      .sd-review {
+        background: var(--el-accent);
+      }
+      .sd-done {
+        background: var(--el-success);
+      }
+      /* Member-combobox Avatar (initial-letter) + the Unassigned glyph */
+      .avatar {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .avatar.unassigned {
+        background: transparent;
+        border: 1px dashed var(--el-border);
+        color: var(--el-text-muted);
+      }
+      .avatar.unassigned svg {
+        width: 13px;
+        height: 13px;
+      }
+      /* assignee sub-search — the member-combobox's own type-ahead */
+      .fp-subsearch {
+        position: relative;
+        margin: 2px 4px 4px;
+      }
+      .fp-subsearch .si {
+        position: absolute;
+        left: 9px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+        pointer-events: none;
+      }
+      .fp-subsearch input {
+        width: 100%;
+        height: 32px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 0 10px 0 30px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .fp-subsearch input::placeholder {
+        color: var(--el-text-muted);
+      }
+
+      /* ── The tree result underneath (applied-filter panel) ───────────────── */
+      .tree-table {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .tt-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 150px 130px;
+        align-items: center;
+        column-gap: 16px;
+        padding: 0 28px 0 16px;
+      }
+      .tt-head {
+        height: 40px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .tt-row {
+        height: 44px;
+        border-bottom: 1px solid var(--el-border);
+        text-decoration: none;
+        color: inherit;
+      }
+      .tt-row:last-child {
+        border-bottom: 0;
+      }
+      .tt-row:hover {
+        background: var(--el-surface);
+      }
+      /* ancestor rows kept only for context (the context-preserving filter) read
+         muted; the actual matches read full-strength */
+      .tt-row.context {
+        color: var(--el-text-muted);
+      }
+      .cell-title {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .cell-title .indent {
+        flex: none;
+        display: inline-block;
+      }
+      .cell-title .lr-id {
+        flex: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .cell-title .ttl {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+      }
+      .tt-row.context .ttl {
+        color: var(--el-text-muted);
+      }
+      .cell-person {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .cell-person .nm {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: 2px 10px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill--todo {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill--inprogress {
+        background: var(--el-tint-sky);
+      }
+      .pill--done {
+        background: var(--el-tint-mint);
+      }
+      .row-note {
+        margin: 10px 2px 0;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        font-style: italic;
+      }
+      .legend {
+        max-width: 1100px;
+        margin: 10px auto 0;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.7;
+      }
+      .legend code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Filter bar — kind · status · assignee · text</h1>
+        <p>
+          Story 2.5 · design for 2.5.4 (the open [Filter] popover tree.png leaves as a disabled
+          seam). Built from the real design-system tokens / primitives.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke, used by <use>) — copied 1:1 from list.mock.html -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <!-- task = square-check-big -->
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <!-- subtask = list-checks -->
+        <g
+          id="i-subtask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-sliders"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="21" x2="14" y1="4" y2="4" />
+          <line x1="10" x2="3" y1="4" y2="4" />
+          <line x1="21" x2="12" y1="12" y2="12" />
+          <line x1="8" x2="3" y1="12" y2="12" />
+          <line x1="21" x2="16" y1="20" y2="20" />
+          <line x1="12" x2="3" y1="20" y2="20" />
+          <line x1="14" x2="14" y1="2" y2="6" />
+          <line x1="8" x2="8" y1="10" y2="14" />
+          <line x1="16" x2="16" y1="18" y2="22" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-list-tree"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12h-8" />
+          <path d="M21 6H8" />
+          <path d="M21 18h-8" />
+          <path d="M3 6v4c0 1.1.9 2 2 2h3" />
+          <path d="M3 10v6c0 1.1.9 2 2 2h3" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <!-- user-x = the Unassigned glyph (member combobox's "no assignee") -->
+        <g
+          id="i-user-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <line x1="17" x2="22" y1="8" y2="13" />
+          <line x1="22" x2="17" y1="8" y2="13" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════ PANEL 0 — the Filter TRIGGER: closed-inactive vs. active ════════════ -->
+    <div class="panel-label">
+      0 · The [Filter] trigger in the /issues toolbar — closed-INACTIVE (no filters) vs.
+      closed-ACTIVE (the accent ring + count badge). The button replaces the 2.5.3 disabled seam.
+    </div>
+    <div class="panel">
+      <div class="page-head">
+        <div>
+          <h2>Issues</h2>
+          <p class="sub">All issues in Prodect — Q3 launch</p>
+        </div>
+        <div class="toolbar">
+          <!-- INACTIVE: identical label to the seam, now enabled -->
+          <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter
+          </button>
+          <button class="tb-btn" aria-haspopup="menu" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-list-tree" /></svg>Tree<svg
+              class="caret"
+              viewBox="0 0 24 24"
+            >
+              <use href="#i-chevron-down" />
+            </svg>
+          </button>
+          <button class="tb-btn primary">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+          </button>
+        </div>
+      </div>
+
+      <div class="page-head" style="margin-top: -4px">
+        <div>
+          <p class="sub" style="margin: 0">…and the same toolbar with filters applied:</p>
+        </div>
+        <div class="toolbar">
+          <!-- ACTIVE: accent ring + the count badge (5 active filter values) -->
+          <button class="tb-btn is-active" aria-haspopup="dialog" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter<span
+              class="tb-count"
+              aria-label="5 filters active"
+              >5</span
+            >
+          </button>
+          <button class="tb-btn" aria-haspopup="menu" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-list-tree" /></svg>Tree<svg
+              class="caret"
+              viewBox="0 0 24 24"
+            >
+              <use href="#i-chevron-down" />
+            </svg>
+          </button>
+          <button class="tb-btn primary">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 1 — popover OPEN, EMPTY (nothing selected) ════════════ -->
+    <div class="panel-label">
+      1 · Open popover — EMPTY: nothing selected yet, so every row is unchecked, the text field is
+      empty, and "Clear filters" is disabled. The four facets: text · kind · status · assignee.
+    </div>
+    <div class="panel">
+      <div class="page-head">
+        <div>
+          <h2>Issues</h2>
+          <p class="sub">All issues in Prodect — Q3 launch</p>
+        </div>
+        <div class="toolbar">
+          <button class="tb-btn is-active" aria-haspopup="dialog" aria-expanded="true">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter
+          </button>
+          <button class="tb-btn" aria-haspopup="menu" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-list-tree" /></svg>Tree<svg
+              class="caret"
+              viewBox="0 0 24 24"
+            >
+              <use href="#i-chevron-down" />
+            </svg>
+          </button>
+          <button class="tb-btn primary">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+          </button>
+
+          <!-- the open filter popover, anchored under [Filter] -->
+          <div class="filter-pop" role="dialog" aria-label="Filter issues">
+            <div class="fp-head">
+              <span class="fp-title">Filter</span>
+              <button class="fp-clear" disabled>
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear filters
+              </button>
+            </div>
+            <div class="fp-body">
+              <!-- TEXT quick-filter -->
+              <div class="fp-search">
+                <svg class="si" viewBox="0 0 24 24"><use href="#i-search" /></svg>
+                <input type="text" placeholder="Find by ID or title…" aria-label="Filter by text" />
+              </div>
+
+              <!-- KIND -->
+              <div class="fp-group" role="group" aria-label="Kind">
+                <div class="fp-group-label">Kind</div>
+                <div role="listbox" aria-label="Kind" aria-multiselectable="true">
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="type-icon t-epic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg></span
+                    ><span class="lbl">Epic</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="type-icon t-story"
+                      ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                    ><span class="lbl">Story</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="type-icon t-task"
+                      ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                    ><span class="lbl">Task</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="type-icon t-bug"
+                      ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                    ><span class="lbl">Bug</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="type-icon t-subtask"
+                      ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                    ><span class="lbl">Sub-task</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                </div>
+              </div>
+
+              <!-- STATUS -->
+              <div class="fp-group" role="group" aria-label="Status">
+                <div class="fp-group-label">Status</div>
+                <div role="listbox" aria-label="Status" aria-multiselectable="true">
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="status-dot sd-todo"></span><span class="lbl">To Do</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="status-dot sd-inprogress"></span
+                    ><span class="lbl">In Progress</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="status-dot sd-review"></span><span class="lbl">In Review</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="status-dot sd-done"></span><span class="lbl">Done</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ASSIGNEE -->
+              <div class="fp-group" role="group" aria-label="Assignee">
+                <div class="fp-group-label">Assignee</div>
+                <div class="fp-subsearch">
+                  <svg class="si" viewBox="0 0 24 24"><use href="#i-search" /></svg>
+                  <input type="text" placeholder="Search members…" aria-label="Search members" />
+                </div>
+                <div role="listbox" aria-label="Assignee" aria-multiselectable="true">
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="avatar unassigned"
+                      ><svg viewBox="0 0 24 24"><use href="#i-user-x" /></svg></span
+                    ><span class="lbl">Unassigned</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="avatar">AC</span><span class="lbl">Alice Chen</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="avatar">DK</span><span class="lbl">Dana Kim</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="avatar">MO</span><span class="lbl">Marco Ortiz</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="avatar">RS</span><span class="lbl">Riya Shah</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 2 — popover OPEN, POPULATED ════════════ -->
+    <div class="panel-label">
+      2 · Open popover — POPULATED: text "oauth" · kind Bug · status In Progress + In Review ·
+      assignee Dana Kim + Unassigned → 5 active values (the trigger badge). "Clear filters" is now
+      active. Selected rows carry the surface tint + the accent Check.
+    </div>
+    <div class="panel">
+      <div class="page-head">
+        <div>
+          <h2>Issues</h2>
+          <p class="sub">All issues in Prodect — Q3 launch</p>
+        </div>
+        <div class="toolbar">
+          <button class="tb-btn is-active" aria-haspopup="dialog" aria-expanded="true">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter<span
+              class="tb-count"
+              aria-label="5 filters active"
+              >5</span
+            >
+          </button>
+          <button class="tb-btn" aria-haspopup="menu" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-list-tree" /></svg>Tree<svg
+              class="caret"
+              viewBox="0 0 24 24"
+            >
+              <use href="#i-chevron-down" />
+            </svg>
+          </button>
+          <button class="tb-btn primary">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+          </button>
+
+          <div class="filter-pop" role="dialog" aria-label="Filter issues">
+            <div class="fp-head">
+              <span class="fp-title">Filter</span>
+              <button class="fp-clear">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear filters
+              </button>
+            </div>
+            <div class="fp-body">
+              <div class="fp-search">
+                <svg class="si" viewBox="0 0 24 24"><use href="#i-search" /></svg>
+                <input
+                  type="text"
+                  value="oauth"
+                  placeholder="Find by ID or title…"
+                  aria-label="Filter by text"
+                />
+              </div>
+
+              <div class="fp-group" role="group" aria-label="Kind">
+                <div class="fp-group-label">Kind <span class="gc">· 1</span></div>
+                <div role="listbox" aria-label="Kind" aria-multiselectable="true">
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="type-icon t-epic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg></span
+                    ><span class="lbl">Epic</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="type-icon t-story"
+                      ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                    ><span class="lbl">Story</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="type-icon t-task"
+                      ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                    ><span class="lbl">Task</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="true">
+                    <span class="type-icon t-bug"
+                      ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                    ><span class="lbl">Bug</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="type-icon t-subtask"
+                      ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                    ><span class="lbl">Sub-task</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                </div>
+              </div>
+
+              <div class="fp-group" role="group" aria-label="Status">
+                <div class="fp-group-label">Status <span class="gc">· 2</span></div>
+                <div role="listbox" aria-label="Status" aria-multiselectable="true">
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="status-dot sd-todo"></span><span class="lbl">To Do</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="true">
+                    <span class="status-dot sd-inprogress"></span
+                    ><span class="lbl">In Progress</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="true">
+                    <span class="status-dot sd-review"></span><span class="lbl">In Review</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="status-dot sd-done"></span><span class="lbl">Done</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                </div>
+              </div>
+
+              <div class="fp-group" role="group" aria-label="Assignee">
+                <div class="fp-group-label">Assignee <span class="gc">· 2</span></div>
+                <div class="fp-subsearch">
+                  <svg class="si" viewBox="0 0 24 24"><use href="#i-search" /></svg>
+                  <input type="text" placeholder="Search members…" aria-label="Search members" />
+                </div>
+                <div role="listbox" aria-label="Assignee" aria-multiselectable="true">
+                  <div class="opt" role="option" aria-selected="true">
+                    <span class="avatar unassigned"
+                      ><svg viewBox="0 0 24 24"><use href="#i-user-x" /></svg></span
+                    ><span class="lbl">Unassigned</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="avatar">AC</span><span class="lbl">Alice Chen</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="true">
+                    <span class="avatar">DK</span><span class="lbl">Dana Kim</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="avatar">MO</span><span class="lbl">Marco Ortiz</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                  <div class="opt" role="option" aria-selected="false">
+                    <span class="avatar">RS</span><span class="lbl">Riya Shah</span
+                    ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 3 — the applied filter on the page ════════════ -->
+    <div class="panel-label">
+      3 · Applied — the active trigger (Filter · 5) over the tree. The context-preserving filter
+      (2.5.1) keeps a match's ANCESTOR chain visible: ancestor rows that don't themselves match read
+      MUTED (context only); the actual matches read full-strength.
+    </div>
+    <div class="panel">
+      <div class="page-head">
+        <div>
+          <h2>Issues</h2>
+          <p class="sub">All issues in Prodect — Q3 launch</p>
+        </div>
+        <div class="toolbar">
+          <button class="tb-btn is-active" aria-haspopup="dialog" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter<span
+              class="tb-count"
+              aria-label="5 filters active"
+              >5</span
+            >
+          </button>
+          <button class="tb-btn" aria-haspopup="menu" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-list-tree" /></svg>Tree<svg
+              class="caret"
+              viewBox="0 0 24 24"
+            >
+              <use href="#i-chevron-down" />
+            </svg>
+          </button>
+          <button class="tb-btn primary">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+          </button>
+        </div>
+      </div>
+
+      <div class="tree-table" role="table" aria-label="Issues">
+        <div class="tt-grid tt-head" role="row">
+          <div role="columnheader">Title</div>
+          <div role="columnheader">Assignee</div>
+          <div role="columnheader">Status</div>
+        </div>
+        <!-- ancestor kept for context: an Epic that doesn't itself match -->
+        <a class="tt-row context tt-grid" role="row" href="#">
+          <div class="cell-title">
+            <span class="type-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg></span
+            ><span class="lr-id">PROD-12</span><span class="ttl">Q3 launch — Auth & sign-in</span>
+          </div>
+          <div class="cell-person"><span class="nm">Alice Chen</span></div>
+          <div><span class="pill pill--inprogress">In Progress</span></div>
+        </a>
+        <!-- ancestor kept for context: a Story that doesn't itself match -->
+        <a class="tt-row context tt-grid" role="row" href="#" style="padding-left: 36px">
+          <div class="cell-title">
+            <span class="type-icon t-story"
+              ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+            ><span class="lr-id">PROD-31</span><span class="ttl">Google OAuth sign-in</span>
+          </div>
+          <div class="cell-person"><span class="nm">Dana Kim</span></div>
+          <div><span class="pill pill--inprogress">In Progress</span></div>
+        </a>
+        <!-- MATCH: a Bug, In Review, Dana Kim, "oauth" in the title -->
+        <a class="tt-row tt-grid" role="row" href="#" style="padding-left: 56px">
+          <div class="cell-title">
+            <span class="type-icon t-bug"
+              ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+            ><span class="lr-id">PROD-49</span
+            ><span class="ttl">OAuth callback drops the `state` param on Safari ≤16</span>
+          </div>
+          <div class="cell-person">
+            <span class="avatar">DK</span><span class="nm">Dana Kim</span>
+          </div>
+          <div><span class="pill pill--inprogress">In Review</span></div>
+        </a>
+        <!-- MATCH: a Bug, In Progress, Unassigned, "oauth" in the title -->
+        <a class="tt-row tt-grid" role="row" href="#" style="padding-left: 56px">
+          <div class="cell-title">
+            <span class="type-icon t-bug"
+              ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+            ><span class="lr-id">PROD-77</span
+            ><span class="ttl">OAuth token refresh loops on expired refresh token</span>
+          </div>
+          <div class="cell-person">
+            <span class="avatar unassigned"
+              ><svg viewBox="0 0 24 24"><use href="#i-user-x" /></svg></span
+            ><span class="nm">Unassigned</span>
+          </div>
+          <div><span class="pill pill--inprogress">In Progress</span></div>
+        </a>
+      </div>
+      <p class="row-note">
+        PROD-12 / PROD-31 are shown only as context (muted) so the matching bugs keep their place in
+        the tree; they are not themselves matches. A "clear filters" reset (popover header, or the
+        trigger) returns the full unfiltered tree.
+      </p>
+    </div>
+
+    <p class="legend">
+      <strong>Notes.</strong> The popover is a <code>Popover</code> (<code>role="dialog"</code>)
+      anchored under the enabled <code>[Filter]</code> <code>ToolbarButton</code>. Each facet is a
+      multi-select <code>role="listbox"</code> of <code>role="option"</code> rows reusing the
+      <code>Combobox</code> option vocabulary (leading glyph · label · trailing <code>Check</code>)
+      — kind rows take the <code>IssueTypeIcon</code> hue, status rows the
+      <code>StatusPicker</code> dot (<code>status.color ?? category var</code>), assignee rows the
+      member-combobox <code>Avatar</code> with <code>Unassigned</code> first. Colour flows only
+      through <code>--el-*</code>; the count badge / selected-row tint / Check use
+      <code>--el-accent</code>; AA-safe (finding #35 — hue in the tint, strong text). Filters apply
+      live and serialize to the URL — there is no Apply button.
+    </p>
+  </body>
+</html>
