@@ -1,4 +1,12 @@
 allowBuilds:
+  # @parcel/watcher + @swc/core arrive as OPTIONAL deps of next-intl (its
+  # experimental build-time SWC message plugin + file watcher). The cookie-based
+  # setup never uses that tooling — `next build` runs fine with these native
+  # builds skipped — so set false to silence pnpm 11's ERR_PNPM_IGNORED_BUILDS
+  # gate deterministically (same rationale as protobufjs below). Without this,
+  # `pnpm install` exits 1 on CI/Vercel.
+  '@parcel/watcher': false
+  '@swc/core': false
   '@prisma/engines': true
   argon2: true
   esbuild: true
