@@ -329,7 +329,7 @@ export function DatePicker({
                 key={wd}
                 role="columnheader"
                 aria-label={WEEKDAY_LABELS[i]}
-                className="flex h-7 items-center justify-center text-[11px] font-semibold uppercase text-(--el-text-faint)"
+                className="flex h-7 items-center justify-center text-[11px] font-semibold uppercase text-(--el-text-secondary)"
               >
                 {wd}
               </span>
@@ -359,7 +359,7 @@ export function DatePicker({
                       className={cn(
                         'relative flex h-9 w-9 items-center justify-center rounded-(--radius-control) border border-transparent text-sm',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
-                        isOutside && 'text-(--el-text-faint)',
+                        isOutside && 'text-(--el-text-muted)',
                         !isOutside && 'text-(--el-text)',
                         !isSelected && 'hover:bg-(--el-surface)',
                         isToday && !isSelected && 'border-(--el-border-strong) font-bold',
