@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { parseSort, parseView, serializeSort } from '@/lib/issues/issueListView';
+import { parsePage, parseSort, parseView, serializeSort } from '@/lib/issues/issueListView';
 import { parseIssueFilter, type IssueFilterParams } from '@/lib/issues/issueListFilter';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -29,7 +29,7 @@ import { IssueTreeSkeleton } from './_components/IssueTreeSkeleton';
 export default async function IssuesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; sort?: string } & IssueFilterParams>;
+  searchParams: Promise<{ view?: string; sort?: string; page?: string } & IssueFilterParams>;
 }) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
@@ -53,6 +53,7 @@ export default async function IssuesPage({
   const view = parseView(sp.view);
   const sort = parseSort(sp.sort);
   const filter = parseIssueFilter(sp);
+  const page = parsePage(sp.page);
 
   // The filter facets (workflow statuses + workspace members) are needed by the
   // toolbar's filter bar up front, so they're read here (cheap) and passed to
@@ -81,7 +82,7 @@ export default async function IssuesPage({
       </header>
 
       <Suspense
-        key={`${view}:${serializeSort(sort)}:${JSON.stringify(filter)}`}
+        key={`${view}:${serializeSort(sort)}:${JSON.stringify(filter)}:${page}`}
         fallback={<IssueTreeSkeleton flat={view === 'list'} />}
       >
         <IssueTreeSection
@@ -91,6 +92,7 @@ export default async function IssuesPage({
           view={view}
           sort={sort}
           filter={filter}
+          page={page}
           workflow={workflow}
           members={members}
         />

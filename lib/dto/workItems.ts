@@ -230,6 +230,20 @@ export interface WorkItemListItemDto {
 }
 
 /**
+ * One server-paged page of the flat List (Subtask 2.5.12, finding #57): the
+ * page's `items` (≤ `pageSize`), the `total` count of the CURRENTLY FILTERED set
+ * (so the "1–50 of N" range tracks the 2.5.4 filter), the 1-based `page` (already
+ * clamped to the last page when the request overshot), and the `pageSize`
+ * constant. The List is `LIMIT/OFFSET`-paged — it never ships the whole backlog.
+ */
+export interface PagedIssueListDto {
+  items: WorkItemListItemDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/**
  * One node of a LAZY tree level (Subtask 2.5.13, finding #57) — the same render
  * fields as a flat List item PLUS `parentId` (placement) and `hasChildren`
  * (drives the expand chevron without pre-loading the subtree). Returned by

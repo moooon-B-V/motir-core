@@ -42,7 +42,7 @@ describe('getProjectIssuesList (flat sorted List read)', () => {
     const story = await createWorkItem(fx, { kind: 'story', title: 'Story', parentId: epic.id });
     await createWorkItem(fx, { kind: 'task', title: 'Task', parentId: story.id });
 
-    const rows = await workItemsService.getProjectIssuesList(
+    const { items: rows } = await workItemsService.getProjectIssuesList(
       fx.projectId,
       { sort: DEFAULT_SORT },
       fx.ctx,
@@ -59,7 +59,11 @@ describe('getProjectIssuesList (flat sorted List read)', () => {
     await createWorkItem(fx, { kind: 'task', title: 'C' });
 
     const sort: IssueSort = { column: 'key', direction: 'desc' };
-    const rows = await workItemsService.getProjectIssuesList(fx.projectId, { sort }, fx.ctx);
+    const { items: rows } = await workItemsService.getProjectIssuesList(
+      fx.projectId,
+      { sort },
+      fx.ctx,
+    );
     expect(ids(rows)).toEqual(['PROD-3', 'PROD-2', 'PROD-1']);
   });
 
@@ -72,14 +76,14 @@ describe('getProjectIssuesList (flat sorted List read)', () => {
     await db.workItem.update({ where: { id: highest.id }, data: { priority: 'highest' } });
     await db.workItem.update({ where: { id: medium.id }, data: { priority: 'medium' } });
 
-    const desc = await workItemsService.getProjectIssuesList(
+    const { items: desc } = await workItemsService.getProjectIssuesList(
       fx.projectId,
       { sort: { column: 'priority', direction: 'desc' } },
       fx.ctx,
     );
     expect(ids(desc)).toEqual([highest.identifier, medium.identifier, low.identifier]);
 
-    const asc = await workItemsService.getProjectIssuesList(
+    const { items: asc } = await workItemsService.getProjectIssuesList(
       fx.projectId,
       { sort: { column: 'priority', direction: 'asc' } },
       fx.ctx,
@@ -98,7 +102,7 @@ describe('getProjectIssuesList (flat sorted List read)', () => {
     });
     await db.workItem.update({ where: { id: late.id }, data: { dueDate: new Date('2026-06-20') } });
 
-    const asc = await workItemsService.getProjectIssuesList(
+    const { items: asc } = await workItemsService.getProjectIssuesList(
       fx.projectId,
       { sort: { column: 'due', direction: 'asc' } },
       fx.ctx,
@@ -106,7 +110,7 @@ describe('getProjectIssuesList (flat sorted List read)', () => {
     // early < late, then the undated row last (NULLS LAST).
     expect(ids(asc)).toEqual([early.identifier, late.identifier, noDue.identifier]);
 
-    const desc = await workItemsService.getProjectIssuesList(
+    const { items: desc } = await workItemsService.getProjectIssuesList(
       fx.projectId,
       { sort: { column: 'due', direction: 'desc' } },
       fx.ctx,
@@ -122,7 +126,7 @@ describe('getProjectIssuesList (flat sorted List read)', () => {
     await createWorkItem(b, { kind: 'task', title: 'B-only' });
 
     // Workspace A's project, read with workspace A's ctx → only A's item.
-    const rowsA = await workItemsService.getProjectIssuesList(
+    const { items: rowsA } = await workItemsService.getProjectIssuesList(
       a.projectId,
       { sort: DEFAULT_SORT },
       a.ctx,
@@ -138,12 +142,78 @@ describe('getProjectIssuesList (flat sorted List read)', () => {
 
   it('an empty project returns []', async () => {
     const fx = await makeFixture();
-    const rows = await workItemsService.getProjectIssuesList(
+    const { items: rows } = await workItemsService.getProjectIssuesList(
       fx.projectId,
       { sort: DEFAULT_SORT },
       fx.ctx,
     );
     expect(rows).toEqual([]);
+  });
+});
+
+describe('getProjectIssuesList — server-side pagination (Subtask 2.5.12)', () => {
+  it('pages by 50, holds the remainder on the last page, and clamps an over-range page', async () => {
+    const fx = await makeFixture();
+    // 52 roots → 2 pages (50 + 2). Keys allocate 1..52 in creation order.
+    for (let i = 0; i < 52; i++) await createWorkItem(fx, { kind: 'task', title: `T${i}` });
+
+    const p1 = await workItemsService.getProjectIssuesList(
+      fx.projectId,
+      { sort: DEFAULT_SORT, page: 1 },
+      fx.ctx,
+    );
+    expect({ total: p1.total, page: p1.page, pageSize: p1.pageSize }).toEqual({
+      total: 52,
+      page: 1,
+      pageSize: 50,
+    });
+    expect(p1.items).toHaveLength(50);
+    expect(p1.items[0]!.identifier).toBe('PROD-1');
+
+    const p2 = await workItemsService.getProjectIssuesList(
+      fx.projectId,
+      { sort: DEFAULT_SORT, page: 2 },
+      fx.ctx,
+    );
+    expect(p2.page).toBe(2);
+    expect(p2.items.map((r) => r.identifier)).toEqual(['PROD-51', 'PROD-52']);
+    // No row appears on both pages (OFFSET paging over a total order).
+    const onP1 = new Set(p1.items.map((r) => r.id));
+    expect(p2.items.some((r) => onP1.has(r.id))).toBe(false);
+
+    // An out-of-range page clamps to the last page (the 2.5.10 edge spec).
+    const over = await workItemsService.getProjectIssuesList(
+      fx.projectId,
+      { sort: DEFAULT_SORT, page: 99 },
+      fx.ctx,
+    );
+    expect(over.page).toBe(2);
+    expect(over.items.map((r) => r.identifier)).toEqual(['PROD-51', 'PROD-52']);
+  });
+
+  it('the total tracks the active filter — the filtered count, not the whole project', async () => {
+    const fx = await makeFixture();
+    for (let i = 0; i < 8; i++) await createWorkItem(fx, { kind: 'task', title: `task ${i}` });
+    for (let i = 0; i < 3; i++) await createWorkItem(fx, { kind: 'bug', title: `bug ${i}` });
+
+    const bugs = await workItemsService.getProjectIssuesList(
+      fx.projectId,
+      { sort: DEFAULT_SORT, filter: { kinds: ['bug'] }, page: 1 },
+      fx.ctx,
+    );
+    expect(bugs.total).toBe(3);
+    expect(bugs.items).toHaveLength(3);
+    expect(bugs.items.every((r) => r.kind === 'bug')).toBe(true);
+  });
+
+  it('an empty project paginates to total 0, page 1, no items', async () => {
+    const fx = await makeFixture();
+    const res = await workItemsService.getProjectIssuesList(
+      fx.projectId,
+      { sort: DEFAULT_SORT },
+      fx.ctx,
+    );
+    expect(res).toEqual({ items: [], total: 0, page: 1, pageSize: 50 });
   });
 });
 
@@ -163,7 +233,7 @@ describe('toIssueListRows (flat shaping over the live reads)', () => {
       workflowsService.getWorkflow(fx.projectId, fx.workspaceId),
       workspacesService.listMembers(fx.workspaceId, fx.ownerId),
     ]);
-    const rows = toIssueListRows(items, workflow, members);
+    const rows = toIssueListRows(items.items, workflow, members);
 
     expect(ids(rows)).toEqual(['PROD-1', 'PROD-2']); // key-asc order preserved
     expect(rows[0]).toMatchObject({

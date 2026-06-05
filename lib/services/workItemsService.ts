@@ -37,6 +37,7 @@ import type {
   WorkItemTreeRow,
   RepoIssueFilter,
 } from '@/lib/repositories/workItemRepository';
+import { ISSUE_LIST_PAGE_SIZE } from '@/lib/issues/issueListView';
 import type { IssueSort } from '@/lib/issues/issueListView';
 import type {
   CreateWorkItemInput,
@@ -46,7 +47,7 @@ import type {
   UpdateWorkItemInput,
   WorkItemDto,
   WorkItemKindDto,
-  WorkItemListItemDto,
+  PagedIssueListDto,
   WorkItemRevisionDto,
   WorkItemSummaryDto,
   WorkItemSubtreeDto,
@@ -861,23 +862,38 @@ export const workItemsService = {
    */
   async getProjectIssuesList(
     projectId: string,
-    params: { sort: IssueSort; filter?: ProjectTreeFilter },
+    params: { sort: IssueSort; filter?: ProjectTreeFilter; page?: number },
     ctx: ServiceContext,
-  ): Promise<WorkItemListItemDto[]> {
+  ): Promise<PagedIssueListDto> {
     const project = await projectRepository.findById(projectId);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
 
     const repoFilter = buildRepoFilter(params.filter ?? {});
+    const pageSize = ISSUE_LIST_PAGE_SIZE;
+
+    // Count the filtered set first so an out-of-range ?page CLAMPS to the last
+    // page (the 2.5.10 edge spec) instead of fetching an empty offset window.
+    // The count is the pager's denominator and tracks the active filter.
+    const total = await workItemRepository.countProjectIssues(
+      projectId,
+      project.workspaceId,
+      repoFilter,
+    );
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(Math.max(1, params.page ?? 1), totalPages);
+    const offset = (page - 1) * pageSize;
+
     const rows = await workItemRepository.findProjectIssuesFlat(
       projectId,
       project.workspaceId,
       params.sort,
       repoFilter,
+      { limit: pageSize, offset },
     );
 
-    return rows.map(toWorkItemListItemDto);
+    return { items: rows.map(toWorkItemListItemDto), total, page, pageSize };
   },
 
   /**

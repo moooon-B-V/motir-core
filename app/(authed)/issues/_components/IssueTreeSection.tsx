@@ -33,6 +33,8 @@ export interface IssueTreeSectionProps {
   sort: IssueSort;
   /** The active filter (Subtask 2.5.4); applied to BOTH views. */
   filter: IssueFilter;
+  /** The requested List page (Subtask 2.5.12); the service clamps out-of-range. Tree ignores it. */
+  page: number;
   /** Pre-read by the page (the toolbar's filter facets need them up front). */
   workflow: WorkflowDto;
   members: WorkspaceMemberDTO[];
@@ -45,6 +47,7 @@ export async function IssueTreeSection({
   view,
   sort,
   filter,
+  page,
   workflow,
   members,
 }: IssueTreeSectionProps) {
@@ -68,9 +71,14 @@ export async function IssueTreeSection({
   );
 
   if (view === 'list') {
-    const items = await workItemsService.getProjectIssuesList(
+    const {
+      items,
+      total,
+      page: clampedPage,
+      pageSize,
+    } = await workItemsService.getProjectIssuesList(
       projectId,
-      { sort, filter: repoFilter },
+      { sort, filter: repoFilter, page },
       ctx,
     );
     if (items.length === 0) return empty;
@@ -79,6 +87,7 @@ export async function IssueTreeSection({
         rows={toIssueListRows(items, workflow, members)}
         sort={sort}
         filter={filter}
+        pagination={{ total, page: clampedPage, pageSize }}
       />
     );
   }

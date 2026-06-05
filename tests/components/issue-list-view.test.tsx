@@ -66,6 +66,7 @@ describe('IssueListTable — sortable headers', () => {
         rows={ROWS}
         sort={{ column: 'key', direction: 'asc' }}
         filter={EMPTY_FILTER}
+        pagination={{ total: ROWS.length, page: 1, pageSize: 50 }}
       />,
     );
     // Default key asc → the Title column (sorts by key) is the active ascending one.
@@ -83,6 +84,7 @@ describe('IssueListTable — sortable headers', () => {
         rows={ROWS}
         sort={{ column: 'key', direction: 'asc' }}
         filter={EMPTY_FILTER}
+        pagination={{ total: ROWS.length, page: 1, pageSize: 50 }}
       />,
     );
     expect(screen.getByRole('link', { name: 'PROD-1 First' }).getAttribute('href')).toBe(
@@ -99,6 +101,7 @@ describe('IssueListTable — sortable headers', () => {
         rows={ROWS}
         sort={{ column: 'key', direction: 'asc' }}
         filter={EMPTY_FILTER}
+        pagination={{ total: ROWS.length, page: 1, pageSize: 50 }}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /Priority/ }));
@@ -111,6 +114,7 @@ describe('IssueListTable — sortable headers', () => {
         rows={ROWS}
         sort={{ column: 'priority', direction: 'asc' }}
         filter={EMPTY_FILTER}
+        pagination={{ total: ROWS.length, page: 1, pageSize: 50 }}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /Priority/ }));
@@ -123,6 +127,7 @@ describe('IssueListTable — sortable headers', () => {
         rows={ROWS}
         sort={{ column: 'key', direction: 'asc' }}
         filter={EMPTY_FILTER}
+        pagination={{ total: ROWS.length, page: 1, pageSize: 50 }}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /Title/ }));
@@ -188,5 +193,67 @@ describe('IssueViewSwitcher — Tree ↔ List toggle', () => {
     expect(screen.getByRole('menuitemradio', { name: /Tree/ }).getAttribute('aria-checked')).toBe(
       'false',
     );
+  });
+});
+
+describe('IssueListTable — pagination footer (Subtask 2.5.12)', () => {
+  const sort = { column: 'key', direction: 'asc' } as const;
+
+  function renderPaged(page: number, total: number, pageSize = 50) {
+    render(
+      <IssueListTable
+        rows={ROWS}
+        sort={sort}
+        filter={EMPTY_FILTER}
+        pagination={{ total, page, pageSize }}
+      />,
+    );
+  }
+
+  it('shows the range + count of the filtered set', () => {
+    renderPaged(2, 120);
+    const count = screen.getByText(
+      (_c, el) =>
+        el?.tagName === 'SPAN' && /^Showing\s*51.100\s*of\s*120$/.test(el?.textContent ?? ''),
+    );
+    expect(count).toBeTruthy();
+  });
+
+  it('Next navigates to ?page=N+1; Prev (to page 1) drops the param', () => {
+    renderPaged(2, 120);
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(push).toHaveBeenCalledWith('/issues?view=list&page=3');
+
+    push.mockReset();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
+    expect(push).toHaveBeenCalledWith('/issues?view=list'); // page 1 is the clean URL
+  });
+
+  it('a page number navigates to that page; the current page is aria-current', () => {
+    renderPaged(2, 120);
+    expect(screen.getByRole('button', { name: 'Page 2' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Page 3' }));
+    expect(push).toHaveBeenCalledWith('/issues?view=list&page=3');
+  });
+
+  it('disables Prev on page 1 (no navigation)', () => {
+    renderPaged(1, 120);
+    const prev = screen.getByRole('button', { name: 'Previous page' });
+    expect(prev.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(prev);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('renders no pager nav when there is only one page (count only)', () => {
+    renderPaged(1, 2);
+    expect(screen.queryByRole('navigation', { name: 'Pagination' })).toBeNull();
+    expect(
+      screen.getByText(
+        (_c, el) =>
+          el?.tagName === 'SPAN' && /^Showing\s*1.2\s*of\s*2$/.test(el?.textContent ?? ''),
+      ),
+    ).toBeTruthy();
   });
 });

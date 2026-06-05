@@ -13,6 +13,7 @@ import {
 } from '@/lib/issues/issueListView';
 import type { IssueFilter } from '@/lib/issues/issueListFilter';
 import { ISSUE_COLUMNS } from './issueColumns';
+import { IssueListPager } from './IssueListPager';
 import type { IssueRowData } from './issueRows';
 
 // The flat, sortable LIST table (Subtask 2.5.8) — the `view=list` rendering the
@@ -41,19 +42,29 @@ const GRID_TEMPLATE = [
 export interface IssueListTableProps {
   rows: IssueRowData[];
   sort: IssueSort;
-  /** Preserved across a header-sort navigation (filtering applies to the List too). */
+  /** Preserved across a header-sort / page navigation (filtering applies to the List too). */
   filter: IssueFilter;
+  /** The server-paged window (Subtask 2.5.12) — drives the footer pager. */
+  pagination: { total: number; page: number; pageSize: number };
 }
 
-export function IssueListTable({ rows, sort, filter }: IssueListTableProps) {
+export function IssueListTable({ rows, sort, filter, pagination }: IssueListTableProps) {
   const router = useRouter();
   const pathname = usePathname();
 
   const onSort = useCallback(
     (column: IssueSortColumn) => {
+      // A sort change resets to page 1 (the new order invalidates the old page).
       router.push(
         buildIssueListHref(pathname, { view: 'list', sort: nextSort(sort, column), filter }),
       );
+    },
+    [router, pathname, sort, filter],
+  );
+
+  const onPage = useCallback(
+    (page: number) => {
+      router.push(buildIssueListHref(pathname, { view: 'list', sort, filter, page }));
     },
     [router, pathname, sort, filter],
   );
@@ -142,6 +153,14 @@ export function IssueListTable({ rows, sort, filter }: IssueListTableProps) {
           ))}
         </div>
       </div>
+
+      {/* Pagination footer — the last row inside the bordered box (2.5.12). */}
+      <IssueListPager
+        total={pagination.total}
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        onPage={onPage}
+      />
     </div>
   );
 }
