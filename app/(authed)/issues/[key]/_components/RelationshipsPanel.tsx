@@ -15,8 +15,8 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 // (blocked-by / blocks / relates-to / duplicates / clones), with the
 // ready/blocked banner at the top. READ surface from 2.4.5; 2.4.9 makes it
 // EDITABLE on the detail page (`editable`): a "+ Link issue" add control + a
-// per-row remove. The EDIT page reuses it read-only (no add/remove) so an editor
-// keeps dependency context without managing links there.
+// per-row remove. The EDIT page reuses it the same editable way (user directive)
+// so an editor manages dependency links without leaving the edit surface.
 
 const STATUS_TONE: Record<StatusCategoryDto, NonNullable<PillProps['status']>> = {
   todo: 'planned',

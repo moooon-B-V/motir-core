@@ -13,9 +13,10 @@ import { RelationshipsPanel } from '../_components/RelationshipsPanel';
 // tree), loads the issue DETAIL bundle by its identifier (the [key] segment,
 // e.g. "PROD-7") — which carries the item, the project's workflow, and the
 // relationship links + readiness — plus the workspace members, then hands them
-// to the client EditIssueForm and the READ-ONLY relationships block (2.4.5, user
-// directive: the edit page shows related issues too, so an editor keeps
-// dependency context). Cross-workspace / missing → 404 (no existence leak);
+// to the client EditIssueForm and the EDITABLE relationships block (2.4.5 +
+// 2.4.9, user directive: the edit page shows related issues too AND lets an
+// editor manage them — same "+ Link issue" add control + per-row remove as the
+// detail page — so dependency work happens without leaving the edit surface). Cross-workspace / missing → 404 (no existence leak);
 // unauthenticated → /sign-in; no active project → a hint, not a crash.
 
 export default async function EditIssuePage({ params }: { params: Promise<{ key: string }> }) {
@@ -59,6 +60,9 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
         clones={detail.clones}
         readiness={detail.readiness}
         workflow={detail.workflow}
+        editable
+        currentItemId={detail.item.id}
+        identifier={detail.item.identifier}
       />
     </div>
   );
