@@ -140,13 +140,22 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
     setText(filter.text ?? '');
   }
 
-  // The debounced push must thread the LATEST facets (a kind toggle mid-type
-  // must not be clobbered), so read the current filter through an effect-synced
-  // ref rather than the keystroke's stale closure.
+  // Every live edit must compose onto the LATEST filter, not the render-time
+  // `filter` closure. Selection round-trips through the URL (push → Server
+  // re-read → new `filter` prop), so a second edit fired before that navigation
+  // settles would otherwise read a stale `filter` and CLOBBER the in-flight one
+  // — e.g. checking two statuses quickly drops the first (finding #58). So both
+  // the debounced text push AND the facet toggles below read `filterRef.current`
+  // — a mirror of the freshest filter, updated SYNCHRONOUSLY in `apply()` (so a
+  // back-to-back edit sees the prior one before any re-render). The effect
+  // reconciles it to the prop, but ONLY when the prop identity changes (a real
+  // navigation / external reset) thanks to the `[filter]` dep — unrelated client
+  // re-renders (open / member-search state) keep the same `filter` reference, so
+  // they don't run it and can't stomp an in-flight optimistic value.
   const filterRef = useRef(filter);
   useEffect(() => {
     filterRef.current = filter;
-  });
+  }, [filter]);
   const textTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     return () => {
@@ -155,6 +164,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
   }, []);
 
   function apply(next: IssueFilter) {
+    filterRef.current = next; // optimistic: the next edit composes onto this
     router.push(buildIssueListHref(pathname, { view, sort, filter: next }));
   }
 
@@ -257,7 +267,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
                 <OptionRow
                   key={type}
                   selected={filter.kinds.includes(type)}
-                  onToggle={() => apply(toggleKind(filter, type))}
+                  onToggle={() => apply(toggleKind(filterRef.current, type))}
                   glyph={<IssueTypeIcon type={type} className="h-4 w-4" />}
                   label={ISSUE_TYPE_META[type].label}
                 />
@@ -273,7 +283,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
                 <OptionRow
                   key={s.id}
                   selected={filter.statuses.includes(s.key)}
-                  onToggle={() => apply(toggleStatus(filter, s.key))}
+                  onToggle={() => apply(toggleStatus(filterRef.current, s.key))}
                   glyph={<StatusDot status={s} />}
                   label={s.label}
                 />
@@ -304,7 +314,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
             <div role="listbox" aria-label="Assignee" aria-multiselectable="true">
               <OptionRow
                 selected={filter.includeUnassigned}
-                onToggle={() => apply(toggleUnassigned(filter))}
+                onToggle={() => apply(toggleUnassigned(filterRef.current))}
                 glyph={
                   <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full border border-dashed border-(--el-border) text-(--el-text-muted)">
                     <UserX className="h-3.5 w-3.5" aria-hidden />
@@ -316,7 +326,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
                 <OptionRow
                   key={m.userId}
                   selected={filter.assigneeIds.includes(m.userId)}
-                  onToggle={() => apply(toggleAssignee(filter, m.userId))}
+                  onToggle={() => apply(toggleAssignee(filterRef.current, m.userId))}
                   glyph={<Avatar name={m.name} />}
                   label={m.name}
                   secondary={m.email}

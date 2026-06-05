@@ -129,14 +129,22 @@ describe('IssueFilterBar — facet toggles navigate (URL-driven)', () => {
     expect(push).toHaveBeenCalledWith('/issues?status=in_progress');
   });
 
-  it('toggling a member pushes ?assignee=<id>; Unassigned pushes the token', () => {
+  it('toggling a member pushes ?assignee=<id>', () => {
     renderBar();
     open();
     const list = screen.getByRole('listbox', { name: 'Assignee' });
     fireEvent.click(within(list).getByRole('option', { name: /Dana Kim/ }));
     expect(push).toHaveBeenCalledWith('/issues?assignee=u-dana');
+  });
 
-    push.mockReset();
+  it('toggling Unassigned pushes the token', () => {
+    // Fresh render (not chained after the member toggle above): a second toggle
+    // in the SAME render would correctly accumulate onto the first — that
+    // accumulate-don't-clobber behaviour is the finding-#58 regression test
+    // below. Here we assert the bare single-toggle URL.
+    renderBar();
+    open();
+    const list = screen.getByRole('listbox', { name: 'Assignee' });
     fireEvent.click(within(list).getByRole('option', { name: 'Unassigned' }));
     expect(push).toHaveBeenCalledWith('/issues?assignee=unassigned');
   });
@@ -182,6 +190,42 @@ describe('IssueFilterBar — clear', () => {
     expect(screen.getByRole('button', { name: /Clear filters/ }).hasAttribute('disabled')).toBe(
       true,
     );
+  });
+});
+
+describe('IssueFilterBar — rapid multi-select (finding #58 regression)', () => {
+  // Selecting more than one value in a facet "quickly" means a second toggle
+  // fires BEFORE the first one's router.push round-trips back as a new `filter`
+  // prop. The handler must compose the second toggle onto the first's result,
+  // not onto the stale render-time `filter` — otherwise the first selection is
+  // silently dropped (its check mark de-syncs). Here `push` is a stub and never
+  // re-drives the `filter` prop, so two synchronous clicks reproduce exactly
+  // that "before the navigation settles" window: the LAST push must carry BOTH
+  // status keys. Pre-fix, the second click read the empty render-time filter and
+  // pushed only the second key.
+  it('keeps the first status when a second is toggled before navigation settles', () => {
+    renderBar();
+    open();
+    const statusList = screen.getByRole('listbox', { name: 'Status' });
+    fireEvent.click(within(statusList).getByRole('option', { name: 'In Progress' }));
+    fireEvent.click(within(statusList).getByRole('option', { name: 'Done' }));
+
+    expect(push).toHaveBeenCalledTimes(2);
+    expect(push).toHaveBeenNthCalledWith(1, '/issues?status=in_progress');
+    // both keys survive — appended in the reducer's sorted order (done, in_progress)
+    expect(push).toHaveBeenLastCalledWith('/issues?status=done&status=in_progress');
+  });
+
+  it('accumulates across facets toggled back-to-back (kind then status)', () => {
+    renderBar();
+    open();
+    fireEvent.click(
+      within(screen.getByRole('listbox', { name: 'Kind' })).getByRole('option', { name: 'Bug' }),
+    );
+    fireEvent.click(
+      within(screen.getByRole('listbox', { name: 'Status' })).getByRole('option', { name: 'Done' }),
+    );
+    expect(push).toHaveBeenLastCalledWith('/issues?kind=bug&status=done');
   });
 });
 
