@@ -95,6 +95,11 @@ export function useShortcut(
       if (mod) {
         const modPressed = isMac ? event.metaKey : event.ctrlKey;
         if (!modPressed) return;
+      } else if (event.metaKey || event.ctrlKey || event.altKey) {
+        // A bare-key combo (e.g. `c`) must NOT fire when a command/ctrl/alt
+        // modifier is held — otherwise ⌘C / Ctrl+C (copy) would trigger the
+        // `c` shortcut. Shift is allowed: printable combos like `?` need it.
+        return;
       }
       if (event.key.toLowerCase() !== key) return;
       if (!whenInputFocused && isEditableTarget(event.target)) return;
