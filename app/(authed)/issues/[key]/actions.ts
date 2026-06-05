@@ -6,8 +6,7 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { isRelationshipKind, relationshipToLink } from '@/lib/workItems/linkRelationships';
-import { WorkItemNotFoundError } from '@/lib/workItems/errors';
-import { WorkItemLinkError } from '@/lib/workItems/linkErrors';
+import { linkErrorMessage } from '@/lib/workItems/linkErrorMessages';
 import type { RelationshipKind } from '@/lib/dto/workItemLinks';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 
@@ -18,32 +17,10 @@ import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 // translate the typed link errors to inline messages, and revalidate the detail
 // path so the panel + readiness banner re-render. No business logic, no service
 // extension. The five UI relationships map to the directed storage link in
-// `lib/workItems/linkRelationships.ts`.
+// `lib/workItems/linkRelationships.ts`. The typed-error → inline-message map is
+// shared with the create-modal link surface (2.4.10) in `linkErrorMessages.ts`.
 
 export type LinkActionResult = { ok: true } | { ok: false; error: string };
-
-/** Translate the typed link/not-found errors to a one-line inline message. */
-function linkErrorMessage(err: unknown): string | null {
-  if (err instanceof WorkItemNotFoundError) return 'That issue no longer exists.';
-  if (err instanceof WorkItemLinkError) {
-    switch (err.code) {
-      case 'SELF_LINK':
-        return "An issue can't link to itself.";
-      case 'DUPLICATE_LINK':
-        return 'That link already exists.';
-      case 'WORK_ITEM_LINK_CYCLE':
-        return 'That would create a dependency cycle.';
-      case 'CROSS_WORKSPACE_LINK':
-      case 'WORKSPACE_MISMATCH_LINK':
-        return 'That issue is in another workspace.';
-      case 'WORK_ITEM_LINK_NOT_FOUND':
-        return 'That link no longer exists.';
-      default:
-        return 'Could not update the link.';
-    }
-  }
-  return null;
-}
 
 /**
  * Candidate target issues for the picker, for a given relationship (the picker

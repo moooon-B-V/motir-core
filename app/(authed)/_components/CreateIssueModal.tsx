@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils/cn';
 import { TypePicker } from '@/components/issues/TypePicker';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { PriorityPicker } from '@/components/issues/PriorityPicker';
+import { CreateIssueLinksField, type PendingLink } from './CreateIssueLinksField';
 import { createIssueAction } from '../issues/actions';
 import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 
@@ -47,8 +48,10 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
   const [explanation, setExplanation] = useState('');
   const [explanationOpen, setExplanationOpen] = useState(false);
   const [priority, setPriority] = useState<WorkItemPriorityDto>('medium');
+  const [links, setLinks] = useState<PendingLink[]>([]);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [parentError, setParentError] = useState<string | null>(null);
+  const [linksError, setLinksError] = useState<string | null>(null);
 
   // Reveal the Explanation editor when it's expanded: the field area scrolls
   // (the dialog height is fixed), so bring the section into view rather than
@@ -71,8 +74,10 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
     setExplanation('');
     setExplanationOpen(false);
     setPriority('medium');
+    setLinks([]);
     setTitleError(null);
     setParentError(null);
+    setLinksError(null);
   }
 
   function close() {
@@ -83,6 +88,7 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setTitleError(null);
+    setLinksError(null);
     if (trimmedTitle.length === 0) {
       setTitleError('Give the issue a title.');
       return;
@@ -99,6 +105,12 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
         explanationMd: explanation.trim() ? explanation : null,
         priority,
         parentId,
+        // Only send links when present, so a plain create's payload (and its
+        // exact-match test) stays unchanged. Strip the carried summary — the
+        // service takes just the (relationship, target) pair.
+        ...(links.length
+          ? { links: links.map((l) => ({ targetId: l.targetId, relationship: l.relationship })) }
+          : {}),
       });
       if (result.ok) {
         toast({
@@ -112,6 +124,10 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
         // The picker pre-filters to legal parents, so this only fires on a
         // forged/edge payload (e.g. subtask + no parent) — surface it inline.
         setParentError(result.error);
+      } else if (result.field === 'links') {
+        // A bad pending link (cycle / cross-workspace) — the whole create was
+        // rejected (atomic); surface it on the Linked-issues section.
+        setLinksError(result.error);
       } else {
         toast({ variant: 'error', title: result.error });
       }
@@ -236,6 +252,20 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
             <span className="text-(--el-text) font-medium">Priority</span>
             <PriorityPicker value={priority} onChange={setPriority} disabled={isPending} />
           </div>
+
+          {/* Linked issues (Subtask 2.4.10) — per design/work-items/links.mock.html
+              panel 5. Collected here, written atomically when the issue is
+              created. create.pen designed this section; 2.3.3/2.3.4 shipped the
+              modal without it. */}
+          <CreateIssueLinksField
+            links={links}
+            onChange={(next) => {
+              setLinks(next);
+              if (linksError) setLinksError(null);
+            }}
+            disabled={isPending}
+            error={linksError}
+          />
         </div>
 
         <Modal.Footer className="shrink-0">

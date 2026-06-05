@@ -9,6 +9,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { keyForAppend, keyBetween } from '@/lib/workItems/positioning';
+import { relationshipToLink } from '@/lib/workItems/linkRelationships';
 import {
   AssigneeNotInWorkspaceError,
   CrossProjectParentError,
@@ -304,6 +305,60 @@ export const workItemsService = {
         },
         tx,
       );
+
+      // Links collected in the create modal (Subtask 2.4.10), written in the
+      // SAME transaction as the item — so the issue + its links commit or roll
+      // back together (a bad link aborts the whole create; the item is never
+      // born half-linked). Each pending entry is a (relationship, target) pair;
+      // the new row's id now exists, so `relationshipToLink` resolves the
+      // directed edge (the single source of the `blocks` from/to flip). The DB
+      // trigger backstops cycle/self-link/workspace-consistency at insert (the
+      // repo translates them to typed errors); a missing or cross-workspace
+      // target is pre-checked here for a precise typed error rather than a raw
+      // FK violation. `relates_to` gets its reciprocal row, mirroring
+      // linkWorkItems (1.4.4). The links ride in the created-row state, so no
+      // separate link revision is recorded — they're part of creation, not a
+      // later edit.
+      if (input.links?.length) {
+        for (const pending of input.links) {
+          const target = await workItemRepository.findById(pending.targetId, tx);
+          if (!target) throw new WorkItemNotFoundError(pending.targetId);
+          if (target.workspaceId !== workspaceId) throw new CrossWorkspaceLinkError();
+
+          const directed = relationshipToLink(pending.relationship, row.id, pending.targetId);
+          await workItemLinkRepository.create(
+            {
+              workspaceId,
+              fromId: directed.fromId,
+              toId: directed.toId,
+              kind: directed.kind,
+              createdById: ctx.userId,
+            },
+            tx,
+          );
+
+          if (directed.kind === 'relates_to') {
+            const existingReciprocal = await workItemLinkRepository.findReciprocal(
+              directed.toId,
+              directed.fromId,
+              'relates_to',
+              tx,
+            );
+            if (!existingReciprocal) {
+              await workItemLinkRepository.create(
+                {
+                  workspaceId,
+                  fromId: directed.toId,
+                  toId: directed.fromId,
+                  kind: 'relates_to',
+                  createdById: ctx.userId,
+                },
+                tx,
+              );
+            }
+          }
+        }
+      }
 
       return toWorkItemDto(row);
     });
@@ -1100,6 +1155,25 @@ export const workItemsService = {
    * picker's Combobox filters by identifier/title client-side (full server
    * search is Epic 6).
    */
+  /**
+   * Candidate target issues for the CREATE-modal link picker (Subtask 2.4.10).
+   * Like {@link listLinkCandidates} but there is no current item yet (the issue
+   * isn't created), so there's nothing to exclude server-side beyond tenancy:
+   * every non-archived item in the caller's WORKSPACE (cross-project — the link
+   * model allows it). The modal excludes already-pending targets client-side
+   * (direction-aware, per chosen relationship) and the Combobox filters by
+   * identifier/title. Bounded to LINK_CANDIDATE_LIMIT; explicit `workspaceId`
+   * gate (finding #26 — the primary tenant filter, RLS is defense-in-depth).
+   */
+  async listCreateLinkCandidates(ctx: ServiceContext): Promise<WorkItemSummaryDto[]> {
+    const rows = await workItemRepository.findLinkCandidates(
+      ctx.workspaceId,
+      [],
+      LINK_CANDIDATE_LIMIT,
+    );
+    return rows.map(toWorkItemSummaryDto);
+  },
+
   async listLinkCandidates(
     currentItemId: string,
     relationship: RelationshipKind,
