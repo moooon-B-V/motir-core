@@ -3,6 +3,7 @@ import type {
   WorkItemForestRow,
   WorkItemListRow,
   WorkItemSubtreeRow,
+  WorkItemTreeRow,
 } from '@/lib/repositories/workItemRepository';
 import type {
   WorkItemDto,
@@ -10,6 +11,7 @@ import type {
   WorkItemSummaryDto,
   WorkItemSubtreeDto,
   WorkItemTreeNodeDto,
+  WorkItemTreeRowDto,
 } from '@/lib/dto/workItems';
 
 // Prisma → DTO converters for the work-item domain. The service calls these
@@ -142,5 +144,17 @@ export function toWorkItemListItemDto(row: WorkItemListRow): WorkItemListItemDto
     reporterId: row.reporterId,
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
     estimateMinutes: row.estimateMinutes,
+  };
+}
+
+/**
+ * A lazy tree-level row (Subtask 2.5.13) → DTO: the flat-list shape plus the
+ * tree-placement fields (`parentId`, `hasChildren`).
+ */
+export function toWorkItemTreeRowDto(row: WorkItemTreeRow): WorkItemTreeRowDto {
+  return {
+    ...toWorkItemListItemDto(row),
+    parentId: row.parentId,
+    hasChildren: row.hasChildren,
   };
 }

@@ -28,10 +28,11 @@ import {
   toWorkItemSubtreeDto,
   toWorkItemTreeNodeDto,
   toWorkItemListItemDto,
+  toWorkItemTreeRowDto,
 } from '@/lib/mappers/workItemMappers';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toWorkItemRevisionDto } from '@/lib/mappers/workItemRevisionMappers';
-import type { WorkItemForestRow } from '@/lib/repositories/workItemRepository';
+import type { WorkItemForestRow, WorkItemTreeRow } from '@/lib/repositories/workItemRepository';
 import type { IssueSort } from '@/lib/issues/issueListView';
 import type {
   CreateWorkItemInput,
@@ -46,6 +47,7 @@ import type {
   WorkItemSummaryDto,
   WorkItemSubtreeDto,
   WorkItemTreeNodeDto,
+  TreeLevelDto,
 } from '@/lib/dto/workItems';
 import type {
   LinkWorkItemsInput,
@@ -244,6 +246,33 @@ function assembleProjectForest(rows: WorkItemForestRow[], prune: boolean): WorkI
     if (node) forest.push(node);
   }
   return forest;
+}
+
+/** Default + max children fetched per lazy tree level (Subtask 2.5.13). The
+ * design pins 50 per node; the max caps a forged `?take`. */
+const TREE_LEVEL_PAGE_SIZE = 50;
+const TREE_LEVEL_MAX_TAKE = 200;
+
+/** Clamp the caller's paging into the safe range (a forged ?take/?offset can't
+ * blow the read up). */
+function clampTreePage(params: { take?: number; offset?: number }): {
+  take: number;
+  offset: number;
+} {
+  const take = Math.min(
+    Math.max(1, Math.trunc(params.take ?? TREE_LEVEL_PAGE_SIZE)),
+    TREE_LEVEL_MAX_TAKE,
+  );
+  const offset = Math.max(0, Math.trunc(params.offset ?? 0));
+  return { take, offset };
+}
+
+/** Turn a `take + 1` fetch into one level page: `hasMore` iff the extra row came
+ * back, then map the first `take` rows to DTOs. */
+function buildTreeLevel(rows: WorkItemTreeRow[], take: number): TreeLevelDto {
+  const hasMore = rows.length > take;
+  const page = hasMore ? rows.slice(0, take) : rows;
+  return { rows: page.map(toWorkItemTreeRowDto), hasMore };
 }
 
 export const workItemsService = {
@@ -847,6 +876,62 @@ export const workItemsService = {
     );
 
     return rows.map(toWorkItemListItemDto);
+  },
+
+  /**
+   * The project's ROOT issues for the LAZY tree (Subtask 2.5.13, finding #57) —
+   * one sorted, paged level (`parentId IS NULL`), each row carrying
+   * `hasChildren` so the client renders an expand chevron without loading the
+   * subtree. Same project + workspace gate as `getProjectTree` (a cross-tenant
+   * `projectId` → `ProjectNotFoundError`, no existence leak). `hasMore` is
+   * derived from a `take + 1` fetch (no COUNT). This is the UNfiltered tree's
+   * read; a filtered tree still uses `getProjectTree` (context-preserving over
+   * the already-bounded result).
+   */
+  async listRootIssues(
+    projectId: string,
+    params: { sort: IssueSort; take?: number; offset?: number },
+    ctx: ServiceContext,
+  ): Promise<TreeLevelDto> {
+    const project = await projectRepository.findById(projectId);
+    if (!project || project.workspaceId !== ctx.workspaceId) {
+      throw new ProjectNotFoundError(projectId);
+    }
+    const { take, offset } = clampTreePage(params);
+    const rows = await workItemRepository.findProjectTreeLevel(
+      projectId,
+      project.workspaceId,
+      null,
+      params.sort,
+      { take, offset },
+    );
+    return buildTreeLevel(rows, take);
+  },
+
+  /**
+   * One parent's DIRECT children for the LAZY tree (Subtask 2.5.13) — a sorted,
+   * paged level (`parentId = <id>`), each child carrying `hasChildren`. The
+   * parent is gated by workspace (finding #26): a missing or cross-workspace
+   * `parentId` → `WorkItemNotFoundError` (never a leak), NOT an empty list.
+   */
+  async listChildIssues(
+    parentId: string,
+    params: { sort: IssueSort; take?: number; offset?: number },
+    ctx: ServiceContext,
+  ): Promise<TreeLevelDto> {
+    const parent = await workItemRepository.findById(parentId);
+    if (!parent || parent.workspaceId !== ctx.workspaceId) {
+      throw new WorkItemNotFoundError(parentId);
+    }
+    const { take, offset } = clampTreePage(params);
+    const rows = await workItemRepository.findProjectTreeLevel(
+      parent.projectId,
+      parent.workspaceId,
+      parentId,
+      params.sort,
+      { take, offset },
+    );
+    return buildTreeLevel(rows, take);
   },
 
   /**
