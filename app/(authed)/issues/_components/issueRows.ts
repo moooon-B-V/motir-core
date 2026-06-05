@@ -92,6 +92,21 @@ function shapeRowData(
   };
 }
 
+/**
+ * A reusable per-row shaper (Subtask 2.5.14) — builds the status/name lookups
+ * ONCE, then maps each `WorkItemListItemDto` / `WorkItemTreeRowDto` to
+ * `IssueRowData`. The lazy Tree (IssueTreeTable) needs this on the CLIENT to
+ * shape children fetched on expand, so it's exported (the workflow + members
+ * cross to the client once; the lazy levels arrive as raw DTOs).
+ */
+export function makeRowShaper(
+  workflow: WorkflowDto,
+  members: WorkspaceMemberDTO[],
+): (item: WorkItemListItemDto) => IssueRowData {
+  const { statusByKey, nameById } = buildLookups(workflow, members);
+  return (item) => shapeRowData(item, statusByKey, nameById);
+}
+
 export function toIssueRows(
   nodes: WorkItemTreeNodeDto[],
   workflow: WorkflowDto,

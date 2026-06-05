@@ -242,13 +242,17 @@ export interface WorkItemTreeRowDto extends WorkItemListItemDto {
 }
 
 /**
- * One page of a lazy tree level: the level's rows + `hasMore` (whether another
- * page exists at the same level — drives the "Load more children" / "Load more"
- * affordance). Derived from a `take + 1` fetch, so no separate COUNT.
+ * One page of a lazy tree level: the level's rows + `hasMore` (another page
+ * exists — drives "Load more children") + `total` (the level's FULL child
+ * count, regardless of paging). `hasMore` is the `take + 1` probe; `total` is a
+ * cheap COUNT the tree render (2.5.14) needs for an honest `aria-setsize` (a row
+ * announces "19 of 128" even when only a window is loaded) + the "Showing 50 of
+ * 128" affordance.
  */
 export interface TreeLevelDto {
   rows: WorkItemTreeRowDto[];
   hasMore: boolean;
+  total: number;
 }
 
 /**

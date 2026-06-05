@@ -156,7 +156,7 @@ describe('IssueViewSwitcher — Tree ↔ List toggle', () => {
     expect(push).toHaveBeenCalledWith('/issues?view=list&sort=priority%3Adesc');
   });
 
-  it('switching back to Tree navigates to the bare /issues (sort dropped)', () => {
+  it('switching to Tree PRESERVES the sort (the Tree sorts too since 2.5.14)', () => {
     render(
       <IssueViewSwitcher
         view="list"
@@ -167,7 +167,9 @@ describe('IssueViewSwitcher — Tree ↔ List toggle', () => {
     fireEvent.click(screen.getByRole('button', { name: 'View: List' }));
     const tree = screen.getByRole('menuitemradio', { name: /Tree/ });
     fireEvent.click(tree);
-    expect(push).toHaveBeenCalledWith('/issues');
+    // Pre-2.5.14 the Tree ignored sort so this dropped to '/issues'; now the
+    // Tree sorts siblings within their parent, so the sort carries over.
+    expect(push).toHaveBeenCalledWith('/issues?sort=priority%3Adesc');
   });
 
   it('the active view option is checked', () => {

@@ -44,6 +44,12 @@ export interface TreeTableColumn<Row> {
   width?: number;
   /** Right-align the cell + header (for the trailing meta columns if wanted). */
   align?: 'start' | 'end';
+  /**
+   * `aria-sort` for this column's header (Subtask 2.5.14) — when the header is a
+   * sort button, the columnheader cell carries the sort state. Omit for
+   * non-sortable columns (no `aria-sort` rendered).
+   */
+  ariaSort?: 'ascending' | 'descending' | 'none';
 }
 
 /** A node in the nested rows model. `children` may be omitted/empty for a leaf. */
@@ -51,6 +57,21 @@ export interface TreeTableRow<Row> {
   id: string;
   data: Row;
   children?: TreeTableRow<Row>[];
+  /**
+   * Override "has children" — for a LAZY parent whose children aren't loaded yet
+   * (Subtask 2.5.14): the chevron shows from this flag, not from `children`.
+   * Defaults to `children?.length > 0`.
+   */
+  hasChildren?: boolean;
+  /** `aria-busy` on the row — a lazy node whose children are being fetched. */
+  busy?: boolean;
+  /**
+   * Override the derived `aria-posinset` / `aria-setsize` (1-based position +
+   * the FULL sibling total). Needed for paged lazy levels, where the rendered
+   * sibling count ≠ the true total (e.g. row 19 of 128 with only 50 loaded).
+   */
+  posinset?: number;
+  setsize?: number;
 }
 
 export interface TreeTableProps<Row> {
@@ -70,6 +91,12 @@ export interface TreeTableProps<Row> {
   getRowHref?: (row: Row) => string | undefined;
   /** Accessible label for the row link — REQUIRED whenever getRowHref is set. */
   getRowLabel?: (row: Row) => string;
+  /**
+   * Activate a NON-link row (no `getRowHref`) on Enter / click — e.g. the lazy
+   * "Load more children" row (2.5.14). Keyboard Enter on the row + a mouse click
+   * on the row both route here. Link rows ignore this (Enter clicks the link).
+   */
+  onRowActivate?: (id: string, data: Row) => void;
   /** Optional per-row `data-testid` (handy for E2E hooks). */
   getRowTestId?: (row: Row) => string | undefined;
   /** Extra classes on the outer container. */
@@ -85,6 +112,7 @@ interface FlatRow<Row> {
   depth: number; // 1 = root
   hasChildren: boolean;
   expanded: boolean;
+  busy: boolean;
   posinset: number; // 1-based among siblings
   setsize: number;
   parentId: string | null;
@@ -99,7 +127,9 @@ function flattenVisible<Row>(
   out: FlatRow<Row>[],
 ): void {
   rows.forEach((row, i) => {
-    const hasChildren = !!row.children && row.children.length > 0;
+    // `hasChildren` can be overridden for a lazy parent whose children aren't
+    // loaded yet (chevron from the flag, not the — still empty — children array).
+    const hasChildren = row.hasChildren ?? (!!row.children && row.children.length > 0);
     const isExpanded = hasChildren && expanded.has(row.id);
     out.push({
       id: row.id,
@@ -107,11 +137,16 @@ function flattenVisible<Row>(
       depth,
       hasChildren,
       expanded: isExpanded,
-      posinset: i + 1,
-      setsize: rows.length,
+      busy: row.busy ?? false,
+      posinset: row.posinset ?? i + 1,
+      setsize: row.setsize ?? rows.length,
       parentId,
     });
-    if (isExpanded) flattenVisible(row.children!, expanded, depth + 1, row.id, out);
+    // Recurse into any LOADED children (a lazy parent may be expanded with none
+    // loaded yet — the consumer injects a synthetic "loading" child row).
+    if (isExpanded && row.children && row.children.length > 0) {
+      flattenVisible(row.children, expanded, depth + 1, row.id, out);
+    }
   });
 }
 
@@ -125,6 +160,7 @@ export function TreeTable<Row>({
   getRowHref,
   getRowLabel,
   getRowTestId,
+  onRowActivate,
   className,
 }: TreeTableProps<Row>) {
   const isControlled = expandedIds !== undefined;
@@ -214,22 +250,25 @@ export function TreeTable<Row>({
             if (parentIndex >= 0) focusRowAt(parentIndex);
           }
           break;
-        case 'Enter':
+        case 'Enter': {
           // Activate the row's stretched link (if any). Space is intentionally
           // NOT bound — it scrolls, and inner controls own their own keys.
-          if (getRowHref) {
-            const link = linkRefs.current.get(row.id);
-            if (link) {
-              e.preventDefault();
-              link.click();
-            }
+          const link = linkRefs.current.get(row.id);
+          if (link) {
+            e.preventDefault();
+            link.click();
+          } else if (onRowActivate) {
+            // A non-link row (e.g. "Load more children") activates via Enter.
+            e.preventDefault();
+            onRowActivate(row.id, row.data);
           }
           break;
+        }
         default:
           break;
       }
     },
-    [focusRowAt, toggle, visible, getRowHref],
+    [focusRowAt, toggle, visible, onRowActivate],
   );
 
   const treeColumn = columns[0];
@@ -259,8 +298,9 @@ export function TreeTable<Row>({
               <div
                 key={col.key}
                 role="columnheader"
+                aria-sort={col.ariaSort}
                 className={cn(
-                  'truncate text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase',
+                  'min-w-0 truncate text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase',
                   col.align === 'end' && 'text-right',
                 )}
               >
@@ -290,10 +330,14 @@ export function TreeTable<Row>({
                   aria-posinset={row.posinset}
                   aria-setsize={row.setsize}
                   aria-expanded={row.hasChildren ? row.expanded : undefined}
+                  aria-busy={row.busy || undefined}
                   tabIndex={row.id === activeId ? 0 : -1}
                   data-testid={testId}
                   onKeyDown={(e) => onRowKeyDown(e, row, index)}
                   onFocus={() => setFocusedId(row.id)}
+                  onClick={
+                    !href && onRowActivate ? () => onRowActivate(row.id, row.data) : undefined
+                  }
                   className="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:-outline-offset-2"
                   style={{ gridTemplateColumns: gridTemplate, height: 40 }}
                 >

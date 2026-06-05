@@ -58,6 +58,7 @@ describe('listRootIssues', () => {
     expect(level.rows.find((r) => r.id === X.id)?.hasChildren).toBe(false);
     expect(level.rows.every((r) => r.parentId === null)).toBe(true);
     expect(level.hasMore).toBe(false);
+    expect(level.total).toBe(2); // the FULL roots count (for aria-setsize)
   });
 
   it('pages with take/offset and reports hasMore', async () => {
@@ -71,6 +72,7 @@ describe('listRootIssues', () => {
     );
     expect(p1.rows.map((r) => r.id)).toEqual([E.id]);
     expect(p1.hasMore).toBe(true);
+    expect(p1.total).toBe(2); // total is the FULL count, not the page size
 
     const p2 = await workItemsService.listRootIssues(
       fx.projectId,
@@ -102,6 +104,7 @@ describe('listChildIssues', () => {
     expect(level.rows.every((r) => r.parentId === E.id)).toBe(true);
     expect(level.rows.every((r) => r.hasChildren)).toBe(true); // A→A1, B→B1
     expect(level.hasMore).toBe(false);
+    expect(level.total).toBe(2); // E has exactly 2 children
   });
 
   it('returns an empty level for a leaf (no children)', async () => {

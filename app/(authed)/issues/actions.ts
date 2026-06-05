@@ -7,15 +7,21 @@ import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { isIssueType } from '@/lib/issues/parentRules';
 import { isRelationshipKind } from '@/lib/workItems/linkRelationships';
+import { parseSort } from '@/lib/issues/issueListView';
 import { linkErrorMessage } from '@/lib/workItems/linkErrorMessages';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import { IllegalParentTypeError, WorkItemError } from '@/lib/workItems/errors';
+import {
+  IllegalParentTypeError,
+  WorkItemError,
+  WorkItemNotFoundError,
+} from '@/lib/workItems/errors';
 import { WorkItemLinkError } from '@/lib/workItems/linkErrors';
 import type {
   CreateWorkItemLinkInput,
   WorkItemKindDto,
   WorkItemPriorityDto,
   WorkItemSummaryDto,
+  TreeLevelDto,
 } from '@/lib/dto/workItems';
 
 // Server Actions for the create-issue surface (Subtask 2.3.3). Transport only:
@@ -177,4 +183,55 @@ export async function listCandidateParentsAction(
     ctx.workspaceId,
   );
   return { ok: true, candidates };
+}
+
+// ── Lazy tree reads (Subtask 2.5.14, finding #57) ──────────────────────────
+// Transport for the lazy Tree view: the client fetches ONE level on expand /
+// "load more" / sort change. Resolve the session + active project, parse the
+// sort through the trusted whitelist (never the client's raw value), call the
+// shipped 2.5.13 read, return the level. `listChildIssues` gates the parent by
+// workspace in the service (a cross-workspace/missing parent → a not-found,
+// surfaced here as a benign error, never a leak).
+
+/** `?sort=`-string in (parsed through the whitelist) + an offset for paging. */
+export interface ListTreeLevelInput {
+  sortParam: string;
+  offset?: number;
+}
+
+export type TreeLevelResult = { ok: true; level: TreeLevelDto } | { ok: false; error: string };
+
+export async function listRootIssuesAction(input: ListTreeLevelInput): Promise<TreeLevelResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, error: 'No active project.' };
+  const level = await workItemsService.listRootIssues(
+    ctx.projectId,
+    { sort: parseSort(input.sortParam), offset: input.offset ?? 0 },
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+  );
+  return { ok: true, level };
+}
+
+export async function listChildIssuesAction(
+  input: ListTreeLevelInput & { parentId: string },
+): Promise<TreeLevelResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, error: 'No active project.' };
+  try {
+    const level = await workItemsService.listChildIssues(
+      input.parentId,
+      { sort: parseSort(input.sortParam), offset: input.offset ?? 0 },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return { ok: true, level };
+  } catch (err) {
+    if (err instanceof WorkItemNotFoundError) {
+      return { ok: false, error: 'That issue no longer exists.' };
+    }
+    throw err;
+  }
 }

@@ -584,6 +584,33 @@ export const workItemRepository = {
   },
 
   /**
+   * The FULL child count of one lazy tree level (Subtask 2.5.14) — the project's
+   * roots (`parentId === null`) or a parent's direct children — for an honest
+   * `aria-setsize` ("19 of 128") + the "Showing N of M" affordance, independent
+   * of paging. Same `workspaceId`+`projectId` gate as `findProjectTreeLevel`.
+   * COUNT comes back as `bigint`; coerced to `number` (a project's per-node
+   * child count is well within `Number.MAX_SAFE_INTEGER`).
+   */
+  async countProjectTreeLevel(
+    projectId: string,
+    workspaceId: string,
+    parentId: string | null,
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const client = tx ?? db;
+    const parentPred =
+      parentId === null ? Prisma.sql`w."parentId" IS NULL` : Prisma.sql`w."parentId" = ${parentId}`;
+    const rows = await client.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*)::bigint AS "count"
+        FROM "work_item" w
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND ${parentPred}`;
+    return Number(rows[0]?.count ?? 0);
+  },
+
+  /**
    * Create a work item. Required `tx`. The DB triggers validate the
    * kind-parent matrix + depth on insert; their SQLSTATE-23514 rejections and
    * a P2002 unique violation are translated to typed errors here.
