@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { getTranslations } from 'next-intl/server';
+import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -45,7 +45,7 @@ async function requireProjectContext(): Promise<{
   return { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: ctx.projectId };
 }
 
-// A minimal translator shape (satisfied by `getTranslations('errors')`).
+// A minimal translator shape (satisfied by `getErrorsTranslator()`).
 type ErrorTranslator = (key: string, values?: Record<string, string | number>) => string;
 
 /** Map a known workflow/management error to a translated message, or rethrow. */
@@ -71,7 +71,7 @@ async function run(fn: () => Promise<unknown>): Promise<ActionResult> {
   try {
     await fn();
   } catch (err) {
-    return { ok: false, error: toMessage(err, await getTranslations('errors')) };
+    return { ok: false, error: toMessage(err, await getErrorsTranslator()) };
   }
   revalidatePath(WORKFLOW_PATH);
   return { ok: true };
@@ -87,7 +87,7 @@ export async function createStatusAction(input: {
   const key = input.key.trim();
   const label = input.label.trim();
   if (!key || !label)
-    return { ok: false, error: (await getTranslations('errors'))('actions.keyLabelRequired') };
+    return { ok: false, error: (await getErrorsTranslator())('actions.keyLabelRequired') };
   return run(() =>
     workflowsService.createStatus({
       ...ctx,
@@ -160,7 +160,7 @@ export async function deleteStatusAction(
       reassignToStatusId,
     });
   } catch (err) {
-    const t = await getTranslations('errors');
+    const t = await getErrorsTranslator();
     if (err instanceof StatusInUseError) {
       return {
         ok: false,

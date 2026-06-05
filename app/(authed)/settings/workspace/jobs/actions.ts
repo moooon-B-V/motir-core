@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { getTranslations } from 'next-intl/server';
+import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { jobsDashboardService } from '@/lib/services/jobsDashboardService';
@@ -33,7 +33,7 @@ async function requireContext() {
  */
 export async function replayDlqAction(dlqId: string): Promise<ActionResult> {
   const { userId, workspaceId } = await requireContext();
-  const t = await getTranslations('errors');
+  const t = await getErrorsTranslator();
   if (!dlqId) return { ok: false, error: t('actions.missingDlqId') };
 
   try {

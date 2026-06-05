@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { getTranslations } from 'next-intl/server';
+import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext, WORKSPACE_COOKIE_NAME } from '@/lib/workspaces';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -34,7 +34,7 @@ export async function renameWorkspaceAction(
   const { userId, workspaceId } = await requireContext();
   const name = String(formData.get('name') ?? '').trim();
   if (!name)
-    return { ok: false, error: (await getTranslations('errors'))('actions.workspaceNameEmpty') };
+    return { ok: false, error: (await getErrorsTranslator())('actions.workspaceNameEmpty') };
 
   await workspacesService.renameWorkspace({ workspaceId, actorUserId: userId, name });
   // Re-render the settings page + the top-nav switcher (in the shared
@@ -74,7 +74,7 @@ async function switchToRemainingOrClear(userId: string): Promise<void> {
  */
 export async function removeMemberAction(targetUserId: string): Promise<ActionResult> {
   const { userId, workspaceId } = await requireContext();
-  const t = await getTranslations('errors');
+  const t = await getErrorsTranslator();
   if (targetUserId === userId) {
     return { ok: false, error: t('actions.useLeaveToRemoveSelf') };
   }
@@ -98,7 +98,7 @@ export async function leaveWorkspaceAction(): Promise<ActionResult> {
     if (err instanceof LastMemberError) {
       return {
         ok: false,
-        error: (await getTranslations('errors'))('actions.cannotLeaveLastMember'),
+        error: (await getErrorsTranslator())('actions.cannotLeaveLastMember'),
       };
     }
     throw err;

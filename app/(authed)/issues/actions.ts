@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { getTranslations } from 'next-intl/server';
+import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -74,7 +74,7 @@ export type CreateIssueResult =
 export async function createIssueAction(input: CreateIssueInput): Promise<CreateIssueResult> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
-  const t = await getTranslations('errors');
+  const t = await getErrorsTranslator();
   const ctx = await getActiveProject();
   if (!ctx) return { ok: false, error: t('actions.noProjectForIssue') };
 
@@ -150,8 +150,7 @@ export async function listCreateLinkCandidatesAction(): Promise<ListCreateLinkCa
   const session = await getSession();
   if (!session) redirect('/sign-in');
   const ctx = await getActiveProject();
-  if (!ctx)
-    return { ok: false, error: (await getTranslations('errors'))('actions.pickProjectFirst') };
+  if (!ctx) return { ok: false, error: (await getErrorsTranslator())('actions.pickProjectFirst') };
 
   const candidates = await workItemsService.listCreateLinkCandidates({
     userId: ctx.userId,
@@ -177,7 +176,7 @@ export async function listCandidateParentsAction(
 ): Promise<ListCandidateParentsResult> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
-  const t = await getTranslations('errors');
+  const t = await getErrorsTranslator();
   const ctx = await getActiveProject();
   if (!ctx) return { ok: false, error: t('actions.noProjectForParent') };
   if (!isIssueType(childType)) return { ok: false, error: t('actions.unknownIssueType') };

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { getTranslations } from 'next-intl/server';
+import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -79,7 +79,7 @@ export async function updateIssueAction(input: UpdateIssueInput): Promise<IssueA
     revalidatePath(ISSUES_PATH);
     return { ok: true, updatedAt: updated.updatedAt };
   } catch (err) {
-    const t = await getTranslations('errors');
+    const t = await getErrorsTranslator();
     if (err instanceof StaleWorkItemError)
       return { ok: false, error: workItemErrorMessage(err, t), stale: true };
     if (err instanceof IllegalParentTypeError)
@@ -102,7 +102,7 @@ export async function changeStatusAction(input: {
     revalidatePath(ISSUES_PATH);
     return { ok: true, updatedAt: updated.updatedAt };
   } catch (err) {
-    const t = await getTranslations('errors');
+    const t = await getErrorsTranslator();
     if (err instanceof IllegalTransitionError || err instanceof UnknownStatusError)
       return { ok: false, error: workItemErrorMessage(err, t), field: 'status' };
     if (err instanceof WorkItemError) return { ok: false, error: workItemErrorMessage(err, t) };

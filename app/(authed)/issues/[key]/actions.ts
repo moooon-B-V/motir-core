@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { getTranslations } from 'next-intl/server';
+import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -35,7 +35,7 @@ export async function listLinkCandidatesAction(
 ): Promise<{ ok: true; candidates: WorkItemSummaryDto[] } | { ok: false; error: string }> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
-  const t = await getTranslations('errors');
+  const t = await getErrorsTranslator();
   const ctx = await getActiveProject();
   if (!ctx) return { ok: false, error: t('actions.pickProjectFirst') };
   if (!isRelationshipKind(relationship))
@@ -68,7 +68,7 @@ export async function createLinkAction(input: {
 }): Promise<LinkActionResult> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
-  const t = await getTranslations('errors');
+  const t = await getErrorsTranslator();
   const ctx = await getActiveProject();
   if (!ctx) return { ok: false, error: t('actions.pickProjectFirst') };
   if (!isRelationshipKind(input.relationship))
@@ -103,7 +103,7 @@ export async function removeLinkAction(input: {
 }): Promise<LinkActionResult> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
-  const t = await getTranslations('errors');
+  const t = await getErrorsTranslator();
   const ctx = await getActiveProject();
   if (!ctx) return { ok: false, error: t('actions.pickProjectFirst') };
 
