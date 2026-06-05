@@ -230,6 +230,28 @@ export interface WorkItemListItemDto {
 }
 
 /**
+ * One node of a LAZY tree level (Subtask 2.5.13, finding #57) — the same render
+ * fields as a flat List item PLUS `parentId` (placement) and `hasChildren`
+ * (drives the expand chevron without pre-loading the subtree). Returned by
+ * `listRootIssues` / `listChildIssues`; the client (2.5.14) fetches one level at
+ * a time on expand rather than the whole forest.
+ */
+export interface WorkItemTreeRowDto extends WorkItemListItemDto {
+  parentId: string | null;
+  hasChildren: boolean;
+}
+
+/**
+ * One page of a lazy tree level: the level's rows + `hasMore` (whether another
+ * page exists at the same level — drives the "Load more children" / "Load more"
+ * affordance). Derived from a `take + 1` fetch, so no separate COUNT.
+ */
+export interface TreeLevelDto {
+  rows: WorkItemTreeRowDto[];
+  hasMore: boolean;
+}
+
+/**
  * Input to `workItemsService.createWorkItem` (Subtask 1.4.4). The reporter is
  * taken from the ServiceContext (`ctx.userId`), and key / identifier /
  * position are allocated by the service — so none of those appear here. The

@@ -90,6 +90,20 @@ export interface WorkItemListRow {
 }
 
 /**
+ * One row of a LAZY tree level (Subtask 2.5.13): a single parent's direct
+ * children OR the project's roots — paged + sorted. Same render fields as
+ * `WorkItemListRow`, plus `parentId` (so the client can place it) and
+ * `hasChildren` — an `EXISTS` flag driving the expand chevron WITHOUT
+ * pre-loading the subtree (the whole-forest scale fix, finding #57). No `depth`
+ * (the client tracks it via expansion) and no `matched` (the lazy path is the
+ * UNfiltered tree; a filtered tree still uses `findProjectForest`).
+ */
+export interface WorkItemTreeRow extends WorkItemListRow {
+  parentId: string | null;
+  hasChildren: boolean;
+}
+
+/**
  * The whitelisted ORDER-BY expression per sort column (Subtask 2.5.8). The
  * key is a validated `IssueSortColumn` (parsed/clamped in `issueListView`), so
  * the SQL fragment is never derived from raw user input. `assignee`/`reporter`
@@ -507,6 +521,66 @@ export const workItemRepository = {
           AND w."archivedAt" IS NULL
           AND (${matched})
         ORDER BY ${orderCol} ${dir} NULLS LAST, w."key" ASC`;
+  },
+
+  /**
+   * One LAZY tree level (Subtask 2.5.13, finding #57) — the project's ROOTS
+   * (`parentId === null`) or one parent's DIRECT children (`parentId === <id>`),
+   * sorted by the whitelisted column + paged with `take`/`offset`. Each row
+   * carries `hasChildren` (a correlated `EXISTS` over non-archived children) so
+   * the client renders the expand chevron WITHOUT loading the subtree — the fix
+   * for the whole-forest read that didn't scale.
+   *
+   * The explicit `workspaceId` + `projectId` gate (finding #26 — RLS is inert
+   * under the dev/CI superuser) means a row can never cross tenants. The sort
+   * column is whitelisted through `ISSUE_SORT_SQL` (never raw user input), and
+   * `key ASC` is the stable tiebreaker that makes the order total (so paging
+   * never skips/repeats a row). Fetches `take + 1` so the caller can derive
+   * `hasMore` without a separate COUNT. UNfiltered only — a filtered tree uses
+   * `findProjectForest` (context-preserving over the bounded result).
+   */
+  async findProjectTreeLevel(
+    projectId: string,
+    workspaceId: string,
+    parentId: string | null,
+    sort: IssueSort,
+    page: { take: number; offset: number },
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItemTreeRow[]> {
+    const client = tx ?? db;
+    const orderCol = ISSUE_SORT_SQL[sort.column];
+    const dir = sort.direction === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`;
+    const parentPred =
+      parentId === null ? Prisma.sql`w."parentId" IS NULL` : Prisma.sql`w."parentId" = ${parentId}`;
+
+    return client.$queryRaw<WorkItemTreeRow[]>`
+      SELECT w."id",
+             w."parentId",
+             w."kind"::text       AS "kind",
+             w."key",
+             w."identifier",
+             w."title",
+             w."status",
+             w."priority"::text   AS "priority",
+             w."assigneeId",
+             w."reporterId",
+             w."dueDate",
+             w."estimateMinutes",
+             EXISTS (
+               SELECT 1 FROM "work_item" ch
+                WHERE ch."parentId" = w."id" AND ch."archivedAt" IS NULL
+             )                    AS "hasChildren"
+        FROM "work_item" w
+        LEFT JOIN "user" au ON au."id" = w."assigneeId"
+        LEFT JOIN "user" ru ON ru."id" = w."reporterId"
+        LEFT JOIN "workflow_status" ws
+               ON ws."project_id" = w."projectId" AND ws."key" = w."status"
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND ${parentPred}
+        ORDER BY ${orderCol} ${dir} NULLS LAST, w."key" ASC
+        LIMIT ${page.take + 1} OFFSET ${page.offset}`;
   },
 
   /**
