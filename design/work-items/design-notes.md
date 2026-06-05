@@ -3,14 +3,14 @@
 Design reference for the `work-items` UI area. Each surface names the design
 asset it lives in, the primitives it composes from, copy strings, and placement.
 
-| Surface                                       | Asset                                       | Notes                                                                                                              |
-| --------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Issue detail page                             | `detail.pen` (Pencil) + `detail.png`        | header eyebrow + Description / Explanation / Activity (left) · core-fields rail (right). Built across 2.4.1–2.4.4. |
-| Create issue modal                            | `create.pen` + `create.png`                 | type/parent/title/description/priority + optional Explanation (panel 3).                                           |
-| Tree view (issue list, nested)                | `tree.pen` + `tree.png`                     | issue tree rows + the `[Filter]`·`[Tree ▾]`·`[+ New issue]` toolbar.                                               |
+| Surface                                       | Asset                                       | Notes                                                                                                                |
+| --------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Issue detail page                             | `detail.pen` (Pencil) + `detail.png`        | header eyebrow + Description / Explanation / Activity (left) · core-fields rail (right). Built across 2.4.1–2.4.4.   |
+| Create issue modal                            | `create.pen` + `create.png`                 | type/parent/title/description/priority + optional Explanation (panel 3).                                             |
+| Tree view (issue list, nested)                | `tree.pen` + `tree.png`                     | issue tree rows + the `[Filter]`·`[Tree ▾]`·`[+ New issue]` toolbar.                                                 |
 | **Flat sortable List view + view switcher**   | **`list.mock.html`** (HTML mockup)          | The List mode `tree.png` leaves unspecified (it draws only Tree + a disabled switcher seam). Gates 2.5.8. See below. |
-| **Relationships panel + ready/blocked badge** | **`relationships.mock.html`** (HTML mockup) | The element `detail.pen` does NOT specify. See below.                                                              |
-| **Link management (add / remove links)**      | **`links.mock.html`** (HTML mockup)         | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                 |
+| **Relationships panel + ready/blocked badge** | **`relationships.mock.html`** (HTML mockup) | The element `detail.pen` does NOT specify. See below.                                                                |
+| **Link management (add / remove links)**      | **`links.mock.html`** (HTML mockup)         | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                   |
 
 ---
 
@@ -212,15 +212,15 @@ three drawn columns — that shipped code is enforced reality, rung 2). The List
 **reuses that exact set and order**, so Tree↔List is column-identical and 2.5.8
 reuses the same `cell` render-props:
 
-| Column   | Width (px) | Cell                                                    | Sorts by                          |
-| -------- | ---------- | ------------------------------------------------------- | --------------------------------- |
-| Title    | `1fr`      | `IssueTypeIcon` (type hue) · mono identifier · title    | **issue key** (the default)       |
-| Priority | 120        | `PRIORITY_META` chip (`Pill` tone + direction icon)     | priority rank (highest→lowest)    |
-| Assignee | 150        | initial-letter `Avatar` · name, or muted "Unassigned"   | assignee name                     |
-| Reporter | 150        | initial-letter `Avatar` · name                          | reporter name                     |
-| Due      | 120        | formatted date, or muted `—`                            | due date                          |
-| Est.     | 90 (end)   | formatted duration, or muted `—` (right-aligned)        | estimate minutes                  |
-| Status   | 130        | `Pill` by lifecycle category (the `STATUS_TONE` map)    | workflow status order             |
+| Column   | Width (px) | Cell                                                  | Sorts by                       |
+| -------- | ---------- | ----------------------------------------------------- | ------------------------------ |
+| Title    | `1fr`      | `IssueTypeIcon` (type hue) · mono identifier · title  | **issue key** (the default)    |
+| Priority | 120        | `PRIORITY_META` chip (`Pill` tone + direction icon)   | priority rank (highest→lowest) |
+| Assignee | 150        | initial-letter `Avatar` · name, or muted "Unassigned" | assignee name                  |
+| Reporter | 150        | initial-letter `Avatar` · name                        | reporter name                  |
+| Due      | 120        | formatted date, or muted `—`                          | due date                       |
+| Est.     | 90 (end)   | formatted duration, or muted `—` (right-aligned)      | estimate minutes               |
+| Status   | 130        | `Pill` by lifecycle category (the `STATUS_TONE` map)  | workflow status order          |
 
 Grid template (identical to `IssueTreeTable` / `IssueTreeSkeleton`):
 `minmax(0,1fr) 120px 150px 150px 120px 90px 130px`.
@@ -228,7 +228,7 @@ Grid template (identical to `IssueTreeTable` / `IssueTreeSkeleton`):
 **Decision — no NEW "Updated" column (the card offered Priority/Updated as
 optional extras).** Priority is already a Tree column, and the seven existing
 columns already give rich, meaningful sort axes — so the List earns its keep
-through *sorting the existing columns*, not by adding data. Adding `updated_at`
+through _sorting the existing columns_, not by adding data. Adding `updated_at`
 would be new plumbing into `IssueRowData` + a new cell for marginal gain over
 the existing Due/Est/Priority sorts ("no complexity for nothing"). An **Updated**
 column (and column show/hide) belongs with Epic 6 saved-views, where recency
