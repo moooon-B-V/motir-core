@@ -1,134 +1,24 @@
 'use client';
 
 import { useState } from 'react';
-import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
-import { Pill, type PillProps } from '@/components/ui/Pill';
 import { TreeTable, type TreeTableColumn, type TreeTableRow } from '@/components/ui/TreeTable';
-import type { StatusCategoryDto } from '@/lib/dto/workflows';
-import { PRIORITY_LABELS } from '@/lib/issues/priority';
-import { PRIORITY_META } from '@/lib/issues/priorityMeta';
+import { ISSUE_COLUMNS } from './issueColumns';
 import type { IssueRowData } from './issueRows';
 
-// The /issues list table (Subtask 2.5.3) — the client wrapper that composes the
-// generic TreeTable primitive (2.5.2) with the issue-specific cells from
-// design/work-items/tree.png: TITLE (type icon + identifier + title), ASSIGNEE
-// (avatar + name / "Unassigned"), STATUS (Pill by lifecycle category) — plus the
-// remaining core-fields the detail page shows, surfaced as columns: PRIORITY
-// (the shared priority chip), REPORTER (avatar + name), DUE, ESTIMATE. The whole
-// row links to the issue's detail page. Expand/collapse is client-held; the
-// default expands the roots one level (matching the mockup), with no per-row
-// persistence in v1. Inline status/assignee editing layers onto these cells in
-// 2.5.5 (it raises its controls above the row's stretched link).
+// The /issues TREE table (Subtask 2.5.3) — the client wrapper that composes the
+// generic TreeTable primitive (2.5.2) with the shared issue cells (issueColumns,
+// 2.5.8) from design/work-items/tree.png: TITLE (type icon + identifier + title),
+// PRIORITY, ASSIGNEE, REPORTER, DUE, EST., STATUS. The whole row links to the
+// issue's detail page. Expand/collapse is client-held; the default expands the
+// roots one level (matching the mockup), with no per-row persistence in v1.
+// Inline status/assignee editing layers onto these cells in 2.5.5. The flat,
+// sortable List view (IssueListTable, 2.5.8) reuses the SAME cells un-nested.
 
-// Lifecycle category → Pill status tone — the same mapping the detail page's
-// ChildList uses (todo→planned, in_progress→in-progress, done→done). All AA-safe
-// (finding #35); an unclassifiable status falls back to a neutral Pill.
-const STATUS_TONE: Record<StatusCategoryDto, NonNullable<PillProps['status']>> = {
-  todo: 'planned',
-  in_progress: 'in-progress',
-  done: 'done',
-};
-
-/** Initial-letter avatar — mirrors the detail rail / ChildList avatar. */
-function Avatar({ name }: { name: string }) {
-  return (
-    <span
-      className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
-      aria-hidden
-    >
-      {name.charAt(0).toUpperCase()}
-    </span>
-  );
-}
-
-const COLUMNS: TreeTableColumn<IssueRowData>[] = [
-  {
-    key: 'title',
-    header: 'Title',
-    cell: (r) => (
-      <span className="flex min-w-0 items-center gap-2">
-        <IssueTypeIcon type={r.kind} className="h-4 w-4 shrink-0" />
-        <span className="shrink-0 font-mono text-xs text-(--el-text-muted)">{r.identifier}</span>
-        <span className="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline">
-          {r.title}
-        </span>
-      </span>
-    ),
-  },
-  {
-    key: 'priority',
-    header: 'Priority',
-    width: 120,
-    cell: (r) => {
-      const meta = PRIORITY_META[r.priority];
-      return (
-        <Pill {...meta.pill}>
-          <meta.icon className="h-3 w-3" aria-hidden />
-          {PRIORITY_LABELS[r.priority]}
-        </Pill>
-      );
-    },
-  },
-  {
-    key: 'assignee',
-    header: 'Assignee',
-    width: 150,
-    cell: (r) =>
-      r.assigneeName ? (
-        <span className="flex min-w-0 items-center gap-2">
-          <Avatar name={r.assigneeName} />
-          <span className="truncate text-(--el-text-secondary)">{r.assigneeName}</span>
-        </span>
-      ) : (
-        <span className="text-(--el-text-muted)">Unassigned</span>
-      ),
-  },
-  {
-    key: 'reporter',
-    header: 'Reporter',
-    width: 150,
-    cell: (r) => (
-      <span className="flex min-w-0 items-center gap-2">
-        <Avatar name={r.reporterName} />
-        <span className="truncate text-(--el-text-secondary)">{r.reporterName}</span>
-      </span>
-    ),
-  },
-  {
-    key: 'due',
-    header: 'Due',
-    width: 120,
-    cell: (r) =>
-      r.dueLabel ? (
-        <span className="truncate text-(--el-text-secondary)">{r.dueLabel}</span>
-      ) : (
-        <span className="text-(--el-text-muted)">—</span>
-      ),
-  },
-  {
-    key: 'estimate',
-    header: 'Est.',
-    width: 90,
-    align: 'end',
-    cell: (r) =>
-      r.estimateLabel ? (
-        <span className="truncate text-(--el-text-secondary)">{r.estimateLabel}</span>
-      ) : (
-        <span className="text-(--el-text-muted)">—</span>
-      ),
-  },
-  {
-    key: 'status',
-    header: 'Status',
-    width: 130,
-    cell: (r) =>
-      r.statusCategory ? (
-        <Pill status={STATUS_TONE[r.statusCategory]}>{r.statusLabel}</Pill>
-      ) : (
-        <Pill tone="neutral">{r.statusLabel}</Pill>
-      ),
-  },
-];
+// Drop the List-only `sortColumn` (the Tree doesn't sort) and keep the
+// TreeTable column shape — the cells are identical across views.
+const COLUMNS: TreeTableColumn<IssueRowData>[] = ISSUE_COLUMNS.map(
+  ({ key, header, width, align, cell }) => ({ key, header, width, align, cell }),
+);
 
 export interface IssueTreeTableProps {
   rows: TreeTableRow<IssueRowData>[];

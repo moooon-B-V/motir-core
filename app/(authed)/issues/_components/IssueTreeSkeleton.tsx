@@ -1,9 +1,12 @@
-// The loading skeleton for the /issues tree-table (Subtask 2.5.3), per
-// design/work-items/tree.png panel 3: the same column header as the real table,
-// then shimmer rows. Purely presentational + static, so it's the Suspense
-// fallback while the Server Component streams the tree. Mirrors the TreeTable
-// container chrome (rounded, bordered, header tint) so there's no layout shift
-// on settle. The grid template is kept in sync with IssueTreeTable's columns.
+// The loading skeleton for the /issues tables (Subtask 2.5.3; flat variant in
+// 2.5.8), per design/work-items/tree.png panel 3 + list.mock.html panel 4: the
+// same column header as the real table, then shimmer rows. Purely presentational
+// + static, so it's the Suspense fallback while the Server Component streams.
+// Mirrors the table container chrome (rounded, bordered, header tint) so there's
+// no layout shift on settle. The grid template is kept in sync with the columns.
+//
+// `flat` (the List view) drops the per-row indent + the chevron slot — the one
+// delta between the Tree skeleton and the List skeleton (the List is un-nested).
 
 // TITLE · PRIORITY · ASSIGNEE · REPORTER · DUE · EST. · STATUS.
 const GRID = 'minmax(0,1fr) 120px 150px 150px 120px 90px 130px';
@@ -17,7 +20,7 @@ function Bar({ w }: { w: number }) {
   return <span className="block h-3 rounded bg-(--el-muted)" style={{ width: w }} aria-hidden />;
 }
 
-export function IssueTreeSkeleton() {
+export function IssueTreeSkeleton({ flat = false }: { flat?: boolean } = {}) {
   return (
     <div
       className="overflow-hidden rounded-xl border border-(--el-border)"
@@ -47,9 +50,11 @@ export function IssueTreeSkeleton() {
             className="grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0"
             style={{ gridTemplateColumns: GRID, height: 40 }}
           >
-            {/* Title */}
-            <span className="flex items-center gap-2" style={{ paddingLeft: INDENT[i] }}>
-              <span className="h-3.5 w-3.5 shrink-0 rounded bg-(--el-muted)" aria-hidden />
+            {/* Title — flat List drops the indent + the chevron slot. */}
+            <span className="flex items-center gap-2" style={{ paddingLeft: flat ? 0 : INDENT[i] }}>
+              {flat ? null : (
+                <span className="h-3.5 w-3.5 shrink-0 rounded bg-(--el-muted)" aria-hidden />
+              )}
               <span className="h-4 w-4 shrink-0 rounded bg-(--el-muted)" aria-hidden />
               <Bar w={56} />
               <Bar w={140 + (i % 3) * 50} />
