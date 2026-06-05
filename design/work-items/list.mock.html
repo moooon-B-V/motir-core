@@ -4,7 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>
-      Design mock · Flat sortable List view + the [Tree ▾] view switcher (Story 2.5 · 2.5.7 → 2.5.8)
+      Design mock · Flat sortable List view + view switcher + pagination (Story 2.5 · 2.5.7 → 2.5.8,
+      2.5.10 → 2.5.12)
     </title>
     <!--
       DESIGN ASSET (HTML mockup) for the issue-list LIST view + the view-switcher
@@ -26,7 +27,9 @@
       Covers (multi-panel): (0) the full List view in the page shell, default
       sort key asc · (1) the [List ▾] switcher menu open · (2) re-sorted by a
       different column (Priority desc) — the active-sort indicator moved + the
-      asc/desc caret · (3) the empty state · (4) the flat loading skeleton.
+      asc/desc caret · (3) the empty state · (4) the flat loading skeleton ·
+      (5) the PAGINATION footer (2.5.10): the List is server-paged (page size 50)
+      with a "1–50 of N" navigator bar — page 1 + a middle page with ellipses.
       Toggle dark mode to confirm token parity. See design-notes.md for the spec.
     -->
     <style>
@@ -632,6 +635,81 @@
         background: var(--el-muted);
         flex: none;
       }
+
+      /* ── Pagination footer (2.5.10) — a row UNDER the table, inside the same
+         bordered box. Mirrors Jira's navigator: "1–50 of N" + prev/next + page
+         numbers. The List is server-paged; this bar drives ?page=. ───────────── */
+      .lt-foot {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 14px;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .lt-count {
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .lt-count strong {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .pager {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      /* page + prev/next buttons — the --radius-control / --height-control affordance */
+      .pg-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 32px;
+        height: 32px;
+        padding: 0 8px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .pg-btn:hover {
+        background: var(--el-surface);
+      }
+      .pg-btn .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+      /* current page — accent fill (+ aria-current="page" in code) */
+      .pg-btn.is-current {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+        cursor: default;
+      }
+      /* prev disabled on the first page / next on the last */
+      .pg-btn.is-disabled {
+        color: var(--el-text-faint);
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+      .pg-btn.is-disabled .ic {
+        color: var(--el-text-faint);
+      }
+      .pg-ellipsis {
+        min-width: 24px;
+        text-align: center;
+        font-size: 13px;
+        color: var(--el-text-faint);
+        user-select: none;
+      }
     </style>
   </head>
   <body>
@@ -780,6 +858,26 @@
           stroke-linejoin="round"
         >
           <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-chevron-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m15 18-6-6 6-6" />
+        </g>
+        <g
+          id="i-chevron-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
         </g>
         <g
           id="i-sliders"
@@ -1578,6 +1676,61 @@
             ><span class="bar" style="width: 36px"></span
           ></span>
           <span class="chip-sk" style="width: 80px"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 5 — pagination footer (server-paged List) ════════════ -->
+    <div class="panel-label">
+      5 · Pagination — the List is server-paged (page size 50); a footer bar under the table mirrors
+      Jira's navigator. The bar drives <code>?page=</code> and composes with sort + filter.
+    </div>
+    <div class="page-shell">
+      <p style="margin: 0 0 10px; font-size: 13px; color: var(--el-text-secondary)">
+        Page 1 of 25 — Prev disabled, page 1 current. The bar is the last row inside the bordered
+        table box (shown standalone here; it sits under the rows from panels 0–2).
+      </p>
+      <div class="list-table">
+        <div class="lt-foot">
+          <span class="lt-count">Showing <strong>1–50</strong> of <strong>1,234</strong></span>
+          <nav class="pager" aria-label="Pagination">
+            <button class="pg-btn is-disabled" aria-label="Previous page" aria-disabled="true">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-chevron-left" /></svg>
+            </button>
+            <button class="pg-btn is-current" aria-current="page">1</button>
+            <button class="pg-btn">2</button>
+            <button class="pg-btn">3</button>
+            <span class="pg-ellipsis" aria-hidden="true">…</span>
+            <button class="pg-btn">25</button>
+            <button class="pg-btn" aria-label="Next page">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+            </button>
+          </nav>
+        </div>
+      </div>
+
+      <p style="margin: 22px 0 10px; font-size: 13px; color: var(--el-text-secondary)">
+        A middle page (13 of 25) — both ends truncate to an ellipsis; the current page is the accent
+        chip (also <code>aria-current="page"</code>).
+      </p>
+      <div class="list-table">
+        <div class="lt-foot">
+          <span class="lt-count">Showing <strong>601–650</strong> of <strong>1,234</strong></span>
+          <nav class="pager" aria-label="Pagination">
+            <button class="pg-btn" aria-label="Previous page">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-chevron-left" /></svg>
+            </button>
+            <button class="pg-btn">1</button>
+            <span class="pg-ellipsis" aria-hidden="true">…</span>
+            <button class="pg-btn">12</button>
+            <button class="pg-btn is-current" aria-current="page">13</button>
+            <button class="pg-btn">14</button>
+            <span class="pg-ellipsis" aria-hidden="true">…</span>
+            <button class="pg-btn">25</button>
+            <button class="pg-btn" aria-label="Next page">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+            </button>
+          </nav>
         </div>
       </div>
     </div>
