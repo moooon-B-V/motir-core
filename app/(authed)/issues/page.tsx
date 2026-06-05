@@ -4,6 +4,9 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { parseSort, parseView, serializeSort } from '@/lib/issues/issueListView';
+import { parseIssueFilter, type IssueFilterParams } from '@/lib/issues/issueListFilter';
+import { workflowsService } from '@/lib/services/workflowsService';
+import { workspacesService } from '@/lib/services/workspacesService';
 import { IssueListToolbar } from './_components/IssueListToolbar';
 import { IssueTreeSection } from './_components/IssueTreeSection';
 import { IssueTreeSkeleton } from './_components/IssueTreeSkeleton';
@@ -26,7 +29,7 @@ import { IssueTreeSkeleton } from './_components/IssueTreeSkeleton';
 export default async function IssuesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; sort?: string }>;
+  searchParams: Promise<{ view?: string; sort?: string } & IssueFilterParams>;
 }) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
@@ -46,9 +49,20 @@ export default async function IssuesPage({
     );
   }
 
-  const { view: rawView, sort: rawSort } = await searchParams;
-  const view = parseView(rawView);
-  const sort = parseSort(rawSort);
+  const sp = await searchParams;
+  const view = parseView(sp.view);
+  const sort = parseSort(sp.sort);
+  const filter = parseIssueFilter(sp);
+
+  // The filter facets (workflow statuses + workspace members) are needed by the
+  // toolbar's filter bar up front, so they're read here (cheap) and passed to
+  // BOTH the toolbar and the streamed section — the section then only awaits the
+  // issues read (the heavy one) behind the skeleton. The page calls services
+  // only (never Prisma) per the 4-layer rule.
+  const [workflow, members] = await Promise.all([
+    workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
+    workspacesService.listMembers(ctx.workspaceId, ctx.userId),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -57,11 +71,17 @@ export default async function IssuesPage({
           <h1 className="font-serif text-2xl font-semibold text-(--el-text)">Issues</h1>
           <p className="text-sm text-(--el-text-muted)">All issues in {ctx.project.name}</p>
         </div>
-        <IssueListToolbar view={view} sort={sort} />
+        <IssueListToolbar
+          view={view}
+          sort={sort}
+          filter={filter}
+          statuses={workflow.statuses}
+          members={members}
+        />
       </header>
 
       <Suspense
-        key={`${view}:${serializeSort(sort)}`}
+        key={`${view}:${serializeSort(sort)}:${JSON.stringify(filter)}`}
         fallback={<IssueTreeSkeleton flat={view === 'list'} />}
       >
         <IssueTreeSection
@@ -70,6 +90,9 @@ export default async function IssuesPage({
           userId={ctx.userId}
           view={view}
           sort={sort}
+          filter={filter}
+          workflow={workflow}
+          members={members}
         />
       </Suspense>
     </div>

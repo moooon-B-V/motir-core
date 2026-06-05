@@ -32,7 +32,11 @@ import {
 } from '@/lib/mappers/workItemMappers';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toWorkItemRevisionDto } from '@/lib/mappers/workItemRevisionMappers';
-import type { WorkItemForestRow, WorkItemTreeRow } from '@/lib/repositories/workItemRepository';
+import type {
+  WorkItemForestRow,
+  WorkItemTreeRow,
+  RepoIssueFilter,
+} from '@/lib/repositories/workItemRepository';
 import type { IssueSort } from '@/lib/issues/issueListView';
 import type {
   CreateWorkItemInput,
@@ -188,29 +192,33 @@ export interface ListWorkItemsFilter {
 /**
  * Translate the wire-level `ProjectTreeFilter` into the repository filter shape
  * shared by the tree (`getProjectTree`) and List (`getProjectIssuesList`) reads.
- * Forwards only the SUPPLIED axes (an absent axis means "don't filter"); a blank
- * `text` quick-filter is treated as absent so trailing whitespace never hides
- * the whole project. `assigneeId: null` is forwarded verbatim (the "Unassigned"
- * filter).
+ * Forwards only the NON-EMPTY axes (an absent/empty facet means "don't filter
+ * on this axis"); a blank `text` quick-filter is treated as absent so trailing
+ * whitespace never hides the whole project. `includeUnassigned` is forwarded
+ * verbatim — the "Unassigned" bucket, OR-ed with any `assigneeIds`.
  */
-function buildRepoFilter(filter: ProjectTreeFilter): {
-  kind?: WorkItemKindDto;
-  status?: string;
-  assigneeId?: string | null;
-  text?: string;
-} {
-  const repoFilter: {
-    kind?: WorkItemKindDto;
-    status?: string;
-    assigneeId?: string | null;
-    text?: string;
-  } = {};
-  if (filter.kind !== undefined) repoFilter.kind = filter.kind;
-  if (filter.status !== undefined) repoFilter.status = filter.status;
-  if (filter.assigneeId !== undefined) repoFilter.assigneeId = filter.assigneeId;
+function buildRepoFilter(filter: ProjectTreeFilter): RepoIssueFilter {
+  const repoFilter: RepoIssueFilter = {};
+  if (filter.kinds && filter.kinds.length > 0) repoFilter.kinds = filter.kinds;
+  if (filter.statuses && filter.statuses.length > 0) repoFilter.statuses = filter.statuses;
+  if (filter.assigneeIds && filter.assigneeIds.length > 0) {
+    repoFilter.assigneeIds = filter.assigneeIds;
+  }
+  if (filter.includeUnassigned) repoFilter.includeUnassigned = true;
   const text = filter.text?.trim();
   if (text) repoFilter.text = text;
   return repoFilter;
+}
+
+/** True when the repo filter constrains at least one axis (drives forest pruning). */
+function repoFilterIsActive(f: RepoIssueFilter): boolean {
+  return (
+    f.kinds !== undefined ||
+    f.statuses !== undefined ||
+    f.assigneeIds !== undefined ||
+    f.includeUnassigned === true ||
+    f.text !== undefined
+  );
 }
 
 function assembleProjectForest(rows: WorkItemForestRow[], prune: boolean): WorkItemTreeNodeDto[] {
@@ -839,13 +847,7 @@ export const workItemsService = {
       repoFilter,
     );
 
-    const hasFilter =
-      repoFilter.kind !== undefined ||
-      repoFilter.status !== undefined ||
-      repoFilter.assigneeId !== undefined ||
-      repoFilter.text !== undefined;
-
-    return assembleProjectForest(rows, hasFilter);
+    return assembleProjectForest(rows, repoFilterIsActive(repoFilter));
   },
 
   /**

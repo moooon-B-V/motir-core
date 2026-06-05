@@ -424,12 +424,7 @@ export const workItemRepository = {
   async findProjectForest(
     projectId: string,
     workspaceId: string,
-    filter: {
-      kind?: WorkItemKind;
-      status?: string;
-      assigneeId?: string | null;
-      text?: string;
-    } = {},
+    filter: RepoIssueFilter = {},
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemForestRow[]> {
     const client = tx ?? db;
@@ -496,12 +491,7 @@ export const workItemRepository = {
     projectId: string,
     workspaceId: string,
     sort: IssueSort,
-    filter: {
-      kind?: WorkItemKind;
-      status?: string;
-      assigneeId?: string | null;
-      text?: string;
-    } = {},
+    filter: RepoIssueFilter = {},
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemListRow[]> {
     const client = tx ?? db;
@@ -661,27 +651,53 @@ function escapeLikePattern(value: string): string {
 }
 
 /**
+ * The shared, multi-select filter shape the project reads accept — the tree
+ * forest (`findProjectForest`) and the flat List (`findProjectIssuesFlat`).
+ * Each faceted axis is a SET: `kinds` / `statuses` / `assigneeIds` match "any
+ * of", AND-ed across facets (Jira's basic filters; the 2.5.4 filter bar). The
+ * assignee facet is the UNION of `assigneeIds` (specific members) with
+ * `includeUnassigned` (items with a null `assigneeId`). Callers pass only the
+ * non-empty axes (an empty facet is omitted, not an empty array). `text` is a
+ * single substring.
+ */
+export interface RepoIssueFilter {
+  kinds?: WorkItemKind[];
+  statuses?: string[];
+  assigneeIds?: string[];
+  includeUnassigned?: boolean;
+  text?: string;
+}
+
+/**
  * The shared filter predicate for the project reads — the tree forest
  * (`findProjectForest`, alias `f`) and the flat List (`findProjectIssuesFlat`,
  * alias `w`). Each axis is a bound-param `Prisma.Sql` fragment (values are
- * never interpolated; the `alias` is a fixed internal literal, not user input).
- * `assigneeId: null` filters to UNASSIGNED via `IS NOT DISTINCT FROM`; a blank
- * `text` is ignored by callers before this point. No axis → `TRUE` (match all).
+ * never interpolated — multi-value axes bind as a single array via `= ANY(...)`;
+ * the `alias` is a fixed internal literal, not user input). The assignee facet
+ * OR-s `assigneeId = ANY(ids)` with an `IS NULL` test for `includeUnassigned`;
+ * a blank `text` is ignored by callers before this point. No axis → `TRUE`
+ * (match all).
  */
-function buildIssueFilterSql(
-  filter: { kind?: WorkItemKind; status?: string; assigneeId?: string | null; text?: string },
-  alias: 'f' | 'w',
-): Prisma.Sql {
+function buildIssueFilterSql(filter: RepoIssueFilter, alias: 'f' | 'w'): Prisma.Sql {
   const t = Prisma.raw(alias);
   const predicates: Prisma.Sql[] = [];
-  if (filter.kind !== undefined) {
-    predicates.push(Prisma.sql`${t}."kind"::text = ${filter.kind}`);
+  if (filter.kinds && filter.kinds.length > 0) {
+    // Cast the bound text[] to the enum array so `kind::text = ANY(...)` compares text-to-text.
+    const kinds = filter.kinds.map((k) => k as string);
+    predicates.push(Prisma.sql`${t}."kind"::text = ANY(${kinds})`);
   }
-  if (filter.status !== undefined) {
-    predicates.push(Prisma.sql`${t}."status" = ${filter.status}`);
+  if (filter.statuses && filter.statuses.length > 0) {
+    predicates.push(Prisma.sql`${t}."status" = ANY(${filter.statuses})`);
   }
-  if (filter.assigneeId !== undefined) {
-    predicates.push(Prisma.sql`${t}."assigneeId" IS NOT DISTINCT FROM ${filter.assigneeId}`);
+  const assigneeIds = filter.assigneeIds ?? [];
+  if (assigneeIds.length > 0 || filter.includeUnassigned) {
+    const terms: Prisma.Sql[] = [];
+    // `NULL = ANY(array)` is NULL in SQL three-valued logic (assigneeId is
+    // nullable), so an unassigned row would yield a NULL `matched` instead of
+    // FALSE; COALESCE the whole assignee group to a clean boolean.
+    if (assigneeIds.length > 0) terms.push(Prisma.sql`${t}."assigneeId" = ANY(${assigneeIds})`);
+    if (filter.includeUnassigned) terms.push(Prisma.sql`${t}."assigneeId" IS NULL`);
+    predicates.push(Prisma.sql`COALESCE((${Prisma.join(terms, ' OR ')}), FALSE)`);
   }
   const text = filter.text?.trim();
   if (text) {

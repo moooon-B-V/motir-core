@@ -137,21 +137,32 @@ export interface WorkItemSubtreeDto {
 }
 
 /**
- * The optional filter `workItemsService.getProjectTree` (Subtask 2.5.1) applies
- * to the project forest. Every field is optional; an absent field is "don't
- * filter on this axis", so an all-absent filter ({}) returns the full tree.
- * `assigneeId: null` is a MEANINGFUL value — it filters to UNASSIGNED items
- * (the list-view "Unassigned" option), distinct from `assigneeId` absent
- * ("any assignee"). `text` is a case-insensitive substring matched against
- * BOTH `identifier` and `title`; an empty/whitespace-only string is treated
- * as absent. The matching is context-preserving at the service layer: a node
- * that matches retains its ancestor chain so the tree stays navigable (see
- * `getProjectTree`), rather than a flat `WHERE` that would orphan children.
+ * The optional filter `workItemsService.getProjectTree` (Subtask 2.5.1, the
+ * multi-select facets of the 2.5.4 filter bar) applies to the project forest.
+ * Every field is optional; an absent / empty field is "don't filter on this
+ * axis", so an all-empty filter ({}) returns the full tree.
+ *
+ * Each faceted axis is a SET (OR within the facet, AND across facets) — Jira's
+ * basic filters, the mirror product, are multi-select, and the filter-bar design
+ * (`design/work-items/filter.mock.html`) draws multiple kinds / statuses /
+ * assignees selected at once. So `kinds` matches "any of these kinds", `statuses`
+ * "any of these status keys", and the assignee facet is the union of
+ * `assigneeIds` (specific members) with `includeUnassigned` — the MEANINGFUL
+ * "Unassigned" bucket (items with a null `assigneeId`), distinct from an empty
+ * assignee facet ("any assignee"). `text` is a single case-insensitive substring
+ * matched against BOTH `identifier` and `title`; an empty/whitespace-only string
+ * is treated as absent.
+ *
+ * The matching is context-preserving at the service layer: a node that matches
+ * retains its ancestor chain so the tree stays navigable (see `getProjectTree`),
+ * rather than a flat `WHERE` that would orphan children.
  */
 export interface ProjectTreeFilter {
-  kind?: WorkItemKindDto;
-  status?: string;
-  assigneeId?: string | null;
+  kinds?: WorkItemKindDto[];
+  statuses?: string[];
+  assigneeIds?: string[];
+  /** Include items with NO assignee (the "Unassigned" bucket), OR-ed with `assigneeIds`. */
+  includeUnassigned?: boolean;
   text?: string;
 }
 

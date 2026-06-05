@@ -68,6 +68,11 @@ async function buildForest(fx: WorkItemFixture) {
   return { E, A, A1, A1a, B, B1, X };
 }
 
+/** True when this node and every descendant are `matched`. */
+function allMatched(node: WorkItemTreeNodeDto): boolean {
+  return node.matched && node.children.every(allMatched);
+}
+
 /** Find a node anywhere in the forest by identifier (depth-first). */
 function findNode(
   nodes: WorkItemTreeNodeDto[],
@@ -187,7 +192,7 @@ describe('workItemsService.getProjectTree — context-preserving filter', () => 
   it('filters by kind, keeping matches + ancestors', async () => {
     const fx = await makeFixture();
     await buildForest(fx);
-    const tree = await workItemsService.getProjectTree(fx.projectId, { kind: 'bug' }, fx.ctx);
+    const tree = await workItemsService.getProjectTree(fx.projectId, { kinds: ['bug'] }, fx.ctx);
     // Only Bug X (PROD-7) is a bug, and it is a root → just it.
     expect(tree.map((n) => n.identifier)).toEqual(['PROD-7']);
     expect(tree[0]!.matched).toBe(true);
@@ -198,13 +203,17 @@ describe('workItemsService.getProjectTree — context-preserving filter', () => 
     const t = await buildForest(fx);
     await setStatus(t.A1a.id, 'done');
 
-    const tree = await workItemsService.getProjectTree(fx.projectId, { status: 'done' }, fx.ctx);
+    const tree = await workItemsService.getProjectTree(
+      fx.projectId,
+      { statuses: ['done'] },
+      fx.ctx,
+    );
     expect(tree.map((n) => n.identifier)).toEqual(['PROD-1']);
     expect(findNode(tree, 'PROD-4')!.matched).toBe(true);
     expect(findNode(tree, 'PROD-1')!.matched).toBe(false);
   });
 
-  it('filters by assignee, and assigneeId:null selects UNASSIGNED', async () => {
+  it('filters by assignee (set), and includeUnassigned selects UNASSIGNED', async () => {
     const fx = await makeFixture();
     const t = await buildForest(fx);
     await setAssignee(t.B1.id, fx.ownerId); // only B1 is assigned
@@ -212,7 +221,7 @@ describe('workItemsService.getProjectTree — context-preserving filter', () => 
     // assignee = owner → the E → B → B1 chain only.
     const assigned = await workItemsService.getProjectTree(
       fx.projectId,
-      { assigneeId: fx.ownerId },
+      { assigneeIds: [fx.ownerId] },
       fx.ctx,
     );
     expect(findNode(assigned, 'PROD-6')!.matched).toBe(true);
@@ -225,7 +234,7 @@ describe('workItemsService.getProjectTree — context-preserving filter', () => 
     // child, B1, which IS assigned → pruned).
     const unassigned = await workItemsService.getProjectTree(
       fx.projectId,
-      { assigneeId: null },
+      { includeUnassigned: true },
       fx.ctx,
     );
     expect(findNode(unassigned, 'PROD-4')!.matched).toBe(true);
@@ -253,6 +262,92 @@ describe('workItemsService.getProjectTree — context-preserving filter', () => 
     const tree = await workItemsService.getProjectTree(fx.projectId, { text: '50%' }, fx.ctx);
     const matched = tree.filter((n) => n.matched).map((n) => n.id);
     expect(matched).toEqual([literal.id]);
+  });
+
+  // --- multi-select facets (Subtask 2.5.4: OR within a facet, AND across) -----
+
+  it('kinds is OR within the facet — any of the listed kinds matches', async () => {
+    const fx = await makeFixture();
+    await buildForest(fx);
+    // story OR bug → A (PROD-2), B (PROD-5), and Bug X (PROD-7). The stories'
+    // task/subtask descendants don't match and prune away; E is the retained
+    // ancestor of the two stories.
+    const tree = await workItemsService.getProjectTree(
+      fx.projectId,
+      { kinds: ['story', 'bug'] },
+      fx.ctx,
+    );
+    expect(tree.map((n) => n.identifier)).toEqual(['PROD-1', 'PROD-7']);
+    expect(findNode(tree, 'PROD-2')!.matched).toBe(true);
+    expect(findNode(tree, 'PROD-5')!.matched).toBe(true);
+    expect(findNode(tree, 'PROD-7')!.matched).toBe(true);
+    expect(findNode(tree, 'PROD-1')!.matched).toBe(false); // retained ancestor
+    expect(findNode(tree, 'PROD-3')).toBeUndefined(); // task A1 pruned
+    expect(findNode(tree, 'PROD-6')).toBeUndefined(); // task B1 pruned
+  });
+
+  it('statuses is OR within the facet — any of the listed status keys matches', async () => {
+    const fx = await makeFixture();
+    const t = await buildForest(fx);
+    await setStatus(t.A1a.id, 'done');
+    await setStatus(t.B1.id, 'in_progress');
+
+    const tree = await workItemsService.getProjectTree(
+      fx.projectId,
+      { statuses: ['done', 'in_progress'] },
+      fx.ctx,
+    );
+    expect(findNode(tree, 'PROD-4')!.matched).toBe(true); // A1a done
+    expect(findNode(tree, 'PROD-6')!.matched).toBe(true); // B1 in_progress
+    expect(findNode(tree, 'PROD-1')!.matched).toBe(false); // retained ancestor
+    expect(findNode(tree, 'PROD-7')).toBeUndefined(); // Bug X (todo) excluded
+  });
+
+  it('the assignee facet OR-s explicit member ids with the Unassigned bucket', async () => {
+    const fx = await makeFixture();
+    const t = await buildForest(fx);
+    await setAssignee(t.B1.id, fx.ownerId); // B1 assigned; everything else unassigned
+
+    // assigneeIds:[owner] OR includeUnassigned → the union is the WHOLE forest:
+    // B1 matches via the id arm, every other node via the Unassigned arm.
+    const tree = await workItemsService.getProjectTree(
+      fx.projectId,
+      { assigneeIds: [fx.ownerId], includeUnassigned: true },
+      fx.ctx,
+    );
+    expect(tree.map((n) => n.identifier)).toEqual(['PROD-1', 'PROD-7']);
+    expect(findNode(tree, 'PROD-6')!.matched).toBe(true); // assigned arm
+    expect(findNode(tree, 'PROD-3')!.matched).toBe(true); // unassigned arm
+    expect(tree.every((n) => allMatched(n))).toBe(true);
+  });
+
+  it('ANDs across facets — kind AND unassigned narrows to unassigned items of that kind', async () => {
+    const fx = await makeFixture();
+    const t = await buildForest(fx);
+    await setAssignee(t.B1.id, fx.ownerId); // the only assigned task
+
+    // kinds:[task] AND includeUnassigned → tasks with no assignee. A1 (PROD-3)
+    // is an unassigned task → matches; B1 (PROD-6) is a task but assigned → out.
+    const tree = await workItemsService.getProjectTree(
+      fx.projectId,
+      { kinds: ['task'], includeUnassigned: true },
+      fx.ctx,
+    );
+    expect(findNode(tree, 'PROD-3')!.matched).toBe(true);
+    expect(findNode(tree, 'PROD-6')).toBeUndefined(); // assigned task excluded
+    expect(findNode(tree, 'PROD-1')!.matched).toBe(false); // retained ancestor
+  });
+
+  it('empty facet arrays are treated as no filter (the full forest)', async () => {
+    const fx = await makeFixture();
+    await buildForest(fx);
+    const tree = await workItemsService.getProjectTree(
+      fx.projectId,
+      { kinds: [], statuses: [], assigneeIds: [] },
+      fx.ctx,
+    );
+    expect(tree.map((n) => n.identifier)).toEqual(['PROD-1', 'PROD-7']);
+    expect(tree.every((n) => allMatched(n))).toBe(true);
   });
 });
 

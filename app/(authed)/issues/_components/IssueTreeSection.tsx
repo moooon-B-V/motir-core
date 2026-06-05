@@ -1,8 +1,13 @@
 import { EmptyState } from '@/components/ui/EmptyState';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { workflowsService } from '@/lib/services/workflowsService';
-import { workspacesService } from '@/lib/services/workspacesService';
 import type { IssueListView, IssueSort } from '@/lib/issues/issueListView';
+import {
+  toProjectTreeFilter,
+  isFilterActive,
+  type IssueFilter,
+} from '@/lib/issues/issueListFilter';
+import type { WorkflowDto } from '@/lib/dto/workflows';
+import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { toIssueRows, toIssueListRows } from './issueRows';
 import { IssueTreeTable } from './IssueTreeTable';
 import { IssueListTable } from './IssueListTable';
@@ -26,6 +31,11 @@ export interface IssueTreeSectionProps {
   userId: string;
   view: IssueListView;
   sort: IssueSort;
+  /** The active filter (Subtask 2.5.4); applied to BOTH views. */
+  filter: IssueFilter;
+  /** Pre-read by the page (the toolbar's filter facets need them up front). */
+  workflow: WorkflowDto;
+  members: WorkspaceMemberDTO[];
 }
 
 export async function IssueTreeSection({
@@ -34,10 +44,22 @@ export async function IssueTreeSection({
   userId,
   view,
   sort,
+  filter,
+  workflow,
+  members,
 }: IssueTreeSectionProps) {
   const ctx = { userId, workspaceId };
+  const repoFilter = toProjectTreeFilter(filter);
+  const filtered = isFilterActive(filter);
 
-  const emptyState = (
+  // A filter that matches nothing is distinct from an empty project: don't tell
+  // the user to "create your first issue" when they've simply over-narrowed.
+  const empty = filtered ? (
+    <EmptyState
+      title="No matching issues"
+      description="No issues match the current filters. Try adjusting or clearing them."
+    />
+  ) : (
     <EmptyState
       title="No issues yet"
       description="Create your first issue to start tracking work."
@@ -46,20 +68,22 @@ export async function IssueTreeSection({
   );
 
   if (view === 'list') {
-    const [items, workflow, members] = await Promise.all([
-      workItemsService.getProjectIssuesList(projectId, { sort }, ctx),
-      workflowsService.getWorkflow(projectId, workspaceId),
-      workspacesService.listMembers(workspaceId, userId),
-    ]);
-    if (items.length === 0) return emptyState;
-    return <IssueListTable rows={toIssueListRows(items, workflow, members)} sort={sort} />;
+    const items = await workItemsService.getProjectIssuesList(
+      projectId,
+      { sort, filter: repoFilter },
+      ctx,
+    );
+    if (items.length === 0) return empty;
+    return (
+      <IssueListTable
+        rows={toIssueListRows(items, workflow, members)}
+        sort={sort}
+        filter={filter}
+      />
+    );
   }
 
-  const [tree, workflow, members] = await Promise.all([
-    workItemsService.getProjectTree(projectId, {}, ctx),
-    workflowsService.getWorkflow(projectId, workspaceId),
-    workspacesService.listMembers(workspaceId, userId),
-  ]);
-  if (tree.length === 0) return emptyState;
+  const tree = await workItemsService.getProjectTree(projectId, repoFilter, ctx);
+  if (tree.length === 0) return empty;
   return <IssueTreeTable rows={toIssueRows(tree, workflow, members)} />;
 }
