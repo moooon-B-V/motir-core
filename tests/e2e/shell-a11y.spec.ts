@@ -39,12 +39,12 @@ const SHELL_ROUTES: { path: string; ready: (page: Page) => Promise<void> }[] = [
     path: '/issues',
     // The sweep's user has a project but no issues → the real route renders its
     // empty state inside a Suspense boundary. Wait for BOTH the page h1 (level:1
-    // — the empty-state h2 "No issues yet" substring-matches a bare name:'Issues')
+    // — the empty-state h2 "No issues yet" substring-matches a bare name:'Work Items')
     // AND the resolved empty state, so axe analyses the settled DOM, not a
     // mid-stream frame. (2.5.6 adds the POPULATED /issues sweep with a fixture.)
     ready: async (page) => {
-      await expect(page.getByRole('heading', { name: 'Issues', level: 1 })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'No issues yet' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Work Items', level: 1 })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'No work items yet' })).toBeVisible();
     },
   },
   {
@@ -148,8 +148,8 @@ test.describe('@a11y shell accessibility', () => {
     await createFirstProject(page, 'Mobile App');
     await page.goto('/issues');
 
-    await page.getByRole('button', { name: 'Create issue' }).click();
-    await expect(page.getByRole('heading', { name: 'Create issue' })).toBeVisible();
+    await page.getByRole('button', { name: 'Create work item' }).click();
+    await expect(page.getByRole('heading', { name: 'Create work item' })).toBeVisible();
     // The real MarkdownEditor (2.3.10: a Tiptap WYSIWYG) — wait for its
     // contenteditable to mount, then exclude only the third-party `.ProseMirror`
     // surface. Our own toolbar (labelled buttons) + label + notice stay swept.
@@ -190,7 +190,7 @@ test.describe('@a11y shell accessibility', () => {
     await createFirstProject(page, 'Mobile App');
 
     await page.goto('/issues');
-    await page.getByRole('button', { name: 'Create issue' }).click();
+    await page.getByRole('button', { name: 'Create work item' }).click();
     await page.getByLabel('Title').fill('Editable issue');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
 
@@ -200,7 +200,7 @@ test.describe('@a11y shell accessibility', () => {
     expect(identifier).toMatch(/^[A-Z]+-\d+$/);
 
     await page.goto(`/issues/${identifier}/edit`);
-    await expect(page.getByRole('heading', { name: 'Edit issue' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Edit work item' })).toBeVisible();
     // Wait for the Tiptap editor's contenteditable to mount before sweeping.
     await expect(page.locator('.ProseMirror').first()).toBeVisible();
 
@@ -226,7 +226,7 @@ test.describe('@a11y shell accessibility', () => {
     await createFirstProject(page, 'Mobile App');
 
     await page.goto('/issues');
-    await page.getByRole('button', { name: 'Create issue' }).click();
+    await page.getByRole('button', { name: 'Create work item' }).click();
     await page.getByLabel('Title').fill('Detail-view issue');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
 
@@ -263,7 +263,7 @@ test.describe('@a11y shell accessibility', () => {
     await createFirstProject(page, 'Mobile App');
 
     await page.goto('/issues');
-    await page.getByRole('button', { name: 'Create issue' }).click();
+    await page.getByRole('button', { name: 'Create work item' }).click();
     await page.getByLabel('Title').fill('Linkable issue');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
 
@@ -276,8 +276,8 @@ test.describe('@a11y shell accessibility', () => {
     await expect(page.getByRole('heading', { name: 'Linkable issue', level: 1 })).toBeVisible();
 
     // Open the add-link form, then expand the Relationship listbox.
-    await page.getByRole('button', { name: 'Link issue' }).click();
-    await expect(page.getByRole('combobox', { name: 'Issue to link' })).toBeVisible();
+    await page.getByRole('button', { name: 'Link work item' }).click();
+    await expect(page.getByRole('combobox', { name: 'Work item to link' })).toBeVisible();
     await page.getByRole('combobox', { name: 'Relationship' }).click();
     await expect(page.getByRole('listbox', { name: 'Relationship' })).toBeVisible();
 
@@ -361,7 +361,7 @@ test.describe('@a11y shell accessibility', () => {
   test('the /tokens/tree-table specimen is axe-clean (WCAG 2.1 AA; strict)', async ({ page }) => {
     await page.goto('/tokens/tree-table');
     await expect(page.getByRole('heading', { name: 'Tree table', level: 1 })).toBeVisible();
-    await expect(page.getByRole('treegrid', { name: 'Issues', exact: true })).toBeVisible();
+    await expect(page.getByRole('treegrid', { name: 'Work Items', exact: true })).toBeVisible();
 
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     expect(
@@ -422,7 +422,7 @@ test.describe('@a11y shell accessibility', () => {
     await expect(rail).toBeVisible();
 
     // aria-current="page" tracks the active route — Issues here, Dashboard not.
-    await expect(rail.getByRole('link', { name: 'Issues' })).toHaveAttribute(
+    await expect(rail.getByRole('link', { name: 'Work Items' })).toHaveAttribute(
       'aria-current',
       'page',
     );

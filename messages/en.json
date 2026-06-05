@@ -58,7 +58,7 @@
       "unassigned": "Unassigned"
     },
     "list": {
-      "tableLabel": "Issues",
+      "tableLabel": "Work Items",
       "sortBy": "Sort by {header}"
     }
   },
@@ -66,7 +66,7 @@
     "actions": {
       "pickProjectFirst": "Pick a project first.",
       "unknownRelationship": "Unknown relationship.",
-      "pickIssueToLink": "Pick an issue to link.",
+      "pickIssueToLink": "Pick a work item to link.",
       "missingDlqId": "Missing dead-letter id.",
       "ownerOnlyReplay": "Only a workspace owner can replay jobs.",
       "dlqGone": "That dead-letter entry no longer exists.",
@@ -75,20 +75,20 @@
       "cannotRemoveLastMember": "Cannot remove the last member.",
       "cannotLeaveLastMember": "You can't leave as the last member — delete the workspace instead.",
       "keyLabelRequired": "Key and label are required.",
-      "noProjectForIssue": "Pick or create a project before adding an issue.",
-      "titleRequired": "Give the issue a title.",
+      "noProjectForIssue": "Pick or create a project before adding a work item.",
+      "titleRequired": "Give the work item a title.",
       "titleTooLong": "Title must be {max} characters or fewer.",
       "projectGone": "That project no longer exists.",
       "noProjectForParent": "Pick or create a project before choosing a parent.",
-      "unknownIssueType": "Unknown issue type.",
-      "couldNotLink": "Could not link the selected issues."
+      "unknownIssueType": "Unknown work item type.",
+      "couldNotLink": "Could not link the selected work items."
     },
     "links": {
-      "notFound": "That issue no longer exists.",
-      "selfLink": "An issue can't link to itself.",
+      "notFound": "That work item no longer exists.",
+      "selfLink": "A work item can't link to itself.",
       "duplicate": "That link already exists.",
       "cycle": "That would create a dependency cycle.",
-      "crossWorkspace": "That issue is in another workspace.",
+      "crossWorkspace": "That work item is in another workspace.",
       "linkNotFound": "That link no longer exists.",
       "couldNotUpdate": "Could not update the link."
     },
@@ -103,7 +103,7 @@
       "ASSIGNEE_NOT_IN_WORKSPACE": "The assignee is not a member of this workspace.",
       "UNKNOWN_STATUS": "Unknown status \"{statusKey}\" for this project's workflow.",
       "ILLEGAL_TRANSITION": "Illegal status transition: \"{from}\" → \"{to}\".",
-      "STALE_WORK_ITEM": "This issue was edited by someone else. Refresh and try again."
+      "STALE_WORK_ITEM": "This work item was edited by someone else. Refresh and try again."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Only a project admin can edit the workflow.",
@@ -218,7 +218,7 @@
   "shell": {
     "nav": {
       "dashboard": "Dashboard",
-      "issues": "Issues",
+      "issues": "Work Items",
       "boards": "Boards",
       "reports": "Reports",
       "settings": "Settings",
@@ -289,9 +289,9 @@
       "ariaLabel": "Theme: {state}. Activate to change."
     },
     "createIssue": {
-      "title": "Create issue",
+      "title": "Create work item",
       "create": "Create",
-      "titleRequired": "Give the issue a title.",
+      "titleRequired": "Give the work item a title.",
       "titleTooLong": "Title must be {max} characters or fewer.",
       "created": "{identifier} created",
       "type": "Type",
@@ -307,9 +307,9 @@
       "priority": "Priority"
     },
     "links": {
-      "section": "Linked issues",
+      "section": "Linked work items",
       "removeAria": "Remove pending {relationship} link to {identifier}",
-      "helper": "Choose a relationship · links are created together with the issue."
+      "helper": "Choose a relationship · links are created together with the work item."
     },
     "commandPalette": {
       "search": "Search",
@@ -319,7 +319,7 @@
       "projectHeading": "Project",
       "accountHeading": "Account",
       "goToDashboard": "Go to Dashboard",
-      "goToIssues": "Go to Issues",
+      "goToIssues": "Go to Work Items",
       "goToBoards": "Go to Boards",
       "goToReports": "Go to Reports",
       "goToSettings": "Go to Settings",
@@ -332,22 +332,22 @@
     }
   },
   "issueViews": {
-    "heading": "Issues",
+    "heading": "Work Items",
     "noProjectTitle": "No project selected",
-    "noProjectListDescription": "Pick or create a project from the switcher to track its issues.",
-    "noProjectDetailDescription": "Pick a project from the switcher to view its issues.",
-    "noProjectEditDescription": "Pick a project from the switcher to edit its issues.",
-    "allIssuesIn": "All issues in {project}",
+    "noProjectListDescription": "Pick or create a project from the switcher to track its work items.",
+    "noProjectDetailDescription": "Pick a project from the switcher to view its work items.",
+    "noProjectEditDescription": "Pick a project from the switcher to edit its work items.",
+    "allIssuesIn": "All work items in {project}",
     "filter": "Filter",
     "filterComingSoon": "Filtering arrives in a later update",
     "viewTree": "Tree",
     "viewList": "List",
     "viewLabel": "View: {view}",
-    "newIssue": "New issue",
-    "noIssuesTitle": "No issues yet",
-    "noIssuesDescription": "Create your first issue to start tracking work.",
-    "noMatchingTitle": "No matching issues",
-    "noMatchingDescription": "No issues match the current filters. Try adjusting or clearing them.",
+    "newIssue": "New work item",
+    "noIssuesTitle": "No work items yet",
+    "noIssuesDescription": "Create your first work item to start tracking work.",
+    "noMatchingTitle": "No matching work items",
+    "noMatchingDescription": "No work items match the current filters. Try adjusting or clearing them.",
     "colTitle": "Title",
     "colPriority": "Priority",
     "colAssignee": "Assignee",
@@ -358,23 +358,23 @@
     "edit": "Edit",
     "description": "Description",
     "descriptionGloss": "what to do",
-    "issueDescriptionAria": "Issue description",
+    "issueDescriptionAria": "Work item description",
     "noDescription": "No description yet.",
     "explanation": "Explanation",
     "explanationGloss": "why it matters",
     "aiDrafted": "AI-drafted",
-    "issueExplanationAria": "Issue explanation",
+    "issueExplanationAria": "Work item explanation",
     "noExplanation": "No explanation yet.",
-    "childIssues": "Child issues",
-    "parentIssuesAria": "Parent issues",
+    "childIssues": "Child work items",
+    "parentIssuesAria": "Parent work items",
     "relationships": "Relationships",
     "relationshipsGloss": "dependencies & links",
-    "noLinkedIssues": "No linked issues yet.",
+    "noLinkedIssues": "No linked work items yet.",
     "openBlocker": "Open blocker",
-    "linkIssue": "Link issue",
+    "linkIssue": "Link work item",
     "removeLinkAria": "Remove {relationship} link to {target}",
     "removeConfirmBefore": "Remove the {relationship} link to",
-    "removeConfirmAfter": "? The issue isn’t deleted — only the link.",
+    "removeConfirmAfter": "? The work item isn’t deleted — only the link.",
     "removeLink": "Remove link",
     "status": "Status",
     "type": "Type",
@@ -393,11 +393,11 @@
     "noEstimate": "No estimate",
     "created": "Created",
     "updated": "Updated",
-    "changedElsewhereRefreshing": "This issue changed elsewhere — refreshing.",
-    "editIssue": "Edit issue",
+    "changedElsewhereRefreshing": "This work item changed elsewhere — refreshing.",
+    "editIssue": "Edit work item",
     "title": "Title",
     "titleRequired": "Title is required.",
-    "staleBanner": "This issue was edited by someone else. Refresh to see the latest.",
+    "staleBanner": "This work item was edited by someone else. Refresh to see the latest.",
     "refresh": "Refresh",
     "reporterCreated": "Reporter: {reporter} · created {created}",
     "issueSaved": "{identifier} saved"
@@ -421,7 +421,7 @@
     "parentPicker": {
       "label": "Parent",
       "noParent": "No parent",
-      "searchPlaceholder": "Search issues…",
+      "searchPlaceholder": "Search work items…",
       "emptyText": "No eligible parents",
       "loadingText": "Loading parents…",
       "previousParent": "The previous parent",
@@ -430,17 +430,17 @@
     },
     "linkAddForm": {
       "relationship": "Relationship",
-      "issueToLink": "Issue to link",
-      "searchPlaceholder": "Search an issue…",
+      "issueToLink": "Work item to link",
+      "searchPlaceholder": "Search a work item…",
       "searchByIdentifierOrTitle": "Search by identifier or title…",
-      "noMatchingIssues": "No matching issues.",
+      "noMatchingIssues": "No matching work items.",
       "add": "Add"
     },
     "readiness": {
       "ready": "Ready to start",
       "allResolved": "All blockers resolved",
       "blocked": "Blocked",
-      "waiting": "Waiting on {count, plural, one {# issue} other {# issues}}"
+      "waiting": "Waiting on {count, plural, one {# work item} other {# work items}}"
     }
   },
   "settings": {
@@ -515,11 +515,11 @@
     },
     "workflow": {
       "title": "Workflow",
-      "cardDescription": "The statuses an issue can hold in this project, and the legal moves between them.",
+      "cardDescription": "The statuses a work item can hold in this project, and the legal moves between them.",
       "empty": {
         "description": "Create a project from the switcher in the top-left to manage its workflow."
       },
-      "pageDescription": "The statuses an issue can hold in <strong>{projectName}</strong>, and the legal moves between them. {editHint}",
+      "pageDescription": "The statuses a work item can hold in <strong>{projectName}</strong>, and the legal moves between them. {editHint}",
       "editHintAdmin": "Edit them here.",
       "editHintReader": "Only a project admin can edit these.",
       "category": {

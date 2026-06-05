@@ -68,14 +68,14 @@ test.describe('@a11y shell keyboard navigation', () => {
 
     // 5. The search input auto-focuses; typing filters to the Issues action.
     await page.keyboard.type('iss');
-    await expect(palette.getByRole('option', { name: 'Go to Issues' })).toBeVisible();
+    await expect(palette.getByRole('option', { name: 'Go to Work Items' })).toBeVisible();
 
     // 6. ↓ highlights the match, ↵ invokes it → client-navigates to /issues.
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
     await page.waitForURL('**/issues');
     await expect(palette).toBeHidden();
-    await expect(page.getByRole('heading', { name: 'Issues', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Work Items', level: 1 })).toBeVisible();
 
     // 7. ⌘\ / Ctrl+\ collapses the rail (data-collapsed flips on the <nav>).
     const rail = page.getByRole('navigation', { name: 'Primary' });

@@ -89,7 +89,7 @@ function Shell({ hasProject = true }: { hasProject?: boolean }) {
   );
 }
 
-const modalHeading = () => screen.queryByRole('heading', { name: 'Create issue' });
+const modalHeading = () => screen.queryByRole('heading', { name: 'Create work item' });
 
 beforeEach(() => {
   // Default: the Linked-issues section's mount fetch resolves to no candidates.
@@ -106,7 +106,7 @@ describe('CreateIssueModal — entry points', () => {
   it('the top-nav "+" button opens the modal', () => {
     render(<Shell />);
     expect(modalHeading()).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Create issue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create work item' }));
     expect(modalHeading()).not.toBeNull();
   });
 
@@ -121,7 +121,7 @@ describe('CreateIssueModal — entry points', () => {
     render(<Shell />);
     // Open the palette via its trigger (deterministic — no platform-key path).
     fireEvent.click(screen.getByRole('button', { name: /search/i }));
-    const command = await screen.findByText('Create issue');
+    const command = await screen.findByText('Create work item');
     fireEvent.click(command);
     await waitFor(() => expect(modalHeading()).not.toBeNull());
   });
@@ -129,7 +129,7 @@ describe('CreateIssueModal — entry points', () => {
   it('no entry points when there is no active project', () => {
     render(<Shell hasProject={false} />);
     // Button hidden, "C" inert, modal not mounted.
-    expect(screen.queryByRole('button', { name: 'Create issue' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Create work item' })).toBeNull();
     fireEvent.keyDown(window, { key: 'c' });
     expect(modalHeading()).toBeNull();
   });
@@ -138,7 +138,7 @@ describe('CreateIssueModal — entry points', () => {
 describe('CreateIssueModal — validation + submit', () => {
   function openModal() {
     render(<Shell />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create issue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create work item' }));
   }
 
   it('Create is disabled until a non-empty title is entered', () => {
@@ -289,12 +289,12 @@ describe('CreateIssueModal — linked issues (2.4.10)', () => {
 
   function openModal() {
     render(<Shell />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create issue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create work item' }));
   }
 
   // Pick the fetched candidate in the Linked-issues search combobox and click Add.
   async function addPendingLink() {
-    fireEvent.click(await screen.findByRole('combobox', { name: 'Issue to link' }));
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Work item to link' }));
     fireEvent.click(await screen.findByRole('option', { name: /Callback bug/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
   }
@@ -314,8 +314,8 @@ describe('CreateIssueModal — linked issues (2.4.10)', () => {
 
     // The same (target, relationship) pair is now excluded — reopening the
     // combobox offers no candidates.
-    fireEvent.click(screen.getByRole('combobox', { name: 'Issue to link' }));
-    expect(await screen.findByText('No matching issues.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('combobox', { name: 'Work item to link' }));
+    expect(await screen.findByText('No matching work items.')).toBeTruthy();
   });
 
   it('removing a pending row drops it', async () => {

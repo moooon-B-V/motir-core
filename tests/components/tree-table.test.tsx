@@ -39,7 +39,7 @@ const ROWS: TreeTableRow<Row>[] = [
 function renderTree(props: Partial<React.ComponentProps<typeof TreeTable<Row>>> = {}) {
   return render(
     <TreeTable
-      label="Issues"
+      label="Work Items"
       columns={COLUMNS}
       rows={ROWS}
       getRowTestId={(r) => `row-${r.id}`}
@@ -51,7 +51,7 @@ function renderTree(props: Partial<React.ComponentProps<typeof TreeTable<Row>>> 
 describe('TreeTable — structure & a11y', () => {
   it('renders a treegrid with column headers and the root row', () => {
     renderTree();
-    expect(screen.getByRole('treegrid', { name: 'Issues' })).toBeTruthy();
+    expect(screen.getByRole('treegrid', { name: 'Work Items' })).toBeTruthy();
     expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual([
       'Title',
       'Meta',

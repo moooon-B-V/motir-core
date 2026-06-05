@@ -26,13 +26,13 @@ afterEach(cleanup);
 describe('i18n rendering', () => {
   it('renders the default (en) catalog values', () => {
     renderWithIntl(<Probe />);
-    expect(screen.getByTestId('nav-issues').textContent).toBe('Issues');
+    expect(screen.getByTestId('nav-issues').textContent).toBe('Work Items');
     expect(screen.getByTestId('common-save').textContent).toBe('Save');
   });
 
   it('renders native zh catalog values when the locale is zh', () => {
     renderWithIntl(<Probe />, { locale: 'zh', messages: zhMessages });
-    expect(screen.getByTestId('nav-issues').textContent).toBe('问题');
+    expect(screen.getByTestId('nav-issues').textContent).toBe('工作项');
     expect(screen.getByTestId('common-save').textContent).toBe('保存');
   });
 });

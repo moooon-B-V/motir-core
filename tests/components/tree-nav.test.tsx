@@ -76,7 +76,7 @@ describe('ParentBreadcrumb (2.4.3)', () => {
     ];
     render(<ParentBreadcrumb ancestors={ancestors} />);
 
-    const nav = screen.getByRole('navigation', { name: /parent issues/i });
+    const nav = screen.getByRole('navigation', { name: /parent work items/i });
     const links = within(nav).getAllByRole('link');
     // Order is root→self: Epic first, immediate parent (Story) last.
     expect(links).toHaveLength(2);
@@ -107,7 +107,7 @@ describe('ChildList (2.4.3)', () => {
     render(<ChildList items={items} workflow={workflow} members={members} />);
 
     // Section title + count badge reflecting the number of children.
-    screen.getByText('Child issues');
+    screen.getByText('Child work items');
     screen.getByText('2');
 
     const first = screen.getByRole('link', { name: /PROD-41/ });

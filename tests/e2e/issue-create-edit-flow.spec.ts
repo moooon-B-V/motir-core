@@ -79,7 +79,7 @@ test('@smoke create → round-trips on the edit form', async ({ page }) => {
   const projectId = await seedActiveProject(email);
 
   await page.goto('/issues');
-  await page.getByRole('button', { name: 'Create issue' }).click();
+  await page.getByRole('button', { name: 'Create work item' }).click();
 
   // Default type (Task) keeps it top-level-legal; fill title + a PLAIN-PROSE
   // description (the WYSIWYG editor stores typed text literally — no Markdown
@@ -126,7 +126,7 @@ test('@smoke the type+parent picker filters candidates inline (2.3.4)', async ({
   await mk('task', 'The Task', storyId);
 
   await page.goto('/issues');
-  await page.getByRole('button', { name: 'Create issue' }).click();
+  await page.getByRole('button', { name: 'Create work item' }).click();
 
   // Type = Sub-task → parent candidates are Story/Task/Bug, never the Epic.
   // (the type's display label is "Sub-task", hyphenated — ISSUE_TYPE_META.)

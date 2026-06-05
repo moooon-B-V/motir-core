@@ -50,7 +50,7 @@ test('@smoke shell: zero-projects sidebar shows the CTA, hides project nav, keep
   await expect(page.getByRole('button', { name: 'Switch project' })).toHaveCount(0);
 
   // Project-scoped nav items are hidden when there's no active project.
-  await expect(page.getByRole('link', { name: 'Issues' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Work Items' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Boards' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Reports' })).toHaveCount(0);
 

@@ -60,7 +60,7 @@ test('@smoke shell: sidebar nav renders, navigates, and marks the active item', 
 
   // The sidebar now carries the project switcher + project-scoped nav.
   await expect(page.getByRole('button', { name: 'Switch project' })).toContainText('Mobile App');
-  const issuesLink = page.getByRole('link', { name: 'Issues' });
+  const issuesLink = page.getByRole('link', { name: 'Work Items' });
   await expect(issuesLink).toBeVisible();
   await expect(page.getByRole('link', { name: 'Boards' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Reports' })).toBeVisible();
@@ -76,7 +76,10 @@ test('@smoke shell: sidebar nav renders, navigates, and marks the active item', 
   // project, Subtask 2.5.3) + Issues becomes current.
   await issuesLink.click();
   await page.waitForURL('**/issues');
-  await expect(page.getByRole('heading', { name: 'Issues', level: 1 })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'No issues yet' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Issues' })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('heading', { name: 'Work Items', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No work items yet' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Work Items' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
 });

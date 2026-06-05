@@ -58,7 +58,7 @@
       "unassigned": "未分配"
     },
     "list": {
-      "tableLabel": "问题",
+      "tableLabel": "工作项",
       "sortBy": "按{header}排序"
     }
   },
@@ -66,7 +66,7 @@
     "actions": {
       "pickProjectFirst": "请先选择一个项目。",
       "unknownRelationship": "未知的关系类型。",
-      "pickIssueToLink": "请选择要关联的问题。",
+      "pickIssueToLink": "请选择要关联的工作项。",
       "missingDlqId": "缺少死信队列 ID。",
       "ownerOnlyReplay": "只有工作区所有者才能重放任务。",
       "dlqGone": "该死信队列条目已不存在。",
@@ -75,20 +75,20 @@
       "cannotRemoveLastMember": "无法移除最后一名成员。",
       "cannotLeaveLastMember": "你是最后一名成员，无法离开——请改为删除该工作区。",
       "keyLabelRequired": "键和标签为必填项。",
-      "noProjectForIssue": "添加问题前请先选择或创建一个项目。",
-      "titleRequired": "请为问题填写标题。",
+      "noProjectForIssue": "添加工作项前请先选择或创建一个项目。",
+      "titleRequired": "请为工作项填写标题。",
       "titleTooLong": "标题不能超过 {max} 个字符。",
       "projectGone": "该项目已不存在。",
       "noProjectForParent": "选择父级前请先选择或创建一个项目。",
-      "unknownIssueType": "未知的问题类型。",
-      "couldNotLink": "无法关联所选问题。"
+      "unknownIssueType": "未知的工作项类型。",
+      "couldNotLink": "无法关联所选工作项。"
     },
     "links": {
-      "notFound": "该问题已不存在。",
-      "selfLink": "问题不能关联到自身。",
+      "notFound": "该工作项已不存在。",
+      "selfLink": "工作项不能关联到自身。",
       "duplicate": "该关联已存在。",
       "cycle": "这会造成循环依赖。",
-      "crossWorkspace": "该问题属于另一个工作区。",
+      "crossWorkspace": "该工作项属于另一个工作区。",
       "linkNotFound": "该关联已不存在。",
       "couldNotUpdate": "无法更新关联。"
     },
@@ -103,7 +103,7 @@
       "ASSIGNEE_NOT_IN_WORKSPACE": "经办人不是该工作区的成员。",
       "UNKNOWN_STATUS": "状态“{statusKey}”不属于该项目的工作流。",
       "ILLEGAL_TRANSITION": "非法的状态流转：“{from}” → “{to}”。",
-      "STALE_WORK_ITEM": "此问题已被他人编辑。请刷新后重试。"
+      "STALE_WORK_ITEM": "此工作项已被他人编辑。请刷新后重试。"
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "只有项目管理员才能编辑工作流。",
@@ -218,7 +218,7 @@
   "shell": {
     "nav": {
       "dashboard": "仪表板",
-      "issues": "问题",
+      "issues": "工作项",
       "boards": "看板",
       "reports": "报告",
       "settings": "设置",
@@ -289,9 +289,9 @@
       "ariaLabel": "主题：{state}。点按以切换。"
     },
     "createIssue": {
-      "title": "创建问题",
+      "title": "创建工作项",
       "create": "创建",
-      "titleRequired": "请为该问题填写标题。",
+      "titleRequired": "请为该工作项填写标题。",
       "titleTooLong": "标题不能超过 {max} 个字符。",
       "created": "{identifier} 已创建",
       "type": "类型",
@@ -307,9 +307,9 @@
       "priority": "优先级"
     },
     "links": {
-      "section": "关联问题",
+      "section": "关联工作项",
       "removeAria": "移除指向 {identifier} 的待添加 {relationship} 关联",
-      "helper": "选择一种关系 · 关联将与问题一同创建。"
+      "helper": "选择一种关系 · 关联将与工作项一同创建。"
     },
     "commandPalette": {
       "search": "搜索",
@@ -319,7 +319,7 @@
       "projectHeading": "项目",
       "accountHeading": "账户",
       "goToDashboard": "前往仪表板",
-      "goToIssues": "前往问题",
+      "goToIssues": "前往工作项",
       "goToBoards": "前往看板",
       "goToReports": "前往报告",
       "goToSettings": "前往设置",
@@ -332,22 +332,22 @@
     }
   },
   "issueViews": {
-    "heading": "问题",
+    "heading": "工作项",
     "noProjectTitle": "未选择项目",
-    "noProjectListDescription": "从切换器中选择或创建一个项目，以跟踪其问题。",
-    "noProjectDetailDescription": "从切换器中选择一个项目，以查看其问题。",
-    "noProjectEditDescription": "从切换器中选择一个项目，以编辑其问题。",
-    "allIssuesIn": "{project} 的全部问题",
+    "noProjectListDescription": "从切换器中选择或创建一个项目，以跟踪其工作项。",
+    "noProjectDetailDescription": "从切换器中选择一个项目，以查看其工作项。",
+    "noProjectEditDescription": "从切换器中选择一个项目，以编辑其工作项。",
+    "allIssuesIn": "{project} 的全部工作项",
     "filter": "筛选",
     "filterComingSoon": "筛选功能将在后续更新中推出",
     "viewTree": "树形",
     "viewList": "列表",
     "viewLabel": "视图：{view}",
-    "newIssue": "新建问题",
-    "noIssuesTitle": "还没有问题",
-    "noIssuesDescription": "创建第一个问题，开始跟踪工作。",
-    "noMatchingTitle": "没有匹配的问题",
-    "noMatchingDescription": "没有问题符合当前筛选条件。请尝试调整或清除筛选。",
+    "newIssue": "新建工作项",
+    "noIssuesTitle": "还没有工作项",
+    "noIssuesDescription": "创建第一个工作项，开始跟踪工作。",
+    "noMatchingTitle": "没有匹配的工作项",
+    "noMatchingDescription": "没有工作项符合当前筛选条件。请尝试调整或清除筛选。",
     "colTitle": "标题",
     "colPriority": "优先级",
     "colAssignee": "经办人",
@@ -358,23 +358,23 @@
     "edit": "编辑",
     "description": "描述",
     "descriptionGloss": "做什么",
-    "issueDescriptionAria": "问题描述",
+    "issueDescriptionAria": "工作项描述",
     "noDescription": "还没有描述。",
     "explanation": "说明",
     "explanationGloss": "为什么重要",
     "aiDrafted": "AI 草拟",
-    "issueExplanationAria": "问题说明",
+    "issueExplanationAria": "工作项说明",
     "noExplanation": "还没有说明。",
-    "childIssues": "子问题",
-    "parentIssuesAria": "父级问题",
+    "childIssues": "子工作项",
+    "parentIssuesAria": "父级工作项",
     "relationships": "关联",
     "relationshipsGloss": "依赖与关联",
-    "noLinkedIssues": "还没有关联问题。",
+    "noLinkedIssues": "还没有关联工作项。",
     "openBlocker": "未完成的阻塞项",
-    "linkIssue": "关联问题",
+    "linkIssue": "关联工作项",
     "removeLinkAria": "移除与 {target} 之间「{relationship}」的关联",
     "removeConfirmBefore": "移除与",
-    "removeConfirmAfter": " 之间「{relationship}」的关联吗？该问题不会被删除——只会移除此关联。",
+    "removeConfirmAfter": " 之间「{relationship}」的关联吗？该工作项不会被删除——只会移除此关联。",
     "removeLink": "移除关联",
     "status": "状态",
     "type": "类型",
@@ -393,11 +393,11 @@
     "noEstimate": "无预估",
     "created": "创建时间",
     "updated": "更新时间",
-    "changedElsewhereRefreshing": "此问题已在别处发生变更——正在刷新。",
-    "editIssue": "编辑问题",
+    "changedElsewhereRefreshing": "此工作项已在别处发生变更——正在刷新。",
+    "editIssue": "编辑工作项",
     "title": "标题",
     "titleRequired": "请填写标题。",
-    "staleBanner": "此问题已被他人编辑。请刷新以查看最新内容。",
+    "staleBanner": "此工作项已被他人编辑。请刷新以查看最新内容。",
     "refresh": "刷新",
     "reporterCreated": "报告人：{reporter} · 创建于 {created}",
     "issueSaved": "{identifier} 已保存"
@@ -421,7 +421,7 @@
     "parentPicker": {
       "label": "父级",
       "noParent": "无父级",
-      "searchPlaceholder": "搜索问题…",
+      "searchPlaceholder": "搜索工作项…",
       "emptyText": "没有可选的父级",
       "loadingText": "正在加载父级…",
       "previousParent": "之前的父级",
@@ -430,17 +430,17 @@
     },
     "linkAddForm": {
       "relationship": "关系",
-      "issueToLink": "要关联的问题",
-      "searchPlaceholder": "搜索问题…",
+      "issueToLink": "要关联的工作项",
+      "searchPlaceholder": "搜索工作项…",
       "searchByIdentifierOrTitle": "按标识符或标题搜索…",
-      "noMatchingIssues": "没有匹配的问题。",
+      "noMatchingIssues": "没有匹配的工作项。",
       "add": "添加"
     },
     "readiness": {
       "ready": "可以开始",
       "allResolved": "所有阻塞已解决",
       "blocked": "受阻",
-      "waiting": "正在等待 {count, plural, other {# 个问题}}"
+      "waiting": "正在等待 {count, plural, other {# 个工作项}}"
     }
   },
   "settings": {

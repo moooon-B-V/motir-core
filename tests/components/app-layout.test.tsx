@@ -15,7 +15,7 @@ const SECTIONS: SidebarSection[] = [
     id: 'primary',
     items: [
       { icon: <span />, label: 'Dashboard', href: '/dashboard' },
-      { icon: <span />, label: 'Issues', href: '/issues', active: true },
+      { icon: <span />, label: 'Work Items', href: '/issues', active: true },
     ],
   },
 ];
