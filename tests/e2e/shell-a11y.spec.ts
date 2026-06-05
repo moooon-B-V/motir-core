@@ -370,6 +370,25 @@ test.describe('@a11y shell accessibility', () => {
     ).toEqual([]);
   });
 
+  // STRICT — zero exclusions, color-contrast ENABLED. The DatePicker specimen
+  // renders an OPEN calendar (autoOpen), so the whole WAI-ARIA dialog + day grid
+  // (the labelled trigger with aria-haspopup, role="grid" with rows/gridcells,
+  // the roving day buttons carrying aria-current="date"/aria-selected, the
+  // AA-safe selected/today states) is held to full WCAG 2.1 AA before the issue
+  // date fields (2.3.6 edit form, 2.4.2 detail rail) rely on it.
+  test('the /tokens/date-picker specimen is axe-clean (WCAG 2.1 AA; strict)', async ({ page }) => {
+    await page.goto('/tokens/date-picker');
+    await expect(page.getByRole('heading', { name: 'Date picker', level: 1 })).toBeVisible();
+    // The autoOpen specimen → the calendar dialog (+ its month grid) is in the DOM.
+    await expect(page.getByRole('dialog', { name: 'Open date' })).toBeVisible();
+
+    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    expect(
+      results.violations,
+      formatViolations('/tokens/date-picker', results.violations as AxeViolation[]),
+    ).toEqual([]);
+  });
+
   // The actual subject of PRODECT_FINDINGS #35: the Pill `status`/`severity`
   // matrix. Scoped color-contrast sweep over JUST the Pill specimen section,
   // with the rule ENABLED — proves every colored tone clears WCAG AA now that

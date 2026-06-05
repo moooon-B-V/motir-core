@@ -11,6 +11,7 @@ import type { IssueType } from '@/lib/issues/parentRules';
 import { cn } from '@/lib/utils/cn';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Pill, type PillProps } from '@/components/ui/Pill';
 import { useToast } from '@/components/ui/Toast';
 import { StatusPicker } from '@/components/issues/StatusPicker';
@@ -169,14 +170,17 @@ export function CoreFieldsPanel({
     });
   }
 
-  // Free-text fields (due/estimate) commit explicitly: on blur (click/tab away)
-  // AND when the chevron collapses them (the chevron no longer blurs the input).
-  // patch() closes edit mode on a real change; otherwise just close.
-  function commitDue() {
-    const next = dueDate ? new Date(`${dueDate}T00:00:00.000Z`).toISOString() : null;
-    if (next !== item.dueDate) patch({ dueDate: next });
+  // Due date commits as soon as the DatePicker fires (a day picked or cleared);
+  // the picker owns its own open/close, so there's no blur/chevron commit. patch()
+  // closes edit mode on a real change; an unchanged pick just closes.
+  function commitDue(next: string | null) {
+    setDueDate(next ?? '');
+    const iso = next ? new Date(`${next}T00:00:00.000Z`).toISOString() : null;
+    if (iso !== item.dueDate) patch({ dueDate: iso });
     else setEditing(null);
   }
+  // Estimate stays a free-text field: commits on blur AND when the chevron
+  // collapses it (the chevron no longer blurs the input).
   function commitEstimate() {
     const next = estimate === '' ? null : Number(estimate);
     if (next !== item.estimateMinutes) patch({ estimateMinutes: next });
@@ -299,17 +303,15 @@ export function CoreFieldsPanel({
       <FieldCard
         label="Due date"
         editing={editing === 'dueDate'}
-        onToggle={() => (editing === 'dueDate' ? commitDue() : setEditing('dueDate'))}
+        onToggle={() => toggle('dueDate')}
       >
         {editing === 'dueDate' ? (
-          <Input
-            type="date"
+          <DatePicker
             aria-label="Due date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            onBlur={commitDue}
+            value={dueDate || null}
+            onChange={commitDue}
             disabled={isPending}
-            autoFocus
+            autoOpen
           />
         ) : item.dueDate ? (
           <span className="flex items-center gap-1.5">
