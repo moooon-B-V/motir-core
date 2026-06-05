@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { uploadIssueAttachment } from '@/lib/blob/uploadClient';
 import { cn } from '@/lib/utils/cn';
 import { TypePicker } from '@/components/issues/TypePicker';
@@ -48,6 +49,9 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
   const [explanation, setExplanation] = useState('');
   const [explanationOpen, setExplanationOpen] = useState(false);
   const [priority, setPriority] = useState<WorkItemPriorityDto>('medium');
+  // Due date as the DatePicker's ISO `YYYY-MM-DD` value (or null) — converted to
+  // a full UTC ISO string on submit, like the edit form. Optional (2.3.12).
+  const [dueDate, setDueDate] = useState<string | null>(null);
   const [links, setLinks] = useState<PendingLink[]>([]);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [parentError, setParentError] = useState<string | null>(null);
@@ -74,6 +78,7 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
     setExplanation('');
     setExplanationOpen(false);
     setPriority('medium');
+    setDueDate(null);
     setLinks([]);
     setTitleError(null);
     setParentError(null);
@@ -105,6 +110,9 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
         explanationMd: explanation.trim() ? explanation : null,
         priority,
         parentId,
+        // Only send dueDate when set (UTC-safe full ISO, like the edit form), so
+        // a plain create's payload (and its exact-match test) stays unchanged.
+        ...(dueDate ? { dueDate: new Date(`${dueDate}T00:00:00.000Z`).toISOString() } : {}),
         // Only send links when present, so a plain create's payload (and its
         // exact-match test) stays unchanged. Strip the carried summary — the
         // service takes just the (relationship, target) pair.
@@ -251,6 +259,19 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
           <div className="flex flex-col gap-1 font-sans text-sm">
             <span className="text-(--el-text) font-medium">Priority</span>
             <PriorityPicker value={priority} onChange={setPriority} disabled={isPending} />
+          </div>
+
+          {/* Due date (Subtask 2.3.12) — per design/work-items/create.mock.html:
+              a DatePicker row after Priority, mirroring Jira + the edit form.
+              Optional; collected here, written with the issue on create. */}
+          <div className="flex flex-col gap-1 font-sans text-sm">
+            <span className="text-(--el-text) font-medium">Due date</span>
+            <DatePicker
+              aria-label="Due date"
+              value={dueDate}
+              onChange={setDueDate}
+              disabled={isPending}
+            />
           </div>
 
           {/* Linked issues (Subtask 2.4.10) — per design/work-items/links.mock.html

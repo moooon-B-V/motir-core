@@ -1,7 +1,21 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/Toast';
+
+// The Due-date DatePicker opens a Radix Popover (Popper), which needs
+// ResizeObserver + pointer-capture / scrollIntoView APIs happy-dom omits.
+beforeAll(() => {
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+  Element.prototype.scrollIntoView ??= () => {};
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.setPointerCapture ??= () => {};
+  Element.prototype.releasePointerCapture ??= () => {};
+});
 
 // Hoisted spies the mock factories close over (vi.mock is hoisted above imports).
 const { refresh, createIssueActionSpy, listCreateLinkCandidatesSpy } = vi.hoisted(() => ({
@@ -188,6 +202,59 @@ describe('CreateIssueModal — validation + submit', () => {
 
     expect(createIssueActionSpy).toHaveBeenCalledWith(
       expect.objectContaining({ explanationMd: 'Why it matters: fewer drop-offs.' }),
+    );
+  });
+
+  it('threads a chosen Due date through as a UTC ISO string; a plain create omits it', async () => {
+    createIssueActionSpy.mockResolvedValue({ ok: true, id: 'wi_3', identifier: 'WFD-9' });
+    openModal();
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Ship the thing' } });
+
+    // Open the Due-date DatePicker and pick TODAY (always present in the
+    // default-open month, whatever date CI runs on).
+    fireEvent.click(screen.getByRole('button', { name: 'Due date' }));
+    const calendar = await screen.findByRole('dialog', { name: 'Due date' });
+    const MONTHS = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    const now = new Date();
+    const y = now.getUTCFullYear();
+    const m = now.getUTCMonth();
+    const d = now.getUTCDate();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const expectedIso = new Date(`${y}-${pad(m + 1)}-${pad(d)}T00:00:00.000Z`).toISOString();
+    fireEvent.click(within(calendar).getByRole('button', { name: `${MONTHS[m]} ${d}, ${y}` }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    });
+    expect(createIssueActionSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ dueDate: expectedIso }),
+    );
+
+    // And a create with no date chosen sends no dueDate key at all (the
+    // exact-match test above already pins the plain-create payload shape).
+    createIssueActionSpy.mockClear();
+    cleanup();
+    createIssueActionSpy.mockResolvedValue({ ok: true, id: 'wi_4', identifier: 'WFD-10' });
+    openModal();
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'No due date' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    });
+    expect(createIssueActionSpy).toHaveBeenCalledWith(
+      expect.not.objectContaining({ dueDate: expect.anything() }),
     );
   });
 
