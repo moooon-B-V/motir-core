@@ -160,7 +160,10 @@ test('@smoke edit non-status fields persists + writes a revision', async ({ page
 
   await page.goto(`/issues/${identifier}/edit`);
   await page.getByLabel('Title').fill('Edited title');
-  await page.getByLabel('Priority').selectOption('high');
+  // Priority is the shared Combobox picker now (not a native <select>) — open it
+  // and pick High (exact: 'High' would otherwise also match 'Highest').
+  await page.getByRole('combobox', { name: 'Priority' }).click();
+  await page.getByRole('option', { name: 'High', exact: true }).click();
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText(/saved|updated/i).first()).toBeVisible();
 

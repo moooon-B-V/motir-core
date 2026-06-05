@@ -37,7 +37,15 @@ const SHELL_ROUTES: { path: string; ready: (page: Page) => Promise<void> }[] = [
   },
   {
     path: '/issues',
-    ready: async (page) => expect(page.getByRole('heading', { name: 'Issues' })).toBeVisible(),
+    // The sweep's user has a project but no issues → the real route renders its
+    // empty state inside a Suspense boundary. Wait for BOTH the page h1 (level:1
+    // — the empty-state h2 "No issues yet" substring-matches a bare name:'Issues')
+    // AND the resolved empty state, so axe analyses the settled DOM, not a
+    // mid-stream frame. (2.5.6 adds the POPULATED /issues sweep with a fixture.)
+    ready: async (page) => {
+      await expect(page.getByRole('heading', { name: 'Issues', level: 1 })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'No issues yet' })).toBeVisible();
+    },
   },
   {
     path: '/boards',

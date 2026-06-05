@@ -12,12 +12,12 @@ import { ParentPicker } from '@/components/issues/ParentPicker';
 import { StatusPicker } from '@/components/issues/StatusPicker';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
 import { TypePicker } from '@/components/issues/TypePicker';
+import { PriorityPicker } from '@/components/issues/PriorityPicker';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { WorkItemDto, WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
-import { PRIORITY_OPTIONS } from '@/lib/issues/priority';
 import { updateIssueAction, changeStatusAction } from '../actions';
 
 // The full edit form (Subtask 2.3.6). Status and non-status fields submit via
@@ -235,47 +235,33 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
           />
         </div>
 
-        <label className="flex flex-col gap-1 font-sans text-sm">
+        <div className="flex flex-col gap-1 font-sans text-sm">
           <span className="text-(--el-text) font-medium">Priority</span>
-          <select
-            className="border-(--el-border) bg-(--el-page-bg) rounded-md border px-3 py-2 text-sm"
-            value={priority}
-            onChange={(e) => setPriority(e.target.value as WorkItemPriorityDto)}
-            disabled={isPending}
-            aria-label="Priority"
-          >
-            {PRIORITY_OPTIONS.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          <PriorityPicker value={priority} onChange={setPriority} disabled={isPending} />
+        </div>
 
-        <label className="flex flex-col gap-1 font-sans text-sm">
+        <div className="flex flex-col gap-1 font-sans text-sm">
           <span className="text-(--el-text) font-medium">Due date</span>
-          <input
+          <Input
             type="date"
-            className="border-(--el-border) bg-(--el-page-bg) rounded-md border px-3 py-2 text-sm"
+            aria-label="Due date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
             disabled={isPending}
-            aria-label="Due date"
           />
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1 font-sans text-sm">
+        <div className="flex flex-col gap-1 font-sans text-sm">
           <span className="text-(--el-text) font-medium">Estimate (minutes)</span>
-          <input
+          <Input
             type="number"
             min={0}
-            className="border-(--el-border) bg-(--el-page-bg) rounded-md border px-3 py-2 text-sm"
+            aria-label="Estimate (minutes)"
             value={estimate}
             onChange={(e) => setEstimate(e.target.value)}
             disabled={isPending}
-            aria-label="Estimate (minutes)"
           />
-        </label>
+        </div>
       </div>
 
       {/* Editable now (the design treats explanation as a first-class authored

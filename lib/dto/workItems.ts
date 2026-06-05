@@ -179,7 +179,15 @@ export interface WorkItemTreeNodeDto {
   identifier: string;
   title: string;
   status: string;
+  // The remaining core properties the list row shows alongside status/assignee
+  // (the same fields the detail page's core-fields panel carries): priority,
+  // reporter, due date, estimate. `reporterId` is always set; `dueDate` is a
+  // wire-safe ISO-8601 string (or null); `estimateMinutes` is whole minutes.
+  priority: WorkItemPriorityDto;
   assigneeId: string | null;
+  reporterId: string;
+  dueDate: string | null;
+  estimateMinutes: number | null;
   depth: number;
   hasChildren: boolean;
   matched: boolean;

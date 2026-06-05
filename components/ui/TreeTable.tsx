@@ -247,7 +247,7 @@ export function TreeTable<Row>({
         <div role="rowgroup">
           <div
             role="row"
-            className="sticky top-0 z-20 grid items-center border-b border-(--el-border) bg-(--el-surface-soft) pr-7 pl-4"
+            className="sticky top-0 z-20 grid items-center gap-x-4 border-b border-(--el-border) bg-(--el-surface-soft) pr-7 pl-4"
             style={{ gridTemplateColumns: gridTemplate, height: 40 }}
           >
             {columns.map((col) => (
@@ -289,7 +289,7 @@ export function TreeTable<Row>({
                   data-testid={testId}
                   onKeyDown={(e) => onRowKeyDown(e, row, index)}
                   onFocus={() => setFocusedId(row.id)}
-                  className="group relative grid items-center border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:-outline-offset-2"
+                  className="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:-outline-offset-2"
                   style={{ gridTemplateColumns: gridTemplate, height: 40 }}
                 >
                   {/* Tree column — indent + chevron slot + the consumer's cell. */}
@@ -338,7 +338,12 @@ export function TreeTable<Row>({
                       <span className="h-4 w-4 shrink-0" aria-hidden />
                     )}
 
-                    <div className="relative z-10 flex min-w-0 flex-1 items-center">
+                    {/* The tree cell's content stays BELOW the stretched link
+                        (no z-raise) so clicking the title/identifier navigates
+                        the row — only genuinely interactive bits (the chevron
+                        above; inline-edit controls in 2.5.5) raise themselves
+                        with `relative z-10` to intercept their own clicks. */}
+                    <div className="flex min-w-0 flex-1 items-center">
                       {treeColumn?.cell(row.data)}
                     </div>
                   </div>

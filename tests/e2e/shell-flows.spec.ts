@@ -240,7 +240,7 @@ test.describe('@smoke shell journeys', () => {
     // Navigate via a drawer nav item → route changes → drawer auto-closes.
     await drawer.getByRole('link', { name: 'Issues' }).click();
     await page.waitForURL('**/issues');
-    await expect(page.getByRole('heading', { name: 'Issues' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Issues', level: 1 })).toBeVisible();
     await expect(drawer).toBeHidden();
 
     // Re-open, then click the scrim (the overlay area beside the 300px panel)

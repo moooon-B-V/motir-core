@@ -3,27 +3,25 @@
 import { useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowDown, ArrowUp, Calendar, ChevronDown, Clock, Minus } from 'lucide-react';
-import type {
-  WorkItemDto,
-  WorkItemKindDto,
-  WorkItemPriorityDto,
-  WorkItemSummaryDto,
-} from '@/lib/dto/workItems';
+import { Calendar, ChevronDown, Clock } from 'lucide-react';
+import type { WorkItemDto, WorkItemKindDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { WorkflowDto, StatusCategoryDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { cn } from '@/lib/utils/cn';
 import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
 import { Pill, type PillProps } from '@/components/ui/Pill';
 import { useToast } from '@/components/ui/Toast';
 import { StatusPicker } from '@/components/issues/StatusPicker';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
+import { PriorityPicker } from '@/components/issues/PriorityPicker';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { TypePicker } from '@/components/issues/TypePicker';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
 import { PRIORITY_LABELS } from '@/lib/issues/priority';
+import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import { formatDateTime, formatDate } from '@/lib/utils/datetime';
 import { formatDurationMinutes } from '@/lib/utils/duration';
 import { changeStatusAction, updateIssueAction, type UpdateIssueInput } from '../edit/actions';
@@ -55,16 +53,8 @@ const STATUS_TONE: Record<StatusCategoryDto, NonNullable<PillProps['status']>> =
   done: 'done',
 };
 
-const PRIORITY_PILL: Record<
-  WorkItemPriorityDto,
-  { pill: Partial<PillProps>; icon: typeof ArrowUp }
-> = {
-  highest: { pill: { severity: 'danger' }, icon: ArrowUp },
-  high: { pill: { severity: 'warning' }, icon: ArrowUp },
-  medium: { pill: { tone: 'neutral' }, icon: Minus },
-  low: { pill: { severity: 'info' }, icon: ArrowDown },
-  lowest: { pill: { tone: 'neutral' }, icon: ArrowDown },
-};
+// Priority chip presentation now lives in the shared `PRIORITY_META` (reused by
+// the issue-list row, 2.5.3) — imported above.
 
 function Avatar({ name }: { name: string }) {
   return (
@@ -194,7 +184,7 @@ export function CoreFieldsPanel({
   }
 
   const muted = (text: string) => <span className="text-(--el-text-secondary) italic">{text}</span>;
-  const priorityPill = PRIORITY_PILL[item.priority];
+  const priorityPill = PRIORITY_META[item.priority];
 
   return (
     <div className="flex flex-col gap-3">
@@ -236,20 +226,11 @@ export function CoreFieldsPanel({
         onToggle={() => toggle('priority')}
       >
         {editing === 'priority' ? (
-          <select
-            className="border-(--el-border) bg-(--el-page-bg) focus-visible:ring-(--focus-ring-color) w-full rounded-md border px-2 py-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none"
+          <PriorityPicker
             value={item.priority}
-            onChange={(e) => patch({ priority: e.target.value as WorkItemPriorityDto })}
+            onChange={(priority) => patch({ priority })}
             disabled={isPending}
-            aria-label="Priority"
-            autoFocus
-          >
-            {(Object.keys(PRIORITY_LABELS) as WorkItemPriorityDto[]).map((p) => (
-              <option key={p} value={p}>
-                {PRIORITY_LABELS[p]}
-              </option>
-            ))}
-          </select>
+          />
         ) : (
           <Pill {...priorityPill.pill}>
             <priorityPill.icon className="h-3 w-3" aria-hidden />
@@ -321,14 +302,13 @@ export function CoreFieldsPanel({
         onToggle={() => (editing === 'dueDate' ? commitDue() : setEditing('dueDate'))}
       >
         {editing === 'dueDate' ? (
-          <input
+          <Input
             type="date"
-            className="border-(--el-border) bg-(--el-page-bg) focus-visible:ring-(--focus-ring-color) w-full rounded-md border px-2 py-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none"
+            aria-label="Due date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
             onBlur={commitDue}
             disabled={isPending}
-            aria-label="Due date"
             autoFocus
           />
         ) : item.dueDate ? (
@@ -347,15 +327,14 @@ export function CoreFieldsPanel({
         onToggle={() => (editing === 'estimate' ? commitEstimate() : setEditing('estimate'))}
       >
         {editing === 'estimate' ? (
-          <input
+          <Input
             type="number"
             min={0}
-            className="border-(--el-border) bg-(--el-page-bg) focus-visible:ring-(--focus-ring-color) w-full rounded-md border px-2 py-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none"
+            aria-label="Estimate (minutes)"
             value={estimate}
             onChange={(e) => setEstimate(e.target.value)}
             onBlur={commitEstimate}
             disabled={isPending}
-            aria-label="Estimate (minutes)"
             autoFocus
           />
         ) : item.estimateMinutes != null ? (

@@ -72,10 +72,11 @@ test('@smoke shell: sidebar nav renders, navigates, and marks the active item', 
   );
   await expect(issuesLink).not.toHaveAttribute('aria-current', 'page');
 
-  // Navigate to Issues → placeholder page renders + Issues becomes current.
+  // Navigate to Issues → the real issue list renders (empty state for a fresh
+  // project, Subtask 2.5.3) + Issues becomes current.
   await issuesLink.click();
   await page.waitForURL('**/issues');
-  await expect(page.getByRole('heading', { name: 'Issues' })).toBeVisible();
-  await expect(page.getByText('Coming in Epic 2.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Issues', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No issues yet' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Issues' })).toHaveAttribute('aria-current', 'page');
 });

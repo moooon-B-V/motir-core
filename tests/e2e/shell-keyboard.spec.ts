@@ -75,7 +75,7 @@ test.describe('@a11y shell keyboard navigation', () => {
     await page.keyboard.press('Enter');
     await page.waitForURL('**/issues');
     await expect(palette).toBeHidden();
-    await expect(page.getByRole('heading', { name: 'Issues' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Issues', level: 1 })).toBeVisible();
 
     // 7. ⌘\ / Ctrl+\ collapses the rail (data-collapsed flips on the <nav>).
     const rail = page.getByRole('navigation', { name: 'Primary' });
