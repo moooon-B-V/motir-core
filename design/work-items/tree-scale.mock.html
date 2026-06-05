@@ -1,0 +1,2009 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Tree view at scale — sortable headers + lazy-expand + virtualization (Story 2.5
+      · 2.5.11)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the issue-list TREE view AT SCALE — the
+      finding-#57 surface tree.png does NOT specify. tree.png draws the whole
+      forest loaded at once with no sort headers; Jira's hierarchy grids
+      (Structure / Advanced Roadmaps) instead LAZY-LOAD children on expand and
+      VIRTUALIZE rows, and let you SORT siblings within their parent. Without
+      this asset, the code subtasks (2.5.13 lazy reads · 2.5.14 lazy/virtual/
+      sortable TreeTable) would be improvising UI — the planning-time design
+      gate. This is the design they build against.
+
+      Built FROM the real design system: the token values below are copied 1:1
+      from app/globals.css (Tier-0 --color-* + Tier-3 --el-* + the shape tokens),
+      and the markup mirrors the SHIPPED primitives + the SHIPPED tree-grid —
+      components/ui/TreeTable (2.5.2): role="treegrid" › rowgroup › row
+      [aria-level/posinset/setsize/expanded] › gridcell, a 22px per-level indent,
+      the rotate-on-expand chevron, a stretched row link with the chevron raised
+      relative z-10 (NO button nested inside the <a>). The column set is the SAME
+      seven the shipped IssueTreeTable renders and the List reuses (list.mock.html):
+      Title · Priority · Assignee · Reporter · Due · Est. · Status — so Tree↔List
+      stays column-identical. Only THREE things are new vs. tree.png, all drawn
+      here: (a) sortable tree-grid headers — the SAME asc/desc/unsorted caret the
+      List shipped, applied to the role="treegrid" header, sorting siblings WITHIN
+      each parent (hierarchy preserved); (b) lazy-expand — a collapsed parent
+      shows the chevron WITHOUT loading its children, expanding fetches them (a
+      spinner placeholder row on the expanding node) with a "Load more children"
+      affordance when a parent has more children than the per-node page (50);
+      (c) virtualization — invisible to the eye (only viewport rows render),
+      documented, no distinct visual.
+
+      Covers (multi-panel): (0) the Tree in the /issues shell — sortable headers,
+      nested rows, default sort KEY asc, a COLLAPSED parent showing its chevron
+      with no children loaded · (1) sorted by PRIORITY desc — siblings re-ordered
+      WITHIN every parent, hierarchy preserved, the active-sort caret moved ·
+      (2) lazy-expand IN PROGRESS — a parent mid-expand with the spinner
+      placeholder child row · (3) "Load more children" — a paged parent (showing
+      50 of 128) with the load-more affordance row · (4) virtualization +
+      keyboard/aria note (no distinct visual). Toggle dark mode to confirm token
+      parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1200px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 36px auto 10px;
+        padding-left: 2px;
+        max-width: 1200px;
+      }
+
+      /* ── Page shell — header + toolbar (mirrors app/(authed)/issues/page.tsx) ─ */
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin: 4px 0 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        position: relative;
+      }
+      /* Toolbar button — the shipped ToolbarButton shape (h-control) */
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .tb-btn .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn .caret {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      /* Filter is still the disabled placeholder seam (2.5.4 wires it) */
+      .tb-btn.is-disabled {
+        color: var(--el-text-muted);
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+      /* Primary "New issue" — Button variant="primary" */
+      .tb-btn.primary {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+      }
+      .tb-btn.primary .ic {
+        color: var(--el-accent-text);
+      }
+
+      /* ── The tree-grid table ─────────────────────────────────────────────── */
+      /* Container chrome mirrors TreeTable: rounded-(--radius-card) bordered box */
+      .tree-table {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      /* Column grid — IDENTICAL to IssueTreeTable / the List:
+         Title(flex) · Priority · Assignee · Reporter · Due · Est. · Status.
+         pr-7 (28px) pl-4 (16px) gap-x-4 (16px), same as the shipped TreeTable. */
+      .tt-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 120px 150px 150px 120px 90px 130px;
+        align-items: center;
+        column-gap: 16px;
+        padding: 0 28px 0 16px;
+      }
+      .tt-head {
+        height: 40px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+      }
+      /* Sortable column header = a button. Hover surfaces the caret; the active
+         column shows the solid asc/desc caret + aria-sort on the cell. Same
+         affordance the List shipped (list.mock.html), applied to the treegrid. */
+      .th {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+      }
+      .th.end {
+        justify-content: flex-end;
+      }
+      .sort-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: none;
+        border: 0;
+        padding: 2px 0;
+        margin: 0;
+        cursor: pointer;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .sort-btn .caret {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        opacity: 0; /* hidden until hover / active */
+        color: var(--el-text-faint);
+        transition: opacity 0.12s ease;
+      }
+      .sort-btn:hover {
+        color: var(--el-text);
+      }
+      .sort-btn:hover .caret {
+        opacity: 0.55;
+      }
+      /* active sort column */
+      .th[aria-sort='ascending'] .sort-btn,
+      .th[aria-sort='descending'] .sort-btn {
+        color: var(--el-text);
+      }
+      .th[aria-sort='ascending'] .sort-btn .caret,
+      .th[aria-sort='descending'] .sort-btn .caret {
+        opacity: 1;
+        color: var(--el-text-secondary);
+      }
+
+      /* A tree row — a positioned container holding a STRETCHED link + cells.
+         The row is NOT an <a>; the link is absolutely positioned (inset-0) so the
+         interactive chevron can raise itself above it (relative z-1) WITHOUT
+         being nested inside an anchor — exactly the shipped TreeTable shape. */
+      .tt-row {
+        position: relative;
+        height: 40px;
+        border-bottom: 1px solid var(--el-border);
+        color: inherit;
+      }
+      .tt-row:last-child {
+        border-bottom: 0;
+      }
+      .tt-row:hover {
+        background: var(--el-surface);
+      }
+      .row-link {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+      }
+      .tt-row:hover .cell-tree .ttl {
+        text-decoration: underline;
+      }
+
+      /* Tree cell — indent (paddingLeft = (depth-1)*22px) + chevron slot + content */
+      .cell-tree {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      /* The expand/collapse chevron — a real button, raised above the row link */
+      .chevron {
+        position: relative;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        flex: none;
+        padding: 0;
+        margin: 0;
+        border: 0;
+        background: none;
+        border-radius: var(--radius-control);
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .chevron:hover {
+        color: var(--el-text);
+      }
+      .chevron svg {
+        width: 12px;
+        height: 12px;
+        transition: transform 0.12s ease;
+      }
+      .chevron.is-open svg {
+        transform: rotate(90deg);
+      }
+      /* Reserved 16px slot so leaf rows align with parents' content (no chevron) */
+      .chevron-slot {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .cell-tree .lr-id {
+        flex: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .cell-tree .ttl {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+
+      .type-icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+
+      /* Avatar — initial-letter, mirrors IssueTreeTable's Avatar */
+      .avatar {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .cell-person {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .cell-person .nm {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .muted-cell {
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .cell-meta {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .end {
+        justify-content: flex-end;
+        text-align: right;
+      }
+
+      /* Pill (components/ui/Pill.tsx): hue in tint background, strong text */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: 2px 10px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill .pic {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .pill--planned {
+        background: var(--el-tint-lavender);
+      }
+      .pill--inprogress {
+        background: var(--el-tint-sky);
+      }
+      .pill--done {
+        background: var(--el-tint-mint);
+      }
+      .pill--warning {
+        background: var(--el-tint-peach);
+      }
+      .pill--danger {
+        background: var(--el-tint-rose);
+      }
+      .pill--info {
+        background: var(--el-tint-sky);
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+
+      /* Lazy-expand: the spinner placeholder row shown on a node while its
+         children load. Sits at the children's indent; one row, then the real
+         children replace it. */
+      .loading-row {
+        position: relative;
+        height: 40px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .loading-inner {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .spinner {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-muted);
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* "Load more children" affordance — a quiet full-width row at the END of a
+         parent's loaded children when it has more than the per-node page (50). */
+      .loadmore-row {
+        position: relative;
+        height: 40px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .loadmore-row:last-child {
+        border-bottom: 0;
+      }
+      .loadmore-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: none;
+        border: 0;
+        padding: 0;
+        margin: 0;
+        cursor: pointer;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        white-space: nowrap;
+        color: var(--el-link);
+      }
+      .loadmore-btn .ic {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .loadmore-row .count {
+        margin-left: 8px;
+        font-size: 12px;
+        white-space: nowrap;
+        color: var(--el-text-faint);
+      }
+
+      /* EmptyState / Card chrome — reused for the virtualization note panel */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        box-shadow: var(--shadow-card);
+      }
+      .note h3 {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        font-weight: 400;
+        margin: 0 0 10px;
+        color: var(--el-text);
+      }
+      .note p {
+        margin: 0 0 10px;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 76ch;
+      }
+      .note p:last-child {
+        margin-bottom: 0;
+      }
+      .note code {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+        color: var(--el-text-strong);
+      }
+      .note kbd {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: 1px 6px;
+        color: var(--el-text-strong);
+      }
+      .note .vrows {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        margin: 4px 0 14px;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .vrow {
+        height: 28px;
+        display: flex;
+        align-items: center;
+        padding: 0 14px;
+        font-size: 12px;
+        font-family: var(--font-mono);
+        color: var(--el-text-faint);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .vrow:last-child {
+        border-bottom: 0;
+      }
+      .vrow.in-view {
+        color: var(--el-text);
+        background: var(--el-surface);
+      }
+      .vrow.off {
+        opacity: 0.5;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Tree view at scale — sortable headers · lazy-expand · virtualization</h1>
+        <p>
+          Story 2.5 · design for 2.5.11 → gating the 2.5.13 lazy reads + 2.5.14
+          lazy/virtual/sortable TreeTable. Extends tree.png + the shipped TreeTable with the scale
+          shape (finding #57). Built from the real design-system tokens / primitives.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke, used by <use>) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <!-- epic = zap -->
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <!-- story = book-open -->
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <!-- task = square-check-big -->
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <!-- bug -->
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <!-- subtask = list-checks -->
+        <g
+          id="i-subtask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <!-- priority arrows + minus -->
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </g>
+        <g
+          id="i-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+        </g>
+        <!-- sort carets (chevron up/down) -->
+        <g
+          id="i-chevron-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m18 15-6-6-6 6" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <!-- expand/collapse chevron (rotates 90° when open) -->
+        <g
+          id="i-chevron-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </g>
+        <!-- filter seam -->
+        <g
+          id="i-sliders"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="21" x2="14" y1="4" y2="4" />
+          <line x1="10" x2="3" y1="4" y2="4" />
+          <line x1="21" x2="12" y1="12" y2="12" />
+          <line x1="8" x2="3" y1="12" y2="12" />
+          <line x1="21" x2="16" y1="20" y2="20" />
+          <line x1="14" x2="14" y1="2" y2="6" />
+          <line x1="8" x2="8" y1="10" y2="14" />
+          <line x1="16" x2="16" y1="18" y2="22" />
+        </g>
+        <!-- view switcher (active = Tree) -->
+        <g
+          id="i-list-tree"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12h-8" />
+          <path d="M21 6H8" />
+          <path d="M21 18h-8" />
+          <path d="M3 6v4c0 1.1.9 2 2 2h3" />
+          <path d="M3 10v6c0 1.1.9 2 2 2h3" />
+        </g>
+        <!-- plus -->
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <!-- loader (spinner ring) -->
+        <g
+          id="i-loader"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </g>
+        <!-- chevron-down used by load-more affordance -->
+      </defs>
+    </svg>
+
+    <!-- ════════════ PANEL 0 — Tree view in the page shell, sortable headers, default sort KEY asc ════════════ -->
+    <div class="panel-label">
+      0 · Tree in the /issues shell — the [Tree&nbsp;▾] switcher active, the nested treegrid with
+      SORTABLE headers, default sort KEY asc (Title). PROD-23 is COLLAPSED — its chevron shows it
+      has children without loading them (lazy)
+    </div>
+    <div class="panel">
+      <div class="page-head">
+        <div>
+          <h2>Issues</h2>
+          <p class="sub">All issues in Prodect — Q3 launch</p>
+        </div>
+        <div class="toolbar">
+          <button class="tb-btn is-disabled" title="Filtering arrives in a later update">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter
+          </button>
+          <button class="tb-btn" aria-haspopup="menu" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-list-tree" /></svg>Tree<svg
+              class="caret"
+              viewBox="0 0 24 24"
+            >
+              <use href="#i-chevron-down" />
+            </svg>
+          </button>
+          <button class="tb-btn primary">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+          </button>
+        </div>
+      </div>
+
+      <div class="tree-table" role="treegrid" aria-label="Issues">
+        <!-- header row — sortable, Title active asc -->
+        <div role="rowgroup">
+          <div class="tt-grid tt-head" role="row">
+            <div class="th" role="columnheader" aria-sort="ascending">
+              <button class="sort-btn">
+                Title<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Priority<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Assignee<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Reporter<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Due<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th end" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Est.<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Status<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div role="rowgroup">
+          <!-- depth 1 — PROD-12 epic, expanded -->
+          <div
+            class="tt-grid tt-row"
+            role="row"
+            aria-level="1"
+            aria-posinset="1"
+            aria-setsize="1"
+            aria-expanded="true"
+          >
+            <span class="cell-tree" style="padding-left: 0">
+              <a class="row-link" href="#" aria-label="Q3 launch — Auth & sign-in"></a>
+              <button class="chevron is-open" aria-label="Collapse row">
+                <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+              </button>
+              <span class="type-icon t-epic"
+                ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+              ></span>
+              <span class="lr-id">PROD-12</span>
+              <span class="ttl">Q3 launch — Auth &amp; sign-in</span>
+            </span>
+            <span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="muted-cell">—</span>
+            <span class="cell-meta end muted-cell">—</span>
+            <span><span class="pill pill--inprogress">in-progress</span></span>
+          </div>
+
+          <!-- depth 2 — PROD-23 story, COLLAPSED (chevron, children not loaded) -->
+          <div
+            class="tt-grid tt-row"
+            role="row"
+            aria-level="2"
+            aria-posinset="1"
+            aria-setsize="3"
+            aria-expanded="false"
+          >
+            <span class="cell-tree" style="padding-left: 22px">
+              <a class="row-link" href="#" aria-label="Email + password sign-in"></a>
+              <button class="chevron" aria-label="Expand row">
+                <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+              </button>
+              <span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+              ></span>
+              <span class="lr-id">PROD-23</span>
+              <span class="ttl">Email + password sign-in</span>
+            </span>
+            <span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="cell-meta">Jun 12, 2026</span>
+            <span class="cell-meta end">8h</span>
+            <span><span class="pill pill--done">done</span></span>
+          </div>
+
+          <!-- depth 2 — PROD-31 story, expanded -->
+          <div
+            class="tt-grid tt-row"
+            role="row"
+            aria-level="2"
+            aria-posinset="2"
+            aria-setsize="3"
+            aria-expanded="true"
+          >
+            <span class="cell-tree" style="padding-left: 22px">
+              <a class="row-link" href="#" aria-label="Google OAuth sign-in"></a>
+              <button class="chevron is-open" aria-label="Collapse row">
+                <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+              </button>
+              <span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+              ></span>
+              <span class="lr-id">PROD-31</span>
+              <span class="ttl">Google OAuth sign-in</span>
+            </span>
+            <span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="muted-cell">—</span>
+            <span class="cell-meta end muted-cell">—</span>
+            <span><span class="pill pill--inprogress">in-progress</span></span>
+          </div>
+
+          <!-- depth 3 — PROD-41 task, leaf -->
+          <div class="tt-grid tt-row" role="row" aria-level="3" aria-posinset="1" aria-setsize="3">
+            <span class="cell-tree" style="padding-left: 44px">
+              <a class="row-link" href="#" aria-label="Set up Google Cloud OAuth credentials"></a>
+              <span class="chevron-slot"></span>
+              <span class="type-icon t-task"
+                ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+              ></span>
+              <span class="lr-id">PROD-41</span>
+              <span class="ttl">Set up Google Cloud OAuth credentials</span>
+            </span>
+            <span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="muted-cell">—</span>
+            <span class="cell-meta end">1h 30m</span>
+            <span><span class="pill pill--done">done</span></span>
+          </div>
+
+          <!-- depth 3 — PROD-42 task, expanded -->
+          <div
+            class="tt-grid tt-row"
+            role="row"
+            aria-level="3"
+            aria-posinset="2"
+            aria-setsize="3"
+            aria-expanded="true"
+          >
+            <span class="cell-tree" style="padding-left: 44px">
+              <a class="row-link" href="#" aria-label="Add Google OAuth to sign-in"></a>
+              <button class="chevron is-open" aria-label="Collapse row">
+                <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+              </button>
+              <span class="type-icon t-task"
+                ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+              ></span>
+              <span class="lr-id">PROD-42</span>
+              <span class="ttl">Add Google OAuth to sign-in</span>
+            </span>
+            <span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="cell-meta">Jun 16, 2026</span>
+            <span class="cell-meta end">4h</span>
+            <span><span class="pill pill--inprogress">in-progress</span></span>
+          </div>
+
+          <!-- depth 4 — PROD-58 subtask, leaf -->
+          <div class="tt-grid tt-row" role="row" aria-level="4" aria-posinset="1" aria-setsize="1">
+            <span class="cell-tree" style="padding-left: 66px">
+              <a
+                class="row-link"
+                href="#"
+                aria-label="Write E2E test: email-first user signs in with Google"
+              ></a>
+              <span class="chevron-slot"></span>
+              <span class="type-icon t-subtask"
+                ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg
+              ></span>
+              <span class="lr-id">PROD-58</span>
+              <span class="ttl">Write E2E test: email-first user signs in with Google</span>
+            </span>
+            <span class="pill pill--info"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg>Low</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="muted-cell">—</span>
+            <span class="cell-meta end">2h 30m</span>
+            <span><span class="pill pill--planned">todo</span></span>
+          </div>
+
+          <!-- depth 3 — PROD-49 bug, leaf -->
+          <div class="tt-grid tt-row" role="row" aria-level="3" aria-posinset="3" aria-setsize="3">
+            <span class="cell-tree" style="padding-left: 44px">
+              <a
+                class="row-link"
+                href="#"
+                aria-label="OAuth callback drops the state param on Safari 16 and below"
+              ></a>
+              <span class="chevron-slot"></span>
+              <span class="type-icon t-bug"
+                ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+              ></span>
+              <span class="lr-id">PROD-49</span>
+              <span class="ttl">OAuth callback drops the `state` param on Safari ≤16</span>
+            </span>
+            <span class="pill pill--danger"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>Highest</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">J</span><span class="nm">Jamal Tate</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="cell-meta">Jun 7, 2026</span>
+            <span class="cell-meta end">2h</span>
+            <span><span class="pill pill--inprogress">in-review</span></span>
+          </div>
+
+          <!-- depth 2 — PROD-34 task, leaf -->
+          <div class="tt-grid tt-row" role="row" aria-level="2" aria-posinset="3" aria-setsize="3">
+            <span class="cell-tree" style="padding-left: 22px">
+              <a class="row-link" href="#" aria-label="Password reset email — copy + template"></a>
+              <span class="chevron-slot"></span>
+              <span class="type-icon t-task"
+                ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+              ></span>
+              <span class="lr-id">PROD-34</span>
+              <span class="ttl">Password reset email — copy + template</span>
+            </span>
+            <span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">R</span><span class="nm">Riya Shah</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+            >
+            <span class="cell-meta">Jun 9, 2026</span>
+            <span class="cell-meta end">3h</span>
+            <span><span class="pill pill--inprogress">in-review</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 1 — sorted by PRIORITY desc; siblings re-ordered WITHIN each parent ════════════ -->
+    <div class="panel-label">
+      1 · Sorted by PRIORITY ▾ (desc) — the active-sort caret moves to Priority
+      (aria-sort="descending"). Each children-fetch carries ORDER&nbsp;BY, so siblings re-order
+      WITHIN their parent: under PROD-12, PROD-31 (High) rises above PROD-34 (Medium); under
+      PROD-31, PROD-49 (Highest) → PROD-42 (High) → PROD-41 (Medium). The hierarchy is preserved —
+      no row leaves its parent.
+    </div>
+    <div class="panel">
+      <div class="tree-table" role="treegrid" aria-label="Issues">
+        <div role="rowgroup">
+          <div class="tt-grid tt-head" role="row">
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Title<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="descending">
+              <button class="sort-btn">
+                Priority<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Assignee<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Reporter<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Due<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th end" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Est.<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Status<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div role="rowgroup">
+          <!-- depth 1 — PROD-12 epic -->
+          <div
+            class="tt-grid tt-row"
+            role="row"
+            aria-level="1"
+            aria-posinset="1"
+            aria-setsize="1"
+            aria-expanded="true"
+          >
+            <span class="cell-tree" style="padding-left: 0">
+              <a class="row-link" href="#" aria-label="Q3 launch — Auth & sign-in"></a>
+              <button class="chevron is-open" aria-label="Collapse row">
+                <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+              </button>
+              <span class="type-icon t-epic"
+                ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+              ></span>
+              <span class="lr-id">PROD-12</span>
+              <span class="ttl">Q3 launch — Auth &amp; sign-in</span>
+            </span>
+            <span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="muted-cell">—</span>
+            <span class="cell-meta end muted-cell">—</span>
+            <span><span class="pill pill--inprogress">in-progress</span></span>
+          </div>
+
+          <!-- depth 2 — PROD-31 (High) now first among PROD-12's children -->
+          <div
+            class="tt-grid tt-row"
+            role="row"
+            aria-level="2"
+            aria-posinset="1"
+            aria-setsize="3"
+            aria-expanded="true"
+          >
+            <span class="cell-tree" style="padding-left: 22px">
+              <a class="row-link" href="#" aria-label="Google OAuth sign-in"></a>
+              <button class="chevron is-open" aria-label="Collapse row">
+                <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+              </button>
+              <span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+              ></span>
+              <span class="lr-id">PROD-31</span>
+              <span class="ttl">Google OAuth sign-in</span>
+            </span>
+            <span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="muted-cell">—</span>
+            <span class="cell-meta end muted-cell">—</span>
+            <span><span class="pill pill--inprogress">in-progress</span></span>
+          </div>
+
+          <!-- depth 3 — PROD-31's children, priority desc: PROD-49 (Highest) -->
+          <div class="tt-grid tt-row" role="row" aria-level="3" aria-posinset="1" aria-setsize="3">
+            <span class="cell-tree" style="padding-left: 44px">
+              <a
+                class="row-link"
+                href="#"
+                aria-label="OAuth callback drops the state param on Safari 16 and below"
+              ></a>
+              <span class="chevron-slot"></span>
+              <span class="type-icon t-bug"
+                ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+              ></span>
+              <span class="lr-id">PROD-49</span>
+              <span class="ttl">OAuth callback drops the `state` param on Safari ≤16</span>
+            </span>
+            <span class="pill pill--danger"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>Highest</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">J</span><span class="nm">Jamal Tate</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="cell-meta">Jun 7, 2026</span>
+            <span class="cell-meta end">2h</span>
+            <span><span class="pill pill--inprogress">in-review</span></span>
+          </div>
+
+          <!-- depth 3 — PROD-42 (High) -->
+          <div
+            class="tt-grid tt-row"
+            role="row"
+            aria-level="3"
+            aria-posinset="2"
+            aria-setsize="3"
+            aria-expanded="true"
+          >
+            <span class="cell-tree" style="padding-left: 44px">
+              <a class="row-link" href="#" aria-label="Add Google OAuth to sign-in"></a>
+              <button class="chevron is-open" aria-label="Collapse row">
+                <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+              </button>
+              <span class="type-icon t-task"
+                ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+              ></span>
+              <span class="lr-id">PROD-42</span>
+              <span class="ttl">Add Google OAuth to sign-in</span>
+            </span>
+            <span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="cell-meta">Jun 16, 2026</span>
+            <span class="cell-meta end">4h</span>
+            <span><span class="pill pill--inprogress">in-progress</span></span>
+          </div>
+
+          <!-- depth 4 — PROD-58 (sole child of PROD-42) -->
+          <div class="tt-grid tt-row" role="row" aria-level="4" aria-posinset="1" aria-setsize="1">
+            <span class="cell-tree" style="padding-left: 66px">
+              <a
+                class="row-link"
+                href="#"
+                aria-label="Write E2E test: email-first user signs in with Google"
+              ></a>
+              <span class="chevron-slot"></span>
+              <span class="type-icon t-subtask"
+                ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg
+              ></span>
+              <span class="lr-id">PROD-58</span>
+              <span class="ttl">Write E2E test: email-first user signs in with Google</span>
+            </span>
+            <span class="pill pill--info"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg>Low</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="muted-cell">—</span>
+            <span class="cell-meta end">2h 30m</span>
+            <span><span class="pill pill--planned">todo</span></span>
+          </div>
+
+          <!-- depth 3 — PROD-41 (Medium) last among PROD-31's children -->
+          <div class="tt-grid tt-row" role="row" aria-level="3" aria-posinset="3" aria-setsize="3">
+            <span class="cell-tree" style="padding-left: 44px">
+              <a class="row-link" href="#" aria-label="Set up Google Cloud OAuth credentials"></a>
+              <span class="chevron-slot"></span>
+              <span class="type-icon t-task"
+                ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+              ></span>
+              <span class="lr-id">PROD-41</span>
+              <span class="ttl">Set up Google Cloud OAuth credentials</span>
+            </span>
+            <span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="muted-cell">—</span>
+            <span class="cell-meta end">1h 30m</span>
+            <span><span class="pill pill--done">done</span></span>
+          </div>
+
+          <!-- depth 2 — PROD-23 (Medium) + PROD-34 (Medium) keep stable order after PROD-31 -->
+          <div
+            class="tt-grid tt-row"
+            role="row"
+            aria-level="2"
+            aria-posinset="2"
+            aria-setsize="3"
+            aria-expanded="false"
+          >
+            <span class="cell-tree" style="padding-left: 22px">
+              <a class="row-link" href="#" aria-label="Email + password sign-in"></a>
+              <button class="chevron" aria-label="Expand row">
+                <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+              </button>
+              <span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+              ></span>
+              <span class="lr-id">PROD-23</span>
+              <span class="ttl">Email + password sign-in</span>
+            </span>
+            <span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="cell-meta">Jun 12, 2026</span>
+            <span class="cell-meta end">8h</span>
+            <span><span class="pill pill--done">done</span></span>
+          </div>
+
+          <div class="tt-grid tt-row" role="row" aria-level="2" aria-posinset="3" aria-setsize="3">
+            <span class="cell-tree" style="padding-left: 22px">
+              <a class="row-link" href="#" aria-label="Password reset email — copy + template"></a>
+              <span class="chevron-slot"></span>
+              <span class="type-icon t-task"
+                ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+              ></span>
+              <span class="lr-id">PROD-34</span>
+              <span class="ttl">Password reset email — copy + template</span>
+            </span>
+            <span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">R</span><span class="nm">Riya Shah</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+            >
+            <span class="cell-meta">Jun 9, 2026</span>
+            <span class="cell-meta end">3h</span>
+            <span><span class="pill pill--inprogress">in-review</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 2 — lazy-expand IN PROGRESS (spinner placeholder child row) ════════════ -->
+    <div class="panel-label">
+      2 · Lazy-expand IN PROGRESS — PROD-23 was just expanded (chevron rotated,
+      aria-expanded="true"); its children are being fetched, so a single spinner placeholder row
+      renders at the children's indent until the real rows arrive. The rest of the tree is
+      unaffected.
+    </div>
+    <div class="panel">
+      <div class="tree-table" role="treegrid" aria-label="Issues">
+        <div role="rowgroup">
+          <div class="tt-grid tt-head" role="row">
+            <div class="th" role="columnheader" aria-sort="ascending">
+              <button class="sort-btn">
+                Title<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Priority<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Assignee<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Reporter<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Due<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th end" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Est.<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Status<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div role="rowgroup">
+          <!-- depth 1 — PROD-12 epic -->
+          <div
+            class="tt-grid tt-row"
+            role="row"
+            aria-level="1"
+            aria-posinset="1"
+            aria-setsize="1"
+            aria-expanded="true"
+          >
+            <span class="cell-tree" style="padding-left: 0">
+              <a class="row-link" href="#" aria-label="Q3 launch — Auth & sign-in"></a>
+              <button class="chevron is-open" aria-label="Collapse row">
+                <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+              </button>
+              <span class="type-icon t-epic"
+                ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+              ></span>
+              <span class="lr-id">PROD-12</span>
+              <span class="ttl">Q3 launch — Auth &amp; sign-in</span>
+            </span>
+            <span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="muted-cell">—</span>
+            <span class="cell-meta end muted-cell">—</span>
+            <span><span class="pill pill--inprogress">in-progress</span></span>
+          </div>
+
+          <!-- depth 2 — PROD-23 just expanded -->
+          <div
+            class="tt-grid tt-row"
+            role="row"
+            aria-level="2"
+            aria-posinset="1"
+            aria-setsize="3"
+            aria-expanded="true"
+            aria-busy="true"
+          >
+            <span class="cell-tree" style="padding-left: 22px">
+              <a class="row-link" href="#" aria-label="Email + password sign-in"></a>
+              <button class="chevron is-open" aria-label="Collapse row">
+                <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+              </button>
+              <span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+              ></span>
+              <span class="lr-id">PROD-23</span>
+              <span class="ttl">Email + password sign-in</span>
+            </span>
+            <span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="cell-meta">Jun 12, 2026</span>
+            <span class="cell-meta end">8h</span>
+            <span><span class="pill pill--done">done</span></span>
+          </div>
+
+          <!-- the spinner placeholder child row, at depth-3 indent -->
+          <div class="loading-row" role="row" aria-level="3" aria-posinset="1" aria-setsize="1">
+            <div class="tt-grid" style="height: 40px">
+              <span class="cell-tree" style="padding-left: 44px">
+                <span class="chevron-slot"></span>
+                <svg class="spinner" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-loader" />
+                </svg>
+                <span class="loading-inner">Loading children…</span>
+              </span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+
+          <!-- depth 2 — PROD-31 (collapsed here for focus) -->
+          <div
+            class="tt-grid tt-row"
+            role="row"
+            aria-level="2"
+            aria-posinset="2"
+            aria-setsize="3"
+            aria-expanded="false"
+          >
+            <span class="cell-tree" style="padding-left: 22px">
+              <a class="row-link" href="#" aria-label="Google OAuth sign-in"></a>
+              <button class="chevron" aria-label="Expand row">
+                <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+              </button>
+              <span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+              ></span>
+              <span class="lr-id">PROD-31</span>
+              <span class="ttl">Google OAuth sign-in</span>
+            </span>
+            <span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="muted-cell">—</span>
+            <span class="cell-meta end muted-cell">—</span>
+            <span><span class="pill pill--inprogress">in-progress</span></span>
+          </div>
+
+          <!-- depth 2 — PROD-34 leaf -->
+          <div class="tt-grid tt-row" role="row" aria-level="2" aria-posinset="3" aria-setsize="3">
+            <span class="cell-tree" style="padding-left: 22px">
+              <a class="row-link" href="#" aria-label="Password reset email — copy + template"></a>
+              <span class="chevron-slot"></span>
+              <span class="type-icon t-task"
+                ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+              ></span>
+              <span class="lr-id">PROD-34</span>
+              <span class="ttl">Password reset email — copy + template</span>
+            </span>
+            <span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">R</span><span class="nm">Riya Shah</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+            >
+            <span class="cell-meta">Jun 9, 2026</span>
+            <span class="cell-meta end">3h</span>
+            <span><span class="pill pill--inprogress">in-review</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 3 — "Load more children" (paged parent, 50 of 128) ════════════ -->
+    <div class="panel-label">
+      3 · "Load more children" — PROD-12 has more children than the per-node page (50). Its first 50
+      children render; a quiet load-more affordance row sits at the END of the loaded set, at the
+      children's indent, showing the count. Clicking fetches the next page (same ORDER&nbsp;BY) and
+      appends — the parent never collapses.
+    </div>
+    <div class="panel">
+      <div class="tree-table" role="treegrid" aria-label="Issues">
+        <div role="rowgroup">
+          <div class="tt-grid tt-head" role="row">
+            <div class="th" role="columnheader" aria-sort="ascending">
+              <button class="sort-btn">
+                Title<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Priority<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Assignee<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Reporter<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Due<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th end" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Est.<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+            <div class="th" role="columnheader" aria-sort="none">
+              <button class="sort-btn">
+                Status<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div role="rowgroup">
+          <!-- depth 1 — PROD-12 epic, expanded with a large child set -->
+          <div
+            class="tt-grid tt-row"
+            role="row"
+            aria-level="1"
+            aria-posinset="1"
+            aria-setsize="1"
+            aria-expanded="true"
+          >
+            <span class="cell-tree" style="padding-left: 0">
+              <a class="row-link" href="#" aria-label="Q3 launch — Auth & sign-in"></a>
+              <button class="chevron is-open" aria-label="Collapse row">
+                <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+              </button>
+              <span class="type-icon t-epic"
+                ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+              ></span>
+              <span class="lr-id">PROD-12</span>
+              <span class="ttl">Q3 launch — Auth &amp; sign-in</span>
+            </span>
+            <span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="muted-cell">—</span>
+            <span class="cell-meta end muted-cell">—</span>
+            <span><span class="pill pill--inprogress">in-progress</span></span>
+          </div>
+
+          <!-- a few representative loaded children (of 50 shown) -->
+          <div
+            class="tt-grid tt-row"
+            role="row"
+            aria-level="2"
+            aria-posinset="1"
+            aria-setsize="128"
+          >
+            <span class="cell-tree" style="padding-left: 22px">
+              <a class="row-link" href="#" aria-label="Email + password sign-in"></a>
+              <span class="chevron-slot"></span>
+              <span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+              ></span>
+              <span class="lr-id">PROD-23</span>
+              <span class="ttl">Email + password sign-in</span>
+            </span>
+            <span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="cell-meta">Jun 12, 2026</span>
+            <span class="cell-meta end">8h</span>
+            <span><span class="pill pill--done">done</span></span>
+          </div>
+
+          <div
+            class="tt-grid tt-row"
+            role="row"
+            aria-level="2"
+            aria-posinset="2"
+            aria-setsize="128"
+          >
+            <span class="cell-tree" style="padding-left: 22px">
+              <a class="row-link" href="#" aria-label="Google OAuth sign-in"></a>
+              <button class="chevron" aria-label="Expand row">
+                <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+              </button>
+              <span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+              ></span>
+              <span class="lr-id">PROD-31</span>
+              <span class="ttl">Google OAuth sign-in</span>
+            </span>
+            <span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="muted-cell">—</span>
+            <span class="cell-meta end muted-cell">—</span>
+            <span><span class="pill pill--inprogress">in-progress</span></span>
+          </div>
+
+          <div
+            class="tt-grid tt-row"
+            role="row"
+            aria-level="2"
+            aria-posinset="3"
+            aria-setsize="128"
+          >
+            <span class="cell-tree" style="padding-left: 22px">
+              <a class="row-link" href="#" aria-label="Password reset email — copy + template"></a>
+              <span class="chevron-slot"></span>
+              <span class="type-icon t-task"
+                ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+              ></span>
+              <span class="lr-id">PROD-34</span>
+              <span class="ttl">Password reset email — copy + template</span>
+            </span>
+            <span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">R</span><span class="nm">Riya Shah</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+            >
+            <span class="cell-meta">Jun 9, 2026</span>
+            <span class="cell-meta end">3h</span>
+            <span><span class="pill pill--inprogress">in-review</span></span>
+          </div>
+
+          <div
+            class="tt-grid tt-row"
+            role="row"
+            aria-level="2"
+            aria-posinset="50"
+            aria-setsize="128"
+          >
+            <span class="cell-tree" style="padding-left: 22px">
+              <a class="row-link" href="#" aria-label="Rate-limit the sign-in endpoint"></a>
+              <span class="chevron-slot"></span>
+              <span class="type-icon t-task"
+                ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+              ></span>
+              <span class="lr-id">PROD-96</span>
+              <span class="ttl">Rate-limit the sign-in endpoint</span>
+            </span>
+            <span class="pill pill--info"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg>Low</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="muted-cell">—</span>
+            <span class="cell-meta end">5h</span>
+            <span><span class="pill pill--planned">todo</span></span>
+          </div>
+
+          <!-- the load-more affordance row, at the children's indent -->
+          <div class="loadmore-row" role="row" aria-level="2" aria-posinset="51" aria-setsize="128">
+            <div class="tt-grid" style="height: 40px">
+              <span class="cell-tree" style="padding-left: 44px">
+                <button class="loadmore-btn">
+                  <svg class="ic" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>Load more
+                  children
+                </button>
+                <span class="count">Showing 50 of 128</span>
+              </span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 4 — virtualization + keyboard / aria note (no distinct visual) ════════════ -->
+    <div class="panel-label">
+      4 · Virtualization + keyboard / aria-sort model — virtualization has NO distinct visual (only
+      viewport rows mount); this panel documents it for 2.5.14
+    </div>
+    <div class="panel" style="max-width: 860px">
+      <div class="card note">
+        <h3>Virtualization — invisible by design</h3>
+        <p>
+          A deep forest can hold thousands of expanded rows. Like Jira's Structure / Advanced
+          Roadmaps grids, the treegrid
+          <strong>only mounts the rows in (or near) the viewport</strong> — rows scrolled out of
+          view are removed from the DOM and a spacer preserves the scroll height. There is
+          <strong>no distinct visual</strong>: a virtualized row looks identical to a
+          non-virtualized one. The diagram below is schematic only — the middle band is what's
+          actually in the DOM.
+        </p>
+        <div class="vrows" aria-hidden="true">
+          <div class="vrow off">PROD-12 · row 1 — above viewport (not mounted)</div>
+          <div class="vrow off">…rows 2–18 (not mounted, spacer holds height)…</div>
+          <div class="vrow in-view">PROD-31 · row 19 — in viewport (mounted)</div>
+          <div class="vrow in-view">PROD-49 · row 20 — in viewport (mounted)</div>
+          <div class="vrow in-view">PROD-42 · row 21 — in viewport (mounted)</div>
+          <div class="vrow off">…rows 22–940 (not mounted, spacer holds height)…</div>
+        </div>
+        <p>
+          <strong>A11y holds across virtualization.</strong> Each mounted row keeps its true
+          <code>aria-level</code>, <code>aria-posinset</code>, and <code>aria-setsize</code> (e.g.
+          <code>posinset 19 / setsize 128</code>) so a screen reader announces the real position
+          even though only a window of rows exists — the lazy-read returns the per-node total for
+          <code>aria-setsize</code>. The roving-tabindex keyboard model from the shipped TreeTable
+          is unchanged: <kbd>↑</kbd>/<kbd>↓</kbd> move the active row (auto-scrolling, which mounts
+          the landed row), <kbd>→</kbd> expands a collapsed parent (triggering its lazy fetch) or
+          steps into its children, <kbd>←</kbd> collapses or steps to the parent, <kbd>Enter</kbd>
+          activates the row link.
+        </p>
+        <h3 style="margin-top: 18px">Sortable headers — the affordance &amp; a11y</h3>
+        <p>
+          Each tree-grid column header is a sort button carrying a caret hidden until hover (faint)
+          or active (solid). The active column's <code>role="columnheader"</code> carries
+          <code>aria-sort="ascending|descending"</code>; every other header is
+          <code>aria-sort="none"</code>. Direction is conveyed by the caret glyph
+          <strong>and</strong> the <code>aria-sort</code> text —
+          <strong>never colour alone</strong> (WCAG 1.4.1 / finding #35). Clicking a header sorts by
+          that column asc; clicking the active header toggles asc↔desc; clicking another moves the
+          active sort there. Single-column sort only (multi-sort is Epic 6). Crucially,
+          <strong>sorting re-orders siblings WITHIN each parent</strong> — each lazy children-fetch
+          carries the same <code>ORDER BY</code>, so the hierarchy is preserved; no row ever leaves
+          its parent. Default sort is <strong>key asc</strong> (the Title column).
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

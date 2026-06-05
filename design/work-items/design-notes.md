@@ -3,17 +3,18 @@
 Design reference for the `work-items` UI area. Each surface names the design
 asset it lives in, the primitives it composes from, copy strings, and placement.
 
-| Surface                                          | Asset                                       | Notes                                                                                                                                   |
-| ------------------------------------------------ | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Issue detail page                                | `detail.pen` (Pencil) + `detail.png`        | header eyebrow + Description / Explanation / Activity (left) · core-fields rail (right). Built across 2.4.1–2.4.4.                      |
-| Create issue modal                               | `create.pen` + `create.png`                 | type/parent/title/description/priority + optional Explanation (panel 3).                                                                |
-| Tree view (issue list, nested)                   | `tree.pen` + `tree.png`                     | issue tree rows + the `[Filter]`·`[Tree ▾]`·`[+ New issue]` toolbar.                                                                    |
-| **Flat sortable List view + view switcher**      | **`list.mock.html`** (HTML mockup)          | The List mode `tree.png` leaves unspecified (it draws only Tree + a disabled switcher seam). Gates 2.5.8. See below.                    |
-| **Filter bar (kind · status · assignee · text)** | **`filter.mock.html`** (HTML mockup)        | The open `[Filter]` popover `tree.png` leaves unspecified (it draws only a disabled `[Filter]` seam). Gates 2.5.4. See below.           |
-| **Relationships panel + ready/blocked badge**    | **`relationships.mock.html`** (HTML mockup) | The element `detail.pen` does NOT specify. See below.                                                                                   |
-| **Link management (add / remove links)**         | **`links.mock.html`** (HTML mockup)         | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                                      |
-| **DatePicker calendar (Due-date field)**         | **`datepicker.mock.html`** (HTML mockup)    | The design-system replacement for the native `<input type="date">` popup; consumed by the Due-date fields (2.4.11 → 2.4.12). See below. |
-| **Create modal — Due date field**                | **`create.mock.html`** (HTML mockup)        | Extends `create.pen` with a Due-date row (`DatePicker`, after Priority) — finding #56 / "mirror Jira" (2.3.11 → 2.3.12). See below.     |
+| Surface                                          | Asset                                       | Notes                                                                                                                                                                                                 |
+| ------------------------------------------------ | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Issue detail page                                | `detail.pen` (Pencil) + `detail.png`        | header eyebrow + Description / Explanation / Activity (left) · core-fields rail (right). Built across 2.4.1–2.4.4.                                                                                    |
+| Create issue modal                               | `create.pen` + `create.png`                 | type/parent/title/description/priority + optional Explanation (panel 3).                                                                                                                              |
+| Tree view (issue list, nested)                   | `tree.pen` + `tree.png`                     | issue tree rows + the `[Filter]`·`[Tree ▾]`·`[+ New issue]` toolbar.                                                                                                                                  |
+| **Tree view at scale (sort · lazy · virtual)**   | **`tree-scale.mock.html`** (HTML mockup)    | The scale shape `tree.png` leaves unspecified (it loads the whole forest, no sort headers) — sortable treegrid headers + lazy-expand + virtualization. Finding #57. Gates 2.5.13 + 2.5.14. See below. |
+| **Flat sortable List view + view switcher**      | **`list.mock.html`** (HTML mockup)          | The List mode `tree.png` leaves unspecified (it draws only Tree + a disabled switcher seam). Gates 2.5.8. See below.                                                                                  |
+| **Filter bar (kind · status · assignee · text)** | **`filter.mock.html`** (HTML mockup)        | The open `[Filter]` popover `tree.png` leaves unspecified (it draws only a disabled `[Filter]` seam). Gates 2.5.4. See below.                                                                         |
+| **Relationships panel + ready/blocked badge**    | **`relationships.mock.html`** (HTML mockup) | The element `detail.pen` does NOT specify. See below.                                                                                                                                                 |
+| **Link management (add / remove links)**         | **`links.mock.html`** (HTML mockup)         | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                                                                                                    |
+| **DatePicker calendar (Due-date field)**         | **`datepicker.mock.html`** (HTML mockup)    | The design-system replacement for the native `<input type="date">` popup; consumed by the Due-date fields (2.4.11 → 2.4.12). See below.                                                               |
+| **Create modal — Due date field**                | **`create.mock.html`** (HTML mockup)        | Extends `create.pen` with a Due-date row (`DatePicker`, after Priority) — finding #56 / "mirror Jira" (2.3.11 → 2.3.12). See below.                                                                   |
 
 ---
 
@@ -403,6 +404,134 @@ caret) · **(3)** empty state · **(4)** the flat loading skeleton.
 Saved / named views, multi-column sort, column show/hide config, and an
 **Updated** column are **Epic 6** (saved views & advanced search) — not invented
 here. Bulk actions from the list are also out of scope for 2.5.8.
+
+---
+
+## Tree view at scale — sortable headers · lazy-expand · virtualization (Story 2.5 · 2.5.11 → 2.5.13 / 2.5.14)
+
+`tree.png` + the shipped `TreeTable` (2.5.2) / `getProjectTree` read (2.5.1)
+load the **whole forest at once** with **no column sorting** — fine for a demo,
+**prototype-thinking at real-product scale** (finding #57). Jira's hierarchy
+grids (Structure / Advanced Roadmaps) don't paginate a tree; they **lazy-load a
+node's children on expand** and **virtualize** rows, and they let you **sort
+siblings within their parent**. `tree-scale.mock.html` is the design asset for
+that scale shape — built from the live `--el-*` tokens + the shipped primitives
+(the same `role="treegrid"` markup, 22px per-level indent, rotate-on-expand
+chevron, stretched row link with the chevron raised `relative z-10` so no button
+nests inside the `<a>`), so the code subtasks (**2.5.13** lazy reads · **2.5.14**
+lazy/virtual/sortable `TreeTable`) compose the same vocabulary with no
+Pencil→code gap. Mirror product: Jira Structure / Advanced Roadmaps.
+
+### What's new vs. tree.png (and what's reused verbatim)
+
+The tree is the **same treegrid**, made sortable + lazy + virtualized. Only
+three things are new; everything else is the shipped `IssueTreeTable`:
+
+- **Sortable tree-grid headers** — the **exact** asc/desc/unsorted caret
+  affordance the List shipped (`list.mock.html`), applied to the
+  `role="treegrid"` header row.
+- **Lazy-expand** — a collapsed parent shows the chevron without loading its
+  children; expanding fetches them (a spinner placeholder row on the expanding
+  node); a **"Load more children"** affordance when a parent has more children
+  than the per-node page.
+- **Virtualization** — invisible (only viewport rows mount); documented, no
+  distinct visual.
+
+Reused **with zero new primitives** (satisfies the AC "no new visual primitive;
+consistent with tree.png"): the seven-column set (Title · Priority · Assignee ·
+Reporter · Due · Est. · Status — **column-identical to the List**, so Tree↔List
+matches), the row vocabulary, the container chrome, the indent + chevron, the
+whole-row link, and the empty / loading states (unchanged from `tree.png` —
+not re-drawn here).
+
+### Sortable headers — the affordance
+
+Identical to the List's (see that section); on the treegrid:
+
+- Each header is a **sort button** (uppercase 11px `--el-text-secondary`) with a
+  **caret** hidden by default, faint on hover (`--el-text-faint`, ~55%), solid on
+  the active column (`--el-text-secondary`): `ChevronUp` = **asc**,
+  `ChevronDown` = **desc**. The active header cell carries
+  `aria-sort="ascending|descending"`; the rest are `aria-sort="none"`.
+- **Default sort = `key` asc** — the **Title** column (the mono identifier).
+- **Single-column sort only** (multi-sort is Epic 6). Clicking a header sorts by
+  it asc; clicking the active header toggles asc↔desc; clicking another moves the
+  active sort there. The right-aligned **Est.** header keeps its caret
+  right-aligned.
+- **Sorting re-orders siblings WITHIN every parent — the hierarchy is
+  preserved.** Each lazy children-fetch carries the same `ORDER BY <sort>`, so
+  siblings sort under their own parent and **no row ever leaves its parent**.
+  (Panel 1: by Priority desc, under PROD-12 the High story rises above the
+  Medium ones; under it the Highest bug → High task → Medium task.) Sort is
+  conveyed by the caret glyph **and** `aria-sort` text, **never colour alone**
+  (WCAG 1.4.1 / finding #35).
+
+### Lazy-expand — per-node paging
+
+- **Per-node page size = 50 children.** A node's children are fetched on first
+  expand, 50 at a time, ordered by the active sort. (2.5.13 shapes the read:
+  `listRoots` + `listChildren(parentId, { sort, cursor, take: 50 })`.)
+- **Collapsed parent** — shows the chevron (it has children) **without** loading
+  them; `aria-expanded="false"`. The whole-forest count is NOT pre-fetched.
+- **Expanding** — the node flips `aria-expanded="true"` + `aria-busy="true"` and
+  renders **one spinner placeholder row** at the children's indent
+  (`Loading children…`, the lucide `loader` ring) until the page arrives, then
+  the real rows replace it.
+- **"Load more children"** — when a parent has more children than the loaded
+  page, a quiet `--el-link` row sits at the **end of that parent's loaded
+  children**, at the children's indent: a `ChevronDown` glyph + **"Load more
+  children"** + a faint `--el-text-faint` count (`Showing 50 of 128`). Clicking
+  fetches the next page (same `ORDER BY`) and **appends** — the parent never
+  collapses. This is per-node paging, distinct from the **List**'s flat
+  whole-result pagination (2.5.10 / 2.5.12).
+
+### Virtualization — invisible, but a11y-honest
+
+Only the rows in (or near) the viewport mount; off-view rows are removed from the
+DOM and a spacer preserves scroll height. **No distinct visual** — a virtualized
+row is identical to a non-virtualized one (so the mock documents it rather than
+drawing it). **A11y holds across the window:** each mounted row keeps its true
+`aria-level` / `aria-posinset` / `aria-setsize` (the lazy read returns the
+per-node total for `aria-setsize`, e.g. `posinset 19 / setsize 128`), so a
+screen reader announces the real position even though only a window exists. The
+shipped `TreeTable`'s **roving-tabindex** keyboard model is unchanged:
+<kbd>↑</kbd>/<kbd>↓</kbd> move the active row (auto-scroll mounts the landed
+row), <kbd>→</kbd> expands a collapsed parent (triggering its lazy fetch) or
+steps into children, <kbd>←</kbd> collapses or steps to the parent,
+<kbd>Enter</kbd> activates the row link.
+
+### Tokens / a11y
+
+- Colour flows only through `--el-*`; status via `Pill`'s tones, priority via the
+  shared `PRIORITY_META` chip (hue in the tint, `--el-text-strong` text — finding
+  #35 AA-safe), type icons take their `--el-type-*` hue.
+- Shape via element-semantic tokens (`--radius-card` container, `--radius-badge`
+  chips, `--radius-control` chevron, `--spacing-control-*`, `--shadow-*`) so the
+  tree re-shapes under `data-display-style`.
+- The treegrid keeps the shipped WAI-ARIA pattern: `role="treegrid"` › rowgroup ›
+  row(`aria-level`/`posinset`/`setsize`/`expanded`) › gridcell, sortable headers
+  carrying `aria-sort` (2.5.14 wires the live value), exactly one row tabbable
+  (roving tabindex). The full sweep is the Story E2E + strict a11y (2.5.6, which
+  already lists 2.5.14 in `depends_on`). Toggle dark mode in the mock to confirm
+  token parity.
+
+### States in the mockup
+
+Panels: **(0)** the Tree in the `/issues` shell — sortable headers, nested rows,
+default sort key asc, a **collapsed** parent (PROD-23) showing its chevron with
+no children loaded · **(1)** sorted by **Priority desc** — siblings re-ordered
+**within** every parent, hierarchy preserved, the active caret moved ·
+**(2)** lazy-expand **in progress** — PROD-23 mid-expand with the spinner
+placeholder child row · **(3)** **"Load more children"** — a paged parent
+(showing 50 of 128) with the load-more affordance row · **(4)** virtualization +
+keyboard / `aria-sort` note (no distinct visual).
+
+### Out of scope (documented extension slots)
+
+Multi-column sort, saved / named views, and column show/hide are **Epic 6**.
+Cross-project / workspace-wide tree scale, and a count-all-descendants badge, are
+not built here. The **List**'s flat pagination is its own design (2.5.10) + code
+(2.5.12) — this section is the **tree** (per-node) shape only.
 
 ---
 
