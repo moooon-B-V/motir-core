@@ -391,18 +391,53 @@ the trigger label reflects `?view` on load.
   Sort direction is conveyed by the caret glyph + `aria-sort` text, never colour
   alone. Toggle dark mode in the mock to confirm token parity.
 
+### Pagination — server-paged navigator (2.5.10 → 2.5.12, finding #57)
+
+The List **must not load every row** — a real backlog is thousands of issues
+(finding #57). It is **server-paged** (mirroring Jira's issue navigator): a
+fixed **page size of 50**, a `LIMIT/OFFSET` read + a count, and a **footer bar**
+inside the same bordered table box (`--el-surface-soft`, top border):
+
+- **Left — the range/count:** `Showing 1–50 of 1,234`. The total is the count of
+  the **currently filtered** set (so the count tracks the 2.5.4 filter), with the
+  `1–50` range reflecting the active page.
+- **Right — the pager** (`<nav aria-label="Pagination">`): a **Prev** chevron
+  button, numbered page buttons with **ellipsis truncation** at both ends
+  (`1 … 12 [13] 14 … 25`), and a **Next** chevron button. The current page is the
+  **accent chip** + `aria-current="page"` (not colour alone — it's also the only
+  non-bordered, filled button). **Prev is disabled on page 1, Next on the last
+  page** (`aria-disabled`, faint).
+- **URL-driven:** the bar drives a `?page=` param that **composes with
+  `?view`/`?sort`/filter** and is part of the route's Suspense key, so changing
+  page re-shows the skeleton while the next page streams (panel 4's loader).
+- **Edge states (for 2.5.12):** an out-of-range `?page` **clamps to the last
+  page**; a filter that yields **0 rows** shows the empty state (panel 3) with
+  **no pager** (or "0 of 0"); a single page hides/disables both chevrons. Page
+  size 50 is a constant (Epic 6 may make it configurable — not here).
+- **The Tree does NOT use this** — a hierarchy can't be cut at "row N"; the Tree
+  scales via lazy-load + virtualization (2.5.11 → 2.5.13/2.5.14), a separate
+  design.
+
+Reuses shipped shape tokens (`--radius-control`, `--height-control`-class
+buttons) + `--el-*`; no new primitive — page buttons are the Button affordance,
+chevrons are lucide.
+
 ### States in the mockup
 
 Panels: **(0)** the List view in the `/issues` shell (toolbar + flat table,
 default key asc) · **(1)** the switcher menu open (Tree / List, List checked) ·
 **(2)** re-sorted by Priority desc (the active-sort indicator moved + the desc
-caret) · **(3)** empty state · **(4)** the flat loading skeleton.
+caret) · **(3)** empty state · **(4)** the flat loading skeleton · **(5)** the
+**pagination footer** — page 1 (Prev disabled, page-1 current) + a middle page
+(13 of 25, both ends ellipsed).
 
 ### Out of scope (documented extension slots)
 
 Saved / named views, multi-column sort, column show/hide config, and an
 **Updated** column are **Epic 6** (saved views & advanced search) — not invented
-here. Bulk actions from the list are also out of scope for 2.5.8.
+here. Bulk actions from the list are also out of scope for 2.5.8. Configurable
+page size + cursor (vs offset) paging are Epic-6 refinements; 2.5.12 ships
+offset paging at a fixed 50.
 
 ---
 
