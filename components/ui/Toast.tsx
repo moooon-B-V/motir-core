@@ -116,7 +116,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               </div>
               <RadixToast.Close
                 aria-label="Close"
-                className="text-(--el-text-muted) hover:text-(--el-text) rounded-(--radius-sm) p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                className="text-(--el-text-muted) hover:text-(--el-text) rounded-(--radius-control) p-(--spacing-icon-btn) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
               >
                 <X className="h-3.5 w-3.5" />
               </RadixToast.Close>

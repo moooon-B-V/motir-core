@@ -434,6 +434,78 @@ primary because almost every component referenced Tier 0 directly).
 
 ---
 
+## ⚠️ Shape (radius + spacing + sizing) flows through element-semantic shape tokens
+
+**EXTREMELY IMPORTANT: SHAPE is the second swappable axis (alongside COLOR).
+A future `data-display-style="…"` — and ultimately a whole different getdesign.md
+design system — must be able to re-shape the WHOLE UI the same way
+`data-palette="…"` re-skins it. "Shape" is NOT just radius: it is radius +
+component padding + control sizing + shadow. So every shaped surface a component
+renders MUST reference an element-semantic shape token — the ones the
+`[data-display-style]` block in `globals.css` overrides — NEVER the generic
+Tier-0 scale (`--radius-xs/sm/md/lg/xl`, `--spacing-xs/sm/md/…`) and NEVER a
+fixed raw utility (`rounded-md`, `p-1`, `px-2.5`, `h-9`, `shadow-md`). All of
+those bypass the swap layer: flipping the display style leaves them unshaped.**
+
+This is the exact analogue of the colour rule above. The generic Tier-0 scales
+are inert (like Tier-0 `--color-*`); the element-semantic tokens are the swap
+layer (like `--el-*`). Only `[data-display-style]` tokens flip.
+
+### Radius — by surface
+
+| Surface                                                                                    | token              |
+| ------------------------------------------------------------------------------------------ | ------------------ |
+| button                                                                                     | `--radius-btn`     |
+| card · popover/dropdown container · callout box                                            | `--radius-card`    |
+| input · textarea · combobox trigger · editor surface                                       | `--radius-input`   |
+| modal / dialog panel                                                                       | `--radius-modal`   |
+| badge / pill / status chip                                                                 | `--radius-badge`   |
+| **small affordance** — menu/list row, icon & close button, tooltip, sidebar row, code chip | `--radius-control` |
+| keyboard-hint chip (`<kbd>`)                                                               | `--radius-kbd`     |
+
+### Padding · sizing · elevation — by surface
+
+| Surface                                               | padding / size token(s)                                 |
+| ----------------------------------------------------- | ------------------------------------------------------- |
+| button                                                | `--spacing-btn-x/y` (`-sm`) · `--height-btn-{sm,md,lg}` |
+| input · textarea                                      | `--spacing-input-x/y` · `--height-input`                |
+| card                                                  | `--spacing-card-padding`                                |
+| menu/list row · combobox trigger/search · sidebar row | `--spacing-control-x/y` · `--height-control`            |
+| square icon / close button                            | `--spacing-icon-btn`                                    |
+| badge / pill chip                                     | `--spacing-chip-x/y`                                    |
+| `<kbd>` chip                                          | `--spacing-kbd-x/y`                                     |
+| tooltip · inline code block                           | `--spacing-tooltip-x/y`                                 |
+| shadow / elevation                                    | `--shadow-{subtle,card,elevated,modal}`                 |
+
+### Rules
+
+- ✅ **Reference an element-semantic shape token** for a surface's radius,
+  its own padding, and its height/size. Need a role not exposed yet? ADD the
+  token to `globals.css` `@theme` AND to the `[data-display-style='soft']`
+  block (so it actually flips), then consume it — the same per-component growth
+  pattern the colour rule uses.
+- ✅ `rounded-full` is fine ONLY for genuinely circular things (spinner, avatar,
+  colour swatch, status dot) — not display-style-dependent.
+- ✅ Layout-only spacing — gaps between siblings (`gap-2`), one-off margins
+  (`mb-1`), page gutters — may stay raw; it is not a surface's shape. Only a
+  control's OWN box padding / radius / size is shape.
+- ❌ `rounded-md` / `rounded-lg` / `rounded-xl`, or `rounded-(--radius-sm|xs)`
+  and the rest of the generic radius scale (Tier-0, inert). A pill chip is
+  `--radius-badge`, not `--radius-pill`.
+- ❌ A fixed `p-1` / `px-2.5` / `h-9` for a control's own padding or height —
+  use `--spacing-*` / `--height-*` so density flips too. A `shadow-md` on a
+  surface — use `--shadow-*`.
+
+This rule was adopted alongside the shape-swap work: components had collapsed
+the SHAPE axis by reaching for the generic radius scale (`--radius-sm` ×11) +
+raw `rounded-md` and fixed `p-1`/`px-2.5`/`h-9`, so `data-display-style` only
+reshaped buttons/cards/inputs/modals and left menus, dialog-close buttons,
+tooltips, badges, kbd, and sidebar rows fixed. The same token set + migration
+lands in the upstream `nextjs-prisma-vercel-starter-with-design`, so a getdesign
+swap can redefine the full shape language, not just colour.
+
+---
+
 ## Project conventions (non-architecture)
 
 - **Manual merge mode.** Subtask PRs open as drafts targeting `main`; the

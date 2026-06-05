@@ -40,9 +40,9 @@ export function Tooltip({
             side={side}
             sideOffset={6}
             className={cn(
-              'z-50 select-none rounded-(--radius-sm)',
+              'z-50 select-none rounded-(--radius-control)',
               'bg-(--el-text) text-(--el-text-inverted)',
-              'px-2 py-1 font-sans text-xs',
+              'px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) font-sans text-xs',
               'shadow-(--shadow-elevated)',
               'data-[state=delayed-open]:animate-in data-[state=closed]:animate-out fade-in-0 fade-out-0',
               className,

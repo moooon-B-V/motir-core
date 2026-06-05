@@ -26,7 +26,7 @@ const pillVariants = cva(
   cn(
     'inline-flex items-center gap-1',
     'rounded-(--radius-badge)',
-    'px-2.5 py-0.5',
+    'px-(--spacing-chip-x) py-(--spacing-chip-y)',
     'font-sans text-xs font-medium',
     'border',
   ),

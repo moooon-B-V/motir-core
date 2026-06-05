@@ -233,7 +233,7 @@ function PaletteBody({
                         onClick={() => invoke(action)}
                         onMouseMove={() => setHighlight(row.index)}
                         className={cn(
-                          'flex w-full items-center gap-2 rounded-(--radius-sm) px-2 py-2 text-left',
+                          'flex w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left',
                           'font-sans text-sm text-(--el-text) focus:outline-none',
                           isActive && 'bg-(--el-surface)',
                         )}
@@ -248,12 +248,12 @@ function PaletteBody({
                         ) : null}
                         <span className="flex-1 truncate">{action.label}</span>
                         {action.badge ? (
-                          <span className="text-(--el-text-muted) shrink-0 rounded-(--radius-pill) bg-(--el-surface) px-2 py-0.5 font-sans text-[10px] font-medium uppercase tracking-wide">
+                          <span className="text-(--el-text-muted) shrink-0 rounded-(--radius-badge) bg-(--el-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-[10px] font-medium uppercase tracking-wide">
                             {action.badge}
                           </span>
                         ) : null}
                         {action.kbd ? (
-                          <kbd className="text-(--el-text-muted) shrink-0 rounded-(--radius-xs) border border-(--el-border) px-1.5 py-0.5 font-mono text-[10px]">
+                          <kbd className="text-(--el-text-muted) shrink-0 rounded-(--radius-kbd) border border-(--el-border) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[10px]">
                             {action.kbd}
                           </kbd>
                         ) : null}
