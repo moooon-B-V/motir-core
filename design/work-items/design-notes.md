@@ -181,7 +181,7 @@ relationship beyond the five kinds, are not in 2.4.9 / 2.4.10.
 
 The design-system **date picker** — the replacement for the native
 `<input type="date">` calendar popup. The Due-date FIELD already uses the
-`Input` primitive, but the native browser *calendar* is OS chrome and breaks the
+`Input` primitive, but the native browser _calendar_ is OS chrome and breaks the
 design system. This designs the in-system calendar so the 2.4.12 code subtask
 (`components/ui/DatePicker`) composes our own primitives instead of improvising
 (the design gate — there is no calendar in the system today). Asset:
@@ -220,19 +220,19 @@ state, not an error.
 
 ### Day-cell states (the authority for 2.4.12)
 
-| State | Treatment |
-|---|---|
-| Default | `--el-text`, transparent bg, transparent border |
-| Hover | `--el-sidebar-item-bg-hover` fill |
-| **Today** | `--el-border-strong` ring + **bold** + a small `--el-accent` **dot** under the number |
-| **Selected** | `--el-accent` **filled** circle, `--el-accent-text` ink, bold (hover → `--el-accent-pressed`) |
-| Focused (keyboard) | 2px `--focus-ring-color` ring (roving tabindex) |
-| Outside month | `--el-text-faint`, still clickable/navigable |
-| Disabled (out of min/max range) | `--el-text-faint` + strikethrough, not selectable |
+| State                           | Treatment                                                                                     |
+| ------------------------------- | --------------------------------------------------------------------------------------------- |
+| Default                         | `--el-text`, transparent bg, transparent border                                               |
+| Hover                           | `--el-sidebar-item-bg-hover` fill                                                             |
+| **Today**                       | `--el-border-strong` ring + **bold** + a small `--el-accent` **dot** under the number         |
+| **Selected**                    | `--el-accent` **filled** circle, `--el-accent-text` ink, bold (hover → `--el-accent-pressed`) |
+| Focused (keyboard)              | 2px `--focus-ring-color` ring (roving tabindex)                                               |
+| Outside month                   | `--el-text-faint`, still clickable/navigable                                                  |
+| Disabled (out of min/max range) | `--el-text-faint` + strikethrough, not selectable                                             |
 
 **Today and selection are NOT conveyed by colour alone** (WCAG 1.4.1 /
-finding #35): selected differs in *shape* (a filled circle), today carries a
-*ring + dot* — a colour-blind / greyscale reader still distinguishes them. All
+finding #35): selected differs in _shape_ (a filled circle), today carries a
+_ring + dot_ — a colour-blind / greyscale reader still distinguishes them. All
 colour flows through `--el-*` (finding #54); when the selected fill needs an
 inverted dot (today + selected), it uses `--el-accent-text`. Light + dark parity
 (toggle in the mock).
