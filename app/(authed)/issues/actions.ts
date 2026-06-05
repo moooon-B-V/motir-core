@@ -6,9 +6,17 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { isIssueType } from '@/lib/issues/parentRules';
+import { isRelationshipKind } from '@/lib/workItems/linkRelationships';
+import { linkErrorMessage } from '@/lib/workItems/linkErrorMessages';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { IllegalParentTypeError, WorkItemError } from '@/lib/workItems/errors';
-import type { WorkItemKindDto, WorkItemPriorityDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
+import { WorkItemLinkError } from '@/lib/workItems/linkErrors';
+import type {
+  CreateWorkItemLinkInput,
+  WorkItemKindDto,
+  WorkItemPriorityDto,
+  WorkItemSummaryDto,
+} from '@/lib/dto/workItems';
 
 // Server Actions for the create-issue surface (Subtask 2.3.3). Transport only:
 // resolve the session + the ACTIVE project (the shipped shell has no
@@ -40,11 +48,16 @@ export interface CreateIssueInput {
   // land the modal omits them and an issue is created top-level + unassigned.
   parentId?: string | null;
   assigneeId?: string | null;
+  // Links to create with the issue (Subtask 2.4.10 — the modal's "Linked
+  // issues" section). Each is the user-facing (relationship, target) pair; the
+  // service resolves direction + writes them atomically with the item. Validated
+  // here against the five relationship kinds before reaching the service.
+  links?: CreateWorkItemLinkInput[];
 }
 
 export type CreateIssueResult =
   | { ok: true; id: string; identifier: string }
-  | { ok: false; error: string; field?: 'parent' };
+  | { ok: false; error: string; field?: 'parent' | 'links' };
 
 export async function createIssueAction(input: CreateIssueInput): Promise<CreateIssueResult> {
   const session = await getSession();
@@ -58,6 +71,12 @@ export async function createIssueAction(input: CreateIssueInput): Promise<Create
     return { ok: false, error: `Title must be ${MAX_TITLE_LENGTH} characters or fewer.` };
   }
 
+  // Whitelist the pending links: keep only well-formed (relationship, target)
+  // pairs (a forged relationship / empty target is dropped before the service).
+  const links = (input.links ?? []).filter(
+    (l): l is CreateWorkItemLinkInput => Boolean(l.targetId) && isRelationshipKind(l.relationship),
+  );
+
   try {
     const issue = await workItemsService.createWorkItem(
       {
@@ -69,6 +88,7 @@ export async function createIssueAction(input: CreateIssueInput): Promise<Create
         parentId: input.parentId ?? null,
         assigneeId: input.assigneeId ?? null,
         ...(input.priority ? { priority: input.priority } : {}),
+        ...(links.length ? { links } : {}),
       },
       { userId: ctx.userId, workspaceId: ctx.workspaceId }, // reporter = session user
     );
@@ -82,11 +102,47 @@ export async function createIssueAction(input: CreateIssueInput): Promise<Create
     if (err instanceof ProjectNotFoundError) {
       return { ok: false, error: 'That project no longer exists.' };
     }
+    // A bad pending link (cycle / cross-workspace / duplicate) aborts the whole
+    // create (one transaction — the issue is NOT created) and surfaces inline on
+    // the Linked-issues section. WorkItemLinkError is its OWN hierarchy (not a
+    // WorkItemError), so this branch precedes the generic one below.
+    if (err instanceof WorkItemLinkError) {
+      return {
+        ok: false,
+        error: linkErrorMessage(err) ?? 'Could not link the selected issues.',
+        field: 'links',
+      };
+    }
     // Any other typed work-item error (cross-project parent, assignee/reporter
     // not a member, …) surfaces as a toast with its own message.
     if (err instanceof WorkItemError) return { ok: false, error: err.message };
     throw err;
   }
+}
+
+export type ListCreateLinkCandidatesResult =
+  | { ok: true; candidates: WorkItemSummaryDto[] }
+  | { ok: false; error: string };
+
+/**
+ * Candidate target issues for the create modal's "Linked issues" picker
+ * (Subtask 2.4.10): every non-archived item in the active workspace
+ * (cross-project — the link model allows it). No current item to exclude (the
+ * issue isn't created yet); the modal excludes already-pending targets
+ * client-side and the Combobox filters by identifier/title. Resolves the active
+ * project server-side, same as createIssueAction.
+ */
+export async function listCreateLinkCandidatesAction(): Promise<ListCreateLinkCandidatesResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, error: 'Pick a project first.' };
+
+  const candidates = await workItemsService.listCreateLinkCandidates({
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+  return { ok: true, candidates };
 }
 
 export type ListCandidateParentsResult =
