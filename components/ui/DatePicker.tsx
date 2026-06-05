@@ -329,7 +329,7 @@ export function DatePicker({
                 key={wd}
                 role="columnheader"
                 aria-label={WEEKDAY_LABELS[i]}
-                className="flex h-7 items-center justify-center text-[11px] font-semibold uppercase text-(--el-text-faint)"
+                className="flex h-7 items-center justify-center text-[11px] font-semibold uppercase text-(--el-text-secondary)"
               >
                 {wd}
               </span>
