@@ -27,10 +27,12 @@ import {
   toWorkItemSummaryDto,
   toWorkItemSubtreeDto,
   toWorkItemTreeNodeDto,
+  toWorkItemListItemDto,
 } from '@/lib/mappers/workItemMappers';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toWorkItemRevisionDto } from '@/lib/mappers/workItemRevisionMappers';
 import type { WorkItemForestRow } from '@/lib/repositories/workItemRepository';
+import type { IssueSort } from '@/lib/issues/issueListView';
 import type {
   CreateWorkItemInput,
   IssueDetailDto,
@@ -39,6 +41,7 @@ import type {
   UpdateWorkItemInput,
   WorkItemDto,
   WorkItemKindDto,
+  WorkItemListItemDto,
   WorkItemRevisionDto,
   WorkItemSummaryDto,
   WorkItemSubtreeDto,
@@ -180,6 +183,34 @@ export interface ListWorkItemsFilter {
  * `hasChildren` falls out of the PRUNED child set (via the mapper), so a
  * chevron only shows when there is something left to expand.
  */
+/**
+ * Translate the wire-level `ProjectTreeFilter` into the repository filter shape
+ * shared by the tree (`getProjectTree`) and List (`getProjectIssuesList`) reads.
+ * Forwards only the SUPPLIED axes (an absent axis means "don't filter"); a blank
+ * `text` quick-filter is treated as absent so trailing whitespace never hides
+ * the whole project. `assigneeId: null` is forwarded verbatim (the "Unassigned"
+ * filter).
+ */
+function buildRepoFilter(filter: ProjectTreeFilter): {
+  kind?: WorkItemKindDto;
+  status?: string;
+  assigneeId?: string | null;
+  text?: string;
+} {
+  const repoFilter: {
+    kind?: WorkItemKindDto;
+    status?: string;
+    assigneeId?: string | null;
+    text?: string;
+  } = {};
+  if (filter.kind !== undefined) repoFilter.kind = filter.kind;
+  if (filter.status !== undefined) repoFilter.status = filter.status;
+  if (filter.assigneeId !== undefined) repoFilter.assigneeId = filter.assigneeId;
+  const text = filter.text?.trim();
+  if (text) repoFilter.text = text;
+  return repoFilter;
+}
+
 function assembleProjectForest(rows: WorkItemForestRow[], prune: boolean): WorkItemTreeNodeDto[] {
   const childrenByParent = new Map<string, WorkItemForestRow[]>();
   const roots: WorkItemForestRow[] = [];
@@ -772,21 +803,7 @@ export const workItemsService = {
       throw new ProjectNotFoundError(projectId);
     }
 
-    // Forward only the supplied axes (an absent axis is "don't filter"); a blank
-    // text quick-filter is treated as absent so trailing whitespace never hides
-    // the whole tree.
-    const repoFilter: {
-      kind?: WorkItemKindDto;
-      status?: string;
-      assigneeId?: string | null;
-      text?: string;
-    } = {};
-    if (filter.kind !== undefined) repoFilter.kind = filter.kind;
-    if (filter.status !== undefined) repoFilter.status = filter.status;
-    if (filter.assigneeId !== undefined) repoFilter.assigneeId = filter.assigneeId;
-    const text = filter.text?.trim();
-    if (text) repoFilter.text = text;
-
+    const repoFilter = buildRepoFilter(filter);
     const rows = await workItemRepository.findProjectForest(
       projectId,
       project.workspaceId,
@@ -800,6 +817,36 @@ export const workItemsService = {
       repoFilter.text !== undefined;
 
     return assembleProjectForest(rows, hasFilter);
+  },
+
+  /**
+   * The flat, sorted issue list powering the List view (Subtask 2.5.8). Same
+   * project + workspace gate as `getProjectTree` (a cross-workspace project id
+   * is a not-found, not an empty list), the SAME filter axes (so the List
+   * honours the 2.5.4 filter bar), but the rows come back UN-NESTED and ordered
+   * by the active `sort` — the read does the `ORDER BY` (no JS re-nesting). An
+   * empty project → `[]`. Returns wire-safe `WorkItemListItemDto`s; the route
+   * shapes them into the same `IssueRowData` the tree row uses.
+   */
+  async getProjectIssuesList(
+    projectId: string,
+    params: { sort: IssueSort; filter?: ProjectTreeFilter },
+    ctx: ServiceContext,
+  ): Promise<WorkItemListItemDto[]> {
+    const project = await projectRepository.findById(projectId);
+    if (!project || project.workspaceId !== ctx.workspaceId) {
+      throw new ProjectNotFoundError(projectId);
+    }
+
+    const repoFilter = buildRepoFilter(params.filter ?? {});
+    const rows = await workItemRepository.findProjectIssuesFlat(
+      projectId,
+      project.workspaceId,
+      params.sort,
+      repoFilter,
+    );
+
+    return rows.map(toWorkItemListItemDto);
   },
 
   /**

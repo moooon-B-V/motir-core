@@ -1,7 +1,12 @@
 import type { WorkItem } from '@prisma/client';
-import type { WorkItemForestRow, WorkItemSubtreeRow } from '@/lib/repositories/workItemRepository';
+import type {
+  WorkItemForestRow,
+  WorkItemListRow,
+  WorkItemSubtreeRow,
+} from '@/lib/repositories/workItemRepository';
 import type {
   WorkItemDto,
+  WorkItemListItemDto,
   WorkItemSummaryDto,
   WorkItemSubtreeDto,
   WorkItemTreeNodeDto,
@@ -114,5 +119,28 @@ export function toWorkItemTreeNodeDto(
     hasChildren: children.length > 0,
     matched: row.matched,
     children,
+  };
+}
+
+/**
+ * Flat List-item DTO (Subtask 2.5.8). Maps one `findProjectIssuesFlat`
+ * projection row (already plain scalars — `kind`/`priority` cast to text) into
+ * a `WorkItemListItemDto`. The List is un-nested + pre-sorted by the read, so
+ * there is no tree metadata to carry. `dueDate` is normalized to a wire-safe
+ * ISO string here (matching the tree-node mapper).
+ */
+export function toWorkItemListItemDto(row: WorkItemListRow): WorkItemListItemDto {
+  return {
+    id: row.id,
+    kind: row.kind,
+    key: row.key,
+    identifier: row.identifier,
+    title: row.title,
+    status: row.status,
+    priority: row.priority,
+    assigneeId: row.assigneeId,
+    reporterId: row.reporterId,
+    dueDate: row.dueDate ? row.dueDate.toISOString() : null,
+    estimateMinutes: row.estimateMinutes,
   };
 }

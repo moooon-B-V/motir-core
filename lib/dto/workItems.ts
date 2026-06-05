@@ -196,6 +196,29 @@ export interface WorkItemTreeNodeDto {
 }
 
 /**
+ * One row of the flat, sortable List view (Subtask 2.5.8) — the same per-item
+ * render fields as a tree node, but WITHOUT the tree metadata (`depth` /
+ * `hasChildren` / `matched` / `children`). The List is the project's issues
+ * un-nested and ordered by the active sort, so there is no hierarchy to carry.
+ * `workItemsService.getProjectIssuesList` returns these already sorted; the
+ * route shapes them into the SAME `IssueRowData` the tree row uses, so both
+ * views render identical cells.
+ */
+export interface WorkItemListItemDto {
+  id: string;
+  kind: WorkItemKindDto;
+  key: number;
+  identifier: string;
+  title: string;
+  status: string;
+  priority: WorkItemPriorityDto;
+  assigneeId: string | null;
+  reporterId: string;
+  dueDate: string | null;
+  estimateMinutes: number | null;
+}
+
+/**
  * Input to `workItemsService.createWorkItem` (Subtask 1.4.4). The reporter is
  * taken from the ServiceContext (`ctx.userId`), and key / identifier /
  * position are allocated by the service — so none of those appear here. The

@@ -1,5 +1,6 @@
 import { Prisma, type WorkItem, type WorkItemKind, type WorkItemPriority } from '@prisma/client';
 import { db } from '@/lib/db';
+import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
 import {
   DepthLimitExceededError,
   IllegalParentTypeError,
@@ -67,6 +68,45 @@ export interface WorkItemForestRow {
   depth: number;
   matched: boolean;
 }
+
+/**
+ * A row of `findProjectIssuesFlat`'s flat List read (Subtask 2.5.8): the same
+ * per-row render fields as `WorkItemForestRow` minus the tree metadata
+ * (`parentId` / `depth` / `matched`) — the List is un-nested, so there is no
+ * hierarchy to carry. The service maps these to `WorkItemListItemDto`s.
+ */
+export interface WorkItemListRow {
+  id: string;
+  kind: WorkItemKind;
+  key: number;
+  identifier: string;
+  title: string;
+  status: string;
+  priority: WorkItemPriority;
+  assigneeId: string | null;
+  reporterId: string;
+  dueDate: Date | null;
+  estimateMinutes: number | null;
+}
+
+/**
+ * The whitelisted ORDER-BY expression per sort column (Subtask 2.5.8). The
+ * key is a validated `IssueSortColumn` (parsed/clamped in `issueListView`), so
+ * the SQL fragment is never derived from raw user input. `assignee`/`reporter`
+ * sort by the joined user name (`au`/`ru` in `findProjectIssuesFlat`); `status`
+ * by the project workflow's status order (`ws.position`); the rest are
+ * `work_item` columns. Total over `IssueSortColumn` (compile-time checked).
+ */
+const ISSUE_SORT_SQL: Record<IssueSortColumn, Prisma.Sql> = {
+  key: Prisma.sql`w."key"`,
+  title: Prisma.sql`w."title"`,
+  priority: Prisma.sql`w."priority"`,
+  assignee: Prisma.sql`au."name"`,
+  reporter: Prisma.sql`ru."name"`,
+  due: Prisma.sql`w."dueDate"`,
+  estimate: Prisma.sql`w."estimateMinutes"`,
+  status: Prisma.sql`ws."position"`,
+};
 
 export const workItemRepository = {
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<WorkItem | null> {
@@ -379,25 +419,9 @@ export const workItemRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemForestRow[]> {
     const client = tx ?? db;
-
-    const predicates: Prisma.Sql[] = [];
-    if (filter.kind !== undefined) {
-      predicates.push(Prisma.sql`f."kind"::text = ${filter.kind}`);
-    }
-    if (filter.status !== undefined) {
-      predicates.push(Prisma.sql`f."status" = ${filter.status}`);
-    }
-    if (filter.assigneeId !== undefined) {
-      // `null` is the "Unassigned" filter; IS NOT DISTINCT FROM gives null=null.
-      predicates.push(Prisma.sql`f."assigneeId" IS NOT DISTINCT FROM ${filter.assigneeId}`);
-    }
-    const text = filter.text?.trim();
-    if (text) {
-      const pattern = `%${escapeLikePattern(text)}%`;
-      predicates.push(Prisma.sql`(f."identifier" ILIKE ${pattern} OR f."title" ILIKE ${pattern})`);
-    }
-    // No filter axis → every row matches (vacuously true).
-    const matched = predicates.length ? Prisma.join(predicates, ' AND ') : Prisma.sql`TRUE`;
+    // The filter axes, as a bound-param predicate over the forest alias `f`
+    // (shared with the flat List read — see buildIssueFilterSql).
+    const matched = buildIssueFilterSql(filter, 'f');
 
     return client.$queryRaw<WorkItemForestRow[]>`
       WITH RECURSIVE forest AS (
@@ -435,6 +459,64 @@ export const workItemRepository = {
              (${matched})         AS "matched"
         FROM forest f
         ORDER BY f.depth ASC, f."key" ASC`;
+  },
+
+  /**
+   * The flat, sorted project read powering the List view (Subtask 2.5.8). Unlike
+   * `findProjectForest` this is NON-recursive — every non-archived item in the
+   * project, un-nested, ordered by the active sort column at the DB layer (a
+   * flat `ORDER BY`, never JS re-nesting/flattening). Same `projectId` +
+   * `workspaceId` tenant gate on the single `work_item` scan (finding #26). The
+   * same `filter` axes as the forest read apply (so the List honours the 2.5.4
+   * filter bar when that lands), built via the shared `buildIssueFilterSql`.
+   *
+   * `assignee`/`reporter` sort by the joined user's display name; `status` by
+   * the project workflow's status order (the `workflow_status.position`
+   * fractional index — a lexicographically-sortable string); the rest are
+   * `work_item` scalar columns (`priority` orders by its enum declaration
+   * lowest→highest). The sort column is whitelisted through `ISSUE_SORT_SQL` —
+   * never string-interpolated — and a stable `"key" ASC` tiebreak keeps paging
+   * deterministic. Read-only path → `db` singleton (optional `tx`).
+   */
+  async findProjectIssuesFlat(
+    projectId: string,
+    workspaceId: string,
+    sort: IssueSort,
+    filter: {
+      kind?: WorkItemKind;
+      status?: string;
+      assigneeId?: string | null;
+      text?: string;
+    } = {},
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItemListRow[]> {
+    const client = tx ?? db;
+    const matched = buildIssueFilterSql(filter, 'w');
+    const orderCol = ISSUE_SORT_SQL[sort.column];
+    const dir = sort.direction === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`;
+
+    return client.$queryRaw<WorkItemListRow[]>`
+      SELECT w."id",
+             w."kind"::text       AS "kind",
+             w."key",
+             w."identifier",
+             w."title",
+             w."status",
+             w."priority"::text   AS "priority",
+             w."assigneeId",
+             w."reporterId",
+             w."dueDate",
+             w."estimateMinutes"
+        FROM "work_item" w
+        LEFT JOIN "user" au ON au."id" = w."assigneeId"
+        LEFT JOIN "user" ru ON ru."id" = w."reporterId"
+        LEFT JOIN "workflow_status" ws
+               ON ws."project_id" = w."projectId" AND ws."key" = w."status"
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND (${matched})
+        ORDER BY ${orderCol} ${dir} NULLS LAST, w."key" ASC`;
   },
 
   /**
@@ -502,6 +584,39 @@ export const workItemRepository = {
  */
 function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+/**
+ * The shared filter predicate for the project reads — the tree forest
+ * (`findProjectForest`, alias `f`) and the flat List (`findProjectIssuesFlat`,
+ * alias `w`). Each axis is a bound-param `Prisma.Sql` fragment (values are
+ * never interpolated; the `alias` is a fixed internal literal, not user input).
+ * `assigneeId: null` filters to UNASSIGNED via `IS NOT DISTINCT FROM`; a blank
+ * `text` is ignored by callers before this point. No axis → `TRUE` (match all).
+ */
+function buildIssueFilterSql(
+  filter: { kind?: WorkItemKind; status?: string; assigneeId?: string | null; text?: string },
+  alias: 'f' | 'w',
+): Prisma.Sql {
+  const t = Prisma.raw(alias);
+  const predicates: Prisma.Sql[] = [];
+  if (filter.kind !== undefined) {
+    predicates.push(Prisma.sql`${t}."kind"::text = ${filter.kind}`);
+  }
+  if (filter.status !== undefined) {
+    predicates.push(Prisma.sql`${t}."status" = ${filter.status}`);
+  }
+  if (filter.assigneeId !== undefined) {
+    predicates.push(Prisma.sql`${t}."assigneeId" IS NOT DISTINCT FROM ${filter.assigneeId}`);
+  }
+  const text = filter.text?.trim();
+  if (text) {
+    const pattern = `%${escapeLikePattern(text)}%`;
+    predicates.push(
+      Prisma.sql`(${t}."identifier" ILIKE ${pattern} OR ${t}."title" ILIKE ${pattern})`,
+    );
+  }
+  return predicates.length ? Prisma.join(predicates, ' AND ') : Prisma.sql`TRUE`;
 }
 
 function translateWriteError(err: unknown, ctx?: { id?: string }): never {

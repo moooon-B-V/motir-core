@@ -1,9 +1,10 @@
 import type {
   WorkItemKindDto,
+  WorkItemListItemDto,
   WorkItemPriorityDto,
   WorkItemTreeNodeDto,
 } from '@/lib/dto/workItems';
-import type { StatusCategoryDto, WorkflowDto } from '@/lib/dto/workflows';
+import type { StatusCategoryDto, WorkflowStatusDto, WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { TreeTableRow } from '@/components/ui/TreeTable';
 import { formatDate } from '@/lib/utils/datetime';
@@ -52,36 +53,72 @@ export interface IssueRowData {
  * helpers the detail page uses, so the client cell just renders strings. The
  * lookup maps are built once so the walk stays O(n).
  */
+/** The lookups both shapers build once: status key → status, user id → name. */
+function buildLookups(workflow: WorkflowDto, members: WorkspaceMemberDTO[]) {
+  return {
+    statusByKey: new Map<string, WorkflowStatusDto>(workflow.statuses.map((s) => [s.key, s])),
+    nameById: new Map(members.map((m) => [m.userId, m.name || m.email])),
+  };
+}
+
+/**
+ * Shape ONE item (a tree node or a flat list item — both carry the same render
+ * fields) into the `IssueRowData` the cell render-props read. Resolves the
+ * status (key → label + category for the Pill tone) and the assignee/reporter
+ * (id → display name); formats the due date + estimate. Shared by the Tree
+ * (`toIssueRows`) and List (`toIssueListRows`) so a row renders identically in
+ * either view.
+ */
+function shapeRowData(
+  item: WorkItemListItemDto,
+  statusByKey: Map<string, WorkflowStatusDto>,
+  nameById: Map<string, string>,
+): IssueRowData {
+  const status = statusByKey.get(item.status);
+  return {
+    identifier: item.identifier,
+    title: item.title,
+    kind: item.kind,
+    statusLabel: status?.label ?? item.status,
+    statusCategory: status?.category ?? null,
+    assigneeName: item.assigneeId ? (nameById.get(item.assigneeId) ?? null) : null,
+    priority: item.priority,
+    // The reporter always exists; fall back to its id only if the member is
+    // somehow missing (e.g. left the workspace) so the cell never blanks.
+    reporterName: nameById.get(item.reporterId) ?? item.reporterId,
+    dueLabel: item.dueDate ? formatDate(item.dueDate) : null,
+    estimateLabel:
+      item.estimateMinutes != null ? formatDurationMinutes(item.estimateMinutes) : null,
+  };
+}
+
 export function toIssueRows(
   nodes: WorkItemTreeNodeDto[],
   workflow: WorkflowDto,
   members: WorkspaceMemberDTO[],
 ): TreeTableRow<IssueRowData>[] {
-  const statusByKey = new Map(workflow.statuses.map((s) => [s.key, s]));
-  const nameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
+  const { statusByKey, nameById } = buildLookups(workflow, members);
 
-  const shape = (node: WorkItemTreeNodeDto): TreeTableRow<IssueRowData> => {
-    const status = statusByKey.get(node.status);
-    return {
-      id: node.id,
-      data: {
-        identifier: node.identifier,
-        title: node.title,
-        kind: node.kind,
-        statusLabel: status?.label ?? node.status,
-        statusCategory: status?.category ?? null,
-        assigneeName: node.assigneeId ? (nameById.get(node.assigneeId) ?? null) : null,
-        priority: node.priority,
-        // The reporter always exists; fall back to its id only if the member is
-        // somehow missing (e.g. left the workspace) so the cell never blanks.
-        reporterName: nameById.get(node.reporterId) ?? node.reporterId,
-        dueLabel: node.dueDate ? formatDate(node.dueDate) : null,
-        estimateLabel:
-          node.estimateMinutes != null ? formatDurationMinutes(node.estimateMinutes) : null,
-      },
-      children: node.children.map(shape),
-    };
-  };
+  const shape = (node: WorkItemTreeNodeDto): TreeTableRow<IssueRowData> => ({
+    id: node.id,
+    data: shapeRowData(node, statusByKey, nameById),
+    children: node.children.map(shape),
+  });
 
   return nodes.map(shape);
+}
+
+/**
+ * The FLAT view-shaping for the List view (Subtask 2.5.8): map the already-
+ * sorted `getProjectIssuesList` items into a flat `IssueRowData[]`, preserving
+ * the read's order (the DB did the sort — no JS re-sorting). Same per-row
+ * resolution as the tree, just un-nested.
+ */
+export function toIssueListRows(
+  items: WorkItemListItemDto[],
+  workflow: WorkflowDto,
+  members: WorkspaceMemberDTO[],
+): IssueRowData[] {
+  const { statusByKey, nameById } = buildLookups(workflow, members);
+  return items.map((item) => shapeRowData(item, statusByKey, nameById));
 }
