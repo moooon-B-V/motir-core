@@ -618,9 +618,12 @@ function buildIssueFilterSql(filter: RepoIssueFilter, alias: 'f' | 'w'): Prisma.
   const assigneeIds = filter.assigneeIds ?? [];
   if (assigneeIds.length > 0 || filter.includeUnassigned) {
     const terms: Prisma.Sql[] = [];
+    // `NULL = ANY(array)` is NULL in SQL three-valued logic (assigneeId is
+    // nullable), so an unassigned row would yield a NULL `matched` instead of
+    // FALSE; COALESCE the whole assignee group to a clean boolean.
     if (assigneeIds.length > 0) terms.push(Prisma.sql`${t}."assigneeId" = ANY(${assigneeIds})`);
     if (filter.includeUnassigned) terms.push(Prisma.sql`${t}."assigneeId" IS NULL`);
-    predicates.push(Prisma.sql`(${Prisma.join(terms, ' OR ')})`);
+    predicates.push(Prisma.sql`COALESCE((${Prisma.join(terms, ' OR ')}), FALSE)`);
   }
   const text = filter.text?.trim();
   if (text) {
