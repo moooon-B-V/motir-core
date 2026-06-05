@@ -174,3 +174,94 @@ section (collect-then-write-on-create).
 
 Bulk-link / link from the list/board surfaces (Epic 3/2.5), and a typed
 relationship beyond the five kinds, are not in 2.4.9 / 2.4.10.
+
+---
+
+## DatePicker calendar (Story 2.4 · 2.4.11 → 2.4.12)
+
+The design-system **date picker** — the replacement for the native
+`<input type="date">` calendar popup. The Due-date FIELD already uses the
+`Input` primitive, but the native browser *calendar* is OS chrome and breaks the
+design system. This designs the in-system calendar so the 2.4.12 code subtask
+(`components/ui/DatePicker`) composes our own primitives instead of improvising
+(the design gate — there is no calendar in the system today). Asset:
+`design/work-items/datepicker.mock.html`.
+
+### Where it's used
+
+The Due-date field on the issue **create modal** (2.3.3), the **edit form**
+(2.3.6), and the **detail core-fields rail** (2.4.2). All three swap the native
+control for `DatePicker`. Due date is **nullable**, so cleared is a first-class
+state, not an error.
+
+### Anatomy
+
+- **Trigger** — an `Input`-styled field (composes `Input.tsx`'s chrome:
+  `--height-input` 44px, `--radius-input`, `--el-border-strong` hairline,
+  `--spacing-input-x` padding, the standard `focus` ring). A leading
+  **calendar glyph** (lucide `calendar`, `--el-text-muted`); the value formats
+  through the existing `formatDate` helper ("Jun 4, 2026"); a placeholder
+  ("Select a date", `--el-text-muted`) when null. A trailing **Clear ×** shows
+  ONLY when a date is set — hover tints `--el-tint-rose`/`--el-danger` (matches
+  the link-row remove affordance from 2.4.9).
+- **Calendar popover** — floats in the `Popover` primitive (`--radius-card`,
+  `--shadow-elevated`, `--el-border`), anchored to the trigger, `width ≈ 296px`.
+  Contents:
+  - **Caption row** — "June 2026" (`--el-text`, 14px/600) + prev/next-month
+    `nav-btn`s (28px square, `--radius-control`, ghost → `--el-surface` hover,
+    lucide `chevron-left`/`chevron-right`).
+  - **Weekday header** — Su–Sa, `--el-text-faint`, 11px/600 uppercase.
+  - **Day grid** — 6 rows × 7 cols, each cell a 36px square button at
+    `--radius-control`. The grid always shows leading/trailing days from the
+    adjacent months (the `is-outside` state) so every month renders 6 full rows
+    (no layout jump on month change).
+  - **Footer** — **Today** (jumps the view + focus to the current date) and
+    **Clear** (sets null), separated by a `--el-border-soft` rule.
+
+### Day-cell states (the authority for 2.4.12)
+
+| State | Treatment |
+|---|---|
+| Default | `--el-text`, transparent bg, transparent border |
+| Hover | `--el-sidebar-item-bg-hover` fill |
+| **Today** | `--el-border-strong` ring + **bold** + a small `--el-accent` **dot** under the number |
+| **Selected** | `--el-accent` **filled** circle, `--el-accent-text` ink, bold (hover → `--el-accent-pressed`) |
+| Focused (keyboard) | 2px `--focus-ring-color` ring (roving tabindex) |
+| Outside month | `--el-text-faint`, still clickable/navigable |
+| Disabled (out of min/max range) | `--el-text-faint` + strikethrough, not selectable |
+
+**Today and selection are NOT conveyed by colour alone** (WCAG 1.4.1 /
+finding #35): selected differs in *shape* (a filled circle), today carries a
+*ring + dot* — a colour-blind / greyscale reader still distinguishes them. All
+colour flows through `--el-*` (finding #54); when the selected fill needs an
+inverted dot (today + selected), it uses `--el-accent-text`. Light + dark parity
+(toggle in the mock).
+
+### Keyboard model (for 2.4.12 to implement)
+
+The grid uses **roving tabindex** — exactly one day is tabbable; focus moves
+within the grid, re-rendering (and shifting the view month) as needed:
+
+- `←` / `→` — focus previous / next day (±1)
+- `↑` / `↓` — focus same weekday previous / next week (±7)
+- `PageUp` / `PageDown` — previous / next month (same day-of-month)
+- `Home` / `End` — first / last day of the focused week
+- `Enter` / `Space` — select the focused day (closes the popover)
+- `Esc` — close without changing; focus returns to the trigger
+
+Crossing a month boundary with an arrow re-renders the grid to the new month
+with focus on the landed day. The popover opens with focus on the selected day
+(or today when null).
+
+### States in the mockup
+
+Panels: **(0)** placement in the core-fields rail · **(1)** trigger states
+(placeholder / filled+Clear / focused / disabled) · **(2)** the open calendar
+(live: click, nav, arrow-key the demo) · **(3)** every day-cell state, labelled ·
+**(4)** cleared → placeholder. Selected = Jun 4, 2026; today = Jun 5, 2026.
+
+### Out of scope
+
+Range selection (start↔end), time-of-day, and a month/year quick-jump picker are
+not in 2.4.12 — single nullable date only. Min/max range wiring (the `disabled`
+state) is drawn here but only enforced where a field constrains it (none in 2.4).
