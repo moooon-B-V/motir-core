@@ -6,6 +6,7 @@ import { Check, ChevronDown, List, ListTree } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { cn } from '@/lib/utils/cn';
 import { buildIssueListHref, type IssueListView, type IssueSort } from '@/lib/issues/issueListView';
+import type { IssueFilter } from '@/lib/issues/issueListFilter';
 
 // The working [Tree ▾] view switcher (Subtask 2.5.8) — replaces the disabled
 // placeholder 2.5.3 shipped as a forward-compatible seam. A Popover menu toggling
@@ -28,9 +29,11 @@ const OPTIONS: ViewOption[] = [TREE_OPTION, LIST_OPTION];
 export interface IssueViewSwitcherProps {
   view: IssueListView;
   sort: IssueSort;
+  /** Preserved across the view toggle (filtering applies to both views, 2.5.4). */
+  filter: IssueFilter;
 }
 
-export function IssueViewSwitcher({ view, sort }: IssueViewSwitcherProps) {
+export function IssueViewSwitcher({ view, sort, filter }: IssueViewSwitcherProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -42,8 +45,9 @@ export function IssueViewSwitcher({ view, sort }: IssueViewSwitcherProps) {
     setOpen(false);
     if (next !== view) {
       // Preserve the active sort only when the List is the destination (the Tree
-      // ignores sort, so its canonical URL drops the param).
-      router.push(buildIssueListHref(pathname, { view: next, sort }));
+      // ignores sort, so its canonical URL drops the param), and the active
+      // filter always (it applies to both views).
+      router.push(buildIssueListHref(pathname, { view: next, sort, filter }));
     }
   }
 

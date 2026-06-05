@@ -18,6 +18,7 @@ vi.mock('next/navigation', () => ({
 
 import { IssueListTable } from '@/app/(authed)/issues/_components/IssueListTable';
 import { IssueViewSwitcher } from '@/app/(authed)/issues/_components/IssueViewSwitcher';
+import { EMPTY_FILTER } from '@/lib/issues/issueListFilter';
 
 // Radix Popover (the switcher menu) needs a few browser APIs happy-dom lacks.
 beforeAll(() => {
@@ -60,7 +61,13 @@ const ROWS: IssueRowData[] = [
 
 describe('IssueListTable — sortable headers', () => {
   it('marks the active sort column with aria-sort and leaves the rest "none"', () => {
-    render(<IssueListTable rows={ROWS} sort={{ column: 'key', direction: 'asc' }} />);
+    render(
+      <IssueListTable
+        rows={ROWS}
+        sort={{ column: 'key', direction: 'asc' }}
+        filter={EMPTY_FILTER}
+      />,
+    );
     // Default key asc → the Title column (sorts by key) is the active ascending one.
     expect(screen.getByRole('columnheader', { name: /Title/ }).getAttribute('aria-sort')).toBe(
       'ascending',
@@ -71,7 +78,13 @@ describe('IssueListTable — sortable headers', () => {
   });
 
   it('renders both issues as whole-row links to their detail page', () => {
-    render(<IssueListTable rows={ROWS} sort={{ column: 'key', direction: 'asc' }} />);
+    render(
+      <IssueListTable
+        rows={ROWS}
+        sort={{ column: 'key', direction: 'asc' }}
+        filter={EMPTY_FILTER}
+      />,
+    );
     expect(screen.getByRole('link', { name: 'PROD-1 First' }).getAttribute('href')).toBe(
       '/issues/PROD-1',
     );
@@ -81,19 +94,37 @@ describe('IssueListTable — sortable headers', () => {
   });
 
   it('clicking a different header sorts by that column ascending (?view=list&sort=)', () => {
-    render(<IssueListTable rows={ROWS} sort={{ column: 'key', direction: 'asc' }} />);
+    render(
+      <IssueListTable
+        rows={ROWS}
+        sort={{ column: 'key', direction: 'asc' }}
+        filter={EMPTY_FILTER}
+      />,
+    );
     fireEvent.click(screen.getByRole('button', { name: /Priority/ }));
     expect(push).toHaveBeenCalledWith('/issues?view=list&sort=priority%3Aasc');
   });
 
   it('clicking the active header flips its direction', () => {
-    render(<IssueListTable rows={ROWS} sort={{ column: 'priority', direction: 'asc' }} />);
+    render(
+      <IssueListTable
+        rows={ROWS}
+        sort={{ column: 'priority', direction: 'asc' }}
+        filter={EMPTY_FILTER}
+      />,
+    );
     fireEvent.click(screen.getByRole('button', { name: /Priority/ }));
     expect(push).toHaveBeenCalledWith('/issues?view=list&sort=priority%3Adesc');
   });
 
   it('clicking the Title header sorts by key (the default column) descending', () => {
-    render(<IssueListTable rows={ROWS} sort={{ column: 'key', direction: 'asc' }} />);
+    render(
+      <IssueListTable
+        rows={ROWS}
+        sort={{ column: 'key', direction: 'asc' }}
+        filter={EMPTY_FILTER}
+      />,
+    );
     fireEvent.click(screen.getByRole('button', { name: /Title/ }));
     expect(push).toHaveBeenCalledWith('/issues?view=list&sort=key%3Adesc');
   });
@@ -101,12 +132,24 @@ describe('IssueListTable — sortable headers', () => {
 
 describe('IssueViewSwitcher — Tree ↔ List toggle', () => {
   it('shows the active view on the trigger', () => {
-    render(<IssueViewSwitcher view="list" sort={{ column: 'key', direction: 'asc' }} />);
+    render(
+      <IssueViewSwitcher
+        view="list"
+        sort={{ column: 'key', direction: 'asc' }}
+        filter={EMPTY_FILTER}
+      />,
+    );
     expect(screen.getByRole('button', { name: 'View: List' })).toBeTruthy();
   });
 
   it('switching to List navigates to ?view=list (preserving the current sort)', () => {
-    render(<IssueViewSwitcher view="tree" sort={{ column: 'priority', direction: 'desc' }} />);
+    render(
+      <IssueViewSwitcher
+        view="tree"
+        sort={{ column: 'priority', direction: 'desc' }}
+        filter={EMPTY_FILTER}
+      />,
+    );
     fireEvent.click(screen.getByRole('button', { name: 'View: Tree' }));
     const list = screen.getByRole('menuitemradio', { name: /List/ });
     fireEvent.click(list);
@@ -114,7 +157,13 @@ describe('IssueViewSwitcher — Tree ↔ List toggle', () => {
   });
 
   it('switching back to Tree navigates to the bare /issues (sort dropped)', () => {
-    render(<IssueViewSwitcher view="list" sort={{ column: 'priority', direction: 'desc' }} />);
+    render(
+      <IssueViewSwitcher
+        view="list"
+        sort={{ column: 'priority', direction: 'desc' }}
+        filter={EMPTY_FILTER}
+      />,
+    );
     fireEvent.click(screen.getByRole('button', { name: 'View: List' }));
     const tree = screen.getByRole('menuitemradio', { name: /Tree/ });
     fireEvent.click(tree);
@@ -122,7 +171,13 @@ describe('IssueViewSwitcher — Tree ↔ List toggle', () => {
   });
 
   it('the active view option is checked', () => {
-    render(<IssueViewSwitcher view="list" sort={{ column: 'key', direction: 'asc' }} />);
+    render(
+      <IssueViewSwitcher
+        view="list"
+        sort={{ column: 'key', direction: 'asc' }}
+        filter={EMPTY_FILTER}
+      />,
+    );
     fireEvent.click(screen.getByRole('button', { name: 'View: List' }));
     expect(
       within(screen.getByRole('menuitemradio', { name: /List/ })).queryByText('List'),

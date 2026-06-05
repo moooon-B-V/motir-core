@@ -8,6 +8,8 @@
 // switcher, and the client List header all agree. Kept pure (no React, no
 // Prisma) → unit-tested in isolation.
 
+import { appendFilterParams, type IssueFilter } from '@/lib/issues/issueListFilter';
+
 /** The two issue-list views the switcher toggles. Tree is the default. */
 export type IssueListView = 'tree' | 'list';
 
@@ -93,15 +95,18 @@ export function nextSort(current: IssueSort, column: IssueSortColumn): IssueSort
 }
 
 /**
- * Build the canonical `/issues` href for a (view, sort) pair. Defaults are
- * OMITTED so URLs stay clean: `view=tree` and the default `key:asc` sort never
- * appear (`/issues` is the canonical Tree URL; `/issues?view=list` is the List
- * at its default sort). Used by the switcher + the List headers so both produce
- * identical, shareable URLs.
+ * Build the canonical `/issues` href for a (view, sort, filter) triple. Defaults
+ * are OMITTED so URLs stay clean: `view=tree` and the default `key:asc` sort
+ * never appear (`/issues` is the canonical Tree URL; `/issues?view=list` is the
+ * List at its default sort). The optional `filter` (Subtask 2.5.4) is appended
+ * regardless of view — filtering applies to BOTH the Tree and the List — so the
+ * switcher + the List sort headers PRESERVE the active filter when they
+ * navigate (and the filter bar preserves the active view + sort). All three
+ * controls route through here, so every produced URL is identical + shareable.
  */
 export function buildIssueListHref(
   pathname: string,
-  opts: { view: IssueListView; sort?: IssueSort },
+  opts: { view: IssueListView; sort?: IssueSort; filter?: IssueFilter },
 ): string {
   const params = new URLSearchParams();
   if (opts.view === 'list') params.set('view', 'list');
@@ -109,6 +114,8 @@ export function buildIssueListHref(
   if (opts.view === 'list' && opts.sort && !isDefaultSort(opts.sort)) {
     params.set('sort', serializeSort(opts.sort));
   }
+  // Filter applies to both views; appended in canonical order (see appendFilterParams).
+  if (opts.filter) appendFilterParams(params, opts.filter);
   const qs = params.toString();
   return qs ? `${pathname}?${qs}` : pathname;
 }

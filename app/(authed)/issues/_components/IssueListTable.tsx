@@ -11,6 +11,7 @@ import {
   type IssueSort,
   type IssueSortColumn,
 } from '@/lib/issues/issueListView';
+import type { IssueFilter } from '@/lib/issues/issueListFilter';
 import { ISSUE_COLUMNS } from './issueColumns';
 import type { IssueRowData } from './issueRows';
 
@@ -40,17 +41,21 @@ const GRID_TEMPLATE = [
 export interface IssueListTableProps {
   rows: IssueRowData[];
   sort: IssueSort;
+  /** Preserved across a header-sort navigation (filtering applies to the List too). */
+  filter: IssueFilter;
 }
 
-export function IssueListTable({ rows, sort }: IssueListTableProps) {
+export function IssueListTable({ rows, sort, filter }: IssueListTableProps) {
   const router = useRouter();
   const pathname = usePathname();
 
   const onSort = useCallback(
     (column: IssueSortColumn) => {
-      router.push(buildIssueListHref(pathname, { view: 'list', sort: nextSort(sort, column) }));
+      router.push(
+        buildIssueListHref(pathname, { view: 'list', sort: nextSort(sort, column), filter }),
+      );
     },
-    [router, pathname, sort],
+    [router, pathname, sort, filter],
   );
 
   return (
