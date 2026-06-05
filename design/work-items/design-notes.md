@@ -3,15 +3,16 @@
 Design reference for the `work-items` UI area. Each surface names the design
 asset it lives in, the primitives it composes from, copy strings, and placement.
 
-| Surface                                       | Asset                                       | Notes                                                                                                                                   |
-| --------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Issue detail page                             | `detail.pen` (Pencil) + `detail.png`        | header eyebrow + Description / Explanation / Activity (left) · core-fields rail (right). Built across 2.4.1–2.4.4.                      |
-| Create issue modal                            | `create.pen` + `create.png`                 | type/parent/title/description/priority + optional Explanation (panel 3).                                                                |
-| Tree view (issue list, nested)                | `tree.pen` + `tree.png`                     | issue tree rows + the `[Filter]`·`[Tree ▾]`·`[+ New issue]` toolbar.                                                                    |
-| **Flat sortable List view + view switcher**   | **`list.mock.html`** (HTML mockup)          | The List mode `tree.png` leaves unspecified (it draws only Tree + a disabled switcher seam). Gates 2.5.8. See below.                    |
-| **Relationships panel + ready/blocked badge** | **`relationships.mock.html`** (HTML mockup) | The element `detail.pen` does NOT specify. See below.                                                                                   |
-| **Link management (add / remove links)**      | **`links.mock.html`** (HTML mockup)         | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                                      |
-| **DatePicker calendar (Due-date field)**      | **`datepicker.mock.html`** (HTML mockup)    | The design-system replacement for the native `<input type="date">` popup; consumed by the Due-date fields (2.4.11 → 2.4.12). See below. |
+| Surface                                          | Asset                                       | Notes                                                                                                                                   |
+| ------------------------------------------------ | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Issue detail page                                | `detail.pen` (Pencil) + `detail.png`        | header eyebrow + Description / Explanation / Activity (left) · core-fields rail (right). Built across 2.4.1–2.4.4.                      |
+| Create issue modal                               | `create.pen` + `create.png`                 | type/parent/title/description/priority + optional Explanation (panel 3).                                                                |
+| Tree view (issue list, nested)                   | `tree.pen` + `tree.png`                     | issue tree rows + the `[Filter]`·`[Tree ▾]`·`[+ New issue]` toolbar.                                                                    |
+| **Flat sortable List view + view switcher**      | **`list.mock.html`** (HTML mockup)          | The List mode `tree.png` leaves unspecified (it draws only Tree + a disabled switcher seam). Gates 2.5.8. See below.                    |
+| **Filter bar (kind · status · assignee · text)** | **`filter.mock.html`** (HTML mockup)        | The open `[Filter]` popover `tree.png` leaves unspecified (it draws only a disabled `[Filter]` seam). Gates 2.5.4. See below.           |
+| **Relationships panel + ready/blocked badge**    | **`relationships.mock.html`** (HTML mockup) | The element `detail.pen` does NOT specify. See below.                                                                                   |
+| **Link management (add / remove links)**         | **`links.mock.html`** (HTML mockup)         | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                                      |
+| **DatePicker calendar (Due-date field)**         | **`datepicker.mock.html`** (HTML mockup)    | The design-system replacement for the native `<input type="date">` popup; consumed by the Due-date fields (2.4.11 → 2.4.12). See below. |
 
 ---
 
@@ -401,3 +402,113 @@ caret) · **(3)** empty state · **(4)** the flat loading skeleton.
 Saved / named views, multi-column sort, column show/hide config, and an
 **Updated** column are **Epic 6** (saved views & advanced search) — not invented
 here. Bulk actions from the list are also out of scope for 2.5.8.
+
+---
+
+## Filter bar — kind · status · assignee · text (Story 2.5 · 2.5.9 → 2.5.4)
+
+`tree.png` draws the `[Filter]` toolbar control only in its **disabled, closed**
+state — a forward-compatible seam (2.5.3's `IssueListToolbar`, the same one
+`list.mock.html` carries). It does NOT specify the **open filter surface** that
+control opens. `filter.mock.html` is the design asset for it — built from the
+live `--el-*` tokens + the shipped primitives, so the code subtask (**2.5.4**)
+composes the same primitives with no Pencil→code gap. Mirror product: Jira's
+issue-navigator basic filters / Linear's filter menu (a popover of faceted
+multi-selects + a text quick-filter).
+
+### Shape — a Popover of faceted multi-selects, NO new primitive
+
+The `[Filter]` control becomes an **enabled** `ToolbarButton` (same `.tb-btn`
+shape) that opens a **`Popover`** (`role="dialog"`, `aria-haspopup="dialog"`)
+anchored under it (left-aligned). The popover surface reuses the **exact card
+chrome the view-switcher menu uses**: `--radius-card` container, `--el-border`
+hairline, `--shadow-elevated`. Inside, **four facets**, top to bottom:
+
+| Facet        | Source (already in context)                                        | Row vocabulary (reused)                                                         |
+| ------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| **Text**     | a free-text quick-filter over identifier + title                   | the bordered `Combobox` **search input** (`--radius-input`, leading `Search`)   |
+| **Kind**     | `ISSUE_TYPE_META` (the five issue types)                           | `IssueTypeIcon` (type hue) · label · trailing `Check`                           |
+| **Status**   | the project's **workflow statuses** (`StatusPicker` option source) | the `StatusPicker` **dot** (`status.color ?? category var`) · label · `Check`   |
+| **Assignee** | workspace members + an explicit **"Unassigned"**                   | member-combobox `Avatar` (initial-letter) · name · `Check`; Unassigned is first |
+
+Each facet is a **multi-select** `role="listbox"` (`aria-multiselectable="true"`)
+of `role="option"` rows — the **same option-row vocabulary the `Combobox`
+ships** (leading glyph · label · optional secondary · trailing `Check`), made
+multi-select: `aria-selected="true"` adds the `--el-surface` row tint + the
+`--el-accent` `Check`. **No new picker primitive** (satisfies the AC) — the kind
+icons, the status dot, the member avatar, and the option row all already exist;
+only the popover that composes them and the trigger's count badge are new, which
+is exactly 2.5.4's scope. The Assignee facet carries the member-combobox's own
+**"Search members…"** type-ahead since membership can be long; the top-level
+**Text** facet is the issue quick-filter (distinct placeholder "Find by ID or
+title…").
+
+### The trigger — active state + the count badge
+
+- **Inactive** (no filters): the `[Filter]` button reads exactly like the
+  shipped seam (`Sliders` icon + "Filter"), now **enabled**.
+- **Active** (≥1 filter applied): the button gains a faint accent ring
+  (`--el-accent` border + `--el-tint-lavender` fill, the icon → `--el-accent`)
+  and a trailing **count badge** — a small `--radius-badge` `--el-accent` chip
+  with `--el-accent-text` ink showing the **number of active filter values**
+  (each selected kind/status/assignee option counts 1; a non-empty text counts
+  1). The badge is the **only net-new affordance** over the disabled seam. AA:
+  the button label stays `--el-text` on the page bg (never hue-on-hue).
+
+### Clear + apply
+
+- **"Clear filters"** lives in the popover **header**, right-aligned (`X` glyph +
+  label, `--el-link`). It is **disabled/greyed when nothing is selected** and
+  active once any facet has a value; clicking it resets every facet to empty
+  (→ the full unfiltered tree). The same reset is reachable from the trigger.
+- **No Apply button.** Filters apply **live** and serialize to the **URL query**
+  (`?kind=…&status=…&assignee=…&q=…`, `assignee=unassigned` for the Unassigned
+  bucket) — the durable, shareable/reload-safe substrate Epic 6 saved filters
+  persist. The Server Component reads the params and re-queries.
+
+### Context-preserving result (reuses 2.5.1)
+
+Filtering feeds `getProjectTree`'s **ancestor-retaining** filter (2.5.1): a
+matching descendant keeps its **ancestor chain visible for context**. In the
+mockup's applied panel, ancestor rows that don't themselves match read **muted**
+(`--el-text-muted`); the actual matches read full-strength — so the tree stays
+legible instead of collapsing to orphaned rows. This is the shipped Tree row
+vocabulary (`IssueTypeIcon` · identifier · `Pill`), not a new surface.
+
+### Tokens / a11y
+
+- Colour flows only through `--el-*`: the count badge / selected-row tint /
+  `Check` use `--el-accent`; status dots use the `StatusPicker` category vars
+  via their `--el-*` equivalents (todo → `--el-text-faint`, in_progress →
+  `--el-info`, done → `--el-success`; a custom-coloured status like "In Review"
+  carries its own colour); kind icons take their `--el-type-*` hue; result pills
+  are `Pill` tones (hue in the tint, `--el-text-strong` text — finding #35
+  AA-safe).
+- Shape via element-semantic tokens (`--radius-card` popover, `--radius-input`
+  search field, `--radius-control` rows, `--radius-badge` count chip,
+  `--spacing-control-*`, `--height-control`, `--shadow-elevated`) so the filter
+  bar re-shapes under `data-display-style`.
+- The popover is a labelled `role="dialog"`; each facet is a `role="group"` +
+  multi-select `role="listbox"` of `role="option"` rows with `aria-selected`;
+  the trigger carries `aria-haspopup="dialog"` + `aria-expanded`, and the count
+  badge an `aria-label` ("N filters active"). Selection state is conveyed by the
+  `Check` glyph + `aria-selected`, never colour alone. Toggle dark mode in the
+  mock to confirm token parity. The end-to-end filter behaviour (incl. the URL
+  round-trip + ancestor retention) is driven by the Story E2E (2.5.6).
+
+### States in the mockup
+
+Panels: **(0)** the `[Filter]` trigger — closed-inactive vs. closed-active
+(accent ring + count badge) in the `/issues` toolbar · **(1)** the popover open,
+**empty** (nothing selected, "Clear filters" disabled) · **(2)** the popover
+open, **populated** (text "oauth" · Bug · In Progress + In Review · Dana Kim +
+Unassigned → badge 5, "Clear filters" active) · **(3)** the applied filter on the
+page — the active trigger over the context-preserving tree.
+
+### Out of scope (documented extension slots)
+
+**Saved / named filters**, the shareable-filter management UI, **advanced search
+operators** (boolean/JQL-style), and filtering by custom fields are **Epic 6**
+(saved views & advanced search) — the URL serialization 2.5.4 ships is the
+forward-compatible substrate they build on, not a throwaway. Sorting the
+filtered set is the **List view's** job (2.5.8), not the filter bar's.
