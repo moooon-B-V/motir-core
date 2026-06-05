@@ -241,7 +241,12 @@ export function TreeTable<Row>({
   ].join(' ');
 
   return (
-    <div className={cn('overflow-hidden rounded-xl border border-(--el-border)', className)}>
+    <div
+      className={cn(
+        'overflow-hidden rounded-(--radius-card) border border-(--el-border)',
+        className,
+      )}
+    >
       <div role="treegrid" aria-label={label} className="w-full text-sm">
         {/* Header */}
         <div role="rowgroup">

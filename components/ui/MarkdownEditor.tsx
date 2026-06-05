@@ -270,11 +270,11 @@ export function MarkdownEditor({
         {labelAccessory}
       </span>
       {readOnly ? (
-        <div className="border-(--el-border) bg-(--el-surface) rounded-md border px-3 py-2">
+        <div className="border-(--el-border) bg-(--el-surface) rounded-(--radius-input) border px-3 py-2">
           <MarkdownView value={value} />
         </div>
       ) : (
-        <div className="border-(--el-border) bg-(--el-surface) focus-within:border-(--el-highlight) rounded-md border transition-colors">
+        <div className="border-(--el-border) bg-(--el-surface) focus-within:border-(--el-highlight) rounded-(--radius-input) border transition-colors">
           <Toolbar
             editor={editor}
             size={size}

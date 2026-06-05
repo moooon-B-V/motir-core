@@ -187,7 +187,7 @@ export function Combobox<T extends string>({
         onClick={() => (open ? setOpen(false) : openMenu())}
         onKeyDown={onTriggerKeyDown}
         className={cn(
-          'border-(--el-border) bg-(--el-page-bg) flex h-9 w-full items-center gap-2 rounded-md border px-3 text-sm',
+          'border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) w-full items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm',
           'focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2',
           'disabled:opacity-50',
           className,
@@ -232,7 +232,7 @@ export function Combobox<T extends string>({
               }}
               onKeyDown={onListKeyDown}
               placeholder={searchPlaceholder}
-              className="border-(--el-border) bg-(--el-page-bg) mb-1 w-full rounded-(--radius-sm) border px-2.5 py-1.5 text-sm focus-visible:outline-none"
+              className="border-(--el-border) bg-(--el-page-bg) mb-1 w-full rounded-(--radius-input) border px-(--spacing-control-x) py-(--spacing-control-y) text-sm focus-visible:outline-none"
             />
           ) : null}
           <div
@@ -262,7 +262,7 @@ export function Combobox<T extends string>({
                     onMouseEnter={() => setActiveIndex(i)}
                     onClick={() => commit(i)}
                     className={cn(
-                      'flex cursor-pointer items-center gap-2 rounded-(--radius-sm) px-2.5 py-1.5 text-sm',
+                      'flex cursor-pointer items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm',
                       isActive ? 'bg-(--el-surface) text-(--el-text)' : 'text-(--el-text)',
                     )}
                   >

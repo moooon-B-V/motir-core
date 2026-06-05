@@ -60,7 +60,7 @@ export const ErrorState = forwardRef<HTMLDivElement, ErrorStateProps>(function E
         </p>
       ) : null}
       {showErrorDetail ? (
-        <pre className="bg-(--el-surface) text-(--el-text-muted) mt-(--spacing-md) max-w-full overflow-x-auto rounded-(--radius-sm) px-2 py-1 text-left font-mono text-xs">
+        <pre className="bg-(--el-surface) text-(--el-text-muted) mt-(--spacing-md) max-w-full overflow-x-auto rounded-(--radius-control) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) text-left font-mono text-xs">
           {error.message}
         </pre>
       ) : null}

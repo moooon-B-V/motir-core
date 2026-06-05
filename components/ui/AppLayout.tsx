@@ -58,7 +58,7 @@ export function AppLayout({ topNav, sidebar, children, className }: AppLayoutPro
         href="#main"
         className={cn(
           'sr-only z-[100] focus:not-sr-only focus:absolute focus:left-4 focus:top-3',
-          'focus:rounded-(--radius-sm) focus:bg-(--el-page-bg) focus:px-4 focus:py-2',
+          'focus:rounded-(--radius-control) focus:bg-(--el-page-bg) focus:px-4 focus:py-2',
           'focus:font-sans focus:text-sm focus:text-(--el-text) focus:shadow-(--shadow-elevated)',
           'focus:outline-none focus:ring-2 focus:ring-(--focus-ring-color)',
         )}

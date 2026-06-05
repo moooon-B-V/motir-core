@@ -31,7 +31,7 @@ export function ReadinessBadge({ ready, blockers = [], className }: ReadinessBad
     return (
       <div
         className={cn(
-          'bg-(--el-tint-mint) flex items-start gap-2.5 rounded-md px-3.5 py-3',
+          'bg-(--el-tint-mint) flex items-start gap-2.5 rounded-(--radius-card) px-3.5 py-3',
           className,
         )}
       >
@@ -54,7 +54,7 @@ export function ReadinessBadge({ ready, blockers = [], className }: ReadinessBad
   return (
     <div
       className={cn(
-        'bg-(--el-tint-peach) flex items-start gap-2.5 rounded-md px-3.5 py-3',
+        'bg-(--el-tint-peach) flex items-start gap-2.5 rounded-(--radius-card) px-3.5 py-3',
         className,
       )}
     >

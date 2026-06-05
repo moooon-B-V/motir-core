@@ -134,6 +134,8 @@
   --radius-input: 8px;
   --radius-modal: 12px;
   --radius-badge: 9999px;
+  --radius-control: 6px; /* small interactive affordances — menu/list rows, icon & close buttons, tooltips, code chips */
+  --radius-kbd: 4px; /* keyboard-hint chips */
 
   /* ── Elevation ──────────────────────────────────────────────────── */
   --shadow-flat: none;
@@ -165,11 +167,24 @@
   --spacing-input-y: 12px;
   --spacing-card-padding: 24px;
 
+  /* Control-level spacing — small affordances. Flip with display-style so a
+     getdesign swap can redefine control DENSITY, not just radius. */
+  --spacing-control-x: 10px; /* menu/list rows, combobox trigger & search, sidebar rows */
+  --spacing-control-y: 6px;
+  --spacing-icon-btn: 4px; /* square icon / close buttons */
+  --spacing-chip-x: 10px; /* badge / pill chips */
+  --spacing-chip-y: 2px;
+  --spacing-kbd-x: 6px; /* <kbd> keyboard-hint chips */
+  --spacing-kbd-y: 2px;
+  --spacing-tooltip-x: 8px; /* tooltip & inline code blocks */
+  --spacing-tooltip-y: 4px;
+
   /* Heights */
   --height-btn-sm: 32px;
   --height-btn-md: 40px;
   --height-btn-lg: 48px;
   --height-input: 44px;
+  --height-control: 36px; /* single-line / square small control */
 
   /* ── Interaction ────────────────────────────────────────────────── */
   --transition-duration: 150ms;
@@ -240,6 +255,8 @@
   --radius-card: 24px;
   --radius-modal: 32px;
   --radius-badge: 9999px;
+  --radius-control: 12px; /* small affordances round up with the rest */
+  --radius-kbd: 8px;
 
   /* Softer, more diffused shadows */
   --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
@@ -252,6 +269,16 @@
   --spacing-input-x: 18px;
   --spacing-input-y: 14px;
   --spacing-card-padding: 28px;
+  --spacing-control-x: 14px;
+  --spacing-control-y: 8px;
+  --spacing-icon-btn: 8px;
+  --spacing-chip-x: 14px;
+  --spacing-chip-y: 4px;
+  --spacing-kbd-x: 8px;
+  --spacing-kbd-y: 3px;
+  --spacing-tooltip-x: 12px;
+  --spacing-tooltip-y: 6px;
+  --height-control: 40px;
 
   /* Slightly slower transitions for softer feel */
   --transition-duration: 200ms;

@@ -118,7 +118,7 @@ function ModalRoot({
           {!hideClose ? (
             <Dialog.Close
               aria-label="Close"
-              className="text-(--el-text-muted) hover:text-(--el-text) absolute right-3 top-3 rounded-(--radius-sm) p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+              className="text-(--el-text-muted) hover:text-(--el-text) absolute right-3 top-3 rounded-(--radius-control) p-(--spacing-icon-btn) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
             >
               <X className="h-4 w-4" />
             </Dialog.Close>

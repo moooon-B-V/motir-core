@@ -97,7 +97,7 @@ function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boo
         aria-current={isActive ? 'page' : undefined}
         aria-label={item.label}
         className={cn(
-          'mx-auto flex h-9 w-9 items-center justify-center rounded-(--radius-sm)',
+          'mx-auto flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control)',
           'text-(--el-text-muted) transition-colors',
           'hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
@@ -122,7 +122,7 @@ function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boo
       href={item.href}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
-        'flex h-[34px] items-center gap-3 rounded-(--radius-sm) px-2',
+        'flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x)',
         'font-sans text-sm transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
         isActive
@@ -141,7 +141,7 @@ function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boo
       </span>
       <span className="flex-1 truncate">{item.label}</span>
       {item.kbd ? (
-        <kbd className="rounded-(--radius-xs) border border-(--el-sidebar-border) bg-(--el-page-bg) px-1.5 py-0.5 font-mono text-[10px] text-(--el-text-muted)">
+        <kbd className="rounded-(--radius-kbd) border border-(--el-sidebar-border) bg-(--el-page-bg) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[10px] text-(--el-text-muted)">
           {item.kbd}
         </kbd>
       ) : null}
@@ -171,7 +171,7 @@ function SidebarSectionFrame({
       <Collapsible.Root defaultOpen={section.defaultOpen ?? true} className="flex flex-col gap-1.5">
         <Collapsible.Trigger
           className={cn(
-            'group flex items-center justify-between rounded-(--radius-xs) px-2 py-0.5',
+            'group flex items-center justify-between rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y)',
             'hover:bg-(--el-sidebar-item-bg-hover)',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
           )}
