@@ -204,6 +204,13 @@ state, not an error.
   ("Select a date", `--el-text-muted`) when null. A trailing **Clear ×** shows
   ONLY when a date is set — hover tints `--el-tint-rose`/`--el-danger` (matches
   the link-row remove affordance from 2.4.9).
+  - **Structure (important for 2.4.12):** the field is a **container**, not a
+    single `<button>`. The calendar-open affordance (glyph + value) and the
+    **Clear** button are **siblings** — the Clear `<button>` is NOT nested
+    inside the trigger button (a `<button>` may not contain another `<button>`;
+    the parser ejects the nested one and the × renders outside the field). So
+    the field row = the `Popover.Trigger` surface (glyph + value → opens the
+    calendar) + a separate Clear button at the row end.
 - **Calendar popover** — floats in the `Popover` primitive (`--radius-card`,
   `--shadow-elevated`, `--el-border`), anchored to the trigger, `width ≈ 296px`.
   Contents:

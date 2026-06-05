@@ -231,7 +231,12 @@
         margin-bottom: 6px;
       }
 
-      /* ── Trigger: Input.tsx chrome (the date FIELD) ─────────────────────── */
+      /* ── Trigger: Input.tsx chrome (the date FIELD) ─────────────────────────
+         The field is a CONTAINER (not itself a <button>): the calendar-open
+         affordance (.field-open) and the Clear button are SIBLINGS. A <button>
+         must not contain another <button> — the parser would eject the nested
+         one. In 2.4.12: the field box is the Popover.Trigger surface and Clear
+         is a separate button at the row end, never nested inside it. */
       .trigger {
         display: inline-flex;
         align-items: center;
@@ -245,9 +250,17 @@
         color: var(--el-text);
         font-family: var(--font-sans);
         font-size: 14px;
-        cursor: pointer;
         transition: border-color 0.12s ease;
         text-align: left;
+      }
+      /* the openable area — glyph + value; clicking it opens the calendar */
+      .field-open {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        min-width: 0;
+        cursor: pointer;
       }
       .trigger .cal-glyph {
         color: var(--el-text-muted);
@@ -256,6 +269,10 @@
       }
       .trigger .value {
         flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
         color: var(--el-text);
       }
       .trigger .value.placeholder {
@@ -285,6 +302,8 @@
       }
       .trigger.is-disabled {
         opacity: 0.5;
+      }
+      .trigger.is-disabled .field-open {
         cursor: not-allowed;
       }
 
@@ -597,15 +616,17 @@
           </div>
           <div class="row">
             <div class="section-label">Due date</div>
-            <button class="trigger" style="width: 100%">
-              <span class="cal-glyph"
-                ><svg width="16" height="16"><use href="#i-calendar" /></svg
-              ></span>
-              <span class="value">Jun 4, 2026</span>
+            <div class="trigger" style="width: 100%">
+              <span class="field-open">
+                <span class="cal-glyph"
+                  ><svg width="16" height="16"><use href="#i-calendar" /></svg
+                ></span>
+                <span class="value">Jun 4, 2026</span>
+              </span>
               <button class="clear" aria-label="Clear due date">
                 <svg width="14" height="14"><use href="#i-x" /></svg>
               </button>
-            </button>
+            </div>
           </div>
         </div>
       </div>
@@ -626,45 +647,53 @@
       <div class="stage">
         <div class="specimen">
           <span class="cap">empty (placeholder)</span>
-          <button class="trigger">
-            <span class="cal-glyph"
-              ><svg width="16" height="16"><use href="#i-calendar" /></svg
-            ></span>
-            <span class="value placeholder">Select a date</span>
-          </button>
+          <div class="trigger">
+            <span class="field-open">
+              <span class="cal-glyph"
+                ><svg width="16" height="16"><use href="#i-calendar" /></svg
+              ></span>
+              <span class="value placeholder">Select a date</span>
+            </span>
+          </div>
         </div>
         <div class="specimen">
           <span class="cap">filled + Clear</span>
-          <button class="trigger">
-            <span class="cal-glyph"
-              ><svg width="16" height="16"><use href="#i-calendar" /></svg
-            ></span>
-            <span class="value">Jun 4, 2026</span>
+          <div class="trigger">
+            <span class="field-open">
+              <span class="cal-glyph"
+                ><svg width="16" height="16"><use href="#i-calendar" /></svg
+              ></span>
+              <span class="value">Jun 4, 2026</span>
+            </span>
             <button class="clear" aria-label="Clear due date">
               <svg width="14" height="14"><use href="#i-x" /></svg>
             </button>
-          </button>
+          </div>
         </div>
         <div class="specimen">
           <span class="cap">focused (open)</span>
-          <button class="trigger is-focused">
-            <span class="cal-glyph"
-              ><svg width="16" height="16"><use href="#i-calendar" /></svg
-            ></span>
-            <span class="value">Jun 4, 2026</span>
+          <div class="trigger is-focused">
+            <span class="field-open">
+              <span class="cal-glyph"
+                ><svg width="16" height="16"><use href="#i-calendar" /></svg
+              ></span>
+              <span class="value">Jun 4, 2026</span>
+            </span>
             <button class="clear" aria-label="Clear due date">
               <svg width="14" height="14"><use href="#i-x" /></svg>
             </button>
-          </button>
+          </div>
         </div>
         <div class="specimen">
           <span class="cap">disabled</span>
-          <button class="trigger is-disabled" disabled>
-            <span class="cal-glyph"
-              ><svg width="16" height="16"><use href="#i-calendar" /></svg
-            ></span>
-            <span class="value placeholder">Select a date</span>
-          </button>
+          <div class="trigger is-disabled" aria-disabled="true">
+            <span class="field-open">
+              <span class="cal-glyph"
+                ><svg width="16" height="16"><use href="#i-calendar" /></svg
+              ></span>
+              <span class="value placeholder">Select a date</span>
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -682,15 +711,17 @@
       </p>
       <div class="stage">
         <div class="anchored">
-          <button class="trigger is-focused" style="width: 100%" id="demoTrigger">
-            <span class="cal-glyph"
-              ><svg width="16" height="16"><use href="#i-calendar" /></svg
-            ></span>
-            <span class="value" id="demoValue">Jun 4, 2026</span>
+          <div class="trigger is-focused" style="width: 100%" id="demoTrigger">
+            <span class="field-open">
+              <span class="cal-glyph"
+                ><svg width="16" height="16"><use href="#i-calendar" /></svg
+              ></span>
+              <span class="value" id="demoValue">Jun 4, 2026</span>
+            </span>
             <button class="clear" aria-label="Clear due date" id="demoClear">
               <svg width="14" height="14"><use href="#i-x" /></svg>
             </button>
-          </button>
+          </div>
           <div class="calendar" role="dialog" aria-label="Choose a date" id="demoCal">
             <div class="cal-caption">
               <span class="month" id="capMonth">June 2026</span>
@@ -792,12 +823,14 @@
       <div class="stage">
         <div class="specimen">
           <span class="cap">after Clear</span>
-          <button class="trigger" style="width: 240px">
-            <span class="cal-glyph"
-              ><svg width="16" height="16"><use href="#i-calendar" /></svg
-            ></span>
-            <span class="value placeholder">Select a date</span>
-          </button>
+          <div class="trigger" style="width: 240px">
+            <span class="field-open">
+              <span class="cal-glyph"
+                ><svg width="16" height="16"><use href="#i-calendar" /></svg
+              ></span>
+              <span class="value placeholder">Select a date</span>
+            </span>
+          </div>
         </div>
       </div>
     </div>
