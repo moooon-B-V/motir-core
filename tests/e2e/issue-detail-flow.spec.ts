@@ -213,18 +213,21 @@ test('@smoke inline assignee: assign then unassign, both persist across reload',
   await signUp(page, email);
   const projectId = await seedActiveProject(email, 'ASG');
   const item = await mk(page, projectId, { title: 'Assign me' });
-  const memberName = email.split('@')[0]!; // the AssigneePicker labels members by name
 
   await page.goto(`/issues/${item.identifier}`);
   await page.getByRole('button', { name: 'Edit Assignee' }).click();
   await page.getByRole('combobox', { name: 'Assignee' }).click();
-  await page.getByRole('option', { name: memberName, exact: true }).click();
+  // The member option's accessible name is `${name} ${email}` (label +
+  // secondary), so match on the email — unique + unambiguous vs "Unassigned".
+  await page.getByRole('option', { name: email }).click();
 
   await expect(async () => {
     expect((await getItem(page, item.id)).assigneeId).not.toBeNull();
   }).toPass();
+  // Reloaded + not editing: the assignee field now names the member, so the
+  // only place "Unassigned" could appear (the empty assignee field) is gone.
   await page.reload();
-  await expect(page.getByText(memberName).first()).toBeVisible();
+  await expect(page.getByText('Unassigned')).toHaveCount(0);
 
   // Unassign.
   await page.getByRole('button', { name: 'Edit Assignee' }).click();

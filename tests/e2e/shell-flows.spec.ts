@@ -104,7 +104,11 @@ test.describe('@smoke shell journeys', () => {
     for (const stop of stops) {
       await rail.getByRole('link', { name: stop.link }).click();
       await page.waitForURL(stop.url);
-      await expect(page.getByRole('heading', { name: stop.heading })).toBeVisible();
+      // exact:true — the /issues empty state also renders an h2 "No issues yet",
+      // and a non-exact name:'Issues' substring-matches it, so a bare match is a
+      // strict-mode violation once both headings have painted. Every stop's
+      // heading text is exact, so this disambiguates without losing coverage.
+      await expect(page.getByRole('heading', { name: stop.heading, exact: true })).toBeVisible();
       // The just-clicked item is current; Dashboard no longer is.
       await expect(rail.getByRole('link', { name: stop.link })).toHaveAttribute(
         'aria-current',
