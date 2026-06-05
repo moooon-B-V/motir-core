@@ -276,12 +276,12 @@ function clampTreePage(params: { take?: number; offset?: number }): {
   return { take, offset };
 }
 
-/** Turn a `take + 1` fetch into one level page: `hasMore` iff the extra row came
- * back, then map the first `take` rows to DTOs. */
-function buildTreeLevel(rows: WorkItemTreeRow[], take: number): TreeLevelDto {
+/** Turn a `take + 1` fetch + the level's total into one level page: `hasMore`
+ * iff the extra row came back, then map the first `take` rows to DTOs. */
+function buildTreeLevel(rows: WorkItemTreeRow[], take: number, total: number): TreeLevelDto {
   const hasMore = rows.length > take;
   const page = hasMore ? rows.slice(0, take) : rows;
-  return { rows: page.map(toWorkItemTreeRowDto), hasMore };
+  return { rows: page.map(toWorkItemTreeRowDto), hasMore, total };
 }
 
 export const workItemsService = {
@@ -916,14 +916,14 @@ export const workItemsService = {
       throw new ProjectNotFoundError(projectId);
     }
     const { take, offset } = clampTreePage(params);
-    const rows = await workItemRepository.findProjectTreeLevel(
-      projectId,
-      project.workspaceId,
-      null,
-      params.sort,
-      { take, offset },
-    );
-    return buildTreeLevel(rows, take);
+    const [rows, total] = await Promise.all([
+      workItemRepository.findProjectTreeLevel(projectId, project.workspaceId, null, params.sort, {
+        take,
+        offset,
+      }),
+      workItemRepository.countProjectTreeLevel(projectId, project.workspaceId, null),
+    ]);
+    return buildTreeLevel(rows, take, total);
   },
 
   /**
@@ -942,14 +942,17 @@ export const workItemsService = {
       throw new WorkItemNotFoundError(parentId);
     }
     const { take, offset } = clampTreePage(params);
-    const rows = await workItemRepository.findProjectTreeLevel(
-      parent.projectId,
-      parent.workspaceId,
-      parentId,
-      params.sort,
-      { take, offset },
-    );
-    return buildTreeLevel(rows, take);
+    const [rows, total] = await Promise.all([
+      workItemRepository.findProjectTreeLevel(
+        parent.projectId,
+        parent.workspaceId,
+        parentId,
+        params.sort,
+        { take, offset },
+      ),
+      workItemRepository.countProjectTreeLevel(parent.projectId, parent.workspaceId, parentId),
+    ]);
+    return buildTreeLevel(rows, take, total);
   },
 
   /**

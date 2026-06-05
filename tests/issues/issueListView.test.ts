@@ -70,14 +70,20 @@ describe('nextSort', () => {
 });
 
 describe('buildIssueListHref', () => {
-  it('omits both defaults — the canonical Tree URL is the bare pathname', () => {
+  it('the default-sorted Tree URL is the bare pathname (no view, no sort param)', () => {
     expect(buildIssueListHref('/issues', { view: 'tree' })).toBe('/issues');
+    expect(buildIssueListHref('/issues', { view: 'tree', sort: DEFAULT_SORT })).toBe('/issues');
+  });
+
+  it('the Tree carries a non-default sort too (sortable since 2.5.14)', () => {
+    // Pre-2.5.14 the Tree ignored sort; now sorting re-orders siblings, so the
+    // sort param must persist for the Tree view as well as the List.
     expect(
       buildIssueListHref('/issues', {
         view: 'tree',
         sort: { column: 'priority', direction: 'desc' },
       }),
-    ).toBe('/issues');
+    ).toBe('/issues?sort=priority%3Adesc');
   });
 
   it('adds view=list, and the sort param only when it is non-default', () => {

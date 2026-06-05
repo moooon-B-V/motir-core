@@ -157,8 +157,10 @@ export function buildIssueListHref(
 ): string {
   const params = new URLSearchParams();
   if (opts.view === 'list') params.set('view', 'list');
-  // Sort only applies to the List view, and only when it's not the default.
-  if (opts.view === 'list' && opts.sort && !isDefaultSort(opts.sort)) {
+  // Sort applies to BOTH views (the List since 2.5.8, the Tree since 2.5.14 —
+  // sorting siblings within their parent), emitted only when it's not the
+  // default `key` asc so a default-sorted URL stays canonical.
+  if (opts.sort && !isDefaultSort(opts.sort)) {
     params.set('sort', serializeSort(opts.sort));
   }
   // Filter applies to both views; appended in canonical order (see appendFilterParams).

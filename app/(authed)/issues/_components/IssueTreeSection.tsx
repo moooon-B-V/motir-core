@@ -1,6 +1,6 @@
 import { EmptyState } from '@/components/ui/EmptyState';
 import { workItemsService } from '@/lib/services/workItemsService';
-import type { IssueListView, IssueSort } from '@/lib/issues/issueListView';
+import { type IssueListView, type IssueSort, serializeSort } from '@/lib/issues/issueListView';
 import {
   toProjectTreeFilter,
   isFilterActive,
@@ -10,6 +10,7 @@ import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { toIssueRows, toIssueListRows } from './issueRows';
 import { IssueTreeTable } from './IssueTreeTable';
+import { IssueTreeStaticTable } from './IssueTreeStaticTable';
 import { IssueListTable } from './IssueListTable';
 import { NewIssueButton } from './NewIssueButton';
 
@@ -92,7 +93,28 @@ export async function IssueTreeSection({
     );
   }
 
-  const tree = await workItemsService.getProjectTree(projectId, repoFilter, ctx);
-  if (tree.length === 0) return empty;
-  return <IssueTreeTable rows={toIssueRows(tree, workflow, members)} />;
+  // FILTERED tree → the context-preserving whole-forest read (already bounded by
+  // the filter; matched nodes keep their ancestors). Rendered with the static
+  // tree — lazy-loading a context-preserving filter is an Epic-6 problem.
+  if (filtered) {
+    const tree = await workItemsService.getProjectTree(projectId, repoFilter, ctx);
+    if (tree.length === 0) return empty;
+    return <IssueTreeStaticTable rows={toIssueRows(tree, workflow, members)} />;
+  }
+
+  // UNFILTERED tree → the LAZY path (finding #57): load only the first page of
+  // ROOTS; children stream in on expand. Keyed by sort so a header-sort remounts
+  // the tree against freshly-sorted roots.
+  const initialLevel = await workItemsService.listRootIssues(projectId, { sort }, ctx);
+  if (initialLevel.total === 0) return empty;
+  return (
+    <IssueTreeTable
+      key={serializeSort(sort)}
+      initialLevel={initialLevel}
+      sort={sort}
+      filter={filter}
+      workflow={workflow}
+      members={members}
+    />
+  );
 }
