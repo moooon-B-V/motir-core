@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { useToast } from '@/components/ui/Toast';
@@ -242,11 +243,10 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
 
         <div className="flex flex-col gap-1 font-sans text-sm">
           <span className="text-(--el-text) font-medium">Due date</span>
-          <Input
-            type="date"
+          <DatePicker
             aria-label="Due date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
+            value={dueDate || null}
+            onChange={(next) => setDueDate(next ?? '')}
             disabled={isPending}
           />
         </div>
