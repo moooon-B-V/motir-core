@@ -1,12 +1,13 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/Toast';
 
 // Hoisted spies the mock factories close over (vi.mock is hoisted above imports).
-const { refresh, createIssueActionSpy } = vi.hoisted(() => ({
+const { refresh, createIssueActionSpy, listCreateLinkCandidatesSpy } = vi.hoisted(() => ({
   refresh: vi.fn(),
   createIssueActionSpy: vi.fn(),
+  listCreateLinkCandidatesSpy: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh, push: vi.fn() }) }));
@@ -14,6 +15,8 @@ vi.mock('@/app/(authed)/issues/actions', () => ({
   createIssueAction: createIssueActionSpy,
   // The modal now renders ParentPicker, which fetches candidates on mount.
   listCandidateParentsAction: vi.fn(async () => ({ ok: true, candidates: [] })),
+  // 2.4.10: the Linked-issues section fetches link candidates on mount.
+  listCreateLinkCandidatesAction: (...args: unknown[]) => listCreateLinkCandidatesSpy(...args),
 }));
 // Heavy palette deps — only the ⌘K-command test renders AppCommandPalette, but
 // the mocks must exist at module-eval time.
@@ -72,6 +75,12 @@ function Shell({ hasProject = true }: { hasProject?: boolean }) {
 }
 
 const modalHeading = () => screen.queryByRole('heading', { name: 'Create issue' });
+
+beforeEach(() => {
+  // Default: the Linked-issues section's mount fetch resolves to no candidates.
+  // Individual link tests override this with a candidate set.
+  listCreateLinkCandidatesSpy.mockResolvedValue({ ok: true, candidates: [] });
+});
 
 afterEach(() => {
   cleanup();
@@ -191,5 +200,106 @@ describe('CreateIssueModal — validation + submit', () => {
     });
     await waitFor(() => expect(screen.getByText('That project no longer exists.')).toBeTruthy());
     expect(modalHeading()).not.toBeNull(); // stays open so the user can retry
+  });
+});
+
+// ── Subtask 2.4.10 — the create-modal "Linked issues" section ──────────────────
+describe('CreateIssueModal — linked issues (2.4.10)', () => {
+  const candidate = {
+    id: 'cand-1',
+    parentId: null,
+    kind: 'task' as const,
+    key: 9,
+    identifier: 'PROD-9',
+    title: 'Callback bug',
+    status: 'todo',
+    priority: 'medium' as const,
+    assigneeId: null,
+    position: 'a1',
+    archivedAt: null,
+  };
+
+  function openModal() {
+    render(<Shell />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create issue' }));
+  }
+
+  // Pick the fetched candidate in the Linked-issues search combobox and click Add.
+  async function addPendingLink() {
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Issue to link' }));
+    fireEvent.click(await screen.findByRole('option', { name: /Callback bug/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+  }
+
+  it('collects a pending link as a row and a second Add is excluded for the same pair', async () => {
+    listCreateLinkCandidatesSpy.mockResolvedValue({ ok: true, candidates: [candidate] });
+    openModal();
+
+    await addPendingLink();
+
+    // The pending row renders (default relationship "Blocked by" + the issue).
+    expect(await screen.findByText('Callback bug')).toBeTruthy();
+    expect(screen.getByText('PROD-9')).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: /Remove pending blocked by link to PROD-9/ }),
+    ).toBeTruthy();
+
+    // The same (target, relationship) pair is now excluded — reopening the
+    // combobox offers no candidates.
+    fireEvent.click(screen.getByRole('combobox', { name: 'Issue to link' }));
+    expect(await screen.findByText('No matching issues.')).toBeTruthy();
+  });
+
+  it('removing a pending row drops it', async () => {
+    listCreateLinkCandidatesSpy.mockResolvedValue({ ok: true, candidates: [candidate] });
+    openModal();
+
+    await addPendingLink();
+    const remove = await screen.findByRole('button', {
+      name: /Remove pending blocked by link to PROD-9/,
+    });
+    fireEvent.click(remove);
+    await waitFor(() => expect(screen.queryByText('Callback bug')).toBeNull());
+  });
+
+  it('submit threads the collected links to createIssueAction', async () => {
+    listCreateLinkCandidatesSpy.mockResolvedValue({ ok: true, candidates: [candidate] });
+    createIssueActionSpy.mockResolvedValue({ ok: true, id: 'wi_9', identifier: 'WFD-9' });
+    openModal();
+
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Needs PROD-9' } });
+    await addPendingLink();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    });
+
+    expect(createIssueActionSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Needs PROD-9',
+        links: [{ targetId: 'cand-1', relationship: 'blocked_by' }],
+      }),
+    );
+  });
+
+  it('a links-field error result keeps the modal open and surfaces inline (no toast)', async () => {
+    listCreateLinkCandidatesSpy.mockResolvedValue({ ok: true, candidates: [candidate] });
+    createIssueActionSpy.mockResolvedValue({
+      ok: false,
+      error: 'That would create a dependency cycle.',
+      field: 'links',
+    });
+    openModal();
+
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Cyclic' } });
+    await addPendingLink();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    });
+
+    await waitFor(() =>
+      expect(screen.getByText('That would create a dependency cycle.')).toBeTruthy(),
+    );
+    expect(modalHeading()).not.toBeNull(); // stays open; the pending link is preserved
   });
 });

@@ -9,6 +9,7 @@
 // JSON-serialize losslessly as numbers). The mapper owns those conversions.
 
 import type { WorkflowDto } from './workflows';
+import type { RelationshipKind } from './workItemLinks';
 
 export type WorkItemKindDto = 'epic' | 'story' | 'task' | 'bug' | 'subtask';
 export type WorkItemPriorityDto = 'lowest' | 'low' | 'medium' | 'high' | 'highest';
@@ -216,6 +217,30 @@ export interface CreateWorkItemInput {
   priority?: WorkItemPriorityDto;
   dueDate?: string | null; // ISO 8601
   estimateMinutes?: number | null;
+  /**
+   * Links to create ATOMICALLY with the issue (Subtask 2.4.10 — the create
+   * modal's "Linked issues" section). Each entry is the user-facing
+   * (relationship, target) pair — NOT a directed storage edge — because at
+   * create time the new item has no id yet, so the from/to direction can't be
+   * resolved by the caller. The service maps each via `relationshipToLink`
+   * once the row exists (the single source of truth for the `blocks` flip),
+   * and writes the `work_item_link` rows inside the same transaction as the
+   * item insert (issue + links commit or roll back together). Omitted/empty →
+   * a plain create, unchanged from 1.4.4.
+   */
+  links?: CreateWorkItemLinkInput[];
+}
+
+/**
+ * One pending link collected in the create modal (Subtask 2.4.10): the chosen
+ * relationship + the target issue's id. Distinct from {@link LinkWorkItemsInput}
+ * (the directed `fromId → toId` storage shape) — here the new item's id isn't
+ * known until it's created, so the pair stays in the UI's
+ * {@link RelationshipKind} terms and the service resolves direction.
+ */
+export interface CreateWorkItemLinkInput {
+  targetId: string;
+  relationship: RelationshipKind;
 }
 
 /**
