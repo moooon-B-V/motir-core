@@ -48,6 +48,10 @@ export interface CreateIssueInput {
   // land the modal omits them and an issue is created top-level + unassigned.
   parentId?: string | null;
   assigneeId?: string | null;
+  // Optional Due date (Subtask 2.3.12 — the modal's DatePicker field; finding
+  // #56 "mirror Jira"). An ISO 8601 string the service stores on the work item;
+  // omitted/null when no date is chosen (Due date is nullable).
+  dueDate?: string | null;
   // Links to create with the issue (Subtask 2.4.10 — the modal's "Linked
   // issues" section). Each is the user-facing (relationship, target) pair; the
   // service resolves direction + writes them atomically with the item. Validated
@@ -88,6 +92,7 @@ export async function createIssueAction(input: CreateIssueInput): Promise<Create
         parentId: input.parentId ?? null,
         assigneeId: input.assigneeId ?? null,
         ...(input.priority ? { priority: input.priority } : {}),
+        ...(input.dueDate ? { dueDate: input.dueDate } : {}),
         ...(links.length ? { links } : {}),
       },
       { userId: ctx.userId, workspaceId: ctx.workspaceId }, // reporter = session user
