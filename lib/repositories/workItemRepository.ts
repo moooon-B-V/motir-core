@@ -492,12 +492,17 @@ export const workItemRepository = {
     workspaceId: string,
     sort: IssueSort,
     filter: RepoIssueFilter = {},
+    page?: { limit: number; offset: number },
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemListRow[]> {
     const client = tx ?? db;
     const matched = buildIssueFilterSql(filter, 'w');
     const orderCol = ISSUE_SORT_SQL[sort.column];
     const dir = sort.direction === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`;
+    // Server-side window (Subtask 2.5.12): the List is LIMIT/OFFSET-paged so it
+    // never ships the whole backlog. The total-order ORDER BY (sort col + the
+    // `key` ASC tiebreak) makes OFFSET paging stable — no row skips/repeats.
+    const limitSql = page ? Prisma.sql`LIMIT ${page.limit} OFFSET ${page.offset}` : Prisma.empty;
 
     return client.$queryRaw<WorkItemListRow[]>`
       SELECT w."id",
@@ -520,7 +525,35 @@ export const workItemRepository = {
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
           AND (${matched})
-        ORDER BY ${orderCol} ${dir} NULLS LAST, w."key" ASC`;
+        ORDER BY ${orderCol} ${dir} NULLS LAST, w."key" ASC
+        ${limitSql}`;
+  },
+
+  /**
+   * COUNT of a project's non-archived issues matching the SAME filter axes as
+   * `findProjectIssuesFlat` (Subtask 2.5.12) — the denominator of the List's
+   * "1–50 of N" pager, so it tracks the active 2.5.4 filter. A single
+   * `COUNT(*)` over `work_item` (no joins — the filter predicate only touches
+   * `work_item` columns), the same `projectId` + `workspaceId` tenant gate
+   * (finding #26). `::int` casts Postgres' `bigint` count to a JS number (a
+   * project's row count is far under 2^53). Read-only path → `db` singleton.
+   */
+  async countProjectIssues(
+    projectId: string,
+    workspaceId: string,
+    filter: RepoIssueFilter = {},
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const client = tx ?? db;
+    const matched = buildIssueFilterSql(filter, 'w');
+    const rows = await client.$queryRaw<Array<{ count: number }>>`
+      SELECT COUNT(*)::int AS "count"
+        FROM "work_item" w
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND (${matched})`;
+    return rows[0]?.count ?? 0;
   },
 
   /**

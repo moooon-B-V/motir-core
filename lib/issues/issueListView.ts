@@ -78,6 +78,53 @@ export function serializeSort(sort: IssueSort): string {
   return `${sort.column}:${sort.direction}`;
 }
 
+/**
+ * The List's fixed page size (Subtask 2.5.12, the 2.5.10 design constant —
+ * Epic 6 may make it configurable; not here). The flat List is server-paged
+ * (LIMIT/OFFSET + count) so it never loads the whole backlog (finding #57).
+ */
+export const ISSUE_LIST_PAGE_SIZE = 50;
+
+/**
+ * Parse `?page=N` into a 1-based page index. Non-numeric / `< 1` / absent → 1.
+ * The UPPER bound is NOT clamped here — the parser is filter-blind, so the
+ * service clamps an out-of-range page to the last page once it knows the
+ * filtered total (the 2.5.10 edge spec). The Tree view ignores `page` (a
+ * hierarchy can't be cut at row N; it scales via lazy-load, 2.5.13/2.5.14).
+ */
+export function parsePage(raw: string | string[] | undefined): number {
+  if (typeof raw !== 'string') return 1;
+  const n = Number.parseInt(raw, 10);
+  return Number.isInteger(n) && n >= 1 ? n : 1;
+}
+
+/** A pager slot: a concrete page number, or a collapsed-gap marker. */
+export type PageItem = number | 'ellipsis';
+
+/**
+ * The page-number sequence for the List pager (Subtask 2.5.12), matching the
+ * 2.5.10 design: always the first + last page, a 3-wide window around the
+ * current page, and an `'ellipsis'` wherever a gap of >1 is collapsed. Examples
+ * (totalPages 25): page 1 → `[1,2,3,'ellipsis',25]`; page 13 →
+ * `[1,'ellipsis',12,13,14,'ellipsis',25]`; page 25 → `[1,'ellipsis',23,24,25]`.
+ * A small set (≤7 pages) shows every page with no ellipsis.
+ */
+export function pageItems(current: number, totalPages: number): PageItem[] {
+  const total = Math.max(totalPages, 1);
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const shown = new Set<number>([1, total, current, current - 1, current + 1]);
+  // Always show three pages at the touched edge (matches the drawn panels).
+  if (current <= 3) [2, 3].forEach((p) => shown.add(p));
+  if (current >= total - 2) [total - 1, total - 2].forEach((p) => shown.add(p));
+  const pages = [...shown].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b);
+  const items: PageItem[] = [];
+  for (let i = 0; i < pages.length; i++) {
+    if (i > 0 && pages[i]! - pages[i - 1]! > 1) items.push('ellipsis');
+    items.push(pages[i]!);
+  }
+  return items;
+}
+
 function isDefaultSort(sort: IssueSort): boolean {
   return sort.column === DEFAULT_SORT.column && sort.direction === DEFAULT_SORT.direction;
 }
@@ -106,7 +153,7 @@ export function nextSort(current: IssueSort, column: IssueSortColumn): IssueSort
  */
 export function buildIssueListHref(
   pathname: string,
-  opts: { view: IssueListView; sort?: IssueSort; filter?: IssueFilter },
+  opts: { view: IssueListView; sort?: IssueSort; filter?: IssueFilter; page?: number },
 ): string {
   const params = new URLSearchParams();
   if (opts.view === 'list') params.set('view', 'list');
@@ -116,6 +163,11 @@ export function buildIssueListHref(
   }
   // Filter applies to both views; appended in canonical order (see appendFilterParams).
   if (opts.filter) appendFilterParams(params, opts.filter);
+  // Page only applies to the List, and only past page 1 (page 1 is the clean
+  // canonical URL — so a sort/filter change, which omits page, resets to page 1).
+  if (opts.view === 'list' && opts.page && opts.page > 1) {
+    params.set('page', String(opts.page));
+  }
   const qs = params.toString();
   return qs ? `${pathname}?${qs}` : pathname;
 }

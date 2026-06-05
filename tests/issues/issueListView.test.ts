@@ -3,6 +3,8 @@ import {
   DEFAULT_SORT,
   buildIssueListHref,
   nextSort,
+  pageItems,
+  parsePage,
   parseSort,
   parseView,
   serializeSort,
@@ -88,5 +90,58 @@ describe('buildIssueListHref', () => {
         sort: { column: 'priority', direction: 'desc' },
       }),
     ).toBe('/issues?view=list&sort=priority%3Adesc');
+  });
+});
+
+describe('parsePage (Subtask 2.5.12)', () => {
+  it('parses a positive integer; non-numeric / <1 / absent → 1', () => {
+    expect(parsePage('3')).toBe(3);
+    expect(parsePage('1')).toBe(1);
+    expect(parsePage(undefined)).toBe(1);
+    expect(parsePage('0')).toBe(1);
+    expect(parsePage('-2')).toBe(1);
+    expect(parsePage('abc')).toBe(1);
+    expect(parsePage(['2', '3'])).toBe(1); // arrays aren't a valid single page
+  });
+
+  it('does NOT upper-clamp (the service clamps to the filtered last page)', () => {
+    expect(parsePage('9999')).toBe(9999);
+  });
+});
+
+describe('pageItems (Subtask 2.5.12)', () => {
+  it('shows every page with no ellipsis when small (≤7)', () => {
+    expect(pageItems(1, 1)).toEqual([1]);
+    expect(pageItems(3, 5)).toEqual([1, 2, 3, 4, 5]);
+    expect(pageItems(4, 7)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it('truncates both ends around the current page (matches the 2.5.10 design)', () => {
+    expect(pageItems(1, 25)).toEqual([1, 2, 3, 'ellipsis', 25]);
+    expect(pageItems(13, 25)).toEqual([1, 'ellipsis', 12, 13, 14, 'ellipsis', 25]);
+    expect(pageItems(25, 25)).toEqual([1, 'ellipsis', 23, 24, 25]);
+  });
+
+  it('shows a single page when there are no others', () => {
+    expect(pageItems(1, 0)).toEqual([1]);
+  });
+});
+
+describe('buildIssueListHref — page param (Subtask 2.5.12)', () => {
+  it('sets ?page only on the List, past page 1, preserving sort + filter', () => {
+    expect(buildIssueListHref('/issues', { view: 'list', page: 3 })).toBe(
+      '/issues?view=list&page=3',
+    );
+    // page 1 is the clean canonical URL (so a sort/filter change resets it)
+    expect(buildIssueListHref('/issues', { view: 'list', page: 1 })).toBe('/issues?view=list');
+    // the Tree never paginates
+    expect(buildIssueListHref('/issues', { view: 'tree', page: 5 })).toBe('/issues');
+    expect(
+      buildIssueListHref('/issues', {
+        view: 'list',
+        sort: { column: 'priority', direction: 'desc' },
+        page: 2,
+      }),
+    ).toBe('/issues?view=list&sort=priority%3Adesc&page=2');
   });
 });
