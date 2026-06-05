@@ -511,7 +511,7 @@ export const workItemRepository = {
         LEFT JOIN "user" au ON au."id" = w."assigneeId"
         LEFT JOIN "user" ru ON ru."id" = w."reporterId"
         LEFT JOIN "workflow_status" ws
-               ON ws."projectId" = w."projectId" AND ws."key" = w."status"
+               ON ws."project_id" = w."projectId" AND ws."key" = w."status"
         WHERE w."projectId" = ${projectId}
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
