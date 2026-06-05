@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -33,14 +34,13 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
+  const t = await getTranslations('issueViews');
+
   const ctx = await getActiveProject();
   if (!ctx) {
     return (
       <div className="mx-auto max-w-[48rem]">
-        <EmptyState
-          title="No project selected"
-          description="Pick a project from the switcher to view its issues."
-        />
+        <EmptyState title={t('noProjectTitle')} description={t('noProjectDetailDescription')} />
       </div>
     );
   }
@@ -79,7 +79,7 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
             href={`/issues/${item.identifier}/edit`}
             className="border-(--el-border) text-(--el-text) hover:bg-(--el-surface) ml-auto rounded-md border px-3 py-1.5 font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >
-            Edit
+            {t('edit')}
           </Link>
         </div>
         <h1 className="text-(--el-text) font-serif text-2xl font-semibold">{item.title}</h1>
@@ -89,15 +89,15 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_18rem]">
         <main className="flex flex-col gap-6">
           <ContentSectionCard
-            title="Description"
-            subtitle="what to do"
+            title={t('description')}
+            subtitle={t('descriptionGloss')}
             editHref={`/issues/${item.identifier}/edit`}
           >
             {item.descriptionMd ? (
-              <MarkdownView value={item.descriptionMd} aria-label="Issue description" />
+              <MarkdownView value={item.descriptionMd} aria-label={t('issueDescriptionAria')} />
             ) : (
               <p className="font-sans text-sm text-(--el-text-secondary) italic">
-                No description yet.
+                {t('noDescription')}
               </p>
             )}
           </ContentSectionCard>

@@ -1,4 +1,7 @@
 import { Prisma } from '@prisma/client';
+import { createTranslator } from 'next-intl';
+import { getMessagesFor } from '@/lib/i18n/messages';
+import { currentLocale } from '@/lib/i18n/serverLocale';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -293,6 +296,19 @@ export const workflowsService = {
     workspaceId: string,
     tx: Prisma.TransactionClient,
   ): Promise<void> {
+    // Seed the protected-default labels in the CREATOR's locale. The labels are
+    // persisted, user-editable rows (not live-translated): the status `key`
+    // stays the stable join target, only the human label is localized at
+    // creation. Off-request callers (the unit suite) fall back to the base
+    // locale via currentLocale(), so the English seed (byte-identical to
+    // DEFAULT_STATUSES) is preserved there.
+    const locale = await currentLocale();
+    const tStatus = createTranslator({
+      locale,
+      messages: getMessagesFor(locale),
+      namespace: 'labels.defaultStatus',
+    }) as (key: string) => string;
+
     const idByKey = new Map<string, string>();
     for (const status of DEFAULT_STATUSES) {
       const row = await workflowsRepository.createStatus(
@@ -300,7 +316,7 @@ export const workflowsService = {
           projectId,
           workspaceId,
           key: status.key,
-          label: status.label,
+          label: tStatus(status.key),
           category: status.category,
           position: status.position,
           isInitial: status.isInitial,

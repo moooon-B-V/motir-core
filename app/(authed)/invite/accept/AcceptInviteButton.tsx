@@ -2,11 +2,13 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { FormAlert } from '@/app/(auth)/_components/AuthShell';
 import { switchWorkspaceAction } from '../../_actions';
 
 export function AcceptInviteButton({ token }: { token: string }) {
+  const t = useTranslations('auth');
   const router = useRouter();
   const [error, setError] = useState<string | undefined>();
   const [isPending, startTransition] = useTransition();
@@ -21,7 +23,7 @@ export function AcceptInviteButton({ token }: { token: string }) {
         // Re-render the page to show the matching error state (expired /
         // used / wrong-email) — the server re-inspects the token.
         router.refresh();
-        setError('This invite could not be accepted. Refresh to see details.');
+        setError(t('inviteAcceptFailed'));
         return;
       }
       const data = (await res.json()) as { workspaceId: string };
@@ -37,7 +39,7 @@ export function AcceptInviteButton({ token }: { token: string }) {
     <div className="flex flex-col gap-3">
       {error ? <FormAlert>{error}</FormAlert> : null}
       <Button variant="primary" className="w-full" onClick={handleAccept} loading={isPending}>
-        Accept invite
+        {t('acceptInvite')}
       </Button>
     </div>
   );

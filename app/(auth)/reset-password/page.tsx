@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import { Mail } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { AuthShell, FormAlert } from '../_components/AuthShell';
@@ -27,6 +28,7 @@ import { AuthShell, FormAlert } from '../_components/AuthShell';
  * rather than silently flipping to the confirmation screen.
  */
 export default function ResetPasswordPage() {
+  const t = useTranslations('auth');
   const [state, setState] = useState<'request' | 'confirmation'>('request');
   const [email, setEmail] = useState('');
   const [pageError, setPageError] = useState('');
@@ -45,9 +47,7 @@ export default function ResetPasswordPage() {
         body: JSON.stringify({ email, redirectTo }),
       });
       if (res.status === 429) {
-        setPageError(
-          'Too many reset requests from this device. Please wait an hour and try again.',
-        );
+        setPageError(t('tooManyRequests'));
         setSubmitting(false);
         return;
       }
@@ -57,32 +57,29 @@ export default function ResetPasswordPage() {
       setState('confirmation');
       setSubmitting(false);
     } catch {
-      setPageError("We couldn't reach the server. Check your connection and try again.");
+      setPageError(t('couldntReachServer'));
       setSubmitting(false);
     }
   }
 
   if (state === 'confirmation') {
     return (
-      <AuthShell
-        headline="Check your inbox"
-        subhead={`If an account exists for that email, we've sent a one-time link to reset your password. The link expires in 1 hour.`}
-      >
+      <AuthShell headline={t('checkInbox')} subhead={t('checkInboxSubhead')}>
         <div className="flex flex-col gap-4">
           <Link
             href="/sign-in"
             className="inline-flex h-(--height-btn-lg) w-full items-center justify-center rounded-(--radius-btn) border border-(--el-border-strong) bg-transparent px-6 font-sans text-base font-medium text-(--el-text) transition-colors hover:bg-(--el-surface) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            Back to sign in
+            {t('backToSignIn')}
           </Link>
           <p className="text-(--el-text-muted) font-sans text-sm">
-            Didn’t get it?{' '}
+            {t('didntGetIt')}{' '}
             <button
               type="button"
               onClick={() => setState('request')}
               className="font-medium text-(--el-link) hover:text-(--el-link-pressed) focus-visible:outline-none focus-visible:underline"
             >
-              Check spam, or try another email.
+              {t('checkSpam')}
             </button>
           </p>
         </div>
@@ -91,10 +88,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <AuthShell
-      headline="Reset your password"
-      subhead="Enter the email tied to your account and we'll send a one-time link."
-    >
+    <AuthShell headline={t('resetYourPassword')} subhead={t('resetSubhead')}>
       <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
         {pageError ? <FormAlert>{pageError}</FormAlert> : null}
         <Input
@@ -102,22 +96,22 @@ export default function ResetPasswordPage() {
           name="email"
           autoComplete="email"
           inputMode="email"
-          placeholder="Email address"
+          placeholder={t('emailAddress')}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           addonStart={<Mail className="h-5 w-5" aria-hidden />}
-          aria-label="Email address"
+          aria-label={t('emailAddress')}
           required
           autoFocus
         />
         <Button type="submit" variant="primary" size="lg" className="w-full" loading={submitting}>
-          {submitting ? 'Sending…' : 'Send reset link'}
+          {submitting ? t('sending') : t('sendResetLink')}
         </Button>
         <Link
           href="/sign-in"
           className="inline-flex h-(--height-btn-lg) w-full items-center justify-center rounded-(--radius-btn) border border-(--el-border-strong) bg-transparent px-6 font-sans text-base font-medium text-(--el-text) transition-colors hover:bg-(--el-surface) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          Back to sign in
+          {t('backToSignIn')}
         </Link>
       </form>
     </AuthShell>

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import type { ReadinessVerdictDto, RelationshipLinkDto } from '@/lib/dto/workItems';
 import type { WorkflowDto, StatusCategoryDto } from '@/lib/dto/workflows';
 import { ContentSectionCard } from './ContentSectionCard';
@@ -58,6 +59,7 @@ function LinkRow({
   identifier?: string;
   relationshipLabel: string;
 }) {
+  const t = useTranslations('issueViews');
   const { item } = link;
   const statusMeta = workflow.statuses.find((s) => s.key === item.status);
   return (
@@ -70,7 +72,7 @@ function LinkRow({
           <span
             className="bg-(--el-warning) h-1.5 w-1.5 shrink-0 rounded-full"
             aria-hidden
-            title="Open blocker"
+            title={t('openBlocker')}
           />
         ) : null}
         <IssueTypeIcon type={item.kind} className="h-4 w-4 shrink-0" />
@@ -114,12 +116,29 @@ export function RelationshipsPanel({
   currentItemId,
   identifier,
 }: RelationshipsPanelProps) {
+  const t = useTranslations('issueViews');
+  const tl = useTranslations('labels');
   const groups = [
-    { key: 'blocked_by', label: 'Blocked by', items: blockedBy, blockerGroup: true },
-    { key: 'blocks', label: 'Blocks', items: blocks, blockerGroup: false },
-    { key: 'relates_to', label: 'Relates to', items: relatesTo, blockerGroup: false },
-    { key: 'duplicates', label: 'Duplicates', items: duplicates, blockerGroup: false },
-    { key: 'clones', label: 'Clones', items: clones, blockerGroup: false },
+    {
+      key: 'blocked_by',
+      label: tl('relationship.blocked_by'),
+      items: blockedBy,
+      blockerGroup: true,
+    },
+    { key: 'blocks', label: tl('relationship.blocks'), items: blocks, blockerGroup: false },
+    {
+      key: 'relates_to',
+      label: tl('relationship.relates_to'),
+      items: relatesTo,
+      blockerGroup: false,
+    },
+    {
+      key: 'duplicates',
+      label: tl('relationship.duplicates'),
+      items: duplicates,
+      blockerGroup: false,
+    },
+    { key: 'clones', label: tl('relationship.clones'), items: clones, blockerGroup: false },
   ];
   const nonEmpty = groups.filter((g) => g.items.length > 0);
   const hasBlockers = blockedBy.length > 0;
@@ -127,7 +146,7 @@ export function RelationshipsPanel({
   const canEdit = Boolean(editable && currentItemId && identifier);
 
   return (
-    <ContentSectionCard title="Relationships" subtitle="dependencies & links">
+    <ContentSectionCard title={t('relationships')} subtitle={t('relationshipsGloss')}>
       <div className="flex flex-col gap-4">
         {canEdit ? (
           <AddLinkControl currentItemId={currentItemId!} identifier={identifier!} />
@@ -147,7 +166,7 @@ export function RelationshipsPanel({
 
         {nonEmpty.length === 0 ? (
           <p className="font-sans text-sm text-(--el-text-secondary) italic">
-            No linked issues yet.
+            {t('noLinkedIssues')}
           </p>
         ) : (
           nonEmpty.map((group) => (

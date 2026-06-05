@@ -16,9 +16,11 @@ export class NotProjectAdminError extends Error {
 /** A status with this `key` already exists in the project. → 422. */
 export class StatusKeyConflictError extends Error {
   readonly code = 'STATUS_KEY_CONFLICT' as const;
+  readonly key: string;
   constructor(key: string) {
     super(`A status with key "${key}" already exists in this project.`);
     this.name = 'StatusKeyConflictError';
+    this.key = key;
   }
 }
 
@@ -84,9 +86,11 @@ export class DefaultStatusProtectedError extends Error {
 /** Refuse to delete the project's initial status. → 422. */
 export class CannotDeleteInitialStatusError extends Error {
   readonly code = 'CANNOT_DELETE_INITIAL_STATUS' as const;
+  readonly statusKey: string;
   constructor(statusKey: string) {
     super(`Status "${statusKey}" is the initial status and can't be deleted.`);
     this.name = 'CannotDeleteInitialStatusError';
+    this.statusKey = statusKey;
   }
 }
 
@@ -97,8 +101,10 @@ export class CannotDeleteInitialStatusError extends Error {
  */
 export class CannotDeleteLastTerminalStatusError extends Error {
   readonly code = 'CANNOT_DELETE_LAST_TERMINAL_STATUS' as const;
+  readonly statusKey: string;
   constructor(statusKey: string) {
     super(`Status "${statusKey}" is the only terminal status — a project needs at least one.`);
     this.name = 'CannotDeleteLastTerminalStatusError';
+    this.statusKey = statusKey;
   }
 }

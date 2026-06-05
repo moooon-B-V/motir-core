@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import {
   BarChart3,
   BookOpen,
@@ -49,6 +50,7 @@ function isActive(pathname: string, match: string): boolean {
 }
 
 export function SidebarNav({ activeProject, projects, variant = 'rail' }: SidebarNavProps) {
+  const t = useTranslations('shell');
   const pathname = usePathname();
   const [storeCollapsed] = useSidebarCollapsed();
   const isDrawer = variant === 'drawer';
@@ -65,25 +67,25 @@ export function SidebarNav({ activeProject, projects, variant = 'rail' }: Sideba
       items: [
         {
           icon: <LayoutDashboard />,
-          label: 'Dashboard',
+          label: t('nav.dashboard'),
           href: '/dashboard',
           active: isActive(pathname, '/dashboard'),
         },
         {
           icon: <CircleDot />,
-          label: 'Issues',
+          label: t('nav.issues'),
           href: '/issues',
           active: isActive(pathname, '/issues'),
         },
         {
           icon: <Columns3 />,
-          label: 'Boards',
+          label: t('nav.boards'),
           href: '/boards',
           active: isActive(pathname, '/boards'),
         },
         {
           icon: <BarChart3 />,
-          label: 'Reports',
+          label: t('nav.reports'),
           href: '/reports',
           active: isActive(pathname, '/reports'),
         },
@@ -96,7 +98,7 @@ export function SidebarNav({ activeProject, projects, variant = 'rail' }: Sideba
     items: [
       {
         icon: <Settings />,
-        label: 'Settings',
+        label: t('nav.settings'),
         // Deep-link to project settings when a project is active; otherwise
         // there's nothing project-scoped to configure, so go to workspace.
         href: hasProject ? '/settings/project' : '/settings/workspace',
@@ -108,13 +110,13 @@ export function SidebarNav({ activeProject, projects, variant = 'rail' }: Sideba
         // Operator surface (Subtask 1.6.5) — the workspace's background-job runs
         // + dead-letter queue. A workspace-scoped settings sub-page.
         icon: <ListChecks />,
-        label: 'Job runs',
+        label: t('nav.jobRuns'),
         href: '/settings/workspace/jobs',
         active: isActive(pathname, '/settings/workspace/jobs'),
       },
       {
         icon: <BookOpen />,
-        label: 'Docs',
+        label: t('nav.docs'),
         href: DOCS_URL,
       },
     ],

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
 
 // AddLinkControl (Subtask 2.4.9) drives the detail-page Server Actions — stub
 // them + next/navigation so the client logic is testable under happy-dom.

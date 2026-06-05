@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { X } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { Button } from '@/components/ui/Button';
@@ -26,6 +27,8 @@ export function RemoveLinkButton({
   targetIdentifier: string;
 }) {
   const router = useRouter();
+  const t = useTranslations('issueViews');
+  const tc = useTranslations('common');
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -53,16 +56,19 @@ export function RemoveLinkButton({
     >
       <Popover.Trigger
         className="text-(--el-text-muted) hover:bg-(--el-tint-rose) hover:text-(--el-danger) inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-        aria-label={`Remove ${relationshipLabel} link to ${targetIdentifier}`}
+        aria-label={t('removeLinkAria', {
+          relationship: relationshipLabel,
+          target: targetIdentifier,
+        })}
       >
         <X className="h-[15px] w-[15px]" aria-hidden />
       </Popover.Trigger>
       <Popover.Content width={300} align="end">
         <div className="flex flex-col gap-3 p-3.5">
           <p className="text-(--el-text) font-sans text-sm leading-snug">
-            Remove the {relationshipLabel.toLowerCase()} link to{' '}
-            <span className="font-mono text-xs">{targetIdentifier}</span>? The issue isn’t deleted —
-            only the link.
+            {t('removeConfirmBefore', { relationship: relationshipLabel.toLowerCase() })}{' '}
+            <span className="font-mono text-xs">{targetIdentifier}</span>
+            {t('removeConfirmAfter', { relationship: relationshipLabel.toLowerCase() })}
           </p>
           {error ? (
             <p className="text-(--el-text-strong) bg-(--el-tint-rose) rounded-md px-2.5 py-1.5 font-sans text-xs">
@@ -71,10 +77,10 @@ export function RemoveLinkButton({
           ) : null}
           <div className="flex justify-end gap-2">
             <Button size="sm" variant="ghost" onClick={() => setOpen(false)} disabled={isPending}>
-              Cancel
+              {tc('cancel')}
             </Button>
             <Button size="sm" variant="danger" onClick={confirm} loading={isPending}>
-              Remove link
+              {t('removeLink')}
             </Button>
           </div>
         </div>

@@ -1,4 +1,8 @@
 import type { NextConfig } from 'next';
+import createNextIntlPlugin from 'next-intl/plugin';
+
+// Wires next-intl's request config (./i18n/request.ts by default) into the build.
+const withNextIntl = createNextIntlPlugin();
 
 // PRODECT_FINDINGS #3: `next build`'s "Collecting page data" step evaluates
 // every route module — including pure server-handler routes that never touch
@@ -46,4 +50,4 @@ const nextConfig: NextConfig = {
   ...(process.env['E2E_DISABLE_DEV_INDICATOR'] ? { devIndicators: false as const } : {}),
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

@@ -3,6 +3,7 @@
 import { useState, useTransition, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { RefreshCw, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
@@ -12,6 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils/cn';
 import { formatDateTime } from '@/lib/utils/datetime';
+import type { Locale } from '@/lib/i18n/locales';
 import type { JobRunDTO, JobRunDlqDTO, JobRunStatus } from '@/lib/dto/jobs';
 import { replayDlqAction } from '../actions';
 
@@ -29,12 +31,7 @@ export type JobsTab = 'runs' | 'dlq' | 'system';
 
 const BASE = '/settings/workspace/jobs';
 
-const STATUS_FILTERS: { label: string; value: JobRunStatus | 'all' }[] = [
-  { label: 'All', value: 'all' },
-  { label: 'Succeeded', value: 'succeeded' },
-  { label: 'Failed', value: 'failed' },
-  { label: 'Running', value: 'running' },
-];
+const STATUS_FILTER_VALUES: (JobRunStatus | 'all')[] = ['all', 'succeeded', 'failed', 'running'];
 
 export interface JobsDashboardProps {
   activeTab: JobsTab;
@@ -90,14 +87,15 @@ function TabStrip({
   dlqCount: number;
   showSystemTab: boolean;
 }) {
+  const t = useTranslations('settings');
   const tabs: { tab: JobsTab; label: string; badge?: number }[] = [
-    { tab: 'runs', label: 'Recent runs' },
-    { tab: 'dlq', label: 'Dead letter', badge: dlqCount },
+    { tab: 'runs', label: t('jobs.tab.runs') },
+    { tab: 'dlq', label: t('jobs.tab.dlq'), badge: dlqCount },
   ];
-  if (showSystemTab) tabs.push({ tab: 'system', label: 'System' });
+  if (showSystemTab) tabs.push({ tab: 'system', label: t('jobs.tab.system') });
 
   return (
-    <nav aria-label="Job run views" className="flex gap-1 border-b border-(--el-border)">
+    <nav aria-label={t('jobs.tabNavLabel')} className="flex gap-1 border-b border-(--el-border)">
       {tabs.map(({ tab, label, badge }) => {
         const active = tab === activeTab;
         return (
@@ -116,7 +114,7 @@ function TabStrip({
           >
             {label}
             {badge && badge > 0 ? (
-              <Pill tone="neutral" aria-label={`${badge} in dead-letter queue`}>
+              <Pill tone="neutral" aria-label={t('jobs.dlqBadgeLabel', { count: badge })}>
                 {badge}
               </Pill>
             ) : null}
@@ -128,9 +126,14 @@ function TabStrip({
 }
 
 function StatusFilter({ activeTab, status }: { activeTab: JobsTab; status?: JobRunStatus }) {
+  const t = useTranslations('settings');
   return (
-    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by status">
-      {STATUS_FILTERS.map(({ label, value }) => {
+    <div
+      className="flex flex-wrap items-center gap-1.5"
+      role="group"
+      aria-label={t('jobs.filterGroupLabel')}
+    >
+      {STATUS_FILTER_VALUES.map((value) => {
         const active = value === 'all' ? !status : status === value;
         return (
           <Link
@@ -145,7 +148,7 @@ function StatusFilter({ activeTab, status }: { activeTab: JobsTab; status?: JobR
                 : 'border-(--el-border) text-(--el-text-secondary) hover:bg-(--el-surface)',
             )}
           >
-            {label}
+            {t(`jobs.filter.${value}`)}
           </Link>
         );
       })}
@@ -197,20 +200,22 @@ function TableShell({ caption, children }: { caption: string; children: ReactNod
 }
 
 function RunsTable({ runs }: { runs: JobRunDTO[] }) {
+  const t = useTranslations('settings');
+  const locale = useLocale() as Locale;
   const [detail, setDetail] = useState<JobRunDTO | null>(null);
   return (
     <>
-      <TableShell caption="Background job runs">
+      <TableShell caption={t('jobs.runsTableCaption')}>
         <thead className="border-b border-(--el-border) bg-(--el-surface)">
           <tr>
-            <Th>Status</Th>
-            <Th>Function</Th>
-            <Th>Event</Th>
-            <Th className="text-right">Attempts</Th>
-            <Th>Started</Th>
-            <Th className="text-right">Duration</Th>
-            <Th>Failure</Th>
-            <Th className="text-right">Details</Th>
+            <Th>{t('jobs.col.status')}</Th>
+            <Th>{t('jobs.col.function')}</Th>
+            <Th>{t('jobs.col.event')}</Th>
+            <Th className="text-right">{t('jobs.col.attempts')}</Th>
+            <Th>{t('jobs.col.started')}</Th>
+            <Th className="text-right">{t('jobs.col.duration')}</Th>
+            <Th>{t('jobs.col.failure')}</Th>
+            <Th className="text-right">{t('jobs.col.details')}</Th>
           </tr>
         </thead>
         <tbody>
@@ -225,14 +230,14 @@ function RunsTable({ runs }: { runs: JobRunDTO[] }) {
               <Td className="font-mono text-xs">{run.functionId}</Td>
               <Td className="font-mono text-xs">{run.eventName}</Td>
               <Td className="text-right tabular-nums">{run.attempt}</Td>
-              <Td className="whitespace-nowrap">{formatDateTime(run.startedAt)}</Td>
+              <Td className="whitespace-nowrap">{formatDateTime(run.startedAt, locale)}</Td>
               <Td className="text-right tabular-nums">{formatDuration(run.durationMs)}</Td>
               <Td className="max-w-[16rem] truncate text-(--el-text-muted)">
                 {run.failure ? firstLine(run.failure.message) : '—'}
               </Td>
               <Td className="text-right">
                 <Button variant="ghost" size="sm" onClick={() => setDetail(run)}>
-                  View
+                  {t('jobs.view')}
                 </Button>
               </Td>
             </tr>
@@ -243,7 +248,7 @@ function RunsTable({ runs }: { runs: JobRunDTO[] }) {
       <Modal
         open={detail !== null}
         onOpenChange={(o) => !o && setDetail(null)}
-        title="Run detail"
+        title={t('jobs.runDetailTitle')}
         size="lg"
       >
         {detail ? <JsonBlock value={detail} /> : null}
@@ -253,6 +258,8 @@ function RunsTable({ runs }: { runs: JobRunDTO[] }) {
 }
 
 function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean }) {
+  const t = useTranslations('settings');
+  const locale = useLocale() as Locale;
   const router = useRouter();
   const { toast } = useToast();
   const [detail, setDetail] = useState<JobRunDlqDTO | null>(null);
@@ -267,28 +274,28 @@ function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean })
       if (result.ok) {
         toast({
           variant: 'success',
-          title: 'Job replayed',
-          description: 'The original event was re-emitted.',
+          title: t('jobs.replayedToastTitle'),
+          description: t('jobs.replayedToastDesc'),
         });
         router.refresh();
       } else {
-        toast({ variant: 'error', title: 'Could not replay', description: result.error });
+        toast({ variant: 'error', title: t('jobs.replayErrorTitle'), description: result.error });
       }
     });
   }
 
   return (
     <>
-      <TableShell caption="Dead-letter queue">
+      <TableShell caption={t('jobs.dlqTableCaption')}>
         <thead className="border-b border-(--el-border) bg-(--el-surface)">
           <tr>
-            <Th>Function</Th>
-            <Th>Event</Th>
-            <Th className="text-right">Attempts</Th>
-            <Th>First failed</Th>
-            <Th>Last failed</Th>
-            <Th>Replayed</Th>
-            <Th className="text-right">Actions</Th>
+            <Th>{t('jobs.col.function')}</Th>
+            <Th>{t('jobs.col.event')}</Th>
+            <Th className="text-right">{t('jobs.col.attempts')}</Th>
+            <Th>{t('jobs.col.firstFailed')}</Th>
+            <Th>{t('jobs.col.lastFailed')}</Th>
+            <Th>{t('jobs.col.replayed')}</Th>
+            <Th className="text-right">{t('jobs.col.actions')}</Th>
           </tr>
         </thead>
         <tbody>
@@ -303,7 +310,7 @@ function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean })
                 disabled={!isOwner}
                 onClick={() => handleReplay(row.id)}
               >
-                Replay
+                {t('jobs.replay')}
               </Button>
             );
             return (
@@ -314,20 +321,20 @@ function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean })
                 <Td className="font-mono text-xs">{row.functionId}</Td>
                 <Td className="font-mono text-xs">{row.eventName}</Td>
                 <Td className="text-right tabular-nums">{row.attempts}</Td>
-                <Td className="whitespace-nowrap">{formatDateTime(row.firstFailedAt)}</Td>
-                <Td className="whitespace-nowrap">{formatDateTime(row.lastFailedAt)}</Td>
+                <Td className="whitespace-nowrap">{formatDateTime(row.firstFailedAt, locale)}</Td>
+                <Td className="whitespace-nowrap">{formatDateTime(row.lastFailedAt, locale)}</Td>
                 <Td className="whitespace-nowrap text-(--el-text-muted)">
-                  {row.replayedAt ? formatDateTime(row.replayedAt) : '—'}
+                  {row.replayedAt ? formatDateTime(row.replayedAt, locale) : '—'}
                 </Td>
                 <Td>
                   <div className="flex items-center justify-end gap-2">
                     <Button variant="ghost" size="sm" onClick={() => setDetail(row)}>
-                      View
+                      {t('jobs.view')}
                     </Button>
                     {isOwner ? (
                       replayBtn
                     ) : (
-                      <Tooltip content="Only a workspace owner can replay jobs" side="left">
+                      <Tooltip content={t('jobs.replayTooltip')} side="left">
                         {/* Wrap the disabled button so the tooltip still fires on
                             hover/focus of the surrounding span. */}
                         <span className="inline-flex">{replayBtn}</span>
@@ -344,19 +351,21 @@ function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean })
       <Modal
         open={detail !== null}
         onOpenChange={(o) => !o && setDetail(null)}
-        title="Dead-letter detail"
-        description="The failure and the original event payload (replayable as-is)."
+        title={t('jobs.dlqDetailTitle')}
+        description={t('jobs.dlqDetailDesc')}
         size="lg"
       >
         {detail ? (
           <div className="flex flex-col gap-4">
             <div>
-              <h3 className="mb-1 font-sans text-sm font-semibold text-(--el-text)">Failure</h3>
+              <h3 className="mb-1 font-sans text-sm font-semibold text-(--el-text)">
+                {t('jobs.failureHeading')}
+              </h3>
               <JsonBlock value={detail.failure} />
             </div>
             <div>
               <h3 className="mb-1 font-sans text-sm font-semibold text-(--el-text)">
-                Event payload
+                {t('jobs.eventPayloadHeading')}
               </h3>
               <JsonBlock value={detail.eventData} />
             </div>
@@ -379,22 +388,23 @@ function Pagination({
   page: number;
   hasNext: boolean;
 }) {
+  const t = useTranslations('settings');
   if (page <= 1 && !hasNext) return null;
   return (
     <div className="flex items-center justify-between font-sans text-sm">
-      <span className="text-(--el-text-muted)">Page {page}</span>
+      <span className="text-(--el-text-muted)">{t('jobs.pageLabel', { page })}</span>
       <div className="flex gap-2">
         {page > 1 ? (
           <Link href={buildHref({ tab: activeTab, status, page: page - 1 })}>
             <Button variant="secondary" size="sm">
-              Previous
+              {t('jobs.previous')}
             </Button>
           </Link>
         ) : null}
         {hasNext ? (
           <Link href={buildHref({ tab: activeTab, status, page: page + 1 })}>
             <Button variant="secondary" size="sm">
-              Next
+              {t('jobs.next')}
             </Button>
           </Link>
         ) : null}
@@ -405,6 +415,7 @@ function Pagination({
 
 export function JobsDashboard(props: JobsDashboardProps) {
   const { activeTab, status, page, hasNext, dlqCount, isOwner, showSystemTab, runs, dlq } = props;
+  const t = useTranslations('settings');
   const router = useRouter();
   const isDlq = activeTab === 'dlq';
 
@@ -420,24 +431,18 @@ export function JobsDashboard(props: JobsDashboardProps) {
           leftIcon={<RefreshCw className="h-3.5 w-3.5" />}
           onClick={() => router.refresh()}
         >
-          Refresh
+          {t('jobs.refresh')}
         </Button>
       </div>
 
       {isDlq ? (
         dlq.length === 0 ? (
-          <EmptyState
-            title="Nothing in the dead-letter queue"
-            description="Every job has succeeded or is still retrying."
-          />
+          <EmptyState title={t('jobs.dlqEmptyTitle')} description={t('jobs.dlqEmptyDesc')} />
         ) : (
           <DlqTable rows={dlq} isOwner={isOwner} />
         )
       ) : runs.length === 0 ? (
-        <EmptyState
-          title="No job runs yet"
-          description="When a background job runs, it'll appear here."
-        />
+        <EmptyState title={t('jobs.runsEmptyTitle')} description={t('jobs.runsEmptyDesc')} />
       ) : (
         <RunsTable runs={runs} />
       )}

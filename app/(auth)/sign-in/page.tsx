@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState, type FormEvent } from 'react';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { signIn } from '@/lib/auth/client';
@@ -38,19 +39,18 @@ export default function SignInPage() {
 }
 
 function SignInShell() {
+  const t = useTranslations('auth');
   // The headline + subhead stay stable across both states, so the
   // streaming fallback renders the same shell as the loaded form.
   return (
-    <AuthShell
-      headline="Welcome back!"
-      subhead="Use Prodect to turn any product idea into reality."
-    >
+    <AuthShell headline={t('welcomeBack')} subhead={t('signInSubhead')}>
       <div className="flex flex-col gap-5" aria-hidden />
     </AuthShell>
   );
 }
 
 function SignInForm() {
+  const t = useTranslations('auth');
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackURL = searchParams.get('next') ?? '/dashboard';
@@ -66,7 +66,7 @@ function SignInForm() {
   // it out of the URL into local state avoids the cascading-render trap
   // that useEffect+setState would create (react-hooks/set-state-in-effect).
   const [pageError, setPageError] = useState(() =>
-    searchParams.get('error') ? "Google sign-in didn't complete. Try again, or use email." : '',
+    searchParams.get('error') ? t('googleSignInIncomplete') : '',
   );
   const [passwordError, setPasswordError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -92,22 +92,19 @@ function SignInForm() {
       const result = await signIn.email({ email, password, callbackURL });
       if (result?.error) {
         // Unified error message — no enumeration. Mockup 07's exact copy.
-        setPasswordError("That password isn't right. Try again, or reset it.");
+        setPasswordError(t('wrongPassword'));
         setSubmitting(false);
         return;
       }
       router.push(callbackURL);
     } catch {
-      setPasswordError("That password isn't right. Try again, or reset it.");
+      setPasswordError(t('wrongPassword'));
       setSubmitting(false);
     }
   }
 
   return (
-    <AuthShell
-      headline="Welcome back!"
-      subhead="Use Prodect to turn any product idea into reality."
-    >
+    <AuthShell headline={t('welcomeBack')} subhead={t('signInSubhead')}>
       {pageError ? <FormAlert>{pageError}</FormAlert> : null}
 
       {step === 'email' ? (
@@ -120,18 +117,18 @@ function SignInForm() {
             name="email"
             autoComplete="email"
             inputMode="email"
-            placeholder="Email address"
+            placeholder={t('emailAddress')}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             addonStart={<Mail className="h-5 w-5" aria-hidden />}
-            aria-label="Email address"
+            aria-label={t('emailAddress')}
             required
             autoFocus
           />
           <Button type="submit" variant="primary" size="lg" className="w-full" loading={submitting}>
-            {submitting ? 'Checking…' : 'Continue'}
+            {submitting ? t('checking') : t('continue')}
           </Button>
-          <FooterLink prompt="Don't have an account?" linkText="Sign up" href="/sign-up" />
+          <FooterLink prompt={t('dontHaveAccount')} linkText={t('signUp')} href="/sign-up" />
         </form>
       ) : (
         <form onSubmit={onSubmitPassword} className="flex flex-col gap-5" noValidate>
@@ -139,7 +136,7 @@ function SignInForm() {
           <div className="flex flex-col gap-1.5">
             <div
               className="flex h-(--height-input) w-full items-center gap-2 rounded-(--radius-input) bg-(--el-surface) px-(--spacing-input-x)"
-              aria-label={`Signing in as ${email}`}
+              aria-label={t('signingInAs', { email })}
             >
               <Mail className="text-(--el-text-muted) h-5 w-5" aria-hidden />
               <span className="flex-1 truncate font-sans text-sm text-(--el-text)">{email}</span>
@@ -153,7 +150,7 @@ function SignInForm() {
               }}
               className="self-start font-sans text-xs text-(--el-link) hover:text-(--el-link-pressed) focus-visible:outline-none focus-visible:underline"
             >
-              Use a different email
+              {t('useDifferentEmail')}
             </button>
           </div>
 
@@ -162,14 +159,14 @@ function SignInForm() {
             href="/reset-password"
             className="self-start font-sans text-sm font-medium text-(--el-link) hover:text-(--el-link-pressed) focus-visible:outline-none focus-visible:underline"
           >
-            Forgot password?
+            {t('forgotPassword')}
           </Link>
 
           <Input
             type={showPassword ? 'text' : 'password'}
             name="password"
             autoComplete="current-password"
-            placeholder="Password"
+            placeholder={t('password')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             addonStart={<Lock className="h-5 w-5" aria-hidden />}
@@ -177,7 +174,7 @@ function SignInForm() {
               <button
                 type="button"
                 onClick={() => setShowPassword((s) => !s)}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-label={showPassword ? t('hidePassword') : t('showPassword')}
                 className="inline-flex h-6 w-6 items-center justify-center rounded-(--radius-xs) text-(--el-text-muted) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
               >
                 {showPassword ? (
@@ -187,17 +184,17 @@ function SignInForm() {
                 )}
               </button>
             }
-            aria-label="Password"
+            aria-label={t('password')}
             error={passwordError || undefined}
             required
             autoFocus
           />
 
           <Button type="submit" variant="primary" size="lg" className="w-full" loading={submitting}>
-            {submitting ? 'Signing in…' : 'Continue'}
+            {submitting ? t('signingIn') : t('continue')}
           </Button>
 
-          <FooterLink prompt="Don't have an account?" linkText="Sign up" href="/sign-up" />
+          <FooterLink prompt={t('dontHaveAccount')} linkText={t('signUp')} href="/sign-up" />
         </form>
       )}
     </AuthShell>

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { ChevronDown, Sparkles } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
@@ -38,6 +39,9 @@ export interface CreateIssueModalProps {
 }
 
 export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) {
+  const t = useTranslations('shell');
+  const tc = useTranslations('common');
+  const tErr = useTranslations('errors');
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -95,11 +99,11 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
     setTitleError(null);
     setLinksError(null);
     if (trimmedTitle.length === 0) {
-      setTitleError('Give the issue a title.');
+      setTitleError(t('createIssue.titleRequired'));
       return;
     }
     if (trimmedTitle.length > MAX_TITLE_LENGTH) {
-      setTitleError(`Title must be ${MAX_TITLE_LENGTH} characters or fewer.`);
+      setTitleError(t('createIssue.titleTooLong', { max: MAX_TITLE_LENGTH }));
       return;
     }
     startTransition(async () => {
@@ -123,7 +127,7 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
       if (result.ok) {
         toast({
           variant: 'success',
-          title: `${result.identifier} created`,
+          title: t('createIssue.created', { identifier: result.identifier }),
           description: trimmedTitle,
         });
         close();
@@ -147,7 +151,7 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
       open={open}
       onOpenChange={(o) => (o ? onOpenChange(true) : close())}
       size="lg"
-      title="Create issue"
+      title={t('createIssue.title')}
     >
       <form className="mt-4 flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
         {/* Scrollable field area — the dialog height is fixed (Modal caps at
@@ -157,7 +161,7 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
             room instead of clipping them against the scroll edge. */}
         <div className="-m-1.5 flex flex-col gap-3 overflow-y-auto p-1.5">
           <div className="flex flex-col gap-1 font-sans text-sm">
-            <span className="text-(--el-text) font-medium">Type</span>
+            <span className="text-(--el-text) font-medium">{t('createIssue.type')}</span>
             <TypePicker
               value={kind}
               onChange={(v) => {
@@ -169,7 +173,7 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
           </div>
 
           <div className="flex flex-col gap-1 font-sans text-sm">
-            <span className="text-(--el-text) font-medium">Parent</span>
+            <span className="text-(--el-text) font-medium">{t('createIssue.parent')}</span>
             <ParentPicker
               childType={kind}
               value={parentId}
@@ -183,7 +187,7 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
           </div>
 
           <Input
-            label="Title"
+            label={t('createIssue.titleLabel')}
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);
@@ -191,7 +195,7 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
             }}
             error={titleError ?? undefined}
             maxLength={MAX_TITLE_LENGTH}
-            placeholder="Summarize the work in a line"
+            placeholder={t('createIssue.titlePlaceholder')}
             disabled={isPending}
             autoFocus
             required
@@ -200,11 +204,11 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
           {/* The MarkdownEditor (min, with file upload) renders its own label
             (also its aria-label) — no external span, else it shows twice. */}
           <MarkdownEditor
-            label="Description"
+            label={t('createIssue.description')}
             value={description}
             onChange={setDescription}
             size="min"
-            onFileUpload={uploadIssueAttachment}
+            onFileUpload={(f) => uploadIssueAttachment(f, tErr)}
           />
 
           {/* Explanation — the "why this matters" axis (Story 1.4), per
@@ -224,9 +228,9 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
                   className={cn('h-4 w-4 transition-transform', !explanationOpen && '-rotate-90')}
                   aria-hidden
                 />
-                Explanation
+                {t('createIssue.explanation')}
               </button>
-              <span className="text-(--el-text-secondary)">— why this matters (optional)</span>
+              <span className="text-(--el-text-secondary)">{t('createIssue.explanationHint')}</span>
               {explanationOpen ? (
                 <Button
                   type="button"
@@ -235,29 +239,29 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
                   leftIcon={<Sparkles className="h-3.5 w-3.5" />}
                   className="ml-auto"
                   disabled
-                  title="AI drafting arrives with the planning layer (Epic 7)"
+                  title={t('createIssue.draftWithAiTooltip')}
                 >
-                  Draft with AI
+                  {t('createIssue.draftWithAi')}
                 </Button>
               ) : null}
             </div>
             {explanationOpen ? (
               <MarkdownEditor
-                label="Explanation"
+                label={t('createIssue.explanation')}
                 value={explanation}
                 onChange={setExplanation}
                 size="min"
-                onFileUpload={uploadIssueAttachment}
+                onFileUpload={(f) => uploadIssueAttachment(f, tErr)}
               />
             ) : (
               <span className="text-xs text-(--el-text-secondary)">
-                Skip this — explanation can be drafted with AI or added after creating.
+                {t('createIssue.explanationSkip')}
               </span>
             )}
           </div>
 
           <div className="flex flex-col gap-1 font-sans text-sm">
-            <span className="text-(--el-text) font-medium">Priority</span>
+            <span className="text-(--el-text) font-medium">{t('createIssue.priority')}</span>
             <PriorityPicker value={priority} onChange={setPriority} disabled={isPending} />
           </div>
 
@@ -291,10 +295,10 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
 
         <Modal.Footer className="shrink-0">
           <Button type="button" variant="ghost" onClick={close} disabled={isPending}>
-            Cancel
+            {tc('cancel')}
           </Button>
           <Button type="submit" variant="primary" disabled={!canSubmit} loading={isPending}>
-            Create
+            {t('createIssue.create')}
           </Button>
         </Modal.Footer>
       </form>

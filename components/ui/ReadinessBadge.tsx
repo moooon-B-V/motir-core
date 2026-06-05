@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { CircleAlert, CircleCheckBig } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
@@ -27,6 +28,7 @@ export interface ReadinessBadgeProps {
 }
 
 export function ReadinessBadge({ ready, blockers = [], className }: ReadinessBadgeProps) {
+  const t = useTranslations('ui');
   if (ready) {
     return (
       <div
@@ -41,10 +43,10 @@ export function ReadinessBadge({ ready, blockers = [], className }: ReadinessBad
         />
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-(--el-text-strong) font-sans text-sm font-semibold">
-            Ready to start
+            {t('readiness.ready')}
           </span>
           <span className="text-(--el-text-strong) font-sans text-[13px]">
-            All blockers resolved
+            {t('readiness.allResolved')}
           </span>
         </div>
       </div>
@@ -60,10 +62,12 @@ export function ReadinessBadge({ ready, blockers = [], className }: ReadinessBad
     >
       <CircleAlert className="text-(--el-warning) mt-0.5 h-[18px] w-[18px] shrink-0" aria-hidden />
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-(--el-text-strong) font-sans text-sm font-semibold">Blocked</span>
+        <span className="text-(--el-text-strong) font-sans text-sm font-semibold">
+          {t('readiness.blocked')}
+        </span>
         {blockers.length > 0 ? (
           <span className="text-(--el-text-strong) font-sans text-[13px]">
-            Waiting on {blockers.length} {blockers.length === 1 ? 'issue' : 'issues'} —{' '}
+            {t('readiness.waiting', { count: blockers.length })} —{' '}
             {blockers.map((b, i) => (
               <span key={b.identifier}>
                 {i > 0 ? ', ' : null}

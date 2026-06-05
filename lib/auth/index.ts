@@ -5,6 +5,7 @@ import { headers } from 'next/headers';
 import { db } from '@/lib/db';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { currentLocale } from '@/lib/i18n/serverLocale';
 import { hash, verify } from './passwords';
 
 // Better-Auth instance. Persistence is Postgres via Prisma; password hashing
@@ -127,7 +128,7 @@ export const auth = betterAuth({
         idempotencyKey: token,
         to: user.email,
         template: 'password-reset',
-        data: { recipientName: user.name || 'there', resetUrl: url },
+        data: { recipientName: user.name || 'there', resetUrl: url, locale: await currentLocale() },
       });
     },
   },

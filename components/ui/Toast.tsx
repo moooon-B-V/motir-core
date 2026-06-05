@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import * as RadixToast from '@radix-ui/react-toast';
 import { AlertCircle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
 import { cva, type VariantProps } from 'class-variance-authority';
@@ -71,6 +72,7 @@ const ICON_COLOR_VAR: Record<ToastVariant, string> = {
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const tc = useTranslations('common');
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const toast = useCallback<ToastContextValue['toast']>(
@@ -115,7 +117,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 ) : null}
               </div>
               <RadixToast.Close
-                aria-label="Close"
+                aria-label={tc('close')}
                 className="text-(--el-text-muted) hover:text-(--el-text) rounded-(--radius-control) p-(--spacing-icon-btn) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
               >
                 <X className="h-3.5 w-3.5" />

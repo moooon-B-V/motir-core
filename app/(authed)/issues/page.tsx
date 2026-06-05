@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -34,17 +35,16 @@ export default async function IssuesPage({
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
+  const t = await getTranslations('issueViews');
+
   const ctx = await getActiveProject();
   if (!ctx) {
     return (
       <div className="flex flex-col gap-6">
         <header className="flex flex-col gap-1">
-          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">Issues</h1>
+          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
         </header>
-        <EmptyState
-          title="No project selected"
-          description="Pick or create a project from the switcher to track its issues."
-        />
+        <EmptyState title={t('noProjectTitle')} description={t('noProjectListDescription')} />
       </div>
     );
   }
@@ -69,8 +69,10 @@ export default async function IssuesPage({
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">Issues</h1>
-          <p className="text-sm text-(--el-text-muted)">All issues in {ctx.project.name}</p>
+          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
+          <p className="text-sm text-(--el-text-muted)">
+            {t('allIssuesIn', { project: ctx.project.name })}
+          </p>
         </div>
         <IssueListToolbar
           view={view}

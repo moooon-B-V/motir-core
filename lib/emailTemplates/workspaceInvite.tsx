@@ -1,38 +1,47 @@
 import { Link, Section, Text } from '@react-email/components';
 import { render } from '@react-email/render';
+import { createTranslator } from 'next-intl';
 import { EmailLayout } from './_components/EmailLayout';
 import { PrimaryButton } from './_components/PrimaryButton';
+import { getMessagesFor } from '@/lib/i18n/messages';
+import { defaultLocale, type Locale } from '@/lib/i18n/locales';
 import type { RenderedEmail } from './types';
 
 // Workspace-invite email. Matches design/workspaces/invite-email-html.png.
-// Per CLAUDE.md, templates are pure render functions: no sendEmail
-// call, no DB access, no environment lookups. The service that
-// composes this email decides the recipient and dispatches.
+// Per CLAUDE.md, templates are pure render functions: no sendEmail call, no DB
+// access, no environment lookups. The service that composes this email decides
+// the recipient + dispatches. Localized via next-intl's synchronous
+// `createTranslator` (NOT getTranslations) because rendering runs inside the
+// email.send background job, off any request scope. `locale` is optional and
+// defaults to the base locale (e.g. unit tests that render without one).
+
+// A minimal translator shape (satisfied by createTranslator's result).
+type T = (key: string, values?: Record<string, string | number>) => string;
 
 export interface WorkspaceInviteEmailProps {
   inviterName: string;
   workspaceName: string;
   acceptUrl: string;
+  locale?: Locale;
 }
 
 function WorkspaceInviteEmail({
   inviterName,
   workspaceName,
   acceptUrl,
-}: WorkspaceInviteEmailProps) {
+  t,
+}: WorkspaceInviteEmailProps & { t: T }) {
   return (
     <EmailLayout
-      preview={`${inviterName} invited you to join ${workspaceName} on Prodect`}
-      footer={`This invite expires in 7 days. Don't know ${inviterName}? You can safely ignore this email.`}
+      preview={t('preview', { inviter: inviterName, workspace: workspaceName })}
+      footer={`${t('expires')} ${t('ignore', { inviter: inviterName })}`}
     >
-      <Text style={greeting}>Hi,</Text>
-      <Text style={lede}>
-        {inviterName} invited you to join {workspaceName} on Prodect.
-      </Text>
+      <Text style={greeting}>{t('greeting')}</Text>
+      <Text style={lede}>{t('lede', { inviter: inviterName, workspace: workspaceName })}</Text>
       <Section style={cta}>
-        <PrimaryButton href={acceptUrl} label="Accept invite" />
+        <PrimaryButton href={acceptUrl} label={t('accept')} />
       </Section>
-      <Text style={fallbackLabel}>Or copy this link into your browser:</Text>
+      <Text style={fallbackLabel}>{t('fallback')}</Text>
       <Text style={fallbackLinkRow}>
         <Link href={acceptUrl} style={fallbackLink}>
           {acceptUrl}
@@ -54,43 +63,38 @@ const fallbackLinkRow = {
 const fallbackLink = { color: '#2563eb', wordBreak: 'break-all' as const };
 
 /**
- * Public template entry point. Returns `{ subject, text, html }` for
- * the service to spread into `sendEmail(...)`. Async because
- * `@react-email/render` returns a Promise.
+ * Public template entry point. Returns `{ subject, text, html }` for the service
+ * to spread into `sendEmail(...)`. Async because `@react-email/render` returns a
+ * Promise.
  */
 export async function workspaceInviteEmail(
   props: WorkspaceInviteEmailProps,
 ): Promise<RenderedEmail> {
-  const element = <WorkspaceInviteEmail {...props} />;
-  const [html, _autoText] = await Promise.all([
-    render(element),
-    // Discard the auto-derived text — we hand-write it below so the
-    // dev-console "link unredacted in plain text" contract is exact
-    // and not subject to the renderer's tag-stripping heuristics.
-    Promise.resolve(''),
-  ]);
+  const locale = props.locale ?? defaultLocale;
+  const t = createTranslator({
+    locale,
+    messages: getMessagesFor(locale),
+    namespace: 'email.invite',
+  }) as T;
+  const html = await render(<WorkspaceInviteEmail {...props} t={t} />);
   return {
-    subject: `You're invited to join ${props.workspaceName} on Prodect`,
-    text: buildPlainText(props),
+    subject: t('subject', { workspace: props.workspaceName }),
+    text: buildPlainText(props, t),
     html,
   };
 }
 
-function buildPlainText({
-  inviterName,
-  workspaceName,
-  acceptUrl,
-}: WorkspaceInviteEmailProps): string {
+function buildPlainText(props: WorkspaceInviteEmailProps, t: T): string {
   return [
-    'Hi,',
+    t('greeting'),
     '',
-    `${inviterName} invited you to join ${workspaceName} on Prodect.`,
+    t('lede', { inviter: props.inviterName, workspace: props.workspaceName }),
     '',
-    `Accept invite: ${acceptUrl}`,
+    `${t('accept')}: ${props.acceptUrl}`,
     '',
-    'This invite expires in 7 days.',
+    t('expires'),
     '',
-    `Don't know ${inviterName}? You can safely ignore this email.`,
+    t('ignore', { inviter: props.inviterName }),
     '',
     '— Prodect',
   ].join('\n');

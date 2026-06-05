@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useTranslations } from 'next-intl';
 import { TriangleAlert } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -16,6 +17,7 @@ export interface DangerZoneCardProps {
 }
 
 export function DangerZoneCard({ workspaceName, isLastMember }: DangerZoneCardProps) {
+  const t = useTranslations('settings');
   const { toast } = useToast();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -26,14 +28,14 @@ export function DangerZoneCard({ workspaceName, isLastMember }: DangerZoneCardPr
       // the last-member error path.
       const result = await leaveWorkspaceAction();
       if (!result.ok) {
-        toast({ variant: 'error', title: "Can't leave", description: result.error });
+        toast({ variant: 'error', title: t('danger.cantLeaveTitle'), description: result.error });
       }
     });
   }
 
   const leaveButton = (
     <Button variant="danger" onClick={handleLeave} loading={isPending} disabled={isLastMember}>
-      Leave
+      {t('danger.leave')}
     </Button>
   );
 
@@ -42,19 +44,21 @@ export function DangerZoneCard({ workspaceName, isLastMember }: DangerZoneCardPr
       className="border-2 border-(--el-danger)"
       header={
         <h2 className="font-sans text-base font-semibold" style={{ color: 'var(--el-danger)' }}>
-          Danger zone
+          {t('danger.heading')}
         </h2>
       }
     >
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="font-sans text-sm font-medium text-(--el-text)">Leave workspace</p>
+          <p className="font-sans text-sm font-medium text-(--el-text)">
+            {t('danger.leaveWorkspace')}
+          </p>
           <p className="text-(--el-text-muted) font-sans text-xs">
-            You&apos;ll lose access to all data in this workspace.
+            {t('danger.leaveWorkspaceDesc')}
           </p>
         </div>
         {isLastMember ? (
-          <Tooltip content="You're the last member — delete the workspace instead.">
+          <Tooltip content={t('danger.lastMemberTooltip')}>
             {/* span wrapper: a disabled button doesn't fire the hover events Radix Tooltip needs. */}
             <span tabIndex={0}>{leaveButton}</span>
           </Tooltip>
@@ -67,13 +71,15 @@ export function DangerZoneCard({ workspaceName, isLastMember }: DangerZoneCardPr
 
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="font-sans text-sm font-medium text-(--el-text)">Delete workspace</p>
+          <p className="font-sans text-sm font-medium text-(--el-text)">
+            {t('danger.deleteWorkspace')}
+          </p>
           <p className="text-(--el-text-muted) font-sans text-xs">
-            Permanently delete this workspace and all its data. This cannot be undone.
+            {t('danger.deleteWorkspaceDesc')}
           </p>
         </div>
         <Button variant="danger" onClick={() => setDeleteOpen(true)}>
-          Delete
+          {t('danger.delete')}
         </Button>
       </div>
 
@@ -95,6 +101,8 @@ function DeleteConfirmModal({
   onOpenChange: (open: boolean) => void;
   workspaceName: string;
 }) {
+  const t = useTranslations('settings');
+  const tc = useTranslations('common');
   const { toast } = useToast();
   const [typed, setTyped] = useState('');
   const [isPending, startTransition] = useTransition();
@@ -107,7 +115,11 @@ function DeleteConfirmModal({
       // Success redirects; control only returns on an unexpected error.
       const result = await deleteWorkspaceAction();
       if (!result.ok) {
-        toast({ variant: 'error', title: 'Could not delete workspace', description: result.error });
+        toast({
+          variant: 'error',
+          title: t('danger.deleteErrorTitle'),
+          description: result.error,
+        });
       }
     });
   }
@@ -130,11 +142,10 @@ function DeleteConfirmModal({
         </span>
         <div>
           <h2 className="font-serif text-xl font-semibold text-(--el-text)">
-            Delete {workspaceName}?
+            {t('danger.deleteModalTitle', { workspaceName })}
           </h2>
           <p className="text-(--el-text-muted) mt-1 font-sans text-sm">
-            This will permanently delete the workspace and all its data (projects, work items,
-            members). This action cannot be undone.
+            {t('danger.deleteModalDesc')}
           </p>
         </div>
       </div>
@@ -146,7 +157,7 @@ function DeleteConfirmModal({
         }}
       >
         <Input
-          label={`Type ${workspaceName} to confirm`}
+          label={t('danger.confirmLabel', { workspaceName })}
           placeholder={workspaceName}
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
@@ -154,10 +165,10 @@ function DeleteConfirmModal({
         />
         <Modal.Footer>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancel
+            {tc('cancel')}
           </Button>
           <Button type="submit" variant="danger" disabled={!matches} loading={isPending}>
-            Delete workspace
+            {t('danger.deleteConfirmButton')}
           </Button>
         </Modal.Footer>
       </form>

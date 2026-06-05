@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Check, ChevronDown, Mail, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Popover } from '@/components/ui/Popover';
@@ -19,6 +20,8 @@ export interface WorkspaceSwitcherProps {
 }
 
 export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSwitcherProps) {
+  const t = useTranslations('shell');
+  const tl = useTranslations('labels');
   const router = useRouter();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -49,10 +52,10 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
         await createWorkspaceAction(name);
         setCreateOpen(false);
         setNewName('');
-        toast({ variant: 'success', title: 'Workspace created' });
+        toast({ variant: 'success', title: t('workspaceSwitcher.created') });
         router.refresh();
       } catch {
-        toast({ variant: 'error', title: 'Could not create workspace' });
+        toast({ variant: 'error', title: t('workspaceSwitcher.createError') });
       }
     });
   }
@@ -73,7 +76,7 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
           leftIcon={<Plus className="h-4 w-4" />}
           onClick={openCreate}
         >
-          Create workspace
+          {t('workspaceSwitcher.create')}
         </Button>
         <CreateWorkspaceModal
           open={createOpen}
@@ -95,15 +98,17 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
             variant="ghost"
             size="md"
             rightIcon={<ChevronDown className="h-4 w-4" />}
-            aria-label="Switch workspace"
+            aria-label={t('workspaceSwitcher.switch')}
           >
-            <span className="max-w-[24ch] truncate">{active?.name ?? 'Select workspace'}</span>
+            <span className="max-w-[24ch] truncate">
+              {active?.name ?? t('workspaceSwitcher.select')}
+            </span>
           </Button>
         </Popover.Trigger>
         <Popover.Content align="start" width={320} className="py-1">
           <div className="px-3 pb-1 pt-2">
             <span className="text-(--el-text-muted) font-mono text-xs uppercase tracking-wider">
-              Workspaces
+              {t('workspaceSwitcher.heading')}
             </span>
           </div>
           <ul role="list" className="px-1">
@@ -136,7 +141,7 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
                       {w.name}
                     </span>
                     {/* Role label = metadata → neutral tone (AA-safe; #35). */}
-                    <Pill tone="neutral">member</Pill>
+                    <Pill tone="neutral">{tl('role.member')}</Pill>
                   </button>
                 </li>
               );
@@ -150,7 +155,7 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
               className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-sm) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
             >
               <Plus className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-              Create workspace
+              {t('workspaceSwitcher.create')}
             </button>
           </div>
           <div className="my-1 h-px bg-(--el-border)" />
@@ -161,7 +166,7 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
               className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-sm) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
             >
               <Mail className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-              Invite teammates
+              {t('workspaceSwitcher.invite')}
             </a>
           </div>
         </Popover.Content>
@@ -194,8 +199,10 @@ function CreateWorkspaceModal({
   onSubmit: () => void;
   pending: boolean;
 }) {
+  const t = useTranslations('shell');
+  const tc = useTranslations('common');
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Create workspace" size="md">
+    <Modal open={open} onOpenChange={onOpenChange} title={t('workspaceSwitcher.create')} size="md">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -203,18 +210,18 @@ function CreateWorkspaceModal({
         }}
       >
         <Input
-          label="Workspace name"
-          placeholder="My workspace"
+          label={t('workspaceSwitcher.nameLabel')}
+          placeholder={t('workspaceSwitcher.namePlaceholder')}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           autoFocus
         />
         <Modal.Footer>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
-            Cancel
+            {tc('cancel')}
           </Button>
           <Button variant="primary" type="submit" loading={pending} disabled={!value.trim()}>
-            Create
+            {t('workspaceSwitcher.submit')}
           </Button>
         </Modal.Footer>
       </form>

@@ -1,6 +1,7 @@
 'use client';
 
 import { forwardRef, type ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cva, type VariantProps } from 'class-variance-authority';
@@ -76,6 +77,7 @@ function ModalRoot({
   className,
   children,
 }: ModalProps) {
+  const tc = useTranslations('common');
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -112,12 +114,12 @@ function ModalRoot({
             </div>
           ) : (
             // Radix requires Title for a11y; provide a visually-hidden one if missing.
-            <Dialog.Title className="sr-only">Dialog</Dialog.Title>
+            <Dialog.Title className="sr-only">{tc('dialog')}</Dialog.Title>
           )}
           {children}
           {!hideClose ? (
             <Dialog.Close
-              aria-label="Close"
+              aria-label={tc('close')}
               className="text-(--el-text-muted) hover:text-(--el-text) absolute right-3 top-3 rounded-(--radius-control) p-(--spacing-icon-btn) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
             >
               <X className="h-4 w-4" />

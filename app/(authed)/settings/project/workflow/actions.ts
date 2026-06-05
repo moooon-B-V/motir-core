@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -44,17 +45,25 @@ async function requireProjectContext(): Promise<{
   return { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: ctx.projectId };
 }
 
-/** Map a known workflow/management error to a friendly message, or rethrow. */
-function toMessage(err: unknown): string {
-  if (err instanceof NotProjectAdminError) return 'Only a project admin can edit the workflow.';
-  if (err instanceof ProjectNotFoundError) return 'That project no longer exists.';
-  if (err instanceof StatusKeyConflictError) return err.message;
-  if (err instanceof WorkflowStatusNotFoundError) return 'That status no longer exists.';
-  if (err instanceof WorkflowTransitionNotFoundError) return 'That transition no longer exists.';
-  if (err instanceof StatusInUseError) return err.message;
-  if (err instanceof InvalidReassignTargetError) return err.message;
-  if (err instanceof CannotDeleteInitialStatusError) return err.message;
-  if (err instanceof CannotDeleteLastTerminalStatusError) return err.message;
+// A minimal translator shape (satisfied by `getTranslations('errors')`).
+type ErrorTranslator = (key: string, values?: Record<string, string | number>) => string;
+
+/** Map a known workflow/management error to a translated message, or rethrow. */
+function toMessage(err: unknown, t: ErrorTranslator): string {
+  if (err instanceof NotProjectAdminError) return t('workflow.NOT_PROJECT_ADMIN');
+  if (err instanceof ProjectNotFoundError) return t('actions.projectGone');
+  if (err instanceof StatusKeyConflictError)
+    return t('workflow.STATUS_KEY_CONFLICT', { key: err.key });
+  if (err instanceof WorkflowStatusNotFoundError) return t('workflow.WORKFLOW_STATUS_NOT_FOUND');
+  if (err instanceof WorkflowTransitionNotFoundError)
+    return t('workflow.WORKFLOW_TRANSITION_NOT_FOUND');
+  if (err instanceof StatusInUseError)
+    return t('workflow.STATUS_IN_USE', { statusKey: err.statusKey, count: err.count });
+  if (err instanceof InvalidReassignTargetError) return t('workflow.INVALID_REASSIGN_TARGET');
+  if (err instanceof CannotDeleteInitialStatusError)
+    return t('workflow.CANNOT_DELETE_INITIAL_STATUS', { statusKey: err.statusKey });
+  if (err instanceof CannotDeleteLastTerminalStatusError)
+    return t('workflow.CANNOT_DELETE_LAST_TERMINAL_STATUS', { statusKey: err.statusKey });
   throw err;
 }
 
@@ -62,7 +71,7 @@ async function run(fn: () => Promise<unknown>): Promise<ActionResult> {
   try {
     await fn();
   } catch (err) {
-    return { ok: false, error: toMessage(err) };
+    return { ok: false, error: toMessage(err, await getTranslations('errors')) };
   }
   revalidatePath(WORKFLOW_PATH);
   return { ok: true };
@@ -77,7 +86,8 @@ export async function createStatusAction(input: {
   const ctx = await requireProjectContext();
   const key = input.key.trim();
   const label = input.label.trim();
-  if (!key || !label) return { ok: false, error: 'Key and label are required.' };
+  if (!key || !label)
+    return { ok: false, error: (await getTranslations('errors'))('actions.keyLabelRequired') };
   return run(() =>
     workflowsService.createStatus({
       ...ctx,
@@ -150,10 +160,15 @@ export async function deleteStatusAction(
       reassignToStatusId,
     });
   } catch (err) {
+    const t = await getTranslations('errors');
     if (err instanceof StatusInUseError) {
-      return { ok: false, statusInUse: { count: err.count }, error: err.message };
+      return {
+        ok: false,
+        statusInUse: { count: err.count },
+        error: t('workflow.STATUS_IN_USE', { statusKey: err.statusKey, count: err.count }),
+      };
     }
-    return { ok: false, error: toMessage(err) };
+    return { ok: false, error: toMessage(err, t) };
   }
   revalidatePath(WORKFLOW_PATH);
   return { ok: true };

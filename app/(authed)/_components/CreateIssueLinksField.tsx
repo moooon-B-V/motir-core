@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { CircleAlert, X } from 'lucide-react';
 import { LinkAddForm } from '@/components/issues/LinkAddForm';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Pill } from '@/components/ui/Pill';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import type { ComboboxOption } from '@/components/ui/Combobox';
-import { relationshipLabel } from '@/lib/workItems/linkRelationships';
 import type { RelationshipKind } from '@/lib/dto/workItemLinks';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
@@ -44,6 +44,8 @@ export function CreateIssueLinksField({
   disabled,
   error,
 }: CreateIssueLinksFieldProps) {
+  const t = useTranslations('shell');
+  const tl = useTranslations('labels');
   const [relationship, setRelationship] = useState<RelationshipKind>('blocked_by');
   const [targetId, setTargetId] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<WorkItemSummaryDto[]>([]);
@@ -102,7 +104,7 @@ export function CreateIssueLinksField({
 
   return (
     <div className="flex flex-col gap-2 font-sans text-sm">
-      <SectionLabel label="Linked issues" />
+      <SectionLabel label={t('links.section')} />
 
       {error ? (
         <div className="bg-(--el-tint-rose) flex items-start gap-2 rounded-md px-3 py-2">
@@ -119,7 +121,7 @@ export function CreateIssueLinksField({
               className="hover:bg-(--el-surface) flex items-center gap-2 rounded-md px-2 py-1.5"
             >
               <Pill tone="neutral" className="shrink-0">
-                {relationshipLabel(l.relationship)}
+                {tl(`relationship.${l.relationship}`)}
               </Pill>
               <IssueTypeIcon type={l.item.kind as IssueType} className="h-4 w-4 shrink-0" />
               <span className="min-w-0 flex-1 truncate">
@@ -132,9 +134,10 @@ export function CreateIssueLinksField({
                 type="button"
                 onClick={() => remove(i)}
                 disabled={disabled}
-                aria-label={`Remove pending ${relationshipLabel(
-                  l.relationship,
-                ).toLowerCase()} link to ${l.item.identifier}`}
+                aria-label={t('links.removeAria', {
+                  relationship: tl(`relationship.${l.relationship}`).toLowerCase(),
+                  identifier: l.item.identifier,
+                })}
                 className="text-(--el-text-muted) hover:bg-(--el-tint-rose) hover:text-(--el-danger) shrink-0 rounded-md p-1 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
               >
                 <X className="h-4 w-4" aria-hidden />
@@ -155,9 +158,7 @@ export function CreateIssueLinksField({
         onSubmit={add}
       />
 
-      <span className="text-(--el-text-secondary) text-xs">
-        Choose a relationship · links are created together with the issue.
-      </span>
+      <span className="text-(--el-text-secondary) text-xs">{t('links.helper')}</span>
     </div>
   );
 }

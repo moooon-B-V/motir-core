@@ -1,11 +1,16 @@
 import type { ReactNode } from 'react';
+import type { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Pill, type PillProps } from '@/components/ui/Pill';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
-import { PRIORITY_LABELS } from '@/lib/issues/priority';
 import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import type { IssueSortColumn } from '@/lib/issues/issueListView';
 import type { IssueRowData } from './issueRows';
+
+// A next-intl global translator (from `useTranslations()` with no namespace), so
+// the column builder can reach both the `issues.columns.*` headers and the
+// `labels.priority.*` enum labels with full-path keys.
+type Translator = ReturnType<typeof useTranslations>;
 
 // The single source of truth for the /issues row cells + column metadata
 // (Subtask 2.5.8). BOTH views compose these: the nested Tree table (2.5.3,
@@ -53,98 +58,104 @@ export interface IssueColumn {
   cell: (row: IssueRowData) => ReactNode;
 }
 
-export const ISSUE_COLUMNS: IssueColumn[] = [
-  {
-    key: 'title',
-    header: 'Title',
-    sortColumn: 'key',
-    cell: (r) => (
-      <span className="flex min-w-0 items-center gap-2">
-        <IssueTypeIcon type={r.kind} className="h-4 w-4 shrink-0" />
-        <span className="shrink-0 font-mono text-xs text-(--el-text-muted)">{r.identifier}</span>
-        <span className="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline">
-          {r.title}
-        </span>
-      </span>
-    ),
-  },
-  {
-    key: 'priority',
-    header: 'Priority',
-    width: 120,
-    sortColumn: 'priority',
-    cell: (r) => {
-      const meta = PRIORITY_META[r.priority];
-      return (
-        <Pill {...meta.pill}>
-          <meta.icon className="h-3 w-3" aria-hidden />
-          {PRIORITY_LABELS[r.priority]}
-        </Pill>
-      );
-    },
-  },
-  {
-    key: 'assignee',
-    header: 'Assignee',
-    width: 150,
-    sortColumn: 'assignee',
-    cell: (r) =>
-      r.assigneeName ? (
+// Built per-render with a translator (rather than a module-level const) so the
+// headers + the inline priority/"Unassigned" labels resolve in the active
+// locale. Both table views (IssueListTable, IssueTreeTable) call this once with
+// `useTranslations()` and consume the result.
+export function buildIssueColumns(t: Translator): IssueColumn[] {
+  return [
+    {
+      key: 'title',
+      header: t('issues.columns.title'),
+      sortColumn: 'key',
+      cell: (r) => (
         <span className="flex min-w-0 items-center gap-2">
-          <Avatar name={r.assigneeName} />
-          <span className="truncate text-(--el-text-secondary)">{r.assigneeName}</span>
+          <IssueTypeIcon type={r.kind} className="h-4 w-4 shrink-0" />
+          <span className="shrink-0 font-mono text-xs text-(--el-text-muted)">{r.identifier}</span>
+          <span className="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline">
+            {r.title}
+          </span>
         </span>
-      ) : (
-        <span className="text-(--el-text-muted)">Unassigned</span>
       ),
-  },
-  {
-    key: 'reporter',
-    header: 'Reporter',
-    width: 150,
-    sortColumn: 'reporter',
-    cell: (r) => (
-      <span className="flex min-w-0 items-center gap-2">
-        <Avatar name={r.reporterName} />
-        <span className="truncate text-(--el-text-secondary)">{r.reporterName}</span>
-      </span>
-    ),
-  },
-  {
-    key: 'due',
-    header: 'Due',
-    width: 120,
-    sortColumn: 'due',
-    cell: (r) =>
-      r.dueLabel ? (
-        <span className="truncate text-(--el-text-secondary)">{r.dueLabel}</span>
-      ) : (
-        <span className="text-(--el-text-muted)">—</span>
+    },
+    {
+      key: 'priority',
+      header: t('issues.columns.priority'),
+      width: 120,
+      sortColumn: 'priority',
+      cell: (r) => {
+        const meta = PRIORITY_META[r.priority];
+        return (
+          <Pill {...meta.pill}>
+            <meta.icon className="h-3 w-3" aria-hidden />
+            {t(`labels.priority.${r.priority}`)}
+          </Pill>
+        );
+      },
+    },
+    {
+      key: 'assignee',
+      header: t('issues.columns.assignee'),
+      width: 150,
+      sortColumn: 'assignee',
+      cell: (r) =>
+        r.assigneeName ? (
+          <span className="flex min-w-0 items-center gap-2">
+            <Avatar name={r.assigneeName} />
+            <span className="truncate text-(--el-text-secondary)">{r.assigneeName}</span>
+          </span>
+        ) : (
+          <span className="text-(--el-text-muted)">{t('issues.columns.unassigned')}</span>
+        ),
+    },
+    {
+      key: 'reporter',
+      header: t('issues.columns.reporter'),
+      width: 150,
+      sortColumn: 'reporter',
+      cell: (r) => (
+        <span className="flex min-w-0 items-center gap-2">
+          <Avatar name={r.reporterName} />
+          <span className="truncate text-(--el-text-secondary)">{r.reporterName}</span>
+        </span>
       ),
-  },
-  {
-    key: 'estimate',
-    header: 'Est.',
-    width: 90,
-    align: 'end',
-    sortColumn: 'estimate',
-    cell: (r) =>
-      r.estimateLabel ? (
-        <span className="truncate text-(--el-text-secondary)">{r.estimateLabel}</span>
-      ) : (
-        <span className="text-(--el-text-muted)">—</span>
-      ),
-  },
-  {
-    key: 'status',
-    header: 'Status',
-    width: 130,
-    sortColumn: 'status',
-    cell: (r) =>
-      r.statusCategory ? (
-        <Pill status={STATUS_TONE[r.statusCategory]}>{r.statusLabel}</Pill>
-      ) : (
-        <Pill tone="neutral">{r.statusLabel}</Pill>
-      ),
-  },
-];
+    },
+    {
+      key: 'due',
+      header: t('issues.columns.due'),
+      width: 120,
+      sortColumn: 'due',
+      cell: (r) =>
+        r.dueLabel ? (
+          <span className="truncate text-(--el-text-secondary)">{r.dueLabel}</span>
+        ) : (
+          <span className="text-(--el-text-muted)">—</span>
+        ),
+    },
+    {
+      key: 'estimate',
+      header: t('issues.columns.estimate'),
+      width: 90,
+      align: 'end',
+      sortColumn: 'estimate',
+      cell: (r) =>
+        r.estimateLabel ? (
+          <span className="truncate text-(--el-text-secondary)">{r.estimateLabel}</span>
+        ) : (
+          <span className="text-(--el-text-muted)">—</span>
+        ),
+    },
+    {
+      key: 'status',
+      header: t('issues.columns.status'),
+      width: 130,
+      sortColumn: 'status',
+      cell: (r) =>
+        r.statusCategory ? (
+          <Pill status={STATUS_TONE[r.statusCategory]}>{r.statusLabel}</Pill>
+        ) : (
+          <Pill tone="neutral">{r.statusLabel}</Pill>
+        ),
+    },
+  ];
+}

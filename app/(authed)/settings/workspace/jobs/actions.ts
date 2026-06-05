@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { jobsDashboardService } from '@/lib/services/jobsDashboardService';
@@ -32,16 +33,17 @@ async function requireContext() {
  */
 export async function replayDlqAction(dlqId: string): Promise<ActionResult> {
   const { userId, workspaceId } = await requireContext();
-  if (!dlqId) return { ok: false, error: 'Missing dead-letter id.' };
+  const t = await getTranslations('errors');
+  if (!dlqId) return { ok: false, error: t('actions.missingDlqId') };
 
   try {
     await jobsDashboardService.replayDLQ({ dlqId, workspaceId, userId });
   } catch (err) {
     if (err instanceof ReplayForbiddenError) {
-      return { ok: false, error: 'Only a workspace owner can replay jobs.' };
+      return { ok: false, error: t('actions.ownerOnlyReplay') };
     }
     if (err instanceof DlqEntryNotFoundError) {
-      return { ok: false, error: 'That dead-letter entry no longer exists.' };
+      return { ok: false, error: t('actions.dlqGone') };
     }
     throw err;
   }

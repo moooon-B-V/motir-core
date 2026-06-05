@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Plus } from 'lucide-react';
 import { displayKey } from '@/lib/shortcuts';
 import { useCreateIssue } from './CreateIssueProvider';
@@ -15,6 +16,7 @@ import { useCreateIssue } from './CreateIssueProvider';
  * project to belong to, and the modal isn't mounted in that state.
  */
 export function CreateIssueButton() {
+  const t = useTranslations('shell');
   const { openCreateIssue, canCreate } = useCreateIssue();
   if (!canCreate) return null;
 
@@ -23,11 +25,11 @@ export function CreateIssueButton() {
       type="button"
       onClick={openCreateIssue}
       aria-keyshortcuts="C"
-      aria-label="Create issue"
+      aria-label={t('createIssue.title')}
       className="text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) inline-flex h-9 items-center gap-2 rounded-(--radius-sm) border border-(--el-border) px-2.5 font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2"
     >
       <Plus className="h-4 w-4" aria-hidden />
-      <span className="hidden sm:inline">Create</span>
+      <span className="hidden sm:inline">{t('createIssue.create')}</span>
       <kbd className="hidden rounded-(--radius-xs) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] sm:inline">
         {displayKey('C')}
       </kbd>

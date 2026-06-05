@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type { IssueRowData } from '@/app/(authed)/issues/_components/issueRows';
 
 // The /issues view-switcher + sortable List headers (Subtask 2.5.8) under

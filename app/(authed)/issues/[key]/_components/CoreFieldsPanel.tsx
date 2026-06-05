@@ -3,11 +3,13 @@
 import { useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
 import { Calendar, ChevronDown, Clock } from 'lucide-react';
 import type { WorkItemDto, WorkItemKindDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { WorkflowDto, StatusCategoryDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { IssueType } from '@/lib/issues/parentRules';
+import type { Locale } from '@/lib/i18n/locales';
 import { cn } from '@/lib/utils/cn';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -21,7 +23,6 @@ import { ParentPicker } from '@/components/issues/ParentPicker';
 import { TypePicker } from '@/components/issues/TypePicker';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
-import { PRIORITY_LABELS } from '@/lib/issues/priority';
 import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import { formatDateTime, formatDate } from '@/lib/utils/datetime';
 import { formatDurationMinutes } from '@/lib/utils/duration';
@@ -85,6 +86,8 @@ function FieldCard({
   onToggle?: () => void;
   children: ReactNode;
 }) {
+  const t = useTranslations('issueViews');
+  const tc = useTranslations('common');
   return (
     <Card className="px-3.5 py-2.5 shadow-(--shadow-card)">
       <div className="flex items-start justify-between gap-2">
@@ -101,7 +104,7 @@ function FieldCard({
             onMouseDown={(e) => e.preventDefault()}
             onClick={onToggle}
             aria-expanded={editing}
-            aria-label={`${editing ? 'Close' : 'Edit'} ${label}`}
+            aria-label={`${editing ? tc('close') : t('edit')} ${label}`}
             className="-mt-0.5 rounded p-0.5 text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >
             <ChevronDown
@@ -124,6 +127,9 @@ export function CoreFieldsPanel({
   reporterIsSelf,
 }: CoreFieldsPanelProps) {
   const router = useRouter();
+  const t = useTranslations('issueViews');
+  const tl = useTranslations('labels');
+  const locale = useLocale() as Locale;
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState<EditableKey | null>(null);
@@ -148,7 +154,7 @@ export function CoreFieldsPanel({
         setUpdatedAt(res.updatedAt);
         router.refresh();
       } else if (res.stale) {
-        toast({ variant: 'error', title: 'This issue changed elsewhere — refreshing.' });
+        toast({ variant: 'error', title: t('changedElsewhereRefreshing') });
         router.refresh();
       } else {
         toast({ variant: 'error', title: res.error });
@@ -192,7 +198,11 @@ export function CoreFieldsPanel({
 
   return (
     <div className="flex flex-col gap-3">
-      <FieldCard label="Status" editing={editing === 'status'} onToggle={() => toggle('status')}>
+      <FieldCard
+        label={t('status')}
+        editing={editing === 'status'}
+        onToggle={() => toggle('status')}
+      >
         {editing === 'status' ? (
           <StatusPicker
             statuses={workflow.statuses}
@@ -209,7 +219,7 @@ export function CoreFieldsPanel({
         )}
       </FieldCard>
 
-      <FieldCard label="Type" editing={editing === 'type'} onToggle={() => toggle('type')}>
+      <FieldCard label={t('type')} editing={editing === 'type'} onToggle={() => toggle('type')}>
         {editing === 'type' ? (
           <TypePicker
             value={item.kind as IssueType}
@@ -225,7 +235,7 @@ export function CoreFieldsPanel({
       </FieldCard>
 
       <FieldCard
-        label="Priority"
+        label={t('priority')}
         editing={editing === 'priority'}
         onToggle={() => toggle('priority')}
       >
@@ -238,13 +248,13 @@ export function CoreFieldsPanel({
         ) : (
           <Pill {...priorityPill.pill}>
             <priorityPill.icon className="h-3 w-3" aria-hidden />
-            {PRIORITY_LABELS[item.priority]}
+            {tl('priority.' + item.priority)}
           </Pill>
         )}
       </FieldCard>
 
       <FieldCard
-        label="Assignee"
+        label={t('assignee')}
         editing={editing === 'assignee'}
         onToggle={() => toggle('assignee')}
       >
@@ -261,23 +271,27 @@ export function CoreFieldsPanel({
             <span className="truncate">{assignee.name}</span>
           </span>
         ) : (
-          muted('Unassigned')
+          muted(t('unassigned'))
         )}
       </FieldCard>
 
-      <FieldCard label="Reporter" editable={false}>
+      <FieldCard label={t('reporter')} editable={false}>
         {reporter ? (
           <span className="flex items-center gap-2">
             <Avatar name={reporter.name || reporter.email} />
             <span className="truncate">{reporter.name}</span>
-            {reporterIsSelf ? <Pill tone="neutral">You</Pill> : null}
+            {reporterIsSelf ? <Pill tone="neutral">{t('you')}</Pill> : null}
           </span>
         ) : (
-          muted('Unknown')
+          muted(t('unknown'))
         )}
       </FieldCard>
 
-      <FieldCard label="Parent" editing={editing === 'parent'} onToggle={() => toggle('parent')}>
+      <FieldCard
+        label={t('parent')}
+        editing={editing === 'parent'}
+        onToggle={() => toggle('parent')}
+      >
         {editing === 'parent' ? (
           <ParentPicker
             childType={item.kind as IssueType}
@@ -296,18 +310,18 @@ export function CoreFieldsPanel({
             <span className="truncate">{parent.title}</span>
           </Link>
         ) : (
-          muted('None')
+          muted(t('none'))
         )}
       </FieldCard>
 
       <FieldCard
-        label="Due date"
+        label={t('dueDate')}
         editing={editing === 'dueDate'}
         onToggle={() => toggle('dueDate')}
       >
         {editing === 'dueDate' ? (
           <DatePicker
-            aria-label="Due date"
+            aria-label={t('dueDate')}
             value={dueDate || null}
             onChange={commitDue}
             disabled={isPending}
@@ -316,15 +330,15 @@ export function CoreFieldsPanel({
         ) : item.dueDate ? (
           <span className="flex items-center gap-1.5">
             <Calendar className="h-4 w-4 text-(--el-text-secondary)" aria-hidden />
-            {formatDate(item.dueDate)}
+            {formatDate(item.dueDate, locale)}
           </span>
         ) : (
-          muted('No due date')
+          muted(t('noDueDate'))
         )}
       </FieldCard>
 
       <FieldCard
-        label="Estimate"
+        label={t('estimate')}
         editing={editing === 'estimate'}
         onToggle={() => (editing === 'estimate' ? commitEstimate() : setEditing('estimate'))}
       >
@@ -332,7 +346,7 @@ export function CoreFieldsPanel({
           <Input
             type="number"
             min={0}
-            aria-label="Estimate (minutes)"
+            aria-label={t('estimateMinutes')}
             value={estimate}
             onChange={(e) => setEstimate(e.target.value)}
             onBlur={commitEstimate}
@@ -345,19 +359,19 @@ export function CoreFieldsPanel({
             {formatDurationMinutes(item.estimateMinutes)}
           </span>
         ) : (
-          muted('No estimate')
+          muted(t('noEstimate'))
         )}
       </FieldCard>
 
-      {/* Created / updated — read-only audit fields (deterministic en-US/UTC). */}
+      {/* Created / updated — read-only audit fields (locale-aware date, UTC zone). */}
       <dl className="flex flex-col gap-1 px-1 pt-1 font-sans text-xs text-(--el-text-secondary)">
         <div className="flex justify-between gap-2">
-          <dt>Created</dt>
-          <dd className="text-(--el-text)">{formatDateTime(item.createdAt)}</dd>
+          <dt>{t('created')}</dt>
+          <dd className="text-(--el-text)">{formatDateTime(item.createdAt, locale)}</dd>
         </div>
         <div className="flex justify-between gap-2">
-          <dt>Updated</dt>
-          <dd className="text-(--el-text)">{formatDateTime(item.updatedAt)}</dd>
+          <dt>{t('updated')}</dt>
+          <dd className="text-(--el-text)">{formatDateTime(item.updatedAt, locale)}</dd>
         </div>
       </dl>
     </div>

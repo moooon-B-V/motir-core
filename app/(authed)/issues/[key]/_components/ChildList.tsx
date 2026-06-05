@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { WorkflowDto, StatusCategoryDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
@@ -45,11 +46,12 @@ export interface ChildListProps {
 }
 
 export function ChildList({ items, workflow, members }: ChildListProps) {
+  const t = useTranslations('issueViews');
   if (items.length === 0) return null;
 
   return (
     <ContentSectionCard
-      title="Child issues"
+      title={t('childIssues')}
       headerExtra={<Pill tone="neutral">{items.length}</Pill>}
     >
       <ul className="-my-1 flex flex-col">

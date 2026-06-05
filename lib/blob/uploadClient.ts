@@ -6,21 +6,28 @@
 // The editor decides `![]` vs `[]` from the File's own MIME; this just returns
 // the URL. A typed server error (413/415/429) surfaces as the thrown message,
 // which the editor turns into its polite inline notice.
+//
+// i18n: the route returns a stable `code`; this maps it to a TRANSLATED message
+// via the `errors`-scoped translator the caller passes in (a client component's
+// useTranslations('errors')) — so the editor notice is localized, not the
+// server's English string.
 
-export async function uploadIssueAttachment(file: File): Promise<string> {
+// A minimal translator shape (satisfied by next-intl's useTranslations('errors')).
+type UploadTranslator = (key: string) => string;
+
+export async function uploadIssueAttachment(file: File, t: UploadTranslator): Promise<string> {
   const form = new FormData();
   form.append('file', file);
 
   const res = await fetch('/api/upload/issue-attachment', { method: 'POST', body: form });
   if (!res.ok) {
-    let message = 'Upload failed — please try again.';
+    let code: string | undefined;
     try {
-      const body = (await res.json()) as { error?: string };
-      if (body.error) message = body.error;
+      code = ((await res.json()) as { code?: string }).code;
     } catch {
-      // non-JSON error body — keep the generic message
+      // non-JSON error body — fall through to the generic message
     }
-    throw new Error(message);
+    throw new Error(code ? t(`upload.${code}`) : t('upload.failed'));
   }
 
   const body = (await res.json()) as { url: string };

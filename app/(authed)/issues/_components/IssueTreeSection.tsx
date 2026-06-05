@@ -1,4 +1,6 @@
+import { getLocale, getTranslations } from 'next-intl/server';
 import { EmptyState } from '@/components/ui/EmptyState';
+import type { Locale } from '@/lib/i18n/locales';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { type IssueListView, type IssueSort, serializeSort } from '@/lib/issues/issueListView';
 import {
@@ -55,18 +57,17 @@ export async function IssueTreeSection({
   const ctx = { userId, workspaceId };
   const repoFilter = toProjectTreeFilter(filter);
   const filtered = isFilterActive(filter);
+  const t = await getTranslations('issueViews');
+  const locale = (await getLocale()) as Locale;
 
   // A filter that matches nothing is distinct from an empty project: don't tell
   // the user to "create your first issue" when they've simply over-narrowed.
   const empty = filtered ? (
-    <EmptyState
-      title="No matching issues"
-      description="No issues match the current filters. Try adjusting or clearing them."
-    />
+    <EmptyState title={t('noMatchingTitle')} description={t('noMatchingDescription')} />
   ) : (
     <EmptyState
-      title="No issues yet"
-      description="Create your first issue to start tracking work."
+      title={t('noIssuesTitle')}
+      description={t('noIssuesDescription')}
       action={<NewIssueButton />}
     />
   );
@@ -85,7 +86,7 @@ export async function IssueTreeSection({
     if (items.length === 0) return empty;
     return (
       <IssueListTable
-        rows={toIssueListRows(items, workflow, members)}
+        rows={toIssueListRows(items, workflow, members, locale)}
         sort={sort}
         filter={filter}
         pagination={{ total, page: clampedPage, pageSize }}
@@ -99,7 +100,7 @@ export async function IssueTreeSection({
   if (filtered) {
     const tree = await workItemsService.getProjectTree(projectId, repoFilter, ctx);
     if (tree.length === 0) return empty;
-    return <IssueTreeStaticTable rows={toIssueRows(tree, workflow, members)} />;
+    return <IssueTreeStaticTable rows={toIssueRows(tree, workflow, members, locale)} />;
   }
 
   // UNFILTERED tree → the LAZY path (finding #57): load only the first page of

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { FolderOpen, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -11,21 +12,22 @@ import { CreateProjectModal } from './CreateProjectModal';
 // project yet, so there's no real identifier to interpolate.
 
 export function ProjectsEmptyState() {
+  const t = useTranslations('shell');
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
     <>
       <EmptyState
         icon={<FolderOpen className="h-12 w-12" aria-hidden />}
-        title="Create your first project"
-        description="Projects group your work items and give them a key like PROD-1. Create one to start planning."
+        title={t('project.createFirst')}
+        description={t('project.emptyDescription')}
         action={
           <Button
             variant="primary"
             leftIcon={<Plus className="h-4 w-4" />}
             onClick={() => setCreateOpen(true)}
           >
-            Create project
+            {t('project.create')}
           </Button>
         }
       />

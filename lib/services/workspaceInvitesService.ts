@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { db } from '@/lib/db';
 import { sendEvent } from '@/lib/jobs/sendEvent';
+import { currentLocale } from '@/lib/i18n/serverLocale';
 import type {
   AcceptInviteResultDTO,
   InspectInviteResultDTO,
@@ -122,6 +123,10 @@ async function enqueueInviteEmail(args: {
       inviterName: args.inviterName,
       workspaceName: args.workspaceName,
       acceptUrl: buildInviteAcceptUrl(args.token),
+      // The inviter's current UI locale — the best available signal, since the
+      // recipient may not exist yet (no persisted per-user locale). Rendered
+      // off-request in the email.send job, so the locale must ride the payload.
+      locale: await currentLocale(),
     },
   });
 }

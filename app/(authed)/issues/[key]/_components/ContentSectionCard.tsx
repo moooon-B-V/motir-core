@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Pencil } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 
@@ -31,6 +32,7 @@ export function ContentSectionCard({
   editHref,
   children,
 }: ContentSectionCardProps) {
+  const t = useTranslations('issueViews');
   return (
     <Card
       className="shadow-(--shadow-card)"
@@ -48,7 +50,7 @@ export function ContentSectionCard({
               className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-sans text-sm text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             >
               <Pencil className="h-3.5 w-3.5" aria-hidden />
-              Edit
+              {t('edit')}
             </Link>
           ) : null}
         </div>

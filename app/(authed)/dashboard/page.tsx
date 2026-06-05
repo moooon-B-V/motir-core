@@ -9,6 +9,7 @@
 // this page only owns its own content.
 
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { ProjectsEmptyState } from '../_components/ProjectsEmptyState';
@@ -25,11 +26,14 @@ export default async function DashboardPage() {
     return <ProjectsEmptyState />;
   }
 
+  const t = await getTranslations('shell');
+
   return (
     <div>
-      <h1 className="font-serif text-3xl font-semibold text-(--el-text)">Dashboard</h1>
+      <h1 className="font-serif text-3xl font-semibold text-(--el-text)">{t('nav.dashboard')}</h1>
       <p className="text-(--el-text-muted) mt-2 font-sans text-sm">
-        Active project: <strong className="text-(--el-text)">{project.project.name}</strong>
+        {t('dashboard.activeProject')}{' '}
+        <strong className="text-(--el-text)">{project.project.name}</strong>
         <span className="text-(--el-text-muted) font-mono"> ({project.project.identifier})</span>
       </p>
     </div>

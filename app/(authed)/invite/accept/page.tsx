@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { workspaceInvitesService } from '@/lib/services/workspaceInvitesService';
 import { type ReactNode } from 'react';
@@ -34,6 +35,7 @@ interface PageProps {
 }
 
 export default async function InviteAcceptPage({ searchParams }: PageProps) {
+  const t = await getTranslations('auth');
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
@@ -56,8 +58,8 @@ export default async function InviteAcceptPage({ searchParams }: PageProps) {
   return (
     <InviteCard>
       <AuthShell
-        headline={`Join ${result.workspaceName}`}
-        subhead={`${result.inviterName} invited you to collaborate.`}
+        headline={t('joinWorkspace', { workspaceName: result.workspaceName })}
+        subhead={t('invitedToCollaborate', { inviterName: result.inviterName })}
       >
         <AcceptInviteButton token={token} />
       </AuthShell>
@@ -65,16 +67,14 @@ export default async function InviteAcceptPage({ searchParams }: PageProps) {
   );
 }
 
-function ExpiredState() {
+async function ExpiredState() {
+  const t = await getTranslations('auth');
   return (
     <InviteCard>
-      <AuthShell
-        headline="This invite has expired"
-        subhead="Invites are valid for 7 days. Ask the inviter for a new link if you'd still like to join."
-      >
+      <AuthShell headline={t('inviteExpired')} subhead={t('inviteExpiredSubhead')}>
         <a href="/dashboard">
           <Button variant="secondary" className="w-full">
-            Back to dashboard
+            {t('backToDashboard')}
           </Button>
         </a>
       </AuthShell>
@@ -82,16 +82,14 @@ function ExpiredState() {
   );
 }
 
-function UsedState() {
+async function UsedState() {
+  const t = await getTranslations('auth');
   return (
     <InviteCard>
-      <AuthShell
-        headline="This invite has already been used"
-        subhead="If you joined from another email, sign in with that account."
-      >
+      <AuthShell headline={t('inviteUsed')} subhead={t('inviteUsedSubhead')}>
         <a href="/sign-in">
           <Button variant="secondary" className="w-full">
-            Back to sign in
+            {t('backToSignIn')}
           </Button>
         </a>
       </AuthShell>
@@ -99,28 +97,29 @@ function UsedState() {
   );
 }
 
-function WrongEmailState({
+async function WrongEmailState({
   invitedEmail,
   currentEmail,
 }: {
   invitedEmail: string;
   currentEmail: string;
 }) {
+  const t = await getTranslations('auth');
   return (
     <InviteCard>
       <AuthShell
-        headline="Sign in with the invited email"
-        subhead={`This invite is for ${invitedEmail}. You're signed in as ${currentEmail}. Sign in with the invited email to accept, or ask the inviter to re-send to your address.`}
+        headline={t('signInWithInvitedEmail')}
+        subhead={t('wrongEmailSubhead', { invitedEmail, currentEmail })}
       >
         <div className="flex flex-col gap-3">
           <a href={`/sign-in?email=${encodeURIComponent(invitedEmail)}`}>
             <Button variant="primary" className="w-full">
-              Sign in with {invitedEmail}
+              {t('signInWith', { invitedEmail })}
             </Button>
           </a>
           <a href="/dashboard">
             <Button variant="secondary" className="w-full">
-              Back to dashboard
+              {t('backToDashboard')}
             </Button>
           </a>
         </div>

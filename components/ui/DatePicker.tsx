@@ -2,9 +2,11 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useLocale } from 'next-intl';
 import { Popover } from './Popover';
 import { formatDate } from '@/lib/utils/datetime';
 import { cn } from '@/lib/utils/cn';
+import type { Locale } from '@/lib/i18n/locales';
 
 /**
  * DatePicker — the design-system replacement for the native `<input type="date">`
@@ -143,6 +145,7 @@ export function DatePicker({
   const [focusKey, setFocusKey] = useState<string>(() => toKey(selected ?? todayUTC()));
 
   const gridRef = useRef<HTMLDivElement>(null);
+  const locale = useLocale() as Locale;
   const baseId = useId();
   const captionId = `${baseId}-caption`;
   const today = todayUTC();
@@ -230,7 +233,7 @@ export function DatePicker({
   }
 
   const cells = monthGrid(view.y, view.m);
-  const triggerLabel = selected && value ? formatDate(value) : placeholder;
+  const triggerLabel = selected && value ? formatDate(value, locale) : placeholder;
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>

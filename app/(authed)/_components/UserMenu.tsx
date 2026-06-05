@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { LogOut, Settings } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { LogOut, Settings, UserCog } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { cn } from '@/lib/utils/cn';
 import { signOut } from '@/lib/auth/client';
@@ -13,6 +14,7 @@ export interface UserMenuProps {
 }
 
 export function UserMenu({ name, email }: UserMenuProps) {
+  const t = useTranslations('shell');
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -34,7 +36,7 @@ export function UserMenu({ name, email }: UserMenuProps) {
       <Popover.Trigger asChild>
         <button
           type="button"
-          aria-label="Account menu"
+          aria-label={t('userMenu.account')}
           className="bg-(--el-text) text-(--el-text-inverted) focus-visible:ring-(--focus-ring-color) inline-flex h-9 w-9 items-center justify-center rounded-full font-sans text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           {initial}
@@ -49,12 +51,20 @@ export function UserMenu({ name, email }: UserMenuProps) {
         </div>
         <div className="px-1">
           <a
+            href="/settings/account"
+            onClick={() => setOpen(false)}
+            className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-sm) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
+          >
+            <UserCog className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+            {t('userMenu.accountSettings')}
+          </a>
+          <a
             href="/settings/workspace"
             onClick={() => setOpen(false)}
             className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-sm) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
           >
             <Settings className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-            Workspace settings
+            {t('userMenu.workspaceSettings')}
           </a>
           <button
             type="button"
@@ -66,7 +76,7 @@ export function UserMenu({ name, email }: UserMenuProps) {
             )}
           >
             <LogOut className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-            {isPending ? 'Signing out…' : 'Sign out'}
+            {isPending ? t('userMenu.signingOut') : t('account.signOut')}
           </button>
         </div>
       </Popover.Content>

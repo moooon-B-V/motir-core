@@ -1,6 +1,8 @@
+import { getTranslations } from 'next-intl/server';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { UserMenu } from './UserMenu';
 import { ThemeToggle } from './ThemeToggle';
+import { LocaleToggle } from './LocaleToggle';
 import { CommandPaletteTrigger } from './CommandPaletteTrigger';
 import { CreateIssueButton } from './CreateIssueButton';
 import { SidebarToggle } from '@/components/ui/SidebarToggle';
@@ -24,7 +26,8 @@ export interface TopNavProps {
   user: { name: string; email: string };
 }
 
-export function TopNav({ workspaces, activeWorkspaceId, user }: TopNavProps) {
+export async function TopNav({ workspaces, activeWorkspaceId, user }: TopNavProps) {
+  const t = await getTranslations('shell');
   return (
     <header className="border-(--el-border) bg-(--el-page-bg) sticky top-0 z-30 border-b">
       {/* `aria-label` names this landmark distinctly from the sidebar's
@@ -32,7 +35,7 @@ export function TopNav({ workspaces, activeWorkspaceId, user }: TopNavProps) {
           landmark-unique rule and leave screen-reader users unable to tell the
           global bar from the primary rail. */}
       <nav
-        aria-label="Global"
+        aria-label={t('topNav.global')}
         className="flex h-14 items-center justify-between gap-2 px-4 sm:px-6"
       >
         <div className="flex items-center gap-2">
@@ -46,6 +49,7 @@ export function TopNav({ workspaces, activeWorkspaceId, user }: TopNavProps) {
         <div className="flex items-center gap-2">
           <CreateIssueButton />
           <CommandPaletteTrigger />
+          <LocaleToggle />
           <ThemeToggle />
           <UserMenu name={user.name} email={user.email} />
         </div>

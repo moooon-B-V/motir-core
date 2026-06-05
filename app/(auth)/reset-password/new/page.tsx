@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState, type FormEvent } from 'react';
 import { Lock, Eye, EyeOff } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { AuthShell, FormAlert } from '../../_components/AuthShell';
@@ -38,17 +39,16 @@ export default function NewPasswordPage() {
 }
 
 function NewPasswordShell() {
+  const t = useTranslations('auth');
   return (
-    <AuthShell
-      headline="Set a new password"
-      subhead="Pick something you haven't used before — at least 8 characters."
-    >
+    <AuthShell headline={t('setNewPassword')} subhead={t('setNewPasswordSubhead')}>
       <div className="flex flex-col gap-5" aria-hidden />
     </AuthShell>
   );
 }
 
 function NewPasswordForm() {
+  const t = useTranslations('auth');
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
@@ -66,22 +66,19 @@ function NewPasswordForm() {
   // on if they clicked an old email or a tampered URL.
   if (callbackError === 'INVALID_TOKEN' || !token) {
     return (
-      <AuthShell
-        headline="This link has expired"
-        subhead="Reset links expire after 1 hour for security. Request a new one to continue."
-      >
+      <AuthShell headline={t('linkExpired')} subhead={t('linkExpiredSubhead')}>
         <div className="flex flex-col gap-4">
           <Link
             href="/reset-password"
             className="inline-flex h-(--height-btn-lg) w-full items-center justify-center rounded-(--radius-btn) bg-(--el-accent) px-6 font-sans text-base font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            Request a new link
+            {t('requestNewLink')}
           </Link>
           <Link
             href="/sign-in"
             className="inline-flex h-(--height-btn-lg) w-full items-center justify-center rounded-(--radius-btn) border border-(--el-border-strong) bg-transparent px-6 font-sans text-base font-medium text-(--el-text) transition-colors hover:bg-(--el-surface) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            Back to sign in
+            {t('backToSignIn')}
           </Link>
         </div>
       </AuthShell>
@@ -90,12 +87,12 @@ function NewPasswordForm() {
 
   if (success) {
     return (
-      <AuthShell headline="Password updated" subhead="You can now sign in with your new password.">
+      <AuthShell headline={t('passwordUpdated')} subhead={t('passwordUpdatedSubhead')}>
         <Link
           href="/sign-in"
           className="inline-flex h-(--height-btn-lg) w-full items-center justify-center rounded-(--radius-btn) bg-(--el-accent) px-6 font-sans text-base font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          Continue to sign in
+          {t('continueToSignIn')}
         </Link>
       </AuthShell>
     );
@@ -106,7 +103,7 @@ function NewPasswordForm() {
     setPageError('');
     setFieldError('');
     if (password.length < 8) {
-      setFieldError('Password must be at least 8 characters.');
+      setFieldError(t('passwordTooShort'));
       return;
     }
     setSubmitting(true);
@@ -131,26 +128,23 @@ function NewPasswordForm() {
         router.replace('/reset-password/new?error=INVALID_TOKEN');
         return;
       }
-      setPageError(body.message ?? 'Something went wrong. Please try again.');
+      setPageError(body.message ?? t('somethingWentWrong'));
       setSubmitting(false);
     } catch {
-      setPageError("We couldn't reach the server. Check your connection and try again.");
+      setPageError(t('couldntReachServer'));
       setSubmitting(false);
     }
   }
 
   return (
-    <AuthShell
-      headline="Set a new password"
-      subhead="Pick something you haven't used before — at least 8 characters."
-    >
+    <AuthShell headline={t('setNewPassword')} subhead={t('setNewPasswordSubhead')}>
       <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
         {pageError ? <FormAlert>{pageError}</FormAlert> : null}
         <Input
           type={showPassword ? 'text' : 'password'}
           name="new-password"
           autoComplete="new-password"
-          placeholder="New password"
+          placeholder={t('newPassword')}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           addonStart={<Lock className="h-5 w-5" aria-hidden />}
@@ -158,7 +152,7 @@ function NewPasswordForm() {
             <button
               type="button"
               onClick={() => setShowPassword((s) => !s)}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-label={showPassword ? t('hidePassword') : t('showPassword')}
               className="inline-flex h-6 w-6 items-center justify-center rounded-(--radius-xs) text-(--el-text-muted) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
             >
               {showPassword ? (
@@ -168,14 +162,14 @@ function NewPasswordForm() {
               )}
             </button>
           }
-          aria-label="New password"
-          helperText={fieldError ? undefined : 'At least 8 characters.'}
+          aria-label={t('newPassword')}
+          helperText={fieldError ? undefined : t('atLeast8')}
           error={fieldError || undefined}
           required
           autoFocus
         />
         <Button type="submit" variant="primary" size="lg" className="w-full" loading={submitting}>
-          {submitting ? 'Updating…' : 'Set new password'}
+          {submitting ? t('updating') : t('setNewPasswordButton')}
         </Button>
       </form>
     </AuthShell>

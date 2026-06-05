@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { isOwnerRole } from '@/lib/workspaces/roles';
@@ -34,13 +35,15 @@ export default async function WorkspaceJobsPage({ searchParams }: JobsPageProps)
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
+  const t = await getTranslations('settings');
+
   const ctx = await getWorkspaceContext();
   if (!ctx) {
     return (
       <div className="mx-auto max-w-[60rem]">
         <EmptyState
-          title="No workspace yet"
-          description="Create a workspace from the switcher in the top-left to get started."
+          title={t('workspace.empty.title')}
+          description={t('workspace.empty.description')}
         />
       </div>
     );
@@ -101,11 +104,8 @@ export default async function WorkspaceJobsPage({ searchParams }: JobsPageProps)
   return (
     <div className="mx-auto flex max-w-[60rem] flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-serif text-3xl font-semibold text-(--el-text)">Job runs</h1>
-        <p className="text-(--el-text-muted) font-sans text-sm">
-          Background jobs for this workspace — delivery of invites &amp; password resets, and any
-          scheduled work. Failed jobs land in the dead-letter queue, where an owner can replay them.
-        </p>
+        <h1 className="font-serif text-3xl font-semibold text-(--el-text)">{t('jobs.title')}</h1>
+        <p className="text-(--el-text-muted) font-sans text-sm">{t('jobs.subtitle')}</p>
       </header>
 
       <JobsDashboard

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { TriangleAlert } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
@@ -24,6 +25,8 @@ export function ArchiveProjectModal({
   projectName,
   projectIdentifier,
 }: ArchiveProjectModalProps) {
+  const t = useTranslations('settings');
+  const tc = useTranslations('common');
   const router = useRouter();
   const { toast } = useToast();
   const [typed, setTyped] = useState('');
@@ -49,12 +52,12 @@ export function ArchiveProjectModal({
       try {
         await archiveProjectAction(projectId);
         handleOpenChange(false);
-        toast({ variant: 'success', title: 'Project archived' });
+        toast({ variant: 'success', title: t('archive.archivedToast') });
         // Re-renders the server tree; getActiveProject falls back to the
         // next non-archived project (or null → empty state).
         router.refresh();
       } catch {
-        toast({ variant: 'error', title: 'Could not archive project' });
+        toast({ variant: 'error', title: t('archive.archiveErrorTitle') });
       }
     });
   }
@@ -70,12 +73,9 @@ export function ArchiveProjectModal({
         </span>
         <div>
           <h2 className="font-serif text-xl font-semibold text-(--el-text)">
-            Archive {projectName}?
+            {t('archive.modalTitle', { projectName })}
           </h2>
-          <p className="text-(--el-text-muted) mt-1 font-sans text-sm">
-            Archiving hides this project from the switcher and lists. Its work items and history are
-            preserved — you can restore the project later. This does not delete any data.
-          </p>
+          <p className="text-(--el-text-muted) mt-1 font-sans text-sm">{t('archive.modalDesc')}</p>
         </div>
       </div>
 
@@ -86,7 +86,7 @@ export function ArchiveProjectModal({
         }}
       >
         <Input
-          label={`Type ${projectIdentifier} to confirm`}
+          label={t('archive.confirmLabel', { identifier: projectIdentifier })}
           placeholder={projectIdentifier}
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
@@ -96,10 +96,10 @@ export function ArchiveProjectModal({
         />
         <Modal.Footer>
           <Button variant="ghost" onClick={() => handleOpenChange(false)} disabled={isPending}>
-            Cancel
+            {tc('cancel')}
           </Button>
           <Button type="submit" variant="danger" disabled={!matches} loading={isPending}>
-            Archive project
+            {t('archive.modalConfirm')}
           </Button>
         </Modal.Footer>
       </form>

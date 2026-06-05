@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -9,6 +10,7 @@ import { isIssueType } from '@/lib/issues/parentRules';
 import { isRelationshipKind } from '@/lib/workItems/linkRelationships';
 import { parseSort } from '@/lib/issues/issueListView';
 import { linkErrorMessage } from '@/lib/workItems/linkErrorMessages';
+import { workItemErrorMessage } from '@/lib/workItems/errorMessages';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   IllegalParentTypeError,
@@ -72,13 +74,14 @@ export type CreateIssueResult =
 export async function createIssueAction(input: CreateIssueInput): Promise<CreateIssueResult> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
+  const t = await getTranslations('errors');
   const ctx = await getActiveProject();
-  if (!ctx) return { ok: false, error: 'Pick or create a project before adding an issue.' };
+  if (!ctx) return { ok: false, error: t('actions.noProjectForIssue') };
 
   const title = input.title.trim();
-  if (title.length === 0) return { ok: false, error: 'Give the issue a title.' };
+  if (title.length === 0) return { ok: false, error: t('actions.titleRequired') };
   if (title.length > MAX_TITLE_LENGTH) {
-    return { ok: false, error: `Title must be ${MAX_TITLE_LENGTH} characters or fewer.` };
+    return { ok: false, error: t('actions.titleTooLong', { max: MAX_TITLE_LENGTH }) };
   }
 
   // Whitelist the pending links: keep only well-formed (relationship, target)
@@ -109,9 +112,9 @@ export async function createIssueAction(input: CreateIssueInput): Promise<Create
     // An illegal parent is a field-level problem — surface it inline on the
     // parent picker, not as a toast.
     if (err instanceof IllegalParentTypeError)
-      return { ok: false, error: err.message, field: 'parent' };
+      return { ok: false, error: workItemErrorMessage(err, t), field: 'parent' };
     if (err instanceof ProjectNotFoundError) {
-      return { ok: false, error: 'That project no longer exists.' };
+      return { ok: false, error: t('actions.projectGone') };
     }
     // A bad pending link (cycle / cross-workspace / duplicate) aborts the whole
     // create (one transaction — the issue is NOT created) and surfaces inline on
@@ -120,13 +123,13 @@ export async function createIssueAction(input: CreateIssueInput): Promise<Create
     if (err instanceof WorkItemLinkError) {
       return {
         ok: false,
-        error: linkErrorMessage(err) ?? 'Could not link the selected issues.',
+        error: linkErrorMessage(err, t) ?? t('actions.couldNotLink'),
         field: 'links',
       };
     }
     // Any other typed work-item error (cross-project parent, assignee/reporter
     // not a member, …) surfaces as a toast with its own message.
-    if (err instanceof WorkItemError) return { ok: false, error: err.message };
+    if (err instanceof WorkItemError) return { ok: false, error: workItemErrorMessage(err, t) };
     throw err;
   }
 }
@@ -147,7 +150,8 @@ export async function listCreateLinkCandidatesAction(): Promise<ListCreateLinkCa
   const session = await getSession();
   if (!session) redirect('/sign-in');
   const ctx = await getActiveProject();
-  if (!ctx) return { ok: false, error: 'Pick a project first.' };
+  if (!ctx)
+    return { ok: false, error: (await getTranslations('errors'))('actions.pickProjectFirst') };
 
   const candidates = await workItemsService.listCreateLinkCandidates({
     userId: ctx.userId,
@@ -173,9 +177,10 @@ export async function listCandidateParentsAction(
 ): Promise<ListCandidateParentsResult> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
+  const t = await getTranslations('errors');
   const ctx = await getActiveProject();
-  if (!ctx) return { ok: false, error: 'Pick or create a project before choosing a parent.' };
-  if (!isIssueType(childType)) return { ok: false, error: 'Unknown issue type.' };
+  if (!ctx) return { ok: false, error: t('actions.noProjectForParent') };
+  if (!isIssueType(childType)) return { ok: false, error: t('actions.unknownIssueType') };
 
   const candidates = await workItemsService.listCandidateParents(
     ctx.projectId,
