@@ -36,9 +36,15 @@ jobs:
       # Unlock the seed's production guard (scripts/plan-seed/seed.ts refuses to
       # run under NODE_ENV=production unless this is set).
       SEED_ALLOW_PRODUCTION: '1'
-      # NOTE: the seed needs NO other secret. It hashes passwords with argon2
-      # directly (lib/auth/passwords.ts) and never loads the Better-Auth instance
-      # (lib/auth/index.ts) — so BETTER_AUTH_SECRET / GOOGLE_* are not required.
+      # Defensive: the seed hashes passwords with argon2 (lib/auth/passwords.ts)
+      # and does NOT currently load the Better-Auth instance (lib/auth/index.ts),
+      # so these aren't strictly required today — but wiring them costs nothing
+      # and keeps the reseed working if a transitive import ever pulls in the auth
+      # instance (its requiredEnv check needs all three at module load). The
+      # GOOGLE_* values only register the OAuth provider; no round-trip happens.
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      GOOGLE_CLIENT_ID: reseed-placeholder
+      GOOGLE_CLIENT_SECRET: reseed-placeholder
       # No git hooks to wire in CI.
       HUSKY: '0'
     steps:
