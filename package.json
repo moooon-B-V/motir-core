@@ -17,6 +17,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
+    "db:seed": "tsx scripts/plan-seed/seed.ts",
     "db:seed:large": "tsx scripts/seed-large.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

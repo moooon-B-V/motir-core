@@ -153,6 +153,12 @@ jobs:
   e2e:
     name: Playwright E2E
     runs-on: ubuntu-latest
+    # Skip E2E on plan-seed PRs. A `seed/*` PR only edits scripts/plan-seed/**
+    # (the plan data the seed loads — see PRODECT.md "Plan seed"); it touches no
+    # app code and scripts/ isn't in the Next bundle, so the Playwright suite has
+    # nothing new to exercise. lint/typecheck/build/test still run. github.head_ref
+    # is the PR source branch (empty on push-to-main, where E2E runs normally).
+    if: ${{ !startsWith(github.head_ref, 'seed/') }}
     # Wait for the build job — E2E is more expensive than a build failure
     # surfaces and there's no point burning Playwright minutes if `next
     # build` is red.

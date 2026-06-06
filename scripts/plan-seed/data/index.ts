@@ -1,0 +1,58 @@
+import { epicIdOf, type PlanEpic, type PlanStory } from '../types';
+import { EPICS } from './epics';
+import { STUB_STORIES } from './stubs';
+import { story_1_0 } from './story-1.0';
+import { story_1_0_5 } from './story-1.0.5';
+import { story_1_1 } from './story-1.1';
+import { story_1_2 } from './story-1.2';
+import { story_1_3 } from './story-1.3';
+import { story_1_4 } from './story-1.4';
+import { story_1_5 } from './story-1.5';
+import { story_1_6 } from './story-1.6';
+import { story_2_1 } from './story-2.1';
+import { story_2_2 } from './story-2.2';
+import { story_2_3 } from './story-2.3';
+import { story_2_4 } from './story-2.4';
+import { story_2_5 } from './story-2.5';
+
+/** Every fully-expanded story module (canonical subtask depth). */
+const EXPANDED_STORIES: PlanStory[] = [
+  story_1_0,
+  story_1_0_5,
+  story_1_1,
+  story_1_2,
+  story_1_3,
+  story_1_4,
+  story_1_5,
+  story_1_6,
+  story_2_1,
+  story_2_2,
+  story_2_3,
+  story_2_4,
+  story_2_5,
+];
+
+const ALL_STORIES: PlanStory[] = [...EXPANDED_STORIES, ...STUB_STORIES];
+
+/** Natural sort over dotted ids: "1.0" < "1.0.5" < "1.1" < "1.10". */
+function cmpDotted(a: string, b: string): number {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] ?? -1;
+    const y = pb[i] ?? -1;
+    if (x !== y) return x - y;
+  }
+  return 0;
+}
+
+/**
+ * The full Prodect v1 plan tree — the source of truth `pnpm db:seed` loads.
+ * Each epic's stories are gathered by id prefix and ordered naturally.
+ */
+export const PLAN: PlanEpic[] = EPICS.map((epic) => ({
+  ...epic,
+  stories: ALL_STORIES.filter((s) => epicIdOf(s.id) === epic.id).sort((a, b) =>
+    cmpDotted(a.id, b.id),
+  ),
+}));
