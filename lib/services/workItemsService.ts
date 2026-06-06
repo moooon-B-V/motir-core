@@ -626,47 +626,69 @@ export const workItemsService = {
     toStatusKey: string,
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    return db.$transaction(async (tx) => {
-      const locked = await workItemRepository.lockById(workItemId, tx);
-      if (!locked) throw new WorkItemNotFoundError(workItemId);
-      const current = await workItemRepository.findById(workItemId, tx);
-      // Tenant gate FIRST: a cross-workspace id is indistinguishable from a
-      // never-existed one (404), and must not leak via a status error.
-      if (!current || current.workspaceId !== ctx.workspaceId) {
-        throw new WorkItemNotFoundError(workItemId);
-      }
+    return db.$transaction((tx) =>
+      workItemsService.applyStatusTransition(workItemId, toStatusKey, ctx, tx),
+    );
+  },
 
-      const fromKey = current.status;
-      // No-op move: succeed without writing a revision (idempotent).
-      if (fromKey === toStatusKey) return toWorkItemDto(current);
+  /**
+   * The transactional CORE of updateStatus — the lock → tenant-gate → no-op →
+   * unknown-status → legal-transition → write-status + revision sequence,
+   * factored out of `updateStatus` so it can run INSIDE a caller-supplied
+   * transaction. `updateStatus` wraps it in its own `db.$transaction`; the
+   * board move path (Subtask 3.1.5, `boardsService.moveCard`) calls it within
+   * ITS transaction so the cross-column status change and the board rank write
+   * commit atomically — one transaction, never a nested `db.$transaction`
+   * (which would open a second connection and deadlock against the row this
+   * method `FOR UPDATE`-locks). Either caller runs the SAME validated path; the
+   * transition validation is defined once here, never re-implemented at the
+   * board layer. `tx` is REQUIRED — this method never opens a transaction.
+   */
+  async applyStatusTransition(
+    workItemId: string,
+    toStatusKey: string,
+    ctx: ServiceContext,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkItemDto> {
+    const locked = await workItemRepository.lockById(workItemId, tx);
+    if (!locked) throw new WorkItemNotFoundError(workItemId);
+    const current = await workItemRepository.findById(workItemId, tx);
+    // Tenant gate FIRST: a cross-workspace id is indistinguishable from a
+    // never-existed one (404), and must not leak via a status error.
+    if (!current || current.workspaceId !== ctx.workspaceId) {
+      throw new WorkItemNotFoundError(workItemId);
+    }
 
-      const target = await workflowsService.getStatusByKey(
-        current.projectId,
-        toStatusKey,
-        ctx.workspaceId,
-      );
-      if (!target) throw new UnknownStatusError(toStatusKey);
+    const fromKey = current.status;
+    // No-op move: succeed without writing a revision (idempotent).
+    if (fromKey === toStatusKey) return toWorkItemDto(current);
 
-      const legal = await workflowsService.canTransition(
-        current.projectId,
-        fromKey,
-        toStatusKey,
-        ctx.workspaceId,
-      );
-      if (!legal) throw new IllegalTransitionError(fromKey, toStatusKey);
+    const target = await workflowsService.getStatusByKey(
+      current.projectId,
+      toStatusKey,
+      ctx.workspaceId,
+    );
+    if (!target) throw new UnknownStatusError(toStatusKey);
 
-      const row = await workItemRepository.update(workItemId, { status: toStatusKey }, tx);
-      await workItemRevisionsService.recordRevision(
-        {
-          workItemId,
-          changedById: ctx.userId,
-          changeKind: 'updated',
-          diff: { status: { from: fromKey, to: toStatusKey } },
-        },
-        tx,
-      );
-      return toWorkItemDto(row);
-    });
+    const legal = await workflowsService.canTransition(
+      current.projectId,
+      fromKey,
+      toStatusKey,
+      ctx.workspaceId,
+    );
+    if (!legal) throw new IllegalTransitionError(fromKey, toStatusKey);
+
+    const row = await workItemRepository.update(workItemId, { status: toStatusKey }, tx);
+    await workItemRevisionsService.recordRevision(
+      {
+        workItemId,
+        changedById: ctx.userId,
+        changeKind: 'updated',
+        diff: { status: { from: fromKey, to: toStatusKey } },
+      },
+      tx,
+    );
+    return toWorkItemDto(row);
   },
 
   /**
