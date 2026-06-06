@@ -3,7 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Design mock · Work-item quick view (peek) — Story 2.5 · 2.5.18 → 2.5.19</title>
+    <title>
+      Design mock · Work-item quick view (peek) — Story 2.5 · 2.5.18 → 2.5.19 · readiness 2.5.20
+    </title>
     <!--
       DESIGN ASSET (HTML mockup) for the /issues QUICK VIEW (peek) — Subtask
       2.5.18, the design that blocks code Subtask 2.5.19. Neither tree.png nor
@@ -40,10 +42,26 @@
       Panels:
         1 · Row trigger — the real List row + a trailing actions cell / eye button
             (rest vs. hover); the stretched-link resolution.
-        2 · Peek modal — LARGE, populated (two-column: full description + rail).
-        3 · Peek modal — LOADING (fields fetch when the modal opens).
-        4 · Peek modal — NOT FOUND / NO ACCESS (stale or forbidden key).
-        5 · Mobile — full-height bottom SHEET on narrow widths.
+        2 · Peek modal — LARGE, populated, BLOCKED (two-column: readiness banner
+            + full description + rail). The readiness banner is the in-context spot.
+        3 · Readiness states — the banner's READY variant + the NO-BLOCKERS case
+            (no banner at all), isolated side-by-side (Subtask 2.5.20).
+        4 · Peek modal — LOADING (fields fetch when the modal opens).
+        5 · Peek modal — NOT FOUND / NO ACCESS (stale or forbidden key).
+        6 · Mobile — full-height bottom SHEET on narrow widths.
+
+      READINESS (Subtask 2.5.20): the peek now surfaces an item's ready/blocked
+      signal so a user can tell AT A GLANCE — while scanning the list — whether an
+      item is "Ready to start" or "Blocked" (and on what), without opening the full
+      page. It REUSES the shipped components/ui/ReadinessBadge (2.4.5) verbatim — NO
+      new visual primitive — placed full-width at the TOP of the main column, under
+      the title, above the Description. Shown ONLY when the item has blockers (mirror
+      the detail page: an item nothing blocks gets no banner). The named open-blocker
+      links SWAP the peek (push ?peek=<blockerKey>) rather than navigate to the full
+      page — the peek-native, in-list action (a justified deviation from the
+      detail-page badge, which links to /issues/[key] because there is no peek there).
+      The relationships/links PANEL itself stays detail-only — only the readiness
+      SIGNAL is promoted into the peek.
       Toggle dark for token parity. See design-notes.md § Work-item quick view.
     -->
     <style>
@@ -700,6 +718,61 @@
         text-decoration: underline;
       }
 
+      /* Readiness banner in the peek (Subtask 2.5.20) — the shipped
+         components/ui/ReadinessBadge (2.4.5) shape, copied 1:1 from
+         relationships.mock.html. Full-width, at the top of the main column,
+         under the title + above the Description. Shown ONLY when the item has
+         blockers. */
+      .qv-readiness {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin-top: 16px;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+      }
+      .qv-readiness--blocked {
+        background: var(--el-tint-peach);
+      }
+      .qv-readiness--ready {
+        background: var(--el-tint-mint);
+      }
+      .qv-readiness .r-icon {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .qv-readiness--blocked .r-icon {
+        color: var(--color-warning);
+      }
+      .qv-readiness--ready .r-icon {
+        color: var(--color-success);
+      }
+      .qv-readiness .r-body {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .qv-readiness .r-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .qv-readiness .r-detail {
+        font-size: 13px;
+        color: var(--el-text-strong);
+        opacity: 0.9;
+      }
+      .qv-readiness .r-detail a {
+        color: var(--el-text-strong);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+
       .qv-rail {
         min-width: 0;
         overflow-y: auto;
@@ -1106,6 +1179,31 @@
           <circle cx="12" cy="12" r="10" />
           <path d="M12 6v6l4 2" />
         </g>
+        <!-- circle-alert (lucide) — blocked readiness, matches ReadinessBadge -->
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" x2="12" y1="8" y2="12" />
+          <line x1="12" x2="12.01" y1="16" y2="16" />
+        </g>
+        <!-- circle-check-big (lucide) — ready readiness, matches ReadinessBadge -->
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
       </defs>
     </svg>
 
@@ -1243,7 +1341,7 @@
       <!-- ═══════════ PANEL 2 — Large peek, populated ═══════════ -->
       <div class="panel">
         <div class="panel-label">
-          2 · Quick view — populated (full description + core-fields rail)
+          2 · Quick view — populated · blocked (readiness banner + full description + rail)
         </div>
         <div class="stage">
           <div class="modal" role="dialog" aria-modal="true" aria-labelledby="qv-title">
@@ -1265,6 +1363,18 @@
             <div class="qv-body">
               <div class="qv-main">
                 <h2 class="qv-title" id="qv-title">Email + password sign-in</h2>
+                <!-- Readiness banner (2.5.20): the shipped ReadinessBadge, blocked
+                     state. Named blockers SWAP the peek (?peek=<key>), staying in-list. -->
+                <div class="qv-readiness qv-readiness--blocked">
+                  <svg class="r-icon" viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+                  <div class="r-body">
+                    <span class="r-title">Blocked</span>
+                    <span class="r-detail"
+                      >Waiting on 2 work items — <a href="#/issues?peek=PROD-3">PROD-3</a>,
+                      <a href="#/issues?peek=PROD-8">PROD-8</a></span
+                    >
+                  </div>
+                </div>
                 <span class="qv-section-label">Description</span>
                 <div class="qv-desc">
                   <p>
@@ -1375,23 +1485,75 @@
         </div>
         <p class="panel-note">
           The peek is <strong>large</strong> (≈940px wide, ~82vh tall) — it shows the
-          <strong>full description</strong> (scrollable), not a teaser. <strong>Left:</strong> title
-          + complete Markdown description. <strong>Right rail:</strong> the detail page's
-          core-fields, condensed — Status · Assignee · Reporter · Priority · Due · Estimate · Parent
-          (the exact field vocabulary of <code>detail.png</code>).
-          <strong>Detail-only</strong> (reached via <em>Open full page →</em>, top-right, and the
-          header identifier): the explanation, the relationships/links panel + readiness badge
-          (2.4.5), attachments, and the activity / comments feed. The peek stays
+          <strong>full description</strong> (scrollable), not a teaser.
+          <strong>Left:</strong> title, then the <strong>readiness banner</strong> (the shipped
+          <code>ReadinessBadge</code>, 2.4.5 — shown here BLOCKED, naming its open blockers;
+          clicking one <strong>swaps the peek</strong> via <code>?peek=&lt;key&gt;</code>), then the
+          complete Markdown description. <strong>Right rail:</strong> the detail page's core-fields,
+          condensed — Status · Assignee · Reporter · Priority · Due · Estimate · Parent (the exact
+          field vocabulary of <code>detail.png</code>). <strong>Detail-only</strong> (reached via
+          <em>Open full page →</em>, top-right, and the header identifier): the explanation, the
+          full relationships/links panel (2.4.5) —
+          <em
+            >only the readiness SIGNAL is promoted into the peek; the link groups stay full-page</em
+          >
+          — attachments, and the activity / comments feed. The peek stays
           <strong>read-only</strong> — editing happens on the full page. Backdrop click,
           <code>×</code>, and <kbd>Esc</kbd> close; the Modal primitive handles focus-trap +
           return-focus to the triggering row button.
         </p>
       </div>
 
+      <!-- ═══════════ PANEL 3 — Readiness states (Subtask 2.5.20) ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">3 · Readiness states — ready · no blockers (no banner)</div>
+        <div class="row-of">
+          <!-- READY: every blocker reached a terminal status -->
+          <div class="stage" style="flex: 1; min-width: 360px; padding: 24px 26px">
+            <h2 class="qv-title" style="font-size: 22px">Set up CI pipeline</h2>
+            <div class="qv-readiness qv-readiness--ready">
+              <svg class="r-icon" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              <div class="r-body">
+                <span class="r-title">Ready to start</span>
+                <span class="r-detail">All blockers resolved</span>
+              </div>
+            </div>
+            <span class="qv-section-label">Description</span>
+            <div class="qv-desc" style="font-size: 14px">
+              <p style="margin: 0">
+                Every <code>is_blocked_by</code> blocker reached a terminal status (done or
+                cancelled), so the item is clear to pick up.
+              </p>
+            </div>
+          </div>
+          <!-- NO BLOCKERS: nothing blocks the item → no banner at all -->
+          <div class="stage" style="flex: 1; min-width: 360px; padding: 24px 26px">
+            <h2 class="qv-title" style="font-size: 22px">Write the README</h2>
+            <span class="qv-section-label">Description</span>
+            <div class="qv-desc" style="font-size: 14px">
+              <p style="margin: 0">
+                The item has no <code>is_blocked_by</code> in-edge, so there is
+                <strong>no readiness signal to give</strong> — no banner renders (mirrors the detail
+                page's rule). The Description follows the title directly.
+              </p>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The readiness banner is shown <strong>only when the item has blockers</strong> — an item
+          nothing blocks shows <strong>no banner</strong> (right), exactly like the 2.4.5 detail
+          banner. <strong>Ready</strong> (left) is mint with a success check;
+          <strong>blocked</strong>
+          (panel 2) is peach with a warning alert and names the open blockers. State is carried by
+          <strong>text + icon</strong>, never colour alone (AA-safe, finding #35); colour flows only
+          through <code>--el-*</code>.
+        </p>
+      </div>
+
       <div class="row-of">
-        <!-- ═══════════ PANEL 3 — Loading ═══════════ -->
+        <!-- ═══════════ PANEL 4 — Loading ═══════════ -->
         <div class="panel" style="flex: 1; min-width: 420px">
-          <div class="panel-label">3 · Quick view — loading (fields fetch on open)</div>
+          <div class="panel-label">4 · Quick view — loading (fields fetch on open)</div>
           <div class="stage" style="padding: 20px">
             <div
               class="modal"
@@ -1463,9 +1625,9 @@
           </p>
         </div>
 
-        <!-- ═══════════ PANEL 4 — Not found / no access ═══════════ -->
+        <!-- ═══════════ PANEL 5 — Not found / no access ═══════════ -->
         <div class="panel" style="flex: 1; min-width: 420px">
-          <div class="panel-label">4 · Quick view — not found / no access</div>
+          <div class="panel-label">5 · Quick view — not found / no access</div>
           <div class="stage" style="padding: 20px">
             <div
               class="modal"
@@ -1503,9 +1665,9 @@
         </div>
       </div>
 
-      <!-- ═══════════ PANEL 5 — Mobile bottom sheet ═══════════ -->
+      <!-- ═══════════ PANEL 6 — Mobile bottom sheet ═══════════ -->
       <div class="panel">
-        <div class="panel-label">5 · Narrow width — full-height bottom sheet</div>
+        <div class="panel-label">6 · Narrow width — full-height bottom sheet</div>
         <div class="phone">
           <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="qv-title-m">
             <div class="grab"></div>
@@ -1522,6 +1684,17 @@
             </div>
             <div class="sheet-body">
               <h2 class="qv-title" id="qv-title-m">Email + password sign-in</h2>
+              <!-- Readiness banner also rides the mobile sheet (2.5.20) -->
+              <div class="qv-readiness qv-readiness--blocked" style="margin-bottom: 4px">
+                <svg class="r-icon" viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+                <div class="r-body">
+                  <span class="r-title">Blocked</span>
+                  <span class="r-detail"
+                    >Waiting on 2 work items — <a href="#/issues?peek=PROD-3">PROD-3</a>,
+                    <a href="#/issues?peek=PROD-8">PROD-8</a></span
+                  >
+                </div>
+              </div>
               <dl class="sheet-meta">
                 <div class="m">
                   <dt>Assignee</dt>
