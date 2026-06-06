@@ -672,7 +672,7 @@ export const story_2_5: PlanStory = {
     {
       id: '2.5.15',
       title: 'Tree row virtualization — window the treegrid (a11y-honest)',
-      status: 'planned',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
@@ -684,6 +684,20 @@ export const story_2_5: PlanStory = {
         'consistent with the stack (e.g. `@tanstack/react-virtual`) over the flat ordered ' +
         '"visible rows" model 2.5.14 produced; an off-view row is removed and a spacer preserves scroll ' +
         'height.\n\n' +
+        '*(PR #123 merged 2026-06-06, merge commit `23eac88` — hand-rolled fixed-row (40px) windowing in ' +
+        '`components/ui/TreeTable.tsx` over the 2.5.14 flat visible-rows model. The rowgroup keeps its FULL ' +
+        'height and each mounted row is absolutely positioned at `index * ROW_PX` (the spacer), so only ' +
+        'viewport(+overscan) rows mount while the page scrollbar stays honest. Windows against the nearest ' +
+        'scrollable ANCESTOR (the shell `<main>` — no internal scrollbar, no layout change) or a ' +
+        '`getScrollElement` prop; degrades to render-all when no viewport is measurable (SSR / the small-tree ' +
+        'component tests), so markup is identical with/without a live scroll container. A11y-honest: each ' +
+        'mounted row keeps its TRUE aria-level/posinset/setsize/expanded from the flat model; roving tabindex ' +
+        'intact (arrowing to an off-window row scrolls it in → mounts → focuses it). Pure `rowgroup → row` ' +
+        'structure (no spacer divs) so the strict axe treegrid sweep is unaffected. Chose hand-rolled over ' +
+        "`@tanstack/react-virtual` — that lib mounts 0 rows under happy-dom, so it can't back the required " +
+        'deterministic component test; the card allows "or equivalent". 4 new TreeTable virtualization tests ' +
+        '(window slice · scroll shifts window · arrow-past mounts+focuses · honest setsize); 142 component ' +
+        'tests green; tsc/eslint(--max-warnings=0)/prettier clean; next build compiles + static-generates.)*\n\n' +
         '**A11y is the hard part (must hold across the window):** each mounted row keeps its ' +
         "TRUE `aria-level` / `aria-posinset` / `aria-setsize` (using 2.5.14's " +
         'per-node count) so a screen reader announces the real position though only a window exists; the ' +
