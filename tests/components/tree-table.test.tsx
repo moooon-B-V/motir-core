@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { TreeTable, type TreeTableColumn, type TreeTableRow } from '@/components/ui/TreeTable';
 
@@ -162,5 +162,152 @@ describe('TreeTable — keyboard (roving tabindex)', () => {
     root.focus();
     fireEvent.keyDown(root, { key: 'Enter' });
     expect(click).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Virtualization (Subtask 2.5.15) ─────────────────────────────────────────
+// Window the treegrid against a scroll viewport: only viewport(+overscan) rows
+// mount, the rowgroup keeps its full height, and roving-tabindex arrow keys that
+// land on an off-window row scroll it in, mount it, and focus it. happy-dom does
+// no layout, so we supply a controllable scroll element (via getScrollElement)
+// and stub its metrics — getBoundingClientRect is wired so the body's offset from
+// the viewport top stays 0 at any scrollTop (the real scroll-invariant geometry).
+
+const ROW_PX = 40; // mirrors TreeTable's fixed row height
+
+function flatRows(n: number): TreeTableRow<Row>[] {
+  return Array.from({ length: n }, (_, i) => ({
+    id: `r${i}`,
+    data: { id: `r${i}`, title: `Row ${i}` },
+  }));
+}
+
+/** A stub scroll viewport with settable scrollTop + a fixed clientHeight. */
+function makeViewport(clientHeight: number) {
+  const el = document.createElement('div');
+  document.body.appendChild(el);
+  let scrollTop = 0;
+  Object.defineProperty(el, 'clientHeight', { configurable: true, get: () => clientHeight });
+  Object.defineProperty(el, 'scrollTop', {
+    configurable: true,
+    get: () => scrollTop,
+    set: (v: number) => {
+      scrollTop = v;
+    },
+  });
+  return el;
+}
+
+function mountedDataRows(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>('[data-testid^="row-r"]'));
+}
+
+describe('TreeTable — virtualization', () => {
+  let viewport: HTMLElement;
+
+  beforeEach(() => {
+    if (typeof (globalThis as { ResizeObserver?: unknown }).ResizeObserver === 'undefined') {
+      (globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      };
+    }
+    viewport = makeViewport(320); // 8 rows tall
+    // Geometry: viewport top is the origin; everything else sits at -scrollTop, so
+    // bodyOffset = bodyTop - viewportTop + scrollTop = (-scrollTop) - 0 + scrollTop = 0.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const isViewport = this === viewport;
+      const top = isViewport ? 0 : -viewport.scrollTop;
+      const height = isViewport ? 320 : ROW_PX;
+      return {
+        top,
+        bottom: top + height,
+        left: 0,
+        right: 800,
+        width: 800,
+        height,
+        x: 0,
+        y: top,
+        toJSON() {},
+      } as DOMRect;
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    viewport.remove();
+  });
+
+  function renderBig(count: number) {
+    return render(
+      <TreeTable
+        label="Big"
+        columns={COLUMNS}
+        rows={flatRows(count)}
+        getRowTestId={(r) => `row-${r.id}`}
+        getScrollElement={() => viewport}
+      />,
+    );
+  }
+
+  it('mounts only a window of a tall tree and keeps the full scroll height', () => {
+    const { container } = renderBig(500);
+
+    const mounted = mountedDataRows(container);
+    // A window — far fewer than all 500 rows — but the top rows are present.
+    expect(mounted.length).toBeGreaterThan(0);
+    expect(mounted.length).toBeLessThan(60);
+    expect(screen.getByTestId('row-r0')).toBeTruthy();
+    expect(screen.queryByTestId('row-r400')).toBeNull();
+
+    // The rowgroup body reserves the full height (spacer), so the scrollbar is honest.
+    const body = container.querySelectorAll<HTMLElement>('[role="rowgroup"]')[1]!;
+    expect(body.style.height).toBe(`${500 * ROW_PX}px`);
+  });
+
+  it('mounts a different window after the viewport scrolls', () => {
+    renderBig(500);
+    expect(screen.getByTestId('row-r0')).toBeTruthy();
+
+    viewport.scrollTop = 400 * ROW_PX;
+    fireEvent.scroll(viewport);
+
+    // The window moved to the rows around index 400; the top rows unmounted.
+    expect(screen.getByTestId('row-r400')).toBeTruthy();
+    expect(screen.queryByTestId('row-r0')).toBeNull();
+  });
+
+  it('arrowing past the window scrolls the landed row in, mounts it, and focuses it', () => {
+    renderBig(500);
+    const first = screen.getByTestId('row-r0');
+    first.focus();
+    expect(document.activeElement).toBe(first);
+
+    // Step well past the initial window; each ArrowDown re-targets the focused row.
+    for (let i = 0; i < 20; i++) {
+      fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'ArrowDown' });
+    }
+
+    const active = document.activeElement as HTMLElement;
+    expect(active.getAttribute('data-testid')).toBe('row-r20');
+    expect(active.isConnected).toBe(true); // it was mounted by the scroll-into-view
+    expect(active.getAttribute('tabindex')).toBe('0'); // roving tabindex followed
+    // The starting row scrolled out of the window and unmounted.
+    expect(screen.queryByTestId('row-r0')).toBeNull();
+  });
+
+  it('End jumps to and focuses the last row (honest aria-setsize across the window)', () => {
+    renderBig(500);
+    const first = screen.getByTestId('row-r0');
+    first.focus();
+    fireEvent.keyDown(first, { key: 'End' });
+
+    const last = screen.getByTestId('row-r499');
+    expect(document.activeElement).toBe(last);
+    expect(last.getAttribute('aria-setsize')).toBe('500'); // true total, not the window size
+    expect(last.getAttribute('aria-posinset')).toBe('500');
   });
 });
