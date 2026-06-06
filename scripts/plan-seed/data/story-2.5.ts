@@ -74,6 +74,7 @@ export const story_2_5: PlanStory = {
     '- **Manual UX check — interact:** expand/collapse rows; filter by kind/status/assignee/text ' +
     "(ancestors stay for context; URL updates + reloads safely); change a row's status inline " +
     '(only legal targets; illegal rejected); reassign + unassign inline; click a row → its detail page; ' +
+    'a row\'s quick-view button opens the item in a modal (a "peek") with an "Open full page" link to its detail page; ' +
     '"New issue" opens the create modal.\n' +
     '- **Empty + loading:** a fresh project shows "No issues yet"; the table shows the skeleton while loading.\n' +
     "- **Cross-workspace check:** as a workspace-A-only user, the workspace-B project's issues never appear at `/issues`.\n" +
@@ -808,6 +809,111 @@ export const story_2_5: PlanStory = {
         '- **Finding #58** in `PRODECT_FINDINGS.md` (full root-cause writeup)\n' +
         '- `app/(authed)/issues/_components/IssueFilterBar.tsx` — the `OptionRow` `onToggle` handlers (KIND/STATUS/ASSIGNEE) + the existing `filterRef` / text-debounce precedent (~L143–167) to mirror\n' +
         '- `lib/issues/issueListFilter.ts` (`toggleKind`/`toggleStatus`/`toggleAssignee`/`toggleUnassigned` — pure, reused as-is); `tests/components/issue-filter-bar.test.tsx` (where the regression test lands)',
+    },
+    {
+      id: '2.5.18',
+      title: 'Design — work-item quick-view (peek) modal + row trigger + "Open full page" link',
+      status: 'planned',
+      type: 'design',
+      executor: 'human',
+      estimateMinutes: 35,
+      descriptionMd:
+        'The design asset the `/issues` **quick view** needs — a *peek* overlay that shows a work item ' +
+        'in a modal **without leaving the list**, with a clear path to the full detail page. Neither ' +
+        '`tree.png` nor the 2.4 detail design draws this surface, so its code (**2.5.19**) is blocked on ' +
+        'it — the planning-time design gate (`notes.html` mistake #31), the same gap 2.5.7 / 2.5.9 closed ' +
+        'for the List view and the filter popover. Produce, under `design/work-items/`, a ' +
+        '`quick-view.mock.html` (built from the live design system — `components/ui/*` + `--el-*` tokens, ' +
+        'preferred so the coding agent composes the same primitives, incl. the existing ' +
+        '`components/ui/Modal`) OR a `.pen`+PNG, plus a `design-notes.md` section, covering:\n\n' +
+        '- The **row trigger**: how a row exposes "quick view". The tree/list rows are **already a ' +
+        'whole-row link to `/issues/[key]`** (2.5.3 / 2.5.8), so the trigger CANNOT be a `<button>` nested ' +
+        'inside that anchor (no nested interactive elements). Specify the resolution — e.g. a dedicated ' +
+        '**quick-view icon button in a trailing row-actions cell** that sits *outside* the row link ' +
+        '(deliver the row link as a stretched/overlay link, not a wrapping `<a>`), its hover/focus ' +
+        'affordance, tooltip, and whether it shows on hover or always.\n' +
+        '- The **modal layout**: a *condensed* subset of the 2.4 detail page — type icon + `PROD-N` ' +
+        'identifier + title, the `Status` `Pill`, assignee avatar, a description excerpt, and the few key ' +
+        "meta fields worth a glance. Decide what the peek shows vs. what stays detail-only (don't rebuild " +
+        'the whole detail page in a modal). Reuse the detail/row vocabulary (`IssueTypeIcon` · `Pill` · ' +
+        'avatar) — no new visual primitive.\n' +
+        '- The prominent **"Open full page →"** affordance (link/button) that routes to `/issues/[key]`, ' +
+        'plus the header identifier — both clearly go to the detail page.\n' +
+        '- **Close affordances**: the `×` button, `Esc`, and backdrop click; the focus-trap / ' +
+        'return-focus behaviour the `Modal` primitive already gives.\n' +
+        "- The peek's **loading** state (the item's fields fetch when the modal opens) and a graceful " +
+        '**not-found / no-access** state (a stale or forbidden key in the URL).\n' +
+        '- Works opened from **both** the Tree and the List view (shared row cells), and the responsive / ' +
+        'narrow-width treatment (centered modal vs. full-height sheet on mobile).\n\n' +
+        'Mirror the output convention of the prior design subtasks (**2.4.7 / 2.4.8 / 2.5.7 / 2.5.9**). ' +
+        'Colour only through `--el-*`; status via `Pill` tones; type icons take their type hue; AA-safe ' +
+        '(finding #35).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- A `design/work-items/quick-view.mock.html` (or `.pen`+PNG) + a `design-notes.md` entry exist, ' +
+        'naming the composing primitives (incl. `Modal`), the condensed field set, the copy, and every ' +
+        'state below.\n' +
+        '- The **row trigger** is specified as a NON-nested affordance compatible with the existing ' +
+        'whole-row link to `/issues/[key]` (no `<button>` inside an `<a>`), for both Tree and List rows.\n' +
+        '- The modal specifies its content, the **"Open full page →"** link to the detail page, the close ' +
+        'affordances, and the **loading + not-found/no-access** states (multi-panel).\n' +
+        '- Reuses the detail/row visual vocabulary — no new visual primitive invented; consistent with ' +
+        '`tree.png` + the 2.4 detail design. Colour flows only through `--el-*`; AA-safe (finding #35).\n\n' +
+        '## Context refs\n\n' +
+        '- The 2.4 detail-page design (`design/work-items/detail.*` + `design-notes.md`) — the field vocabulary the peek condenses\n' +
+        '- `design/work-items/tree.png` (+ `tree.pen`) + `list.mock.html` (2.5.7) — the row designs the trigger attaches to\n' +
+        '- `components/ui/Modal` (the 2.3 `CreateIssueModal` + the detail surfaces use it) + `components/ui/*` primitive inventory + `app/globals.css` `--el-*` tiers + the `/tokens` route',
+    },
+    {
+      id: '2.5.19',
+      title: 'Work-item quick-view modal in `/issues` (URL-driven peek + "Open full page")',
+      status: 'planned',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 15,
+      dependsOn: ['2.5.3', '2.5.8', '2.5.18'],
+      descriptionMd:
+        'Add a **quick view** to `/issues`: a per-row trigger opens the work item in a **modal over the ' +
+        'list** (a "peek"), so a user can scan an item without losing their place in the tree/list; the ' +
+        'modal carries a prominent **"Open full page →"** link to `/issues/[key]`. Build it per ' +
+        "**2.5.18**'s design, composing the existing `components/ui/Modal` + the detail field vocabulary — " +
+        'do NOT rebuild the whole 2.4 detail page.\n\n' +
+        "**Durable shape: the peek lives in the URL** (e.g. `?peek=<key>`), exactly like 2.5.4's filter " +
+        "and 2.5.8's `view`/`sort` params — shareable, reload-safe, and `Esc`/back closes it by clearing " +
+        'the param. The Server Component reads `searchParams.peek`; when present it calls the shipped ' +
+        '`getIssueDetail(identifier, ctx)` (2.4) for that key and renders the `IssueQuickView` modal over ' +
+        'the list — so the workspace/membership gate and the not-found/no-access path are inherited from ' +
+        "that read, not re-implemented. A stale or forbidden `peek` key renders the design's not-found " +
+        'state, not a crash.\n\n' +
+        '**The trigger** is the non-nested row affordance 2.5.18 draws (a quick-view icon button in the ' +
+        'trailing row-actions cell, outside the whole-row `/issues/[key]` link — no `<button>` inside an ' +
+        '`<a>`). It lives in the **shared row cells** so it appears in BOTH the Tree and the List view; ' +
+        'activating it pushes `?peek=<key>`.\n\n' +
+        '**Scope guard.** v1 = open the peek, show the condensed fields read-only, "Open full page", and ' +
+        'close. **Editing inside the peek is out of scope** (inline edits are 2.5.5 on the rows; full edit ' +
+        "is the detail page) — keep the modal a read surface so we don't fork the edit paths (no " +
+        'complexity for nothing).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- Each row (Tree and List) shows the quick-view trigger from 2.5.18; activating it opens the ' +
+        'modal and sets `?peek=<key>` (shareable / reload-safe). A direct load of `/issues?peek=<key>` ' +
+        'opens with the modal already shown.\n' +
+        '- The modal renders the condensed fields per `quick-view.mock.html` from `getIssueDetail` ' +
+        '(reused, not duplicated); the **"Open full page →"** control and the header identifier navigate ' +
+        'to `/issues/[key]`. `×` / `Esc` / backdrop close it by clearing `?peek=`, with focus returned to ' +
+        'the trigger.\n' +
+        "- The trigger is NOT nested inside the row's `/issues/[key]` link (no nested interactive); the " +
+        'whole-row link still works; colours via `--el-*`, status via `Pill` tones.\n' +
+        '- A stale / cross-workspace / deleted `peek` key renders the not-found/no-access state (no leak, ' +
+        "no crash) — inherited from `getIssueDetail`'s gate; 4-layer respected, no new read added unless a " +
+        'lighter projection is justified.\n' +
+        '- Component test (trigger sets `?peek` + the modal renders the item + "Open full page" href is ' +
+        '`/issues/[key]` + close clears the param). The open→peek→"Open full page" flow is exercised ' +
+        'end-to-end by the **Story E2E (2.5.6)**, which also sweeps the open modal for shell-a11y (focus ' +
+        'trap, labelled dialog, return focus).\n\n' +
+        '## Context refs\n\n' +
+        '- `design/work-items/quick-view.mock.html` + `design-notes.md` (2.5.18) — the layout authority\n' +
+        "- 2.5.3 `app/(authed)/issues/page.tsx` (reads `searchParams`; render the modal here) + the shared row cells / `issueRows` + `IssueTreeTable` (where the trigger lands) + 2.5.8's flat List rows\n" +
+        '- 2.4 `getIssueDetail(identifier, ctx)` / `IssueDetailDto` + `app/(authed)/issues/[key]/page.tsx` (the detail destination) + its field components to compose the condensed view\n' +
+        '- `components/ui/Modal` (the 2.3 `CreateIssueModal` open/close+URL precedent) · 2.5.4 / 2.5.8 URL-param pattern · `prodect-core/CLAUDE.md` — 4-layer · `--el-*` tokens',
     },
   ],
 };
