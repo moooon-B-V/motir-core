@@ -452,11 +452,10 @@ test.describe('@a11y shell accessibility', () => {
     const grid = page.getByRole('treegrid', { name: 'Work Items', exact: true });
     await expect(grid).toBeVisible();
     // Expand a node so a NESTED level (aria-level 2 row + its gridcells + the
-    // collapse control) is part of the swept DOM, not just the roots.
-    await page
-      .getByTestId(`issue-row-${epic.identifier}`)
-      .getByRole('button', { name: 'Expand row' })
-      .click();
+    // collapse control) is part of the swept DOM, not just the roots. Use the
+    // treegrid keyboard model (ArrowRight on the focused row) — robust vs a
+    // coordinate click on the chevron among same-row z-10 inline-edit controls.
+    await page.getByTestId(`issue-row-${epic.identifier}`).press('ArrowRight');
     await expect(page.getByTestId(`issue-row-${story.identifier}`)).toBeVisible();
 
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();

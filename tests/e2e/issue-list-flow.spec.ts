@@ -126,28 +126,34 @@ test('@smoke nested tree renders project-scoped + lazily expands/collapses, row 
   await expect(epicRow).toContainText(epic.identifier);
   await expect(epicRow).toContainText('To Do');
 
+  // Expand/collapse via the treegrid's keyboard model (focus row → ArrowRight to
+  // expand, ArrowLeft to collapse, Enter to activate the row link). This is the
+  // documented WAI-ARIA treegrid interaction and is robust against pointer
+  // hit-testing — the tiny chevron sits among same-row z-10 inline-edit controls,
+  // so a coordinate click on it is interception-prone in a dense row.
+
   // Expand the epic → the story streams in at level 2 (lazy fetch on expand).
-  await epicRow.getByRole('button', { name: 'Expand row' }).click();
+  await epicRow.press('ArrowRight');
   const storyRow = page.getByTestId(`issue-row-${story.identifier}`);
   await expect(storyRow).toBeVisible();
   await expect(storyRow).toHaveAttribute('aria-level', '2');
 
   // Drill deeper: story → task → sub-task, each one level appearing on expand.
-  await storyRow.getByRole('button', { name: 'Expand row' }).click();
+  await storyRow.press('ArrowRight');
   const taskRow = page.getByTestId(`issue-row-${task.identifier}`);
   await expect(taskRow).toBeVisible();
-  await taskRow.getByRole('button', { name: 'Expand row' }).click();
+  await taskRow.press('ArrowRight');
   const subRow = page.getByTestId(`issue-row-${sub.identifier}`);
   await expect(subRow).toBeVisible();
   await expect(subRow).toHaveAttribute('aria-level', '4');
 
   // Collapse the epic → all descendants disappear again.
-  await epicRow.getByRole('button', { name: 'Collapse row' }).click();
+  await epicRow.press('ArrowLeft');
   await expect(page.getByTestId(`issue-row-${story.identifier}`)).toHaveCount(0);
   await expect(page.getByTestId(`issue-row-${sub.identifier}`)).toHaveCount(0);
 
-  // A whole-row click navigates to the issue detail.
-  await page.getByRole('link', { name: `${bug.identifier} ${bug.title}` }).click();
+  // Activating the row (Enter) follows the whole-row link to the issue detail.
+  await page.getByTestId(`issue-row-${bug.identifier}`).press('Enter');
   await page.waitForURL(`**/issues/${bug.identifier}`);
   await expect(page.getByRole('heading', { name: bug.title, level: 1 })).toBeVisible();
 });
@@ -428,11 +434,10 @@ test('@smoke SCALE — the Tree lazy-loads children and virtualizes (DOM stays b
   await expect(grid).toBeVisible();
 
   // LAZY: a collapsed parent's children are NOT in the DOM until it is expanded.
+  // Expand via the keyboard model (ArrowRight on the focused row) — robust vs a
+  // coordinate click on the chevron among same-row z-10 controls.
   await expect(page.getByTestId(`issue-row-${firstChild}`)).toHaveCount(0);
-  await page
-    .getByTestId(`issue-row-${bigEpic}`)
-    .getByRole('button', { name: 'Expand row' })
-    .click();
+  await page.getByTestId(`issue-row-${bigEpic}`).press('ArrowRight');
   await expect(page.getByTestId(`issue-row-${firstChild}`)).toBeVisible();
 
   // VIRTUALIZATION: expanding loads the first level page (50 children). With 5
