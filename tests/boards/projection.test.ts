@@ -5,6 +5,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { BoardNotFoundError } from '@/lib/boards/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
@@ -196,5 +197,32 @@ describe('boardsService.getBoard — projection', () => {
     // B's own board sees none of A's cards.
     const boardB = await boardsService.getBoard(b.projectId, b.ctx);
     expect(boardB.columns.every((c) => c.totalCount === 0)).toBe(true);
+  });
+
+  it('marks a card with an open (non-terminal) blocker as not ready (batch readiness, finding #21)', async () => {
+    const fx = await makeFixture('proj-ready@example.com');
+    const blocker = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'blocker (todo = non-terminal)' },
+      fx.ctx,
+    );
+    const blocked = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'blocked by the open blocker',
+        links: [{ targetId: blocker.id, relationship: 'blocked_by' }],
+      },
+      fx.ctx,
+    );
+
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx);
+    const todo = board.columns.find((c) => c.statusKeys[0] === 'todo')!;
+    const cardById = new Map(todo.cards.map((c) => [c.id, c]));
+    expect(cardById.get(blocked.id)!.ready).toBe(false); // open blocker → not ready
+    expect(cardById.get(blocker.id)!.ready).toBe(true); // the blocker itself has none
+  });
+
+  it('findBlockerStatesForItems short-circuits an empty id set without a query', async () => {
+    expect(await workItemLinkRepository.findBlockerStatesForItems([])).toEqual([]);
   });
 });
