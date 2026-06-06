@@ -1,0 +1,159 @@
+# Epic 2 (Issue tracking core) — test coverage matrix
+
+This file maps every invariant from the **Subtask 2.6** card's _scope_ list to the
+test (file → `describe`) that protects it, at the **epic** scale. It is the
+planner's audit record of what Epic 2 already covers — the deliverable of
+**Subtask 2.6.1** — and the gap list the fill subtasks (2.6.2 / 2.6.3 / 2.6.4 /
+2.6.5) consume so they add **net-new** coverage instead of duplicating inherited
+assertions. It is the epic-level analogue of
+`tests/integration/work-items/TEST_COVERAGE.md` (Subtask 1.4.7, which audited
+Story 1.4's work-item model only).
+
+**Audit, not duplicate.** Each Epic-2 feature story (2.1–2.5) shipped its own
+scoped tests with the feature (design-before-code, tests-with-the-feature
+canonical depth). 2.6 does NOT re-write those — it audits them here, fills the
+genuine gaps no single feature story owned (2.6.2 / 2.6.3), extends coverage
+**gating** to the Epic-2 modules that grew past 1.4.7's snapshot (2.6.4), and
+adds one consolidated E2E acceptance journey (2.6.5).
+
+## Files referenced
+
+Integration (real Postgres) under `tests/integration/work-items/` unless noted:
+
+- `service.test.ts` — `workItemsService` happy-path: CRUD, move, link, isReady, keys
+- `service-edge-cases.test.ts` — `workItemsService` guard / error / membership branches
+- `repository.test.ts` — `workItemRepository` (triggers, filters, pagination, Prisma-error translation)
+- `link-repository.test.ts` — `workItemLinkRepository` (link triggers)
+- `kind-parent-matrix.test.ts` — full service-driven kind-parent matrix (every cell)
+- `revisions.test.ts` — revision audit (diff, atomicity, ordering, RLS)
+- `issue-detail.test.ts` — `getIssueDetail` aggregate + `listLinkCandidates` (2.4)
+- `issue-list-view.test.ts` — `getProjectIssuesList` flat List read + sort + pagination (2.5.12)
+- `issue-list-page.test.ts` — `toIssueRows` page shaping over the live reads
+- `project-tree.test.ts` — `getProjectTree` nesting + context-preserving filter + `findProjectForest`
+- `tree-lazy-read.test.ts` — `listRootIssues` / `listChildIssues` lazy tree reads (2.5)
+- `workspace-scoped-reads.test.ts` — `getWorkItem` / `listRevisions` / `getLink` tenant scoping
+- `../../project-counter.test.ts` (`tests/project-counter.test.ts`) — per-project key sequence
+- `../../work-item-rls.test.ts` (`tests/work-item-rls.test.ts`) — work_item / link RLS + finding #19 triggers
+- `../../work-items/positioning.test.ts` — fractional-index key math (unit)
+
+Workflows under `tests/workflows/`:
+
+- `transition-validation.test.ts` — `updateStatus` restricted / open / tenant gate / atomicity / seed
+- `read-api.test.ts` — `getWorkflow` / `getTerminalStatusKeys` / `canTransition` (the four cells) / finding #26 filter
+- `management.test.ts` — create / update / delete status, transitions, `setPolicyMode`, default-status protection
+- `delete-reassign.test.ts` — `deleteStatus` delete-with-reassign (2.3.1)
+- `restore-defaults.test.ts` — `restoreDefaultTransitions` additive merge
+- `default-workflow.test.ts` — `defaultWorkflow` constant + `createProject` seeds it + backfill
+- `readiness.test.ts` — `isReady` terminal = per-project `category=done` (finding #21)
+- `rls.test.ts` — workflow_status / workflow_transition RLS + per-project key + one-initial constraints
+
+Pure / unit under `tests/issues/`:
+
+- `issueTypes.test.ts` — `ISSUE_TYPE_META` + `canParent` full matrix
+- `parentValidation.test.ts` — `assertValidParent` service gate (every cell) + single-source-of-truth
+- `issueListFilter.test.ts` — `parseIssueFilter` / URL round-trip / `toProjectTreeFilter` / immutable toggles
+- `issueListView.test.ts` — `parseView` / `parseSort` / `nextSort` / `buildIssueListHref` / `parsePage` / `pageItems`
+
+Status legend: **inherited** = shipped by a feature story (2.1–2.5), kept as-is ·
+**filled** = was partial, a 2.6 subtask adds the missing case(s) · **added** =
+net-new in a 2.6 subtask. At the 2.6.1 audit every cited row is **inherited**;
+the **filled** / **added** rows arrive when 2.6.2 / 2.6.3 / 2.6.5 land and update
+this file. The open gaps are enumerated in **“Gaps 2.6 fills”** below.
+
+## Invariant → covering test
+
+| Card scope invariant                                                                                                                       | Status    | Covering test (file → `describe`)                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Issue CRUD — create** (members/refs validated; assignee + dueDate round-trip)                                                            | inherited | `service.test.ts` → "createWorkItem — key allocation"; `service-edge-cases.test.ts` → "createWorkItem — membership + reference guards"; `repository.test.ts` → "workItemRepository.create — happy paths"                                                                                                                                                                          |
+| **Issue CRUD — update** (no-op short-circuit; per-field diff; not-found)                                                                   | inherited | `service.test.ts` → "updateWorkItem — no-op patches" + "updateWorkItem — explanation-source state machine"; `service-edge-cases.test.ts` → "updateWorkItem — per-field change branches" + "updateWorkItem — not-found"                                                                                                                                                            |
+| **Issue CRUD — assign** (set + clear to null)                                                                                              | inherited | `service.test.ts` → "assignWorkItem"                                                                                                                                                                                                                                                                                                                                              |
+| **Issue CRUD — archive** (no child cascade — Linear shape)                                                                                 | inherited | `service.test.ts` → "archiveWorkItem"                                                                                                                                                                                                                                                                                                                                             |
+| **Issue CRUD — move** (reorder within parent; re-parent; move-to-start/-end/-between; no-op + guards)                                      | inherited | `service.test.ts` → "moveWorkItem" + "moveWorkItem — edge cases"; `service-edge-cases.test.ts` → "moveWorkItem — no-op + guards"; `../../work-items/positioning.test.ts` → "keyForAppend" / "keyForPrepend" / "keyBetween"                                                                                                                                                        |
+| **Issue CRUD — Prisma error translation** (P2002 → KeyConflict; P2025 → NotFound)                                                          | inherited | `repository.test.ts` → "workItemRepository.create / update — Prisma error translation"                                                                                                                                                                                                                                                                                            |
+| **Type-parent rules — kind-parent matrix** (every (parent,child) cell; legal vs `IllegalParentTypeError`; service + repo + pure)           | inherited | service (all 30 cells): `kind-parent-matrix.test.ts` → "kind-parent matrix — service-driven (every cell)"; repo trigger: `repository.test.ts` → "workItemRepository.create — kind-parent trigger"; pure: `issues/issueTypes.test.ts` → "canParent — full matrix" + `issues/parentValidation.test.ts` → "assertValidParent — the service-layer gate (every cell)"                  |
+| **Type-parent rules — depth limit** (4-deep legal; 5th → `DepthLimitExceededError`)                                                        | inherited | `repository.test.ts` → "workItemRepository.create — depth-limit trigger"                                                                                                                                                                                                                                                                                                          |
+| **Type-parent rules — cycle prevention** (re-parent ancestor under descendant; 2-deep + 3-hop; kind pre-flight pre-empts)                  | inherited | `repository.test.ts` → "workItemRepository.update — cycle trigger"; `service.test.ts` → "moveWorkItem — re-parent cycle is intercepted by the kind pre-flight"                                                                                                                                                                                                                    |
+| **Workflow transitions — legal / illegal / unknown / no-op / open-mode** (the canTransition cells)                                         | inherited | `read-api.test.ts` → "workflowsService.canTransition (the four matrix cells)"; `transition-validation.test.ts` → "updateStatus — restricted mode (the default seed)" + "updateStatus — open mode"                                                                                                                                                                                 |
+| **Workflow transitions — atomicity** (status + revision in one transaction) + **tenant gate**                                              | inherited | `transition-validation.test.ts` → "updateStatus — atomicity (status + revision in one transaction)" + "updateStatus — tenant gate"                                                                                                                                                                                                                                                |
+| **Workflow transitions — initial-status seed** (create seeds initial; project seeds default workflow in one tx)                            | inherited | `transition-validation.test.ts` → "createWorkItem seeds the workflow initial status"; `default-workflow.test.ts` → "createProject seeds the default workflow (same transaction)" + "seed atomicity + the one-initial-per-project constraint"                                                                                                                                      |
+| **Workflow management** (create/update/delete status; transitions; `setPolicyMode`; default-status protection; reassign; restore-defaults) | inherited | `management.test.ts` → "createStatus" / "updateStatus" / "deleteStatus protections (custom statuses)" / "transitions" / "setPolicyMode" / "default status protection (finding #49)"; `delete-reassign.test.ts` → "deleteStatus — delete-with-reassign (2.3.1)"; `restore-defaults.test.ts` → "restoreDefaultTransitions — additive merge"                                         |
+| **Workflow default-graph** (the 15-edge default constant) — _sampled only; see gap 2_                                                      | inherited | `default-workflow.test.ts` → "defaultWorkflow constant"                                                                                                                                                                                                                                                                                                                           |
+| **Key uniqueness — per-project sequence** (gap-free serial allocation)                                                                     | inherited | `../../project-counter.test.ts` → "allocateWorkItemNumber"                                                                                                                                                                                                                                                                                                                        |
+| **Key uniqueness — concurrent allocation** (20-wide → contiguous 1..20, no dups/gaps; not recycled after archive)                          | inherited | `service.test.ts` → "createWorkItem — key allocation" ("allocates a contiguous, gap-free, duplicate-free key set under 20-wide concurrency")                                                                                                                                                                                                                                      |
+| **Key uniqueness — status keys** (per-project unique; one initial per project)                                                             | inherited | `workflows/rls.test.ts` → "workflow_status constraints — per-project key uniqueness" + "workflow_status constraints — partial-unique initial status"                                                                                                                                                                                                                              |
+| **Issue list/tree reads — tree nesting + tenant gate + single round-trip**                                                                 | inherited | `project-tree.test.ts` → "workItemsService.getProjectTree — nesting (no filter)" + "workItemsService.getProjectTree — tenant gate (finding #26)" + "workItemRepository.findProjectForest — single round-trip + workspace gate"                                                                                                                                                    |
+| **Issue list/tree reads — filter** (text / kind / status / assignee / unassigned; AND across facets, OR within; ancestor-preserving)       | inherited | `project-tree.test.ts` → "workItemsService.getProjectTree — context-preserving filter"; repo: `repository.test.ts` → "workItemRepository.findByProjectFiltered — filters"; pure: `issues/issueListFilter.test.ts` → "parseIssueFilter" / "toProjectTreeFilter (→ service read DTO)"                                                                                               |
+| **Issue list/tree reads — flat List + sort + pagination** (key/priority/due sort; page-by-50; filtered total)                              | inherited | `issue-list-view.test.ts` → "getProjectIssuesList (flat sorted List read)" + "getProjectIssuesList — server-side pagination (Subtask 2.5.12)" + "toIssueListRows (flat shaping…)"; repo: `repository.test.ts` → "workItemRepository.findByProject — pagination"; pure: `issues/issueListView.test.ts` → "parseSort" / "parsePage (Subtask 2.5.12)" / "pageItems (Subtask 2.5.12)" |
+| **Issue list/tree reads — lazy-load** (roots + children, key-asc, hasChildren/hasMore, per-parent sort, no leak)                           | inherited | `tree-lazy-read.test.ts` → "listRootIssues" + "listChildIssues"                                                                                                                                                                                                                                                                                                                   |
+| **Issue list/tree reads — page shaping + detail aggregate**                                                                                | inherited | `issue-list-page.test.ts` → "issues page data shaping (toIssueRows over the live reads)"; `issue-detail.test.ts` → "workItemsService.getIssueDetail (2.4.1)" + "workItemsService.listLinkCandidates (2.4.9)"                                                                                                                                                                      |
+| **Assignees — membership gates** (non-member assignee/reporter rejected at create AND update)                                              | inherited | `service-edge-cases.test.ts` → "createWorkItem — membership + reference guards" + "updateWorkItem — per-field change branches" ("rejects assigning a non-member on update"); `service.test.ts` → "assignWorkItem"                                                                                                                                                                 |
+| **Readiness — ready/blocked verdict** (terminal = per-project `category=done`; cancelled counts; flips live; unlink restores)              | inherited | `workflows/readiness.test.ts` → "isReady — terminal status is per-project category=done (finding #21)"; `service.test.ts` → "isReady"; `issue-detail.test.ts` → "readiness flips to 'ready'… once every blocker is terminal"                                                                                                                                                      |
+| **RLS / tenancy — work_item** (read isolation; project narrowing; WITH CHECK write; triggers fire under RLS — finding #19)                 | inherited | `../../work-item-rls.test.ts` → "work_item RLS — read isolation" + "work_item RLS — project narrowing (restrictive policy)" + "work_item RLS — write isolation (WITH CHECK)" + "PRODECT_FINDINGS #19 — work_item triggers fire under RLS"                                                                                                                                         |
+| **RLS / tenancy — work_item_link** (workspace scope, no project narrowing; WITH CHECK)                                                     | inherited | `../../work-item-rls.test.ts` → "work_item_link RLS — workspace scope, no project narrowing" + "work_item_link RLS — write isolation (WITH CHECK)" + "PRODECT_FINDINGS #19 — work_item_link triggers fire under RLS"                                                                                                                                                              |
+| **RLS / tenancy — workflow** (status + transition read isolation; WITH CHECK write)                                                        | inherited | `workflows/rls.test.ts` → "workflow_status RLS — read isolation" + "workflow_transition RLS — read isolation" + "workflow_status RLS — write isolation (WITH CHECK)"                                                                                                                                                                                                              |
+| **RLS / tenancy — workspace-scoped service reads** (single fetch / revisions / link 404 cross-workspace, no leak)                          | inherited | `workspace-scoped-reads.test.ts` → "getWorkItem — workspace-scoped single fetch" + "listRevisions — workspace-scoped revision feed" + "getLink — workspace-scoped single link fetch"                                                                                                                                                                                              |
+
+## Gaps 2.6 fills
+
+Each gap below was verified absent in the current tree at the 2.6.1 audit; each
+points at the subtask that closes it.
+
+1. **No epic-level coverage matrix.** 1.4.7 wrote one only for Story 1.4's model.
+   → **Closed by this document (2.6.1).**
+2. **Default-workflow transitions are only SAMPLED.** `default-workflow.test.ts`
+   → "defaultWorkflow constant" and the `canTransition` cells assert representative
+   edges, not a graph-complete sweep of all default transitions **and every
+   non-edge**. → **2.6.2** — a constant-derived graph-conformance suite
+   (`tests/workflows/transition-conformance.test.ts`) that iterates the real
+   `lib/workflows/defaultWorkflow.ts` edge set (drop one edge locally → it FAILS).
+3. **No single cross-story lifecycle scenario.** No one test threads the whole
+   epic lifecycle — create tree → assign → multi-hop status walk → archive →
+   list/tree/readiness — end to end. → **2.6.3**
+   (`tests/integration/work-items/epic2-lifecycle.test.ts`).
+4. **Coverage GATING is scoped to 1.4.7's four work-item files only.**
+   `vitest.config.ts` `coverage.include` + per-file ≥90% thresholds cover only
+   `workItemsService` + the three work-item repos; **`workflowsService` and
+   `workflowsRepository` are ungated**, and `workItemsService` grew across 2.3–2.5
+   after the 1.4.7 numbers were taken. → **2.6.4** extends the gate to the workflow
+   modules. **Audit caveat (see numbers below): `workflowsService` is currently
+   76.41% branch / 91.83% lines — BELOW the 90% gate — so 2.6.4 must ADD workflow
+   tests to lift branch coverage over the bar before enabling the threshold, not
+   merely flip the config.**
+5. **No consolidated E2E acceptance journey.** No single Playwright spec proves the
+   type-parent rule + the full status lifecycle + list/tree reflection as one
+   user-visible flow. → **2.6.5**
+   (`tests/e2e/epic2-acceptance.spec.ts`, run on a `subtask/*` branch so E2E is
+   not skipped).
+
+## Coverage numbers (latest `pnpm test:coverage` — 841 tests, 85 files, real Postgres)
+
+The four work-item modules are gated today (`vitest.config.ts` `coverage.include`
+
+- per-file ≥90%). The two workflow modules are reported here via a one-off
+  `--coverage.include` override (2.6.1 changes no config); 2.6.4 brings them under
+  the gate.
+
+| Module                                           | % Branch | % Funcs | % Lines | % Stmts | Gated today?                                                              |
+| ------------------------------------------------ | -------- | ------- | ------- | ------- | ------------------------------------------------------------------------- |
+| `lib/services/workItemsService.ts`               | 94.80    | 98.43   | 97.95   | 97.16   | ✅ ≥90                                                                    |
+| `lib/repositories/workItemRepository.ts`         | 92.56    | 100     | 100     | 100     | ✅ ≥90                                                                    |
+| `lib/repositories/workItemLinkRepository.ts`     | 91.66    | 100     | 100     | 100     | ✅ ≥90                                                                    |
+| `lib/repositories/workItemRevisionRepository.ts` | 100      | 100     | 100     | 100     | ✅ ≥90                                                                    |
+| `lib/services/workflowsService.ts`               | 76.41    | 96.96   | 91.83   | 87.15   | ❌ ungated — **below 90% branch (gap 4 / 2.6.4 must fill before gating)** |
+| `lib/repositories/workflowsRepository.ts`        | 93.75    | 100     | 100     | 96.15   | ❌ ungated — meets ≥90 today (gap 4 / 2.6.4 brings under the gate)        |
+
+All four gated work-item modules clear their ≥90% (branches/functions/lines)
+thresholds after Epic-2 growth. `workflowsService` is the one module that would
+fail the gate as-is — its uncovered branches are concentrated in the status
+create/update/delete management paths — which is exactly the fill 2.6.4 owns.
+
+## A note on the test harness (real Postgres, serial)
+
+`vitest.config.ts` sets `fileParallelism: false` + `sequence.concurrent: false`,
+so the 85 test files run serially against the one local Postgres (no cross-file
+row races). Every RLS assertion binds its GUCs transaction-locally
+(`set_config(..., true)` + `SET LOCAL ROLE prodect_app`), so the binding is
+discarded at each transaction boundary — no cross-test GUC bleed. `beforeEach`
+truncates the touched tables (`tests/helpers/db.ts`), so row state never carries
+between cases. The only permitted `vi.mock` is `getSession()`; every DB/external
+call goes through the real path (`prodect-core/CLAUDE.md`).
