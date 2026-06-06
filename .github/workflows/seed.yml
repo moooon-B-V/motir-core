@@ -3,9 +3,11 @@ name: Reseed plan on merge
 # When a plan-seed PR merges, `main` changes under scripts/plan-seed/** — the
 # plan data is the source of truth, so regenerate the live `moooon`/`prodect`
 # tenant from it. The seed clears-and-reseeds ONLY that workspace (by name,
-# owned by the fixed seed user); no other tenant is touched. Inert until the
-# SEED_DATABASE_URL secret is set (the job fails loudly rather than touching the
-# wrong database).
+# owned by the fixed seed user); no other tenant is touched.
+#
+# Inert until the SEED_DATABASE_URL secret is set: the guard step below detects
+# the missing secret and SKIPS the reseed (the job stays green with a notice),
+# so a not-yet-configured repo doesn't paint main red. Add the secret to enable.
 on:
   push:
     branches: [main]
@@ -24,8 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # The production (unpooled) Neon connection string — add this as a GitHub
-      # Actions secret (Settings → Secrets and variables → Actions). Without it
-      # the job fails before touching any database.
+      # Actions secret (Settings → Secrets and variables → Actions) to enable
+      # reseed-on-merge. Empty when unset; the guard step skips the reseed then.
       DATABASE_URL: ${{ secrets.SEED_DATABASE_URL }}
       # Unlock the seed's production guard (scripts/plan-seed/seed.ts refuses to
       # run under NODE_ENV=production unless this is set).
@@ -39,14 +41,35 @@ jobs:
       # No git hooks to wire in CI.
       HUSKY: '0'
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      # Gate the whole job on the secret being present. `secrets.*` can't be used
+      # in a job/step `if:`, but a step CAN read it into an env var and branch —
+      # so an unconfigured repo skips (green) instead of failing at migrate/seed.
+      - name: Check SEED_DATABASE_URL is configured
+        id: guard
+        env:
+          SEED_DATABASE_URL: ${{ secrets.SEED_DATABASE_URL }}
+        run: |
+          if [ -z "$SEED_DATABASE_URL" ]; then
+            echo "::notice::SEED_DATABASE_URL is not set — skipping the reseed. Add it under Settings → Secrets and variables → Actions to enable reseed-on-merge."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.guard.outputs.enabled == 'true'
+        uses: actions/checkout@v4
+      - if: steps.guard.outputs.enabled == 'true'
+        uses: pnpm/action-setup@v4
+      - if: steps.guard.outputs.enabled == 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm prisma generate
+      - if: steps.guard.outputs.enabled == 'true'
+        run: pnpm install --frozen-lockfile
+      - if: steps.guard.outputs.enabled == 'true'
+        run: pnpm prisma generate
       # Make sure the target DB is on the latest schema before seeding.
-      - run: pnpm prisma migrate deploy
-      - run: pnpm db:seed
+      - if: steps.guard.outputs.enabled == 'true'
+        run: pnpm prisma migrate deploy
+      - if: steps.guard.outputs.enabled == 'true'
+        run: pnpm db:seed
