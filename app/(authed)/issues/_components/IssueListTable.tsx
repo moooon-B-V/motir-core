@@ -166,20 +166,26 @@ export function IssueListTable({
               className="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
               style={{ gridTemplateColumns: gridTemplate, height: 44 }}
             >
-              {/* Stretched link covers the whole row (the row is the positioned
-                  ancestor); cells stay static below it so clicking anywhere
-                  navigates — mirrors the TreeTable pattern. */}
-              <Link
-                href={`/issues/${row.identifier}`}
-                aria-label={`${row.identifier} ${row.title}`}
-                className="absolute inset-0 z-0 focus:outline-none"
-              />
-              {columns.map((col) => (
+              {columns.map((col, i) => (
                 <div
                   key={col.key}
                   role="cell"
                   className={cn('flex min-w-0 items-center', col.align === 'end' && 'justify-end')}
                 >
+                  {/* The stretched link lives INSIDE the first cell, not as a
+                      direct child of role="row" — a row may only contain cell /
+                      columnheader children (aria-required-children). The cell is
+                      static, so `absolute inset-0` still resolves against the
+                      relative ROW and covers the whole row, and the cell content
+                      stays below it so clicking anywhere navigates — the same
+                      shape TreeTable uses for its first gridcell. */}
+                  {i === 0 ? (
+                    <Link
+                      href={`/issues/${row.identifier}`}
+                      aria-label={`${row.identifier} ${row.title}`}
+                      className="absolute inset-0 z-0 focus:outline-none"
+                    />
+                  ) : null}
                   {col.cell(row)}
                 </div>
               ))}

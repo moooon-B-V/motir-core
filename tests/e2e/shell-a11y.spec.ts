@@ -17,6 +17,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp, createFirstProject } from './_helpers/shell-session';
+import { workItemsService } from '@/lib/services/workItemsService';
 
 const USER_EMAIL = 'e2e-shell-a11y@example.com';
 
@@ -405,6 +406,81 @@ test.describe('@a11y shell accessibility', () => {
     expect(
       results.violations,
       formatViolations('/tokens#primitives-pill', results.violations as AxeViolation[]),
+    ).toEqual([]);
+  });
+
+  // The POPULATED /issues route — BOTH views (Subtask 2.5.6). The empty /issues
+  // is already in the SHELL_ROUTES sweep above; this seeds a real multi-level
+  // tree (so the treegrid carries nested rows with aria-level/expanded + status
+  // Pills + the inline-edit cell controls) and sweeps the Tree AND the flat
+  // sortable List. STRICT — zero exclusions, color-contrast ENABLED: the
+  // treegrid semantics (2.5.2) + the List's sortable-header `aria-sort` (2.5.8)
+  // + the AA-safe Pills (#35) must all hold on the REAL route, not just the
+  // /tokens specimen. Seeds server-side through workItemsService (the sanctioned
+  // test cross-layer reach) so the fixture is exactly what Prodect renders.
+  async function seedIssueTree(page: Page, email: string) {
+    await signUp(page, email);
+    await createFirstProject(page, 'Mobile App');
+    const local = email.split('@')[0]!;
+    const user = (await db.user.findFirst({ where: { email } }))!;
+    const ws = (await db.workspace.findFirst({ where: { name: `${local}'s Workspace` } }))!;
+    const project = (await db.project.findFirst({ where: { workspaceId: ws.id } }))!;
+    const ctx = { userId: user.id, workspaceId: ws.id };
+    const epic = await workItemsService.createWorkItem(
+      { projectId: project.id, kind: 'epic', title: 'Platform epic' },
+      ctx,
+    );
+    const story = await workItemsService.createWorkItem(
+      { projectId: project.id, kind: 'story', title: 'Auth story', parentId: epic.id },
+      ctx,
+    );
+    // A second root with a non-default status + an assignee so the swept DOM
+    // carries a colored status Pill + an assignee avatar (the palette tones, not
+    // just grey) alongside the default-status rows.
+    const task = await workItemsService.createWorkItem(
+      { projectId: project.id, kind: 'task', title: 'Ship the build', assigneeId: user.id },
+      ctx,
+    );
+    await workItemsService.updateStatus(task.id, 'in_progress', ctx);
+    return { epic, story };
+  }
+
+  test('the populated /issues TREE view is axe-clean (WCAG 2.1 AA; strict)', async ({ page }) => {
+    const { epic, story } = await seedIssueTree(page, 'e2e-issues-tree-a11y@example.com');
+
+    await page.goto('/issues');
+    const grid = page.getByRole('treegrid', { name: 'Work Items', exact: true });
+    await expect(grid).toBeVisible();
+    // Expand a node so a NESTED level (aria-level 2 row + its gridcells + the
+    // collapse control) is part of the swept DOM, not just the roots. Use the
+    // treegrid keyboard model (ArrowRight on the focused row) — robust vs a
+    // coordinate click on the chevron among same-row z-10 inline-edit controls.
+    await page.getByTestId(`issue-row-${epic.identifier}`).press('ArrowRight');
+    await expect(page.getByTestId(`issue-row-${story.identifier}`)).toBeVisible();
+
+    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    expect(
+      results.violations,
+      formatViolations('/issues (tree, populated)', results.violations as AxeViolation[]),
+    ).toEqual([]);
+  });
+
+  test('the populated /issues LIST view is axe-clean (WCAG 2.1 AA; strict)', async ({ page }) => {
+    await seedIssueTree(page, 'e2e-issues-list-a11y@example.com');
+
+    await page.goto('/issues?view=list');
+    await expect(page.getByRole('table', { name: 'Work Items' })).toBeVisible();
+    // The sortable headers carry aria-sort and the inline-edit cell triggers
+    // (labelled buttons) are present — all held to full AA here.
+    await expect(page.getByRole('columnheader', { name: 'Status' })).toHaveAttribute(
+      'aria-sort',
+      'none',
+    );
+
+    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    expect(
+      results.violations,
+      formatViolations('/issues (list, populated)', results.violations as AxeViolation[]),
     ).toEqual([]);
   });
 

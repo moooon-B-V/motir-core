@@ -269,7 +269,7 @@ export const story_2_5: PlanStory = {
       id: '2.5.6',
       title:
         'Story E2E — render · expand · filter · inline edit · view-switcher · isolation + a11y',
-      status: 'planned',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 15,
@@ -914,6 +914,112 @@ export const story_2_5: PlanStory = {
         "- 2.5.3 `app/(authed)/issues/page.tsx` (reads `searchParams`; render the modal here) + the shared row cells / `issueRows` + `IssueTreeTable` (where the trigger lands) + 2.5.8's flat List rows\n" +
         '- 2.4 `getIssueDetail(identifier, ctx)` / `IssueDetailDto` + `app/(authed)/issues/[key]/page.tsx` (the detail destination) + its field components to compose the condensed view\n' +
         '- `components/ui/Modal` (the 2.3 `CreateIssueModal` open/close+URL precedent) · 2.5.4 / 2.5.8 URL-param pattern · `prodect-core/CLAUDE.md` — 4-layer · `--el-*` tokens',
+    },
+    {
+      id: '2.5.20',
+      title: 'Design — ready/blocked readiness in the quick-view (peek) modal',
+      status: 'done',
+      type: 'design',
+      executor: 'human',
+      estimateMinutes: 25,
+      descriptionMd:
+        'The design asset for showing **ready / blocked** readiness INSIDE the `/issues` quick-view ' +
+        '(peek) modal. The shipped `quick-view.mock.html` (2.5.18) deliberately scoped the peek as a ' +
+        'read preview and listed the **readiness badge (2.4.5) as DETAIL-ONLY** (design-notes ' +
+        '"What the peek shows vs. what stays detail-only", L805–811). This subtask **reconciles that ' +
+        "decision**: the peek should surface an item's readiness so a user can tell at a glance, while " +
+        'scanning the list, whether the item is **Ready to start** or **Blocked** (and on what) — without ' +
+        'opening the full page. Because the existing mockup does not draw this in the peek, 2.5.21 would be ' +
+        'improvising UI without this asset — the planning-time design gate (`notes.html` mistake #31), the ' +
+        'same gate 2.5.7 / 2.5.9 / 2.5.18 closed for their surfaces.\n\n' +
+        '**No new visual primitive — reuse the shipped `ReadinessBadge` (2.4.5).** The ready/blocked ' +
+        'treatment already exists as a reusable primitive (`components/ui/ReadinessBadge` — mint ' +
+        '"Ready to start" / peach "Blocked · Waiting on N issue(s) — PROD-3, PROD-8" with the open ' +
+        'blockers named as links, state carried by TEXT not colour alone, AA-safe per finding #35). This ' +
+        'design DOES NOT invent a new badge — it decides WHERE the existing badge sits in the peek and how ' +
+        'it behaves in the modal context. Update `design/work-items/quick-view.mock.html` + the ' +
+        '`design-notes.md` "Work-item quick view (peek) modal" section to cover:\n\n' +
+        '- **Placement** — where the `ReadinessBadge` lives in the two-column peek (e.g. a full-width row ' +
+        'at the top of the main column above the Description, or at the top of the 300px core-fields rail). ' +
+        'Pick one and justify it briefly; keep it consistent with how the badge reads on the detail page.\n' +
+        '- **States (multi-panel)** — **blocked** (named open blockers as links), **ready** ' +
+        '("All blockers resolved"), and **no blockers at all** (mirror the detail-page rule: an item with ' +
+        'no `is_blocked_by` in-edge shows NO banner — there is no readiness signal to give; confirm the ' +
+        'peek follows the same rule rather than rendering an empty/"ready" banner for everything).\n' +
+        '- **Blocker links inside a modal** — the named-blocker links route to `/issues/[key]`. Decide ' +
+        'whether clicking one **swaps the peek** to that key (`?peek=`) or **navigates to the full page** ' +
+        '(closing the peek); the detail-page badge links straight to the detail page — note which the peek ' +
+        'uses and why.\n' +
+        '- **Reconcile the design-notes** — move "readiness badge" OUT of the peek\'s "Detail-only" list ' +
+        'and into "What the peek shows", so the doc and the mockup agree (the relationships/links panel ' +
+        'itself STAYS detail-only — only the readiness signal is promoted).\n\n' +
+        'Mirror the output convention of the prior design subtasks (**2.4.7 / 2.5.7 / 2.5.9 / 2.5.18**). ' +
+        "Colour only through `--el-*`; the badge's tones come from `--el-tint-mint` / `--el-tint-peach` " +
+        'with `--el-text-strong`; AA-safe (finding #35); toggle dark mode in the mockup to confirm token ' +
+        'parity.\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- `quick-view.mock.html` gains the readiness treatment in the peek (the shipped `ReadinessBadge` ' +
+        'shape — NO new visual primitive) with **blocked · ready · no-blockers (no banner)** panels, and ' +
+        'the `design-notes.md` peek section documents its placement, the named-blocker link behaviour ' +
+        '(swap-peek vs. navigate), and the no-blockers rule.\n' +
+        '- The design-notes "Detail-only" list is updated — readiness is promoted into the peek; the ' +
+        'relationships/links panel stays detail-only.\n' +
+        '- Consistent with the detail-page readiness banner (2.4.5) and `tree.png` toolbar; colour flows ' +
+        'only through `--el-*`; state is conveyed by text + icon, not colour alone; AA-safe (finding #35).\n\n' +
+        '## Context refs\n\n' +
+        '- `design/work-items/quick-view.mock.html` + `design-notes.md` "Work-item quick view (peek) modal" section (the surface to extend) + its "Detail-only" line to reconcile\n' +
+        '- `design/work-items/relationships.mock.html` + the `design-notes.md` "Relationships panel + ready/blocked badge" section (2.4.5) — the readiness banner this reuses\n' +
+        '- `components/ui/ReadinessBadge.tsx` (the shipped primitive) + `components/ui/*` inventory + `app/globals.css` `--el-*` tiers + the `/tokens` route',
+    },
+    {
+      id: '2.5.21',
+      title: 'Show ready/blocked readiness in the `/issues` quick-view modal',
+      status: 'planned',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 8,
+      dependsOn: ['2.5.19', '2.5.20'],
+      descriptionMd:
+        'Render the **ready / blocked** signal inside the `/issues` quick-view (peek) modal per ' +
+        "**2.5.20**'s design, so a user can tell while scanning the list whether a peeked item is " +
+        '**Ready to start** or **Blocked** (and on what) without opening the full page. This is a ' +
+        '**purely presentational** addition to the 2.5.19 modal — no new read, no new mutation, no new ' +
+        'visual primitive.\n\n' +
+        '**The data is already in hand.** The peek renders from the shipped ' +
+        '`getIssueDetail(projectId, key, ctx)` (2.4), whose `IssueDetailDto` ALREADY carries ' +
+        '`readiness: ReadinessVerdictDto` (`{ ready, openBlockers }`) — the same verdict the detail ' +
+        "page's relationships panel feeds to `ReadinessBadge`. So 2.5.21 drops the shipped " +
+        '`components/ui/ReadinessBadge` (2.4.5) into the `IssueQuickView` modal, fed from ' +
+        "`detail.readiness`, at the placement 2.5.20 specifies. Map `openBlockers` to the badge's " +
+        '`{ identifier, href }` exactly as the detail page does (reuse that mapping — do NOT re-derive ' +
+        'readiness; the service owns the per-project terminal classification, finding #21).\n\n' +
+        "**Match the design's rules:** show NO banner when the item has no blockers (mirror the " +
+        'detail-page rule — 2.5.20 confirms it); the open blockers are named as links to ' +
+        '`/issues/[key]`, with the swap-peek-vs-navigate behaviour 2.5.20 decides; readiness state is ' +
+        'conveyed by text + icon, never colour alone (the badge already does this); colours via ' +
+        '`--el-*`.\n\n' +
+        '**Scope guard.** Only the readiness signal moves into the peek — the full relationships / links ' +
+        'panel STAYS detail-only (no link create/remove, no Blocks/Relates-to/Duplicates groups in the ' +
+        'peek). v1 = render the existing badge from the already-returned verdict (no complexity for ' +
+        'nothing).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- The quick-view modal renders the shipped `ReadinessBadge` from `detail.readiness` per ' +
+        '`quick-view.mock.html` (2.5.20): **blocked** names the open blockers as `/issues/[key]` links, ' +
+        '**ready** shows "Ready to start", an item with **no blockers shows no banner**.\n' +
+        "- Reuses `getIssueDetail`'s existing `readiness` field + the `ReadinessBadge` primitive — NO new " +
+        'read, NO new component, NO re-derivation of readiness; the relationships/links panel stays ' +
+        'detail-only.\n' +
+        '- The named-blocker links behave as 2.5.20 specifies (swap `?peek=` or navigate to full page); ' +
+        "the badge never breaks the modal's focus-trap / `Esc` / return-focus or the non-nested row " +
+        'trigger; colours via `--el-*`, state by text + icon not colour alone (finding #35).\n' +
+        "- Component test: a blocked item's peek renders the blocked badge with the open-blocker links; a " +
+        'ready item renders "Ready to start"; an item with no blockers renders no banner. tsc / eslint / ' +
+        'prettier clean; next build compiles.\n\n' +
+        '## Context refs\n\n' +
+        '- `design/work-items/quick-view.mock.html` + `design-notes.md` (2.5.20) — the layout authority\n' +
+        '- The 2.5.19 `IssueQuickView` modal (`app/(authed)/issues/_components/*`) — the surface to extend (where the badge mounts)\n' +
+        '- `components/ui/ReadinessBadge.tsx` (2.4.5) + `app/(authed)/issues/[key]/page.tsx` (how the detail page feeds `detail.readiness` → `ReadinessBadge`, incl. the `openBlockers` → `{identifier, href}` mapping to reuse)\n' +
+        '- `lib/dto/workItems.ts` `ReadinessVerdictDto` / `IssueDetailDto.readiness`; `lib/services/workItemsService.ts` `getReadiness` (the read already wired into `getIssueDetail`); `prodect-core/CLAUDE.md` — `--el-*` tokens',
     },
   ],
 };
