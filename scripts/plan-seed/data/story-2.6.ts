@@ -162,7 +162,7 @@ export const story_2_6: PlanStory = {
     {
       id: '2.6.2',
       title: 'Default-workflow graph-conformance suite (vitest, constant-derived)',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
