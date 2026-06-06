@@ -1,24 +1,13 @@
 import type { PlanStory } from '../types';
 
 /**
- * Summary-level (subtasks-deferred) stories: Epic 2's test story 2.6 plus all
- * of Epics 3–8. Each is `planned` with no leaf items yet — they get expanded to
- * full subtask depth (their own data/story-*.ts module) when the ready set
- * drains, per the async-expansion rule. Transcribed from the epic-*.html cards.
+ * Summary-level (subtasks-deferred) stories: Epics 3–8 (Epic 2 is fully
+ * expanded — 2.6 became data/story-2.6.ts). Each is `planned` with no leaf items
+ * yet — they get expanded to full subtask depth (their own data/story-*.ts
+ * module) when the ready set drains, per the async-expansion rule. Transcribed
+ * from the epic-*.html cards.
  */
 export const STUB_STORIES: PlanStory[] = [
-  // ── Epic 2 ────────────────────────────────────────────────────────────────
-  {
-    id: '2.6',
-    title: 'Tests — issue CRUD, workflow transitions, type-parent rules',
-    status: 'planned',
-    descriptionMd:
-      'Vitest (real Postgres) over the service/repository layer: CRUD, illegal-transition ' +
-      'rejection, type-parent constraint violations, key uniqueness. Playwright over the create → ' +
-      'detail → status-change flow.',
-    items: [],
-  },
-
   // ── Epic 3: Boards ─────────────────────────────────────────────────────────
   // 3.1 is fully expanded → data/story-3.1.ts (assembled in index.ts).
   {
