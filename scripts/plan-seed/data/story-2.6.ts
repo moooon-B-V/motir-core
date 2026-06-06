@@ -117,7 +117,7 @@ export const story_2_6: PlanStory = {
     {
       id: '2.6.1',
       title: 'Epic-2 coverage audit + `tests/EPIC2_COVERAGE.md` matrix',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
