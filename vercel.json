@@ -1,0 +1,4 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "ignoreCommand": "bash -c 'case \"$VERCEL_GIT_COMMIT_REF\" in seed/*|design/*) echo \"Skip preview deploy: $VERCEL_GIT_COMMIT_REF touches no app code\"; exit 0 ;; *) exit 1 ;; esac'"
+}
