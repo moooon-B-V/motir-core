@@ -648,5 +648,21 @@
         "label": "语言"
       }
     }
+  },
+  "boards": {
+    "heading": "看板",
+    "subtitle": "{project} 的看板",
+    "filter": "筛选",
+    "filterComingSoon": "看板筛选即将推出",
+    "noProjectTitle": "未选择项目",
+    "noProjectDescription": "从切换器中选择或创建一个项目，以查看其看板。",
+    "loadingLabel": "正在加载看板",
+    "errorTitle": "无法加载看板",
+    "errorDescription": "加载此看板时出现问题，请重试。",
+    "noBoardTitle": "尚无看板",
+    "noBoardDescription": "此项目尚未配置看板。",
+    "emptyColumn": "暂无工作项",
+    "columnLabel": "{name}，{count} 个工作项",
+    "openIssueAria": "打开 {key}：{title}"
   }
 }

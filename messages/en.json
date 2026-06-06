@@ -648,5 +648,21 @@
         "label": "Language"
       }
     }
+  },
+  "boards": {
+    "heading": "Board",
+    "subtitle": "Kanban board for {project}",
+    "filter": "Filter",
+    "filterComingSoon": "Board filtering is coming soon",
+    "noProjectTitle": "No project selected",
+    "noProjectDescription": "Pick or create a project from the switcher to see its board.",
+    "loadingLabel": "Loading board",
+    "errorTitle": "Couldn’t load the board",
+    "errorDescription": "Something went wrong loading this board. Try again.",
+    "noBoardTitle": "No board yet",
+    "noBoardDescription": "This project doesn’t have a board configured yet.",
+    "emptyColumn": "No work items",
+    "columnLabel": "{name}, {count} work items",
+    "openIssueAria": "Open {key}: {title}"
   }
 }

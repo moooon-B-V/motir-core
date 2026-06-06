@@ -20,6 +20,28 @@ import { Modal } from '@/components/ui/Modal';
 // computes the cleared URL — reused by the header × and the not-found Close
 // (QuickViewCloseButton).
 
+/**
+ * Returns a stable `(identifier) => void` that opens the quick-view peek for a
+ * work item by pushing `?peek=<identifier>` onto the current URL, preserving
+ * every other param (view/sort/filter/page). The peek is URL-driven — shareable,
+ * reload-safe, and closed by `usePeekClose`. Shared by the issue-list row
+ * `QuickViewTrigger` and the board (Subtask 3.2.2): both open the SAME peek
+ * surface, so the open wiring lives here, not forked per caller.
+ */
+export function usePeekOpen() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  return useCallback(
+    (identifier: string) => {
+      const params = new URLSearchParams(searchParams?.toString());
+      params.set('peek', identifier);
+      router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [router, pathname, searchParams],
+  );
+}
+
 /** Returns a stable callback that navigates to the current URL minus `?peek`. */
 export function usePeekClose() {
   const router = useRouter();
