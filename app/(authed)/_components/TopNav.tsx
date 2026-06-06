@@ -2,7 +2,6 @@ import { getTranslations } from 'next-intl/server';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { UserMenu } from './UserMenu';
 import { ThemeToggle } from './ThemeToggle';
-import { LocaleToggle } from './LocaleToggle';
 import { CommandPaletteTrigger } from './CommandPaletteTrigger';
 import { CreateIssueButton } from './CreateIssueButton';
 import { SidebarToggle } from '@/components/ui/SidebarToggle';
@@ -49,7 +48,6 @@ export async function TopNav({ workspaces, activeWorkspaceId, user }: TopNavProp
         <div className="flex items-center gap-2">
           <CreateIssueButton />
           <CommandPaletteTrigger />
-          <LocaleToggle />
           <ThemeToggle />
           <UserMenu name={user.name} email={user.email} />
         </div>
