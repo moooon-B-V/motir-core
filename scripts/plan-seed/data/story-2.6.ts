@@ -210,7 +210,7 @@ export const story_2_6: PlanStory = {
     {
       id: '2.6.3',
       title: 'Full Epic-2 lifecycle integration scenario (vitest)',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 35,
