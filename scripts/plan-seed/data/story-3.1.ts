@@ -322,7 +322,7 @@ export const story_3_1: PlanStory = {
       id: '3.1.6',
       title:
         'Board API routes — `GET` projection, `GET` column page, `POST` move (thin, workspace-gated)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 16,
