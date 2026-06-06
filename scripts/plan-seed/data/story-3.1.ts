@@ -180,7 +180,7 @@ export const story_3_1: PlanStory = {
       id: '3.1.3',
       title:
         'Board repositories — `boardRepository` / `boardColumnRepository` / `boardColumnStatusRepository`',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 16,
