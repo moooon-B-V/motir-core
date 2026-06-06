@@ -20,7 +20,7 @@
  * can.
  */
 /* eslint-disable no-console -- a CLI script: console IS its output surface */
-import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads
+import '../_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads (helper is in scripts/, one level up)
 import type { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
