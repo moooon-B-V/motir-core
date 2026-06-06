@@ -304,7 +304,7 @@ export const story_2_6: PlanStory = {
       id: '2.6.5',
       title:
         'E2E — Epic-2 acceptance journey (Playwright): create → detail → lifecycle → list/tree',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 35,
