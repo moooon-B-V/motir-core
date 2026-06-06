@@ -834,6 +834,10 @@ visual primitive** is invented.
 blockers resolved`); and **no blockers → NO banner at all** — mirror the detail-page
   rule: an item with no `is_blocked_by` in-edge has no readiness signal to give. Panel 2
   draws **blocked** in context; **panel 3** draws **ready** + the **no-banner** case.
+- **Only while the item is in the `todo` category** — once a peeked item is in-progress or
+  done, the readiness banner is suppressed regardless of blockers: "can I start this?" is
+  moot once work has started or finished (2.5.21). So the banner shows iff the item is
+  todo-category AND has blockers.
 - **Blocker links swap the peek** — a named blocker link pushes **`?peek=<blockerKey>`**
   (staying on `/issues`, swapping the peeked item) rather than navigating to
   `/issues/[key]`. Rationale: the peek exists to inspect _without losing your place_, so

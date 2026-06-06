@@ -82,12 +82,15 @@ describe('IssueQuickViewPanel — populated (ready)', () => {
 });
 
 describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
+  // The banner shows only for a TODO-category item with blockers.
+  const TODO = { ...DATA, statusLabel: 'To Do', statusCategory: 'todo' as const };
+
   it('blocked: renders the Blocked banner naming open blockers as ?peek= swap-peek links', () => {
     searchParamsString = 'view=list&peek=PROD-7';
     render(
       <IssueQuickViewPanel
         state="ready"
-        data={{ ...DATA, readiness: { ready: false, blockers: ['PROD-3', 'PROD-8'] } }}
+        data={{ ...TODO, readiness: { ready: false, blockers: ['PROD-3', 'PROD-8'] } }}
       />,
     );
     expect(screen.getByText('Blocked')).toBeTruthy();
@@ -105,7 +108,7 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
     render(
       <IssueQuickViewPanel
         state="ready"
-        data={{ ...DATA, readiness: { ready: true, blockers: [] } }}
+        data={{ ...TODO, readiness: { ready: true, blockers: [] } }}
       />,
     );
     expect(screen.getByText('Ready to start')).toBeTruthy();
@@ -113,9 +116,25 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
   });
 
   it('no blockers: renders NO readiness banner (readiness === null)', () => {
-    render(<IssueQuickViewPanel state="ready" data={{ ...DATA, readiness: null }} />);
+    render(<IssueQuickViewPanel state="ready" data={{ ...TODO, readiness: null }} />);
     expect(screen.queryByText('Blocked')).toBeNull();
     expect(screen.queryByText('Ready to start')).toBeNull();
+  });
+
+  it('non-todo status: suppresses the banner even with open blockers (moot past todo)', () => {
+    // Same blocked verdict as the first case, but the item is in-progress.
+    render(
+      <IssueQuickViewPanel
+        state="ready"
+        data={{
+          ...DATA,
+          statusCategory: 'in_progress',
+          readiness: { ready: false, blockers: ['PROD-3', 'PROD-8'] },
+        }}
+      />,
+    );
+    expect(screen.queryByText('Blocked')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'PROD-3' })).toBeNull();
   });
 });
 

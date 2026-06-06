@@ -45,11 +45,13 @@ export interface QuickViewData {
    * The ready/blocked readiness signal (Subtask 2.5.21), shaped for the shipped
    * ReadinessBadge. `null` when the item has NO `is_blocked_by` in-edge — mirror
    * the detail-page rule: nothing blocks it, so there's no readiness signal to
-   * give and no banner renders. Otherwise `ready` is the service verdict and
-   * `blockers` names the OPEN (non-terminal) blockers; the panel maps each to a
-   * `?peek=` swap-peek href (so a blocker link swaps the peeked item in-list,
-   * never leaving `/issues` — the 2.5.20 design's justified deviation from the
-   * detail-page badge, which links to `/issues/[key]`).
+   * give. Otherwise `ready` is the service verdict and `blockers` names the OPEN
+   * (non-terminal) blockers; the panel maps each to a `?peek=` swap-peek href (so
+   * a blocker link swaps the peeked item in-list, never leaving `/issues` — the
+   * 2.5.20 design's justified deviation from the detail-page badge, which links
+   * to `/issues/[key]`). The panel additionally suppresses the banner once the
+   * item leaves the `todo` category (see `statusCategory`): "can I start this?"
+   * is moot for an item already in progress or done.
    */
   readiness: { ready: boolean; blockers: string[] } | null;
 }
@@ -199,9 +201,11 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             {data.title}
           </h2>
           {/* Readiness banner (2.5.21) — the shipped ReadinessBadge, top of the
-              main column under the title, per quick-view.mock.html (2.5.20). No
-              banner when the item has no blockers. Named blockers swap the peek. */}
-          {data.readiness ? (
+              main column under the title, per quick-view.mock.html (2.5.20). Shown
+              only for a TODO-category item that has blockers: no banner without
+              blockers, and none once the item is in-progress / done ("can I start
+              this?" is moot past todo). Named blockers swap the peek. */}
+          {data.readiness && data.statusCategory === 'todo' ? (
             <ReadinessBadge
               ready={data.readiness.ready}
               blockers={data.readiness.blockers.map((identifier) => ({
