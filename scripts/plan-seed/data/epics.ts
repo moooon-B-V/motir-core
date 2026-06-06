@@ -55,6 +55,31 @@ export const EPICS: EpicMeta[] = [
           '(tabs / sidebar section across Workflow / Archive / …) remains a separate design ' +
           'decision, deferred — this fix only restores discoverability.',
       },
+      {
+        id: 'bug-tree-header-misalignment',
+        kind: 'bug',
+        title: 'Tree view: column values not aligned with their headers',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 2 · **Discovered in:** Story 2.5 (issue list — Tree ' +
+          'view) · **Status:** open\n\n' +
+          'On the project issue list at `/issues`, the **Tree view** renders misaligned: the column ' +
+          '**values** in each row do not line up with the column **headers** above them — the ' +
+          'header row and the data cells sit on different horizontal grids, so the layout reads as ' +
+          '"off". First observed in the seeded `moooon` / `prodect` project after the plan was ' +
+          'migrated into the seed (with a full backlog to render, the misalignment is obvious).\n\n' +
+          '**Repro:** sign in as `info@moooon.net`, open the `moooon` / `prodect` project → ' +
+          '`/issues`, switch to **Tree** view, and observe that the column headers do not sit ' +
+          'above their values.\n\n' +
+          '**Fix approach — reproduce first.** Per the reproduce-before-diagnosing rule, the fix ' +
+          'must start with a FAILING UI test asserting header↔cell column alignment (a shared ' +
+          'grid-template / column-width source), not a code-reading theory. Candidate area to ' +
+          'investigate (hypothesis, NOT a diagnosis): the Tree view header row vs. the ' +
+          'virtualized / lazy-loaded body rows (2.5.14) may compute column widths independently — ' +
+          'a classic cause of header/body drift in virtualized tables — but confirm with the repro ' +
+          'before changing code.',
+      },
     ],
   },
   {
