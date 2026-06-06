@@ -7,7 +7,7 @@ import type { PlanStory } from '../types';
 export const story_2_5: PlanStory = {
   id: '2.5',
   title: 'Issue list view',
-  status: 'in_progress',
+  status: 'done',
   descriptionMd:
     'The project\'s issue index — the surface the sidebar "Issues" link opens (today a stub). Per the ' +
     'shipped mockup `design/work-items/tree.png` this is a **hierarchical tree-table**: ' +
@@ -974,7 +974,7 @@ export const story_2_5: PlanStory = {
     {
       id: '2.5.21',
       title: 'Show ready/blocked readiness in the `/issues` quick-view modal',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 8,
