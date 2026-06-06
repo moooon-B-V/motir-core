@@ -80,6 +80,39 @@ function renderTree(initialLevel: TreeLevelDto) {
 }
 
 describe('IssueTreeTable — lazy + sortable', () => {
+  // Regression: bug-tree-header-misalignment. The sortable Tree remaps the
+  // shared issue columns to wrap each header in a sort button — and must FORWARD
+  // each column's fixed `width`. Dropping it made TreeTable fall back to
+  // `max-content`, so every independently-gridded row sized to its OWN content
+  // and the header row landed on a different column grid than the data rows. The
+  // header + every data row must carry the SAME grid template with the fixed px
+  // tracks (the verified-real cause; alignment itself is measured in the
+  // browser, but happy-dom can still assert the template the rows share).
+  it('gives the header and data rows the same fixed-width column grid (not max-content)', () => {
+    renderTree({
+      rows: [node({ id: 'a', key: 1, hasChildren: true }), node({ id: 'b', key: 2 })],
+      hasMore: false,
+      total: 2,
+    });
+    const grid = screen.getByRole('treegrid');
+    const headerRow = within(grid)
+      .getAllByRole('row')
+      .find((r) => within(r).queryAllByRole('columnheader').length > 0)!;
+    const dataRow = screen.getByTestId('issue-row-PROD-1');
+
+    const headerTemplate = headerRow.style.gridTemplateColumns;
+    const dataTemplate = dataRow.style.gridTemplateColumns;
+
+    // The fixed widths from buildIssueColumns are present — not collapsed to
+    // content-sized tracks that drift per row.
+    expect(headerTemplate).not.toContain('max-content');
+    for (const px of ['120px', '150px', '90px', '130px']) {
+      expect(headerTemplate).toContain(px);
+    }
+    // Header and data share ONE column grid → columns line up under headers.
+    expect(dataTemplate).toBe(headerTemplate);
+  });
+
   it('renders roots; a parent has an expand chevron, a leaf does not', () => {
     renderTree({
       rows: [node({ id: 'a', key: 1, hasChildren: true }), node({ id: 'b', key: 2 })],
