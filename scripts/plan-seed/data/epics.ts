@@ -59,11 +59,11 @@ export const EPICS: EpicMeta[] = [
         id: 'bug-tree-header-misalignment',
         kind: 'bug',
         title: 'Tree view: column values not aligned with their headers',
-        status: 'in_progress',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 2 · **Discovered in:** Story 2.5 (issue list — Tree ' +
-          'view) · **Status:** open\n\n' +
+          'view) · **Status:** fixed (PR #124, merged)\n\n' +
           'On the project issue list at `/issues`, the **Tree view** renders misaligned: the column ' +
           '**values** in each row do not line up with the column **headers** above them — the ' +
           'header row and the data cells sit on different horizontal grids, so the layout reads as ' +
