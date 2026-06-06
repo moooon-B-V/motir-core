@@ -257,7 +257,7 @@ export const story_2_6: PlanStory = {
     {
       id: '2.6.4',
       title: 'Extend coverage gating to the Epic-2 workflow modules + re-verify thresholds',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
