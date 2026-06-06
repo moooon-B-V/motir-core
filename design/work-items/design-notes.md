@@ -15,7 +15,7 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | **Link management (add / remove links)**         | **`links.mock.html`** (HTML mockup)         | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                                                                                                    |
 | **DatePicker calendar (Due-date field)**         | **`datepicker.mock.html`** (HTML mockup)    | The design-system replacement for the native `<input type="date">` popup; consumed by the Due-date fields (2.4.11 → 2.4.12). See below.                                                               |
 | **Create modal — Due date field**                | **`create.mock.html`** (HTML mockup)        | Extends `create.pen` with a Due-date row (`DatePicker`, after Priority) — finding #56 / "mirror Jira" (2.3.11 → 2.3.12). See below.                                                                   |
-| **Work-item quick view (peek)**                  | **`quick-view.mock.html`** (HTML mockup)    | The peek modal + row trigger neither `tree.png` nor the 2.4 detail design specifies — a condensed in-list preview with "Open full page →". Gates 2.5.19. See below.                                   |
+| **Work-item quick view (peek)**                  | **`quick-view.mock.html`** (HTML mockup)    | The peek modal + row trigger neither `tree.png` nor the 2.4 detail design specifies — a large two-column in-list preview (full description + core-fields rail) with "Open full page →". Gates 2.5.19. See below. |
 
 ---
 
@@ -748,15 +748,24 @@ visual primitive is invented** (AC).
 - **`components/ui/Modal`** — the dialog shell (the same one `CreateIssueModal`
   (2.3.3) and `create.mock.html` use): backdrop, centered panel, `--shadow-modal`,
   `--radius-modal`, the `×` close button, and the focus-trap / `Esc` / return-focus
-  behaviour. The peek uses **`size="lg"`** (`max-w-[32rem]` ≈ 512px) — a touch
-  wider than the create modal's `md`, to seat the header + meta strip + excerpt.
+  behaviour. The peek is **large** — it takes a big part of the screen: **≈940px
+  wide, ~82vh tall** (`max-w-[58rem]` + a `max-h-[82vh]`, capped so it never
+  exceeds the viewport). This is wider than Modal's stock `size="lg"`, so 2.5.19
+  passes an explicit `size="xl"` / a `max-w-[58rem]` className (add the `xl` size
+  token to `Modal` if not present — the per-component growth pattern). **Sizing
+  rationale (per Yue, 2026-06-06, decision-authority rung-0 user directive):** the
+  card framed the peek as a small "condensed subset"; Yue overrode that — the peek
+  should be generous and show the **full** description, not a teaser. It remains a
+  _peek_ (read-only, prominent "Open full page", no inline edit / no comments feed),
+  just a big one — the Linear/Jira peek shape.
 - **`IssueTypeIcon`** — the type glyph in its type hue (`--el-type-{epic|story|task|bug|subtask}`),
-  in the header eyebrow.
+  in the header bar.
 - **`Pill`** — the Status chip (lifecycle-category tone via the `STATUS_TONE` map)
-  in the header, and the Priority chip (`PRIORITY_META`) in the meta strip — the
-  exact chips the rows + detail page already render.
-- **Avatar** — the initial-letter assignee avatar (same as the row `cell-person`).
-- **`Button`** — `btn-ghost` "Close" + `btn-primary` "Open full page →".
+  in the header + the rail, and the Priority chip (`PRIORITY_META`) in the rail —
+  the exact chips the rows + detail page already render.
+- **Avatar** — the initial-letter assignee + reporter avatars (same as the row `cell-person`).
+- **`Button`** — `btn-primary` "Open full page →" (in the header bar) + `btn-ghost`
+  "Close" (in the empty state); the `×` close `icon-btn` in the header.
 
 ### The row trigger — resolving the nested-interactive problem
 
@@ -781,43 +790,47 @@ breaks AT semantics and HTML validity). Resolution:
   coarse pointers** (`@media (hover: none)`) so touch users get it. The 40px
   column is always reserved → no layout shift.
 
-### Modal layout — a _condensed_ subset of the detail page
+### Modal layout — a large, two-column peek
 
-The peek shows what's worth a glance, not the whole detail page:
+The peek is a generous overlay (NOT a small card): a **sticky header bar** over a
+**two-column body** — a scrollable main column + a core-fields rail. It reads like
+the detail page, scoped to a peek.
 
-| Region         | Content                                                                                                                                                |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Header eyebrow | `IssueTypeIcon` (type hue) · **`PROD-N`** (mono, a **link** to `/issues/[key]`) · Status `Pill` (right) · `×` close                                    |
-| Title          | the work-item title, serif `--font-serif` 20px (matches the detail header)                                                                             |
-| Meta strip     | three glanceable fields — **Assignee** (avatar + name, or muted "Unassigned") · **Priority** (`PRIORITY_META` chip) · **Due date** (formatted, or `—`) |
-| Description    | a **3-line clamped excerpt** (`-webkit-line-clamp: 3`) under a "Description" label                                                                     |
-| Footer         | `btn-ghost` **Close** · `btn-primary` **Open full page →** (arrow-right), routing to `/issues/[key]`                                                   |
+| Region                 | Content                                                                                                                                                                                                                                                                                                         |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Header bar (sticky)    | `IssueTypeIcon` (type hue) · **`PROD-N`** (mono, a **link** to `/issues/[key]`) · Status `Pill` · spacer · **`btn-primary` "Open full page →"** · `×` close `icon-btn`                                                                                                                                          |
+| Main (scrollable, 1fr) | the title (serif `--font-serif` 27px, matches the detail header), then the **full Markdown description** (`MarkdownView`) under a "Description" label, then a quiet `--el-text-muted` footer line naming what's full-page-only                                                                                  |
+| Rail (300px)           | the detail page's **core-fields rail, condensed** — **Status** (`Pill`) · **Assignee** (Avatar + name) · **Reporter** (Avatar + name) · **Priority** (`PRIORITY_META` chip) · **Due date** · **Estimate** (clock glyph + duration) · **Parent** (breadcrumb link). `--el-surface-soft` bg, left hairline border |
 
-**What the peek shows vs. what stays detail-only.** Shown: type, key, title,
-status, assignee, priority, due, description excerpt. **Detail-only** (reached via
-_Open full page →_ / the header identifier — both clearly go to the detail page):
-reporter, estimate, parent + children, the relationships/links panel + readiness
-badge (2.4.5), labels, the full Markdown description **and** explanation, and the
-activity / comments feed. The peek is a glance, not a second detail page.
+**What the peek shows vs. what stays detail-only.** Shown: type, key, title, the
+**full description**, status, assignee, reporter, priority, due, estimate, parent.
+**Detail-only** (reached via _Open full page →_ in the header bar / the header
+identifier — both clearly go to the detail page): the **Explanation**, the
+**child list**, the **relationships/links panel + readiness badge** (2.4.5),
+**attachments**, **labels**, and the **activity / comments feed**. The peek is a
+big, read-only preview — editing and the heavier sections live on the full page.
 
 ### States (multi-panel)
 
 1. **Populated** — panel 2.
 2. **Loading** (panel 3) — the modal opens immediately (URL-driven, `?peek=PROD-N`);
    the item's fields fetch in the background. Skeleton bars (`--el-muted`, gentle
-   pulse) hold the header / meta / description layout so the panel doesn't resize
-   when data lands. The _Open full page_ link is live throughout.
+   pulse) hold the header / main / rail layout so the modal doesn't resize when data
+   lands. The _Open full page_ button is live throughout.
 3. **Not found / no access** (panel 4) — a stale `?peek=` key (deleted issue) or a
-   forbidden one shows a centered empty state: a `search-x` glyph in a muted
-   circle, **"This issue isn't available"**, and a line explaining it may have been
-   moved/deleted or is in a workspace you can't access. **Cross-workspace returns
-   the same not-found** (finding #44's pure-workspace gate — never leak existence).
-   A `lock` glyph variant covers an explicit no-access message if the product later
-   distinguishes them. No _Open full page_ button (there is no page to open).
-4. **Mobile / narrow** (panel 5) — the same Modal renders as a full-width bottom
-   **sheet** (rounded top corners, grab handle, scrollable, `max-height ≈ 88%`)
-   instead of a centered dialog. _Open full page_ goes full-width as the primary
-   action; close is backdrop / swipe-down / `Esc`.
+   forbidden one shows a centered empty state (the header bar keeps only the `×`):
+   a `search-x` glyph in a muted circle, **"This issue isn't available"**, a line
+   explaining it may have been moved/deleted or is in a workspace you can't access,
+   and a `btn-ghost` **Close**. **Cross-workspace returns the same not-found**
+   (finding #44's pure-workspace gate — never leak existence). A `lock` glyph
+   variant covers an explicit no-access message if the product later distinguishes
+   them. No _Open full page_ button (there is no page to open).
+4. **Mobile / narrow** (panel 5) — the same Modal renders as a full-height bottom
+   **sheet** (rounded top corners, grab handle, scrollable body, ~90% height)
+   instead of a centered dialog. The 300px rail **collapses into a compact meta
+   strip** (Assignee · Priority · Due) above the description; _Open full page_ is
+   pinned full-width at the bottom as the primary action; close is backdrop /
+   swipe-down / `Esc`.
 
 ### Opened from both views
 
@@ -826,8 +839,9 @@ identically from a Tree row or a List row. The modal is **URL-driven**
 (`?peek=PROD-N` on `/issues`) so it survives a refresh, is shareable/deep-linkable,
 and Back closes it — the standard "preview as a URL state" pattern (Linear's peek,
 GitHub's issue hovercard→modal). 2.5.19's data load reuses `getWorkItemByIdentifier`
-/ the detail aggregate read (the same source the full page uses), scoped to a
-condensed projection.
+/ the detail aggregate read (the same source the full page uses) — the peek shows
+the full description + core fields, so it needs the same core read, just without the
+heavier child-list / relationships / activity sub-queries (those stay full-page).
 
 ### Colour + shape
 
