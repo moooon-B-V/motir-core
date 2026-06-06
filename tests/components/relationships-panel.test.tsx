@@ -81,6 +81,9 @@ const EMPTY: Omit<React.ComponentProps<typeof RelationshipsPanel>, 'readiness' |
   relatesTo: [],
   duplicates: [],
   clones: [],
+  // The item itself is in the todo category, so the readiness banner is eligible
+  // to show (gated further by whether it has blockers).
+  currentStatus: 'todo',
 };
 const READY: ReadinessVerdictDto = { ready: true, openBlockers: [] };
 
@@ -140,6 +143,7 @@ describe('RelationshipsPanel (2.4.5 read-only)', () => {
           ready: false,
           openBlockers: [summary({ id: 'b', identifier: 'PROD-3' })],
         }}
+        currentStatus="todo"
         workflow={workflow}
       />,
     );
@@ -173,6 +177,25 @@ describe('RelationshipsPanel (2.4.5 read-only)', () => {
     );
     screen.getByText('Ready to start');
     within(screen.getByRole('link', { name: /PROD-3/ })).getByText('Done');
+  });
+
+  it('suppresses the readiness banner once the item leaves the todo category', () => {
+    // Same blocked verdict as above, but the item itself is Done — "can I start
+    // this?" is moot, so no banner (the blocked-by GROUP still renders).
+    render(
+      <RelationshipsPanel
+        {...EMPTY}
+        blockedBy={[link({ id: 'b', identifier: 'PROD-3', title: 'Upstream', status: 'todo' })]}
+        readiness={{ ready: false, openBlockers: [summary({ id: 'b', identifier: 'PROD-3' })] }}
+        currentStatus="done"
+        workflow={workflow}
+      />,
+    );
+    expect(screen.queryByText('Blocked')).toBeNull();
+    expect(screen.queryByText(/Waiting on/)).toBeNull();
+    // The dependency group itself is unaffected — only the banner is gated.
+    screen.getByText('Blocked by');
+    screen.getByRole('link', { name: /Upstream/ });
   });
 
   it('falls back to the raw status key for a cross-project status the workflow does not classify', () => {

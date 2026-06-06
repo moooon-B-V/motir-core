@@ -59,6 +59,7 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
         duplicates={detail.duplicates}
         clones={detail.clones}
         readiness={detail.readiness}
+        currentStatus={detail.item.status}
         workflow={detail.workflow}
         editable
         currentItemId={detail.item.id}

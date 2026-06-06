@@ -116,6 +116,7 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
             duplicates={detail.duplicates}
             clones={detail.clones}
             readiness={detail.readiness}
+            currentStatus={item.status}
             workflow={detail.workflow}
             editable
             currentItemId={item.id}
