@@ -219,12 +219,17 @@ export function IssueTreeTable({
     () =>
       buildIssueColumns(t).map((col, idx) => {
         const isTree = idx === 0;
-        const active = sort.column === col.sortColumn;
-        const ariaSort: 'ascending' | 'descending' | 'none' = active
-          ? sort.direction === 'asc'
-            ? 'ascending'
-            : 'descending'
-          : 'none';
+        // The trailing actions column (2.5.19) has no sortColumn → a plain
+        // screen-reader-only header (no sort button, no aria-sort).
+        const sortCol = col.sortColumn;
+        const active = sortCol ? sort.column === sortCol : false;
+        const ariaSort: 'ascending' | 'descending' | 'none' | undefined = sortCol
+          ? active
+            ? sort.direction === 'asc'
+              ? 'ascending'
+              : 'descending'
+            : 'none'
+          : undefined;
         return {
           key: col.key,
           // Forward the fixed column width: without it TreeTable falls back to
@@ -236,14 +241,16 @@ export function IssueTreeTable({
           align: col.align,
           ariaSort,
           headerLabel: col.header,
-          header: (
+          header: sortCol ? (
             <SortHeader
               label={col.header}
               active={active}
               sort={sort}
-              onSort={() => onSort(col.sortColumn)}
+              onSort={() => onSort(sortCol)}
               alignEnd={col.align === 'end'}
             />
+          ) : (
+            <span className="sr-only">{col.header}</span>
           ),
           cell: (node: TreeNode) => {
             if (node.kind === 'issue') return col.cell(node.row);

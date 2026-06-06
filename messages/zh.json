@@ -55,6 +55,7 @@
       "due": "截止",
       "estimate": "预估",
       "status": "状态",
+      "actions": "操作",
       "unassigned": "未分配"
     },
     "list": {
@@ -348,6 +349,14 @@
     "noIssuesDescription": "创建第一个工作项，开始跟踪工作。",
     "noMatchingTitle": "没有匹配的工作项",
     "noMatchingDescription": "没有工作项符合当前筛选条件。请尝试调整或清除筛选。",
+    "quickView": "快速查看",
+    "quickViewAria": "快速查看 {key}：{title}",
+    "quickViewDialogLabel": "快速查看：{key}",
+    "openFullPage": "打开完整页面",
+    "quickViewLoadingAria": "正在加载工作项",
+    "quickViewMore": "说明、关联关系、附件以及活动记录请在<link>完整页面</link>查看。",
+    "quickViewUnavailableTitle": "该工作项不可用",
+    "quickViewUnavailableDescription": "{key} 可能已被移动、删除，或位于你无权访问的工作区。",
     "colTitle": "标题",
     "colPriority": "优先级",
     "colAssignee": "负责人",

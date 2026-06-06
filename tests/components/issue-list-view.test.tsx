@@ -15,6 +15,7 @@ const push = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
   usePathname: () => '/issues',
+  useSearchParams: () => new URLSearchParams(),
 }));
 // The rows are inline-editable (Subtask 2.5.5), so the cells import the detail
 // page's edit Server Actions — stub them so this client test stays DB-free.

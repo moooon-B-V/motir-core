@@ -14,6 +14,7 @@ const { push, listRootIssuesAction, listChildIssuesAction } = vi.hoisted(() => (
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
   usePathname: () => '/issues',
+  useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock('@/app/(authed)/issues/actions', () => ({ listRootIssuesAction, listChildIssuesAction }));
 // The rows are inline-editable (Subtask 2.5.5), so the cells import the detail

@@ -27,6 +27,7 @@ vi.mock('@/app/(authed)/issues/[key]/edit/actions', () => ({
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushSpy, refresh: refreshSpy }),
   usePathname: () => '/issues',
+  useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ toast: toastSpy }) }));
 

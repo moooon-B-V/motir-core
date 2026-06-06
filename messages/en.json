@@ -55,6 +55,7 @@
       "due": "Due",
       "estimate": "Est.",
       "status": "Status",
+      "actions": "Actions",
       "unassigned": "Unassigned"
     },
     "list": {
@@ -348,6 +349,14 @@
     "noIssuesDescription": "Create your first work item to start tracking work.",
     "noMatchingTitle": "No matching work items",
     "noMatchingDescription": "No work items match the current filters. Try adjusting or clearing them.",
+    "quickView": "Quick view",
+    "quickViewAria": "Quick view {key}: {title}",
+    "quickViewDialogLabel": "Quick view: {key}",
+    "openFullPage": "Open full page",
+    "quickViewLoadingAria": "Loading work item",
+    "quickViewMore": "Explanation, relationships, attachments, and the activity feed live on the <link>full page</link>.",
+    "quickViewUnavailableTitle": "This work item isn’t available",
+    "quickViewUnavailableDescription": "{key} may have been moved, deleted, or it’s in a workspace you don’t have access to.",
     "colTitle": "Title",
     "colPriority": "Priority",
     "colAssignee": "Assignee",
