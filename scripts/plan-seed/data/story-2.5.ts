@@ -813,7 +813,7 @@ export const story_2_5: PlanStory = {
     {
       id: '2.5.18',
       title: 'Design — work-item quick-view (peek) modal + row trigger + "Open full page" link',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'human',
       estimateMinutes: 35,
