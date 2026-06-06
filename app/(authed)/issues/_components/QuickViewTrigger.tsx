@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Eye } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { usePeekOpen } from './IssueQuickView';
 
 // The per-row QUICK-VIEW trigger (Subtask 2.5.19) — the eye button that lives in
 // the trailing row-actions cell of BOTH the Tree and the List (shared via the
@@ -18,16 +18,10 @@ import { useTranslations } from 'next-intl';
 // coarse pointers so touch users get it.
 
 export function QuickViewTrigger({ identifier, title }: { identifier: string; title: string }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const t = useTranslations('issueViews');
+  const openPeek = usePeekOpen();
 
-  const open = useCallback(() => {
-    const params = new URLSearchParams(searchParams?.toString());
-    params.set('peek', identifier);
-    router.push(`${pathname}?${params.toString()}`, { scroll: false });
-  }, [router, pathname, searchParams, identifier]);
+  const open = useCallback(() => openPeek(identifier), [openPeek, identifier]);
 
   return (
     <button

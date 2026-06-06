@@ -1,0 +1,141 @@
+// @vitest-environment happy-dom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
+
+// BoardContainer (Subtask 3.2.2) is a pure client consumer of the Story-3.1.6
+// board API: it fetches GET /api/board on mount and renders the board-level
+// states (loading skeleton / error+retry / no-board / populated column scaffold),
+// and a card click opens the quick-view peek by pushing `?peek=<identifier>`.
+// Stub next/navigation (the usePeekOpen URL push) + global fetch so the client
+// orchestration is testable under happy-dom, DB-free.
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push }),
+  usePathname: () => '/boards',
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+import { BoardContainer } from '@/app/(authed)/boards/_components/BoardContainer';
+import type { BoardCardDto, BoardColumnDto, BoardProjectionDto } from '@/lib/dto/boards';
+
+function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardCardDto {
+  return {
+    projectId: 'p1',
+    parentId: null,
+    kind: 'task',
+    identifier: `PROD-${over.key}`,
+    title: `Card ${over.key}`,
+    status: 'todo',
+    priority: 'medium',
+    assigneeId: null,
+    dueDate: null,
+    estimateMinutes: null,
+    position: 'a0',
+    ready: true,
+    ...over,
+  };
+}
+
+function column(over: Partial<BoardColumnDto> & { id: string; name: string }): BoardColumnDto {
+  return {
+    position: 'a0',
+    wipLimit: null,
+    statusKeys: ['todo'],
+    cards: [],
+    totalCount: 0,
+    cursor: null,
+    ...over,
+  };
+}
+
+const projection: BoardProjectionDto = {
+  boardId: 'b1',
+  name: 'Default',
+  type: 'kanban',
+  unmappedStatuses: [],
+  columns: [
+    column({
+      id: 'c1',
+      name: 'To Do',
+      totalCount: 2,
+      cards: [card({ id: 'w1', key: 1 }), card({ id: 'w2', key: 2 })],
+    }),
+    column({ id: 'c2', name: 'In Progress', totalCount: 0, cards: [] }),
+  ],
+};
+
+function mockFetchOk(data: BoardProjectionDto) {
+  return vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => data });
+}
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+  vi.unstubAllGlobals();
+});
+
+beforeEach(() => {
+  vi.useRealTimers();
+});
+
+describe('BoardContainer', () => {
+  it('shows the loading skeleton while the projection streams', () => {
+    // A never-resolving fetch keeps it in the loading phase.
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => {})));
+    render(<BoardContainer />);
+    expect(screen.getByTestId('board-skeleton')).toBeTruthy();
+  });
+
+  it('renders the column scaffold with per-column counts and cards once loaded', async () => {
+    vi.stubGlobal('fetch', mockFetchOk(projection));
+    render(<BoardContainer />);
+
+    await waitFor(() => expect(screen.getByTestId('board')).toBeTruthy());
+    // Column counts (the projection totalCount, not the loaded length).
+    expect(screen.getByTestId('board-count-c1').textContent).toBe('2');
+    expect(screen.getByTestId('board-count-c2').textContent).toBe('0');
+    // Cards render in their column.
+    expect(screen.getByTestId('board-card-PROD-1')).toBeTruthy();
+    expect(screen.getByTestId('board-card-PROD-2')).toBeTruthy();
+    // The empty column shows the empty-column placeholder, no cards.
+    expect(screen.getByText('No work items')).toBeTruthy();
+  });
+
+  it('opens the quick-view peek (pushes ?peek=<identifier>) on a card click', async () => {
+    vi.stubGlobal('fetch', mockFetchOk(projection));
+    render(<BoardContainer />);
+
+    const cardEl = await screen.findByTestId('board-card-PROD-1');
+    fireEvent.click(cardEl);
+    expect(push).toHaveBeenCalledWith('/boards?peek=PROD-1', { scroll: false });
+  });
+
+  it('shows the error state with a working retry on a failed fetch', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({ code: 'OOPS' }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => projection });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<BoardContainer />);
+
+    await waitFor(() => expect(screen.getByText('Couldn’t load the board')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    // Retry re-fetches and reconciles to the populated board.
+    await waitFor(() => expect(screen.getByTestId('board')).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the defensive no-board state on a 404 BOARD_NOT_FOUND', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: async () => ({ code: 'BOARD_NOT_FOUND' }),
+      }),
+    );
+    render(<BoardContainer />);
+    await waitFor(() => expect(screen.getByText('No board yet')).toBeTruthy());
+  });
+});
