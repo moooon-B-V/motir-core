@@ -13,6 +13,10 @@ on:
     branches: [main]
     paths:
       - 'scripts/plan-seed/**'
+  # Manual "Run workflow" button — reseed on demand (e.g. the first prod
+  # populate, or after changing the SEED_DATABASE_URL target) without waiting
+  # for a plan-seed merge.
+  workflow_dispatch:
 
 # Never run two reseeds at once (each is a destructive clear-and-reseed of the
 # one workspace). Do NOT cancel an in-flight reseed — let it finish cleanly.
@@ -32,12 +36,9 @@ jobs:
       # Unlock the seed's production guard (scripts/plan-seed/seed.ts refuses to
       # run under NODE_ENV=production unless this is set).
       SEED_ALLOW_PRODUCTION: '1'
-      # The auth module (imported transitively by usersService.createUser) reads
-      # these at module load. The secret is the real per-env value; the OAuth
-      # placeholders just let the providers register (no OAuth round-trip here).
-      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
-      GOOGLE_CLIENT_ID: reseed-placeholder
-      GOOGLE_CLIENT_SECRET: reseed-placeholder
+      # NOTE: the seed needs NO other secret. It hashes passwords with argon2
+      # directly (lib/auth/passwords.ts) and never loads the Better-Auth instance
+      # (lib/auth/index.ts) — so BETTER_AUTH_SECRET / GOOGLE_* are not required.
       # No git hooks to wire in CI.
       HUSKY: '0'
     steps:
