@@ -1,0 +1,1305 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Work-item quick view (peek) — Story 2.5 · 2.5.18 → 2.5.19</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the /issues QUICK VIEW (peek) — Subtask
+      2.5.18, the design that blocks code Subtask 2.5.19. Neither tree.png nor
+      the 2.4 detail design draws this surface, so the planning-time design gate
+      (notes.html mistake #31) requires it before any code — the same gap 2.5.7 /
+      2.5.9 closed for the List view + filter popover.
+
+      WHAT THE PEEK IS: a modal overlay that shows a work item WITHOUT leaving the
+      /issues list, with a prominent path to the full detail page (/issues/[key]).
+      It composes the SAME primitives the detail + row designs already use — the
+      shipped components/ui/Modal, IssueTypeIcon (type hue), Pill (status/priority
+      tones), the initial-letter Avatar — so 2.5.19 invents NO new visual
+      primitive. Tokens copied 1:1 from app/globals.css; colour only through the
+      Tier-3 --el-* layer; shape through the element-semantic radius/size tokens.
+
+      ── The row-trigger problem this design RESOLVES ──
+      The Tree (2.5.3) and List (2.5.8) rows are ALREADY a whole-row link to
+      /issues/[key] — shipped as a wrapping <a class="lt-row" href>. A quick-view
+      <button> CANNOT be nested inside that <a> (no nested interactive elements).
+      Resolution (panel 1): convert the row to a relative <div role="row"> whose
+      TITLE cell holds the navigation <a> rendered as a STRETCHED link (an
+      ::after overlay covering the whole row), and add a trailing ROW-ACTIONS
+      cell whose quick-view icon <button> is layered ABOVE the overlay (z-index).
+      Button and link are SIBLINGS, never nested. One shared row-cell change
+      serves BOTH Tree and List.
+
+      Panels:
+        1 · Row trigger — List/Tree row gains a trailing actions cell + quick-view
+            button (rest vs. hover/focus); the stretched-link resolution.
+        2 · Peek modal — populated (condensed detail subset + "Open full page →").
+        3 · Peek modal — LOADING (fields fetch when the modal opens).
+        4 · Peek modal — NOT FOUND / NO ACCESS (stale or forbidden key).
+        5 · Mobile — full-height bottom SHEET on narrow widths.
+      Toggle dark for token parity. See design-notes.md § Quick view (peek) modal.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 6px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 32px;
+        --focus-ring-color: var(--color-primary);
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-warning: var(--color-warning);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        /* issue-type hue (by kind) — IssueTypeIcon applies these */
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #3bb3ae;
+        --color-accent-green: #2fc94f;
+        --color-info: #4aa3ff;
+        --color-destructive: #f0656c;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 12px 40px rgba(15, 15, 15, 0.15);
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 120px;
+      }
+      .review-head {
+        max-width: 1120px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 760px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel-row {
+        max-width: 1120px;
+        margin: 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 40px 48px;
+        align-items: flex-start;
+        justify-content: center;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding-left: 2px;
+        max-width: 520px;
+      }
+      .panel-note {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        max-width: 520px;
+        padding-left: 2px;
+      }
+      .panel-note code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+
+      /* ════════════════════════════════════════════════════════════════════
+         LIST / TREE ROW — copied from list.mock.html, with the 2.5.19 change:
+         a trailing ROW-ACTIONS column + the stretched-link resolution.
+         ════════════════════════════════════════════════════════════════════ */
+      .list-table {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+        width: 720px;
+        max-width: 100%;
+      }
+      /* Grid — the shipped 7-col set + a NEW trailing 40px actions cell.
+         Before: minmax(0,1fr) 120px 150px 150px 120px 90px 130px
+         After : … + 40px   (Tree + List share this template). */
+      .lt-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 120px 150px 120px 130px 40px;
+        align-items: center;
+        column-gap: 16px;
+        padding: 0 12px 0 16px;
+      }
+      .lt-head {
+        height: 40px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .th {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .th.end {
+        justify-content: flex-end;
+      }
+
+      /* The row is now a RELATIVE container (was the <a>). */
+      .lt-row {
+        position: relative;
+        height: 44px;
+        border-bottom: 1px solid var(--el-border);
+        color: inherit;
+      }
+      .lt-row:last-child {
+        border-bottom: 0;
+      }
+      .lt-row:hover {
+        background: var(--el-surface);
+      }
+      .lt-row:hover .ttl,
+      .lt-row:focus-within .ttl {
+        text-decoration: underline;
+      }
+
+      .cell-title {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .type-icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+
+      /* THE STRETCHED LINK — the navigation <a> lives in the title cell but its
+         ::after overlays the WHOLE row, so clicking anywhere (except the layered
+         actions button) navigates to /issues/[key]. No wrapping <a>; the button
+         is a SIBLING above it. */
+      .row-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        text-decoration: none;
+        color: inherit;
+      }
+      .row-link::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+      }
+      .row-link:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: -2px;
+        border-radius: var(--radius-control);
+      }
+      .lr-id {
+        flex: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .ttl {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      /* Tree-only indent + disclosure (List omits these; same cell otherwise) */
+      .twisty {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-faint);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: 2px 10px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill .pic {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .pill--inprogress {
+        background: var(--el-tint-sky);
+      }
+      .pill--done {
+        background: var(--el-tint-mint);
+      }
+      .pill--warning {
+        background: var(--el-tint-peach);
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+      }
+      .cell-person {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .cell-person .nm {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .cell-meta {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .avatar {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+
+      /* The NEW trailing actions cell — layered ABOVE the stretched link. */
+      .cell-actions {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .qv-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        padding: var(--spacing-icon-btn);
+        border: none;
+        background: transparent;
+        color: var(--el-text-muted);
+        border-radius: var(--radius-control);
+        cursor: pointer;
+        /* hidden at rest; revealed on row hover / keyboard focus.
+           On coarse pointers (touch) it is ALWAYS shown — see @media below. */
+        opacity: 0;
+        transition:
+          opacity 0.12s ease,
+          background 0.12s ease,
+          color 0.12s ease;
+      }
+      .qv-btn svg {
+        width: 17px;
+        height: 17px;
+      }
+      .lt-row:hover .qv-btn,
+      .lt-row:focus-within .qv-btn,
+      .qv-btn:focus-visible {
+        opacity: 1;
+      }
+      .qv-btn:hover {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      .qv-btn:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: var(--focus-ring-offset);
+      }
+      .qv-btn.is-shown {
+        opacity: 1;
+      } /* mock: force-visible on the demo row */
+      @media (hover: none) {
+        .qv-btn {
+          opacity: 1;
+        }
+      }
+
+      /* ════════════════════════════════════════════════════════════════════
+         BACKDROP + MODAL (components/ui/Modal.tsx) — the peek itself.
+         ════════════════════════════════════════════════════════════════════ */
+      .stage {
+        position: relative;
+        width: 560px;
+        max-width: 100%;
+        padding: 28px;
+        border-radius: var(--radius-card);
+        background:
+          repeating-linear-gradient(45deg, rgba(120, 118, 113, 0.06) 0 10px, transparent 10px 20px),
+          var(--el-surface);
+        display: flex;
+        justify-content: center;
+      }
+      /* the dimmed backdrop the Modal renders behind itself */
+      .stage::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: var(--radius-card);
+        background: rgba(15, 15, 15, 0.32);
+      }
+      [data-theme='dark'] .stage::before {
+        background: rgba(0, 0, 0, 0.55);
+      }
+
+      .modal {
+        position: relative;
+        width: 512px; /* Modal size="lg" — max-w-[32rem] */
+        max-width: 100%;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: transparent;
+        color: var(--el-text-muted);
+        border-radius: var(--radius-control);
+        cursor: pointer;
+      }
+      .modal-close:hover {
+        color: var(--el-text);
+        background: var(--el-muted);
+      }
+
+      /* ── Peek header: type icon + identifier (link) + status pill ─────────── */
+      .peek-eyebrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-right: 32px; /* clear the × button */
+      }
+      .peek-id {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      .peek-id:hover {
+        text-decoration: underline;
+      }
+      .peek-eyebrow .pill {
+        margin-left: auto;
+      }
+      .peek-title {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        line-height: 1.3;
+        color: var(--el-text);
+        margin: 12px 0 0;
+      }
+
+      /* ── Condensed meta strip: the few glanceable fields ──────────────────── */
+      .peek-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px 28px;
+        margin: 18px 0 0;
+        padding: 0;
+      }
+      .peek-meta .m {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        min-width: 0;
+        margin: 0;
+      }
+      .peek-meta dt {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .peek-meta dd {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .peek-meta dd.unassigned {
+        color: var(--el-text-muted);
+      }
+
+      /* ── Description excerpt — clamped; the rest lives on the full page ────── */
+      .peek-desc {
+        margin: 20px 0 0;
+        padding-top: 18px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .peek-desc .lbl {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        display: block;
+        margin-bottom: 7px;
+      }
+      .peek-desc p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+
+      /* ── Footer: the prominent "Open full page →" affordance ──────────────── */
+      .peek-foot {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 22px;
+        padding-top: var(--spacing-md);
+        border-top: 1px solid var(--el-border);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid transparent;
+        text-decoration: none;
+      }
+      .btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border);
+      }
+      .btn-ghost:hover {
+        background: var(--el-muted);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-primary:hover {
+        background: var(--el-accent-pressed);
+      }
+
+      /* ── LOADING skeleton (fields fetch when the modal opens) ─────────────── */
+      .sk {
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.55;
+        }
+      }
+      .sk-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* ── NOT FOUND / NO ACCESS empty state inside the modal ───────────────── */
+      .peek-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 6px;
+        padding: 28px 12px 8px;
+      }
+      .peek-empty .glyph {
+        width: 44px;
+        height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-muted);
+        color: var(--el-text-muted);
+        margin-bottom: 6px;
+      }
+      .peek-empty .glyph svg {
+        width: 22px;
+        height: 22px;
+      }
+      .peek-empty h3 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 17px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .peek-empty p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        max-width: 320px;
+        line-height: 1.5;
+      }
+
+      /* ── Phone frame + bottom SHEET (narrow-width treatment) ──────────────── */
+      .phone {
+        position: relative;
+        width: 340px;
+        height: 580px;
+        border-radius: 28px;
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-surface);
+        overflow: hidden;
+        box-shadow: var(--shadow-elevated);
+      }
+      .phone::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: rgba(15, 15, 15, 0.36);
+        z-index: 1;
+      }
+      .sheet {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 2;
+        background: var(--el-page-bg);
+        border-top-left-radius: var(--radius-modal);
+        border-top-right-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: 20px;
+        max-height: 88%;
+        overflow: auto;
+      }
+      .sheet .grab {
+        width: 36px;
+        height: 4px;
+        border-radius: 9999px;
+        background: var(--el-border-strong);
+        margin: 0 auto 14px;
+      }
+      .sheet .peek-foot .btn {
+        flex: 1;
+        justify-content: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Work-item quick view (peek)</h1>
+        <p>
+          Story 2.5 · design for 2.5.18 → 2.5.19. A modal that previews a work item without leaving
+          <code>/issues</code>, with a prominent path to the full detail page. Composes the shipped
+          Modal · IssueTypeIcon · Pill · Avatar — no new primitive. The row gains a trailing actions
+          cell + a stretched-link so the quick-view <em>button</em> never nests inside the row
+          <em>link</em>. Built from the real <code>--el-*</code> tokens.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18M6 6l12 12" />
+        </g>
+        <!-- eye = the quick-view trigger glyph -->
+        <g
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <!-- arrow-right = "Open full page →" -->
+        <g
+          id="i-arrow-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </g>
+        <!-- search-x = not found -->
+        <g
+          id="i-search-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m13.5 8.5-5 5" />
+          <path d="m8.5 8.5 5 5" />
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <!-- lock = no access -->
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+      </defs>
+    </svg>
+
+    <div class="panel-row">
+      <!-- ═══════════ PANEL 1 — Row trigger (the resolution) ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">1 · Row trigger — trailing actions cell + stretched row link</div>
+        <div class="list-table" role="table" aria-label="Issues">
+          <div class="lt-grid lt-head" role="row">
+            <div class="th" role="columnheader">Title</div>
+            <div class="th" role="columnheader">Priority</div>
+            <div class="th" role="columnheader">Assignee</div>
+            <div class="th" role="columnheader">Due</div>
+            <div class="th" role="columnheader">Status</div>
+            <div class="th end" role="columnheader"><span class="sr">Actions</span></div>
+          </div>
+
+          <!-- rest state — quick-view button hidden until hover/focus -->
+          <div class="lt-row" role="row">
+            <span class="cell-title">
+              <span class="type-icon t-epic"
+                ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+              ></span>
+              <a class="row-link" href="#/issues/PROD-12">
+                <span class="lr-id">PROD-12</span>
+                <span class="ttl">Q3 launch — Auth &amp; sign-in</span>
+              </a>
+            </span>
+            <span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="cell-meta" style="color: var(--el-text-muted)">—</span>
+            <span><span class="pill pill--inprogress">in-progress</span></span>
+            <span class="cell-actions">
+              <button
+                class="qv-btn"
+                aria-label="Quick view PROD-12: Q3 launch — Auth &amp; sign-in"
+              >
+                <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+              </button>
+            </span>
+          </div>
+
+          <!-- hover/focus state — quick-view button revealed (forced for the mock) -->
+          <div class="lt-row" role="row" style="background: var(--el-surface)">
+            <span class="cell-title">
+              <span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+              ></span>
+              <a class="row-link" href="#/issues/PROD-23">
+                <span class="lr-id">PROD-23</span>
+                <span class="ttl" style="text-decoration: underline">Email + password sign-in</span>
+              </a>
+            </span>
+            <span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+            >
+            <span class="cell-meta">Jun 12, 2026</span>
+            <span><span class="pill pill--inprogress">in-progress</span></span>
+            <span class="cell-actions">
+              <button
+                class="qv-btn is-shown"
+                aria-label="Quick view PROD-23: Email + password sign-in"
+                title="Quick view"
+              >
+                <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+              </button>
+            </span>
+          </div>
+
+          <!-- a Tree row — same cells + actions cell; adds the disclosure twisty -->
+          <div class="lt-row" role="row">
+            <span class="cell-title" style="padding-left: 20px">
+              <svg class="twisty" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              <span class="type-icon t-task"
+                ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+              ></span>
+              <a class="row-link" href="#/issues/PROD-31">
+                <span class="lr-id">PROD-31</span>
+                <span class="ttl">Hash + verify passwords (argon2id)</span>
+              </a>
+            </span>
+            <span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            >
+            <span class="cell-person"
+              ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+            >
+            <span class="cell-meta" style="color: var(--el-text-muted)">—</span>
+            <span><span class="pill pill--done">done</span></span>
+            <span class="cell-actions">
+              <button class="qv-btn" aria-label="Quick view PROD-31: Hash + verify passwords">
+                <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+              </button>
+            </span>
+          </div>
+        </div>
+        <p class="panel-note">
+          The whole-row navigation link is rendered as a <strong>stretched link</strong> (an
+          <code>::after</code> overlay on the relative row) instead of a wrapping
+          <code>&lt;a&gt;</code>. The quick-view <code>&lt;button&gt;</code> lives in a trailing
+          actions cell layered <em>above</em> the overlay (<code>z-index</code>), so button and link
+          are siblings — never nested. The button is hidden at rest, revealed on row
+          <code>:hover</code> / <code>:focus-within</code>, and always shown on touch. One shared
+          row change serves both Tree and List. (Columns abbreviated here; the real grid keeps the
+          shipped 7-column set + this 8th 40px actions cell.)
+        </p>
+      </div>
+
+      <!-- ═══════════ PANEL 2 — Peek modal, populated ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">2 · Quick view — populated (condensed detail subset)</div>
+        <div class="stage">
+          <div class="modal" role="dialog" aria-modal="true" aria-labelledby="qv-title">
+            <button class="modal-close" aria-label="Close quick view">
+              <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+            <div class="peek-eyebrow">
+              <span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+              ></span>
+              <a class="peek-id" href="#/issues/PROD-23">PROD-23</a>
+              <span class="pill pill--inprogress">in-progress</span>
+            </div>
+            <h2 class="peek-title" id="qv-title">Email + password sign-in</h2>
+
+            <dl class="peek-meta">
+              <div class="m">
+                <dt>Assignee</dt>
+                <dd><span class="avatar">M</span>Marco Ortiz</dd>
+              </div>
+              <div class="m">
+                <dt>Priority</dt>
+                <dd>
+                  <span class="pill pill--neutral"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+                  >
+                </dd>
+              </div>
+              <div class="m">
+                <dt>Due date</dt>
+                <dd>Jun 12, 2026</dd>
+              </div>
+            </dl>
+
+            <div class="peek-desc">
+              <span class="lbl">Description</span>
+              <p>
+                Let a returning user sign in with their email address and password. Validate the
+                credentials against the stored argon2id hash, establish a session, and route to the
+                workspace they last visited. Surface a single generic error for any wrong
+                email-or-password combination — never reveal which field was wrong — and rate-limit
+                repeated failures per account.
+              </p>
+            </div>
+
+            <div class="peek-foot">
+              <button class="btn btn-ghost">Close</button>
+              <a class="btn btn-primary" href="#/issues/PROD-23">
+                Open full page
+                <svg viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+              </a>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The peek shows a <strong>condensed subset</strong> of the 2.4 detail page: type icon +
+          linked <code>PROD-N</code> + Status pill (header), title, the three glanceable meta fields
+          (Assignee · Priority · Due), and a 3-line description excerpt. Reporter, Estimate,
+          parent/children, relationships, labels, full Markdown description/explanation, and the
+          activity feed stay <strong>detail-only</strong> — reached via the prominent
+          <em>Open full page →</em> button (and the header identifier). Backdrop click, the
+          <code>×</code>, and <kbd>Esc</kbd> all close; the Modal primitive handles focus-trap +
+          return-focus to the triggering row button.
+        </p>
+      </div>
+
+      <!-- ═══════════ PANEL 3 — Peek modal, loading ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">3 · Quick view — loading (fields fetch on open)</div>
+        <div class="stage">
+          <div
+            class="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-busy="true"
+            aria-label="Loading issue"
+          >
+            <button class="modal-close" aria-label="Close quick view">
+              <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+            <div class="peek-eyebrow">
+              <span class="sk" style="width: 16px; height: 16px; border-radius: 4px"></span>
+              <span class="sk" style="width: 64px; height: 12px"></span>
+              <span
+                class="sk"
+                style="margin-left: auto; width: 86px; height: 20px; border-radius: 9999px"
+              ></span>
+            </div>
+            <div class="sk" style="width: 78%; height: 22px; margin-top: 14px"></div>
+
+            <dl class="peek-meta">
+              <div class="m">
+                <dt><span class="sk" style="width: 52px; height: 9px; display: block"></span></dt>
+                <dd>
+                  <span class="sk" style="width: 22px; height: 22px; border-radius: 9999px"></span>
+                  <span class="sk" style="width: 78px; height: 13px"></span>
+                </dd>
+              </div>
+              <div class="m">
+                <dt><span class="sk" style="width: 44px; height: 9px; display: block"></span></dt>
+                <dd>
+                  <span class="sk" style="width: 64px; height: 18px; border-radius: 9999px"></span>
+                </dd>
+              </div>
+              <div class="m">
+                <dt><span class="sk" style="width: 48px; height: 9px; display: block"></span></dt>
+                <dd><span class="sk" style="width: 82px; height: 13px"></span></dd>
+              </div>
+            </dl>
+
+            <div class="peek-desc">
+              <span class="lbl">Description</span>
+              <div class="sk" style="width: 100%; height: 12px; margin-bottom: 8px"></div>
+              <div class="sk" style="width: 96%; height: 12px; margin-bottom: 8px"></div>
+              <div class="sk" style="width: 60%; height: 12px"></div>
+            </div>
+
+            <div class="peek-foot">
+              <button class="btn btn-ghost">Close</button>
+              <a class="btn btn-primary" href="#/issues/PROD-23">
+                Open full page
+                <svg viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+              </a>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The modal opens immediately (URL-driven via <code>?peek=PROD-23</code>); the item's fields
+          fetch in the background. Skeleton bars (<code>--el-muted</code>, gentle pulse) hold the
+          header / meta / description layout so the modal doesn't resize when data lands. The
+          <em>Open full page</em> link is live even while loading.
+        </p>
+      </div>
+
+      <!-- ═══════════ PANEL 4 — Peek modal, not found / no access ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">
+          4 · Quick view — not found / no access (stale or forbidden key)
+        </div>
+        <div class="stage">
+          <div class="modal" role="dialog" aria-modal="true" aria-label="Issue unavailable">
+            <button class="modal-close" aria-label="Close quick view">
+              <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+            <div class="peek-empty">
+              <span class="glyph"
+                ><svg viewBox="0 0 24 24"><use href="#i-search-x" /></svg
+              ></span>
+              <h3>This issue isn’t available</h3>
+              <p>
+                <code style="font-family: var(--font-mono)">PROD-23</code> may have been moved,
+                deleted, or it’s in a workspace you don’t have access to.
+              </p>
+            </div>
+            <div class="peek-foot" style="justify-content: center; border-top: 0; padding-top: 4px">
+              <button class="btn btn-ghost">Close</button>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          A stale <code>?peek=</code> key (deleted issue) or a forbidden one (cross-workspace —
+          finding #44's pure-workspace gate returns the same not-found, never leaking existence)
+          shows this single empty state. The <code>search-x</code> glyph covers not-found; a
+          <code>lock</code> glyph variant covers an explicit no-access message where the product
+          chooses to distinguish them. No <em>Open full page</em> button here — there is no page to
+          open.
+        </p>
+      </div>
+
+      <!-- ═══════════ PANEL 5 — Mobile bottom sheet ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">5 · Narrow width — full-height bottom sheet</div>
+        <div class="phone">
+          <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="qv-title-m">
+            <div class="grab"></div>
+            <div class="peek-eyebrow">
+              <span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+              ></span>
+              <a class="peek-id" href="#/issues/PROD-23">PROD-23</a>
+              <span class="pill pill--inprogress">in-progress</span>
+            </div>
+            <h2 class="peek-title" id="qv-title-m">Email + password sign-in</h2>
+            <dl class="peek-meta">
+              <div class="m">
+                <dt>Assignee</dt>
+                <dd><span class="avatar">M</span>Marco Ortiz</dd>
+              </div>
+              <div class="m">
+                <dt>Priority</dt>
+                <dd>
+                  <span class="pill pill--neutral"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+                  >
+                </dd>
+              </div>
+              <div class="m">
+                <dt>Due date</dt>
+                <dd>Jun 12, 2026</dd>
+              </div>
+            </dl>
+            <div class="peek-desc">
+              <span class="lbl">Description</span>
+              <p>
+                Let a returning user sign in with their email address and password. Validate the
+                credentials against the stored argon2id hash, establish a session, and route to the
+                workspace they last visited.
+              </p>
+            </div>
+            <div class="peek-foot">
+              <a class="btn btn-primary" href="#/issues/PROD-23">
+                Open full page
+                <svg viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+              </a>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          On narrow viewports the same Modal renders as a full-width bottom
+          <strong>sheet</strong> (rounded top corners, grab handle, scrollable, max-height ~88%)
+          rather than a centered dialog — the standard mobile treatment. The
+          <em>Open full page</em> button goes full-width as the primary action; close is the
+          backdrop / swipe-down / <kbd>Esc</kbd>.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
