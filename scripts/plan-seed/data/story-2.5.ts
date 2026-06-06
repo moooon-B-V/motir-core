@@ -866,7 +866,7 @@ export const story_2_5: PlanStory = {
     {
       id: '2.5.19',
       title: 'Work-item quick-view modal in `/issues` (URL-driven peek + "Open full page")',
-      status: 'planned',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 15,
