@@ -233,7 +233,10 @@ export function Combobox<T extends string>({
       {open ? (
         <div
           className={cn(
-            'absolute left-0 right-0 top-full z-50 mt-1 rounded-(--radius-card) bg-(--el-page-bg) p-1',
+            // Size to the widest option (so a narrow inline-edit cell's dropdown
+            // isn't cramped), but never narrower than the trigger and capped so a
+            // long label can't run off-screen.
+            'absolute left-0 top-full z-50 mt-1 w-max min-w-full max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-1',
             'shadow-(--shadow-elevated) border border-(--el-border)',
           )}
         >

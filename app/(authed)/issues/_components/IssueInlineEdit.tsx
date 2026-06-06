@@ -388,6 +388,9 @@ function InlineEstimateEditor({ row }: { row: IssueRowData }) {
           type="number"
           min={0}
           aria-label={t('estimateMinutes')}
+          // Hide the native number spinners — they overflow the narrow estimate
+          // cell; the value is typed. Right-align to match the column.
+          className="text-right [appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
