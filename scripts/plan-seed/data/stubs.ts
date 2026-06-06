@@ -20,16 +20,7 @@ export const STUB_STORIES: PlanStory[] = [
   },
 
   // ── Epic 3: Boards ─────────────────────────────────────────────────────────
-  {
-    id: '3.1',
-    title: 'Board data model + column-from-workflow projection',
-    status: 'planned',
-    descriptionMd:
-      "A board config entity (per project) deriving columns from Epic 2's workflow statuses. The " +
-      'board is a read projection over issues; moving a card = a workflow transition, not a ' +
-      'board-local state write.',
-    items: [],
-  },
+  // 3.1 is fully expanded → data/story-3.1.ts (assembled in index.ts).
   {
     id: '3.2',
     title: 'Kanban board UI + drag-drop transitions',
