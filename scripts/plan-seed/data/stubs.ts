@@ -9,16 +9,7 @@ import type { PlanStory } from '../types';
  */
 export const STUB_STORIES: PlanStory[] = [
   // ── Epic 3: Boards ─────────────────────────────────────────────────────────
-  // 3.1 is fully expanded → data/story-3.1.ts (assembled in index.ts).
-  {
-    id: '3.2',
-    title: 'Kanban board UI + drag-drop transitions',
-    status: 'planned',
-    descriptionMd:
-      'The board surface: columns, cards, drag-drop with optimistic move and server-side ' +
-      'transition validation (illegal moves snap back). Accessible keyboard DnD.',
-    items: [],
-  },
+  // 3.1, 3.2 are fully expanded → data/story-3.1.ts, data/story-3.2.ts (assembled in index.ts).
   {
     id: '3.3',
     title: 'Swimlanes + WIP limits',
