@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
@@ -26,6 +34,21 @@ import { cn } from '@/lib/utils/cn';
 //   keys move focus and expand/collapse, Enter activates the row's link. Inner
 //   controls (the chevron) are tabIndex=-1 — operated via the row keyboard +
 //   mouse, never a second tab stop.
+//
+// VIRTUALIZATION (Subtask 2.5.15) — a deeply-expanded forest can hold thousands
+// of rows. To keep the DOM bounded, the body WINDOWS its rows: only the rows in
+// (or near) the viewport mount; off-view rows are removed; the rowgroup keeps its
+// FULL height and each mounted row is absolutely positioned at `index * ROW_PX`,
+// so the page scrollbar stays honest. It is INVISIBLE — a windowed row is
+// identical to a non-windowed one — and A11Y-HONEST: every mounted row keeps its
+// true `aria-level/posinset/setsize/expanded` from the flat model, so a screen
+// reader announces the real position though only a window exists. The roving
+// keyboard model is unchanged: arrow-moving to an off-window row scrolls it into
+// view (which mounts it) and then focuses it. The scroll viewport is the nearest
+// scrollable ANCESTOR (the shell `<main>`; no internal scrollbar, no layout
+// change) — or a `getScrollElement` the caller supplies. When no viewport can be
+// measured (SSR, or a viewport-less test) it degrades to rendering EVERY row, so
+// the markup is identical with or without a live scroll container.
 
 /** A column definition. The FIRST column is the tree column (indent + chevron). */
 export interface TreeTableColumn<Row> {
@@ -99,11 +122,20 @@ export interface TreeTableProps<Row> {
   onRowActivate?: (id: string, data: Row) => void;
   /** Optional per-row `data-testid` (handy for E2E hooks). */
   getRowTestId?: (row: Row) => string | undefined;
+  /**
+   * The scroll viewport the body windows against (Subtask 2.5.15). Defaults to
+   * the nearest scrollable ANCESTOR of the table (the shell `<main>`); supply a
+   * custom resolver to point at a different element (or to drive the window
+   * deterministically in tests). Return `null` to disable windowing (render all).
+   */
+  getScrollElement?: () => HTMLElement | null;
   /** Extra classes on the outer container. */
   className?: string;
 }
 
 const INDENT_PX = 22; // per-level indent (design/work-items/tree.pen)
+const ROW_PX = 40; // fixed row height — the windowing unit (design/work-items/tree-scale.mock.html)
+const OVERSCAN = 8; // rows mounted beyond each viewport edge so fast scroll never flashes a gap
 
 /** A row flattened for rendering, carrying the tree metadata aria needs. */
 interface FlatRow<Row> {
@@ -116,6 +148,12 @@ interface FlatRow<Row> {
   posinset: number; // 1-based among siblings
   setsize: number;
   parentId: string | null;
+}
+
+/** The windowed slice of the flat rows: `[start, end)` indices currently mounted. */
+interface RowWindow {
+  start: number;
+  end: number;
 }
 
 /** Depth-first flatten of the visible rows, honoring the expanded set. */
@@ -150,6 +188,17 @@ function flattenVisible<Row>(
   });
 }
 
+/** Walk up from `el` to the nearest ancestor that scrolls vertically. */
+function findScrollParent(el: HTMLElement | null): HTMLElement | null {
+  let node = el?.parentElement ?? null;
+  while (node && node !== document.body && node !== document.documentElement) {
+    const overflowY = getComputedStyle(node).overflowY;
+    if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
 export function TreeTable<Row>({
   label,
   columns,
@@ -161,6 +210,7 @@ export function TreeTable<Row>({
   getRowLabel,
   getRowTestId,
   onRowActivate,
+  getScrollElement,
   className,
 }: TreeTableProps<Row>) {
   const isControlled = expandedIds !== undefined;
@@ -185,8 +235,76 @@ export function TreeTable<Row>({
     return visible[0]?.id ?? null;
   }, [focusedId, visible]);
 
+  const bodyRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const linkRefs = useRef(new Map<string, HTMLAnchorElement>());
+
+  // ── Windowing (Subtask 2.5.15) ───────────────────────────────────────────
+  // `rowWindow` null = not virtualizing → render every row (SSR / no measurable
+  // viewport / the existing small-tree tests). Otherwise only [start,end) mount.
+  const scrollElRef = useRef<HTMLElement | null>(null);
+  const [rowWindow, setRowWindow] = useState<RowWindow | null>(null);
+
+  // Distance (px) from the scroll viewport's top edge to the row at index 0.
+  // Scroll-invariant, so reading it on every recompute self-corrects when the
+  // content ABOVE the table (page header, toolbar) changes height.
+  const bodyOffset = useCallback((): number => {
+    const scrollEl = scrollElRef.current;
+    const body = bodyRef.current;
+    if (!scrollEl || !body) return 0;
+    return (
+      body.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop
+    );
+  }, []);
+
+  const recomputeWindow = useCallback(() => {
+    const scrollEl = scrollElRef.current;
+    const viewportH = scrollEl?.clientHeight ?? 0;
+    if (!scrollEl || viewportH <= 0) {
+      setRowWindow(null); // no measurable viewport → render all
+      return;
+    }
+    const top = scrollEl.scrollTop - bodyOffset(); // px from the body's top to the viewport's top
+    const first = Math.floor(top / ROW_PX) - OVERSCAN;
+    const last = Math.ceil((top + viewportH) / ROW_PX) + OVERSCAN;
+    setRowWindow((prev) =>
+      prev && prev.start === first && prev.end === last ? prev : { start: first, end: last },
+    );
+  }, [bodyOffset]);
+
+  // Resolve + observe the scroll viewport once mounted; re-window on scroll/resize.
+  useLayoutEffect(() => {
+    const scrollEl = getScrollElement ? getScrollElement() : findScrollParent(bodyRef.current);
+    scrollElRef.current = scrollEl;
+    if (!scrollEl) {
+      setRowWindow(null);
+      return;
+    }
+    recomputeWindow();
+    const onScroll = () => recomputeWindow();
+    scrollEl.addEventListener('scroll', onScroll, { passive: true });
+    let resizeObserver: ResizeObserver | undefined;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => recomputeWindow());
+      resizeObserver.observe(scrollEl);
+    }
+    return () => {
+      scrollEl.removeEventListener('scroll', onScroll);
+      resizeObserver?.disconnect();
+    };
+  }, [getScrollElement, recomputeWindow]);
+
+  // The visible-row count changes when a node expands/collapses, so the window
+  // must be recomputed against the new total height.
+  useLayoutEffect(() => {
+    recomputeWindow();
+  }, [visible.length, recomputeWindow]);
+
+  const total = visible.length;
+  const windowing = rowWindow !== null && total > 0;
+  const start = windowing ? Math.max(0, Math.min(rowWindow.start, total)) : 0;
+  const end = windowing ? Math.max(start, Math.min(rowWindow.end, total)) : total;
+  const windowRows = windowing ? visible.slice(start, end) : visible;
 
   const setExpanded = useCallback(
     (next: Set<string>) => {
@@ -206,16 +324,61 @@ export function TreeTable<Row>({
     [expanded, setExpanded],
   );
 
+  // Scroll a row's index into the viewport (windowing only) so an off-window row
+  // mounts before we try to focus it. A no-op when not virtualizing.
+  const scrollIndexIntoView = useCallback(
+    (index: number) => {
+      const scrollEl = scrollElRef.current;
+      if (!scrollEl || rowWindow === null) return;
+      const rowTop = bodyOffset() + index * ROW_PX;
+      const rowBottom = rowTop + ROW_PX;
+      const viewTop = scrollEl.scrollTop;
+      const viewBottom = viewTop + scrollEl.clientHeight;
+      let next = viewTop;
+      if (rowTop < viewTop) next = rowTop;
+      else if (rowBottom > viewBottom) next = rowBottom - scrollEl.clientHeight;
+      if (next !== viewTop) {
+        scrollEl.scrollTop = next;
+        recomputeWindow(); // setting scrollTop doesn't always fire 'scroll' synchronously
+      }
+    },
+    [rowWindow, bodyOffset, recomputeWindow],
+  );
+
+  // The row id we want focused once it has mounted (set when an arrow key lands
+  // on a row outside the current window; cleared by the effect below).
+  const pendingFocusId = useRef<string | null>(null);
+
   const focusRowAt = useCallback(
     (index: number) => {
       const clamped = Math.max(0, Math.min(index, visible.length - 1));
       const target = visible[clamped];
       if (!target) return;
       setFocusedId(target.id);
-      rowRefs.current.get(target.id)?.focus();
+      scrollIndexIntoView(clamped);
+      const el = rowRefs.current.get(target.id);
+      if (el) {
+        el.focus();
+        pendingFocusId.current = null;
+      } else {
+        // Off-window: it will mount after the scroll re-windows; focus it then.
+        pendingFocusId.current = target.id;
+      }
     },
-    [visible],
+    [visible, scrollIndexIntoView],
   );
+
+  // After a re-window, focus a row an arrow key landed on that hadn't mounted yet
+  // (so the roving tabindex stays intact across the virtualization boundary).
+  useEffect(() => {
+    const id = pendingFocusId.current;
+    if (!id) return;
+    const el = rowRefs.current.get(id);
+    if (el) {
+      el.focus();
+      pendingFocusId.current = null;
+    }
+  }, [rowWindow, visible]);
 
   const onRowKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>, row: FlatRow<Row>, index: number) => {
@@ -292,7 +455,7 @@ export function TreeTable<Row>({
           <div
             role="row"
             className="sticky top-0 z-20 grid items-center gap-x-4 border-b border-(--el-border) bg-(--el-surface-soft) pr-7 pl-4"
-            style={{ gridTemplateColumns: gridTemplate, height: 40 }}
+            style={{ gridTemplateColumns: gridTemplate, height: ROW_PX }}
           >
             {columns.map((col) => (
               <div
@@ -311,10 +474,17 @@ export function TreeTable<Row>({
         </div>
 
         {/* Body — omitted entirely when there are no rows (the consumer renders
-            its own empty state; an empty rowgroup adds nothing to convey). */}
-        {visible.length > 0 ? (
-          <div role="rowgroup">
-            {visible.map((row, index) => {
+            its own empty state; an empty rowgroup adds nothing to convey). When
+            windowing, the rowgroup keeps the FULL height so the scrollbar stays
+            honest, and each mounted row is absolutely positioned at its index. */}
+        {total > 0 ? (
+          <div
+            role="rowgroup"
+            ref={bodyRef}
+            style={windowing ? { position: 'relative', height: total * ROW_PX } : undefined}
+          >
+            {windowRows.map((row, i) => {
+              const index = start + i;
               const href = getRowHref?.(row.data);
               const rowLabel = getRowLabel?.(row.data);
               const testId = getRowTestId?.(row.data);
@@ -338,8 +508,19 @@ export function TreeTable<Row>({
                   onClick={
                     !href && onRowActivate ? () => onRowActivate(row.id, row.data) : undefined
                   }
-                  className="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:-outline-offset-2"
-                  style={{ gridTemplateColumns: gridTemplate, height: 40 }}
+                  className={cn(
+                    'group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:-outline-offset-2',
+                    // Strip the trailing border only when EVERY row renders — a
+                    // windowed slice's last DOM row usually has rows below it.
+                    !windowing && 'last:border-b-0',
+                  )}
+                  style={{
+                    gridTemplateColumns: gridTemplate,
+                    height: ROW_PX,
+                    ...(windowing
+                      ? { position: 'absolute', top: index * ROW_PX, left: 0, right: 0 }
+                      : null),
+                  }}
                 >
                   {/* Tree column — indent + chevron slot + the consumer's cell. */}
                   <div
