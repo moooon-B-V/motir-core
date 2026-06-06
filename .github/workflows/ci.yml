@@ -104,6 +104,14 @@ jobs:
   test:
     name: Vitest (integration + coverage)
     runs-on: ubuntu-latest
+    # Skip the integration suite on plan-seed and design PRs, same as E2E
+    # below. A `seed/*` PR only edits scripts/plan-seed/** and a `design/*` PR
+    # only edits design/** — neither touches app code, services, or
+    # repositories, so the integration tests (which run against a real Postgres
+    # to exercise that code) have nothing new to cover. lint/typecheck/build
+    # still run. github.head_ref is the PR source branch (empty on
+    # push-to-main, where the suite runs normally).
+    if: ${{ !startsWith(github.head_ref, 'seed/') && !startsWith(github.head_ref, 'design/') }}
     services:
       postgres:
         image: postgres:16-alpine
