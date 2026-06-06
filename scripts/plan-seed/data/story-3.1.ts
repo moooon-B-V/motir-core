@@ -133,7 +133,7 @@ export const story_3_1: PlanStory = {
       id: '3.1.2',
       title:
         'Default-board seed (`lib/boards/defaultBoard.ts`) wired into `createProject` + backfill',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 16,
