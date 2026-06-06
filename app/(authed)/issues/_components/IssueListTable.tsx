@@ -102,7 +102,24 @@ export function IssueListTable({
             style={{ gridTemplateColumns: gridTemplate, height: 40 }}
           >
             {columns.map((col) => {
-              const active = sort.column === col.sortColumn;
+              // The non-sortable trailing actions column (2.5.19): a plain
+              // columnheader with a screen-reader-only label, no sort button.
+              if (!col.sortColumn) {
+                return (
+                  <div
+                    key={col.key}
+                    role="columnheader"
+                    className={cn(
+                      'flex min-w-0 items-center',
+                      col.align === 'end' && 'justify-end',
+                    )}
+                  >
+                    <span className="sr-only">{col.header}</span>
+                  </div>
+                );
+              }
+              const sortColumn = col.sortColumn;
+              const active = sort.column === sortColumn;
               const ariaSort = active
                 ? sort.direction === 'asc'
                   ? 'ascending'
@@ -118,7 +135,7 @@ export function IssueListTable({
                 >
                   <button
                     type="button"
-                    onClick={() => onSort(col.sortColumn)}
+                    onClick={() => onSort(sortColumn)}
                     title={t('issues.list.sortBy', { header: col.header })}
                     className="group/sort inline-flex max-w-full items-center gap-1 text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
                   >

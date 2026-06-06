@@ -50,6 +50,12 @@ const contentVariants = cva(
         sm: 'max-w-[24rem]',
         md: 'max-w-[28rem]',
         lg: 'max-w-[32rem]',
+        // The large peek surface (Subtask 2.5.19's quick view) — a generous
+        // dialog that takes a big part of the screen; pairs with a height +
+        // p-0 className on the consumer side. Stock Tailwind 4xl rem value, so
+        // the design-system --spacing-* scale stays untouched (see the comment
+        // above on why we pin rems instead of max-w-{key}).
+        xl: 'max-w-[58rem]',
       },
     },
     defaultVariants: { size: 'md' },
@@ -64,6 +70,14 @@ export interface ModalProps extends VariantProps<typeof contentVariants> {
   children?: ReactNode;
   /** Hide the default close (×) button in the corner. */
   hideClose?: boolean;
+  /**
+   * Accessible name for a dialog that renders its OWN visible heading (so no
+   * `title` is passed). Radix requires a Dialog.Title; without `title`/`srTitle`
+   * we fall back to the generic "Dialog". Supply this to label the dialog with
+   * something meaningful (e.g. the previewed issue's key) while keeping the
+   * heading inside `children` (Subtask 2.5.19's quick-view peek).
+   */
+  srTitle?: string;
   className?: string;
 }
 
@@ -74,6 +88,7 @@ function ModalRoot({
   description,
   size,
   hideClose,
+  srTitle,
   className,
   children,
 }: ModalProps) {
@@ -113,8 +128,10 @@ function ModalRoot({
               ) : null}
             </div>
           ) : (
-            // Radix requires Title for a11y; provide a visually-hidden one if missing.
-            <Dialog.Title className="sr-only">{tc('dialog')}</Dialog.Title>
+            // Radix requires Title for a11y; provide a visually-hidden one if
+            // missing. `srTitle` lets a consumer with its own visible heading
+            // still give the dialog a meaningful accessible name.
+            <Dialog.Title className="sr-only">{srTitle ?? tc('dialog')}</Dialog.Title>
           )}
           {children}
           {!hideClose ? (

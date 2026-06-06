@@ -10,6 +10,7 @@ import {
   InlineDueCell,
   InlineEstimateCell,
 } from './IssueInlineEdit';
+import { QuickViewTrigger } from './QuickViewTrigger';
 import type { IssueRowData } from './issueRows';
 
 // A next-intl global translator (from `useTranslations()` with no namespace), so
@@ -37,14 +38,16 @@ type Translator = ReturnType<typeof useTranslations>;
  * `width`/`align` shape the grid; `sortColumn` is the {@link IssueSortColumn}
  * the List header sorts by when clicked (the Tree ignores it). The flexible
  * Title column has no `width` (it takes the remaining space) and sorts by the
- * issue `key` — the mono identifier leading the cell, the canonical order.
+ * issue `key` — the mono identifier leading the cell, the canonical order. A
+ * column with NO `sortColumn` is non-sortable (the trailing row-actions cell):
+ * both tables render its header as a screen-reader-only label, not a sort button.
  */
 export interface IssueColumn {
   key: string;
   header: string;
   width?: number;
   align?: 'start' | 'end';
-  sortColumn: IssueSortColumn;
+  sortColumn?: IssueSortColumn;
   cell: (row: IssueRowData) => ReactNode;
 }
 
@@ -125,6 +128,18 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
       // Inline-editable inside an IssueInlineEditProvider (2.5.5); read-only Pill
       // otherwise. The cell owns its own category→tone rendering.
       cell: (r) => <InlineStatusCell row={r} />,
+    },
+    {
+      // The trailing row-actions cell (Subtask 2.5.19) — shared by Tree + List
+      // so the quick-view trigger appears in both. Non-sortable (no sortColumn):
+      // its header is a screen-reader-only "Actions" label. The eye button is a
+      // SIBLING of the row's stretched link, raised above it (relative z-10) so
+      // it never nests inside the link (design/work-items/quick-view.mock.html).
+      key: 'actions',
+      header: t('issues.columns.actions'),
+      width: 40,
+      align: 'end',
+      cell: (r) => <QuickViewTrigger identifier={r.identifier} title={r.title} />,
     },
   ];
 }

@@ -28,7 +28,17 @@ export interface IssueTreeStaticTableProps {
 export function IssueTreeStaticTable({ rows, workflow, members }: IssueTreeStaticTableProps) {
   const t = useTranslations();
   const columns: TreeTableColumn<IssueRowData>[] = buildIssueColumns(t).map(
-    ({ key, header, width, align, cell }) => ({ key, header, width, align, cell }),
+    ({ key, header, width, align, cell, sortColumn }) => ({
+      key,
+      // The filtered tree's headers are plain (no sorting here), but the
+      // non-sortable trailing actions column (2.5.19) still needs its label
+      // hidden — a screen-reader-only "Actions" rather than a visible caption.
+      header: sortColumn ? header : <span className="sr-only">{header}</span>,
+      headerLabel: header,
+      width,
+      align,
+      cell,
+    }),
   );
 
   // Expand the roots one level so matched descendants are visible under their
