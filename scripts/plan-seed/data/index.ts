@@ -14,6 +14,7 @@ import { story_2_2 } from './story-2.2';
 import { story_2_3 } from './story-2.3';
 import { story_2_4 } from './story-2.4';
 import { story_2_5 } from './story-2.5';
+import { story_3_1 } from './story-3.1';
 
 /** Every fully-expanded story module (canonical subtask depth). */
 const EXPANDED_STORIES: PlanStory[] = [
@@ -30,6 +31,7 @@ const EXPANDED_STORIES: PlanStory[] = [
   story_2_3,
   story_2_4,
   story_2_5,
+  story_3_1,
 ];
 
 const ALL_STORIES: PlanStory[] = [...EXPANDED_STORIES, ...STUB_STORIES];
