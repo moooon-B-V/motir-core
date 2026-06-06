@@ -22,6 +22,7 @@
  * SEED_DEEP_CHILDREN (defaults below ≈ 2,000 issues).
  */
 /* eslint-disable no-console -- a CLI dev script: console IS its output surface */
+import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads
 import type { Prisma, WorkItemKind } from '@prisma/client';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
