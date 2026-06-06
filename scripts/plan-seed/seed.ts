@@ -176,6 +176,21 @@ async function main() {
         for (const dep of item.dependsOn ?? []) dependsEdges.push({ from: item.id, to: dep });
       }
     }
+
+    // Epic-direct leaves (standalone bugs parented to the epic, Jira shape).
+    for (const item of epic.items ?? []) {
+      await createItem({
+        kind: item.kind ?? 'bug',
+        planId: item.id,
+        title: `${item.id} ${item.title}`,
+        status: PLAN_STATUS_MAP[item.status],
+        descriptionMd: composeDescription(item),
+        explanationMd: item.explanationMd?.trim() ?? null,
+        estimateMinutes: item.estimateMinutes ?? null,
+        parentId: epicId,
+      });
+      for (const dep of item.dependsOn ?? []) dependsEdges.push({ from: item.id, to: dep });
+    }
   }
 
   // ── Link pass: depends_on → `is_blocked_by` (fromItem is_blocked_by toItem) ─
