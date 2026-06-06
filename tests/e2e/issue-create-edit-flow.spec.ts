@@ -225,7 +225,7 @@ test('@smoke a stale edit (the row changed since load) surfaces the refresh bann
   await page.getByLabel('Title').fill('My conflicting edit');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(
-    page.getByText('This issue was edited by someone else. Refresh to see the latest.'),
+    page.getByText('This work item was edited by someone else. Refresh to see the latest.'),
   ).toBeVisible();
 });
 
