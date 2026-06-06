@@ -20,7 +20,7 @@
  * can.
  */
 /* eslint-disable no-console -- a CLI script: console IS its output surface */
-import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads
+import '../_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads (helper is in scripts/, one level up)
 import type { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
@@ -175,6 +175,21 @@ async function main() {
         });
         for (const dep of item.dependsOn ?? []) dependsEdges.push({ from: item.id, to: dep });
       }
+    }
+
+    // Epic-direct leaves (standalone bugs parented to the epic, Jira shape).
+    for (const item of epic.items ?? []) {
+      await createItem({
+        kind: item.kind ?? 'bug',
+        planId: item.id,
+        title: `${item.id} ${item.title}`,
+        status: PLAN_STATUS_MAP[item.status],
+        descriptionMd: composeDescription(item),
+        explanationMd: item.explanationMd?.trim() ?? null,
+        estimateMinutes: item.estimateMinutes ?? null,
+        parentId: epicId,
+      });
+      for (const dep of item.dependsOn ?? []) dependsEdges.push({ from: item.id, to: dep });
     }
   }
 
