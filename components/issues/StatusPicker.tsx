@@ -43,6 +43,10 @@ export interface StatusPickerProps {
   error?: string | null;
   id?: string;
   disabled?: boolean;
+  /** Open the picker immediately on mount (inline-edit cells — Subtask 2.5.5). */
+  autoOpen?: boolean;
+  /** Fired when the picker menu closes without/after a pick (Subtask 2.5.5). */
+  onClose?: () => void;
 }
 
 export function StatusPicker({
@@ -54,6 +58,8 @@ export function StatusPicker({
   error,
   id,
   disabled,
+  autoOpen,
+  onClose,
 }: StatusPickerProps) {
   const t = useTranslations('ui');
   const options = useMemo<ComboboxOption<string>[]>(() => {
@@ -81,6 +87,8 @@ export function StatusPicker({
         label={t('statusPicker.label')}
         id={id}
         disabled={disabled}
+        autoOpen={autoOpen}
+        onClose={onClose}
       />
       {error ? (
         <p className="text-(--el-danger) text-xs" role="alert">

@@ -117,6 +117,7 @@ export function toWorkItemTreeNodeDto(
     reporterId: row.reporterId,
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
     estimateMinutes: row.estimateMinutes,
+    updatedAt: row.updatedAt.toISOString(),
     depth: row.depth,
     hasChildren: children.length > 0,
     matched: row.matched,
@@ -144,6 +145,7 @@ export function toWorkItemListItemDto(row: WorkItemListRow): WorkItemListItemDto
     reporterId: row.reporterId,
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
     estimateMinutes: row.estimateMinutes,
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 

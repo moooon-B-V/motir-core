@@ -16,6 +16,13 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/issues',
 }));
 vi.mock('@/app/(authed)/issues/actions', () => ({ listRootIssuesAction, listChildIssuesAction }));
+// The rows are inline-editable (Subtask 2.5.5), so the cells import the detail
+// page's edit Server Actions — stub them so this client test stays DB-free.
+vi.mock('@/app/(authed)/issues/[key]/edit/actions', () => ({
+  updateIssueAction: vi.fn(),
+  changeStatusAction: vi.fn(),
+}));
+vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
 import { IssueTreeTable } from '@/app/(authed)/issues/_components/IssueTreeTable';
 import type { TreeLevelDto, WorkItemTreeRowDto } from '@/lib/dto/workItems';
@@ -62,6 +69,7 @@ function node(over: Partial<WorkItemTreeRowDto> & { id: string; key: number }): 
     reporterId: 'u1',
     dueDate: null,
     estimateMinutes: null,
+    updatedAt: '2026-06-01T00:00:00.000Z',
     hasChildren: false,
     ...over,
   };

@@ -22,10 +22,15 @@ import { defaultLocale, type Locale } from '@/lib/i18n/locales';
 
 /** The row payload the TreeTable cells render. Fully serializable. */
 export interface IssueRowData {
+  /** The work-item id — the target of the inline-edit Server Actions (2.5.5). */
+  id: string;
   identifier: string;
   title: string;
   /** Drives the type-hued IssueTypeIcon. */
   kind: WorkItemKindDto;
+  /** The raw workflow status KEY (not the label) — what the inline StatusPicker
+   *  edits + `changeStatusAction` commits (2.5.5); `statusLabel` is its display. */
+  status: string;
   /** Human status label (workflow label, or the raw key as a fallback). */
   statusLabel: string;
   /**
@@ -34,8 +39,14 @@ export interface IssueRowData {
    * Pill showing the raw key), mirroring the detail page's ChildList.
    */
   statusCategory: StatusCategoryDto | null;
+  /** The raw assignee userId (or null) — what the inline AssigneePicker edits +
+   *  `updateIssueAction` commits (2.5.5); `assigneeName` is its display. */
+  assigneeId: string | null;
   /** Resolved assignee display name, or null when unassigned. */
   assigneeName: string | null;
+  /** ISO-8601 last-modified stamp — the `expectedUpdatedAt` the inline assignee
+   *  edit submits for optimistic concurrency (2.5.5). */
+  updatedAt: string;
   /** Priority value → the shared PRIORITY_META chip in the cell. */
   priority: WorkItemPriorityDto;
   /** Resolved reporter display name (a reporter is always set). */
@@ -78,12 +89,16 @@ function shapeRowData(
 ): IssueRowData {
   const status = statusByKey.get(item.status);
   return {
+    id: item.id,
     identifier: item.identifier,
     title: item.title,
     kind: item.kind,
+    status: item.status,
     statusLabel: status?.label ?? item.status,
     statusCategory: status?.category ?? null,
+    assigneeId: item.assigneeId,
     assigneeName: item.assigneeId ? (nameById.get(item.assigneeId) ?? null) : null,
+    updatedAt: item.updatedAt,
     priority: item.priority,
     // The reporter always exists; fall back to its id only if the member is
     // somehow missing (e.g. left the workspace) so the cell never blanks.

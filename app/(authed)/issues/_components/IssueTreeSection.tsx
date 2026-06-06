@@ -90,6 +90,8 @@ export async function IssueTreeSection({
         sort={sort}
         filter={filter}
         pagination={{ total, page: clampedPage, pageSize }}
+        workflow={workflow}
+        members={members}
       />
     );
   }
@@ -100,7 +102,13 @@ export async function IssueTreeSection({
   if (filtered) {
     const tree = await workItemsService.getProjectTree(projectId, repoFilter, ctx);
     if (tree.length === 0) return empty;
-    return <IssueTreeStaticTable rows={toIssueRows(tree, workflow, members, locale)} />;
+    return (
+      <IssueTreeStaticTable
+        rows={toIssueRows(tree, workflow, members, locale)}
+        workflow={workflow}
+        members={members}
+      />
+    );
   }
 
   // UNFILTERED tree → the LAZY path (finding #57): load only the first page of

@@ -200,6 +200,9 @@ export interface WorkItemTreeNodeDto {
   reporterId: string;
   dueDate: string | null;
   estimateMinutes: number | null;
+  /** ISO-8601 last-modified stamp — the `expectedUpdatedAt` an inline edit
+   *  (Subtask 2.5.5) submits for optimistic concurrency on `updateIssueAction`. */
+  updatedAt: string;
   depth: number;
   hasChildren: boolean;
   matched: boolean;
@@ -227,6 +230,10 @@ export interface WorkItemListItemDto {
   reporterId: string;
   dueDate: string | null;
   estimateMinutes: number | null;
+  /** ISO-8601 last-modified stamp — the `expectedUpdatedAt` an inline edit
+   *  (Subtask 2.5.5) submits for optimistic concurrency on `updateIssueAction`.
+   *  `WorkItemTreeRowDto` inherits it for the lazy Tree's inline edits. */
+  updatedAt: string;
 }
 
 /**

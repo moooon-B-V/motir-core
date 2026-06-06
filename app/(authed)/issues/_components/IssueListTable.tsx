@@ -13,7 +13,10 @@ import {
   type IssueSortColumn,
 } from '@/lib/issues/issueListView';
 import type { IssueFilter } from '@/lib/issues/issueListFilter';
+import type { WorkflowDto } from '@/lib/dto/workflows';
+import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { buildIssueColumns } from './issueColumns';
+import { IssueInlineEditProvider } from './IssueInlineEdit';
 import { IssueListPager } from './IssueListPager';
 import type { IssueRowData } from './issueRows';
 
@@ -39,9 +42,20 @@ export interface IssueListTableProps {
   filter: IssueFilter;
   /** The server-paged window (Subtask 2.5.12) — drives the footer pager. */
   pagination: { total: number; page: number; pageSize: number };
+  /** The project workflow + workspace members enable inline status/assignee edits
+   *  (Subtask 2.5.5); omit them to render read-only cells. */
+  workflow?: WorkflowDto;
+  members?: WorkspaceMemberDTO[];
 }
 
-export function IssueListTable({ rows, sort, filter, pagination }: IssueListTableProps) {
+export function IssueListTable({
+  rows,
+  sort,
+  filter,
+  pagination,
+  workflow,
+  members,
+}: IssueListTableProps) {
   const router = useRouter();
   const pathname = usePathname();
   const t = useTranslations();
@@ -72,7 +86,7 @@ export function IssueListTable({ rows, sort, filter, pagination }: IssueListTabl
     [router, pathname, sort, filter],
   );
 
-  return (
+  const table = (
     <div className="overflow-hidden rounded-(--radius-card) border border-(--el-border)">
       <div
         role="table"
@@ -165,5 +179,13 @@ export function IssueListTable({ rows, sort, filter, pagination }: IssueListTabl
         onPage={onPage}
       />
     </div>
+  );
+
+  return workflow && members ? (
+    <IssueInlineEditProvider workflow={workflow} members={members}>
+      {table}
+    </IssueInlineEditProvider>
+  ) : (
+    table
   );
 }
