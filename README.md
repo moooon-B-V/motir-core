@@ -61,15 +61,16 @@ You should see a placeholder "Prodect" page on a dark theme — not the default
 
 ### Scripts
 
-| Script              | What it does                                 |
-| ------------------- | -------------------------------------------- |
-| `pnpm dev`          | Start the dev server on `localhost:3000`     |
-| `pnpm build`        | Production build (must pass with 0 warnings) |
-| `pnpm start`        | Start the production server                  |
-| `pnpm lint`         | Run ESLint                                   |
-| `pnpm format`       | Run Prettier and write fixes in place        |
-| `pnpm format:check` | Run Prettier in check mode (used by CI)      |
-| `pnpm typecheck`    | Run `tsc --noEmit`                           |
+| Script               | What it does                                                                                                                                                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm dev`           | Start the dev server on `localhost:3000`                                                                                                                                                                                                                           |
+| `pnpm build`         | Production build (must pass with 0 warnings)                                                                                                                                                                                                                       |
+| `pnpm start`         | Start the production server                                                                                                                                                                                                                                        |
+| `pnpm lint`          | Run ESLint                                                                                                                                                                                                                                                         |
+| `pnpm format`        | Run Prettier and write fixes in place                                                                                                                                                                                                                              |
+| `pnpm format:check`  | Run Prettier in check mode (used by CI)                                                                                                                                                                                                                            |
+| `pnpm typecheck`     | Run `tsc --noEmit`                                                                                                                                                                                                                                                 |
+| `pnpm db:seed:large` | Seed a real-scale demo project (~2,000 issues, deep tree) so the `/issues` List pagination + lazy/virtualized Tree are visible at scale. Idempotent; prints a sign-in. Tune via `SEED_ROOTS` / `SEED_BIG_CHILDREN` / `SEED_SMALL_CHILDREN` / `SEED_DEEP_CHILDREN`. |
 
 ## Project layout
 
