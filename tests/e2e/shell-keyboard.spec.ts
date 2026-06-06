@@ -66,8 +66,8 @@ test.describe('@a11y shell keyboard navigation', () => {
     await expect(palette).toBeVisible();
     await expect(palette).toHaveAttribute('aria-modal', 'true');
 
-    // 5. The search input auto-focuses; typing filters to the Issues action.
-    await page.keyboard.type('iss');
+    // 5. The search input auto-focuses; typing filters to the Work Items action.
+    await page.keyboard.type('work');
     await expect(palette.getByRole('option', { name: 'Go to Work Items' })).toBeVisible();
 
     // 6. ↓ highlights the match, ↵ invokes it → client-navigates to /issues.
