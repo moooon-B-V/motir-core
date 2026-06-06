@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import type { BoardColumn, WorkItem } from '@prisma/client';
 import { db } from '@/lib/db';
 import { boardRepository } from '@/lib/repositories/boardRepository';
 import { boardColumnRepository } from '@/lib/repositories/boardColumnRepository';
@@ -14,7 +15,14 @@ import { toBoardCardDto } from '@/lib/mappers/boardMappers';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { buildDefaultBoard } from '@/lib/boards/defaultBoard';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import type { MoveCardResultDto, MoveCardTarget } from '@/lib/dto/boards';
+import type {
+  BoardColumnDto,
+  BoardProjectionDto,
+  BoardTypeDto,
+  MoveCardResultDto,
+  MoveCardTarget,
+  PagedColumnCardsDto,
+} from '@/lib/dto/boards';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
@@ -129,6 +137,143 @@ export const boardsService = {
   },
 
   /**
+   * The board READ projection (Subtask 3.1.4) — turn a project's default board +
+   * workflow + issues into the column-of-cards shape the 3.2 UI renders, BOUNDED
+   * (never load-all, finding #57). For each column it returns the column meta,
+   * its mapped status keys, the FULL card count, a bounded first page of cards
+   * (ranked by `position`, or by recency for a terminal/done column), and a
+   * `cursor` for lazy "load more". Plus a top-level `unmappedStatuses` — every
+   * project status mapped to NO column (Jira's behaviour: surfaced, never
+   * dropped). Read-only: no transaction; the explicit `workspaceId` gate
+   * (finding #26) is carried into every repo read.
+   *
+   * Throws `BoardNotFoundError` (404) when the project has no board yet (a
+   * project predating the 3.1.2 seed/backfill — the 3.2 UI shows its no-board
+   * state).
+   */
+  async getBoard(projectId: string, ctx: ServiceContext): Promise<BoardProjectionDto> {
+    const board = await boardRepository.findDefaultForProject(projectId, ctx.workspaceId);
+    if (!board) throw new BoardNotFoundError(`default board for project ${projectId}`);
+
+    const [columns, mappings, statuses] = await Promise.all([
+      boardColumnRepository.findByBoard(board.id, ctx.workspaceId),
+      boardColumnStatusRepository.findByBoard(board.id, ctx.workspaceId),
+      workflowsService.listStatusesByProject(projectId, ctx.workspaceId),
+    ]);
+
+    const statusById = new Map(statuses.map((s) => [s.id, s]));
+    const terminalKeys = terminalKeySet(statuses);
+
+    // column id → its mapped LIVE statuses; plus the set of all mapped status
+    // ids (any status NOT in it is unmapped). A mapping to a deleted status is
+    // skipped (no live key) but does not make the status "unmapped".
+    const liveByColumn = new Map<string, WorkflowStatusDto[]>();
+    const mappedStatusIds = new Set<string>();
+    for (const m of mappings) {
+      mappedStatusIds.add(m.statusId);
+      const s = statusById.get(m.statusId);
+      if (!s) continue;
+      const list = liveByColumn.get(m.columnId) ?? [];
+      list.push(s);
+      liveByColumn.set(m.columnId, list);
+    }
+
+    // Build each column's count + bounded first page (per-column, NOT per-card —
+    // bounded by column count, so no N+1 over cards).
+    const built = await Promise.all(
+      columns.map((col) => {
+        const live = (liveByColumn.get(col.id) ?? []).slice().sort(byPosition);
+        const statusKeys = live.map((s) => s.key);
+        const terminal = isTerminalColumn(statusKeys, terminalKeys);
+        return buildColumnPage(projectId, col, statusKeys, terminal, ctx);
+      }),
+    );
+
+    // Batch readiness across EVERY card on the board in ONE pass (finding #21
+    // without an N+1).
+    const allRows = built.flatMap((b) => b.rows);
+    const readyById = await workItemsService.getReadinessForItems(
+      allRows.map((r) => r.id),
+      ctx,
+    );
+
+    const columnsDto: BoardColumnDto[] = built.map((b) => ({
+      id: b.col.id,
+      name: b.col.name,
+      position: b.col.position.toString(),
+      wipLimit: b.col.wipLimit,
+      statusKeys: b.statusKeys,
+      cards: b.rows.map((r) => toBoardCardDto(r, { ready: readyById.get(r.id) ?? true })),
+      totalCount: b.totalCount,
+      cursor: b.cursor,
+    }));
+
+    return {
+      boardId: board.id,
+      name: board.name,
+      type: board.type as BoardTypeDto,
+      columns: columnsDto,
+      unmappedStatuses: statuses.filter((s) => !mappedStatusIds.has(s.id)),
+    };
+  },
+
+  /**
+   * One lazy "load more" page for a single column (Subtask 3.1.4, finding #57) —
+   * the next slice of cards after `cursor` (null/absent = the first page) plus
+   * the cursor for the page after it (null at the end of the column's bounded
+   * window). The 3.2 UI calls this as a column scrolls. Same column resolution +
+   * terminal/recent ordering + tenant gate as `getBoard`.
+   *
+   * Throws `BoardNotFoundError` / `BoardColumnNotFoundError` (404) for an
+   * unknown board or a column that isn't on it.
+   */
+  async loadColumnCards(
+    boardId: string,
+    columnId: string,
+    cursor: string | null | undefined,
+    ctx: ServiceContext,
+  ): Promise<PagedColumnCardsDto> {
+    const board = await boardRepository.findById(boardId, ctx.workspaceId);
+    if (!board) throw new BoardNotFoundError(boardId);
+    const column = await boardColumnRepository.findById(columnId, ctx.workspaceId);
+    if (!column || column.boardId !== boardId) throw new BoardColumnNotFoundError(columnId);
+
+    const [mappings, statuses] = await Promise.all([
+      boardColumnStatusRepository.findByColumn(columnId, ctx.workspaceId),
+      workflowsService.listStatusesByProject(board.projectId, ctx.workspaceId),
+    ]);
+    const statusById = new Map(statuses.map((s) => [s.id, s]));
+    const statusKeys = mappings
+      .map((m) => statusById.get(m.statusId))
+      .filter((s): s is WorkflowStatusDto => s != null)
+      .map((s) => s.key);
+    if (statusKeys.length === 0) return { cards: [], cursor: null };
+
+    const terminal = isTerminalColumn(statusKeys, terminalKeySet(statuses));
+    const offset = parseCursor(cursor);
+    const [totalCount, rows] = await Promise.all([
+      workItemRepository.countProjectIssues(board.projectId, ctx.workspaceId, {
+        statuses: statusKeys,
+      }),
+      workItemRepository.findColumnCards(
+        board.projectId,
+        ctx.workspaceId,
+        statusKeys,
+        terminal ? 'recent' : 'position',
+        { limit: BOARD_COLUMN_PAGE_SIZE, offset },
+      ),
+    ]);
+    const readyById = await workItemsService.getReadinessForItems(
+      rows.map((r) => r.id),
+      ctx,
+    );
+    return {
+      cards: rows.map((r) => toBoardCardDto(r, { ready: readyById.get(r.id) ?? true })),
+      cursor: nextCursor(offset, BOARD_COLUMN_PAGE_SIZE, totalCount, terminal),
+    };
+  },
+
+  /**
    * Move a card on a board: resolve the target column's status, run a workflow
    * transition for a cross-column move (validated; illegal → snapback), and
    * re-rank the card within the column — all in one transaction.
@@ -235,6 +380,104 @@ export const boardsService = {
     };
   },
 };
+
+/** Default per-column page size — the projection ships at most this many cards
+ * per column per page (finding #57: never the whole column). */
+const BOARD_COLUMN_PAGE_SIZE = 50;
+
+/**
+ * Terminal (done / cancelled) columns are bounded to a RECENT WINDOW — Jira
+ * hides done issues older than ~14 days; lacking a `completedAt` column we order
+ * terminal columns by `updatedAt` desc and cap the lazily-pageable window at the
+ * most-recent N, with the FULL count still surfaced (`totalCount`). This is the
+ * durable shape (a bounded recent window), not a magic display cap.
+ */
+const TERMINAL_COLUMN_WINDOW = 200;
+
+/** The per-project terminal-status key set (category `done`) — the finding-#21
+ * terminal generalization, reused for both readiness and terminal-column order. */
+function terminalKeySet(statuses: WorkflowStatusDto[]): Set<string> {
+  return new Set(statuses.filter((s) => s.category === 'done').map((s) => s.key));
+}
+
+/** A column is terminal iff it maps at least one live status and EVERY mapped
+ * status is terminal (the Done / Cancelled columns). */
+function isTerminalColumn(statusKeys: string[], terminalKeys: Set<string>): boolean {
+  return statusKeys.length > 0 && statusKeys.every((k) => terminalKeys.has(k));
+}
+
+/** Sort `WorkflowStatusDto`s by their fractional-index `position` (lexicographic). */
+function byPosition(a: WorkflowStatusDto, b: WorkflowStatusDto): number {
+  return a.position < b.position ? -1 : a.position > b.position ? 1 : 0;
+}
+
+/** The card window actually reachable by paging — capped for terminal columns. */
+function pageableTotal(total: number, terminal: boolean): number {
+  return terminal ? Math.min(total, TERMINAL_COLUMN_WINDOW) : total;
+}
+
+/** The cursor for the page AFTER `offset` (null when the bounded window is
+ * exhausted). The cursor is the opaque next offset; paging is offset-based,
+ * mirroring the List's `?page=` window (Subtask 2.5.12). */
+function nextCursor(
+  offset: number,
+  limit: number,
+  total: number,
+  terminal: boolean,
+): string | null {
+  const next = offset + limit;
+  return next < pageableTotal(total, terminal) ? String(next) : null;
+}
+
+/** Decode a load-more cursor to its offset; absent/garbage → 0 (first page). */
+function parseCursor(cursor: string | null | undefined): number {
+  if (!cursor) return 0;
+  const n = Number.parseInt(cursor, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+/**
+ * Build one column's projection page: its full card count + the bounded first
+ * page of card rows (terminal columns ordered by recency, others by rank) + the
+ * load-more cursor. A column mapping no live status is an empty column.
+ */
+async function buildColumnPage(
+  projectId: string,
+  col: BoardColumn,
+  statusKeys: string[],
+  terminal: boolean,
+  ctx: ServiceContext,
+): Promise<{
+  col: BoardColumn;
+  statusKeys: string[];
+  rows: WorkItem[];
+  totalCount: number;
+  cursor: string | null;
+}> {
+  if (statusKeys.length === 0) {
+    return { col, statusKeys, rows: [], totalCount: 0, cursor: null };
+  }
+  const [totalCount, rows] = await Promise.all([
+    workItemRepository.countProjectIssues(projectId, ctx.workspaceId, { statuses: statusKeys }),
+    workItemRepository.findColumnCards(
+      projectId,
+      ctx.workspaceId,
+      statusKeys,
+      terminal ? 'recent' : 'position',
+      {
+        limit: BOARD_COLUMN_PAGE_SIZE,
+        offset: 0,
+      },
+    ),
+  ]);
+  return {
+    col,
+    statusKeys,
+    rows,
+    totalCount,
+    cursor: nextCursor(0, BOARD_COLUMN_PAGE_SIZE, totalCount, terminal),
+  };
+}
 
 /**
  * Resolve a rank-neighbour id to its `position`, or null when no neighbour is

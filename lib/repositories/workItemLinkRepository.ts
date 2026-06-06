@@ -106,6 +106,29 @@ export const workItemLinkRepository = {
   },
 
   /**
+   * Batched form of {@link findBlockerStates} for MANY items at once — the board
+   * projection (3.1.4) needs a ready flag per card without an N+1. Returns every
+   * `is_blocked_by` blocker of any item in `fromIds`, each row carrying the
+   * blocked item it belongs to (`fromId`) plus the blocker's `status` +
+   * `projectId` for per-project terminal classification. ONE query. Empty
+   * `fromIds` short-circuits to `[]`. Read-only → `db` singleton.
+   */
+  async findBlockerStatesForItems(
+    fromIds: string[],
+  ): Promise<Array<{ fromId: string; status: string; projectId: string }>> {
+    if (fromIds.length === 0) return [];
+    const rows = await db.workItemLink.findMany({
+      where: { fromId: { in: fromIds }, kind: 'is_blocked_by' },
+      select: { fromId: true, toItem: { select: { status: true, projectId: true } } },
+    });
+    return rows.map((r) => ({
+      fromId: r.fromId,
+      status: r.toItem.status,
+      projectId: r.toItem.projectId,
+    }));
+  },
+
+  /**
    * Create a link. Required `tx`. The DB triggers validate cycle /
    * self-link / workspace consistency on insert; their SQLSTATE-23514
    * rejections and a P2002 unique violation are translated to typed errors
