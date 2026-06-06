@@ -235,7 +235,7 @@ export const story_2_5: PlanStory = {
     {
       id: '2.5.5',
       title: "Inline row edits — status + assignee (reuse 2.4.4's gated controls)",
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 10,
