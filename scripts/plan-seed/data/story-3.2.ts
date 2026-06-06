@@ -101,7 +101,7 @@ export const story_3_2: PlanStory = {
     {
       id: '3.2.1',
       title: 'Design — Kanban board surface: columns, card anatomy, drag states, scale + states',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 50,
@@ -180,6 +180,16 @@ export const story_3_2: PlanStory = {
         'Hold the projection in component state shaped so the later subtasks can mutate one ' +
         "column's card list in place (optimistic moves, appended pages) without refetching the " +
         'whole board.\n\n' +
+        '**Quick-view wiring (card click → IssueQuickView modal).** A board card is a peek into an ' +
+        'issue: **clicking a card opens the existing `IssueQuickView` modal** (Story 2.5), the SAME ' +
+        'peek surface the issue list uses — NOT a new detail surface and NOT a full-page navigation. ' +
+        'This subtask mounts the shared quick-view panel at the board-page level (reusing the ' +
+        'issues-list wiring — `IssueQuickViewPanel` + the `QuickViewTrigger`/`QuickView` ' +
+        'open-handler/context) and threads an `onOpenQuickView(workItemId)` handler down to the ' +
+        '`BoardCard` (3.2.3), which invokes it on click. The card stays keyboard-activatable (Enter ' +
+        'opens the quick view; the drag pick-up key is Space, per 3.2.4) and a "↗ open full page" ' +
+        'path from the peek still navigates to the issue detail. Reuse, do not rebuild, the 2.5 ' +
+        'quick-view panel.\n\n' +
         '**Board-level states (completeness).** Render, per the 3.2.1 design: a **loading** ' +
         'skeleton (columns + card placeholders) via `Spinner`/skeleton while the projection ' +
         'streams; an **error** state (`ErrorState` with retry) on a failed fetch; and the ' +
@@ -194,10 +204,12 @@ export const story_3_2: PlanStory = {
         '- `/boards` renders the real board (the `ProjectStubPage` placeholder is gone) for the active project; the sidebar/Cmd-K links resolve to it unchanged.\n' +
         '- The container fetches `GET …/board` once on load via the native fetch idiom (no query lib added) and holds the projection in mutable-per-column state; `unmappedStatuses` is carried in state for 3.2.6.\n' +
         '- A loading skeleton shows while the projection streams; a failed fetch shows `ErrorState` with a working retry; a null/absent board is handled without a crash.\n' +
+        '- The board page mounts the shared `IssueQuickView` panel and provides the `onOpenQuickView(workItemId)` handler the `BoardCard` (3.2.3) calls; **clicking a card opens the IssueQuickView modal** (the same 2.5 peek surface — reused, not rebuilt), with the "open full page" path intact.\n' +
         '- No data access in the page beyond calling the 3.1.6 API (no new route, no Prisma — this is a pure consumer); colours via `--el-*`, shape via element tokens, matching `design/boards/`.\n' +
-        '- Component/render tests assert the loading, error, and populated-scaffold branches.\n\n' +
+        '- Component/render tests assert the loading, error, and populated-scaffold branches, plus that a card click opens the quick view.\n\n' +
         '## Context refs\n\n' +
         '- `app/(authed)/boards/page.tsx` — the stub to replace; `app/(authed)/_components/ProjectStubPage.tsx` — what it renders today\n' +
+        '- `app/(authed)/issues/_components/IssueQuickView*.tsx` + `QuickViewTrigger.tsx` — the quick-view panel + open-handler wiring to reuse (a card click opens it)\n' +
         '- `app/(authed)/issues/page.tsx` + `_components/*` — the active-project resolution + client-fetch + Suspense/skeleton precedent to mirror\n' +
         '- Story 3.1.6 — the `GET /api/projects/[key]/board` route + `BoardProjectionDto`/`lib/dto/boards.ts` shape this consumes\n' +
         '- `components/ui/Spinner` / `ErrorState` / `EmptyState`; `design/boards/board.mock.html` + `design-notes.md` (3.2.1)\n' +
