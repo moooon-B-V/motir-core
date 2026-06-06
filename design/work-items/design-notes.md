@@ -3,19 +3,19 @@
 Design reference for the `work-items` UI area. Each surface names the design
 asset it lives in, the primitives it composes from, copy strings, and placement.
 
-| Surface                                          | Asset                                       | Notes                                                                                                                                                                                                            |
-| ------------------------------------------------ | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Issue detail page                                | `detail.pen` (Pencil) + `detail.png`        | header eyebrow + Description / Explanation / Activity (left) · core-fields rail (right). Built across 2.4.1–2.4.4.                                                                                               |
-| Create issue modal                               | `create.pen` + `create.png`                 | type/parent/title/description/priority + optional Explanation (panel 3).                                                                                                                                         |
-| Tree view (issue list, nested)                   | `tree.pen` + `tree.png`                     | issue tree rows + the `[Filter]`·`[Tree ▾]`·`[+ New issue]` toolbar.                                                                                                                                             |
-| **Tree view at scale (sort · lazy · virtual)**   | **`tree-scale.mock.html`** (HTML mockup)    | The scale shape `tree.png` leaves unspecified (it loads the whole forest, no sort headers) — sortable treegrid headers + lazy-expand + virtualization. Finding #57. Gates 2.5.13 + 2.5.14. See below.            |
-| **Flat sortable List view + view switcher**      | **`list.mock.html`** (HTML mockup)          | The List mode `tree.png` leaves unspecified (it draws only Tree + a disabled switcher seam). Gates 2.5.8. See below.                                                                                             |
-| **Filter bar (kind · status · assignee · text)** | **`filter.mock.html`** (HTML mockup)        | The open `[Filter]` popover `tree.png` leaves unspecified (it draws only a disabled `[Filter]` seam). Gates 2.5.4. See below.                                                                                    |
-| **Relationships panel + ready/blocked badge**    | **`relationships.mock.html`** (HTML mockup) | The element `detail.pen` does NOT specify. See below.                                                                                                                                                            |
-| **Link management (add / remove links)**         | **`links.mock.html`** (HTML mockup)         | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                                                                                                               |
-| **DatePicker calendar (Due-date field)**         | **`datepicker.mock.html`** (HTML mockup)    | The design-system replacement for the native `<input type="date">` popup; consumed by the Due-date fields (2.4.11 → 2.4.12). See below.                                                                          |
-| **Create modal — Due date field**                | **`create.mock.html`** (HTML mockup)        | Extends `create.pen` with a Due-date row (`DatePicker`, after Priority) — finding #56 / "mirror Jira" (2.3.11 → 2.3.12). See below.                                                                              |
-| **Work-item quick view (peek)**                  | **`quick-view.mock.html`** (HTML mockup)    | The peek modal + row trigger neither `tree.png` nor the 2.4 detail design specifies — a large two-column in-list preview (full description + core-fields rail) with "Open full page →". Gates 2.5.19. See below. |
+| Surface                                          | Asset                                       | Notes                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Issue detail page                                | `detail.pen` (Pencil) + `detail.png`        | header eyebrow + Description / Explanation / Activity (left) · core-fields rail (right). Built across 2.4.1–2.4.4.                                                                                                                                                                          |
+| Create issue modal                               | `create.pen` + `create.png`                 | type/parent/title/description/priority + optional Explanation (panel 3).                                                                                                                                                                                                                    |
+| Tree view (issue list, nested)                   | `tree.pen` + `tree.png`                     | issue tree rows + the `[Filter]`·`[Tree ▾]`·`[+ New issue]` toolbar.                                                                                                                                                                                                                        |
+| **Tree view at scale (sort · lazy · virtual)**   | **`tree-scale.mock.html`** (HTML mockup)    | The scale shape `tree.png` leaves unspecified (it loads the whole forest, no sort headers) — sortable treegrid headers + lazy-expand + virtualization. Finding #57. Gates 2.5.13 + 2.5.14. See below.                                                                                       |
+| **Flat sortable List view + view switcher**      | **`list.mock.html`** (HTML mockup)          | The List mode `tree.png` leaves unspecified (it draws only Tree + a disabled switcher seam). Gates 2.5.8. See below.                                                                                                                                                                        |
+| **Filter bar (kind · status · assignee · text)** | **`filter.mock.html`** (HTML mockup)        | The open `[Filter]` popover `tree.png` leaves unspecified (it draws only a disabled `[Filter]` seam). Gates 2.5.4. See below.                                                                                                                                                               |
+| **Relationships panel + ready/blocked badge**    | **`relationships.mock.html`** (HTML mockup) | The element `detail.pen` does NOT specify. See below.                                                                                                                                                                                                                                       |
+| **Link management (add / remove links)**         | **`links.mock.html`** (HTML mockup)         | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                                                                                                                                                                                          |
+| **DatePicker calendar (Due-date field)**         | **`datepicker.mock.html`** (HTML mockup)    | The design-system replacement for the native `<input type="date">` popup; consumed by the Due-date fields (2.4.11 → 2.4.12). See below.                                                                                                                                                     |
+| **Create modal — Due date field**                | **`create.mock.html`** (HTML mockup)        | Extends `create.pen` with a Due-date row (`DatePicker`, after Priority) — finding #56 / "mirror Jira" (2.3.11 → 2.3.12). See below.                                                                                                                                                         |
+| **Work-item quick view (peek)**                  | **`quick-view.mock.html`** (HTML mockup)    | The peek modal + row trigger neither `tree.png` nor the 2.4 detail design specifies — a large two-column in-list preview (full description + core-fields rail) with "Open full page →", plus the **ready/blocked readiness banner** in the peek (2.5.20). Gates 2.5.19 + 2.5.21. See below. |
 
 ---
 
@@ -732,7 +732,7 @@ addressed here. Date ranges / relative presets / time-of-day stay out (the
 
 ---
 
-## Work-item quick view (peek) modal (Story 2.5 · 2.5.18 → 2.5.19)
+## Work-item quick view (peek) modal (Story 2.5 · 2.5.18 → 2.5.19; readiness 2.5.20 → 2.5.21)
 
 `quick-view.mock.html` is the design for the `/issues` **quick view** — a _peek_
 overlay that previews a work item **without leaving the list**, with a prominent
@@ -803,21 +803,63 @@ the detail page, scoped to a peek.
 | Rail (300px)           | the detail page's **core-fields rail, condensed** — **Status** (`Pill`) · **Assignee** (Avatar + name) · **Reporter** (Avatar + name) · **Priority** (`PRIORITY_META` chip) · **Due date** · **Estimate** (clock glyph + duration) · **Parent** (breadcrumb link). `--el-surface-soft` bg, left hairline border |
 
 **What the peek shows vs. what stays detail-only.** Shown: type, key, title, the
-**full description**, status, assignee, reporter, priority, due, estimate, parent.
+**readiness banner** (ready/blocked — 2.5.20, see below), the **full description**,
+status, assignee, reporter, priority, due, estimate, parent.
 **Detail-only** (reached via _Open full page →_ in the header bar / the header
 identifier — both clearly go to the detail page): the **Explanation**, the
-**child list**, the **relationships/links panel + readiness badge** (2.4.5),
-**attachments**, **labels**, and the **activity / comments feed**. The peek is a
-big, read-only preview — editing and the heavier sections live on the full page.
+**child list**, the **full relationships/links panel** (2.4.5) — the Blocked-by /
+Blocks / Relates-to / Duplicates / Clones groups and link add/remove — **attachments**,
+**labels**, and the **activity / comments feed**. The peek is a big, read-only preview —
+editing and the heavier sections live on the full page. **(Reconciliation, 2.5.20:** the
+readiness **signal** moved OUT of detail-only and INTO the peek; only the full
+relationships **panel** stays detail-only.)
+
+### Readiness — ready / blocked (Subtask 2.5.20)
+
+The peek surfaces the item's **readiness** so a viewer can tell, while scanning the
+list, whether an item is **Ready to start** or **Blocked** (and on what) — without
+opening the full page. It **reuses the shipped `ReadinessBadge` (2.4.5)** verbatim — the
+SAME mint / peach banner the detail page's relationships panel renders — so **no new
+visual primitive** is invented.
+
+- **Placement** — a full-width banner at the **top of the main column, directly under
+  the title and above the Description** (panel 2). Rationale: the title identifies the
+  item; "can I start this?" is the next thing a scanner wants, so the banner is the first
+  thing in the scrollable main area. NOT the rail — the rail holds scalar fields, while a
+  full-width call-out reads stronger and matches how the badge sits atop its section on
+  the detail page.
+- **States** — **blocked** (peach, `circle-alert` in `--color-warning`, **Blocked** +
+  `Waiting on N work item(s) — PROD-3, PROD-8` naming the open, non-terminal blockers);
+  **ready** (mint, `circle-check-big` in `--color-success`, **Ready to start** / `All
+blockers resolved`); and **no blockers → NO banner at all** — mirror the detail-page
+  rule: an item with no `is_blocked_by` in-edge has no readiness signal to give. Panel 2
+  draws **blocked** in context; **panel 3** draws **ready** + the **no-banner** case.
+- **Blocker links swap the peek** — a named blocker link pushes **`?peek=<blockerKey>`**
+  (staying on `/issues`, swapping the peeked item) rather than navigating to
+  `/issues/[key]`. Rationale: the peek exists to inspect _without losing your place_, so
+  swapping keeps the user in-list and Back / `Esc` steps back through peeked items. This
+  is a **justified deviation** from the detail-page badge (which links straight to
+  `/issues/[key]` because there is no peek there): the only delta 2.5.21 passes to the
+  shared component is each blocker's `href` (`?peek=…` instead of `/issues/[key]`) — the
+  `ReadinessBadge` component itself is unchanged.
+- **Data — no new query.** `readiness` is **already part of the core detail read** the
+  peek issues: `getIssueDetail` returns `readiness: { ready, openBlockers }` — the same
+  verdict the detail page feeds to `ReadinessBadge` — so 2.5.21 renders the badge from
+  data already in hand (it maps `openBlockers` → `{ identifier, href }` exactly as the
+  detail page does, only with the `?peek=` href). State is conveyed by **text + icon,
+  never colour alone** (AA-safe, finding #35); colour flows only through `--el-*`.
 
 ### States (multi-panel)
 
-1. **Populated** — panel 2.
-2. **Loading** (panel 3) — the modal opens immediately (URL-driven, `?peek=PROD-N`);
+1. **Populated** — panel 2 (drawn **blocked**, so the readiness banner is visible in
+   context).
+2. **Readiness states** (panel 3) — the **ready** banner + the **no-blockers** case
+   (no banner), isolated side-by-side (2.5.20, see above).
+3. **Loading** (panel 4) — the modal opens immediately (URL-driven, `?peek=PROD-N`);
    the item's fields fetch in the background. Skeleton bars (`--el-muted`, gentle
    pulse) hold the header / main / rail layout so the modal doesn't resize when data
    lands. The _Open full page_ button is live throughout.
-3. **Not found / no access** (panel 4) — a stale `?peek=` key (deleted issue) or a
+4. **Not found / no access** (panel 5) — a stale `?peek=` key (deleted issue) or a
    forbidden one shows a centered empty state (the header bar keeps only the `×`):
    a `search-x` glyph in a muted circle, **"This issue isn't available"**, a line
    explaining it may have been moved/deleted or is in a workspace you can't access,
@@ -825,7 +867,7 @@ big, read-only preview — editing and the heavier sections live on the full pag
    (finding #44's pure-workspace gate — never leak existence). A `lock` glyph
    variant covers an explicit no-access message if the product later distinguishes
    them. No _Open full page_ button (there is no page to open).
-4. **Mobile / narrow** (panel 5) — the same Modal renders as a full-height bottom
+5. **Mobile / narrow** (panel 6) — the same Modal renders as a full-height bottom
    **sheet** (rounded top corners, grab handle, scrollable body, ~90% height)
    instead of a centered dialog. The 300px rail **collapses into a compact meta
    strip** (Assignee · Priority · Due) above the description; _Open full page_ is
