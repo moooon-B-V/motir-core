@@ -50,6 +50,16 @@ const STATUSES: WorkflowStatusDto[] = [
     isInitial: true,
   },
   {
+    id: 's-blocked',
+    projectId: 'p',
+    key: 'blocked',
+    label: 'Blocked',
+    category: 'todo',
+    color: null,
+    position: 'a5',
+    isInitial: false,
+  },
+  {
     id: 's2',
     projectId: 'p',
     key: 'in_progress',
@@ -190,6 +200,53 @@ describe('IssueFilterBar — clear', () => {
     expect(screen.getByRole('button', { name: /Clear filters/ }).hasAttribute('disabled')).toBe(
       true,
     );
+  });
+});
+
+describe('IssueFilterBar — optimistic selection (finding #58)', () => {
+  // THE core bug: selection lives in the URL, so the check mark used to render
+  // straight off the server-round-tripped `filter` prop — it stayed blank from
+  // the click until the navigation + issue read settled, so a clicked status
+  // "didn't show" (worse / more visibly with a status that matches nothing, so
+  // the read returns empty). `push` is a stub here and NEVER re-drives the
+  // `filter` prop, so this asserts the check + count update from optimistic
+  // state alone, with zero round-trip. Pre-fix this failed (aria-selected stayed
+  // 'false'); the count badge likewise.
+  it('checks the clicked status immediately, with no navigation round-trip', () => {
+    renderBar();
+    open();
+    const statusList = screen.getByRole('listbox', { name: 'Status' });
+    const blocked = within(statusList).getByRole('option', { name: 'Blocked' });
+    expect(blocked.getAttribute('aria-selected')).toBe('false');
+
+    fireEvent.click(blocked);
+
+    // no rerender with a new prop — the optimistic mirror drives the UI
+    expect(blocked.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Filter — 1 active' })).toBeTruthy();
+    expect(push).toHaveBeenCalledWith('/issues?status=blocked');
+  });
+
+  it('reconciles to the server filter when the navigation lands', () => {
+    const { rerender } = renderBar();
+    open();
+    const statusList = screen.getByRole('listbox', { name: 'Status' });
+    fireEvent.click(within(statusList).getByRole('option', { name: 'Blocked' }));
+
+    // simulate the Server Component re-rendering with the URL-parsed filter
+    rerender(
+      <IssueFilterBar
+        filter={{ ...EMPTY_FILTER, statuses: ['blocked'] }}
+        statuses={STATUSES}
+        members={MEMBERS}
+        view="tree"
+        sort={DEFAULT_SORT}
+      />,
+    );
+    const blocked = within(screen.getByRole('listbox', { name: 'Status' })).getByRole('option', {
+      name: 'Blocked',
+    });
+    expect(blocked.getAttribute('aria-selected')).toBe('true');
   });
 });
 
