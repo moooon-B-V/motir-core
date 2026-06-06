@@ -12,7 +12,6 @@ import { formatDate } from '@/lib/utils/datetime';
 import { formatDurationMinutes } from '@/lib/utils/duration';
 import { cn } from '@/lib/utils/cn';
 import { useToast } from '@/components/ui/Toast';
-import { Input } from '@/components/ui/Input';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { StatusPicker } from '@/components/issues/StatusPicker';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
@@ -382,15 +381,19 @@ function InlineEstimateEditor({ row }: { row: IssueRowData }) {
   }
 
   if (editing) {
+    // A compact, cell-sized field — the form-sized `Input` (taller
+    // `--height-input` + FormField chrome) doesn't fit a table row. Same shape /
+    // colour element tokens (control height, input radius, strong border), native
+    // number spinners hidden (they overflow + aren't needed), right-aligned to
+    // the column.
     return (
       <EditSurface>
-        <Input
+        <input
           type="number"
           min={0}
+          inputMode="numeric"
           aria-label={t('estimateMinutes')}
-          // Hide the native number spinners — they overflow the narrow estimate
-          // cell; the value is typed. Right-align to match the column.
-          className="text-right [appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none"
+          className="h-(--height-control) w-full rounded-(--radius-input) border border-(--el-border-strong) bg-(--el-page-bg) px-(--spacing-control-x) text-right font-sans text-sm text-(--el-text) outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) disabled:opacity-60 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
