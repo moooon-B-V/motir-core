@@ -918,7 +918,7 @@ export const story_2_5: PlanStory = {
     {
       id: '2.5.20',
       title: 'Design — ready/blocked readiness in the quick-view (peek) modal',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'human',
       estimateMinutes: 25,
