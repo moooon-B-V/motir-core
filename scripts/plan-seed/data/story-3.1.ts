@@ -222,7 +222,7 @@ export const story_3_1: PlanStory = {
       id: '3.1.4',
       title:
         'Board projection service — columns + grouped, per-column-paginated cards + unmapped statuses',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
