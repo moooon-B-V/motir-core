@@ -2,10 +2,12 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { ArrowRight, Clock, SearchX } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { MarkdownView } from '@/components/ui/MarkdownView';
+import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import { Avatar, AssigneeValue, PriorityValue, StatusValue } from './issueCellPrimitives';
@@ -39,6 +41,17 @@ export interface QuickViewData {
   dueLabel: string | null;
   estimateLabel: string | null;
   parent: { identifier: string; title: string; kind: WorkItemKindDto } | null;
+  /**
+   * The ready/blocked readiness signal (Subtask 2.5.21), shaped for the shipped
+   * ReadinessBadge. `null` when the item has NO `is_blocked_by` in-edge — mirror
+   * the detail-page rule: nothing blocks it, so there's no readiness signal to
+   * give and no banner renders. Otherwise `ready` is the service verdict and
+   * `blockers` names the OPEN (non-terminal) blockers; the panel maps each to a
+   * `?peek=` swap-peek href (so a blocker link swaps the peeked item in-list,
+   * never leaving `/issues` — the 2.5.20 design's justified deviation from the
+   * detail-page badge, which links to `/issues/[key]`).
+   */
+  readiness: { ready: boolean; blockers: string[] } | null;
 }
 
 type IssueQuickViewPanelProps =
@@ -86,6 +99,17 @@ function Sk({ className }: { className?: string }) {
 
 export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   const t = useTranslations('issueViews');
+  // A named readiness blocker SWAPS the peek (push `?peek=<blockerKey>`, staying
+  // in-list) rather than navigating to the full page — the 2.5.20 design. Build
+  // the href the same way QuickViewTrigger opens a peek: preserve every other
+  // param (view/sort/filter/page), just swap `peek`.
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const buildPeekHref = (identifier: string) => {
+    const params = new URLSearchParams(searchParams?.toString() ?? '');
+    params.set('peek', identifier);
+    return `${pathname}?${params.toString()}`;
+  };
 
   // ── NOT FOUND / NO ACCESS (panel 4) ──────────────────────────────────────
   if (props.state === 'notfound') {
@@ -174,6 +198,19 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           <h2 className="font-serif text-[27px] leading-tight font-semibold text-(--el-text)">
             {data.title}
           </h2>
+          {/* Readiness banner (2.5.21) — the shipped ReadinessBadge, top of the
+              main column under the title, per quick-view.mock.html (2.5.20). No
+              banner when the item has no blockers. Named blockers swap the peek. */}
+          {data.readiness ? (
+            <ReadinessBadge
+              ready={data.readiness.ready}
+              blockers={data.readiness.blockers.map((identifier) => ({
+                identifier,
+                href: buildPeekHref(identifier),
+              }))}
+              className="mt-4"
+            />
+          ) : null}
           <span className="mt-6 mb-2 block text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase">
             {t('description')}
           </span>

@@ -44,6 +44,7 @@ const DATA: QuickViewData = {
   dueLabel: 'Jun 12, 2026',
   estimateLabel: '8h',
   parent: { identifier: 'PROD-1', title: 'Q3 launch', kind: 'epic' },
+  readiness: null,
 };
 
 describe('QuickViewTrigger — opens the peek via ?peek', () => {
@@ -77,6 +78,44 @@ describe('IssueQuickViewPanel — populated (ready)', () => {
     expect(screen.getByRole('link', { name: 'PROD-7' }).getAttribute('href')).toBe(
       '/issues/PROD-7',
     );
+  });
+});
+
+describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
+  it('blocked: renders the Blocked banner naming open blockers as ?peek= swap-peek links', () => {
+    searchParamsString = 'view=list&peek=PROD-7';
+    render(
+      <IssueQuickViewPanel
+        state="ready"
+        data={{ ...DATA, readiness: { ready: false, blockers: ['PROD-3', 'PROD-8'] } }}
+      />,
+    );
+    expect(screen.getByText('Blocked')).toBeTruthy();
+    expect(screen.getByText(/Waiting on 2 work items/)).toBeTruthy();
+    // A blocker link SWAPS the peek (preserves view, swaps peek), staying in-list.
+    expect(screen.getByRole('link', { name: 'PROD-3' }).getAttribute('href')).toBe(
+      '/issues?view=list&peek=PROD-3',
+    );
+    expect(screen.getByRole('link', { name: 'PROD-8' }).getAttribute('href')).toBe(
+      '/issues?view=list&peek=PROD-8',
+    );
+  });
+
+  it('ready: renders "Ready to start" when the item has blockers that are all resolved', () => {
+    render(
+      <IssueQuickViewPanel
+        state="ready"
+        data={{ ...DATA, readiness: { ready: true, blockers: [] } }}
+      />,
+    );
+    expect(screen.getByText('Ready to start')).toBeTruthy();
+    expect(screen.getByText('All blockers resolved')).toBeTruthy();
+  });
+
+  it('no blockers: renders NO readiness banner (readiness === null)', () => {
+    render(<IssueQuickViewPanel state="ready" data={{ ...DATA, readiness: null }} />);
+    expect(screen.queryByText('Blocked')).toBeNull();
+    expect(screen.queryByText('Ready to start')).toBeNull();
   });
 });
 
