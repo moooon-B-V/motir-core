@@ -122,6 +122,11 @@ export interface DatePickerProps {
   id?: string;
   /** Open the calendar as soon as the field mounts (the rail's inline-edit entry). */
   autoOpen?: boolean;
+  /** Fired when the calendar closes via Radix (outside-click / Escape / trigger
+   *  toggle) — the inline-edit cell uses it to leave edit mode (Subtask 2.5.5).
+   *  A day-pick commits through `onChange` and closes directly, so this fires
+   *  only for a dismiss-without-pick. */
+  onClose?: () => void;
   className?: string;
 }
 
@@ -133,6 +138,7 @@ export function DatePicker({
   'aria-label': ariaLabel = 'Date',
   id,
   autoOpen = false,
+  onClose,
   className,
 }: DatePickerProps) {
   const selected = parseKey(value);
@@ -169,6 +175,8 @@ export function DatePicker({
       const anchor = parseKey(value) ?? todayUTC();
       setView({ y: anchor.y, m: anchor.m });
       setFocusKey(toKey(anchor));
+    } else {
+      onClose?.();
     }
     setOpen(next);
   }

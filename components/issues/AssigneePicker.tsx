@@ -18,9 +18,21 @@ export interface AssigneePickerProps {
   onChange: (userId: string | null) => void;
   id?: string;
   disabled?: boolean;
+  /** Open the picker immediately on mount (inline-edit cells — Subtask 2.5.5). */
+  autoOpen?: boolean;
+  /** Fired when the picker menu closes without/after a pick (Subtask 2.5.5). */
+  onClose?: () => void;
 }
 
-export function AssigneePicker({ members, value, onChange, id, disabled }: AssigneePickerProps) {
+export function AssigneePicker({
+  members,
+  value,
+  onChange,
+  id,
+  disabled,
+  autoOpen,
+  onClose,
+}: AssigneePickerProps) {
   const t = useTranslations('ui');
   const options: ComboboxOption<string>[] = [
     { value: NONE, label: t('assigneePicker.unassigned') },
@@ -44,6 +56,8 @@ export function AssigneePicker({ members, value, onChange, id, disabled }: Assig
       emptyText={t('assigneePicker.emptyText')}
       id={id}
       disabled={disabled}
+      autoOpen={autoOpen}
+      onClose={onClose}
     />
   );
 }

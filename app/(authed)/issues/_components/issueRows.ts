@@ -22,10 +22,15 @@ import { defaultLocale, type Locale } from '@/lib/i18n/locales';
 
 /** The row payload the TreeTable cells render. Fully serializable. */
 export interface IssueRowData {
+  /** The work-item id — the target of the inline-edit Server Actions (2.5.5). */
+  id: string;
   identifier: string;
   title: string;
   /** Drives the type-hued IssueTypeIcon. */
   kind: WorkItemKindDto;
+  /** The raw workflow status KEY (not the label) — what the inline StatusPicker
+   *  edits + `changeStatusAction` commits (2.5.5); `statusLabel` is its display. */
+  status: string;
   /** Human status label (workflow label, or the raw key as a fallback). */
   statusLabel: string;
   /**
@@ -34,14 +39,25 @@ export interface IssueRowData {
    * Pill showing the raw key), mirroring the detail page's ChildList.
    */
   statusCategory: StatusCategoryDto | null;
+  /** The raw assignee userId (or null) — what the inline AssigneePicker edits +
+   *  `updateIssueAction` commits (2.5.5); `assigneeName` is its display. */
+  assigneeId: string | null;
   /** Resolved assignee display name, or null when unassigned. */
   assigneeName: string | null;
-  /** Priority value → the shared PRIORITY_META chip in the cell. */
+  /** ISO-8601 last-modified stamp — the `expectedUpdatedAt` the inline assignee
+   *  edit submits for optimistic concurrency (2.5.5). */
+  updatedAt: string;
+  /** Priority value → the shared PRIORITY_META chip; the raw value the inline
+   *  PriorityPicker edits (2.5.5). */
   priority: WorkItemPriorityDto;
   /** Resolved reporter display name (a reporter is always set). */
   reporterName: string;
+  /** Raw due date (ISO-8601) or null — what the inline DatePicker edits (2.5.5). */
+  dueDate: string | null;
   /** Pre-formatted due date ("Jun 4, 2026"), or null when none. */
   dueLabel: string | null;
+  /** Raw estimate in whole minutes or null — what the inline estimate field edits (2.5.5). */
+  estimateMinutes: number | null;
   /** Pre-formatted estimate ("2h 30m"), or null when unestimated. */
   estimateLabel: string | null;
 }
@@ -78,17 +94,23 @@ function shapeRowData(
 ): IssueRowData {
   const status = statusByKey.get(item.status);
   return {
+    id: item.id,
     identifier: item.identifier,
     title: item.title,
     kind: item.kind,
+    status: item.status,
     statusLabel: status?.label ?? item.status,
     statusCategory: status?.category ?? null,
+    assigneeId: item.assigneeId,
     assigneeName: item.assigneeId ? (nameById.get(item.assigneeId) ?? null) : null,
+    updatedAt: item.updatedAt,
     priority: item.priority,
     // The reporter always exists; fall back to its id only if the member is
     // somehow missing (e.g. left the workspace) so the cell never blanks.
     reporterName: nameById.get(item.reporterId) ?? item.reporterId,
+    dueDate: item.dueDate,
     dueLabel: item.dueDate ? formatDate(item.dueDate, locale) : null,
+    estimateMinutes: item.estimateMinutes,
     estimateLabel:
       item.estimateMinutes != null ? formatDurationMinutes(item.estimateMinutes) : null,
   };

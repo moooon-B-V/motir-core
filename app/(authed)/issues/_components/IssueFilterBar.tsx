@@ -22,7 +22,7 @@ import {
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { cn } from '@/lib/utils/cn';
-import { Avatar } from './issueColumns';
+import { Avatar } from './issueCellPrimitives';
 
 // The /issues FILTER bar (Subtask 2.5.4) — the [Filter] toolbar control wired
 // into a working, URL-driven, multi-select filter over the issue tree (and the

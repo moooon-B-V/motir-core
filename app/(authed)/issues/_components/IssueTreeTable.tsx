@@ -19,6 +19,7 @@ import type { TreeLevelDto, WorkItemTreeRowDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { buildIssueColumns } from './issueColumns';
+import { IssueInlineEditProvider } from './IssueInlineEdit';
 import { makeRowShaper, type IssueRowData } from './issueRows';
 import { listChildIssuesAction, listRootIssuesAction } from '../actions';
 
@@ -271,21 +272,25 @@ export function IssueTreeTable({
   );
 
   return (
-    <TreeTable
-      label={t('issues.list.tableLabel')}
-      columns={columns}
-      rows={rows}
-      expandedIds={expanded}
-      onExpandedChange={onExpandedChange}
-      onRowActivate={onRowActivate}
-      getRowHref={(node) => (node.kind === 'issue' ? `/issues/${node.row.identifier}` : undefined)}
-      getRowLabel={(node) =>
-        node.kind === 'issue' ? `${node.row.identifier} ${node.row.title}` : ''
-      }
-      getRowTestId={(node) =>
-        node.kind === 'issue' ? `issue-row-${node.row.identifier}` : undefined
-      }
-    />
+    <IssueInlineEditProvider workflow={workflow} members={members}>
+      <TreeTable
+        label={t('issues.list.tableLabel')}
+        columns={columns}
+        rows={rows}
+        expandedIds={expanded}
+        onExpandedChange={onExpandedChange}
+        onRowActivate={onRowActivate}
+        getRowHref={(node) =>
+          node.kind === 'issue' ? `/issues/${node.row.identifier}` : undefined
+        }
+        getRowLabel={(node) =>
+          node.kind === 'issue' ? `${node.row.identifier} ${node.row.title}` : ''
+        }
+        getRowTestId={(node) =>
+          node.kind === 'issue' ? `issue-row-${node.row.identifier}` : undefined
+        }
+      />
+    </IssueInlineEditProvider>
   );
 }
 

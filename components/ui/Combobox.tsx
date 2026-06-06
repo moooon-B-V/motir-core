@@ -50,6 +50,18 @@ export interface ComboboxProps<T extends string> {
   /** id for the trigger button. */
   id?: string;
   className?: string;
+  /**
+   * Mount already-open (Subtask 2.5.5) — for an inline-edit cell that renders the
+   * picker on a single click, so the menu is open immediately (mirrors
+   * `DatePicker`'s `autoOpen`). Focus lands on the search input / listbox.
+   */
+  autoOpen?: boolean;
+  /**
+   * Fired whenever the menu transitions open → closed (a pick, Escape,
+   * click-outside, or toggling the trigger). The inline-edit cell uses it to
+   * leave edit mode and return to the static pill/avatar (Subtask 2.5.5).
+   */
+  onClose?: () => void;
 }
 
 export function Combobox<T extends string>({
@@ -66,8 +78,10 @@ export function Combobox<T extends string>({
   disabled = false,
   id,
   className,
+  autoOpen = false,
+  onClose,
 }: ComboboxProps<T>) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const baseId = useId();
@@ -111,11 +125,11 @@ export function Combobox<T extends string>({
   useEffect(() => {
     if (!open) return;
     function onDocMouseDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) closeMenu();
     }
     document.addEventListener('mousedown', onDocMouseDown);
     return () => document.removeEventListener('mousedown', onDocMouseDown);
-  }, [open]);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep the active row in view.
   useEffect(() => {
@@ -129,8 +143,15 @@ export function Combobox<T extends string>({
     setOpen(true);
   }
 
-  function closeAndRefocus() {
+  // Close the menu, notifying the consumer (Subtask 2.5.5's inline-edit cell
+  // leaves edit mode on close). Every close path funnels through here.
+  function closeMenu() {
     setOpen(false);
+    onClose?.();
+  }
+
+  function closeAndRefocus() {
+    closeMenu();
     triggerRef.current?.focus();
   }
 
@@ -184,7 +205,7 @@ export function Combobox<T extends string>({
         aria-controls={open ? listId : undefined}
         aria-label={label}
         disabled={disabled}
-        onClick={() => (open ? setOpen(false) : openMenu())}
+        onClick={() => (open ? closeMenu() : openMenu())}
         onKeyDown={onTriggerKeyDown}
         className={cn(
           'border-(--el-border) bg-(--el-page-bg) flex h-(--height-control) w-full items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) text-sm',
@@ -212,7 +233,10 @@ export function Combobox<T extends string>({
       {open ? (
         <div
           className={cn(
-            'absolute left-0 right-0 top-full z-50 mt-1 rounded-(--radius-card) bg-(--el-page-bg) p-1',
+            // Size to the widest option (so a narrow inline-edit cell's dropdown
+            // isn't cramped), but never narrower than the trigger and capped so a
+            // long label can't run off-screen.
+            'absolute left-0 top-full z-50 mt-1 w-max min-w-full max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-1',
             'shadow-(--shadow-elevated) border border-(--el-border)',
           )}
         >

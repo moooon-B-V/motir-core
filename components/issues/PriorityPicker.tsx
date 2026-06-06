@@ -17,9 +17,20 @@ export interface PriorityPickerProps {
   onChange: (value: WorkItemPriorityDto) => void;
   id?: string;
   disabled?: boolean;
+  /** Open the picker immediately on mount (inline-edit cells — Subtask 2.5.5). */
+  autoOpen?: boolean;
+  /** Fired when the picker menu closes without/after a pick (Subtask 2.5.5). */
+  onClose?: () => void;
 }
 
-export function PriorityPicker({ value, onChange, id, disabled }: PriorityPickerProps) {
+export function PriorityPicker({
+  value,
+  onChange,
+  id,
+  disabled,
+  autoOpen,
+  onClose,
+}: PriorityPickerProps) {
   const t = useTranslations('labels');
   const tu = useTranslations('ui');
   // PRIORITY_OPTIONS supplies the canonical order; the label is translated.
@@ -35,6 +46,8 @@ export function PriorityPicker({ value, onChange, id, disabled }: PriorityPicker
       label={tu('priorityPicker.label')}
       id={id}
       disabled={disabled}
+      autoOpen={autoOpen}
+      onClose={onClose}
     />
   );
 }

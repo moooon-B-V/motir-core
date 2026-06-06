@@ -1,10 +1,15 @@
 import type { ReactNode } from 'react';
 import type { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
-import { Pill, type PillProps } from '@/components/ui/Pill';
-import type { StatusCategoryDto } from '@/lib/dto/workflows';
-import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import type { IssueSortColumn } from '@/lib/issues/issueListView';
+import { Avatar } from './issueCellPrimitives';
+import {
+  InlineStatusCell,
+  InlineAssigneeCell,
+  InlinePriorityCell,
+  InlineDueCell,
+  InlineEstimateCell,
+} from './IssueInlineEdit';
 import type { IssueRowData } from './issueRows';
 
 // A next-intl global translator (from `useTranslations()` with no namespace), so
@@ -21,26 +26,11 @@ type Translator = ReturnType<typeof useTranslations>;
 // table re-declares the cells; the columns are Title · Priority · Assignee ·
 // Reporter · Due · Est. · Status, the set the detail page's core-fields surface.
 
-// Lifecycle category → Pill status tone — the same mapping the detail page's
-// ChildList uses (todo→planned, in_progress→in-progress, done→done). All AA-safe
-// (finding #35); an unclassifiable status falls back to a neutral Pill.
-export const STATUS_TONE: Record<StatusCategoryDto, NonNullable<PillProps['status']>> = {
-  todo: 'planned',
-  in_progress: 'in-progress',
-  done: 'done',
-};
-
-/** Initial-letter avatar — mirrors the detail rail / ChildList avatar. */
-export function Avatar({ name }: { name: string }) {
-  return (
-    <span
-      className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
-      aria-hidden
-    >
-      {name.charAt(0).toUpperCase()}
-    </span>
-  );
-}
+// The STATUS_TONE map, the row `Avatar`, and the status/assignee cell VALUE
+// renderers now live in the leaf `issueCellPrimitives` module, so the inline-edit
+// cells (IssueInlineEdit) can share them without an import cycle. The STATUS and
+// ASSIGNEE columns below render those inline-edit cells (read-only outside an
+// `IssueInlineEditProvider`, editable within one — Subtask 2.5.5).
 
 /**
  * One issue-list column. `cell` renders the row body (shared by both views);
@@ -83,30 +73,18 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
       header: t('issues.columns.priority'),
       width: 120,
       sortColumn: 'priority',
-      cell: (r) => {
-        const meta = PRIORITY_META[r.priority];
-        return (
-          <Pill {...meta.pill}>
-            <meta.icon className="h-3 w-3" aria-hidden />
-            {t(`labels.priority.${r.priority}`)}
-          </Pill>
-        );
-      },
+      // Inline-editable inside an IssueInlineEditProvider (2.5.5); read-only chip
+      // otherwise. The cell owns its own PRIORITY_META chip rendering.
+      cell: (r) => <InlinePriorityCell row={r} />,
     },
     {
       key: 'assignee',
       header: t('issues.columns.assignee'),
       width: 150,
       sortColumn: 'assignee',
-      cell: (r) =>
-        r.assigneeName ? (
-          <span className="flex min-w-0 items-center gap-2">
-            <Avatar name={r.assigneeName} />
-            <span className="truncate text-(--el-text-secondary)">{r.assigneeName}</span>
-          </span>
-        ) : (
-          <span className="text-(--el-text-muted)">{t('issues.columns.unassigned')}</span>
-        ),
+      // Inline-editable inside an IssueInlineEditProvider (2.5.5); read-only value
+      // otherwise. The cell owns its own avatar/name vs. "Unassigned" rendering.
+      cell: (r) => <InlineAssigneeCell row={r} />,
     },
     {
       key: 'reporter',
@@ -125,12 +103,9 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
       header: t('issues.columns.due'),
       width: 120,
       sortColumn: 'due',
-      cell: (r) =>
-        r.dueLabel ? (
-          <span className="truncate text-(--el-text-secondary)">{r.dueLabel}</span>
-        ) : (
-          <span className="text-(--el-text-muted)">—</span>
-        ),
+      // Inline-editable inside an IssueInlineEditProvider (2.5.5); read-only date
+      // otherwise.
+      cell: (r) => <InlineDueCell row={r} />,
     },
     {
       key: 'estimate',
@@ -138,24 +113,18 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
       width: 90,
       align: 'end',
       sortColumn: 'estimate',
-      cell: (r) =>
-        r.estimateLabel ? (
-          <span className="truncate text-(--el-text-secondary)">{r.estimateLabel}</span>
-        ) : (
-          <span className="text-(--el-text-muted)">—</span>
-        ),
+      // Inline-editable inside an IssueInlineEditProvider (2.5.5); read-only value
+      // otherwise.
+      cell: (r) => <InlineEstimateCell row={r} />,
     },
     {
       key: 'status',
       header: t('issues.columns.status'),
       width: 130,
       sortColumn: 'status',
-      cell: (r) =>
-        r.statusCategory ? (
-          <Pill status={STATUS_TONE[r.statusCategory]}>{r.statusLabel}</Pill>
-        ) : (
-          <Pill tone="neutral">{r.statusLabel}</Pill>
-        ),
+      // Inline-editable inside an IssueInlineEditProvider (2.5.5); read-only Pill
+      // otherwise. The cell owns its own category→tone rendering.
+      cell: (r) => <InlineStatusCell row={r} />,
     },
   ];
 }

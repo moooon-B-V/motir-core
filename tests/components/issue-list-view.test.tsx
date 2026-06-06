@@ -16,6 +16,12 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
   usePathname: () => '/issues',
 }));
+// The rows are inline-editable (Subtask 2.5.5), so the cells import the detail
+// page's edit Server Actions — stub them so this client test stays DB-free.
+vi.mock('@/app/(authed)/issues/[key]/edit/actions', () => ({
+  updateIssueAction: vi.fn(),
+  changeStatusAction: vi.fn(),
+}));
 
 import { IssueListTable } from '@/app/(authed)/issues/_components/IssueListTable';
 import { IssueViewSwitcher } from '@/app/(authed)/issues/_components/IssueViewSwitcher';
@@ -42,14 +48,20 @@ afterEach(() => {
 
 function row(over: Partial<IssueRowData> & { identifier: string }): IssueRowData {
   return {
+    id: `wi_${over.identifier}`,
     title: 'An issue',
     kind: 'task',
+    status: 'todo',
     statusLabel: 'To Do',
     statusCategory: 'todo',
+    assigneeId: null,
     assigneeName: null,
+    updatedAt: '2026-06-01T00:00:00.000Z',
     priority: 'medium',
     reporterName: 'Owner',
+    dueDate: null,
     dueLabel: null,
+    estimateMinutes: null,
     estimateLabel: null,
     ...over,
   };

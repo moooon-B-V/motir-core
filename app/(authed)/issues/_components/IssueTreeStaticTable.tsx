@@ -3,7 +3,10 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { TreeTable, type TreeTableColumn, type TreeTableRow } from '@/components/ui/TreeTable';
+import type { WorkflowDto } from '@/lib/dto/workflows';
+import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { buildIssueColumns } from './issueColumns';
+import { IssueInlineEditProvider } from './IssueInlineEdit';
 import type { IssueRowData } from './issueRows';
 
 // The STATIC (non-lazy) /issues tree — used ONLY for the FILTERED view, where
@@ -16,9 +19,13 @@ import type { IssueRowData } from './issueRows';
 
 export interface IssueTreeStaticTableProps {
   rows: TreeTableRow<IssueRowData>[];
+  /** The project workflow + workspace members enable inline status/assignee edits
+   *  (Subtask 2.5.5); omit them to render read-only cells. */
+  workflow?: WorkflowDto;
+  members?: WorkspaceMemberDTO[];
 }
 
-export function IssueTreeStaticTable({ rows }: IssueTreeStaticTableProps) {
+export function IssueTreeStaticTable({ rows, workflow, members }: IssueTreeStaticTableProps) {
   const t = useTranslations();
   const columns: TreeTableColumn<IssueRowData>[] = buildIssueColumns(t).map(
     ({ key, header, width, align, cell }) => ({ key, header, width, align, cell }),
@@ -30,7 +37,7 @@ export function IssueTreeStaticTable({ rows }: IssueTreeStaticTableProps) {
     () => new Set(rows.filter((r) => r.children && r.children.length > 0).map((r) => r.id)),
   );
 
-  return (
+  const table = (
     <TreeTable
       label={t('issues.list.tableLabel')}
       columns={columns}
@@ -41,5 +48,13 @@ export function IssueTreeStaticTable({ rows }: IssueTreeStaticTableProps) {
       getRowLabel={(r) => `${r.identifier} ${r.title}`}
       getRowTestId={(r) => `issue-row-${r.identifier}`}
     />
+  );
+
+  return workflow && members ? (
+    <IssueInlineEditProvider workflow={workflow} members={members}>
+      {table}
+    </IssueInlineEditProvider>
+  ) : (
+    table
   );
 }
