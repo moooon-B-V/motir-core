@@ -12,6 +12,10 @@
 // what the optimistic-update reconcile needs, the UI already holds the avatar.)
 
 import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
+import type { WorkflowStatusDto } from '@/lib/dto/workflows';
+
+/** Board kind — mirrors the Prisma `BoardType` enum (Story 3.1.1). */
+export type BoardTypeDto = 'kanban' | 'scrum';
 
 /**
  * One work item rendered as a board card. The row-render fields a column card
@@ -64,4 +68,54 @@ export interface MoveCardResultDto {
   card: BoardCardDto;
   appliedStatus: string;
   column: { id: string; name: string };
+}
+
+/**
+ * One column of the board projection (Subtask 3.1.4): the column meta, its
+ * mapped status keys, a BOUNDED first page of cards (ordered by rank, or by
+ * recency for a terminal column), the FULL count of cards in the column
+ * (`totalCount` — the denominator the UI shows, independent of how many are
+ * loaded), and a `cursor` for lazy "load more" (null when the column has no
+ * further pages). The board NEVER returns every card (finding #57); the 3.2 UI
+ * pages with `cursor` and virtualizes a tall column.
+ */
+export interface BoardColumnDto {
+  id: string;
+  name: string;
+  /** Fractional-index sort key (opaque string). */
+  position: string;
+  /** WIP limit (Story 3.3 enforces; 3.1.4 only surfaces it). */
+  wipLimit: number | null;
+  /** The workflow status keys this column maps (the statuses its cards hold). */
+  statusKeys: string[];
+  cards: BoardCardDto[];
+  totalCount: number;
+  cursor: string | null;
+}
+
+/**
+ * The board read projection (Subtask 3.1.4): the default board's columns (in
+ * `position` order), each with its bounded first page of cards, plus
+ * `unmappedStatuses` — every project workflow status mapped to NO column
+ * (Jira's behaviour: surfaced, never silently dropped, so the 3.2 UI can offer
+ * to map them). The board itself stores no card placement; a card's column is
+ * derived from its `work_item.status`.
+ */
+export interface BoardProjectionDto {
+  boardId: string;
+  name: string;
+  type: BoardTypeDto;
+  columns: BoardColumnDto[];
+  unmappedStatuses: WorkflowStatusDto[];
+}
+
+/**
+ * One lazy "load more" page for a single column (`boardsService.loadColumnCards`
+ * / the 3.1.6 `GET …/columns/[id]/cards` route): the next slice of cards plus
+ * the cursor for the page after it (null at the end of the column's bounded
+ * window). Same `BoardCardDto` shape the projection returns.
+ */
+export interface PagedColumnCardsDto {
+  cards: BoardCardDto[];
+  cursor: string | null;
 }

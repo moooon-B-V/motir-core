@@ -1153,6 +1153,33 @@ export const workItemsService = {
   },
 
   /**
+   * Batch readiness (finding #21) for MANY items at once — the board projection
+   * (3.1.4) needs a `ready` flag per card without a per-card N+1. Returns a Map
+   * keyed by EVERY requested id (an item with no blocker, or only terminal
+   * blockers, is ready). Mirrors `getReadiness`'s per-project terminal
+   * classification, but over ONE batched blocker read + ONE batched terminal-set
+   * read — the same shape `getReadiness` uses, scaled to a set.
+   */
+  async getReadinessForItems(
+    itemIds: string[],
+    ctx: ServiceContext,
+  ): Promise<Map<string, boolean>> {
+    const ready = new Map<string, boolean>(itemIds.map((id) => [id, true]));
+    if (itemIds.length === 0) return ready;
+    const blockers = await workItemLinkRepository.findBlockerStatesForItems(itemIds);
+    if (blockers.length === 0) return ready;
+    const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+      blockers.map((b) => b.projectId),
+      ctx.workspaceId,
+    );
+    for (const b of blockers) {
+      const isTerminal = terminalByProject.get(b.projectId)?.has(b.status) ?? false;
+      if (!isTerminal) ready.set(b.fromId, false);
+    }
+    return ready;
+  },
+
+  /**
    * Fetch ONE work item by id, scoped to the caller's active workspace. Returns
    * the full DTO, or throws WorkItemNotFoundError when the row is absent OR
    * belongs to a DIFFERENT workspace — the 404-not-403 no-existence-leak

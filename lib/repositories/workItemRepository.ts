@@ -561,6 +561,42 @@ export const workItemRepository = {
   },
 
   /**
+   * One BOUNDED page of a board column's cards (Subtask 3.1.4, finding #57): a
+   * project's non-archived work items whose `status` is one of `statusKeys` (the
+   * column's mapped statuses), ordered for the board and windowed with
+   * `skip`/`take` so the projection never ships a whole column. `order` is
+   * whitelisted (NOT user input): `'position'` ranks by the board rank
+   * (`position` asc — the fractional-index string sorts lexicographically) for
+   * an active column; `'recent'` orders by `updatedAt` desc for a terminal
+   * (done) column, so its bounded window is the most-recent work. A stable
+   * `key` asc tiebreak keeps paging deterministic. The explicit `projectId` +
+   * `workspaceId` gate is the app-layer tenancy check atop RLS (finding #26).
+   * Empty `statusKeys` short-circuits to `[]` (a column mapping no live status
+   * has no cards). Read-only → `db` singleton (optional `tx`).
+   */
+  async findColumnCards(
+    projectId: string,
+    workspaceId: string,
+    statusKeys: string[],
+    order: 'position' | 'recent',
+    page: { limit: number; offset: number },
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem[]> {
+    if (statusKeys.length === 0) return [];
+    const client = tx ?? db;
+    const orderBy: Prisma.WorkItemOrderByWithRelationInput[] =
+      order === 'recent'
+        ? [{ updatedAt: 'desc' }, { key: 'asc' }]
+        : [{ position: 'asc' }, { key: 'asc' }];
+    return client.workItem.findMany({
+      where: { projectId, workspaceId, archivedAt: null, status: { in: statusKeys } },
+      orderBy,
+      skip: page.offset,
+      take: page.limit,
+    });
+  },
+
+  /**
    * One LAZY tree level (Subtask 2.5.13, finding #57) — the project's ROOTS
    * (`parentId === null`) or one parent's DIRECT children (`parentId === <id>`),
    * sorted by the whitelisted column + paged with `take`/`offset`. Each row
