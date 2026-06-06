@@ -140,13 +140,34 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
     setText(filter.text ?? '');
   }
 
-  // The debounced push must thread the LATEST facets (a kind toggle mid-type
-  // must not be clobbered), so read the current filter through an effect-synced
-  // ref rather than the keystroke's stale closure.
+  // Selection is OPTIMISTIC. The active filter lives in the URL, so it only
+  // reflects back as a new `filter` prop AFTER a push → Server re-read round-trip
+  // — driving the check marks / counts straight off `filter` would leave them
+  // blank from the click until the navigation (and the issue read) settle, so a
+  // selected status simply "doesn't show" (finding #58). Instead we mirror the
+  // filter into local state that updates the instant a facet is toggled, render
+  // every check mark + count from THAT, and reconcile to the prop when it changes
+  // identity (the navigation landed, or an external reset / back-forward) —
+  // guarded like `urlText` above so unrelated client re-renders (open /
+  // member-search state) can't stomp an in-flight optimistic value.
+  //
+  // `filterRef` is the synchronous twin of that state: a toggle composes onto
+  // `filterRef.current`, not the render-time closure, so two edits fired
+  // back-to-back (before any re-render) still stack instead of clobbering.
+  const [optimistic, setOptimistic] = useState(filter);
+  const [seenFilter, setSeenFilter] = useState(filter);
+  if (filter !== seenFilter) {
+    setSeenFilter(filter);
+    setOptimistic(filter);
+  }
+  // `filterRef` is reconciled in an effect (not during render — refs mustn't be
+  // written there); the `[filter]` dep runs it only when the prop identity
+  // changes, so it never stomps an in-flight optimistic value mid-navigation.
   const filterRef = useRef(filter);
   useEffect(() => {
     filterRef.current = filter;
-  });
+  }, [filter]);
+
   const textTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     return () => {
@@ -155,6 +176,8 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
   }, []);
 
   function apply(next: IssueFilter) {
+    filterRef.current = next; // sync source: the NEXT toggle composes onto this
+    setOptimistic(next); // instant UI: check marks + counts update on click
     router.push(buildIssueListHref(pathname, { view, sort, filter: next }));
   }
 
@@ -166,8 +189,9 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
     }, 300);
   }
 
-  const active = isFilterActive(filter);
-  const count = countActiveFilters(filter);
+  // Trigger badge + every check mark / count render from the optimistic mirror.
+  const active = isFilterActive(optimistic);
+  const count = countActiveFilters(optimistic);
   const memberMatches = members.filter((m) => {
     if (memberQuery.trim() === '') return true;
     const q = memberQuery.trim().toLowerCase();
@@ -218,6 +242,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
             disabled={!active}
             onClick={() => {
               setMemberQuery('');
+              setText('');
               apply(EMPTY_FILTER);
             }}
             className={cn(
@@ -251,13 +276,13 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
 
           {/* KIND */}
           <div className="border-t border-(--el-border) py-1.5 first:border-t-0">
-            <FacetLabel label="Kind" count={filter.kinds.length} />
+            <FacetLabel label="Kind" count={optimistic.kinds.length} />
             <div role="listbox" aria-label="Kind" aria-multiselectable="true">
               {ISSUE_TYPES.map((type: IssueType) => (
                 <OptionRow
                   key={type}
-                  selected={filter.kinds.includes(type)}
-                  onToggle={() => apply(toggleKind(filter, type))}
+                  selected={optimistic.kinds.includes(type)}
+                  onToggle={() => apply(toggleKind(filterRef.current, type))}
                   glyph={<IssueTypeIcon type={type} className="h-4 w-4" />}
                   label={ISSUE_TYPE_META[type].label}
                 />
@@ -267,13 +292,13 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
 
           {/* STATUS */}
           <div className="border-t border-(--el-border) py-1.5">
-            <FacetLabel label="Status" count={filter.statuses.length} />
+            <FacetLabel label="Status" count={optimistic.statuses.length} />
             <div role="listbox" aria-label="Status" aria-multiselectable="true">
               {statuses.map((s) => (
                 <OptionRow
                   key={s.id}
-                  selected={filter.statuses.includes(s.key)}
-                  onToggle={() => apply(toggleStatus(filter, s.key))}
+                  selected={optimistic.statuses.includes(s.key)}
+                  onToggle={() => apply(toggleStatus(filterRef.current, s.key))}
                   glyph={<StatusDot status={s} />}
                   label={s.label}
                 />
@@ -285,7 +310,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
           <div className="border-t border-(--el-border) py-1.5">
             <FacetLabel
               label="Assignee"
-              count={filter.assigneeIds.length + (filter.includeUnassigned ? 1 : 0)}
+              count={optimistic.assigneeIds.length + (optimistic.includeUnassigned ? 1 : 0)}
             />
             <div className="relative mx-1 mt-0.5 mb-1">
               <Search
@@ -303,8 +328,8 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
             </div>
             <div role="listbox" aria-label="Assignee" aria-multiselectable="true">
               <OptionRow
-                selected={filter.includeUnassigned}
-                onToggle={() => apply(toggleUnassigned(filter))}
+                selected={optimistic.includeUnassigned}
+                onToggle={() => apply(toggleUnassigned(filterRef.current))}
                 glyph={
                   <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full border border-dashed border-(--el-border) text-(--el-text-muted)">
                     <UserX className="h-3.5 w-3.5" aria-hidden />
@@ -315,8 +340,8 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
               {memberMatches.map((m) => (
                 <OptionRow
                   key={m.userId}
-                  selected={filter.assigneeIds.includes(m.userId)}
-                  onToggle={() => apply(toggleAssignee(filter, m.userId))}
+                  selected={optimistic.assigneeIds.includes(m.userId)}
+                  onToggle={() => apply(toggleAssignee(filterRef.current, m.userId))}
                   glyph={<Avatar name={m.name} />}
                   label={m.name}
                   secondary={m.email}
