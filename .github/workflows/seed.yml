@@ -1,0 +1,52 @@
+name: Reseed plan on merge
+
+# When a plan-seed PR merges, `main` changes under scripts/plan-seed/** — the
+# plan data is the source of truth, so regenerate the live `moooon`/`prodect`
+# tenant from it. The seed clears-and-reseeds ONLY that workspace (by name,
+# owned by the fixed seed user); no other tenant is touched. Inert until the
+# SEED_DATABASE_URL secret is set (the job fails loudly rather than touching the
+# wrong database).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/plan-seed/**'
+
+# Never run two reseeds at once (each is a destructive clear-and-reseed of the
+# one workspace). Do NOT cancel an in-flight reseed — let it finish cleanly.
+concurrency:
+  group: reseed-main
+  cancel-in-progress: false
+
+jobs:
+  reseed:
+    name: Reseed moooon/prodect from the plan seed
+    runs-on: ubuntu-latest
+    env:
+      # The production (unpooled) Neon connection string — add this as a GitHub
+      # Actions secret (Settings → Secrets and variables → Actions). Without it
+      # the job fails before touching any database.
+      DATABASE_URL: ${{ secrets.SEED_DATABASE_URL }}
+      # Unlock the seed's production guard (scripts/plan-seed/seed.ts refuses to
+      # run under NODE_ENV=production unless this is set).
+      SEED_ALLOW_PRODUCTION: '1'
+      # The auth module (imported transitively by usersService.createUser) reads
+      # these at module load. The secret is the real per-env value; the OAuth
+      # placeholders just let the providers register (no OAuth round-trip here).
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      GOOGLE_CLIENT_ID: reseed-placeholder
+      GOOGLE_CLIENT_SECRET: reseed-placeholder
+      # No git hooks to wire in CI.
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma generate
+      # Make sure the target DB is on the latest schema before seeding.
+      - run: pnpm prisma migrate deploy
+      - run: pnpm db:seed
