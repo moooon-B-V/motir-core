@@ -185,7 +185,9 @@ describe('IssueTreeTable — lazy + sortable', () => {
 
   it('clicking a column header navigates to the new ?sort=', () => {
     renderTree({ rows: [node({ id: 'a', key: 1 })], hasMore: false, total: 1 });
-    fireEvent.click(screen.getByRole('button', { name: /Priority/ }));
+    // Exact name: the inline priority CELL trigger is "Edit Priority" (2.5.5), so
+    // the bare "Priority" matches only the sortable column header.
+    fireEvent.click(screen.getByRole('button', { name: 'Priority' }));
     expect(push).toHaveBeenCalledTimes(1);
     expect(String(push.mock.calls[0]?.[0])).toContain('sort=priority');
   });

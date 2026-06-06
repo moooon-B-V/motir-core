@@ -1,11 +1,15 @@
 import type { ReactNode } from 'react';
 import type { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
-import { Pill } from '@/components/ui/Pill';
-import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import type { IssueSortColumn } from '@/lib/issues/issueListView';
 import { Avatar } from './issueCellPrimitives';
-import { InlineStatusCell, InlineAssigneeCell } from './IssueInlineEdit';
+import {
+  InlineStatusCell,
+  InlineAssigneeCell,
+  InlinePriorityCell,
+  InlineDueCell,
+  InlineEstimateCell,
+} from './IssueInlineEdit';
 import type { IssueRowData } from './issueRows';
 
 // A next-intl global translator (from `useTranslations()` with no namespace), so
@@ -69,15 +73,9 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
       header: t('issues.columns.priority'),
       width: 120,
       sortColumn: 'priority',
-      cell: (r) => {
-        const meta = PRIORITY_META[r.priority];
-        return (
-          <Pill {...meta.pill}>
-            <meta.icon className="h-3 w-3" aria-hidden />
-            {t(`labels.priority.${r.priority}`)}
-          </Pill>
-        );
-      },
+      // Inline-editable inside an IssueInlineEditProvider (2.5.5); read-only chip
+      // otherwise. The cell owns its own PRIORITY_META chip rendering.
+      cell: (r) => <InlinePriorityCell row={r} />,
     },
     {
       key: 'assignee',
@@ -105,12 +103,9 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
       header: t('issues.columns.due'),
       width: 120,
       sortColumn: 'due',
-      cell: (r) =>
-        r.dueLabel ? (
-          <span className="truncate text-(--el-text-secondary)">{r.dueLabel}</span>
-        ) : (
-          <span className="text-(--el-text-muted)">—</span>
-        ),
+      // Inline-editable inside an IssueInlineEditProvider (2.5.5); read-only date
+      // otherwise.
+      cell: (r) => <InlineDueCell row={r} />,
     },
     {
       key: 'estimate',
@@ -118,12 +113,9 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
       width: 90,
       align: 'end',
       sortColumn: 'estimate',
-      cell: (r) =>
-        r.estimateLabel ? (
-          <span className="truncate text-(--el-text-secondary)">{r.estimateLabel}</span>
-        ) : (
-          <span className="text-(--el-text-muted)">—</span>
-        ),
+      // Inline-editable inside an IssueInlineEditProvider (2.5.5); read-only value
+      // otherwise.
+      cell: (r) => <InlineEstimateCell row={r} />,
     },
     {
       key: 'status',

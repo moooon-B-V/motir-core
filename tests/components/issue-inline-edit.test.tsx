@@ -34,7 +34,17 @@ import { IssueListTable } from '@/app/(authed)/issues/_components/IssueListTable
 import { EMPTY_FILTER } from '@/lib/issues/issueListFilter';
 
 beforeAll(() => {
-  (window.HTMLElement.prototype as unknown as Record<string, unknown>)['scrollIntoView'] = vi.fn();
+  // Radix Popover (the DatePicker dialog) needs a few browser APIs happy-dom lacks.
+  const proto = window.HTMLElement.prototype as unknown as Record<string, unknown>;
+  proto['scrollIntoView'] = vi.fn();
+  proto['hasPointerCapture'] = vi.fn(() => false);
+  proto['setPointerCapture'] = vi.fn();
+  proto['releasePointerCapture'] = vi.fn();
+  (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
 });
 
 afterEach(() => {
@@ -98,7 +108,9 @@ function row(over: Partial<IssueRowData> & { identifier: string }): IssueRowData
     updatedAt: '2026-06-01T00:00:00.000Z',
     priority: 'medium',
     reporterName: 'Owner',
+    dueDate: null,
     dueLabel: null,
+    estimateMinutes: null,
     estimateLabel: null,
     ...over,
   };
@@ -160,6 +172,46 @@ describe('Inline row edits (Subtask 2.5.5)', () => {
     expect(updateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'wi_1', assigneeId: null }),
     );
+  });
+
+  it('PRIORITY cell opens the shared PriorityPicker and commits via updateIssueAction', () => {
+    updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-02T00:00:00.000Z' });
+    renderTable([row({ identifier: 'PROD-1', id: 'wi_1', priority: 'medium' })]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Priority' }));
+    fireEvent.click(screen.getByRole('option', { name: 'High' }));
+
+    expect(updateSpy).toHaveBeenCalledWith({
+      id: 'wi_1',
+      expectedUpdatedAt: '2026-06-01T00:00:00.000Z',
+      priority: 'high',
+    });
+    expect(statusSpy).not.toHaveBeenCalled();
+  });
+
+  it('ESTIMATE cell commits a new value on blur via updateIssueAction', () => {
+    updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-02T00:00:00.000Z' });
+    renderTable([row({ identifier: 'PROD-1', id: 'wi_1', estimateMinutes: null })]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Estimate' }));
+    const input = screen.getByLabelText('Estimate (minutes)');
+    fireEvent.change(input, { target: { value: '120' } });
+    expect(updateSpy).not.toHaveBeenCalled(); // not per-keystroke
+    fireEvent.blur(input);
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'wi_1', estimateMinutes: 120 }),
+    );
+  });
+
+  it('DUE cell opens the calendar picker (Edit Due date trigger)', () => {
+    renderTable([row({ identifier: 'PROD-1', id: 'wi_1', dueDate: null, dueLabel: null })]);
+
+    // The due cell is a trigger; opening it mounts the DatePicker dialog.
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Due date' }));
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(pushSpy).not.toHaveBeenCalled();
   });
 
   it('opening a control reveals the picker rather than navigating the row', () => {

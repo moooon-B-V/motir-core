@@ -47,12 +47,17 @@ export interface IssueRowData {
   /** ISO-8601 last-modified stamp — the `expectedUpdatedAt` the inline assignee
    *  edit submits for optimistic concurrency (2.5.5). */
   updatedAt: string;
-  /** Priority value → the shared PRIORITY_META chip in the cell. */
+  /** Priority value → the shared PRIORITY_META chip; the raw value the inline
+   *  PriorityPicker edits (2.5.5). */
   priority: WorkItemPriorityDto;
   /** Resolved reporter display name (a reporter is always set). */
   reporterName: string;
+  /** Raw due date (ISO-8601) or null — what the inline DatePicker edits (2.5.5). */
+  dueDate: string | null;
   /** Pre-formatted due date ("Jun 4, 2026"), or null when none. */
   dueLabel: string | null;
+  /** Raw estimate in whole minutes or null — what the inline estimate field edits (2.5.5). */
+  estimateMinutes: number | null;
   /** Pre-formatted estimate ("2h 30m"), or null when unestimated. */
   estimateLabel: string | null;
 }
@@ -103,7 +108,9 @@ function shapeRowData(
     // The reporter always exists; fall back to its id only if the member is
     // somehow missing (e.g. left the workspace) so the cell never blanks.
     reporterName: nameById.get(item.reporterId) ?? item.reporterId,
+    dueDate: item.dueDate,
     dueLabel: item.dueDate ? formatDate(item.dueDate, locale) : null,
+    estimateMinutes: item.estimateMinutes,
     estimateLabel:
       item.estimateMinutes != null ? formatDurationMinutes(item.estimateMinutes) : null,
   };

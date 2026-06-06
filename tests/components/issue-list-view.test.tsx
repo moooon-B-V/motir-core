@@ -59,7 +59,9 @@ function row(over: Partial<IssueRowData> & { identifier: string }): IssueRowData
     updatedAt: '2026-06-01T00:00:00.000Z',
     priority: 'medium',
     reporterName: 'Owner',
+    dueDate: null,
     dueLabel: null,
+    estimateMinutes: null,
     estimateLabel: null,
     ...over,
   };

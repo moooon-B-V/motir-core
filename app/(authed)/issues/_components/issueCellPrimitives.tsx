@@ -2,7 +2,9 @@
 
 import { useTranslations } from 'next-intl';
 import { Pill, type PillProps } from '@/components/ui/Pill';
+import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
+import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
 
 // The presentational vocabulary the /issues row cells share (Subtask 2.5.3,
 // extracted in 2.5.5). A leaf module — no Server Actions, no context — so BOTH
@@ -57,5 +59,35 @@ export function AssigneeValue({ name }: { name: string | null }) {
     </span>
   ) : (
     <span className="text-(--el-text-muted)">{t('columns.unassigned')}</span>
+  );
+}
+
+/** The PRIORITY cell value — the shared PRIORITY_META chip (tone + direction icon). */
+export function PriorityValue({ priority }: { priority: WorkItemPriorityDto }) {
+  const t = useTranslations('labels');
+  const meta = PRIORITY_META[priority];
+  return (
+    <Pill {...meta.pill}>
+      <meta.icon className="h-3 w-3" aria-hidden />
+      {t(`priority.${priority}`)}
+    </Pill>
+  );
+}
+
+/** The DUE cell value — the pre-formatted date, or a muted em dash when unset. */
+export function DueValue({ label }: { label: string | null }) {
+  return label ? (
+    <span className="truncate text-(--el-text-secondary)">{label}</span>
+  ) : (
+    <span className="text-(--el-text-muted)">—</span>
+  );
+}
+
+/** The ESTIMATE cell value — the pre-formatted duration, or a muted em dash. */
+export function EstimateValue({ label }: { label: string | null }) {
+  return label ? (
+    <span className="truncate text-(--el-text-secondary)">{label}</span>
+  ) : (
+    <span className="text-(--el-text-muted)">—</span>
   );
 }
