@@ -32,6 +32,10 @@ export interface RelationshipsPanelProps {
   duplicates: RelationshipLinkDto[];
   clones: RelationshipLinkDto[];
   readiness: ReadinessVerdictDto;
+  /** The current item's status key — the readiness banner shows only while the
+   *  item is in the `todo` category (resolved via `workflow`); "can I start
+   *  this?" is moot once it's in-progress or done (2.5.21). */
+  currentStatus: string;
   /** The item's project workflow — classifies a linked status into a Pill tone. */
   workflow: WorkflowDto;
   /** When set, render the add control + per-row remove (the detail page). The
@@ -111,6 +115,7 @@ export function RelationshipsPanel({
   duplicates,
   clones,
   readiness,
+  currentStatus,
   workflow,
   editable,
   currentItemId,
@@ -141,7 +146,11 @@ export function RelationshipsPanel({
     { key: 'clones', label: tl('relationship.clones'), items: clones, blockerGroup: false },
   ];
   const nonEmpty = groups.filter((g) => g.items.length > 0);
-  const hasBlockers = blockedBy.length > 0;
+  // The readiness banner shows only for a TODO-category item that has blockers:
+  // "can I start this?" is moot once the item is in-progress or done (2.5.21,
+  // matching the quick-view peek).
+  const currentCategory = workflow.statuses.find((s) => s.key === currentStatus)?.category;
+  const showReadiness = blockedBy.length > 0 && currentCategory === 'todo';
   const openBlockerIds = new Set(readiness.openBlockers.map((b) => b.id));
   const canEdit = Boolean(editable && currentItemId && identifier);
 
@@ -153,8 +162,9 @@ export function RelationshipsPanel({
         ) : null}
 
         {/* Readiness reads off the dependency in-edges, so it shows only when
-            there ARE blockers — an item nothing blocks has no signal to give. */}
-        {hasBlockers ? (
+            there ARE blockers — an item nothing blocks has no signal to give —
+            AND only while the item is still in the todo category (2.5.21). */}
+        {showReadiness ? (
           <ReadinessBadge
             ready={readiness.ready}
             blockers={readiness.openBlockers.map((b) => ({
