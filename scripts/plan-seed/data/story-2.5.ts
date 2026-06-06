@@ -269,7 +269,7 @@ export const story_2_5: PlanStory = {
       id: '2.5.6',
       title:
         'Story E2E — render · expand · filter · inline edit · view-switcher · isolation + a11y',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 15,
