@@ -44,7 +44,10 @@ export function IssueListPager({ total, page, pageSize, onPage }: IssueListPager
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-(--el-border) bg-(--el-surface-soft) px-3.5 py-2.5">
-      <span className="text-[13px] text-(--el-text-muted)">
+      {/* `--el-text-secondary` (not `-muted`): at 13px on `--el-surface-soft`
+          muted is ~4.34:1 (below WCAG AA); secondary clears it (~6.5:1 light,
+          ~6.9:1 dark). Surfaced by the 2.5.6 strict /issues a11y sweep. */}
+      <span className="text-[13px] text-(--el-text-secondary)">
         Showing{' '}
         <strong className="font-semibold text-(--el-text)">
           {N.format(from)}–{N.format(to)}
