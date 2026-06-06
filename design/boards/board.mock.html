@@ -1,0 +1,2074 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Kanban board UI + drag-drop transitions (Story 3.2 · 3.2.1)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the Kanban BOARD surface — Story 3.2.
+      No design/boards/ asset existed; the planning-time design gate (3.2.1)
+      produces this. It is the layout source of truth every UI subtask in 3.2
+      (3.2.2–3.2.6) builds against.
+
+      Built FROM the real design system: the token block below is copied 1:1
+      from app/globals.css (Tier-0 --color-* + Tier-3 --el-* + the shape
+      tokens), and the markup mirrors the SHIPPED primitives — Card, Pill
+      (status/priority tones), IssueTypeIcon (lucide in the --el-type-* hue),
+      the initial-letter Avatar, ReadinessBadge (the blocked/peach treatment),
+      EmptyState, ErrorState, Spinner. A board card REUSES the exact issue
+      primitives from app/(authed)/issues/_components/issueCellPrimitives.tsx —
+      no new card vocabulary; the board is a new ARRANGEMENT of shipped pieces.
+      Clicking a card opens the existing IssueQuickView (Story 2.5).
+
+      The board is a PURE consumer of the Story-3.1 board API
+      (GET …/board → BoardProjectionDto; GET …/board/columns/[id]/cards → the
+      lazy page; POST …/board/move → the moved card). Moving a card = a workflow
+      transition, never a board-local write; illegal drops snap back on the 3.1
+      typed errors (409 IllegalBoardMove, 422 UnmappedColumnTarget).
+
+      Covers (multi-panel):
+        (0) the full board in the page shell — columns of cards, counts
+        (1) DRAG in progress — lifted card (DragOverlay) + insertion indicator +
+            target-column highlight + the aria-live announcement
+        (2) illegal-move SNAP-BACK — the card returning + a danger toast (409)
+        (3) KEYBOARD DnD — a "picked up" card + the keyboard model + announcement
+        (4) SCALE — a tall column: count + "Load more" + the virtualization note
+        (5) UNMAPPED-statuses tray — statuses with no column (the Jira behaviour)
+        (6) STATES — loading skeleton · empty board · error
+        (7) MOBILE — the narrow single-column layout
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1240px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel {
+        max-width: 1240px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 40px auto 10px;
+        padding-left: 2px;
+        max-width: 1240px;
+      }
+      .stage {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+
+      /* ── Page shell — header + toolbar (mirrors app/(authed) board route) ─── */
+      .page {
+        padding: 24px 24px 8px;
+      }
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin: 4px 0 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .tb-btn .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn.primary {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+      }
+      .tb-btn.primary .ic {
+        color: var(--el-accent-text);
+      }
+      .tb-btn.is-disabled {
+        color: var(--el-text-muted);
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+
+      /* ── The board: a horizontally-scrolling row of columns ───────────────── */
+      .board {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        overflow-x: auto;
+        padding: 4px 24px 24px;
+        scroll-snap-type: x proximity;
+      }
+      .col {
+        scroll-snap-align: start;
+        flex: 0 0 288px;
+        width: 288px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        display: flex;
+        flex-direction: column;
+        max-height: 560px;
+      }
+      .col-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 12px 10px;
+      }
+      .col-head .nm {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        letter-spacing: 0.01em;
+      }
+      /* per-column card count (the total from the projection) */
+      .col-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 20px;
+        padding: 0 7px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .col-head .spacer {
+        flex: 1;
+      }
+      /* WIP-limit indicator SLOT — drawn as a placeholder; Story 3.3 enforces. */
+      .wip-slot {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-faint);
+        font-family: var(--font-mono);
+      }
+      .col-head .icon-btn {
+        width: 24px;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        border: 0;
+        background: none;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .col-head .icon-btn:hover {
+        background: var(--el-muted);
+      }
+      .col-head .icon-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .col-body {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 0 10px 10px;
+        overflow-y: auto;
+      }
+
+      /* ── Board card — REUSES the issue primitives, compactly ───────────────── */
+      .bcard {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        cursor: grab;
+        text-decoration: none;
+        color: inherit;
+      }
+      .bcard:hover {
+        border-color: var(--el-border-strong);
+      }
+      .bcard:hover .bc-title {
+        text-decoration: underline;
+      }
+      .bc-top {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .type-icon {
+        width: 15px;
+        height: 15px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+      .bc-id {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .bc-top .spacer {
+        flex: 1;
+      }
+      /* the drag handle — a grip; the whole card is draggable, this signals it */
+      .grip {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-faint);
+        flex: none;
+        opacity: 0;
+        transition: opacity 0.1s ease;
+      }
+      .bcard:hover .grip {
+        opacity: 1;
+      }
+      .bc-title {
+        font-size: 13.5px;
+        line-height: 1.35;
+        color: var(--el-text);
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .bc-meta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .bc-meta .spacer {
+        flex: 1;
+      }
+
+      /* Pill (components/ui/Pill.tsx): hue in tint background, strong text */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill .pic {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .pill--highest,
+      .pill--high {
+        background: var(--el-tint-rose);
+      }
+      .pill--highest .pic,
+      .pill--high .pic {
+        color: var(--el-danger);
+      }
+      .pill--medium {
+        background: var(--el-tint-sky);
+      }
+      .pill--medium .pic {
+        color: var(--el-info);
+      }
+      .pill--low {
+        background: var(--el-tint-mint);
+      }
+      .pill--low .pic {
+        color: var(--el-success);
+      }
+      .pill--blocked {
+        background: var(--el-tint-peach);
+      }
+      .pill--blocked .pic {
+        color: var(--el-warning);
+      }
+      /* estimate / story-point chip — neutral */
+      .pts {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        font-family: var(--font-mono);
+      }
+      /* Avatar — initial-letter, mirrors IssueTreeTable's Avatar */
+      .avatar {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .avatar.unassigned {
+        background: var(--el-muted);
+        color: var(--el-text-faint);
+        border: 1px dashed var(--el-border-strong);
+      }
+
+      /* empty column */
+      .col-empty {
+        margin: 4px 0 12px;
+        padding: 18px 10px;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        text-align: center;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Drag states ──────────────────────────────────────────────────────── */
+      /* the source card's hole while it's lifted */
+      .bcard.ghost {
+        opacity: 0.4;
+        border-style: dashed;
+        box-shadow: none;
+      }
+      /* the insertion indicator between cards (NOT colour-alone — it's a bar) */
+      .insertion {
+        height: 3px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        margin: 1px 2px;
+      }
+      /* the column being targeted — ring + tint, plus the insertion bar above */
+      .col.drop-target {
+        outline: 2px solid var(--el-accent);
+        outline-offset: -1px;
+        background: var(--el-tint-lavender);
+      }
+      /* the DragOverlay clone — lifted, tilted, elevated */
+      .drag-overlay {
+        position: absolute;
+        right: 28px;
+        top: 96px;
+        width: 264px;
+        transform: rotate(2.5deg);
+        box-shadow: var(--shadow-elevated);
+        pointer-events: none;
+      }
+      .drag-overlay .bcard {
+        cursor: grabbing;
+        border-color: var(--el-accent);
+      }
+      .stage.rel {
+        position: relative;
+      }
+      /* keyboard "picked up" state — strong focus ring + lifted */
+      .bcard.picked {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: 1px;
+        box-shadow: var(--shadow-elevated);
+        cursor: grabbing;
+      }
+      .focus-ring {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: 1px;
+        border-radius: var(--radius-card);
+      }
+
+      /* aria-live announcement region (visually shown here for review; in prod
+         it is sr-only and read by the screen reader) */
+      .live {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 24px 12px;
+        padding: 8px 12px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+        border: 1px dashed var(--el-border-strong);
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .live .tag {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+      }
+
+      /* keyboard hint chips */
+      .kbd-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0 24px 16px;
+        align-items: center;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      kbd {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        line-height: 1;
+        padding: 3px 6px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+        box-shadow: var(--shadow-subtle);
+      }
+
+      /* ── Toast (components/ui/Toast.tsx) — illegal-move rejection ──────────── */
+      .toast-wrap {
+        position: absolute;
+        right: 20px;
+        bottom: 20px;
+        width: 340px;
+      }
+      .toast {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-left: 3px solid var(--el-danger);
+        box-shadow: var(--shadow-elevated);
+      }
+      .toast .t-ic {
+        width: 18px;
+        height: 18px;
+        color: var(--el-danger);
+        flex: none;
+        margin-top: 1px;
+      }
+      .toast .t-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .toast .t-body {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        margin-top: 2px;
+      }
+
+      /* ── Scale: load-more + virtualization ────────────────────────────────── */
+      .load-more {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        width: 100%;
+        height: var(--height-control);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .load-more:hover {
+        background: var(--el-page-bg);
+        border-color: var(--el-border-strong);
+      }
+      .load-more svg {
+        width: 14px;
+        height: 14px;
+      }
+      .col-foot {
+        padding: 4px 10px 10px;
+      }
+      .virt-note {
+        font-size: 11px;
+        color: var(--el-text-faint);
+        font-family: var(--font-mono);
+        text-align: center;
+        padding: 6px 0 0;
+      }
+
+      /* ── Unmapped-statuses tray (banner) ──────────────────────────────────── */
+      .tray {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 24px 14px;
+        padding: 10px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-yellow);
+        border: 1px solid transparent;
+      }
+      .tray .tr-ic {
+        width: 18px;
+        height: 18px;
+        color: var(--el-warning);
+        flex: none;
+      }
+      .tray .tr-text {
+        font-size: 13px;
+        color: var(--el-text-strong);
+        flex: 1;
+      }
+      .tray .tr-chips {
+        display: inline-flex;
+        gap: 6px;
+      }
+      .tray .tr-link {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-link);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .pill--neutral {
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+
+      /* ── States: loading skeleton / empty / error ─────────────────────────── */
+      .sk {
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+      .pulse {
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      .sk-card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        box-shadow: var(--shadow-card);
+      }
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 16px;
+      }
+      .empty .ic-wrap {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-muted);
+        background: var(--el-surface);
+        border-radius: 9999px;
+      }
+      .empty .ic-wrap svg {
+        width: 24px;
+        height: 24px;
+      }
+      .empty h3 {
+        margin: 0 0 6px;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        font-family: var(--font-serif);
+      }
+      .empty p {
+        margin: 0 0 16px;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+        max-width: 360px;
+      }
+      .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 16px;
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        border: 0;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .btn-primary svg {
+        width: 16px;
+        height: 16px;
+      }
+      .err .ic-wrap {
+        color: var(--el-danger);
+      }
+      .spinner {
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        border: 2px solid var(--el-border);
+        border-top-color: var(--el-accent);
+        display: inline-block;
+      }
+
+      /* ── Mobile panel ─────────────────────────────────────────────────────── */
+      .phone {
+        max-width: 380px;
+        margin: 0 auto;
+        border: 1px solid var(--el-border);
+        border-radius: 22px;
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .phone .page {
+        padding: 16px 14px 6px;
+      }
+      .phone .page-head h2 {
+        font-size: 19px;
+      }
+      .phone .col-pager {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 14px 10px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .phone .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        background: var(--el-border-strong);
+      }
+      .phone .dot.on {
+        background: var(--el-accent);
+        width: 18px;
+        border-radius: 9999px;
+      }
+      .phone .board {
+        padding: 0 14px 18px;
+      }
+      .phone .col {
+        flex: 0 0 296px;
+        width: 296px;
+      }
+      .legend {
+        max-width: 1240px;
+        margin: 8px auto 0;
+        font-size: 12px;
+        color: var(--el-text-faint);
+        padding-left: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Kanban board UI + drag-drop transitions</h1>
+        <p>
+          Story 3.2 · Subtask 3.2.1 design asset — built from app/globals.css tokens + the shipped
+          issue/UI primitives. Source of truth = this HTML; see design-notes.md.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke, used by <use>) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <g
+          id="i-subtask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </g>
+        <g
+          id="i-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+        </g>
+        <g
+          id="i-grip"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="9" cy="6" r="1" />
+          <circle cx="9" cy="12" r="1" />
+          <circle cx="9" cy="18" r="1" />
+          <circle cx="15" cy="6" r="1" />
+          <circle cx="15" cy="12" r="1" />
+          <circle cx="15" cy="18" r="1" />
+        </g>
+        <g
+          id="i-more"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="5" cy="12" r="1" />
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-circle-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 8v4" />
+          <path d="M12 16h.01" />
+        </g>
+        <g
+          id="i-inbox"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+          <path
+            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+          />
+        </g>
+        <g
+          id="i-columns"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════════ PANEL 0 — the full board ════════════════ -->
+    <div class="panel-label">
+      0 · Board — columns of cards (default Kanban board, workflow order)
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="page-head">
+            <div>
+              <h2>Board</h2>
+              <p class="sub">Prodect · all issues, grouped by status</p>
+            </div>
+            <div class="toolbar">
+              <button class="tb-btn is-disabled" title="Filter — Epic 6">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-columns" /></svg
+                ></span>
+                Filter
+              </button>
+              <button class="tb-btn primary">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                ></span>
+                New issue
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="board">
+          <!-- To Do -->
+          <section class="col" aria-label="To Do, 8 issues">
+            <div class="col-head">
+              <span class="nm">To Do</span>
+              <span class="col-count">8</span>
+              <span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-31 Google OAuth sign-in">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-31</span>
+                  <span class="spacer"></span>
+                  <span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Google OAuth sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--high"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                    >High</span
+                  >
+                  <span class="pts">5</span>
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Yue Zhu">YZ</span>
+                </div>
+              </a>
+              <a class="bcard" href="#" aria-label="PROD-34 Password reset email — copy + template">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-34</span>
+                  <span class="spacer"></span>
+                  <span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Password reset email — copy + template</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                    >Medium</span
+                  >
+                  <span class="pts">2</span>
+                  <span class="spacer"></span>
+                  <span class="avatar unassigned" title="Unassigned">–</span>
+                </div>
+              </a>
+              <a
+                class="bcard"
+                href="#"
+                aria-label="PROD-49 OAuth callback drops the state param on Safari, blocked"
+              >
+                <div class="bc-top">
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-49</span>
+                  <span class="spacer"></span>
+                  <span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">OAuth callback drops the `state` param on Safari ≤16</div>
+                <div class="bc-meta">
+                  <span class="pill pill--blocked"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-circle-alert" /></svg></span
+                    >Blocked</span
+                  >
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Ana Ruiz">AR</span>
+                </div>
+              </a>
+            </div>
+            <div class="col-foot">
+              <button class="load-more">Load 5 more</button>
+            </div>
+          </section>
+
+          <!-- In Progress -->
+          <section class="col" aria-label="In Progress, 3 issues">
+            <div class="col-head">
+              <span class="nm">In Progress</span>
+              <span class="col-count">3</span>
+              <span class="spacer"></span>
+              <span class="wip-slot" title="WIP limit — Story 3.3">3/5</span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-23 Email + password sign-in">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-23</span>
+                  <span class="spacer"></span>
+                  <span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Email + password sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--highest"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                    >Highest</span
+                  >
+                  <span class="pts">8</span>
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Yue Zhu">YZ</span>
+                </div>
+              </a>
+              <a class="bcard" href="#" aria-label="PROD-42 Add Google OAuth to sign-in">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-42</span>
+                  <span class="spacer"></span>
+                  <span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Add Google OAuth to sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                    >Medium</span
+                  >
+                  <span class="pts">3</span>
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Ben Ito">BI</span>
+                </div>
+              </a>
+            </div>
+          </section>
+
+          <!-- In Review -->
+          <section class="col" aria-label="In Review, 2 issues">
+            <div class="col-head">
+              <span class="nm">In Review</span>
+              <span class="col-count">2</span>
+              <span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a
+                class="bcard"
+                href="#"
+                aria-label="PROD-58 Write E2E test: email-first user signs in with Google"
+              >
+                <div class="bc-top">
+                  <span class="type-icon t-subtask"
+                    ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-58</span>
+                  <span class="spacer"></span>
+                  <span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Write E2E test: email-first user signs in with Google</div>
+                <div class="bc-meta">
+                  <span class="pill pill--low"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg></span
+                    >Low</span
+                  >
+                  <span class="pts">2</span>
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Ben Ito">BI</span>
+                </div>
+              </a>
+            </div>
+          </section>
+
+          <!-- Done (terminal — windowed) -->
+          <section class="col" aria-label="Done, 41 issues">
+            <div class="col-head">
+              <span class="nm">Done</span>
+              <span class="col-count">41</span>
+              <span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-12 Q3 launch — Auth and sign-in">
+                <div class="bc-top">
+                  <span class="type-icon t-epic"
+                    ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-12</span>
+                  <span class="spacer"></span>
+                  <span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Q3 launch — Auth &amp; sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                    >Medium</span
+                  >
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Yue Zhu">YZ</span>
+                </div>
+              </a>
+            </div>
+            <div class="col-foot">
+              <div class="virt-note">recent 20 of 41 · older hidden</div>
+            </div>
+          </section>
+
+          <!-- Cancelled (empty) -->
+          <section class="col" aria-label="Cancelled, 0 issues">
+            <div class="col-head">
+              <span class="nm">Cancelled</span>
+              <span class="col-count">0</span>
+              <span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <div class="col-empty">No issues</div>
+            </div>
+          </section>
+        </div>
+      </div>
+      <p class="legend">
+        Card = IssueTypeIcon (kind hue via --el-type-*) · mono key · 2-line title · priority Pill ·
+        story-point chip · assignee Avatar · a "Blocked" peach pill (ReadinessBadge tone) on blocked
+        cards. Hover reveals the grip. Whole card is the drag handle + opens IssueQuickView on
+        click.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 1 — drag in progress ════════════════ -->
+    <div class="panel-label">
+      1 · Drag in progress — DragOverlay + insertion indicator + target highlight
+    </div>
+    <div class="panel">
+      <div class="live" aria-hidden="true">
+        <span class="tag">aria-live</span>
+        <span>Picked up PROD-34. Over column In Progress, position 2 of 3.</span>
+      </div>
+      <div class="stage rel">
+        <div class="board">
+          <section class="col" aria-label="To Do, 8 issues">
+            <div class="col-head">
+              <span class="nm">To Do</span><span class="col-count">7</span
+              ><span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                  ><span class="bc-id">PROD-31</span><span class="spacer"></span>
+                </div>
+                <div class="bc-title">Google OAuth sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--high"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                    >High</span
+                  ><span class="spacer"></span><span class="avatar">YZ</span>
+                </div>
+              </a>
+              <!-- the source card's hole (ghost) while it is lifted -->
+              <div class="bcard ghost" aria-hidden="true">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                  ><span class="bc-id">PROD-34</span>
+                </div>
+                <div class="bc-title">Password reset email — copy + template</div>
+              </div>
+            </div>
+          </section>
+
+          <!-- target column: ring + tint + insertion bar -->
+          <section class="col drop-target" aria-label="In Progress, drop target">
+            <div class="col-head">
+              <span class="nm">In Progress</span><span class="col-count">3</span
+              ><span class="spacer"></span>
+              <span class="wip-slot">3/5</span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                  ><span class="bc-id">PROD-23</span><span class="spacer"></span>
+                </div>
+                <div class="bc-title">Email + password sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--highest"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                    >Highest</span
+                  ><span class="spacer"></span><span class="avatar">YZ</span>
+                </div>
+              </a>
+              <!-- where the card will drop -->
+              <div class="insertion" aria-hidden="true"></div>
+              <a class="bcard" href="#">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                  ><span class="bc-id">PROD-42</span><span class="spacer"></span>
+                </div>
+                <div class="bc-title">Add Google OAuth to sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                    >Medium</span
+                  ><span class="spacer"></span><span class="avatar">BI</span>
+                </div>
+              </a>
+            </div>
+          </section>
+
+          <section class="col" aria-label="In Review, 2 issues">
+            <div class="col-head">
+              <span class="nm">In Review</span><span class="col-count">2</span
+              ><span class="spacer"></span
+              ><button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#">
+                <div class="bc-top">
+                  <span class="type-icon t-subtask"
+                    ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                  ><span class="bc-id">PROD-58</span><span class="spacer"></span>
+                </div>
+                <div class="bc-title">Write E2E test: email-first user signs in with Google</div>
+                <div class="bc-meta">
+                  <span class="pill pill--low"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg></span
+                    >Low</span
+                  ><span class="spacer"></span><span class="avatar">BI</span>
+                </div>
+              </a>
+            </div>
+          </section>
+        </div>
+
+        <!-- the DragOverlay clone following the cursor -->
+        <div class="drag-overlay" aria-hidden="true">
+          <div class="bcard">
+            <div class="bc-top">
+              <span class="type-icon t-task"
+                ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+              ><span class="bc-id">PROD-34</span><span class="spacer"></span
+              ><span class="grip" style="opacity: 1"
+                ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+              ></span>
+            </div>
+            <div class="bc-title">Password reset email — copy + template</div>
+            <div class="bc-meta">
+              <span class="pill pill--medium"
+                ><span class="pic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                >Medium</span
+              ><span class="pts">2</span><span class="spacer"></span
+              ><span class="avatar unassigned">–</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        Optimistic: the card jumps to the drop position immediately, then reconciles against POST
+        …/move. Target column = accent ring + lavender tint AND the insertion bar (never colour
+        alone — finding #35). The lifted card is a DragOverlay clone (tilted, --shadow-elevated).
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 2 — illegal-move snap-back ════════════════ -->
+    <div class="panel-label">
+      2 · Illegal move → snap-back + toast (POST …/move → 409 IllegalBoardMove)
+    </div>
+    <div class="panel">
+      <div class="stage rel">
+        <div class="board">
+          <section class="col" aria-label="To Do, 8 issues">
+            <div class="col-head">
+              <span class="nm">To Do</span><span class="col-count">8</span
+              ><span class="spacer"></span
+              ><button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <!-- the card has snapped back to its origin (focus ring shows it returned) -->
+              <a class="bcard focus-ring" href="#">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                  ><span class="bc-id">PROD-34</span><span class="spacer"></span>
+                </div>
+                <div class="bc-title">Password reset email — copy + template</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                    >Medium</span
+                  ><span class="pts">2</span><span class="spacer"></span
+                  ><span class="avatar unassigned">–</span>
+                </div>
+              </a>
+            </div>
+          </section>
+          <section class="col" aria-label="Done">
+            <div class="col-head">
+              <span class="nm">Done</span><span class="col-count">41</span
+              ><span class="spacer"></span
+              ><button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <div class="col-empty">
+                Drop rejected — To&nbsp;Do → Done is not an allowed transition
+              </div>
+            </div>
+          </section>
+        </div>
+        <div class="toast-wrap" role="alert">
+          <div class="toast">
+            <span class="t-ic"
+              ><svg viewBox="0 0 24 24"><use href="#i-circle-alert" /></svg
+            ></span>
+            <div>
+              <div class="t-title">Move not allowed</div>
+              <div class="t-body">
+                “To Do → Done” isn’t a permitted transition in this workflow. The card was returned.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        409 → the optimistic move is reverted (card animates back to origin) and a danger Toast
+        names the rejected transition. 422 (UnmappedColumnTarget) and network errors snap back the
+        same way. The card never stays in a rejected position; the issue status is unchanged.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 3 — keyboard DnD ════════════════ -->
+    <div class="panel-label">3 · Keyboard drag-drop — operable with no mouse</div>
+    <div class="panel">
+      <div class="kbd-row">
+        <span><kbd>Space</kbd> / <kbd>Enter</kbd> pick up &amp; drop</span>
+        <span><kbd>↑</kbd><kbd>↓</kbd> move within column</span>
+        <span><kbd>←</kbd><kbd>→</kbd> move across columns</span>
+        <span><kbd>Esc</kbd> cancel</span>
+      </div>
+      <div class="live" aria-hidden="true">
+        <span class="tag">aria-live</span>
+        <span
+          >PROD-23 moved to In Review, position 1 of 3. Press Space to drop, Escape to cancel.</span
+        >
+      </div>
+      <div class="stage">
+        <div class="board">
+          <section class="col" aria-label="In Progress">
+            <div class="col-head">
+              <span class="nm">In Progress</span><span class="col-count">2</span
+              ><span class="spacer"></span><span class="wip-slot">2/5</span>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                  ><span class="bc-id">PROD-42</span><span class="spacer"></span>
+                </div>
+                <div class="bc-title">Add Google OAuth to sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                    >Medium</span
+                  ><span class="spacer"></span><span class="avatar">BI</span>
+                </div>
+              </a>
+            </div>
+          </section>
+          <section class="col drop-target" aria-label="In Review, keyboard target">
+            <div class="col-head">
+              <span class="nm">In Review</span><span class="col-count">2</span
+              ><span class="spacer"></span>
+            </div>
+            <div class="col-body">
+              <!-- the picked-up card, moved here by keyboard -->
+              <div class="bcard picked" aria-grabbed="true">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                  ><span class="bc-id">PROD-23</span><span class="spacer"></span
+                  ><span class="grip" style="opacity: 1"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Email + password sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--highest"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                    >Highest</span
+                  ><span class="pts">8</span><span class="spacer"></span
+                  ><span class="avatar">YZ</span>
+                </div>
+              </div>
+              <a class="bcard" href="#">
+                <div class="bc-top">
+                  <span class="type-icon t-subtask"
+                    ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                  ><span class="bc-id">PROD-58</span><span class="spacer"></span>
+                </div>
+                <div class="bc-title">Write E2E test: email-first user signs in with Google</div>
+                <div class="bc-meta">
+                  <span class="pill pill--low"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg></span
+                    >Low</span
+                  ><span class="spacer"></span><span class="avatar">BI</span>
+                </div>
+              </a>
+            </div>
+          </section>
+        </div>
+      </div>
+      <p class="legend">
+        dnd-kit keyboard sensor: a focused card is picked up with Space/Enter (strong focus ring +
+        elevation, aria-grabbed), moved with the arrow keys, dropped with Space, cancelled with Esc.
+        Every step reads from the aria-live region. Same POST …/move + snap-back contract as
+        pointer.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 4 — scale ════════════════ -->
+    <div class="panel-label">
+      4 · Scale — per-column count + Load more + virtualization (finding #57)
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="board">
+          <section class="col" aria-label="To Do, 214 issues" style="max-height: 520px">
+            <div class="col-head">
+              <span class="nm">To Do</span><span class="col-count">214</span
+              ><span class="spacer"></span
+              ><button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#"
+                ><div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                  ><span class="bc-id">PROD-31</span><span class="spacer"></span>
+                </div>
+                <div class="bc-title">Google OAuth sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--high"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                    >High</span
+                  ><span class="spacer"></span><span class="avatar">YZ</span>
+                </div></a
+              >
+              <a class="bcard" href="#"
+                ><div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                  ><span class="bc-id">PROD-34</span><span class="spacer"></span>
+                </div>
+                <div class="bc-title">Password reset email — copy + template</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                    >Medium</span
+                  ><span class="spacer"></span><span class="avatar unassigned">–</span>
+                </div></a
+              >
+              <a class="bcard" href="#"
+                ><div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                  ><span class="bc-id">PROD-41</span><span class="spacer"></span>
+                </div>
+                <div class="bc-title">Set up Google Cloud OAuth credentials</div>
+                <div class="bc-meta">
+                  <span class="pill pill--low"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg></span
+                    >Low</span
+                  ><span class="spacer"></span><span class="avatar">AR</span>
+                </div></a
+              >
+              <div class="virt-note">… 47 loaded · rows virtualized (bounded DOM)</div>
+            </div>
+            <div class="col-foot">
+              <button class="load-more">
+                <span class="spinner" aria-hidden="true"></span>
+                Loading…
+              </button>
+            </div>
+          </section>
+          <section class="col" aria-label="Done, 1280 issues" style="max-height: 520px">
+            <div class="col-head">
+              <span class="nm">Done</span><span class="col-count">1,280</span
+              ><span class="spacer"></span
+              ><button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#"
+                ><div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                  ><span class="bc-id">PROD-220</span><span class="spacer"></span>
+                </div>
+                <div class="bc-title">Sign-out clears the session cookie</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                    >Medium</span
+                  ><span class="spacer"></span><span class="avatar">YZ</span>
+                </div></a
+              >
+            </div>
+            <div class="col-foot">
+              <button class="load-more">Load 20 more</button>
+              <div class="virt-note">recent 20 of 1,280 · terminal window</div>
+            </div>
+          </section>
+        </div>
+      </div>
+      <p class="legend">
+        The board never loads every card. Each column shows its total count and a "Load more" that
+        fetches GET …/columns/[id]/cards?cursor= and appends a page; tall columns virtualize (only
+        viewport rows render — bounded DOM). Done/terminal columns are additionally windowed to a
+        recent set with the full count surfaced.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 5 — unmapped statuses tray ════════════════ -->
+    <div class="panel-label">
+      5 · Unmapped-statuses tray — statuses with no column (the Jira behaviour)
+    </div>
+    <div class="panel">
+      <div class="tray">
+        <span class="tr-ic"
+          ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+        ></span>
+        <span class="tr-text">
+          2 statuses aren’t on this board — issues in them are hidden here:
+          <span class="tr-chips">
+            <span class="pill pill--neutral">Needs Triage</span>
+            <span class="pill pill--neutral">On Hold</span>
+          </span>
+        </span>
+        <a class="tr-link" href="#">Map columns →</a>
+      </div>
+      <div class="stage">
+        <div class="board">
+          <section class="col" aria-label="To Do">
+            <div class="col-head">
+              <span class="nm">To Do</span><span class="col-count">8</span
+              ><span class="spacer"></span>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#"
+                ><div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                  ><span class="bc-id">PROD-31</span><span class="spacer"></span>
+                </div>
+                <div class="bc-title">Google OAuth sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--high"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                    >High</span
+                  ><span class="spacer"></span><span class="avatar">YZ</span>
+                </div></a
+              >
+            </div>
+          </section>
+          <section class="col" aria-label="In Progress">
+            <div class="col-head">
+              <span class="nm">In Progress</span><span class="col-count">3</span
+              ><span class="spacer"></span><span class="wip-slot">3/5</span>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#"
+                ><div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                  ><span class="bc-id">PROD-23</span><span class="spacer"></span>
+                </div>
+                <div class="bc-title">Email + password sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--highest"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                    >Highest</span
+                  ><span class="spacer"></span><span class="avatar">YZ</span>
+                </div></a
+              >
+            </div>
+          </section>
+        </div>
+      </div>
+      <p class="legend">
+        From BoardProjectionDto.unmappedStatuses (Story 3.1.4). Surfaced as a yellow tray naming the
+        statuses + a link to the board/workflow admin — never silently dropped, never shown as
+        columns. The tray is absent when unmappedStatuses is empty.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 6 — states ════════════════ -->
+    <div class="panel-label">6 · States — loading skeleton · empty board · error</div>
+    <div class="panel">
+      <!-- loading -->
+      <div class="stage">
+        <div class="board">
+          <section class="col">
+            <div class="col-head">
+              <span class="sk pulse" style="width: 64px; height: 14px"></span
+              ><span class="spacer"></span>
+            </div>
+            <div class="col-body">
+              <div class="sk-card">
+                <span class="sk pulse" style="width: 70px; height: 12px"></span
+                ><span class="sk pulse" style="width: 100%; height: 13px"></span
+                ><span class="sk pulse" style="width: 55%; height: 12px"></span>
+              </div>
+              <div class="sk-card">
+                <span class="sk pulse" style="width: 70px; height: 12px"></span
+                ><span class="sk pulse" style="width: 90%; height: 13px"></span
+                ><span class="sk pulse" style="width: 45%; height: 12px"></span>
+              </div>
+            </div>
+          </section>
+          <section class="col">
+            <div class="col-head">
+              <span class="sk pulse" style="width: 84px; height: 14px"></span
+              ><span class="spacer"></span>
+            </div>
+            <div class="col-body">
+              <div class="sk-card">
+                <span class="sk pulse" style="width: 70px; height: 12px"></span
+                ><span class="sk pulse" style="width: 95%; height: 13px"></span
+                ><span class="sk pulse" style="width: 50%; height: 12px"></span>
+              </div>
+            </div>
+          </section>
+          <section class="col">
+            <div class="col-head">
+              <span class="sk pulse" style="width: 72px; height: 14px"></span
+              ><span class="spacer"></span>
+            </div>
+            <div class="col-body">
+              <div class="sk-card">
+                <span class="sk pulse" style="width: 70px; height: 12px"></span
+                ><span class="sk pulse" style="width: 80%; height: 13px"></span
+                ><span class="sk pulse" style="width: 40%; height: 12px"></span>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- empty + error side by side -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px">
+        <div class="stage" style="padding: 32px 16px">
+          <div
+            class="card empty"
+            style="border: 0; box-shadow: none; max-width: 440px; margin: 0 auto"
+          >
+            <span class="ic-wrap"
+              ><svg viewBox="0 0 24 24"><use href="#i-inbox" /></svg
+            ></span>
+            <h3>No issues yet</h3>
+            <p>
+              This project’s board is empty. Create the first issue and it’ll appear in the To Do
+              column.
+            </p>
+            <button class="btn-primary">
+              <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+            </button>
+          </div>
+        </div>
+        <div class="stage" style="padding: 32px 16px">
+          <div
+            class="card empty err"
+            style="border: 0; box-shadow: none; max-width: 440px; margin: 0 auto"
+          >
+            <span class="ic-wrap"
+              ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+            ></span>
+            <h3>Couldn’t load the board</h3>
+            <p>Something went wrong fetching this board. Check your connection and try again.</p>
+            <button
+              class="btn-primary"
+              style="
+                background: var(--el-page-bg);
+                color: var(--el-text);
+                border: 1px solid var(--el-border);
+              "
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        Loading = a column scaffold of pulsing skeleton cards (Spinner/skeleton). Empty board =
+        EmptyState (inbox icon) with a "New issue" CTA — not six blank columns. Error / no-board =
+        ErrorState with a Retry. (Loading + error shells ship in 3.2.2; empty + tray in 3.2.6.)
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 7 — mobile ════════════════ -->
+    <div class="panel-label">7 · Mobile — single-column scroll + column pager</div>
+    <div class="panel">
+      <div class="phone">
+        <div class="page">
+          <div class="page-head" style="margin-bottom: 12px">
+            <div><h2>Board</h2></div>
+            <div class="toolbar">
+              <button class="tb-btn primary" style="height: 32px; padding: 0 10px">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg></span
+                >New
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="col-pager" aria-hidden="true">
+          <span class="dot on"></span><span class="dot"></span><span class="dot"></span
+          ><span class="dot"></span><span class="dot"></span>
+          <span style="margin-left: 6px">To Do · 1 of 5</span>
+        </div>
+        <div class="board">
+          <section class="col" aria-label="To Do">
+            <div class="col-head">
+              <span class="nm">To Do</span><span class="col-count">8</span
+              ><span class="spacer"></span
+              ><button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#"
+                ><div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                  ><span class="bc-id">PROD-31</span><span class="spacer"></span>
+                </div>
+                <div class="bc-title">Google OAuth sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--high"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                    >High</span
+                  ><span class="pts">5</span><span class="spacer"></span
+                  ><span class="avatar">YZ</span>
+                </div></a
+              >
+              <a class="bcard" href="#"
+                ><div class="bc-top">
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                  ><span class="bc-id">PROD-49</span><span class="spacer"></span>
+                </div>
+                <div class="bc-title">OAuth callback drops the `state` param on Safari ≤16</div>
+                <div class="bc-meta">
+                  <span class="pill pill--blocked"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-circle-alert" /></svg></span
+                    >Blocked</span
+                  ><span class="spacer"></span><span class="avatar">AR</span>
+                </div></a
+              >
+            </div>
+          </section>
+        </div>
+      </div>
+      <p class="legend">
+        On narrow viewports the board is a single-column horizontal scroll with a pager (dots + "1
+        of 5"). Card anatomy is unchanged. Drag still works (pointer + keyboard); long-press lifts a
+        card on touch.
+      </p>
+    </div>
+  </body>
+</html>
