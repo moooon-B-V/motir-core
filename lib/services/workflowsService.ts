@@ -332,6 +332,7 @@ export const workflowsService = {
       // Unreachable — the transition graph only references the six seeded keys;
       // the guard turns a future typo in defaultWorkflow into a clear failure
       // instead of a Prisma null-FK error.
+      /* istanbul ignore next -- defensive: DEFAULT_TRANSITIONS only references the six DEFAULT_STATUSES keys just seeded above, so this typo-guard is unreachable */
       if (!fromStatusId || !toStatusId) {
         throw new Error(
           `defaultWorkflow: transition references an unknown status key (${fromKey} -> ${toKey})`,
@@ -384,6 +385,7 @@ export const workflowsService = {
     let position = input.position;
     if (position == null) {
       const statuses = await workflowsRepository.findStatuses(input.projectId, input.workspaceId);
+      /* istanbul ignore next -- defensive: a project always carries its seeded statuses, so the empty-list (`: null`) ternary branch is unreachable here */
       const last = statuses.length ? statuses[statuses.length - 1]!.position : null;
       position = keyForAppend(last);
     }
@@ -408,9 +410,11 @@ export const workflowsService = {
           return toWorkflowStatusDto(row);
         } catch (err) {
           // Backstop the pre-check against a concurrent insert of the same key.
+          /* istanbul ignore next -- defensive: P2002 only fires when a concurrent insert wins the same key between the pre-check and this write; not deterministically testable (mirrors the work-item repos' P2002 guards) */
           if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
             throw new StatusKeyConflictError(input.key);
           }
+          /* istanbul ignore next -- defensive rethrow: createStatus's only expected write error is the P2002 handled above */
           throw err;
         }
       },
@@ -481,11 +485,13 @@ export const workflowsService = {
     await withWorkspaceContext(
       { userId: input.userId, workspaceId: input.workspaceId },
       async (tx) => {
+        /* istanbul ignore next -- defensive re-read: the status was just read outside the tx; it can only be missing here if a concurrent tx deleted it in the window, which isn't deterministically testable */
         const status = await workflowsRepository.findStatusById(
           input.statusId,
           input.workspaceId,
           tx,
         );
+        /* istanbul ignore next -- defensive: paired with the re-read above */
         if (!status) throw new WorkflowStatusNotFoundError(input.statusId);
 
         // Protections fire FIRST and unconditionally — a reassign target can't
@@ -498,6 +504,11 @@ export const workflowsService = {
             tx,
           );
           const terminals = all.filter((s) => s.category === 'done').length;
+          // Unreachable in practice: the two default terminals (`done`,
+          // `cancelled`) are protected (2.2.10), so a project always keeps ≥2
+          // category=done statuses — a deletable custom terminal is never the
+          // last one. Kept as a defensive guard (see management.test.ts note).
+          /* istanbul ignore next -- unreachable: protected default terminals keep the count ≥2, so a deletable status is never the last terminal */
           if (terminals <= 1) throw new CannotDeleteLastTerminalStatusError(status.key);
         }
 
@@ -577,6 +588,7 @@ export const workflowsService = {
           return toWorkflowTransitionDto(row);
         } catch (err) {
           // Concurrent duplicate insert → re-read and return it (idempotent).
+          /* istanbul ignore next -- defensive: P2002 only fires when a concurrent insert wins the same (from,to) edge between the pre-check and this write; not deterministically testable */
           if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
             const row = await workflowsRepository.findTransition(
               input.projectId,
@@ -587,6 +599,7 @@ export const workflowsService = {
             );
             if (row) return toWorkflowTransitionDto(row);
           }
+          /* istanbul ignore next -- defensive rethrow: addTransition's only expected write error is the P2002 handled above */
           throw err;
         }
       },
@@ -652,6 +665,7 @@ export const workflowsService = {
         for (const [fromKey, toKey] of DEFAULT_TRANSITIONS) {
           const from = byKey.get(fromKey);
           const to = byKey.get(toKey);
+          /* istanbul ignore next -- unreachable: default statuses are protected (2.2.10), so every DEFAULT_TRANSITIONS endpoint key is always present; the missing-endpoint skip can't fire */
           if (!from || !to) continue;
           const pair = `${from.id}|${to.id}`;
           if (seen.has(pair)) continue;

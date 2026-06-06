@@ -241,6 +241,38 @@ describe('workflowsService.getTerminalStatusKeys (finding #21 surface)', () => {
   });
 });
 
+// The batched terminal-key read behind workItemsService.isReady (2.2.6). 2.6.4
+// fill: exercises it directly (it was only ever reached transitively), covering
+// the empty-input short-circuit and the every-requested-projectId-present
+// contract.
+describe('workflowsService.getTerminalStatusKeysByProjects (batched, 2.2.6)', () => {
+  it('returns an empty map for an empty project list (no query)', async () => {
+    const fx = await makeFixture();
+    const map = await workflowsService.getTerminalStatusKeysByProjects([], fx.workspaceId);
+    expect(map.size).toBe(0);
+  });
+
+  it('maps each requested project to its terminal set, deduping ids and including unknown projects with an empty set', async () => {
+    const fx = await makeFixture();
+    const map = await workflowsService.getTerminalStatusKeysByProjects(
+      [fx.projectId, fx.projectId, 'unknown-project'],
+      fx.workspaceId,
+    );
+    expect(map.get(fx.projectId)).toEqual(new Set(['done', 'cancelled']));
+    // Every requested id is present so callers can .get() without a null gap.
+    expect(map.get('unknown-project')).toEqual(new Set());
+  });
+
+  it('returns empty terminal sets for a cross-workspace read (finding #26 filter)', async () => {
+    const fx = await makeFixture();
+    const map = await workflowsService.getTerminalStatusKeysByProjects(
+      [fx.projectId],
+      fx.otherWorkspaceId,
+    );
+    expect(map.get(fx.projectId)).toEqual(new Set());
+  });
+});
+
 describe('workflowsService.canTransition (the four matrix cells)', () => {
   it('restricted + transition row exists → true', async () => {
     const fx = await makeFixture();

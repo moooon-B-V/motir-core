@@ -11,7 +11,10 @@ import {
   NotProjectAdminError,
   StatusInUseError,
   StatusKeyConflictError,
+  WorkflowStatusNotFoundError,
+  WorkflowTransitionNotFoundError,
 } from '@/lib/workflows/errors';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -322,5 +325,147 @@ describe('setPolicyMode', () => {
     expect(mode).toBe('open');
     const wf = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
     expect(wf.policyMode).toBe('open');
+  });
+});
+
+// 2.6.4 coverage fill — the management-write error/branch paths the per-feature
+// 2.2/2.3 tests left uncovered (the admin-gate no-existence-leak, the
+// not-found guards on every id-keyed write, the custom-status category/position
+// edits, and deleting a CUSTOM category=done status that is NOT the last
+// terminal). Net-new in 2.6, no duplication of the inherited happy-path cases.
+describe('management writes — guard & branch coverage (2.6.4)', () => {
+  it('assertProjectAdmin 404s a nonexistent project AND a cross-workspace one (no existence leak)', async () => {
+    const fx = await makeFixture();
+
+    // Nonexistent projectId → !project branch.
+    await expect(
+      workflowsService.setPolicyMode({
+        userId: fx.ownerId,
+        workspaceId: fx.workspaceId,
+        projectId: 'does-not-exist',
+        mode: 'open',
+      }),
+    ).rejects.toThrow(ProjectNotFoundError);
+
+    // A project that exists but belongs to ANOTHER workspace → workspace-mismatch
+    // branch (same 404, indistinguishable from never-existed).
+    const otherOwner = await usersService.createUser({
+      email: 'wf-mgmt-other@example.com',
+      password: 'hunter2hunter2',
+      name: 'Other Owner',
+    });
+    const otherWs = await workspacesService.createWorkspace({
+      name: 'WF Mgmt Other',
+      ownerUserId: otherOwner.id,
+    });
+    const otherProject = await createTestProject({
+      workspaceId: otherWs.workspace.id,
+      actorUserId: otherOwner.id,
+    });
+    await expect(
+      workflowsService.setPolicyMode({
+        userId: fx.ownerId,
+        workspaceId: fx.workspaceId,
+        projectId: otherProject.id,
+        mode: 'open',
+      }),
+    ).rejects.toThrow(ProjectNotFoundError);
+  });
+
+  it('createStatus persists an explicit color', async () => {
+    const fx = await makeFixture();
+    const created = await workflowsService.createStatus({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      key: 'staging',
+      label: 'Staging',
+      category: 'in_progress',
+      color: '#00aa55',
+    });
+    expect(created.color).toBe('#00aa55');
+  });
+
+  it('updateStatus throws WorkflowStatusNotFoundError for an unknown status id', async () => {
+    const fx = await makeFixture();
+    await expect(
+      workflowsService.updateStatus({
+        userId: fx.ownerId,
+        workspaceId: fx.workspaceId,
+        statusId: 'no-such-status',
+        label: 'X',
+      }),
+    ).rejects.toThrow(WorkflowStatusNotFoundError);
+  });
+
+  it('updateStatus edits a custom status category and position', async () => {
+    const fx = await makeFixture();
+    const custom = await workflowsService.createStatus({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      key: 'qa',
+      label: 'QA',
+      category: 'todo',
+    });
+    const updated = await workflowsService.updateStatus({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      statusId: custom.id,
+      category: 'in_progress',
+      position: 'a5',
+    });
+    expect(updated.category).toBe('in_progress');
+    expect(updated.position).toBe('a5');
+  });
+
+  it('deleteStatus throws WorkflowStatusNotFoundError for an unknown status id', async () => {
+    const fx = await makeFixture();
+    await expect(
+      workflowsService.deleteStatus({
+        userId: fx.ownerId,
+        workspaceId: fx.workspaceId,
+        statusId: 'no-such-status',
+      }),
+    ).rejects.toThrow(WorkflowStatusNotFoundError);
+  });
+
+  it('deletes a CUSTOM category=done status when it is not the last terminal', async () => {
+    const fx = await makeFixture();
+    // Defaults already carry two terminals (done, cancelled); a third custom
+    // terminal can be removed without tripping the last-terminal guard.
+    const wontFix = await workflowsService.createStatus({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      key: 'wont_fix',
+      label: "Won't Fix",
+      category: 'done',
+    });
+    await workflowsService.deleteStatus({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      statusId: wontFix.id,
+    });
+    const wf = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
+    expect(wf.statuses.map((s) => s.key)).not.toContain('wont_fix');
+    // The two default terminals survive.
+    expect(
+      wf.statuses
+        .filter((s) => s.category === 'done')
+        .map((s) => s.key)
+        .sort(),
+    ).toEqual(['cancelled', 'done']);
+  });
+
+  it('removeTransition throws WorkflowTransitionNotFoundError for an unknown transition id', async () => {
+    const fx = await makeFixture();
+    await expect(
+      workflowsService.removeTransition({
+        userId: fx.ownerId,
+        workspaceId: fx.workspaceId,
+        transitionId: 'no-such-transition',
+      }),
+    ).rejects.toThrow(WorkflowTransitionNotFoundError);
   });
 });
