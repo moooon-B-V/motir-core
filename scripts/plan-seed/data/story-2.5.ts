@@ -974,7 +974,7 @@ export const story_2_5: PlanStory = {
     {
       id: '2.5.21',
       title: 'Show ready/blocked readiness in the `/issues` quick-view modal',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 8,
