@@ -3,8 +3,9 @@
 import { useCallback, useMemo, useState, useTransition, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { TreeTable, type TreeTableColumn, type TreeTableRow } from '@/components/ui/TreeTable';
+import type { Locale } from '@/lib/i18n/locales';
 import { cn } from '@/lib/utils/cn';
 import {
   buildIssueListHref,
@@ -68,11 +69,15 @@ export function IssueTreeTable({
   members,
 }: IssueTreeTableProps) {
   const t = useTranslations();
+  const locale = useLocale() as Locale;
   const router = useRouter();
   const pathname = usePathname();
   const [, startTransition] = useTransition();
   const sortParam = serializeSort(sort);
-  const shape = useMemo(() => makeRowShaper(workflow, members), [workflow, members]);
+  const shape = useMemo(
+    () => makeRowShaper(workflow, members, locale),
+    [workflow, members, locale],
+  );
 
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [levels, setLevels] = useState<Record<string, LevelState>>(() => ({
@@ -256,7 +261,7 @@ export function IssueTreeTable({
           },
         };
       }),
-    [sort, onSort],
+    [sort, onSort, t],
   );
 
   return (

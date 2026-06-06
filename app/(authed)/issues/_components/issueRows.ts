@@ -104,9 +104,10 @@ function shapeRowData(
 export function makeRowShaper(
   workflow: WorkflowDto,
   members: WorkspaceMemberDTO[],
+  locale: Locale = defaultLocale,
 ): (item: WorkItemListItemDto) => IssueRowData {
   const { statusByKey, nameById } = buildLookups(workflow, members);
-  return (item) => shapeRowData(item, statusByKey, nameById);
+  return (item) => shapeRowData(item, statusByKey, nameById, locale);
 }
 
 export function toIssueRows(
