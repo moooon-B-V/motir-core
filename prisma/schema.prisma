@@ -167,6 +167,9 @@ model Workspace {
   workflowStatuses    WorkflowStatus[]
   workflowTransitions WorkflowTransition[]
   attachments         Attachment[]
+  boards              Board[]
+  boardColumns        BoardColumn[]
+  boardColumnStatuses BoardColumnStatus[]
 
   @@map("workspace")
 }
@@ -210,6 +213,9 @@ model Project {
   workItems           WorkItem[]
   workflowStatuses    WorkflowStatus[]
   workflowTransitions WorkflowTransition[]
+  boards              Board[]
+  boardColumns        BoardColumn[]
+  boardColumnStatuses BoardColumnStatus[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -510,12 +516,16 @@ model WorkflowStatus {
   createdAt   DateTime       @default(now()) @map("created_at")
   updatedAt   DateTime       @updatedAt @map("updated_at")
 
-  workspace       Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project         Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace           Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
   // A transition references two statuses (from / to); both edges cascade so
   // deleting a status removes the transitions that touch it.
-  transitionsFrom WorkflowTransition[] @relation("WorkflowTransitionFrom")
-  transitionsTo   WorkflowTransition[] @relation("WorkflowTransitionTo")
+  transitionsFrom     WorkflowTransition[] @relation("WorkflowTransitionFrom")
+  transitionsTo       WorkflowTransition[] @relation("WorkflowTransitionTo")
+  // Board columns this status is mapped into (Story 3.1). Cascades: deleting a
+  // status removes its column mappings (a card whose status vanished can't sit
+  // in a column keyed on it).
+  boardColumnStatuses BoardColumnStatus[]
 
   // `key` is the machine-stable handle work_item.status stores; unique per
   // project. The partial "exactly one initial per project" unique index is
@@ -577,6 +587,104 @@ enum WorkflowPolicyMode {
   open
 
   @@map("workflow_policy_mode")
+}
+
+/// A board (Story 3.1) is a per-project READ PROJECTION over issues — columns
+/// of cards, where a card's column is DERIVED from its `work_item.status`,
+/// never stored as board-local placement. A project owns one-or-more boards;
+/// v1 auto-seeds exactly ONE Kanban board (Subtask 3.1.2). `projectId` is a
+/// plain FK and is deliberately NOT unique, so multiple-boards-per-project is
+/// a non-breaking later addition (board CRUD is post-v1). The Scrum
+/// sprint-scoped board is Story 3.4 — `BoardType.scrum` ships now so 3.4 adds
+/// no enum migration. RLS is the pure workspace gate (non-null `workspace_id`,
+/// every write under an active workspace context) — same as `workflow_status`
+/// / `project` / `work_item`, with NO system-admin escape hatch.
+model Board {
+  id          String    @id @default(cuid())
+  workspaceId String    @map("workspace_id")
+  projectId   String    @map("project_id")
+  name        String
+  type        BoardType @default(kanban)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  workspace      Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project        Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  columns        BoardColumn[]
+  columnStatuses BoardColumnStatus[]
+
+  @@index([workspaceId])
+  // Non-unique — the per-project board lookup (v1 returns the single board).
+  @@index([projectId])
+  @@map("board")
+}
+
+/// An ordered column on a board (Story 3.1). It maps to a SET of workflow
+/// statuses via `board_column_status` (many statuses → one column — the Jira
+/// "merge In Progress + In Review" shape). `position` is the SAME opaque
+/// base-62 fractional-index String the `work_item` / `workflow_status` columns
+/// use (`lib/workItems/positioning.ts`) — a column reorder is a single-row
+/// rewrite needing no new mechanism. (The 3.1.1 card said `Decimal(20,10)`
+/// citing finding #18, but the shipped position columns are `String @db.Text`;
+/// per the decision-authority ladder shipped code wins — see the migration
+/// header.) `wipLimit` ships nullable now so Story 3.3 (WIP enforcement) adds
+/// no migration; THIS story only persists the column — no enforcement.
+model BoardColumn {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  projectId   String   @map("project_id")
+  boardId     String   @map("board_id")
+  name        String
+  position    String   @db.Text
+  wipLimit    Int?     @map("wip_limit")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace      Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project        Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  board          Board               @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  statusMappings BoardColumnStatus[]
+
+  @@index([workspaceId])
+  @@index([boardId, position])
+  @@map("board_column")
+}
+
+/// The column ↔ status mapping (Story 3.1). One row links one `workflow_status`
+/// to one `board_column`. `@@unique([boardId, statusId])` enforces that a
+/// status maps to AT MOST ONE column per board (many statuses MAY share a
+/// column, but a status is never in two columns at once). A project status
+/// with NO row here is UNMAPPED — surfaced by the 3.1.4 projection's
+/// `unmappedStatuses`, never shown as a column and never silently dropped.
+model BoardColumnStatus {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  projectId   String   @map("project_id")
+  boardId     String   @map("board_id")
+  columnId    String   @map("column_id")
+  statusId    String   @map("status_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  board     Board          @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  column    BoardColumn    @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  status    WorkflowStatus @relation(fields: [statusId], references: [id], onDelete: Cascade)
+
+  @@unique([boardId, statusId])
+  @@index([workspaceId])
+  @@index([columnId])
+  @@map("board_column_status")
+}
+
+/// Board kind (Story 3.1). `kanban` is the v1 default auto-seeded per project;
+/// `scrum` (the sprint-scoped board) is Story 3.4 — the value exists now so
+/// 3.4 adds no enum ALTER.
+enum BoardType {
+  kanban
+  scrum
+
+  @@map("board_type")
 }
 
 // Background-job run ledger (Story 1.6 · Subtask 1.6.2). Every invocation of a
