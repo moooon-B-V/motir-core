@@ -650,7 +650,7 @@
     }
   },
   "boards": {
-    "heading": "Board",
+    "heading": "Boards",
     "subtitle": "Kanban board for {project}",
     "filter": "Filter",
     "filterComingSoon": "Board filtering is coming soon",
