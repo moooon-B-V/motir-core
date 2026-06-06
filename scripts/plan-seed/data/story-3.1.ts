@@ -71,7 +71,7 @@ export const story_3_1: PlanStory = {
     {
       id: '3.1.1',
       title: 'Schema — `board` + `board_column` + `board_column_status` mapping + RLS',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 20,
