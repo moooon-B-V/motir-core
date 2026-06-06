@@ -9,16 +9,8 @@ import type { PlanStory } from '../types';
  */
 export const STUB_STORIES: PlanStory[] = [
   // ── Epic 3: Boards ─────────────────────────────────────────────────────────
-  // 3.1, 3.2 are fully expanded → data/story-3.1.ts, data/story-3.2.ts (assembled in index.ts).
-  {
-    id: '3.3',
-    title: 'Swimlanes + WIP limits',
-    status: 'planned',
-    descriptionMd:
-      'Group-by swimlanes (assignee / epic / priority) and per-column WIP limits with soft ' +
-      'over-limit warnings. Config persisted on the board entity.',
-    items: [],
-  },
+  // 3.1, 3.2, 3.3 are fully expanded → data/story-3.1.ts, data/story-3.2.ts,
+  // data/story-3.3.ts (assembled in index.ts).
   {
     id: '3.4',
     title: 'Scrum board (sprint-scoped view)',
