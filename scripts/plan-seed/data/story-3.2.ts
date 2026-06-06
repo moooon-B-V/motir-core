@@ -101,9 +101,9 @@ export const story_3_2: PlanStory = {
     {
       id: '3.2.1',
       title: 'Design — Kanban board surface: columns, card anatomy, drag states, scale + states',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
-      executor: 'human',
+      executor: 'coding_agent',
       estimateMinutes: 50,
       dependsOn: ['1.5.1'],
       descriptionMd:
