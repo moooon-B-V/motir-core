@@ -360,7 +360,7 @@ export const story_3_1: PlanStory = {
     {
       id: '3.1.7',
       title: 'Story E2E — board projection + move-as-transition over the real stack (API-level)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 18,
