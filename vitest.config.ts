@@ -38,13 +38,18 @@ export default defineConfig({
       concurrent: false,
     },
     testTimeout: 15_000,
-    // Coverage (Subtask 1.4.7). The work-item data model's load-bearing
-    // modules — the service + its three repositories — must stay at ≥90%
-    // branches/functions/lines. We scope `include` to exactly those four
-    // files so the report (and the per-file thresholds below) is focused on
-    // the surface 1.4.7 is responsible for, rather than diluting the signal
-    // across the whole tree. Other modules carry their own coverage stories in
-    // their own Subtasks. v8 is the provider (matches @vitest/coverage-v8).
+    // Coverage (Subtask 1.4.7, extended by 2.6.4). The Epic-2 load-bearing
+    // modules must stay at ≥90% branches/functions/lines. 1.4.7 gated the
+    // work-item data model — the service + its three repositories. 2.6.4 adds
+    // the Story-2.2 workflow layer (`workflowsService` + `workflowsRepository`)
+    // to the gate, closing coverage-gap #4: that layer shipped ungated, and
+    // `workItemsService` grew across Stories 2.3–2.5 (detail / tree / list /
+    // pagination) after the 1.4.7 numbers were measured. We scope `include` to
+    // exactly these six files so the report (and the per-file thresholds below)
+    // stays focused on the surface this Epic is responsible for, rather than
+    // diluting the signal across the whole tree. Other modules carry their own
+    // coverage stories in their own Subtasks. v8 is the provider (matches
+    // @vitest/coverage-v8).
     coverage: {
       provider: 'v8',
       include: [
@@ -52,9 +57,11 @@ export default defineConfig({
         'lib/repositories/workItemRepository.ts',
         'lib/repositories/workItemLinkRepository.ts',
         'lib/repositories/workItemRevisionRepository.ts',
+        'lib/services/workflowsService.ts',
+        'lib/repositories/workflowsRepository.ts',
       ],
       reporter: ['text', 'text-summary'],
-      // Per-file thresholds keyed by glob: each of the four modules gates
+      // Per-file thresholds keyed by glob: each of the six modules gates
       // independently, so a regression in any one fails the run (rather than a
       // blended average hiding a weak module).
       thresholds: {
@@ -66,6 +73,8 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
+        'lib/services/workflowsService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/workflowsRepository.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },

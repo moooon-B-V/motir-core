@@ -6,6 +6,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { DEFAULT_STATUSES, DEFAULT_TRANSITIONS } from '@/lib/workflows/defaultWorkflow';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { truncateAuthTables } from '../helpers/db';
 
 // Default-workflow seed (Story 2.2 · Subtask 2.2.2). Real Postgres — runs in
@@ -178,5 +179,12 @@ describe('backfillDefaultWorkflow (one-off, idempotent)', () => {
     const again = await workflowsService.backfillDefaultWorkflow(bare.id, userId);
     expect(again).toBe(false);
     expect(await db.workflowStatus.count({ where: { projectId: bare.id } })).toBe(6);
+  });
+
+  it('throws ProjectNotFoundError for a project that does not exist (2.6.4)', async () => {
+    const { userId } = await makeWorkspaceAndUser();
+    await expect(
+      workflowsService.backfillDefaultWorkflow('does-not-exist', userId),
+    ).rejects.toThrow(ProjectNotFoundError);
   });
 });
