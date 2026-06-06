@@ -19,6 +19,7 @@
     "typecheck": "tsc --noEmit",
     "db:seed": "tsx scripts/plan-seed/seed.ts",
     "db:seed:large": "tsx scripts/seed-large.ts",
+    "db:backfill:boards": "tsx scripts/backfill-default-boards.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",

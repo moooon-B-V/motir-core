@@ -10,6 +10,7 @@ import {
 } from '@/lib/projects/errors';
 import { toProjectDTO } from '@/lib/mappers/projectMappers';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { boardsService } from '@/lib/services/boardsService';
 import type { ProjectDTO } from '@/lib/dto/projects';
 
 // Projects service — business logic for the Project entity. Owns all
@@ -156,6 +157,11 @@ export const projectsService = {
             // P2002 on identifier/slug rolls back the project AND its seed; the
             // next retry re-seeds in a fresh transaction.
             await workflowsService.seedDefaultWorkflow(created.id, input.workspaceId, tx);
+            // Then seed the default Kanban board (Subtask 3.1.2) in the SAME
+            // transaction — it reads the statuses just written above to project
+            // one column per status, so it MUST run after the workflow seed and
+            // within the same tx (the statuses aren't visible outside it yet).
+            await boardsService.seedDefaultBoard(created.id, input.workspaceId, tx);
             return created;
           },
         );
