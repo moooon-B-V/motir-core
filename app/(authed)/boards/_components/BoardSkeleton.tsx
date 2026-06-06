@@ -25,7 +25,7 @@ function Bar({ w, className }: { w?: number; className?: string }) {
 function SkeletonCard() {
   return (
     <div
-      className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-(--spacing-card-padding) shadow-(--shadow-subtle)"
+      className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding) shadow-(--shadow-subtle)"
       aria-hidden
     >
       <div className="flex items-center gap-2">
@@ -55,7 +55,7 @@ export function BoardSkeleton() {
         {COLUMNS.map((col) => (
           <div
             key={col}
-            className="flex w-72 shrink-0 flex-col gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) p-3"
+            className="flex w-72 shrink-0 flex-col gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-3"
           >
             <div className="flex items-center gap-2">
               <Bar w={84} />

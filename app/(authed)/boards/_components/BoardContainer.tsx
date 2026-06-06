@@ -97,10 +97,23 @@ export function BoardContainer() {
 // overflow-x auto, fixed-width 288px columns). 3.2.3 swaps the scaffold below for
 // the real `BoardColumn`/`BoardCard`; 3.2.4 wires the dnd-kit DndContext around
 // this; 3.2.6 adds the board-level empty state + the unmapped-statuses tray.
+//
+// The row is the horizontal scroll region — it carries `tabIndex={0}` + an
+// accessible name so it's keyboard-operable even when no column has cards (the
+// axe `scrollable-region-focusable` rule). Per-column vertical scroll +
+// virtualization (with their own keyboard handling) land in 3.2.3/3.2.5; the
+// scaffold columns size to content and the page scrolls under the shell.
 function BoardColumns({ columns }: { columns: BoardColumnDto[] }) {
+  const t = useTranslations('boards');
   const openPeek = usePeekOpen();
   return (
-    <div className="flex flex-1 gap-4 overflow-x-auto pb-2" data-testid="board">
+    <div
+      role="group"
+      aria-label={t('boardLabel')}
+      tabIndex={0}
+      className="flex gap-4 overflow-x-auto pb-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+      data-testid="board"
+    >
       {columns.map((column) => (
         <BoardColumnScaffold key={column.id} column={column} onOpenQuickView={openPeek} />
       ))}
@@ -123,7 +136,7 @@ function BoardColumnScaffold({
   return (
     <section
       aria-label={t('columnLabel', { name: column.name, count: column.totalCount })}
-      className="flex w-72 shrink-0 flex-col rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
+      className="flex w-72 shrink-0 flex-col rounded-(--radius-card) border border-(--el-border) bg-(--el-surface)"
     >
       <header className="flex items-center gap-2 border-b border-(--el-border) px-3 py-2">
         <h2 className="text-[13px] font-semibold text-(--el-text-strong)">{column.name}</h2>
@@ -134,9 +147,11 @@ function BoardColumnScaffold({
           {column.totalCount}
         </span>
       </header>
-      <div className="flex flex-col gap-2 overflow-y-auto p-2">
+      <div className="flex flex-col gap-2 p-2">
         {column.cards.length === 0 ? (
-          <p className="px-2 py-6 text-center text-xs text-(--el-text-muted)">{t('emptyColumn')}</p>
+          <p className="px-2 py-6 text-center text-xs text-(--el-text-secondary)">
+            {t('emptyColumn')}
+          </p>
         ) : (
           column.cards.map((card) => (
             <BoardCardSeam key={card.id} card={card} onOpenQuickView={onOpenQuickView} />
@@ -167,7 +182,7 @@ function BoardCardSeam({
       onClick={() => onOpenQuickView(card.identifier)}
       aria-label={t('openIssueAria', { key: card.identifier, title: card.title })}
       data-testid={`board-card-${card.identifier}`}
-      className="flex flex-col gap-1 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-(--spacing-card-padding) text-left shadow-(--shadow-subtle) transition-colors hover:border-(--el-border-strong) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+      className="flex flex-col gap-1 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding) text-left shadow-(--shadow-subtle) transition-colors hover:border-(--el-border-strong) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
     >
       <span className="font-mono text-xs text-(--el-text-muted)">{card.identifier}</span>
       <span className="line-clamp-2 text-sm text-(--el-text)">{card.title}</span>

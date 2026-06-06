@@ -663,6 +663,7 @@
     "noBoardDescription": "This project doesn’t have a board configured yet.",
     "emptyColumn": "No work items",
     "columnLabel": "{name}, {count} work items",
-    "openIssueAria": "Open {key}: {title}"
+    "openIssueAria": "Open {key}: {title}",
+    "boardLabel": "Board columns"
   }
 }

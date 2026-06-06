@@ -663,6 +663,7 @@
     "noBoardDescription": "此项目尚未配置看板。",
     "emptyColumn": "暂无工作项",
     "columnLabel": "{name}，{count} 个工作项",
-    "openIssueAria": "打开 {key}：{title}"
+    "openIssueAria": "打开 {key}：{title}",
+    "boardLabel": "看板列"
   }
 }
