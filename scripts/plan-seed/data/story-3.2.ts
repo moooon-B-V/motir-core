@@ -160,7 +160,7 @@ export const story_3_2: PlanStory = {
     {
       id: '3.2.2',
       title: 'Board page + data layer — replace the `/boards` stub; fetch projection; board states',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
