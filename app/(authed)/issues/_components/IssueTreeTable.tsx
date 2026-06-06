@@ -226,6 +226,12 @@ export function IssueTreeTable({
           : 'none';
         return {
           key: col.key,
+          // Forward the fixed column width: without it TreeTable falls back to
+          // `max-content`, sizing each independently-gridded row to its OWN
+          // content so the header row and data rows land on DIFFERENT column
+          // grids (bug-tree-header-misalignment). The List + static Tree keep
+          // the width; the sortable Tree must too.
+          width: col.width,
           align: col.align,
           ariaSort,
           headerLabel: col.header,

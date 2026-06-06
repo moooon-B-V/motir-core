@@ -59,7 +59,7 @@ export const EPICS: EpicMeta[] = [
         id: 'bug-tree-header-misalignment',
         kind: 'bug',
         title: 'Tree view: column values not aligned with their headers',
-        status: 'planned',
+        status: 'in_progress',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 2 · **Discovered in:** Story 2.5 (issue list — Tree ' +
@@ -72,13 +72,19 @@ export const EPICS: EpicMeta[] = [
           '**Repro:** sign in as `info@moooon.net`, open the `moooon` / `prodect` project → ' +
           '`/issues`, switch to **Tree** view, and observe that the column headers do not sit ' +
           'above their values.\n\n' +
-          '**Fix approach — reproduce first.** Per the reproduce-before-diagnosing rule, the fix ' +
-          'must start with a FAILING UI test asserting header↔cell column alignment (a shared ' +
-          'grid-template / column-width source), not a code-reading theory. Candidate area to ' +
-          'investigate (hypothesis, NOT a diagnosis): the Tree view header row vs. the ' +
-          'virtualized / lazy-loaded body rows (2.5.14) may compute column widths independently — ' +
-          'a classic cause of header/body drift in virtualized tables — but confirm with the repro ' +
-          'before changing code.',
+          '**Root cause (confirmed by browser repro, not code-reading).** The lazy + sortable ' +
+          '`IssueTreeTable` (2.5.14) remaps the shared `buildIssueColumns` to wrap each header in a ' +
+          'sort button but DROPPED each column’s fixed `width`. `TreeTable` then falls back to ' +
+          '`max-content` for those tracks; because every row is its OWN CSS grid, `max-content` ' +
+          'sizes each row to its own content, so the header row and the data rows land on different ' +
+          'column grids → drift (measured up to ~73px). The static/filtered tree + the List never ' +
+          'drifted because they forward `width`. (The original "virtualized body computes widths ' +
+          'independently" guess was directionally right about "independent widths" but wrong on ' +
+          'mechanism — there is no virtualization; it was the dropped `width`.)\n\n' +
+          '**Fix.** Forward `width: col.width` in `IssueTreeTable`’s column remap, so the header + ' +
+          'every data row share one fixed-width grid. Guarded by a regression test asserting the ' +
+          'header and data rows carry the same fixed-px grid template (not `max-content`), plus a ' +
+          'browser pixel-alignment measurement during the fix.',
       },
     ],
   },
