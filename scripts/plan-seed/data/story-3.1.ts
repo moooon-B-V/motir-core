@@ -272,7 +272,7 @@ export const story_3_1: PlanStory = {
     {
       id: '3.1.5',
       title: 'Board mutation service — cross-column move = workflow transition; in-column = rank',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
