@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment } from 'react';
+import { useTranslations } from 'next-intl';
 import { Modal } from '@/components/ui/Modal';
 import { SHELL_SHORTCUTS, displayKey } from '@/lib/shortcuts';
 
@@ -20,12 +21,13 @@ export function ShortcutsCheatsheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useTranslations('shell');
   return (
     <Modal
       open={open}
       onOpenChange={onOpenChange}
-      title="Keyboard shortcuts"
-      description="Shortcuts available anywhere in the app."
+      title={t('shortcuts.title')}
+      description={t('shortcuts.description')}
       size="md"
     >
       <ul className="flex flex-col gap-1">

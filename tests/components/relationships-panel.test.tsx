@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type {
   ReadinessVerdictDto,
   RelationshipLinkDto,
@@ -101,7 +102,7 @@ describe('ReadinessBadge (2.4.5)', () => {
       />,
     );
     screen.getByText('Blocked');
-    screen.getByText(/Waiting on 2 issues/);
+    screen.getByText(/Waiting on 2 work items/);
     const lnk = screen.getByRole('link', { name: 'PROD-3' });
     expect(lnk.getAttribute('href')).toBe('/issues/PROD-3');
   });
@@ -113,7 +114,7 @@ describe('ReadinessBadge (2.4.5)', () => {
         blockers={[{ identifier: 'PROD-3', href: '/issues/PROD-3' }]}
       />,
     );
-    screen.getByText(/Waiting on 1 issue —/);
+    screen.getByText(/Waiting on 1 work item —/);
   });
 });
 
@@ -121,10 +122,10 @@ describe('RelationshipsPanel (2.4.5 read-only)', () => {
   it('shows a muted empty state (not blank); read-only mode has no add control', () => {
     render(<RelationshipsPanel {...EMPTY} readiness={READY} workflow={workflow} />);
     screen.getByText('Relationships');
-    screen.getByText('No linked issues yet.');
+    screen.getByText('No linked work items yet.');
     expect(screen.queryByText('Ready to start')).toBeNull();
     // Not editable → no "+ Link issue" entry point.
-    expect(screen.queryByRole('button', { name: /Link issue/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Link work item/ })).toBeNull();
   });
 
   it('groups links by kind, each linked item a navigable row with its status', () => {
@@ -158,7 +159,7 @@ describe('RelationshipsPanel (2.4.5 read-only)', () => {
     expect(screen.getByRole('link', { name: /Downstream/ }).textContent).toContain('Done');
 
     screen.getByText('Blocked');
-    screen.getByText(/Waiting on 1 issue/);
+    screen.getByText(/Waiting on 1 work item/);
   });
 
   it('shows "Ready to start" above the groups when blockers exist but are all resolved', () => {

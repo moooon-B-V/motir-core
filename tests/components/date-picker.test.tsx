@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { useState } from 'react';
 
 // Radix Popover (used for the calendar dialog) anchors via Radix Popper, which

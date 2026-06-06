@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import { type ReactNode } from 'react';
 
 /**
@@ -33,15 +34,18 @@ export function AuthShell({
  * email form on sign-in / sign-up. Matches mockups 01 + 03.
  */
 export function OrDivider() {
+  const t = useTranslations('auth');
   return (
     <div
       className="flex items-center gap-4"
       role="separator"
       aria-orientation="horizontal"
-      aria-label="or"
+      aria-label={t('orAriaLabel')}
     >
       <span className="h-px flex-1 bg-(--el-border)" aria-hidden />
-      <span className="text-(--el-text-muted) font-sans text-xs uppercase tracking-wider">OR</span>
+      <span className="text-(--el-text-muted) font-sans text-xs uppercase tracking-wider">
+        {t('or')}
+      </span>
       <span className="h-px flex-1 bg-(--el-border)" aria-hidden />
     </div>
   );

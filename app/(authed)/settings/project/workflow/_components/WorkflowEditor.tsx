@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { ArrowDown, ArrowUp, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -29,24 +30,16 @@ import type {
   WorkflowTransitionDto,
 } from '@/lib/dto/workflows';
 
-const CATEGORY_OPTIONS: ReadonlyArray<{ value: StatusCategoryDto; label: string }> = [
-  { value: 'todo', label: 'To Do' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'done', label: 'Done' },
-];
-
-const CATEGORY_LABEL: Record<StatusCategoryDto, string> = {
-  todo: 'To Do',
-  in_progress: 'In Progress',
-  done: 'Done',
-};
+const CATEGORY_VALUES: readonly StatusCategoryDto[] = ['todo', 'in_progress', 'done'];
 
 // Category → AA-safe semantic Pill (post-finding-#35). todo = neutral grey,
 // in_progress = info blue, done = success green.
 function CategoryPill({ category }: { category: StatusCategoryDto }) {
-  if (category === 'in_progress') return <Pill severity="info">In Progress</Pill>;
-  if (category === 'done') return <Pill severity="success">Done</Pill>;
-  return <Pill tone="neutral">To Do</Pill>;
+  const t = useTranslations('settings');
+  if (category === 'in_progress')
+    return <Pill severity="info">{t('workflow.category.in_progress')}</Pill>;
+  if (category === 'done') return <Pill severity="success">{t('workflow.category.done')}</Pill>;
+  return <Pill tone="neutral">{t('workflow.category.todo')}</Pill>;
 }
 
 // A default status (Subtask 2.2.10 / finding #49) is PROTECTED: recolor only —
@@ -67,6 +60,8 @@ export function WorkflowEditor({
   policyMode,
   isAdmin,
 }: WorkflowEditorProps) {
+  const t = useTranslations('settings');
+  const tc = useTranslations('common');
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -93,7 +88,7 @@ export function WorkflowEditor({
         onSuccess?.(); // e.g. close the modal — ONLY on success, so a failure keeps the form
         router.refresh();
       } else {
-        toast({ variant: 'error', title: res.error ?? 'Something went wrong' });
+        toast({ variant: 'error', title: res.error ?? t('workflow.toast.genericError') });
       }
     });
   }
@@ -104,12 +99,12 @@ export function WorkflowEditor({
     startTransition(async () => {
       const res = await deleteStatusAction(s.id);
       if (res.ok) {
-        toast({ variant: 'success', title: 'Status deleted' });
+        toast({ variant: 'success', title: t('workflow.toast.statusDeleted') });
         router.refresh();
       } else if (res.statusInUse) {
         setReassign({ status: s, count: res.statusInUse.count });
       } else {
-        toast({ variant: 'error', title: res.error ?? 'Something went wrong' });
+        toast({ variant: 'error', title: res.error ?? t('workflow.toast.genericError') });
       }
     });
   }
@@ -125,17 +120,20 @@ export function WorkflowEditor({
     const neighbour = statuses[target]!.position;
     const [lo, hi] = dir === -1 ? [beyond, neighbour] : [neighbour, beyond];
     const position = keyBetween(lo, hi);
-    run(() => reorderStatusAction({ statusId: statuses[index]!.id, position }), 'Reordered');
+    run(
+      () => reorderStatusAction({ statusId: statuses[index]!.id, position }),
+      t('workflow.toast.reordered'),
+    );
   }
 
   function toggleTransition(from: WorkflowStatusDto, to: WorkflowStatusDto) {
     const existing = transitionByPair.get(`${from.id}|${to.id}`);
     if (existing) {
-      run(() => removeTransitionAction(existing.id), 'Transition removed');
+      run(() => removeTransitionAction(existing.id), t('workflow.toast.transitionRemoved'));
     } else {
       run(
         () => addTransitionAction({ fromStatusId: from.id, toStatusId: to.id }),
-        'Transition added',
+        t('workflow.toast.transitionAdded'),
       );
     }
   }
@@ -146,18 +144,20 @@ export function WorkflowEditor({
       <section className="border-(--el-border) bg-card flex flex-col gap-2 rounded-lg border p-4">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="font-sans text-sm font-semibold text-(--el-text)">Transition policy</h2>
+            <h2 className="font-sans text-sm font-semibold text-(--el-text)">
+              {t('workflow.policyHeading')}
+            </h2>
             <p className="text-(--el-text-muted) font-sans text-xs">
               {policyMode === 'open'
-                ? 'Open mode: any status can transition to any other.'
-                : 'Restricted mode: only the transitions below are allowed.'}
+                ? t('workflow.policyOpenDesc')
+                : t('workflow.policyRestrictedDesc')}
             </p>
           </div>
           {/* Segmented control: one bordered track, two connected segments — the
               active one is a raised pill, not a separate solid button. */}
           <div
             role="group"
-            aria-label="Transition policy mode"
+            aria-label={t('workflow.policyGroupLabel')}
             className="border-(--el-border) bg-(--el-page-bg) inline-flex shrink-0 rounded-md border p-0.5"
           >
             {(['restricted', 'open'] as const).map((mode) => {
@@ -170,7 +170,8 @@ export function WorkflowEditor({
                   disabled={!isAdmin || isPending}
                   onClick={() => {
                     // Clicking the active segment is a harmless no-op; the other switches.
-                    if (!active) run(() => setPolicyModeAction(mode), `Policy set to ${mode}`);
+                    if (!active)
+                      run(() => setPolicyModeAction(mode), t('workflow.policySetToast', { mode }));
                   }}
                   className={`rounded px-3 py-1 font-sans text-xs font-medium transition-colors disabled:opacity-50 ${
                     active
@@ -178,7 +179,9 @@ export function WorkflowEditor({
                       : 'text-(--el-text-muted) hover:text-(--el-text)'
                   }`}
                 >
-                  {mode === 'restricted' ? 'Restricted' : 'Open'}
+                  {mode === 'restricted'
+                    ? t('workflow.policyRestricted')
+                    : t('workflow.policyOpen')}
                 </button>
               );
             })}
@@ -190,21 +193,21 @@ export function WorkflowEditor({
       <div
         className="border-(--el-border) flex gap-1 border-b"
         role="tablist"
-        aria-label="Workflow editor"
+        aria-label={t('workflow.tablistLabel')}
       >
-        {(['statuses', 'transitions'] as const).map((t) => (
+        {(['statuses', 'transitions'] as const).map((tabKey) => (
           <button
-            key={t}
+            key={tabKey}
             role="tab"
-            aria-selected={tab === t}
+            aria-selected={tab === tabKey}
             className={`-mb-px border-b-2 px-3 py-2 font-sans text-sm font-medium ${
-              tab === t
+              tab === tabKey
                 ? 'border-(--el-text) text-(--el-text)'
                 : 'text-(--el-text-muted) border-transparent'
             }`}
-            onClick={() => setTab(t)}
+            onClick={() => setTab(tabKey)}
           >
-            {t === 'statuses' ? 'Statuses' : 'Transitions'}
+            {tabKey === 'statuses' ? t('workflow.tabStatuses') : t('workflow.tabTransitions')}
           </button>
         ))}
       </div>
@@ -226,8 +229,8 @@ export function WorkflowEditor({
                   />
                   <span className="font-sans text-sm font-medium text-(--el-text)">{s.label}</span>
                   <CategoryPill category={s.category} />
-                  {s.isInitial && <Pill tone="neutral">Initial</Pill>}
-                  {isDefault && <Pill tone="neutral">Default</Pill>}
+                  {s.isInitial && <Pill tone="neutral">{t('workflow.initialBadge')}</Pill>}
+                  {isDefault && <Pill tone="neutral">{t('workflow.defaultBadge')}</Pill>}
                   {isAdmin && (
                     <div className="ml-auto flex items-center gap-1">
                       {/* Defaults are non-reorderable (protected) — hide the
@@ -237,7 +240,7 @@ export function WorkflowEditor({
                           <Button
                             variant="ghost"
                             size="sm"
-                            aria-label={`Move ${s.label} up`}
+                            aria-label={t('workflow.moveUp', { label: s.label })}
                             disabled={i === 0 || isPending}
                             onClick={() => moveStatus(i, -1)}
                           >
@@ -246,7 +249,7 @@ export function WorkflowEditor({
                           <Button
                             variant="ghost"
                             size="sm"
-                            aria-label={`Move ${s.label} down`}
+                            aria-label={t('workflow.moveDown', { label: s.label })}
                             disabled={i === statuses.length - 1 || isPending}
                             onClick={() => moveStatus(i, 1)}
                           >
@@ -257,18 +260,20 @@ export function WorkflowEditor({
                       <Button
                         variant="ghost"
                         size="sm"
-                        aria-label={isDefault ? `Change color of ${s.label}` : undefined}
+                        aria-label={
+                          isDefault ? t('workflow.changeColor', { label: s.label }) : undefined
+                        }
                         disabled={isPending}
                         onClick={() => setEditing(s)}
                       >
-                        {isDefault ? 'Color' : 'Edit'}
+                        {isDefault ? t('workflow.colorButton') : t('workflow.editButton')}
                       </Button>
                       {/* Defaults can't be deleted (protected) — no delete button. */}
                       {!isDefault && (
                         <Button
                           variant="ghost"
                           size="sm"
-                          aria-label={`Delete ${s.label}`}
+                          aria-label={t('workflow.deleteStatus', { label: s.label })}
                           disabled={isPending}
                           onClick={() => handleDelete(s)}
                         >
@@ -290,7 +295,7 @@ export function WorkflowEditor({
                 disabled={isPending}
                 onClick={() => setAddOpen(true)}
               >
-                Add status
+                {t('workflow.addStatus')}
               </Button>
             </div>
           )}
@@ -308,20 +313,20 @@ export function WorkflowEditor({
                 disabled={isPending}
                 onClick={() => setRestoreOpen(true)}
               >
-                Restore default transitions
+                {t('workflow.restoreDefaults')}
               </Button>
             </div>
           )}
           <div className="overflow-x-auto">
             <table className="border-collapse font-sans text-xs">
               <caption className="text-(--el-text-muted) mb-2 text-left text-xs">
-                Each cell is a legal move from the row status to the column status.
-                {policyMode === 'open' && ' (Ignored while policy is Open.)'}
+                {t('workflow.tableCaption')}
+                {policyMode === 'open' && t('workflow.tableCaptionOpen')}
               </caption>
               <thead>
                 <tr>
                   <th className="text-(--el-text-muted) p-2 text-left font-medium">
-                    From ↓ / To →
+                    {t('workflow.fromToHeader')}
                   </th>
                   {statuses.map((to) => (
                     <th key={to.id} scope="col" className="text-(--el-text-muted) p-2 font-medium">
@@ -350,7 +355,10 @@ export function WorkflowEditor({
                               type="button"
                               role="checkbox"
                               aria-checked={on}
-                              aria-label={`${from.label} to ${to.label}`}
+                              aria-label={t('workflow.transitionCell', {
+                                from: from.label,
+                                to: to.label,
+                              })}
                               disabled={!isAdmin || isPending}
                               onClick={() => toggleTransition(from, to)}
                               className={`h-6 w-6 rounded border ${
@@ -377,7 +385,7 @@ export function WorkflowEditor({
         <StatusFormModal
           open={addOpen}
           onOpenChange={setAddOpen}
-          title="Add status"
+          title={t('workflow.addStatus')}
           isPending={isPending}
           onSubmit={(values) =>
             run(
@@ -388,7 +396,7 @@ export function WorkflowEditor({
                   category: values.category,
                   color: values.color || null,
                 }),
-              'Status added',
+              t('workflow.toast.statusAdded'),
               () => setAddOpen(false),
             )
           }
@@ -400,7 +408,11 @@ export function WorkflowEditor({
         <StatusFormModal
           open={Boolean(editing)}
           onOpenChange={(o) => !o && setEditing(null)}
-          title={isDefaultStatus(editing) ? `Color · ${editing.label}` : `Edit ${editing.label}`}
+          title={
+            isDefaultStatus(editing)
+              ? t('workflow.colorTitle', { label: editing.label })
+              : t('workflow.editTitle', { label: editing.label })
+          }
           isPending={isPending}
           // A default status is recolor-only (finding #49): the form hides the
           // label/category/initial fields and the action sends just `color`.
@@ -424,7 +436,7 @@ export function WorkflowEditor({
                       color: values.color || null,
                       isInitial: values.isInitial,
                     }),
-              'Status updated',
+              t('workflow.toast.statusUpdated'),
               () => setEditing(null),
             )
           }
@@ -434,17 +446,16 @@ export function WorkflowEditor({
       {restoreOpen && (
         <Modal open={restoreOpen} onOpenChange={setRestoreOpen} size="md">
           <h2 className="font-serif text-xl font-semibold text-(--el-text)">
-            Restore default transitions?
+            {t('workflow.restoreModalTitle')}
           </h2>
           <p className="text-(--el-text-muted) mt-2 font-sans text-sm">
-            This re-adds the standard transitions (the allowed moves between statuses) that are
-            missing from this project&apos;s workflow. It does <strong>not</strong>&nbsp;remove any
-            transitions you added, and it doesn&apos;t touch your statuses — nothing you&apos;ve set
-            up is lost.
+            {t.rich('workflow.restoreModalDesc', {
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
           </p>
           <Modal.Footer>
             <Button variant="ghost" onClick={() => setRestoreOpen(false)} disabled={isPending}>
-              Cancel
+              {tc('cancel')}
             </Button>
             <Button
               variant="primary"
@@ -452,12 +463,12 @@ export function WorkflowEditor({
               onClick={() =>
                 run(
                   () => restoreDefaultTransitionsAction(),
-                  'Default transitions restored',
+                  t('workflow.toast.transitionsRestored'),
                   () => setRestoreOpen(false),
                 )
               }
             >
-              Restore default transitions
+              {t('workflow.restoreDefaults')}
             </Button>
           </Modal.Footer>
         </Modal>
@@ -473,7 +484,7 @@ export function WorkflowEditor({
           onConfirm={(targetId) =>
             run(
               () => deleteStatusAction(reassign.status.id, targetId),
-              'Status deleted',
+              t('workflow.toast.statusDeleted'),
               () => setReassign(null),
             )
           }
@@ -502,27 +513,31 @@ function ReassignModal({
   onCancel: () => void;
   onConfirm: (targetId: string) => void;
 }) {
+  const t = useTranslations('settings');
+  const tc = useTranslations('common');
   const [targetId, setTargetId] = useState('');
-  const noun = count === 1 ? 'work item' : 'work items';
   return (
     <Modal open onOpenChange={(o) => !o && onCancel()} size="md">
-      <h2 className="font-serif text-xl font-semibold text-(--el-text)">Delete “{status.label}”</h2>
+      <h2 className="font-serif text-xl font-semibold text-(--el-text)">
+        {t('workflow.reassignTitle', { label: status.label })}
+      </h2>
       <p
         className="text-(--el-text-muted) mt-2 font-sans text-sm"
         data-testid="reassign-affected-count"
       >
-        {count} {noun} still use this status. Choose a status to move {count === 1 ? 'it' : 'them'}{' '}
-        to — then “{status.label}” is removed.
+        {t('workflow.reassignAffected', { count, label: status.label })}
       </p>
       <label className="mt-4 flex flex-col gap-1">
-        <span className="font-sans text-sm font-medium text-(--el-text)">Move items to</span>
+        <span className="font-sans text-sm font-medium text-(--el-text)">
+          {t('workflow.reassignMoveTo')}
+        </span>
         <select
           className="border-(--el-border) bg-card text-(--el-text) rounded-md border px-3 py-2 font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           value={targetId}
           onChange={(e) => setTargetId(e.target.value)}
         >
           <option value="" disabled>
-            Select a status…
+            {t('workflow.selectStatusPlaceholder')}
           </option>
           {targets.map((s) => (
             <option key={s.id} value={s.id}>
@@ -533,7 +548,7 @@ function ReassignModal({
       </label>
       <Modal.Footer>
         <Button variant="ghost" onClick={onCancel} disabled={isPending}>
-          Cancel
+          {tc('cancel')}
         </Button>
         <Button
           variant="primary"
@@ -541,7 +556,7 @@ function ReassignModal({
           disabled={!targetId}
           onClick={() => onConfirm(targetId)}
         >
-          Reassign &amp; delete
+          {t('workflow.reassignConfirm')}
         </Button>
       </Modal.Footer>
     </Modal>
@@ -578,6 +593,8 @@ function StatusFormModal({
   colorOnly?: boolean;
   onSubmit: (values: StatusFormValues) => void;
 }) {
+  const t = useTranslations('settings');
+  const tc = useTranslations('common');
   const [key, setKey] = useState(initial?.key ?? '');
   const [label, setLabel] = useState(initial?.label ?? '');
   const [category, setCategory] = useState<StatusCategoryDto>(initial?.category ?? 'todo');
@@ -606,13 +623,14 @@ function StatusFormModal({
       >
         {colorOnly && (
           <p className="text-(--el-text-muted) font-sans text-sm">
-            <span className="text-(--el-text) font-medium">{initial?.label}</span> is a default
-            status — only its color can be changed.
+            {t.rich('workflow.defaultStatusNote', {
+              name: () => <span className="text-(--el-text) font-medium">{initial?.label}</span>,
+            })}
           </p>
         )}
         {!colorOnly && requireKey && (
           <Input
-            label="Key (machine id, lowercase)"
+            label={t('workflow.keyLabel')}
             value={key}
             onChange={(e) => setKey(e.target.value)}
             placeholder="in_review"
@@ -622,32 +640,32 @@ function StatusFormModal({
         )}
         {!colorOnly && (
           <Input
-            label="Label"
+            label={t('workflow.labelLabel')}
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            placeholder="In Review"
+            placeholder={t('workflow.labelPlaceholder')}
             disabled={isPending}
           />
         )}
         {!colorOnly && (
           <label className="flex flex-col gap-1 font-sans text-sm">
-            <span className="text-(--el-text) font-medium">Category</span>
+            <span className="text-(--el-text) font-medium">{t('workflow.categoryLabel')}</span>
             <select
               className="border-(--el-border) bg-(--el-page-bg) rounded-md border px-3 py-2 text-sm"
               value={category}
               onChange={(e) => setCategory(e.target.value as StatusCategoryDto)}
               disabled={isPending}
             >
-              {CATEGORY_OPTIONS.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {CATEGORY_LABEL[c.value]}
+              {CATEGORY_VALUES.map((c) => (
+                <option key={c} value={c}>
+                  {t(`workflow.category.${c}`)}
                 </option>
               ))}
             </select>
           </label>
         )}
         <ColorSwatchPicker
-          label="Color"
+          label={t('workflow.colorButton')}
           value={color || null}
           onChange={(v) => setColor(v ?? '')}
           disabled={isPending}
@@ -660,15 +678,15 @@ function StatusFormModal({
               onChange={(e) => setIsInitial(e.target.checked)}
               disabled={isPending}
             />
-            <span className="text-(--el-text)">Make this the initial status</span>
+            <span className="text-(--el-text)">{t('workflow.makeInitial')}</span>
           </label>
         )}
         <Modal.Footer>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancel
+            {tc('cancel')}
           </Button>
           <Button type="submit" variant="primary" disabled={!canSubmit} loading={isPending}>
-            Save
+            {tc('save')}
           </Button>
         </Modal.Footer>
       </form>

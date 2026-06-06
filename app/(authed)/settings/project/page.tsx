@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -14,6 +15,8 @@ export default async function ProjectSettingsPage() {
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
+  const t = await getTranslations('settings');
+
   const project = await getActiveProject();
   if (!project) {
     // No active project — the user has no projects yet, or just archived
@@ -21,10 +24,7 @@ export default async function ProjectSettingsPage() {
     // here we surface a static hint so this route doesn't 404.
     return (
       <div className="mx-auto max-w-[42rem]">
-        <EmptyState
-          title="No project yet"
-          description="Create a project from the switcher in the top-left to get started."
-        />
+        <EmptyState title={t('project.empty.title')} description={t('project.empty.description')} />
       </div>
     );
   }
@@ -32,10 +32,8 @@ export default async function ProjectSettingsPage() {
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-serif text-3xl font-semibold text-(--el-text)">Project settings</h1>
-        <p className="text-(--el-text-muted) font-sans text-sm">
-          Configure the active project and manage its lifecycle.
-        </p>
+        <h1 className="font-serif text-3xl font-semibold text-(--el-text)">{t('project.title')}</h1>
+        <p className="text-(--el-text-muted) font-sans text-sm">{t('project.subtitle')}</p>
       </header>
 
       <WorkflowSettingsCard />

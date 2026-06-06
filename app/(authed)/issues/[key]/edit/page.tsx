@@ -1,4 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -23,14 +24,13 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
+  const t = await getTranslations('issueViews');
+
   const ctx = await getActiveProject();
   if (!ctx) {
     return (
       <div className="mx-auto max-w-[42rem]">
-        <EmptyState
-          title="No project selected"
-          description="Pick a project from the switcher to edit its issues."
-        />
+        <EmptyState title={t('noProjectTitle')} description={t('noProjectEditDescription')} />
       </div>
     );
   }
@@ -50,7 +50,7 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-serif text-2xl font-semibold text-(--el-text)">Edit issue</h1>
+      <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('editIssue')}</h1>
       <EditIssueForm issue={detail.item} workflow={detail.workflow} members={members} />
       <RelationshipsPanel
         blockedBy={detail.blockedBy}

@@ -101,8 +101,10 @@ test('@smoke delete-with-reassign: an in-use custom status migrates its items, t
   await page.getByLabel('Move items to').selectOption({ label: 'To Do' });
   await page.getByRole('button', { name: 'Reassign & delete' }).click();
 
-  // Success toast + the Triage row is gone from the editor.
-  await expect(page.getByText('Status deleted')).toBeVisible();
+  // Success toast + the Triage row is gone from the editor. `exact` so the
+  // visible toast title is matched, not Radix's sr-only announce region
+  // ("Notification Status deleted"), which would trip strict mode.
+  await expect(page.getByText('Status deleted', { exact: true })).toBeVisible();
   await expect(page.getByRole('listitem').filter({ hasText: 'Triage' })).toHaveCount(0);
 
   // Every item migrated to 'todo', each with a triage→todo status revision.

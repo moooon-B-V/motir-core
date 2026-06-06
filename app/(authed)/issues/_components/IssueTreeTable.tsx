@@ -3,7 +3,9 @@
 import { useCallback, useMemo, useState, useTransition, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { TreeTable, type TreeTableColumn, type TreeTableRow } from '@/components/ui/TreeTable';
+import type { Locale } from '@/lib/i18n/locales';
 import { cn } from '@/lib/utils/cn';
 import {
   buildIssueListHref,
@@ -16,7 +18,7 @@ import type { IssueFilter } from '@/lib/issues/issueListFilter';
 import type { TreeLevelDto, WorkItemTreeRowDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
-import { ISSUE_COLUMNS } from './issueColumns';
+import { buildIssueColumns } from './issueColumns';
 import { makeRowShaper, type IssueRowData } from './issueRows';
 import { listChildIssuesAction, listRootIssuesAction } from '../actions';
 
@@ -66,11 +68,16 @@ export function IssueTreeTable({
   workflow,
   members,
 }: IssueTreeTableProps) {
+  const t = useTranslations();
+  const locale = useLocale() as Locale;
   const router = useRouter();
   const pathname = usePathname();
   const [, startTransition] = useTransition();
   const sortParam = serializeSort(sort);
-  const shape = useMemo(() => makeRowShaper(workflow, members), [workflow, members]);
+  const shape = useMemo(
+    () => makeRowShaper(workflow, members, locale),
+    [workflow, members, locale],
+  );
 
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [levels, setLevels] = useState<Record<string, LevelState>>(() => ({
@@ -209,7 +216,7 @@ export function IssueTreeTable({
   // in the tree column only, (b) make every header a sort button with aria-sort.
   const columns = useMemo<TreeTableColumn<TreeNode>[]>(
     () =>
-      ISSUE_COLUMNS.map((col, idx) => {
+      buildIssueColumns(t).map((col, idx) => {
         const isTree = idx === 0;
         const active = sort.column === col.sortColumn;
         const ariaSort: 'ascending' | 'descending' | 'none' = active
@@ -254,12 +261,12 @@ export function IssueTreeTable({
           },
         };
       }),
-    [sort, onSort],
+    [sort, onSort, t],
   );
 
   return (
     <TreeTable
-      label="Issues"
+      label={t('issues.list.tableLabel')}
       columns={columns}
       rows={rows}
       expandedIds={expanded}

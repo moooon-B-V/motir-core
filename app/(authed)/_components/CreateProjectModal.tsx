@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -38,6 +39,8 @@ export interface CreateProjectModalProps {
 }
 
 export function CreateProjectModal({ open, onOpenChange }: CreateProjectModalProps) {
+  const t = useTranslations('shell');
+  const tc = useTranslations('common');
   const router = useRouter();
   const { toast } = useToast();
   const [name, setName] = useState('');
@@ -90,7 +93,7 @@ export function CreateProjectModal({ open, onOpenChange }: CreateProjectModalPro
           identifier: isIdentifierDirty && identifier ? identifier : undefined,
         });
         handleOpenChange(false);
-        toast({ variant: 'success', title: 'Project created' });
+        toast({ variant: 'success', title: t('project.created') });
         router.refresh();
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Could not create project';
@@ -98,16 +101,16 @@ export function CreateProjectModal({ open, onOpenChange }: CreateProjectModalPro
         // retries — surface that on the identifier field so the user can
         // pick a different one. Other errors surface as a toast.
         if (message.includes('IDENTIFIER_COLLISION')) {
-          setError('That identifier is already taken. Try a different one.');
+          setError(t('project.identifierTaken'));
         } else {
-          toast({ variant: 'error', title: 'Could not create project' });
+          toast({ variant: 'error', title: t('project.createError') });
         }
       }
     });
   }
 
   return (
-    <Modal open={open} onOpenChange={handleOpenChange} title="Create project" size="md">
+    <Modal open={open} onOpenChange={handleOpenChange} title={t('project.create')} size="md">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -116,34 +119,32 @@ export function CreateProjectModal({ open, onOpenChange }: CreateProjectModalPro
       >
         <div className="space-y-(--spacing-md)">
           <Input
-            label="Project name"
-            placeholder="Mobile App"
+            label={t('project.nameLabel')}
+            placeholder={t('project.namePlaceholder')}
             value={name}
             onChange={(e) => handleNameChange(e.target.value)}
             autoFocus
             disabled={isPending}
           />
           <Input
-            label="Identifier"
+            label={t('project.identifierLabel')}
             value={effectiveIdentifier}
             onChange={(e) => handleIdentifierChange(e.target.value)}
             className="font-mono uppercase"
             maxLength={IDENTIFIER_MAX}
             error={error ?? undefined}
             helperText={
-              error
-                ? undefined
-                : `3–5 uppercase characters. Work items will be keyed ${previewIdentifier}-1, ${previewIdentifier}-2, …`
+              error ? undefined : t('project.identifierHelper', { preview: previewIdentifier })
             }
             disabled={isPending}
           />
         </div>
         <Modal.Footer>
           <Button variant="ghost" onClick={() => handleOpenChange(false)} disabled={isPending}>
-            Cancel
+            {tc('cancel')}
           </Button>
           <Button variant="primary" type="submit" loading={isPending} disabled={!name.trim()}>
-            Create project
+            {t('project.create')}
           </Button>
         </Modal.Footer>
       </form>

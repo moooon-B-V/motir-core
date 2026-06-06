@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Mail } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -25,6 +26,7 @@ export function MembersCard({
   members,
   currentUserId,
 }: MembersCardProps) {
+  const t = useTranslations('settings');
   const { toast } = useToast();
   const router = useRouter();
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -35,13 +37,13 @@ export function MembersCard({
       header={
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h2 className="font-sans text-base font-semibold text-(--el-text)">Members</h2>
+            <h2 className="font-sans text-base font-semibold text-(--el-text)">
+              {t('members.heading')}
+            </h2>
             {/* A member count is metadata, not an "info" severity state — so the
                 neutral tone is the right semantics here (independent of #35,
                 now resolved: all colored tones clear WCAG AA too). */}
-            <Pill tone="neutral">
-              {members.length} {members.length === 1 ? 'member' : 'members'}
-            </Pill>
+            <Pill tone="neutral">{t('members.count', { count: members.length })}</Pill>
           </div>
           <Button
             variant="secondary"
@@ -49,7 +51,7 @@ export function MembersCard({
             leftIcon={<Mail className="h-4 w-4" />}
             onClick={() => setInviteOpen(true)}
           >
-            Invite
+            {t('members.invite')}
           </Button>
         </div>
       }
@@ -71,7 +73,7 @@ export function MembersCard({
         workspaceId={workspaceId}
         workspaceName={workspaceName}
         onSent={(email) => {
-          toast({ variant: 'success', title: `Invite sent to ${email}` });
+          toast({ variant: 'success', title: t('members.inviteSentToast', { email }) });
           setInviteOpen(false);
         }}
       />
@@ -88,6 +90,8 @@ function MemberRow({
   isSelf: boolean;
   onRemoved: () => void;
 }) {
+  const t = useTranslations('settings');
+  const tl = useTranslations('labels');
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const initial = (member.name || member.email).charAt(0).toUpperCase();
@@ -96,10 +100,14 @@ function MemberRow({
     startTransition(async () => {
       const result = await removeMemberAction(member.userId);
       if (result.ok) {
-        toast({ variant: 'success', title: `Removed ${member.name}` });
+        toast({ variant: 'success', title: t('members.removedToast', { name: member.name }) });
         onRemoved();
       } else {
-        toast({ variant: 'error', title: 'Could not remove member', description: result.error });
+        toast({
+          variant: 'error',
+          title: t('members.removeErrorTitle'),
+          description: result.error,
+        });
       }
     });
   }
@@ -112,16 +120,18 @@ function MemberRow({
       <div className="min-w-0 flex-1">
         <p className="truncate font-sans text-sm font-medium text-(--el-text)">
           {member.name}
-          {isSelf ? <span className="text-(--el-text-muted) font-normal"> (you)</span> : null}
+          {isSelf ? (
+            <span className="text-(--el-text-muted) font-normal">{t('members.youSuffix')}</span>
+          ) : null}
         </p>
         <p className="text-(--el-text-muted) truncate font-sans text-xs">{member.email}</p>
       </div>
       {/* A role is a category label, not an "info" severity — neutral tone
           (AA-contrast-safe; see finding #35). */}
-      <Pill tone="neutral">{member.role}</Pill>
+      <Pill tone="neutral">{tl('role.' + member.role)}</Pill>
       {isSelf ? null : (
         <Button variant="ghost" size="sm" onClick={handleRemove} loading={isPending}>
-          Remove
+          {t('members.remove')}
         </Button>
       )}
     </li>
@@ -141,6 +151,8 @@ function InviteModal({
   workspaceName: string;
   onSent: (email: string) => void;
 }) {
+  const t = useTranslations('settings');
+  const tc = useTranslations('common');
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [isPending, startTransition] = useTransition();
@@ -167,9 +179,9 @@ function InviteModal({
           return;
         }
         const data = (await res.json().catch(() => ({}))) as { code?: string };
-        setError(messageForInviteError(res.status, data.code, value));
+        setError(messageForInviteError(t, res.status, data.code, value));
       } catch {
-        setError('Something went wrong. Please try again.');
+        setError(t('members.errorUnexpected'));
       }
     });
   }
@@ -181,8 +193,8 @@ function InviteModal({
         if (!o) reset();
         onOpenChange(o);
       }}
-      title={`Invite to ${workspaceName}`}
-      description="They'll get an email with a one-time link. Links expire in 7 days."
+      title={t('members.inviteModalTitle', { workspaceName })}
+      description={t('members.inviteModalDescription')}
       size="md"
     >
       <form
@@ -192,9 +204,9 @@ function InviteModal({
         }}
       >
         <Input
-          label="Email address"
+          label={t('members.emailLabel')}
           type="email"
-          placeholder="teammate@example.com"
+          placeholder={t('members.emailPlaceholder')}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           error={error}
@@ -202,10 +214,10 @@ function InviteModal({
         />
         <Modal.Footer>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancel
+            {tc('cancel')}
           </Button>
           <Button type="submit" variant="primary" loading={isPending} disabled={!email.trim()}>
-            Send invite
+            {t('members.sendInvite')}
           </Button>
         </Modal.Footer>
       </form>
@@ -213,15 +225,20 @@ function InviteModal({
   );
 }
 
-function messageForInviteError(status: number, code: string | undefined, email: string): string {
+function messageForInviteError(
+  t: (key: string, values?: Record<string, string>) => string,
+  status: number,
+  code: string | undefined,
+  email: string,
+): string {
   if (status === 422 || code === 'ALREADY_MEMBER') {
-    return `${email} is already a member of this workspace.`;
+    return t('members.errorAlreadyMember', { email });
   }
   if (status === 429 || code === 'RATE_LIMITED') {
-    return "You've already sent 3 invites to this address in the last hour. Please wait before trying again.";
+    return t('members.errorRateLimited');
   }
   if (status === 400 || code === 'INVALID_EMAIL') {
-    return 'Enter a valid email address.';
+    return t('members.errorInvalidEmail');
   }
-  return 'Could not send the invite. Please try again.';
+  return t('members.errorGeneric');
 }

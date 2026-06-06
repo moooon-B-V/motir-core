@@ -8,9 +8,19 @@
 // `flat` (the List view) drops the per-row indent + the chevron slot — the one
 // delta between the Tree skeleton and the List skeleton (the List is un-nested).
 
+import { useTranslations } from 'next-intl';
+
 // TITLE · PRIORITY · ASSIGNEE · REPORTER · DUE · EST. · STATUS.
 const GRID = 'minmax(0,1fr) 120px 150px 150px 120px 90px 130px';
-const HEADERS = ['Title', 'Priority', 'Assignee', 'Reporter', 'Due', 'Est.', 'Status'];
+const HEADER_KEYS = [
+  'colTitle',
+  'colPriority',
+  'colAssignee',
+  'colReporter',
+  'colDue',
+  'colEst',
+  'colStatus',
+] as const;
 
 const ROWS = [0, 1, 2, 3, 4, 5, 6, 7];
 // Indent (px) per row — echoes the mockup's depth-varied shimmer.
@@ -21,6 +31,7 @@ function Bar({ w }: { w: number }) {
 }
 
 export function IssueTreeSkeleton({ flat = false }: { flat?: boolean } = {}) {
+  const t = useTranslations('issueViews');
   return (
     <div
       className="overflow-hidden rounded-xl border border-(--el-border)"
@@ -33,12 +44,12 @@ export function IssueTreeSkeleton({ flat = false }: { flat?: boolean } = {}) {
           className="grid items-center gap-x-4 border-b border-(--el-border) bg-(--el-surface-soft) pr-7 pl-4"
           style={{ gridTemplateColumns: GRID, height: 40 }}
         >
-          {HEADERS.map((h) => (
+          {HEADER_KEYS.map((key) => (
             <span
-              key={h}
+              key={key}
               className="text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase"
             >
-              {h}
+              {t(key)}
             </span>
           ))}
         </div>

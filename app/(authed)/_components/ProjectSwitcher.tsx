@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Check, ChevronDown, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
@@ -29,6 +30,7 @@ export function ProjectSwitcher({
   activeProjectId,
   activeProject,
 }: ProjectSwitcherProps) {
+  const t = useTranslations('shell');
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -64,7 +66,7 @@ export function ProjectSwitcher({
           <Button
             variant="ghost"
             size="md"
-            aria-label="Switch project"
+            aria-label={t('projectSwitcher.switch')}
             // Full-width so it fills the ~216px sidebar-header slot (240px
             // rail minus padding); the chevron pins to the right edge.
             // Open-state affordance mirrors WorkspaceSwitcher: primary
@@ -77,13 +79,13 @@ export function ProjectSwitcher({
           >
             <span className="flex w-full items-center gap-2">
               <span className="min-w-0 flex-1 truncate text-left">
-                {active?.name ?? 'No project'}
+                {active?.name ?? t('projectSwitcher.none')}
               </span>
               {isArchived ? (
                 // "Archived" is a muted inactive state, not an info severity —
                 // neutral tone (AA-safe; #35).
                 <Pill tone="neutral" className="shrink-0">
-                  Archived
+                  {t('projectSwitcher.archived')}
                 </Pill>
               ) : null}
               <ChevronDown className="text-(--el-text-muted) h-4 w-4 shrink-0" aria-hidden />
@@ -93,7 +95,7 @@ export function ProjectSwitcher({
         <Popover.Content align="start" width={320} className="py-1">
           <div className="px-3 pb-1 pt-2">
             <span className="text-(--el-text-muted) font-mono text-xs uppercase tracking-wider">
-              Projects
+              {t('projectSwitcher.heading')}
             </span>
           </div>
           <ul role="list" className="px-1">
@@ -138,7 +140,7 @@ export function ProjectSwitcher({
               className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-sm) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
             >
               <Plus className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-              Create project
+              {t('project.create')}
             </button>
           </div>
         </Popover.Content>

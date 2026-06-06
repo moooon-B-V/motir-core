@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { TreeTable, type TreeTableColumn, type TreeTableRow } from '@/components/ui/TreeTable';
-import { ISSUE_COLUMNS } from './issueColumns';
+import { buildIssueColumns } from './issueColumns';
 import type { IssueRowData } from './issueRows';
 
 // The STATIC (non-lazy) /issues tree — used ONLY for the FILTERED view, where
@@ -13,15 +14,16 @@ import type { IssueRowData } from './issueRows';
 // matched nodes' ancestors retained. Headers are plain here (the filtered forest
 // comes back key-asc — sorting a context-preserving tree is out of v1 scope).
 
-const COLUMNS: TreeTableColumn<IssueRowData>[] = ISSUE_COLUMNS.map(
-  ({ key, header, width, align, cell }) => ({ key, header, width, align, cell }),
-);
-
 export interface IssueTreeStaticTableProps {
   rows: TreeTableRow<IssueRowData>[];
 }
 
 export function IssueTreeStaticTable({ rows }: IssueTreeStaticTableProps) {
+  const t = useTranslations();
+  const columns: TreeTableColumn<IssueRowData>[] = buildIssueColumns(t).map(
+    ({ key, header, width, align, cell }) => ({ key, header, width, align, cell }),
+  );
+
   // Expand the roots one level so matched descendants are visible under their
   // retained ancestors (the context-preserving filter's whole point).
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
@@ -30,8 +32,8 @@ export function IssueTreeStaticTable({ rows }: IssueTreeStaticTableProps) {
 
   return (
     <TreeTable
-      label="Issues"
-      columns={COLUMNS}
+      label={t('issues.list.tableLabel')}
+      columns={columns}
       rows={rows}
       expandedIds={expandedIds}
       onExpandedChange={setExpandedIds}

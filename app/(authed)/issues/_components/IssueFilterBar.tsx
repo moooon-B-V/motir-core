@@ -227,7 +227,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
 
       <Popover.Content
         role="dialog"
-        aria-label="Filter issues"
+        aria-label="Filter work items"
         align="start"
         width={320}
         className="p-0"

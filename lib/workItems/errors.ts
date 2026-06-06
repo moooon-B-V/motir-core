@@ -82,9 +82,11 @@ export class ParentCycleError extends WorkItemError {
 export class WorkItemNotFoundError extends WorkItemError {
   readonly tag = 'WORK_ITEM_NOT_FOUND' as const;
   readonly code = 'WORK_ITEM_NOT_FOUND' as const;
+  readonly idOrIdentifier: string;
   constructor(idOrIdentifier: string) {
     super(`Work item ${idOrIdentifier} not found.`);
     this.name = 'WorkItemNotFoundError';
+    this.idOrIdentifier = idOrIdentifier;
   }
 }
 
@@ -161,9 +163,11 @@ export class AssigneeNotInWorkspaceError extends WorkItemError {
 export class UnknownStatusError extends WorkItemError {
   readonly tag = 'UNKNOWN_STATUS' as const;
   readonly code = 'UNKNOWN_STATUS' as const;
+  readonly statusKey: string;
   constructor(statusKey: string) {
     super(`Unknown status "${statusKey}" for this project's workflow.`);
     this.name = 'UnknownStatusError';
+    this.statusKey = statusKey;
   }
 }
 
@@ -176,9 +180,13 @@ export class UnknownStatusError extends WorkItemError {
 export class IllegalTransitionError extends WorkItemError {
   readonly tag = 'ILLEGAL_TRANSITION' as const;
   readonly code = 'ILLEGAL_TRANSITION' as const;
+  readonly fromKey: string;
+  readonly toKey: string;
   constructor(fromKey: string, toKey: string) {
     super(`Illegal status transition: "${fromKey}" → "${toKey}".`);
     this.name = 'IllegalTransitionError';
+    this.fromKey = fromKey;
+    this.toKey = toKey;
   }
 }
 

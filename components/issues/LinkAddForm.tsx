@@ -1,6 +1,7 @@
 'use client';
 
 import { CircleAlert } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { Button } from '@/components/ui/Button';
 import { RELATIONSHIP_KINDS } from '@/lib/workItems/linkRelationships';
@@ -18,11 +19,6 @@ import type { RelationshipKind } from '@/lib/dto/workItemLinks';
 //   - the create-modal `CreateIssueLinksField` (2.4.10) wraps it with
 //     collect-on-create semantics (Add → push a pending row, written when the
 //     issue is created) and no Cancel (the form stays open inline).
-
-const KIND_OPTIONS: ComboboxOption<RelationshipKind>[] = RELATIONSHIP_KINDS.map((r) => ({
-  value: r.kind,
-  label: r.label,
-}));
 
 export interface LinkAddFormProps {
   /** The chosen relationship + its setter (the kind selector). */
@@ -57,40 +53,47 @@ export function LinkAddForm({
   error,
   onSubmit,
   pending,
-  submitLabel = 'Add',
+  submitLabel,
   onCancel,
 }: LinkAddFormProps) {
+  const tLabels = useTranslations('labels');
+  const t = useTranslations('ui');
+  const tc = useTranslations('common');
+  const kindOptions: ComboboxOption<RelationshipKind>[] = RELATIONSHIP_KINDS.map((r) => ({
+    value: r.kind,
+    label: tLabels(`relationship.${r.kind}`),
+  }));
   return (
     <div className="bg-(--el-surface-soft) border-(--el-border) flex flex-col gap-2.5 rounded-md border p-3">
       <div className="flex flex-wrap items-center gap-2">
         <div className="w-[140px] shrink-0">
           <Combobox
-            label="Relationship"
-            options={KIND_OPTIONS}
+            label={t('linkAddForm.relationship')}
+            options={kindOptions}
             value={relationship}
             onChange={onRelationshipChange}
           />
         </div>
         <div className="min-w-[180px] flex-1">
           <Combobox
-            label="Issue to link"
+            label={t('linkAddForm.issueToLink')}
             options={options}
             value={targetId}
             onChange={(v) => onTargetChange(v)}
             searchable
-            placeholder="Search an issue…"
-            searchPlaceholder="Search by identifier or title…"
+            placeholder={t('linkAddForm.searchPlaceholder')}
+            searchPlaceholder={t('linkAddForm.searchByIdentifierOrTitle')}
             loading={loading}
-            emptyText="No matching issues."
+            emptyText={t('linkAddForm.noMatchingIssues')}
           />
         </div>
         <div className="ml-auto flex items-center gap-2">
           <Button size="sm" onClick={onSubmit} disabled={!targetId || pending} loading={pending}>
-            {submitLabel}
+            {submitLabel ?? t('linkAddForm.add')}
           </Button>
           {onCancel ? (
             <Button size="sm" variant="ghost" onClick={onCancel} disabled={pending}>
-              Cancel
+              {tc('cancel')}
             </Button>
           ) : null}
         </div>

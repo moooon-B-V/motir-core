@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
 import {
   buildIssueListHref,
@@ -12,7 +13,7 @@ import {
   type IssueSortColumn,
 } from '@/lib/issues/issueListView';
 import type { IssueFilter } from '@/lib/issues/issueListFilter';
-import { ISSUE_COLUMNS } from './issueColumns';
+import { buildIssueColumns } from './issueColumns';
 import { IssueListPager } from './IssueListPager';
 import type { IssueRowData } from './issueRows';
 
@@ -31,14 +32,6 @@ import type { IssueRowData } from './issueRows';
 // inside role="columnheader" cells carrying aria-sort — required by the 2.5.6
 // strict shell-a11y sweep, which exercises this view.
 
-// The grid template mirrors the TreeTable: the Title column flexes, the rest
-// take their fixed widths (Priority 120 · Assignee 150 · Reporter 150 · Due 120
-// · Est. 90 · Status 130).
-const GRID_TEMPLATE = [
-  'minmax(0,1fr)',
-  ...ISSUE_COLUMNS.slice(1).map((c) => (c.width ? `${c.width}px` : 'max-content')),
-].join(' ');
-
 export interface IssueListTableProps {
   rows: IssueRowData[];
   sort: IssueSort;
@@ -51,6 +44,16 @@ export interface IssueListTableProps {
 export function IssueListTable({ rows, sort, filter, pagination }: IssueListTableProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const t = useTranslations();
+  const columns = buildIssueColumns(t);
+
+  // The grid template mirrors the TreeTable: the Title column flexes, the rest
+  // take their fixed widths (Priority 120 · Assignee 150 · Reporter 150 · Due 120
+  // · Est. 90 · Status 130).
+  const gridTemplate = [
+    'minmax(0,1fr)',
+    ...columns.slice(1).map((c) => (c.width ? `${c.width}px` : 'max-content')),
+  ].join(' ');
 
   const onSort = useCallback(
     (column: IssueSortColumn) => {
@@ -73,7 +76,7 @@ export function IssueListTable({ rows, sort, filter, pagination }: IssueListTabl
     <div className="overflow-hidden rounded-(--radius-card) border border-(--el-border)">
       <div
         role="table"
-        aria-label="Issues"
+        aria-label={t('issues.list.tableLabel')}
         className="w-full text-sm"
         data-testid="issue-list-table"
       >
@@ -82,9 +85,9 @@ export function IssueListTable({ rows, sort, filter, pagination }: IssueListTabl
           <div
             role="row"
             className="sticky top-0 z-20 grid items-center gap-x-4 border-b border-(--el-border) bg-(--el-surface-soft) pr-7 pl-4"
-            style={{ gridTemplateColumns: GRID_TEMPLATE, height: 40 }}
+            style={{ gridTemplateColumns: gridTemplate, height: 40 }}
           >
-            {ISSUE_COLUMNS.map((col) => {
+            {columns.map((col) => {
               const active = sort.column === col.sortColumn;
               const ariaSort = active
                 ? sort.direction === 'asc'
@@ -102,7 +105,7 @@ export function IssueListTable({ rows, sort, filter, pagination }: IssueListTabl
                   <button
                     type="button"
                     onClick={() => onSort(col.sortColumn)}
-                    title={`Sort by ${col.header}`}
+                    title={t('issues.list.sortBy', { header: col.header })}
                     className="group/sort inline-flex max-w-full items-center gap-1 text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
                   >
                     <span className="truncate">{col.header}</span>
@@ -130,7 +133,7 @@ export function IssueListTable({ rows, sort, filter, pagination }: IssueListTabl
               role="row"
               data-testid={`issue-row-${row.identifier}`}
               className="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-              style={{ gridTemplateColumns: GRID_TEMPLATE, height: 44 }}
+              style={{ gridTemplateColumns: gridTemplate, height: 44 }}
             >
               {/* Stretched link covers the whole row (the row is the positioned
                   ancestor); cells stay static below it so clicking anywhere
@@ -140,7 +143,7 @@ export function IssueListTable({ rows, sort, filter, pagination }: IssueListTabl
                 aria-label={`${row.identifier} ${row.title}`}
                 className="absolute inset-0 z-0 focus:outline-none"
               />
-              {ISSUE_COLUMNS.map((col) => (
+              {columns.map((col) => (
                 <div
                   key={col.key}
                   role="cell"

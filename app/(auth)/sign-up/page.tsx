@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState, type FormEvent } from 'react';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { signUp } from '@/lib/auth/client';
@@ -43,17 +44,16 @@ export default function SignUpPage() {
 }
 
 function SignUpShell() {
+  const t = useTranslations('auth');
   return (
-    <AuthShell
-      headline="Welcome to Prodect!"
-      subhead="Sign up to turn any product idea into reality."
-    >
+    <AuthShell headline={t('welcomeToProdect')} subhead={t('signUpSubhead')}>
       <div className="flex flex-col gap-5" aria-hidden />
     </AuthShell>
   );
 }
 
 function SignUpForm() {
+  const t = useTranslations('auth');
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackURL = searchParams.get('next') ?? '/dashboard';
@@ -66,7 +66,7 @@ function SignUpForm() {
   // pageError is seeded from `?error=` once during initial render (see the
   // matching note on sign-in/page.tsx). Avoids the set-state-in-effect lint.
   const [pageError, setPageError] = useState(() =>
-    searchParams.get('error') ? "Google sign-up didn't complete. Try again, or use email." : '',
+    searchParams.get('error') ? t('googleSignUpIncomplete') : '',
   );
   const [emailExists, setEmailExists] = useState(false);
   const [passwordError, setPasswordError] = useState('');
@@ -87,7 +87,7 @@ function SignUpForm() {
     setEmailExists(false);
 
     if (password.length < 8) {
-      setPasswordError('Password must be at least 8 characters.');
+      setPasswordError(t('passwordTooShort'));
       return;
     }
 
@@ -118,25 +118,22 @@ function SignUpForm() {
           setEmailExists(true);
           setStep('identity');
         } else if (code === 'PASSWORD_TOO_SHORT' || /password/i.test(result.error.message ?? '')) {
-          setPasswordError('Password must be at least 8 characters.');
+          setPasswordError(t('passwordTooShort'));
         } else {
-          setPageError('Something went wrong. Please try again.');
+          setPageError(t('somethingWentWrong'));
         }
         setSubmitting(false);
         return;
       }
       router.push(callbackURL);
     } catch {
-      setPageError('Something went wrong. Please try again.');
+      setPageError(t('somethingWentWrong'));
       setSubmitting(false);
     }
   }
 
   return (
-    <AuthShell
-      headline="Welcome to Prodect!"
-      subhead="Sign up to turn any product idea into reality."
-    >
+    <AuthShell headline={t('welcomeToProdect')} subhead={t('signUpSubhead')}>
       {pageError ? <FormAlert>{pageError}</FormAlert> : null}
 
       {step === 'identity' ? (
@@ -148,17 +145,17 @@ function SignUpForm() {
             name="email"
             autoComplete="email"
             inputMode="email"
-            placeholder="Email address"
+            placeholder={t('emailAddress')}
             value={email}
             onChange={(e) => {
               setEmail(e.target.value);
               if (emailExists) setEmailExists(false);
             }}
             addonStart={<Mail className="h-5 w-5" aria-hidden />}
-            aria-label="Email address"
+            aria-label={t('emailAddress')}
             required
-            error={emailExists ? 'An account with this email already exists.' : undefined}
-            helperText={emailExists ? undefined : "We'll use this to sign you in."}
+            error={emailExists ? t('accountExists') : undefined}
+            helperText={emailExists ? undefined : t('emailHelper')}
             autoFocus
           />
           {emailExists ? (
@@ -167,14 +164,14 @@ function SignUpForm() {
                 href={{ pathname: '/sign-in' }}
                 className="font-medium text-(--el-link) hover:text-(--el-link-pressed) focus-visible:outline-none focus-visible:underline"
               >
-                Sign in instead →
+                {t('signInInstead')}
               </Link>
             </p>
           ) : null}
           <Button type="submit" variant="primary" size="lg" className="w-full">
-            Continue
+            {t('continue')}
           </Button>
-          <FooterLink prompt="Already have an account?" linkText="Log in" href="/sign-in" />
+          <FooterLink prompt={t('alreadyHaveAccount')} linkText={t('logIn')} href="/sign-in" />
         </form>
       ) : (
         <form onSubmit={onCreateAccount} className="flex flex-col gap-5" noValidate>
@@ -189,7 +186,7 @@ function SignUpForm() {
               onClick={() => setStep('identity')}
               className="self-start font-sans text-xs text-(--el-link) hover:text-(--el-link-pressed) focus-visible:outline-none focus-visible:underline"
             >
-              Edit
+              {t('edit')}
             </button>
           </div>
 
@@ -197,7 +194,7 @@ function SignUpForm() {
             type={showPassword ? 'text' : 'password'}
             name="new-password"
             autoComplete="new-password"
-            placeholder="Create a password"
+            placeholder={t('createPassword')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             addonStart={<Lock className="h-5 w-5" aria-hidden />}
@@ -205,7 +202,7 @@ function SignUpForm() {
               <button
                 type="button"
                 onClick={() => setShowPassword((s) => !s)}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-label={showPassword ? t('hidePassword') : t('showPassword')}
                 className="inline-flex h-6 w-6 items-center justify-center rounded-(--radius-xs) text-(--el-text-muted) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
               >
                 {showPassword ? (
@@ -215,18 +212,18 @@ function SignUpForm() {
                 )}
               </button>
             }
-            aria-label="Password"
-            helperText={passwordError ? undefined : 'At least 8 characters.'}
+            aria-label={t('password')}
+            helperText={passwordError ? undefined : t('atLeast8')}
             error={passwordError || undefined}
             required
             autoFocus
           />
 
           <Button type="submit" variant="primary" size="lg" className="w-full" loading={submitting}>
-            {submitting ? 'Creating account…' : 'Create account'}
+            {submitting ? t('creatingAccount') : t('createAccount')}
           </Button>
 
-          <FooterLink prompt="Already have an account?" linkText="Log in" href="/sign-in" />
+          <FooterLink prompt={t('alreadyHaveAccount')} linkText={t('logIn')} href="/sign-in" />
         </form>
       )}
     </AuthShell>

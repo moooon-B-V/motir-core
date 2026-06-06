@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import type {
   WorkflowStatusDto,
@@ -54,6 +55,7 @@ export function StatusPicker({
   id,
   disabled,
 }: StatusPickerProps) {
+  const t = useTranslations('ui');
   const options = useMemo<ComboboxOption<string>[]>(() => {
     const byKey = new Map(statuses.map((s) => [s.key, s]));
     const current = byKey.get(value);
@@ -76,7 +78,7 @@ export function StatusPicker({
         options={options}
         value={value}
         onChange={onChange}
-        label="Status"
+        label={t('statusPicker.label')}
         id={id}
         disabled={disabled}
       />

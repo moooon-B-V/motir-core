@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/Input';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Button } from '@/components/ui/Button';
@@ -40,6 +41,9 @@ export interface EditIssueFormProps {
 
 export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) {
   const router = useRouter();
+  const t = useTranslations('issueViews');
+  const tc = useTranslations('common');
+  const tErr = useTranslations('errors');
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
 
@@ -92,7 +96,7 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
     e.preventDefault();
     clearErrors();
     if (title.trim().length === 0) {
-      setTitleError('Title is required.');
+      setTitleError(t('titleRequired'));
       return;
     }
 
@@ -134,7 +138,7 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
         setUpdatedAt(res.updatedAt);
       }
 
-      toast({ variant: 'success', title: `${issue.identifier} saved` });
+      toast({ variant: 'success', title: t('issueSaved', { identifier: issue.identifier }) });
       router.refresh();
     });
   }
@@ -151,15 +155,15 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
           role="alert"
           className="border-(--el-danger) bg-card text-(--el-text) flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
         >
-          <span>This issue was edited by someone else. Refresh to see the latest.</span>
+          <span>{t('staleBanner')}</span>
           <Button type="button" variant="secondary" size="sm" onClick={() => router.refresh()}>
-            Refresh
+            {t('refresh')}
           </Button>
         </div>
       ) : null}
 
       <Input
-        label="Title"
+        label={t('title')}
         value={title}
         onChange={(e) => {
           setTitle(e.target.value);
@@ -174,16 +178,16 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
       {/* The MarkdownEditor renders its own label (also its aria-label) — no
           wrapping <label>/span, else "Description" shows twice. */}
       <MarkdownEditor
-        label="Description"
+        label={t('description')}
         value={description}
         onChange={setDescription}
         size="full"
-        onFileUpload={uploadIssueAttachment}
+        onFileUpload={(f) => uploadIssueAttachment(f, tErr)}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-(--el-text) font-medium">Type</span>
+          <span className="text-(--el-text) font-medium">{t('type')}</span>
           <TypePicker
             value={kind as IssueType}
             onChange={(t) => {
@@ -197,7 +201,7 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
         </div>
 
         <div className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-(--el-text) font-medium">Status</span>
+          <span className="text-(--el-text) font-medium">{t('status')}</span>
           <StatusPicker
             statuses={workflow.statuses}
             transitions={workflow.transitions}
@@ -213,7 +217,7 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
         </div>
 
         <div className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-(--el-text) font-medium">Parent</span>
+          <span className="text-(--el-text) font-medium">{t('parent')}</span>
           <ParentPicker
             childType={issue.kind as IssueType}
             value={parentId}
@@ -227,7 +231,7 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
         </div>
 
         <div className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-(--el-text) font-medium">Assignee</span>
+          <span className="text-(--el-text) font-medium">{t('assignee')}</span>
           <AssigneePicker
             members={members}
             value={assigneeId}
@@ -237,14 +241,14 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
         </div>
 
         <div className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-(--el-text) font-medium">Priority</span>
+          <span className="text-(--el-text) font-medium">{t('priority')}</span>
           <PriorityPicker value={priority} onChange={setPriority} disabled={isPending} />
         </div>
 
         <div className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-(--el-text) font-medium">Due date</span>
+          <span className="text-(--el-text) font-medium">{t('dueDate')}</span>
           <DatePicker
-            aria-label="Due date"
+            aria-label={t('dueDate')}
             value={dueDate || null}
             onChange={(next) => setDueDate(next ?? '')}
             disabled={isPending}
@@ -252,11 +256,11 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
         </div>
 
         <div className="flex flex-col gap-1 font-sans text-sm">
-          <span className="text-(--el-text) font-medium">Estimate (minutes)</span>
+          <span className="text-(--el-text) font-medium">{t('estimateMinutes')}</span>
           <Input
             type="number"
             min={0}
-            aria-label="Estimate (minutes)"
+            aria-label={t('estimateMinutes')}
             value={estimate}
             onChange={(e) => setEstimate(e.target.value)}
             disabled={isPending}
@@ -270,24 +274,28 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
           The gloss + AI-drafted badge ride the editor's own label via
           labelAccessory — no external "Explanation" span, else it shows twice. */}
       <MarkdownEditor
-        label="Explanation"
+        label={t('explanation')}
         labelAccessory={
           <>
-            <span className="text-(--el-text-secondary) font-normal">— why it matters</span>
+            <span className="text-(--el-text-secondary) font-normal">
+              — {t('explanationGloss')}
+            </span>
             {issue.explanationSource === 'ai_draft' ? (
-              <Pill severity="info">AI-drafted</Pill>
+              <Pill severity="info">{t('aiDrafted')}</Pill>
             ) : null}
           </>
         }
         value={explanation}
         onChange={setExplanation}
         size="full"
-        onFileUpload={uploadIssueAttachment}
+        onFileUpload={(f) => uploadIssueAttachment(f, tErr)}
       />
 
       <div className="text-(--el-text-muted) font-sans text-xs">
-        Reporter: {reporter ? reporter.name : issue.reporterId} · created{' '}
-        {issue.createdAt.slice(0, 10)}
+        {t('reporterCreated', {
+          reporter: reporter ? reporter.name : issue.reporterId,
+          created: issue.createdAt.slice(0, 10),
+        })}
       </div>
 
       <div className="flex items-center justify-end gap-2">
@@ -297,10 +305,10 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
           onClick={() => router.push('/issues')}
           disabled={isPending}
         >
-          Cancel
+          {tc('cancel')}
         </Button>
         <Button type="submit" variant="primary" disabled={!canSubmit} loading={isPending}>
-          Save
+          {tc('save')}
         </Button>
       </div>
     </form>

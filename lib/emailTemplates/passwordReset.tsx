@@ -1,31 +1,37 @@
 import { Link, Section, Text } from '@react-email/components';
 import { render } from '@react-email/render';
+import { createTranslator } from 'next-intl';
 import { EmailLayout } from './_components/EmailLayout';
 import { PrimaryButton } from './_components/PrimaryButton';
+import { getMessagesFor } from '@/lib/i18n/messages';
+import { defaultLocale, type Locale } from '@/lib/i18n/locales';
 import type { RenderedEmail } from './types';
 
 // Password-reset email. Wired into Better-Auth's
-// emailAndPassword.sendResetPassword in lib/auth/index.ts. The 1-hour
-// expiry copy here MUST match the resetPasswordTokenExpiresIn config
-// — if you change one, change the other.
+// emailAndPassword.sendResetPassword in lib/auth/index.ts. The 1-hour expiry
+// copy here MUST match the resetPasswordTokenExpiresIn config — if you change
+// one, change the other. Localized via next-intl's synchronous createTranslator
+// (rendering runs off-request, in the email.send job); `locale` defaults to the
+// base locale when absent.
+
+// A minimal translator shape (satisfied by createTranslator's result).
+type T = (key: string, values?: Record<string, string | number>) => string;
 
 export interface PasswordResetEmailProps {
   recipientName: string;
   resetUrl: string;
+  locale?: Locale;
 }
 
-function PasswordResetEmail({ recipientName, resetUrl }: PasswordResetEmailProps) {
+function PasswordResetEmail({ recipientName, resetUrl, t }: PasswordResetEmailProps & { t: T }) {
   return (
-    <EmailLayout
-      preview="Reset your Prodect password"
-      footer="This link expires in 1 hour. If you didn't request this, you can ignore this email."
-    >
-      <Text style={greeting}>Hi {recipientName},</Text>
-      <Text style={lede}>We received a request to reset your Prodect password.</Text>
+    <EmailLayout preview={t('preview')} footer={t('expires')}>
+      <Text style={greeting}>{t('greeting', { name: recipientName })}</Text>
+      <Text style={lede}>{t('lede')}</Text>
       <Section style={cta}>
-        <PrimaryButton href={resetUrl} label="Reset your password" />
+        <PrimaryButton href={resetUrl} label={t('reset')} />
       </Section>
-      <Text style={fallbackLabel}>Or copy this link into your browser:</Text>
+      <Text style={fallbackLabel}>{t('fallback')}</Text>
       <Text style={fallbackLinkRow}>
         <Link href={resetUrl} style={fallbackLink}>
           {resetUrl}
@@ -47,23 +53,29 @@ const fallbackLinkRow = {
 const fallbackLink = { color: '#2563eb', wordBreak: 'break-all' as const };
 
 export async function passwordResetEmail(props: PasswordResetEmailProps): Promise<RenderedEmail> {
-  const html = await render(<PasswordResetEmail {...props} />);
+  const locale = props.locale ?? defaultLocale;
+  const t = createTranslator({
+    locale,
+    messages: getMessagesFor(locale),
+    namespace: 'email.passwordReset',
+  }) as T;
+  const html = await render(<PasswordResetEmail {...props} t={t} />);
   return {
-    subject: 'Reset your Prodect password',
-    text: buildPlainText(props),
+    subject: t('subject'),
+    text: buildPlainText(props, t),
     html,
   };
 }
 
-function buildPlainText({ recipientName, resetUrl }: PasswordResetEmailProps): string {
+function buildPlainText(props: PasswordResetEmailProps, t: T): string {
   return [
-    `Hi ${recipientName},`,
+    t('greeting', { name: props.recipientName }),
     '',
-    'We received a request to reset your Prodect password.',
+    t('lede'),
     '',
-    `Reset link: ${resetUrl}`,
+    `${t('reset')}: ${props.resetUrl}`,
     '',
-    "This link expires in 1 hour. If you didn't request this, you can ignore this email.",
+    t('expires'),
     '',
     '— Prodect',
   ].join('\n');

@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -8,6 +9,8 @@ import { useToast } from '@/components/ui/Toast';
 import { renameWorkspaceAction, type ActionResult } from '../actions';
 
 export function NameCard({ initialName }: { initialName: string }) {
+  const t = useTranslations('settings');
+  const tc = useTranslations('common');
   const { toast } = useToast();
   const [name, setName] = useState(initialName);
   const [state, formAction, pending] = useActionState<ActionResult, FormData>(
@@ -20,17 +23,19 @@ export function NameCard({ initialName }: { initialName: string }) {
   useEffect(() => {
     if (!submitted.current) return;
     if (state.ok) {
-      toast({ variant: 'success', title: 'Workspace renamed' });
+      toast({ variant: 'success', title: t('name.renamedToast') });
     } else if (state.error) {
-      toast({ variant: 'error', title: 'Could not rename', description: state.error });
+      toast({ variant: 'error', title: t('name.renameErrorTitle'), description: state.error });
     }
-  }, [state, toast]);
+  }, [state, toast, t]);
 
   return (
     <Card
       header={
         <div>
-          <h2 className="font-sans text-base font-semibold text-(--el-text)">Workspace name</h2>
+          <h2 className="font-sans text-base font-semibold text-(--el-text)">
+            {t('name.heading')}
+          </h2>
         </div>
       }
     >
@@ -44,10 +49,10 @@ export function NameCard({ initialName }: { initialName: string }) {
         <div className="flex-1">
           <Input
             name="name"
-            aria-label="Workspace name"
+            aria-label={t('name.heading')}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            helperText="Visible to everyone in this workspace."
+            helperText={t('name.helper')}
           />
         </div>
         {/* The Input renders helper text below the box, so the row is taller
@@ -61,7 +66,7 @@ export function NameCard({ initialName }: { initialName: string }) {
           disabled={!name.trim()}
           className="h-(--height-input)"
         >
-          Save
+          {tc('save')}
         </Button>
       </form>
     </Card>

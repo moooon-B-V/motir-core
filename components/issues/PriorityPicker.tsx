@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { PRIORITY_OPTIONS } from '@/lib/issues/priority';
 import { PRIORITY_META } from '@/lib/issues/priorityMeta';
@@ -11,13 +12,6 @@ import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
 // dropdowns (status / type / assignee / parent) instead of rendering a native
 // <select>. Five fixed options → not searchable.
 
-const PRIORITY_PICKER_OPTIONS: ComboboxOption<WorkItemPriorityDto>[] = PRIORITY_OPTIONS.map(
-  ({ value, label }) => {
-    const Icon = PRIORITY_META[value].icon;
-    return { value, label, icon: <Icon className="h-4 w-4" /> };
-  },
-);
-
 export interface PriorityPickerProps {
   value: WorkItemPriorityDto;
   onChange: (value: WorkItemPriorityDto) => void;
@@ -26,12 +20,19 @@ export interface PriorityPickerProps {
 }
 
 export function PriorityPicker({ value, onChange, id, disabled }: PriorityPickerProps) {
+  const t = useTranslations('labels');
+  const tu = useTranslations('ui');
+  // PRIORITY_OPTIONS supplies the canonical order; the label is translated.
+  const options: ComboboxOption<WorkItemPriorityDto>[] = PRIORITY_OPTIONS.map(({ value }) => {
+    const Icon = PRIORITY_META[value].icon;
+    return { value, label: t(`priority.${value}`), icon: <Icon className="h-4 w-4" /> };
+  });
   return (
     <Combobox
-      options={PRIORITY_PICKER_OPTIONS}
+      options={options}
       value={value}
       onChange={onChange}
-      label="Priority"
+      label={tu('priorityPicker.label')}
       id={id}
       disabled={disabled}
     />

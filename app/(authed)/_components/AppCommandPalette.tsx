@@ -2,6 +2,7 @@
 
 import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import {
   BarChart3,
   CircleDot,
@@ -58,6 +59,7 @@ export function AppCommandPalette({
   activeProjectId,
   hasProject,
 }: AppCommandPaletteProps) {
+  const t = useTranslations('shell');
   const { open, setOpen } = useCommandPalette();
   const { openCreateIssue, canCreate } = useCreateIssue();
   const router = useRouter();
@@ -107,11 +109,11 @@ export function AppCommandPalette({
   // and the "C" shortcut). Only with an active project to create into.
   if (canCreate) {
     groups.push({
-      heading: 'Create',
+      heading: t('commandPalette.createHeading'),
       actions: [
         {
           id: 'create-issue',
-          label: 'Create issue',
+          label: t('createIssue.title'),
           icon: <Plus />,
           kbd: 'C',
           onSelect: createIssue,
@@ -127,25 +129,25 @@ export function AppCommandPalette({
     navActions.push(
       {
         id: 'nav-dashboard',
-        label: 'Go to Dashboard',
+        label: t('commandPalette.goToDashboard'),
         icon: <LayoutDashboard />,
         onSelect: () => go('/dashboard'),
       },
       {
         id: 'nav-issues',
-        label: 'Go to Issues',
+        label: t('commandPalette.goToIssues'),
         icon: <CircleDot />,
         onSelect: () => go('/issues'),
       },
       {
         id: 'nav-boards',
-        label: 'Go to Boards',
+        label: t('commandPalette.goToBoards'),
         icon: <Columns3 />,
         onSelect: () => go('/boards'),
       },
       {
         id: 'nav-reports',
-        label: 'Go to Reports',
+        label: t('commandPalette.goToReports'),
         icon: <BarChart3 />,
         onSelect: () => go('/reports'),
       },
@@ -153,25 +155,25 @@ export function AppCommandPalette({
   }
   navActions.push({
     id: 'nav-settings',
-    label: 'Go to Settings',
+    label: t('commandPalette.goToSettings'),
     icon: <Settings />,
     onSelect: () => go(hasProject ? '/settings/project' : '/settings/workspace'),
   });
-  groups.push({ heading: 'Navigation', actions: navActions });
+  groups.push({ heading: t('commandPalette.navigationHeading'), actions: navActions });
 
   // The active workspace/project isn't a switch target — show it by name with
   // a "Current" tag, and make selecting it a no-op (just closes the palette).
   if (workspaces.length > 0) {
     groups.push({
-      heading: 'Workspace',
+      heading: t('commandPalette.workspaceHeading'),
       actions: workspaces.map((w) => {
         const isCurrent = w.id === activeWorkspaceId;
         return {
           id: `ws-${w.id}`,
-          label: isCurrent ? w.name : `Switch to ${w.name}`,
+          label: isCurrent ? w.name : t('commandPalette.switchTo', { name: w.name }),
           icon: <Users />,
           keywords: w.name,
-          ...(isCurrent ? { badge: 'Current' } : {}),
+          ...(isCurrent ? { badge: t('commandPalette.current') } : {}),
           onSelect: isCurrent ? () => {} : () => switchWorkspace(w.id),
         };
       }),
@@ -180,15 +182,15 @@ export function AppCommandPalette({
 
   if (projects.length > 0) {
     groups.push({
-      heading: 'Project',
+      heading: t('commandPalette.projectHeading'),
       actions: projects.map((p) => {
         const isCurrent = p.id === activeProjectId;
         return {
           id: `proj-${p.id}`,
-          label: isCurrent ? p.name : `Switch to ${p.name}`,
+          label: isCurrent ? p.name : t('commandPalette.switchTo', { name: p.name }),
           icon: <Folder />,
           keywords: p.name,
-          ...(isCurrent ? { badge: 'Current' } : {}),
+          ...(isCurrent ? { badge: t('commandPalette.current') } : {}),
           onSelect: isCurrent ? () => {} : () => switchProject(p.id),
         };
       }),
@@ -196,10 +198,20 @@ export function AppCommandPalette({
   }
 
   groups.push({
-    heading: 'Account',
+    heading: t('commandPalette.accountHeading'),
     actions: [
-      { id: 'acct-theme', label: 'Toggle theme', icon: <SunMoon />, onSelect: toggleTheme },
-      { id: 'acct-signout', label: 'Sign out', icon: <LogOut />, onSelect: handleSignOut },
+      {
+        id: 'acct-theme',
+        label: t('account.toggleTheme'),
+        icon: <SunMoon />,
+        onSelect: toggleTheme,
+      },
+      {
+        id: 'acct-signout',
+        label: t('account.signOut'),
+        icon: <LogOut />,
+        onSelect: handleSignOut,
+      },
     ],
   });
 

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import { ChevronRight } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 
@@ -9,7 +10,8 @@ import { Card } from '@/components/ui/Card';
 // grammar (a single <Link> wrapping the card so the whole row is one
 // accessible navigation target — no new settings-nav chrome invented).
 
-export function WorkflowSettingsCard() {
+export async function WorkflowSettingsCard() {
+  const t = await getTranslations('settings');
   return (
     <Card className="p-0 transition-shadow hover:shadow-(--shadow-card)">
       <Link
@@ -17,9 +19,9 @@ export function WorkflowSettingsCard() {
         className="focus-visible:ring-(--focus-ring-color) flex items-center justify-between gap-4 rounded-(--radius-card) p-(--spacing-card-padding) focus-visible:outline-none focus-visible:ring-2"
       >
         <div>
-          <p className="font-sans text-sm font-medium text-(--el-text)">Workflow</p>
+          <p className="font-sans text-sm font-medium text-(--el-text)">{t('workflow.title')}</p>
           <p className="text-(--el-text-muted) font-sans text-xs">
-            The statuses an issue can hold in this project, and the legal moves between them.
+            {t('workflow.cardDescription')}
           </p>
         </div>
         <ChevronRight className="text-(--el-text-muted) size-5 shrink-0" aria-hidden />

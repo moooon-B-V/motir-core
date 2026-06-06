@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
 
 // AddLinkControl (Subtask 2.4.9) drives the detail-page Server Actions — stub
 // them + next/navigation so the client logic is testable under happy-dom.
@@ -41,7 +42,7 @@ afterEach(cleanup);
 
 function open() {
   render(<AddLinkControl currentItemId="wi-1" identifier="PROD-1" />);
-  fireEvent.click(screen.getByRole('button', { name: /Link issue/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Link work item/ }));
 }
 
 describe('AddLinkControl (2.4.9)', () => {
@@ -49,7 +50,7 @@ describe('AddLinkControl (2.4.9)', () => {
     open();
     // The kind + issue comboboxes render; Add is disabled until a target is picked.
     expect(screen.getByRole('combobox', { name: 'Relationship' })).toBeTruthy();
-    expect(screen.getByRole('combobox', { name: 'Issue to link' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Work item to link' })).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Add' }) as HTMLButtonElement).disabled).toBe(true);
     await waitFor(() =>
       expect(listLinkCandidatesAction).toHaveBeenCalledWith('wi-1', 'blocked_by'),
@@ -59,7 +60,7 @@ describe('AddLinkControl (2.4.9)', () => {
   it('Cancel collapses the form back to the entry point', () => {
     open();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.getByRole('button', { name: /Link issue/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Link work item/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Add' })).toBeNull();
   });
 
@@ -68,7 +69,7 @@ describe('AddLinkControl (2.4.9)', () => {
     open();
 
     // Open the issue combobox + pick the fetched candidate.
-    fireEvent.click(await screen.findByRole('combobox', { name: 'Issue to link' }));
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Work item to link' }));
     fireEvent.click(await screen.findByRole('option', { name: /Callback bug/ }));
 
     const add = screen.getByRole('button', { name: 'Add' }) as HTMLButtonElement;

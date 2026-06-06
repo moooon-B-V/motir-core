@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { getActiveProject } from '@/lib/projects';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -19,21 +20,19 @@ export interface ProjectStubPageProps {
 }
 
 export async function ProjectStubPage({ title, comingIn }: ProjectStubPageProps) {
+  const t = await getTranslations('shell');
   const active = await getActiveProject();
 
   if (active?.project.archivedAt) {
     return (
-      <EmptyState
-        title="This project is archived"
-        description="Switch to another project to continue working."
-      />
+      <EmptyState title={t('stub.archivedTitle')} description={t('stub.archivedDescription')} />
     );
   }
 
   return (
     <div className="space-y-2">
       <h1 className="font-serif text-2xl">{title}</h1>
-      <p className="text-(--el-text-muted)">Coming in {comingIn}.</p>
+      <p className="text-(--el-text-muted)">{t('stub.comingIn', { comingIn })}</p>
     </div>
   );
 }

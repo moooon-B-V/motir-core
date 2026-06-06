@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 
@@ -20,8 +21,9 @@ export interface AssigneePickerProps {
 }
 
 export function AssigneePicker({ members, value, onChange, id, disabled }: AssigneePickerProps) {
+  const t = useTranslations('ui');
   const options: ComboboxOption<string>[] = [
-    { value: NONE, label: 'Unassigned' },
+    { value: NONE, label: t('assigneePicker.unassigned') },
     ...members.map((m) => ({
       value: m.userId,
       label: m.name,
@@ -35,11 +37,11 @@ export function AssigneePicker({ members, value, onChange, id, disabled }: Assig
       options={options}
       value={value ?? NONE}
       onChange={(v) => onChange(v === NONE ? null : v)}
-      label="Assignee"
-      placeholder="Unassigned"
+      label={t('assigneePicker.label')}
+      placeholder={t('assigneePicker.unassigned')}
       searchable
-      searchPlaceholder="Search members…"
-      emptyText="No members"
+      searchPlaceholder={t('assigneePicker.searchPlaceholder')}
+      emptyText={t('assigneePicker.emptyText')}
       id={id}
       disabled={disabled}
     />

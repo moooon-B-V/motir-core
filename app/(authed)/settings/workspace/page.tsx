@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -17,6 +18,8 @@ export default async function WorkspaceSettingsPage() {
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
+  const t = await getTranslations('settings');
+
   const ctx = await getWorkspaceContext();
   if (!ctx) {
     // No active workspace (the user left/deleted their last one). Show the
@@ -25,8 +28,8 @@ export default async function WorkspaceSettingsPage() {
     return (
       <div className="mx-auto max-w-[42rem]">
         <EmptyState
-          title="No workspace yet"
-          description="Create a workspace from the switcher in the top-left to get started."
+          title={t('workspace.empty.title')}
+          description={t('workspace.empty.description')}
         />
       </div>
     );
@@ -41,10 +44,10 @@ export default async function WorkspaceSettingsPage() {
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-serif text-3xl font-semibold text-(--el-text)">Workspace settings</h1>
-        <p className="text-(--el-text-muted) font-sans text-sm">
-          Manage your workspace name, members, and lifecycle.
-        </p>
+        <h1 className="font-serif text-3xl font-semibold text-(--el-text)">
+          {t('workspace.title')}
+        </h1>
+        <p className="text-(--el-text-muted) font-sans text-sm">{t('workspace.subtitle')}</p>
       </header>
 
       <NameCard initialName={workspace.name} />

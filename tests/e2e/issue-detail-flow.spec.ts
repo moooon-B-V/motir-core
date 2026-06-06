@@ -19,9 +19,9 @@
 // (work-items / work-item-links create + the gated `?status=` transition), so
 // this has no ordering dependency on the create/edit specs. Selectors target the
 // stable role/label hooks the detail components expose (the "Edit <field>"
-// FieldCard toggles, the "Status"/"Assignee"/"Relationship"/"Issue to link"
+// FieldCard toggles, the "Status"/"Assignee"/"Relationship"/"Work item to link"
 // Comboboxes, the "Link issue" / per-row "Remove … link" affordances, the
-// "Parent issues" nav, the "Child issues" / "Relationships" section cards), never
+// "Parent work items" nav, the "Child issues" / "Relationships" section cards), never
 // brittle text.
 
 import { expect, test, type Page } from '@playwright/test';
@@ -132,7 +132,7 @@ test('@smoke renders the canonical detail page (header · rendered Markdown · c
   await expect(page.getByText(item.identifier, { exact: true })).toBeVisible();
 
   // Rendered Markdown (not raw source): a real anchor, bold, and inline code.
-  const desc = page.getByLabel('Issue description');
+  const desc = page.getByLabel('Work item description');
   await expect(desc.getByRole('link', { name: 'docs' })).toHaveAttribute(
     'href',
     'https://example.com/guide',
@@ -159,7 +159,7 @@ test('@smoke tree navigation: breadcrumb walks up, child list walks down', async
 
   // On the subtask, the breadcrumb shows the Story → Task lineage.
   await page.goto(`/issues/${sub.identifier}`);
-  const breadcrumb = page.getByRole('navigation', { name: 'Parent issues' });
+  const breadcrumb = page.getByRole('navigation', { name: 'Parent work items' });
   await expect(breadcrumb.getByRole('link', { name: /The Story/ })).toBeVisible();
   const taskCrumb = breadcrumb.getByRole('link', { name: /The Task/ });
   await expect(taskCrumb).toBeVisible();
@@ -252,7 +252,7 @@ test('@smoke readiness: blocked item reads "Blocked", flips to "Ready" when the 
 
   await page.goto(`/issues/${item.identifier}`);
   await expect(page.getByText('Blocked', { exact: true })).toBeVisible();
-  await expect(page.getByText(/Waiting on 1 issue/)).toBeVisible();
+  await expect(page.getByText(/Waiting on 1 work item/)).toBeVisible();
 
   // Resolve the blocker (walk it to terminal `done`) → reload re-judges readiness.
   await driveToDone(page, blocker.id);
@@ -270,9 +270,9 @@ test('@smoke link management — add a blocked-by link via the panel; persists +
   const b = await mk(page, projectId, { title: 'The blocker issue' });
 
   await page.goto(`/issues/${a.identifier}`);
-  await page.getByRole('button', { name: 'Link issue' }).click();
+  await page.getByRole('button', { name: 'Link work item' }).click();
   // Default relationship is "Blocked by" — just pick the target + Add.
-  await page.getByRole('combobox', { name: 'Issue to link' }).click();
+  await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await page.getByRole('option', { name: /The blocker issue/ }).click();
   await page.getByRole('button', { name: 'Add' }).click();
 
@@ -324,10 +324,10 @@ test('@smoke link management — removing a relates_to link drops both reciproca
 
   // Add a relates_to link A → D through the panel.
   await page.goto(`/issues/${a.identifier}`);
-  await page.getByRole('button', { name: 'Link issue' }).click();
+  await page.getByRole('button', { name: 'Link work item' }).click();
   await page.getByRole('combobox', { name: 'Relationship' }).click();
   await page.getByRole('option', { name: 'Relates to' }).click();
-  await page.getByRole('combobox', { name: 'Issue to link' }).click();
+  await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await page.getByRole('option', { name: /Issue Delta/ }).click();
   await page.getByRole('button', { name: 'Add' }).click();
   await expect(page.getByRole('link', { name: /Issue Delta/ })).toBeVisible();
@@ -358,8 +358,8 @@ test('@smoke link management — a cycle attempt surfaces an inline error and pe
 
   // On B, try to add "Blocked by" → A: B is_blocked_by A would close A→B→A.
   await page.goto(`/issues/${b.identifier}`);
-  await page.getByRole('button', { name: 'Link issue' }).click();
-  await page.getByRole('combobox', { name: 'Issue to link' }).click();
+  await page.getByRole('button', { name: 'Link work item' }).click();
+  await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await page.getByRole('option', { name: /Alpha cyc/ }).click();
   await page.getByRole('button', { name: 'Add' }).click();
 
@@ -377,11 +377,11 @@ test('@smoke create with a link (2.4.10): the link is written atomically with th
   const target = await mk(page, projectId, { title: 'Pre-existing target' });
 
   await page.goto('/issues');
-  await page.getByRole('button', { name: 'Create issue' }).click();
+  await page.getByRole('button', { name: 'Create work item' }).click();
   await page.getByLabel('Title').fill('Created with a link');
 
   // The Linked-issues section: pick the target (default "Blocked by") + Add.
-  await page.getByRole('combobox', { name: 'Issue to link' }).click();
+  await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await page.getByRole('option', { name: /Pre-existing target/ }).click();
   await page.getByRole('button', { name: 'Add' }).click();
   // The pending row renders before submit.
@@ -410,9 +410,9 @@ test('@smoke create with a link (2.4.10): removing the pending row before create
   const target = await mk(page, projectId, { title: 'Not actually linked' });
 
   await page.goto('/issues');
-  await page.getByRole('button', { name: 'Create issue' }).click();
+  await page.getByRole('button', { name: 'Create work item' }).click();
   await page.getByLabel('Title').fill('No links after all');
-  await page.getByRole('combobox', { name: 'Issue to link' }).click();
+  await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await page.getByRole('option', { name: /Not actually linked/ }).click();
   await page.getByRole('button', { name: 'Add' }).click();
 
@@ -431,7 +431,7 @@ test('@smoke create with a link (2.4.10): removing the pending row before create
 
   await page.goto(`/issues/${identifier}`);
   // No relationships were written — the panel shows its empty state.
-  await expect(page.getByText('No linked issues yet.')).toBeVisible();
+  await expect(page.getByText('No linked work items yet.')).toBeVisible();
 });
 
 test('@smoke cross-workspace isolation: a foreign identifier 404s; the link picker is own-workspace only', async ({
@@ -454,8 +454,8 @@ test('@smoke cross-workspace isolation: a foreign identifier 404s; the link pick
   const bItem = await mk(page, projectIdB, { title: 'B home issue' });
   await mk(page, projectIdB, { title: 'B candidate issue' });
   await page.goto(`/issues/${bItem.identifier}`);
-  await page.getByRole('button', { name: 'Link issue' }).click();
-  await page.getByRole('combobox', { name: 'Issue to link' }).click();
+  await page.getByRole('button', { name: 'Link work item' }).click();
+  await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await expect(page.getByRole('option', { name: /B candidate issue/ })).toBeVisible();
   await expect(page.getByRole('option', { name: /A-only issue/ })).toHaveCount(0);
 });

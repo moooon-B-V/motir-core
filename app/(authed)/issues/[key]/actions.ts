@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -34,9 +35,11 @@ export async function listLinkCandidatesAction(
 ): Promise<{ ok: true; candidates: WorkItemSummaryDto[] } | { ok: false; error: string }> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
+  const t = await getErrorsTranslator();
   const ctx = await getActiveProject();
-  if (!ctx) return { ok: false, error: 'Pick a project first.' };
-  if (!isRelationshipKind(relationship)) return { ok: false, error: 'Unknown relationship.' };
+  if (!ctx) return { ok: false, error: t('actions.pickProjectFirst') };
+  if (!isRelationshipKind(relationship))
+    return { ok: false, error: t('actions.unknownRelationship') };
 
   try {
     const candidates = await workItemsService.listLinkCandidates(currentItemId, relationship, {
@@ -45,7 +48,7 @@ export async function listLinkCandidatesAction(
     });
     return { ok: true, candidates };
   } catch (err) {
-    const msg = linkErrorMessage(err);
+    const msg = linkErrorMessage(err, t);
     if (msg) return { ok: false, error: msg };
     throw err;
   }
@@ -65,10 +68,12 @@ export async function createLinkAction(input: {
 }): Promise<LinkActionResult> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
+  const t = await getErrorsTranslator();
   const ctx = await getActiveProject();
-  if (!ctx) return { ok: false, error: 'Pick a project first.' };
-  if (!isRelationshipKind(input.relationship)) return { ok: false, error: 'Unknown relationship.' };
-  if (!input.targetId) return { ok: false, error: 'Pick an issue to link.' };
+  if (!ctx) return { ok: false, error: t('actions.pickProjectFirst') };
+  if (!isRelationshipKind(input.relationship))
+    return { ok: false, error: t('actions.unknownRelationship') };
+  if (!input.targetId) return { ok: false, error: t('actions.pickIssueToLink') };
 
   const serviceCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
   try {
@@ -78,7 +83,7 @@ export async function createLinkAction(input: {
     const link = relationshipToLink(input.relationship, input.currentItemId, input.targetId);
     await workItemsService.linkWorkItems(link, serviceCtx);
   } catch (err) {
-    const msg = linkErrorMessage(err);
+    const msg = linkErrorMessage(err, t);
     if (msg) return { ok: false, error: msg };
     throw err;
   }
@@ -98,15 +103,16 @@ export async function removeLinkAction(input: {
 }): Promise<LinkActionResult> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
+  const t = await getErrorsTranslator();
   const ctx = await getActiveProject();
-  if (!ctx) return { ok: false, error: 'Pick a project first.' };
+  if (!ctx) return { ok: false, error: t('actions.pickProjectFirst') };
 
   const serviceCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
   try {
     await workItemsService.getLink(input.linkId, serviceCtx); // cross-tenant gate
     await workItemsService.unlinkWorkItems(input.linkId, serviceCtx);
   } catch (err) {
-    const msg = linkErrorMessage(err);
+    const msg = linkErrorMessage(err, t);
     if (msg) return { ok: false, error: msg };
     throw err;
   }

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Plus } from 'lucide-react';
 import type { ComboboxOption } from '@/components/ui/Combobox';
 import { LinkAddForm } from '@/components/issues/LinkAddForm';
@@ -27,6 +28,7 @@ export function AddLinkControl({
   identifier: string;
 }) {
   const router = useRouter();
+  const t = useTranslations('issueViews');
   const [open, setOpen] = useState(false);
   const [relationship, setRelationship] = useState<RelationshipKind>('blocked_by');
   const [targetId, setTargetId] = useState<string | null>(null);
@@ -101,7 +103,7 @@ export function AddLinkControl({
           className="text-(--el-link) inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 font-sans text-sm font-semibold hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >
           <Plus className="h-4 w-4" aria-hidden />
-          Link issue
+          {t('linkIssue')}
         </button>
       </div>
     );

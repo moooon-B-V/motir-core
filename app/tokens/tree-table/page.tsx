@@ -138,7 +138,7 @@ export default function TreeTableSpecimenPage() {
       <section className="mt-8 flex flex-col gap-2">
         <SectionLabel>Populated (depth 4, controlled expansion)</SectionLabel>
         <TreeTable
-          label="Issues"
+          label="Work Items"
           columns={COLUMNS}
           rows={ROWS}
           expandedIds={expanded}

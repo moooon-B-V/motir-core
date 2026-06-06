@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Plus } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { SectionLabel } from '@/components/ui/SectionLabel';
@@ -35,6 +36,7 @@ export interface SidebarHeaderProps {
 }
 
 export function SidebarHeader({ activeProject, projects, collapsed = false }: SidebarHeaderProps) {
+  const t = useTranslations('shell');
   const [createOpen, setCreateOpen] = useState(false);
   const hasProject = Boolean(activeProject);
 
@@ -46,7 +48,7 @@ export function SidebarHeader({ activeProject, projects, collapsed = false }: Si
       <>
         <button
           type="button"
-          aria-label={hasProject ? 'Active project' : 'Create your first project'}
+          aria-label={hasProject ? t('sidebarHeader.activeProject') : t('project.createFirst')}
           onClick={hasProject ? undefined : () => setCreateOpen(true)}
           className={cn(
             'bg-(--el-accent) text-(--el-accent-text) mx-auto flex h-8 w-8 items-center justify-center',
@@ -72,16 +74,16 @@ export function SidebarHeader({ activeProject, projects, collapsed = false }: Si
           tint="lavender"
           clickable
           onClick={() => setCreateOpen(true)}
-          aria-label="Create your first project"
+          aria-label={t('project.createFirst')}
           className="flex items-center gap-2 p-2"
         >
           <span className="bg-(--el-accent) text-(--el-accent-text) flex h-7 w-7 shrink-0 items-center justify-center rounded-(--radius-xs)">
             <Plus className="h-4 w-4" aria-hidden />
           </span>
           <span className="min-w-0 flex-1">
-            <SectionLabel label="Project" />
+            <SectionLabel label={t('sidebarHeader.project')} />
             <span className="text-(--el-text) block truncate font-sans text-sm font-medium">
-              Create your first project
+              {t('project.createFirst')}
             </span>
           </span>
         </Card>

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ThemeProvider } from '@/lib/contexts/theme-context';
 import { ThemeToggle } from '@/app/(authed)/_components/ThemeToggle';
 import { THEME_STORAGE_KEYS } from '@/lib/theme/types';

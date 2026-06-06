@@ -2,6 +2,7 @@
 
 import { useState, type ComponentType } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Check, ChevronDown, List, ListTree } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { cn } from '@/lib/utils/cn';
@@ -18,12 +19,12 @@ import type { IssueFilter } from '@/lib/issues/issueListFilter';
 
 interface ViewOption {
   view: IssueListView;
-  label: string;
+  labelKey: 'viewTree' | 'viewList';
   icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }
 
-const TREE_OPTION: ViewOption = { view: 'tree', label: 'Tree', icon: ListTree };
-const LIST_OPTION: ViewOption = { view: 'list', label: 'List', icon: List };
+const TREE_OPTION: ViewOption = { view: 'tree', labelKey: 'viewTree', icon: ListTree };
+const LIST_OPTION: ViewOption = { view: 'list', labelKey: 'viewList', icon: List };
 const OPTIONS: ViewOption[] = [TREE_OPTION, LIST_OPTION];
 
 export interface IssueViewSwitcherProps {
@@ -36,10 +37,12 @@ export interface IssueViewSwitcherProps {
 export function IssueViewSwitcher({ view, sort, filter }: IssueViewSwitcherProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const t = useTranslations('issueViews');
   const [open, setOpen] = useState(false);
 
   const active = view === 'list' ? LIST_OPTION : TREE_OPTION;
   const ActiveIcon = active.icon;
+  const activeLabel = t(active.labelKey);
 
   function select(next: IssueListView) {
     setOpen(false);
@@ -56,11 +59,11 @@ export function IssueViewSwitcher({ view, sort, filter }: IssueViewSwitcherProps
       <Popover.Trigger asChild>
         <button
           type="button"
-          aria-label={`View: ${active.label}`}
+          aria-label={t('viewLabel', { view: activeLabel })}
           className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-(--el-border) px-3 font-sans text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >
           <ActiveIcon className="h-4 w-4 text-(--el-text-muted)" aria-hidden />
-          {active.label}
+          {activeLabel}
           <ChevronDown className="h-3.5 w-3.5 text-(--el-text-muted)" aria-hidden />
         </button>
       </Popover.Trigger>
@@ -81,7 +84,7 @@ export function IssueViewSwitcher({ view, sort, filter }: IssueViewSwitcherProps
               )}
             >
               <Icon className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
-              <span className="flex-1">{opt.label}</span>
+              <span className="flex-1">{t(opt.labelKey)}</span>
               {isActive ? (
                 <Check className="h-4 w-4 shrink-0 text-(--el-accent)" aria-hidden />
               ) : null}

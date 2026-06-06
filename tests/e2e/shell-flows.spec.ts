@@ -68,7 +68,7 @@ test.describe('@smoke shell journeys', () => {
     const rail = page.getByRole('navigation', { name: 'Primary' });
     await expect(rail).toBeVisible();
     await expect(rail.getByRole('link', { name: 'Dashboard' })).toBeVisible();
-    await expect(rail.getByRole('link', { name: 'Issues' })).toBeVisible();
+    await expect(rail.getByRole('link', { name: 'Work Items' })).toBeVisible();
     await expect(rail.getByRole('link', { name: 'Boards' })).toBeVisible();
     await expect(rail.getByRole('link', { name: 'Reports' })).toBeVisible();
     await expect(rail.getByRole('link', { name: 'Settings' })).toBeVisible();
@@ -95,7 +95,7 @@ test.describe('@smoke shell journeys', () => {
 
     // Each tuple: rail link → URL it routes to → the placeholder heading there.
     const stops: { link: string; url: string; heading: string }[] = [
-      { link: 'Issues', url: '**/issues', heading: 'Issues' },
+      { link: 'Work Items', url: '**/issues', heading: 'Work Items' },
       { link: 'Boards', url: '**/boards', heading: 'Boards' },
       { link: 'Reports', url: '**/reports', heading: 'Reports' },
       { link: 'Settings', url: '**/settings/project', heading: 'Project settings' },
@@ -105,7 +105,7 @@ test.describe('@smoke shell journeys', () => {
       await rail.getByRole('link', { name: stop.link }).click();
       await page.waitForURL(stop.url);
       // exact:true — the /issues empty state also renders an h2 "No issues yet",
-      // and a non-exact name:'Issues' substring-matches it, so a bare match is a
+      // and a non-exact name:'Work Items' substring-matches it, so a bare match is a
       // strict-mode violation once both headings have painted. Every stop's
       // heading text is exact, so this disambiguates without losing coverage.
       await expect(page.getByRole('heading', { name: stop.heading, exact: true })).toBeVisible();
@@ -242,9 +242,9 @@ test.describe('@smoke shell journeys', () => {
     await expect(drawer).toBeVisible();
 
     // Navigate via a drawer nav item → route changes → drawer auto-closes.
-    await drawer.getByRole('link', { name: 'Issues' }).click();
+    await drawer.getByRole('link', { name: 'Work Items' }).click();
     await page.waitForURL('**/issues');
-    await expect(page.getByRole('heading', { name: 'Issues', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Work Items', level: 1 })).toBeVisible();
     await expect(drawer).toBeHidden();
 
     // Re-open, then click the scrim (the overlay area beside the 300px panel)
@@ -305,7 +305,7 @@ test.describe('@smoke shell journeys', () => {
 
     // The project-scoped nav is hidden; Settings/Docs (bottom section) stay.
     const rail = page.getByRole('navigation', { name: 'Primary' });
-    await expect(rail.getByRole('link', { name: 'Issues' })).toHaveCount(0);
+    await expect(rail.getByRole('link', { name: 'Work Items' })).toHaveCount(0);
     await expect(rail.getByRole('link', { name: 'Boards' })).toHaveCount(0);
     await expect(rail.getByRole('link', { name: 'Reports' })).toHaveCount(0);
     await expect(rail.getByRole('link', { name: 'Settings' })).toBeVisible();

@@ -13,7 +13,7 @@ const SECTIONS: SidebarSection[] = [
     id: 'primary',
     items: [
       { icon: <span />, label: 'Dashboard', href: '/dashboard' },
-      { icon: <span />, label: 'Issues', href: '/issues', active: true },
+      { icon: <span />, label: 'Work Items', href: '/issues', active: true },
       { icon: <span />, label: 'Boards', href: '/boards' },
     ],
   },
@@ -36,7 +36,7 @@ describe('Sidebar', () => {
     const { Sidebar } = await import('@/components/ui/Sidebar');
     render(<Sidebar collapsed={false} sections={SECTIONS} />);
 
-    const issues = screen.getByRole('link', { name: 'Issues' });
+    const issues = screen.getByRole('link', { name: 'Work Items' });
     expect(issues.getAttribute('aria-current')).toBe('page');
 
     const boards = screen.getByRole('link', { name: 'Boards' });
@@ -65,7 +65,7 @@ describe('Sidebar', () => {
 
     // The accessible name comes from aria-label (no visible text in collapsed
     // mode), and Radix's Tooltip.Trigger stamps data-state on the wrapped <a>.
-    const issues = screen.getByRole('link', { name: 'Issues' });
+    const issues = screen.getByRole('link', { name: 'Work Items' });
     expect(issues.getAttribute('data-state')).not.toBeNull();
     expect(issues.getAttribute('aria-current')).toBe('page');
   });
@@ -73,7 +73,7 @@ describe('Sidebar', () => {
   it('does NOT wrap rows in a Tooltip trigger when expanded', async () => {
     const { Sidebar } = await import('@/components/ui/Sidebar');
     render(<Sidebar collapsed={false} sections={SECTIONS} />);
-    const issues = screen.getByRole('link', { name: 'Issues' });
+    const issues = screen.getByRole('link', { name: 'Work Items' });
     expect(issues.getAttribute('data-state')).toBeNull();
   });
 });

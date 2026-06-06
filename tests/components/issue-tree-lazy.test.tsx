@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
 
 // IssueTreeTable (Subtask 2.5.14) drives the lazy reads through Server Actions +
 // next/navigation for the header-sort URL — stub both so the client orchestration

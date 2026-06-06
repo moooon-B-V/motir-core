@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import { Sparkles } from 'lucide-react';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { Pill } from '@/components/ui/Pill';
@@ -24,24 +25,25 @@ export function IssueExplanation({
   explanationSource,
   editHref,
 }: IssueExplanationProps) {
+  const t = useTranslations('issueViews');
   return (
     <ContentSectionCard
-      title="Explanation"
-      subtitle="why it matters"
+      title={t('explanation')}
+      subtitle={t('explanationGloss')}
       editHref={editHref}
       headerExtra={
         explanationSource === 'ai_draft' ? (
           <Pill tone="neutral">
             <Sparkles className="h-3 w-3" aria-hidden />
-            AI-drafted
+            {t('aiDrafted')}
           </Pill>
         ) : null
       }
     >
       {explanationMd ? (
-        <MarkdownView value={explanationMd} aria-label="Issue explanation" />
+        <MarkdownView value={explanationMd} aria-label={t('issueExplanationAria')} />
       ) : (
-        <p className="font-sans text-sm text-(--el-text-secondary) italic">No explanation yet.</p>
+        <p className="font-sans text-sm text-(--el-text-secondary) italic">{t('noExplanation')}</p>
       )}
     </ContentSectionCard>
   );

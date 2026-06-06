@@ -9,6 +9,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { TreeTableRow } from '@/components/ui/TreeTable';
 import { formatDate } from '@/lib/utils/datetime';
 import { formatDurationMinutes } from '@/lib/utils/duration';
+import { defaultLocale, type Locale } from '@/lib/i18n/locales';
 
 // Pure view-shaping for the /issues list route (Subtask 2.5.3): turn the
 // `getProjectTree` forest (2.5.1) into the serializable nested-row model the
@@ -73,6 +74,7 @@ function shapeRowData(
   item: WorkItemListItemDto,
   statusByKey: Map<string, WorkflowStatusDto>,
   nameById: Map<string, string>,
+  locale: Locale,
 ): IssueRowData {
   const status = statusByKey.get(item.status);
   return {
@@ -86,7 +88,7 @@ function shapeRowData(
     // The reporter always exists; fall back to its id only if the member is
     // somehow missing (e.g. left the workspace) so the cell never blanks.
     reporterName: nameById.get(item.reporterId) ?? item.reporterId,
-    dueLabel: item.dueDate ? formatDate(item.dueDate) : null,
+    dueLabel: item.dueDate ? formatDate(item.dueDate, locale) : null,
     estimateLabel:
       item.estimateMinutes != null ? formatDurationMinutes(item.estimateMinutes) : null,
   };
@@ -102,21 +104,23 @@ function shapeRowData(
 export function makeRowShaper(
   workflow: WorkflowDto,
   members: WorkspaceMemberDTO[],
+  locale: Locale = defaultLocale,
 ): (item: WorkItemListItemDto) => IssueRowData {
   const { statusByKey, nameById } = buildLookups(workflow, members);
-  return (item) => shapeRowData(item, statusByKey, nameById);
+  return (item) => shapeRowData(item, statusByKey, nameById, locale);
 }
 
 export function toIssueRows(
   nodes: WorkItemTreeNodeDto[],
   workflow: WorkflowDto,
   members: WorkspaceMemberDTO[],
+  locale: Locale = defaultLocale,
 ): TreeTableRow<IssueRowData>[] {
   const { statusByKey, nameById } = buildLookups(workflow, members);
 
   const shape = (node: WorkItemTreeNodeDto): TreeTableRow<IssueRowData> => ({
     id: node.id,
-    data: shapeRowData(node, statusByKey, nameById),
+    data: shapeRowData(node, statusByKey, nameById, locale),
     children: node.children.map(shape),
   });
 
@@ -133,7 +137,8 @@ export function toIssueListRows(
   items: WorkItemListItemDto[],
   workflow: WorkflowDto,
   members: WorkspaceMemberDTO[],
+  locale: Locale = defaultLocale,
 ): IssueRowData[] {
   const { statusByKey, nameById } = buildLookups(workflow, members);
-  return items.map((item) => shapeRowData(item, statusByKey, nameById));
+  return items.map((item) => shapeRowData(item, statusByKey, nameById, locale));
 }

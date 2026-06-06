@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { useState } from 'react';
 import { CommandPalette, type CommandGroup } from '@/components/ui/CommandPalette';
 import {
@@ -16,7 +17,7 @@ function makeGroups(spies: Record<string, () => void>): CommandGroup[] {
       heading: 'Navigation',
       actions: [
         { id: 'dash', label: 'Go to Dashboard', onSelect: spies.dash! },
-        { id: 'issues', label: 'Go to Issues', onSelect: spies.issues! },
+        { id: 'issues', label: 'Go to Work Items', onSelect: spies.issues! },
         { id: 'boards', label: 'Go to Boards', onSelect: spies.boards! },
       ],
     },
@@ -57,11 +58,11 @@ describe('CommandPalette (primitive)', () => {
       />,
     );
     fireEvent.change(screen.getByRole('textbox', { name: 'Search commands' }), {
-      target: { value: 'iss' },
+      target: { value: 'work' },
     });
     const options = screen.getAllByRole('option');
     expect(options).toHaveLength(1);
-    expect(options[0]!.textContent).toContain('Go to Issues');
+    expect(options[0]!.textContent).toContain('Go to Work Items');
     // The non-matching group heading is gone too.
     expect(screen.queryByText('Account')).toBeNull();
   });
@@ -92,7 +93,7 @@ describe('CommandPalette (primitive)', () => {
       <Host groups={makeGroups({ dash: vi.fn(), issues, boards: vi.fn(), signout: vi.fn() })} />,
     );
     const input = screen.getByRole('textbox', { name: 'Search commands' });
-    fireEvent.change(input, { target: { value: 'iss' } });
+    fireEvent.change(input, { target: { value: 'work' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(issues).toHaveBeenCalledTimes(1);
   });

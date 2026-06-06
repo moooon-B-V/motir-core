@@ -1,0 +1,643 @@
+{
+  "common": {
+    "close": "Close",
+    "dialog": "Dialog",
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "save": "Save",
+    "loading": "Loading…"
+  },
+  "localeToggle": {
+    "label": "Language",
+    "activate": "Activate to change."
+  },
+  "labels": {
+    "issueType": {
+      "epic": "Epic",
+      "story": "Story",
+      "task": "Task",
+      "bug": "Bug",
+      "subtask": "Sub-task"
+    },
+    "priority": {
+      "highest": "Highest",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "lowest": "Lowest"
+    },
+    "relationship": {
+      "blocked_by": "Blocked by",
+      "blocks": "Blocks",
+      "relates_to": "Relates to",
+      "duplicates": "Duplicates",
+      "clones": "Clones"
+    },
+    "role": {
+      "owner": "owner",
+      "member": "member"
+    },
+    "defaultStatus": {
+      "todo": "To Do",
+      "blocked": "Blocked",
+      "in_progress": "In Progress",
+      "in_review": "In Review",
+      "done": "Done",
+      "cancelled": "Cancelled"
+    }
+  },
+  "issues": {
+    "columns": {
+      "title": "Title",
+      "priority": "Priority",
+      "assignee": "Assignee",
+      "reporter": "Reporter",
+      "due": "Due",
+      "estimate": "Est.",
+      "status": "Status",
+      "unassigned": "Unassigned"
+    },
+    "list": {
+      "tableLabel": "Work Items",
+      "sortBy": "Sort by {header}"
+    }
+  },
+  "errors": {
+    "actions": {
+      "pickProjectFirst": "Pick a project first.",
+      "unknownRelationship": "Unknown relationship.",
+      "pickIssueToLink": "Pick a work item to link.",
+      "missingDlqId": "Missing dead-letter id.",
+      "ownerOnlyReplay": "Only a workspace owner can replay jobs.",
+      "dlqGone": "That dead-letter entry no longer exists.",
+      "workspaceNameEmpty": "Workspace name cannot be empty.",
+      "useLeaveToRemoveSelf": "Use Leave to remove yourself.",
+      "cannotRemoveLastMember": "Cannot remove the last member.",
+      "cannotLeaveLastMember": "You can't leave as the last member — delete the workspace instead.",
+      "keyLabelRequired": "Key and label are required.",
+      "noProjectForIssue": "Pick or create a project before adding a work item.",
+      "titleRequired": "Give the work item a title.",
+      "titleTooLong": "Title must be {max} characters or fewer.",
+      "projectGone": "That project no longer exists.",
+      "noProjectForParent": "Pick or create a project before choosing a parent.",
+      "unknownIssueType": "Unknown work item type.",
+      "couldNotLink": "Could not link the selected work items."
+    },
+    "links": {
+      "notFound": "That work item no longer exists.",
+      "selfLink": "A work item can't link to itself.",
+      "duplicate": "That link already exists.",
+      "cycle": "That would create a dependency cycle.",
+      "crossWorkspace": "That work item is in another workspace.",
+      "linkNotFound": "That link no longer exists.",
+      "couldNotUpdate": "Could not update the link."
+    },
+    "workItems": {
+      "ILLEGAL_PARENT_TYPE": "Illegal parent for this work-item kind.",
+      "DEPTH_LIMIT_EXCEEDED": "Work-item tree depth limit (4 levels) exceeded.",
+      "PARENT_CYCLE": "Re-parenting would create a cycle in the work-item tree.",
+      "WORK_ITEM_NOT_FOUND": "Work item {id} not found.",
+      "KEY_CONFLICT": "A work item with this key or identifier already exists in the project.",
+      "CROSS_PROJECT_PARENT": "A work item parent must belong to the same project as the child.",
+      "REPORTER_NOT_IN_WORKSPACE": "The reporter is not a member of this workspace.",
+      "ASSIGNEE_NOT_IN_WORKSPACE": "The assignee is not a member of this workspace.",
+      "UNKNOWN_STATUS": "Unknown status \"{statusKey}\" for this project's workflow.",
+      "ILLEGAL_TRANSITION": "Illegal status transition: \"{from}\" → \"{to}\".",
+      "STALE_WORK_ITEM": "This work item was edited by someone else. Refresh and try again."
+    },
+    "workflow": {
+      "NOT_PROJECT_ADMIN": "Only a project admin can edit the workflow.",
+      "STATUS_KEY_CONFLICT": "A status with key \"{key}\" already exists in this project.",
+      "WORKFLOW_STATUS_NOT_FOUND": "That status no longer exists.",
+      "WORKFLOW_TRANSITION_NOT_FOUND": "That transition no longer exists.",
+      "STATUS_IN_USE": "Status \"{statusKey}\" is still used by {count} work item(s) and can't be deleted.",
+      "INVALID_REASSIGN_TARGET": "Pick a different status in this project to move the items to.",
+      "DEFAULT_STATUS_PROTECTED": "\"{statusKey}\" is a default status — only its color can be changed.",
+      "CANNOT_DELETE_INITIAL_STATUS": "Status \"{statusKey}\" is the initial status and can't be deleted.",
+      "CANNOT_DELETE_LAST_TERMINAL_STATUS": "Status \"{statusKey}\" is the only terminal status — a project needs at least one."
+    },
+    "upload": {
+      "FILE_TOO_LARGE": "File is too large — please choose a smaller file.",
+      "UNSUPPORTED_FILE_TYPE": "That file type isn't supported.",
+      "RATE_LIMITED": "Too many uploads — please wait a moment and try again.",
+      "failed": "Upload failed — please try again."
+    }
+  },
+  "email": {
+    "invite": {
+      "subject": "You're invited to join {workspace} on Prodect",
+      "preview": "{inviter} invited you to join {workspace} on Prodect",
+      "greeting": "Hi,",
+      "lede": "{inviter} invited you to join {workspace} on Prodect.",
+      "accept": "Accept invite",
+      "fallback": "Or copy this link into your browser:",
+      "expires": "This invite expires in 7 days.",
+      "ignore": "Don't know {inviter}? You can safely ignore this email."
+    },
+    "passwordReset": {
+      "subject": "Reset your Prodect password",
+      "preview": "Reset your Prodect password",
+      "greeting": "Hi {name},",
+      "lede": "We received a request to reset your Prodect password.",
+      "reset": "Reset your password",
+      "fallback": "Or copy this link into your browser:",
+      "expires": "This link expires in 1 hour. If you didn't request this, you can ignore this email."
+    }
+  },
+  "auth": {
+    "welcomeBack": "Welcome back!",
+    "signInSubhead": "Use Prodect to turn any product idea into reality.",
+    "checking": "Checking…",
+    "continue": "Continue",
+    "signingIn": "Signing in…",
+    "googleSignInIncomplete": "Google sign-in didn't complete. Try again, or use email.",
+    "googleSignUpIncomplete": "Google sign-up didn't complete. Try again, or use email.",
+    "wrongPassword": "That password isn't right. Try again, or reset it.",
+    "emailAddress": "Email address",
+    "signingInAs": "Signing in as {email}",
+    "useDifferentEmail": "Use a different email",
+    "forgotPassword": "Forgot password?",
+    "password": "Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "dontHaveAccount": "Don't have an account?",
+    "signUp": "Sign up",
+    "welcomeToProdect": "Welcome to Prodect!",
+    "signUpSubhead": "Sign up to turn any product idea into reality.",
+    "accountExists": "An account with this email already exists.",
+    "emailHelper": "We'll use this to sign you in.",
+    "signInInstead": "Sign in instead →",
+    "alreadyHaveAccount": "Already have an account?",
+    "logIn": "Log in",
+    "edit": "Edit",
+    "createPassword": "Create a password",
+    "atLeast8": "At least 8 characters.",
+    "passwordTooShort": "Password must be at least 8 characters.",
+    "somethingWentWrong": "Something went wrong. Please try again.",
+    "creatingAccount": "Creating account…",
+    "createAccount": "Create account",
+    "checkInbox": "Check your inbox",
+    "checkInboxSubhead": "If an account exists for that email, we've sent a one-time link to reset your password. The link expires in 1 hour.",
+    "backToSignIn": "Back to sign in",
+    "didntGetIt": "Didn’t get it?",
+    "checkSpam": "Check spam, or try another email.",
+    "resetYourPassword": "Reset your password",
+    "resetSubhead": "Enter the email tied to your account and we'll send a one-time link.",
+    "tooManyRequests": "Too many reset requests from this device. Please wait an hour and try again.",
+    "couldntReachServer": "We couldn't reach the server. Check your connection and try again.",
+    "sending": "Sending…",
+    "sendResetLink": "Send reset link",
+    "linkExpired": "This link has expired",
+    "linkExpiredSubhead": "Reset links expire after 1 hour for security. Request a new one to continue.",
+    "requestNewLink": "Request a new link",
+    "passwordUpdated": "Password updated",
+    "passwordUpdatedSubhead": "You can now sign in with your new password.",
+    "continueToSignIn": "Continue to sign in",
+    "setNewPassword": "Set a new password",
+    "setNewPasswordSubhead": "Pick something you haven't used before — at least 8 characters.",
+    "newPassword": "New password",
+    "updating": "Updating…",
+    "setNewPasswordButton": "Set new password",
+    "or": "OR",
+    "orAriaLabel": "or",
+    "connecting": "Connecting…",
+    "continueWithGoogle": "Continue with Google",
+    "joinWorkspace": "Join {workspaceName}",
+    "invitedToCollaborate": "{inviterName} invited you to collaborate.",
+    "inviteExpired": "This invite has expired",
+    "inviteExpiredSubhead": "Invites are valid for 7 days. Ask the inviter for a new link if you'd still like to join.",
+    "backToDashboard": "Back to dashboard",
+    "inviteUsed": "This invite has already been used",
+    "inviteUsedSubhead": "If you joined from another email, sign in with that account.",
+    "signInWithInvitedEmail": "Sign in with the invited email",
+    "wrongEmailSubhead": "This invite is for {invitedEmail}. You're signed in as {currentEmail}. Sign in with the invited email to accept, or ask the inviter to re-send to your address.",
+    "signInWith": "Sign in with {invitedEmail}",
+    "inviteAcceptFailed": "This invite could not be accepted. Refresh to see details.",
+    "acceptInvite": "Accept invite"
+  },
+  "shell": {
+    "nav": {
+      "dashboard": "Dashboard",
+      "issues": "Work Items",
+      "boards": "Boards",
+      "reports": "Reports",
+      "settings": "Settings",
+      "jobRuns": "Job runs",
+      "docs": "Docs"
+    },
+    "topNav": {
+      "global": "Global"
+    },
+    "sidebarHeader": {
+      "activeProject": "Active project",
+      "project": "Project"
+    },
+    "project": {
+      "createFirst": "Create your first project",
+      "emptyDescription": "Projects group your work items and give them a key like PROD-1. Create one to start planning.",
+      "create": "Create project",
+      "created": "Project created",
+      "createError": "Could not create project",
+      "identifierTaken": "That identifier is already taken. Try a different one.",
+      "nameLabel": "Project name",
+      "namePlaceholder": "Mobile App",
+      "identifierLabel": "Identifier",
+      "identifierHelper": "3–5 uppercase characters. Work items will be keyed {preview}-1, {preview}-2, …"
+    },
+    "workspaceSwitcher": {
+      "created": "Workspace created",
+      "createError": "Could not create workspace",
+      "create": "Create workspace",
+      "switch": "Switch workspace",
+      "select": "Select workspace",
+      "heading": "Workspaces",
+      "invite": "Invite teammates",
+      "nameLabel": "Workspace name",
+      "namePlaceholder": "My workspace",
+      "submit": "Create"
+    },
+    "projectSwitcher": {
+      "switch": "Switch project",
+      "none": "No project",
+      "archived": "Archived",
+      "heading": "Projects"
+    },
+    "stub": {
+      "archivedTitle": "This project is archived",
+      "archivedDescription": "Switch to another project to continue working.",
+      "comingIn": "Coming in {comingIn}."
+    },
+    "dashboard": {
+      "activeProject": "Active project:"
+    },
+    "userMenu": {
+      "account": "Account menu",
+      "workspaceSettings": "Workspace settings",
+      "accountSettings": "Account settings",
+      "signingOut": "Signing out…"
+    },
+    "account": {
+      "signOut": "Sign out",
+      "toggleTheme": "Toggle theme"
+    },
+    "theme": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System",
+      "systemResolved": "System ({resolved})",
+      "tooltip": "Theme: {state}",
+      "ariaLabel": "Theme: {state}. Activate to change."
+    },
+    "createIssue": {
+      "title": "Create work item",
+      "create": "Create",
+      "titleRequired": "Give the work item a title.",
+      "titleTooLong": "Title must be {max} characters or fewer.",
+      "created": "{identifier} created",
+      "type": "Type",
+      "parent": "Parent",
+      "titleLabel": "Title",
+      "titlePlaceholder": "Summarize the work in a line",
+      "description": "Description",
+      "explanation": "Explanation",
+      "explanationHint": "— why this matters (optional)",
+      "draftWithAiTooltip": "AI drafting arrives with the planning layer (Epic 7)",
+      "draftWithAi": "Draft with AI",
+      "explanationSkip": "Skip this — explanation can be drafted with AI or added after creating.",
+      "priority": "Priority"
+    },
+    "links": {
+      "section": "Linked work items",
+      "removeAria": "Remove pending {relationship} link to {identifier}",
+      "helper": "Choose a relationship · links are created together with the work item."
+    },
+    "commandPalette": {
+      "search": "Search",
+      "createHeading": "Create",
+      "navigationHeading": "Navigation",
+      "workspaceHeading": "Workspace",
+      "projectHeading": "Project",
+      "accountHeading": "Account",
+      "goToDashboard": "Go to Dashboard",
+      "goToIssues": "Go to Work Items",
+      "goToBoards": "Go to Boards",
+      "goToReports": "Go to Reports",
+      "goToSettings": "Go to Settings",
+      "switchTo": "Switch to {name}",
+      "current": "Current"
+    },
+    "shortcuts": {
+      "title": "Keyboard shortcuts",
+      "description": "Shortcuts available anywhere in the app."
+    }
+  },
+  "issueViews": {
+    "heading": "Work Items",
+    "noProjectTitle": "No project selected",
+    "noProjectListDescription": "Pick or create a project from the switcher to track its work items.",
+    "noProjectDetailDescription": "Pick a project from the switcher to view its work items.",
+    "noProjectEditDescription": "Pick a project from the switcher to edit its work items.",
+    "allIssuesIn": "All work items in {project}",
+    "filter": "Filter",
+    "filterComingSoon": "Filtering arrives in a later update",
+    "viewTree": "Tree",
+    "viewList": "List",
+    "viewLabel": "View: {view}",
+    "newIssue": "New work item",
+    "noIssuesTitle": "No work items yet",
+    "noIssuesDescription": "Create your first work item to start tracking work.",
+    "noMatchingTitle": "No matching work items",
+    "noMatchingDescription": "No work items match the current filters. Try adjusting or clearing them.",
+    "colTitle": "Title",
+    "colPriority": "Priority",
+    "colAssignee": "Assignee",
+    "colReporter": "Reporter",
+    "colDue": "Due",
+    "colEst": "Est.",
+    "colStatus": "Status",
+    "edit": "Edit",
+    "description": "Description",
+    "descriptionGloss": "what to do",
+    "issueDescriptionAria": "Work item description",
+    "noDescription": "No description yet.",
+    "explanation": "Explanation",
+    "explanationGloss": "why it matters",
+    "aiDrafted": "AI-drafted",
+    "issueExplanationAria": "Work item explanation",
+    "noExplanation": "No explanation yet.",
+    "childIssues": "Child work items",
+    "parentIssuesAria": "Parent work items",
+    "relationships": "Relationships",
+    "relationshipsGloss": "dependencies & links",
+    "noLinkedIssues": "No linked work items yet.",
+    "openBlocker": "Open blocker",
+    "linkIssue": "Link work item",
+    "removeLinkAria": "Remove {relationship} link to {target}",
+    "removeConfirmBefore": "Remove the {relationship} link to",
+    "removeConfirmAfter": "? The work item isn’t deleted — only the link.",
+    "removeLink": "Remove link",
+    "status": "Status",
+    "type": "Type",
+    "priority": "Priority",
+    "assignee": "Assignee",
+    "reporter": "Reporter",
+    "parent": "Parent",
+    "dueDate": "Due date",
+    "estimate": "Estimate",
+    "estimateMinutes": "Estimate (minutes)",
+    "unassigned": "Unassigned",
+    "unknown": "Unknown",
+    "you": "You",
+    "none": "None",
+    "noDueDate": "No due date",
+    "noEstimate": "No estimate",
+    "created": "Created",
+    "updated": "Updated",
+    "changedElsewhereRefreshing": "This work item changed elsewhere — refreshing.",
+    "editIssue": "Edit work item",
+    "title": "Title",
+    "titleRequired": "Title is required.",
+    "staleBanner": "This work item was edited by someone else. Refresh to see the latest.",
+    "refresh": "Refresh",
+    "reporterCreated": "Reporter: {reporter} · created {created}",
+    "issueSaved": "{identifier} saved"
+  },
+  "ui": {
+    "typePicker": {
+      "label": "Type"
+    },
+    "priorityPicker": {
+      "label": "Priority"
+    },
+    "statusPicker": {
+      "label": "Status"
+    },
+    "assigneePicker": {
+      "label": "Assignee",
+      "unassigned": "Unassigned",
+      "searchPlaceholder": "Search members…",
+      "emptyText": "No members"
+    },
+    "parentPicker": {
+      "label": "Parent",
+      "noParent": "No parent",
+      "searchPlaceholder": "Search work items…",
+      "emptyText": "No eligible parents",
+      "loadingText": "Loading parents…",
+      "previousParent": "The previous parent",
+      "topLevelNotice": "{type}s are top-level — parent cleared.",
+      "clearedNotice": "Parent cleared — {who} can't hold a {type}."
+    },
+    "linkAddForm": {
+      "relationship": "Relationship",
+      "issueToLink": "Work item to link",
+      "searchPlaceholder": "Search a work item…",
+      "searchByIdentifierOrTitle": "Search by identifier or title…",
+      "noMatchingIssues": "No matching work items.",
+      "add": "Add"
+    },
+    "readiness": {
+      "ready": "Ready to start",
+      "allResolved": "All blockers resolved",
+      "blocked": "Blocked",
+      "waiting": "Waiting on {count, plural, one {# work item} other {# work items}}"
+    }
+  },
+  "settings": {
+    "workspace": {
+      "empty": {
+        "title": "No workspace yet",
+        "description": "Create a workspace from the switcher in the top-left to get started."
+      },
+      "title": "Workspace settings",
+      "subtitle": "Manage your workspace name, members, and lifecycle."
+    },
+    "name": {
+      "renamedToast": "Workspace renamed",
+      "renameErrorTitle": "Could not rename",
+      "heading": "Workspace name",
+      "helper": "Visible to everyone in this workspace."
+    },
+    "members": {
+      "heading": "Members",
+      "count": "{count, plural, one {# member} other {# members}}",
+      "invite": "Invite",
+      "inviteSentToast": "Invite sent to {email}",
+      "removedToast": "Removed {name}",
+      "removeErrorTitle": "Could not remove member",
+      "youSuffix": " (you)",
+      "remove": "Remove",
+      "inviteModalTitle": "Invite to {workspaceName}",
+      "inviteModalDescription": "They'll get an email with a one-time link. Links expire in 7 days.",
+      "emailLabel": "Email address",
+      "emailPlaceholder": "teammate@example.com",
+      "sendInvite": "Send invite",
+      "errorAlreadyMember": "{email} is already a member of this workspace.",
+      "errorRateLimited": "You've already sent 3 invites to this address in the last hour. Please wait before trying again.",
+      "errorInvalidEmail": "Enter a valid email address.",
+      "errorGeneric": "Could not send the invite. Please try again.",
+      "errorUnexpected": "Something went wrong. Please try again."
+    },
+    "danger": {
+      "cantLeaveTitle": "Can't leave",
+      "leave": "Leave",
+      "heading": "Danger zone",
+      "leaveWorkspace": "Leave workspace",
+      "leaveWorkspaceDesc": "You'll lose access to all data in this workspace.",
+      "lastMemberTooltip": "You're the last member — delete the workspace instead.",
+      "deleteWorkspace": "Delete workspace",
+      "deleteWorkspaceDesc": "Permanently delete this workspace and all its data. This cannot be undone.",
+      "delete": "Delete",
+      "deleteErrorTitle": "Could not delete workspace",
+      "deleteModalTitle": "Delete {workspaceName}?",
+      "deleteModalDesc": "This will permanently delete the workspace and all its data (projects, work items, members). This action cannot be undone.",
+      "confirmLabel": "Type {workspaceName} to confirm",
+      "deleteConfirmButton": "Delete workspace"
+    },
+    "project": {
+      "empty": {
+        "title": "No project yet",
+        "description": "Create a project from the switcher in the top-left to get started."
+      },
+      "title": "Project settings",
+      "subtitle": "Configure the active project and manage its lifecycle."
+    },
+    "archive": {
+      "title": "Archive project",
+      "description": "Hides this project from the switcher and lists. Work items and history are preserved.",
+      "archive": "Archive",
+      "archivedToast": "Project archived",
+      "archiveErrorTitle": "Could not archive project",
+      "modalTitle": "Archive {projectName}?",
+      "modalDesc": "Archiving hides this project from the switcher and lists. Its work items and history are preserved — you can restore the project later. This does not delete any data.",
+      "confirmLabel": "Type {identifier} to confirm",
+      "modalConfirm": "Archive project"
+    },
+    "workflow": {
+      "title": "Workflow",
+      "cardDescription": "The statuses a work item can hold in this project, and the legal moves between them.",
+      "empty": {
+        "description": "Create a project from the switcher in the top-left to manage its workflow."
+      },
+      "pageDescription": "The statuses a work item can hold in <strong>{projectName}</strong>, and the legal moves between them. {editHint}",
+      "editHintAdmin": "Edit them here.",
+      "editHintReader": "Only a project admin can edit these.",
+      "category": {
+        "todo": "To Do",
+        "in_progress": "In Progress",
+        "done": "Done"
+      },
+      "policyHeading": "Transition policy",
+      "policyOpenDesc": "Open mode: any status can transition to any other.",
+      "policyRestrictedDesc": "Restricted mode: only the transitions below are allowed.",
+      "policyGroupLabel": "Transition policy mode",
+      "policySetToast": "Policy set to {mode}",
+      "policyRestricted": "Restricted",
+      "policyOpen": "Open",
+      "tablistLabel": "Workflow editor",
+      "tabStatuses": "Statuses",
+      "tabTransitions": "Transitions",
+      "initialBadge": "Initial",
+      "defaultBadge": "Default",
+      "moveUp": "Move {label} up",
+      "moveDown": "Move {label} down",
+      "changeColor": "Change color of {label}",
+      "colorButton": "Color",
+      "editButton": "Edit",
+      "deleteStatus": "Delete {label}",
+      "addStatus": "Add status",
+      "restoreDefaults": "Restore default transitions",
+      "tableCaption": "Each cell is a legal move from the row status to the column status.",
+      "tableCaptionOpen": " (Ignored while policy is Open.)",
+      "fromToHeader": "From ↓ / To →",
+      "transitionCell": "{from} to {to}",
+      "colorTitle": "Color · {label}",
+      "editTitle": "Edit {label}",
+      "restoreModalTitle": "Restore default transitions?",
+      "restoreModalDesc": "This re-adds the standard transitions (the allowed moves between statuses) that are missing from this project's workflow. It does <strong>not</strong> remove any transitions you added, and it doesn't touch your statuses — nothing you've set up is lost.",
+      "reassignTitle": "Delete “{label}”",
+      "reassignAffected": "{count, plural, one {# work item still use this status. Choose a status to move it to — then “{label}” is removed.} other {# work items still use this status. Choose a status to move them to — then “{label}” is removed.}}",
+      "reassignMoveTo": "Move items to",
+      "selectStatusPlaceholder": "Select a status…",
+      "reassignConfirm": "Reassign & delete",
+      "keyLabel": "Key (machine id, lowercase)",
+      "labelLabel": "Label",
+      "labelPlaceholder": "In Review",
+      "categoryLabel": "Category",
+      "makeInitial": "Make this the initial status",
+      "defaultStatusNote": "<name></name> is a default status — only its color can be changed.",
+      "toast": {
+        "reordered": "Reordered",
+        "transitionRemoved": "Transition removed",
+        "transitionAdded": "Transition added",
+        "statusAdded": "Status added",
+        "statusUpdated": "Status updated",
+        "statusDeleted": "Status deleted",
+        "transitionsRestored": "Default transitions restored",
+        "genericError": "Something went wrong"
+      }
+    },
+    "jobs": {
+      "title": "Job runs",
+      "subtitle": "Background jobs for this workspace — delivery of invites & password resets, and any scheduled work. Failed jobs land in the dead-letter queue, where an owner can replay them.",
+      "tab": {
+        "runs": "Recent runs",
+        "dlq": "Dead letter",
+        "system": "System"
+      },
+      "tabNavLabel": "Job run views",
+      "dlqBadgeLabel": "{count} in dead-letter queue",
+      "filterGroupLabel": "Filter by status",
+      "filter": {
+        "all": "All",
+        "succeeded": "Succeeded",
+        "failed": "Failed",
+        "running": "Running"
+      },
+      "runsTableCaption": "Background job runs",
+      "col": {
+        "status": "Status",
+        "function": "Function",
+        "event": "Event",
+        "attempts": "Attempts",
+        "started": "Started",
+        "duration": "Duration",
+        "failure": "Failure",
+        "details": "Details",
+        "firstFailed": "First failed",
+        "lastFailed": "Last failed",
+        "replayed": "Replayed",
+        "actions": "Actions"
+      },
+      "view": "View",
+      "runDetailTitle": "Run detail",
+      "dlqTableCaption": "Dead-letter queue",
+      "replay": "Replay",
+      "replayTooltip": "Only a workspace owner can replay jobs",
+      "replayedToastTitle": "Job replayed",
+      "replayedToastDesc": "The original event was re-emitted.",
+      "replayErrorTitle": "Could not replay",
+      "dlqDetailTitle": "Dead-letter detail",
+      "dlqDetailDesc": "The failure and the original event payload (replayable as-is).",
+      "failureHeading": "Failure",
+      "eventPayloadHeading": "Event payload",
+      "pageLabel": "Page {page}",
+      "previous": "Previous",
+      "next": "Next",
+      "refresh": "Refresh",
+      "dlqEmptyTitle": "Nothing in the dead-letter queue",
+      "dlqEmptyDesc": "Every job has succeeded or is still retrying.",
+      "runsEmptyTitle": "No job runs yet",
+      "runsEmptyDesc": "When a background job runs, it'll appear here."
+    },
+    "account": {
+      "title": "Account settings",
+      "subtitle": "Manage your personal preferences.",
+      "language": {
+        "heading": "Language",
+        "helper": "Choose the language for the Prodect interface.",
+        "label": "Language"
+      }
+    }
+  }
+}

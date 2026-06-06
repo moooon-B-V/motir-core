@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { ArchiveProjectModal } from './ArchiveProjectModal';
@@ -16,6 +17,7 @@ export function ArchiveProjectCard({
   projectName,
   projectIdentifier,
 }: ArchiveProjectCardProps) {
+  const t = useTranslations('settings');
   const [open, setOpen] = useState(false);
 
   return (
@@ -24,19 +26,17 @@ export function ArchiveProjectCard({
         className="border-2 border-(--el-danger)"
         header={
           <h2 className="font-sans text-base font-semibold" style={{ color: 'var(--el-danger)' }}>
-            Danger zone
+            {t('danger.heading')}
           </h2>
         }
       >
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="font-sans text-sm font-medium text-(--el-text)">Archive project</p>
-            <p className="text-(--el-text-muted) font-sans text-xs">
-              Hides this project from the switcher and lists. Work items and history are preserved.
-            </p>
+            <p className="font-sans text-sm font-medium text-(--el-text)">{t('archive.title')}</p>
+            <p className="text-(--el-text-muted) font-sans text-xs">{t('archive.description')}</p>
           </div>
           <Button variant="danger" onClick={() => setOpen(true)}>
-            Archive
+            {t('archive.archive')}
           </Button>
         </div>
       </Card>

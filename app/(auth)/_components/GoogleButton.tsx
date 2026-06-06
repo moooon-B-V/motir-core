@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { signIn } from '@/lib/auth/client';
 
@@ -25,6 +26,7 @@ export function GoogleButton({
   callbackURL: string;
   onError: (message: string) => void;
 }) {
+  const t = useTranslations('auth');
   const [loading, setLoading] = useState(false);
 
   async function go() {
@@ -36,13 +38,15 @@ export function GoogleButton({
       // populated the redirect never happened, so we surface it inline.
       if (result?.error) {
         setLoading(false);
-        onError(humanizeOAuthError(result.error.message ?? null));
+        onError(humanizeOAuthError(result.error.message ?? null, t('googleSignInIncomplete')));
       }
       // Success path: the browser is already navigating to Google's consent
       // screen, so leave `loading=true` until the unload tears us down.
     } catch (err) {
       setLoading(false);
-      onError(humanizeOAuthError(err instanceof Error ? err.message : null));
+      onError(
+        humanizeOAuthError(err instanceof Error ? err.message : null, t('googleSignInIncomplete')),
+      );
     }
   }
 
@@ -56,11 +60,11 @@ export function GoogleButton({
       onClick={go}
     >
       {loading ? (
-        'Connecting…'
+        t('connecting')
       ) : (
         <span className="inline-flex items-center gap-2">
           <GoogleGlyph />
-          <span>Continue with Google</span>
+          <span>{t('continueWithGoogle')}</span>
         </span>
       )}
     </Button>
@@ -96,10 +100,10 @@ function GoogleGlyph() {
   );
 }
 
-function humanizeOAuthError(raw: string | null): string {
+function humanizeOAuthError(raw: string | null, message: string): string {
   // Better-Auth surfaces a few documented codes (USER_CANCELED, etc.) but
   // most provider-side failures come through as opaque strings. Keep the
   // copy aligned with mockup 06 — short, actionable, no enumeration.
-  if (!raw) return "Google sign-in didn't complete. Try again, or use email.";
-  return "Google sign-in didn't complete. Try again, or use email.";
+  if (!raw) return message;
+  return message;
 }

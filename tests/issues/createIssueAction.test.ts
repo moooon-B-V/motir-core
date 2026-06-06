@@ -116,7 +116,7 @@ describe('createIssueAction', () => {
   it('trims the title and rejects an empty one without calling the service', async () => {
     await makeFixture();
     const empty = await createIssueAction({ kind: 'task', title: '   ' });
-    expect(empty).toEqual({ ok: false, error: 'Give the issue a title.' });
+    expect(empty).toEqual({ ok: false, error: 'Give the work item a title.' });
     const count = await db.workItem.count();
     expect(count).toBe(0);
   });

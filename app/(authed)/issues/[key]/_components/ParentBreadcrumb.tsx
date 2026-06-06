@@ -1,5 +1,6 @@
 import { Fragment } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -20,11 +21,12 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 // with an accessible name so assistive tech announces it as navigation.
 
 export function ParentBreadcrumb({ ancestors }: { ancestors: WorkItemSummaryDto[] }) {
+  const t = useTranslations('issueViews');
   if (ancestors.length === 0) return null;
 
   return (
     <nav
-      aria-label="Parent issues"
+      aria-label={t('parentIssuesAria')}
       className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1"
     >
       {ancestors.map((ancestor) => {

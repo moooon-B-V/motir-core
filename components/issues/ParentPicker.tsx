@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
-import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
 import { allowedParentKinds, type IssueType } from '@/lib/issues/parentRules';
 import { listCandidateParentsAction } from '@/app/(authed)/issues/actions';
 import type { WorkItemKindDto } from '@/lib/dto/workItems';
@@ -40,6 +40,8 @@ export function ParentPicker({
   id,
   disabled,
 }: ParentPickerProps) {
+  const t = useTranslations('ui');
+  const tl = useTranslations('labels');
   const [options, setOptions] = useState<ComboboxOption<string>[]>([]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -57,7 +59,7 @@ export function ParentPicker({
   useEffect(() => {
     let cancelled = false;
     setNotice(null);
-    const childLabel = ISSUE_TYPE_META[childType].label;
+    const typeLabel = tl(`issueType.${childType}`);
 
     // A childType with no legal parent (epic) is top-level by definition.
     if (allowedParentKinds(childType).length === 0) {
@@ -65,7 +67,7 @@ export function ParentPicker({
       setLoading(false);
       if (value !== null) {
         onChange(null);
-        setNotice(`${childLabel}s are top-level — parent cleared.`);
+        setNotice(t('parentPicker.topLevelNotice', { type: typeLabel }));
         selectedLabelRef.current = null;
       }
       return;
@@ -88,8 +90,8 @@ export function ParentPicker({
       // Clear a selection the new childType no longer permits.
       if (value !== null && !candidates.some((c) => c.id === value)) {
         onChange(null);
-        const who = selectedLabelRef.current ?? 'The previous parent';
-        setNotice(`Parent cleared — ${who} can't hold a ${childLabel}.`);
+        const who = selectedLabelRef.current ?? t('parentPicker.previousParent');
+        setNotice(t('parentPicker.clearedNotice', { who, type: typeLabel }));
         selectedLabelRef.current = null;
       }
     });
@@ -114,7 +116,10 @@ export function ParentPicker({
     selectedLabelRef.current = picked ? `${picked.secondary ?? ''} ${picked.label}`.trim() : null;
   }
 
-  const comboOptions: ComboboxOption<string>[] = [{ value: NONE, label: 'No parent' }, ...options];
+  const comboOptions: ComboboxOption<string>[] = [
+    { value: NONE, label: t('parentPicker.noParent') },
+    ...options,
+  ];
 
   return (
     <div className="flex flex-col gap-1">
@@ -122,13 +127,13 @@ export function ParentPicker({
         options={comboOptions}
         value={value ?? NONE}
         onChange={handleChange}
-        label="Parent"
-        placeholder="No parent"
+        label={t('parentPicker.label')}
+        placeholder={t('parentPicker.noParent')}
         searchable
-        searchPlaceholder="Search issues…"
-        emptyText="No eligible parents"
+        searchPlaceholder={t('parentPicker.searchPlaceholder')}
+        emptyText={t('parentPicker.emptyText')}
         loading={loading}
-        loadingText="Loading parents…"
+        loadingText={t('parentPicker.loadingText')}
         id={id}
         disabled={disabled}
       />

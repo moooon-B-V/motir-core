@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme } from '@/lib/contexts/theme-context';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -18,18 +19,22 @@ import type { ThemePattern } from '@/lib/theme/types';
  */
 const CYCLE: ThemePattern[] = ['light', 'dark', 'system'];
 
-const META: Record<ThemePattern, { Icon: typeof Sun; label: string }> = {
-  light: { Icon: Sun, label: 'Light' },
-  dark: { Icon: Moon, label: 'Dark' },
-  system: { Icon: Monitor, label: 'System' },
+const META: Record<ThemePattern, { Icon: typeof Sun }> = {
+  light: { Icon: Sun },
+  dark: { Icon: Moon },
+  system: { Icon: Monitor },
 };
 
 export function ThemeToggle() {
+  const t = useTranslations('shell');
   const { pattern, resolvedPattern, setPattern } = useTheme();
-  const { Icon, label } = META[pattern];
+  const { Icon } = META[pattern];
 
   // "System (dark)" when following the OS; plain "Light" / "Dark" otherwise.
-  const announced = pattern === 'system' ? `System (${resolvedPattern})` : label;
+  const announced =
+    pattern === 'system'
+      ? t('theme.systemResolved', { resolved: resolvedPattern })
+      : t(`theme.${pattern}`);
 
   function cycle() {
     const next = CYCLE[(CYCLE.indexOf(pattern) + 1) % CYCLE.length]!;
@@ -37,11 +42,11 @@ export function ThemeToggle() {
   }
 
   return (
-    <Tooltip content={`Theme: ${announced}`}>
+    <Tooltip content={t('theme.tooltip', { state: announced })}>
       <button
         type="button"
         onClick={cycle}
-        aria-label={`Theme: ${announced}. Activate to change.`}
+        aria-label={t('theme.ariaLabel', { state: announced })}
         className="text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) inline-flex h-9 w-9 items-center justify-center rounded-(--radius-sm) transition-colors focus-visible:outline-none focus-visible:ring-2"
       >
         <Icon className="h-4 w-4" aria-hidden />

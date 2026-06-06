@@ -3,6 +3,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
+import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext, WORKSPACE_COOKIE_NAME } from '@/lib/workspaces';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -32,7 +33,8 @@ export async function renameWorkspaceAction(
 ): Promise<ActionResult> {
   const { userId, workspaceId } = await requireContext();
   const name = String(formData.get('name') ?? '').trim();
-  if (!name) return { ok: false, error: 'Workspace name cannot be empty.' };
+  if (!name)
+    return { ok: false, error: (await getErrorsTranslator())('actions.workspaceNameEmpty') };
 
   await workspacesService.renameWorkspace({ workspaceId, actorUserId: userId, name });
   // Re-render the settings page + the top-nav switcher (in the shared
@@ -72,14 +74,15 @@ async function switchToRemainingOrClear(userId: string): Promise<void> {
  */
 export async function removeMemberAction(targetUserId: string): Promise<ActionResult> {
   const { userId, workspaceId } = await requireContext();
+  const t = await getErrorsTranslator();
   if (targetUserId === userId) {
-    return { ok: false, error: 'Use Leave to remove yourself.' };
+    return { ok: false, error: t('actions.useLeaveToRemoveSelf') };
   }
   try {
     await workspacesService.removeMember({ userId: targetUserId, workspaceId });
   } catch (err) {
     if (err instanceof LastMemberError) {
-      return { ok: false, error: 'Cannot remove the last member.' };
+      return { ok: false, error: t('actions.cannotRemoveLastMember') };
     }
     throw err;
   }
@@ -95,7 +98,7 @@ export async function leaveWorkspaceAction(): Promise<ActionResult> {
     if (err instanceof LastMemberError) {
       return {
         ok: false,
-        error: "You can't leave as the last member — delete the workspace instead.",
+        error: (await getErrorsTranslator())('actions.cannotLeaveLastMember'),
       };
     }
     throw err;

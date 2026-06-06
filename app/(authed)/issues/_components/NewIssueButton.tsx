@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useCreateIssue } from '../../_components/CreateIssueProvider';
@@ -10,6 +11,7 @@ import { useCreateIssue } from '../../_components/CreateIssueProvider';
 // the empty-state CTA. Hidden when there's no active project (the modal isn't
 // mounted then), mirroring the top-nav CreateIssueButton.
 export function NewIssueButton({ size = 'md' }: { size?: 'sm' | 'md' }) {
+  const t = useTranslations('issueViews');
   const { openCreateIssue, canCreate } = useCreateIssue();
   if (!canCreate) return null;
   return (
@@ -19,7 +21,7 @@ export function NewIssueButton({ size = 'md' }: { size?: 'sm' | 'md' }) {
       leftIcon={<Plus className="h-4 w-4" />}
       onClick={openCreateIssue}
     >
-      New issue
+      {t('newIssue')}
     </Button>
   );
 }

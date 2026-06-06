@@ -2,9 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { workItemErrorMessage } from '@/lib/workItems/errorMessages';
 import {
   IllegalParentTypeError,
   IllegalTransitionError,
@@ -77,10 +79,12 @@ export async function updateIssueAction(input: UpdateIssueInput): Promise<IssueA
     revalidatePath(ISSUES_PATH);
     return { ok: true, updatedAt: updated.updatedAt };
   } catch (err) {
-    if (err instanceof StaleWorkItemError) return { ok: false, error: err.message, stale: true };
+    const t = await getErrorsTranslator();
+    if (err instanceof StaleWorkItemError)
+      return { ok: false, error: workItemErrorMessage(err, t), stale: true };
     if (err instanceof IllegalParentTypeError)
-      return { ok: false, error: err.message, field: 'parent' };
-    if (err instanceof WorkItemError) return { ok: false, error: err.message };
+      return { ok: false, error: workItemErrorMessage(err, t), field: 'parent' };
+    if (err instanceof WorkItemError) return { ok: false, error: workItemErrorMessage(err, t) };
     throw err;
   }
 }
@@ -98,9 +102,10 @@ export async function changeStatusAction(input: {
     revalidatePath(ISSUES_PATH);
     return { ok: true, updatedAt: updated.updatedAt };
   } catch (err) {
+    const t = await getErrorsTranslator();
     if (err instanceof IllegalTransitionError || err instanceof UnknownStatusError)
-      return { ok: false, error: err.message, field: 'status' };
-    if (err instanceof WorkItemError) return { ok: false, error: err.message };
+      return { ok: false, error: workItemErrorMessage(err, t), field: 'status' };
+    if (err instanceof WorkItemError) return { ok: false, error: workItemErrorMessage(err, t) };
     throw err;
   }
 }
