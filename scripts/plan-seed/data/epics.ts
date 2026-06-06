@@ -20,7 +20,7 @@ export const EPICS: EpicMeta[] = [
   {
     id: '2',
     title: 'Issue tracking core',
-    status: 'in_progress',
+    status: 'done',
     descriptionMd:
       'The irreducible Jira core — the first epic of the PM substrate that makes Prodect a usable ' +
       "standalone product. Built directly on Story 1.4's `work_item` model: issue types " +

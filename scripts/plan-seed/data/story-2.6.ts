@@ -67,7 +67,7 @@ import type { PlanStory } from '../types';
 export const story_2_6: PlanStory = {
   id: '2.6',
   title: 'Tests — Epic 2 consolidation, coverage hardening & acceptance journeys',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The closing story of Epic 2 (Issue tracking core): the epic-level test **closer**, modeled on ' +
     'Subtask 1.4.7 (the Story-1.4 work-item-model closer). Its job is to **audit** the coverage ' +
@@ -257,7 +257,7 @@ export const story_2_6: PlanStory = {
     {
       id: '2.6.4',
       title: 'Extend coverage gating to the Epic-2 workflow modules + re-verify thresholds',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
