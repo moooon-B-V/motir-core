@@ -1,11 +1,13 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { MoreHorizontal } from 'lucide-react';
 import type { BoardColumnDto } from '@/lib/dto/boards';
 import { BoardCard } from './BoardCard';
 
-// BoardColumn (Subtask 3.2.3) — one board column per
+// BoardColumn (Subtask 3.2.3 · drop wired in 3.2.4) — one board column per
 // `design/boards/board.mock.html` (`.col`): a header over a scrollable card
 // stack, with a designed empty-column state. The header carries (in order):
 //   - the column `name` + the per-column total count badge (the projection's
@@ -15,10 +17,15 @@ import { BoardCard } from './BoardCard';
 //   - a disabled column-actions seam (mirrors the page-level Filter seam from
 //     3.2.2 — the design shows the affordance; board/column admin is not v1)
 //
-// The card-stack body is the seam 3.2.4 makes a dnd-kit droppable and 3.2.5
-// fills with the load-more footer + virtualization. Colour strictly `--el-*`,
-// shape via element tokens. `assigneeNameById` resolves each card's `assigneeId`
-// to a display name (the projection card carries only the id — Story 3.1.4).
+// DROP TARGET (3.2.4): the card-stack body is a dnd-kit droppable (so an empty
+// column and the gaps between cards accept a drop), and the cards inside are a
+// vertical `SortableContext`. While a card is dragged over this column the
+// section shows the design's redundant cues (finding #35, not colour-alone): an
+// accent RING (outline shape) + a lavender TINT (colour) — paired, plus the
+// dragged card's dashed ghost marks the insertion slot. Colour strictly
+// `--el-*`, shape via element tokens. `assigneeNameById` resolves each card's
+// `assigneeId` to a display name (the projection card carries only the id —
+// Story 3.1.4).
 
 export function BoardColumn({
   column,
@@ -30,15 +37,26 @@ export function BoardColumn({
   onOpenQuickView: (identifier: string) => void;
 }) {
   const t = useTranslations('boards');
+  // The whole column is the droppable, so a drop anywhere in it (incl. the empty
+  // body) resolves to this column; the card SortableContext handles the slot.
+  const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
   return (
     // The column caps its height to the available screen height (viewport minus
     // the top nav + page header + gutters ≈ 12rem) so it uses the full screen on
     // tall displays, and its card body scrolls internally — per-column scroll, no
-    // fixed 560px cap that ends mid-screen.
+    // fixed 560px cap that ends mid-screen. While a card is dragged over, the
+    // accent ring + lavender tint mark it as the drop target (paired cues).
     <section
+      ref={setNodeRef}
       aria-label={t('columnLabel', { name: column.name, count: column.totalCount })}
-      className="flex max-h-[calc(100dvh-12rem)] w-72 shrink-0 flex-col rounded-(--radius-card) border border-(--el-border) bg-(--el-surface)"
+      data-testid={`board-column-${column.id}`}
+      data-over={isOver ? 'true' : undefined}
+      className={`flex max-h-[calc(100dvh-12rem)] w-72 shrink-0 flex-col rounded-(--radius-card) border bg-(--el-surface) transition-colors ${
+        isOver
+          ? 'border-(--el-accent) bg-(--el-tint-lavender) outline outline-2 outline-(--el-accent)'
+          : 'border-(--el-border)'
+      }`}
     >
       <header className="flex items-center gap-2 border-b border-(--el-border) px-3 py-2.5">
         <h2 className="text-[13px] font-semibold text-(--el-text-strong)">{column.name}</h2>
@@ -77,16 +95,21 @@ export function BoardColumn({
             {t('emptyColumn')}
           </p>
         ) : (
-          column.cards.map((card) => (
-            <BoardCard
-              key={card.id}
-              card={card}
-              assigneeName={
-                card.assigneeId ? (assigneeNameById.get(card.assigneeId) ?? null) : null
-              }
-              onOpenQuickView={onOpenQuickView}
-            />
-          ))
+          <SortableContext
+            items={column.cards.map((c) => c.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            {column.cards.map((card) => (
+              <BoardCard
+                key={card.id}
+                card={card}
+                assigneeName={
+                  card.assigneeId ? (assigneeNameById.get(card.assigneeId) ?? null) : null
+                }
+                onOpenQuickView={onOpenQuickView}
+              />
+            ))}
+          </SortableContext>
         )}
       </div>
     </section>

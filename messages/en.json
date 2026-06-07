@@ -671,6 +671,15 @@
     "estimateLabel": "Estimate {value}",
     "assignedTo": "Assigned to {name}",
     "unassigned": "Unassigned",
-    "boardLabel": "Board columns"
+    "boardLabel": "Board columns",
+    "dndInstructions": "To pick up a card, press Space. While dragging, use the arrow keys to move the card. Press Space again to drop, or Escape to cancel.",
+    "announcementPickedUp": "Picked up {key}. Over column {col}, position {index} of {count}.",
+    "announcementMoved": "{key} moved to {col}, position {index} of {count}. Press Space to drop, Escape to cancel.",
+    "announcementDropped": "{key} dropped into {col}.",
+    "announcementCancelled": "Move cancelled. {key} returned to {col}.",
+    "moveRejectedTitle": "Move not allowed",
+    "moveIllegalDescription": "{from} → {to} isn’t a permitted transition. {key} returned.",
+    "moveUnmappedDescription": "That column maps no status. {key} returned.",
+    "moveErrorDescription": "Couldn’t move {key}. It was returned to its place."
   }
 }
