@@ -561,16 +561,23 @@ export const workItemRepository = {
   },
 
   /**
-   * One BOUNDED page of a board column's cards (Subtask 3.1.4, finding #57): a
-   * project's non-archived work items whose `status` is one of `statusKeys` (the
-   * column's mapped statuses), ordered for the board and windowed with
-   * `skip`/`take` so the projection never ships a whole column. `order` is
-   * whitelisted (NOT user input): `'position'` ranks by the board rank
-   * (`position` asc — the fractional-index string sorts lexicographically) for
-   * an active column; `'recent'` orders by `updatedAt` desc for a terminal
-   * (done) column, so its bounded window is the most-recent work. A stable
-   * `key` asc tiebreak keeps paging deterministic. The explicit `projectId` +
-   * `workspaceId` gate is the app-layer tenancy check atop RLS (finding #26).
+   * The BOUNDED card set of a board column (Subtask 3.1.4 / 3.8.2, finding #57):
+   * a project's non-archived work items whose `status` is one of `statusKeys`
+   * (the column's mapped statuses), ordered for the board and capped with `take`
+   * so the projection never ships an unbounded column. `order` is whitelisted
+   * (NOT user input): `'position'` ranks by the board rank (`position` asc — the
+   * fractional-index string sorts lexicographically) for an active column;
+   * `'recent'` orders by `updatedAt` desc for a terminal (done) column, so its
+   * bounded window is the most-recent work. A stable `key` asc tiebreak keeps
+   * the order total/deterministic.
+   *
+   * `opts.limit` caps the load at the board-level cap (Subtask 3.8.2 — there is
+   * no more per-column cursor paging; the whole bounded set loads at once and
+   * virtualizes client-side). `opts.updatedSince`, when present, applies the
+   * **Done-age window** (3.8.2): only cards touched on/after that instant load —
+   * the age-based shape Jira uses for terminal columns, while the FULL count is
+   * still surfaced separately via `countProjectIssues`. The explicit `projectId`
+   * + `workspaceId` gate is the app-layer tenancy check atop RLS (finding #26).
    * Empty `statusKeys` short-circuits to `[]` (a column mapping no live status
    * has no cards). Read-only → `db` singleton (optional `tx`).
    */
@@ -579,7 +586,7 @@ export const workItemRepository = {
     workspaceId: string,
     statusKeys: string[],
     order: 'position' | 'recent',
-    page: { limit: number; offset: number },
+    opts: { limit: number; updatedSince?: Date },
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
     if (statusKeys.length === 0) return [];
@@ -589,10 +596,15 @@ export const workItemRepository = {
         ? [{ updatedAt: 'desc' }, { key: 'asc' }]
         : [{ position: 'asc' }, { key: 'asc' }];
     return client.workItem.findMany({
-      where: { projectId, workspaceId, archivedAt: null, status: { in: statusKeys } },
+      where: {
+        projectId,
+        workspaceId,
+        archivedAt: null,
+        status: { in: statusKeys },
+        ...(opts.updatedSince ? { updatedAt: { gte: opts.updatedSince } } : {}),
+      },
       orderBy,
-      skip: page.offset,
-      take: page.limit,
+      take: opts.limit,
     });
   },
 

@@ -23,7 +23,6 @@ vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.curre
 
 // Import AFTER the mocks are registered.
 const { GET: boardGET, PATCH: boardPATCH } = await import('@/app/api/board/route');
-const { GET: cardsGET } = await import('@/app/api/board/columns/[columnId]/cards/route');
 const { PATCH: columnPATCH } = await import('@/app/api/board/columns/[columnId]/route');
 const { POST: movePOST } = await import('@/app/api/board/move/route');
 
@@ -64,12 +63,6 @@ async function makeFixture(): Promise<Fixture> {
   };
   activeCtx.current = { ...fx, project };
   return fx;
-}
-
-function cardsReq(columnId: string, query: string) {
-  return cardsGET(new Request(`${BASE}/api/board/columns/${columnId}/cards${query}`), {
-    params: Promise.resolve({ columnId }),
-  });
 }
 
 function moveReq(body: unknown) {
@@ -123,26 +116,6 @@ describe('board API routes', () => {
       'done',
       'cancelled',
     ]);
-  });
-
-  it('GET column cards → the lazy page; missing boardId → 400', async () => {
-    const fx = await makeFixture();
-    await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'A' },
-      {
-        userId: fx.userId,
-        workspaceId: fx.workspaceId,
-      },
-    );
-    const board = (await (await boardGET()).json()) as BoardProjectionDto;
-    const todo = board.columns.find((c) => c.statusKeys[0] === 'todo')!;
-
-    const ok = await cardsReq(todo.id, `?boardId=${board.boardId}`);
-    expect(ok.status).toBe(200);
-    expect(((await ok.json()) as { cards: unknown[] }).cards).toHaveLength(1);
-
-    const bad = await cardsReq(todo.id, '');
-    expect(bad.status).toBe(400);
   });
 
   it('POST /api/board/move → 200 for a legal cross-column move (status persists)', async () => {

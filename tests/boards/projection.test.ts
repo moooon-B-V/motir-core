@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
-import { boardsService } from '@/lib/services/boardsService';
+import { boardsService, BOARD_ISSUE_CAP, DONE_AGE_WINDOW_DAYS } from '@/lib/services/boardsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { usersService } from '@/lib/services/usersService';
@@ -11,12 +11,17 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
 
-// boardsService.getBoard / loadColumnCards (Story 3.1 · Subtask 3.1.4). Real
-// Postgres (no mocks), per CLAUDE.md. createTestProject → createProject auto-
-// seeds BOTH the default workflow (statuses todo / blocked / in_progress /
-// in_review / done / cancelled, in that position order) AND the default board
-// (3.1.2): one column per status, each mapped to its status. So getBoard reads
-// a fully-seeded board with no manual row inserts.
+// boardsService.getBoard (Story 3.1 · Subtask 3.1.4, load model corrected by
+// 3.8.2). Real Postgres (no mocks), per CLAUDE.md. createTestProject →
+// createProject auto-seeds BOTH the default workflow (statuses todo / blocked /
+// in_progress / in_review / done / cancelled, in that position order) AND the
+// default board (3.1.2): one column per status, each mapped to its status. So
+// getBoard reads a fully-seeded board with no manual row inserts.
+//
+// 3.8.2 retired the per-column cursor + "Load more": the board now loads the
+// whole bounded set up to BOARD_ISSUE_CAP, windows terminal columns to the
+// Done-age (~14d), and returns board-level `truncated`/`cap`. These tests assert
+// that corrected model.
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -126,22 +131,68 @@ describe('boardsService.getBoard — projection', () => {
     expect(board.columns.flatMap((c) => c.statusKeys)).not.toContain('needs_triage');
   });
 
-  it('bounds a column to a page + cursor; loadColumnCards returns the next page (finding #57)', async () => {
-    const fx = await makeFixture('proj-page@example.com');
-    await bulkCards(fx, 'todo', 51); // one over the 50 page size
+  it('loads the WHOLE bounded column set at once — no cursor, no "Load more" (3.8.2)', async () => {
+    const fx = await makeFixture('proj-wholeset@example.com');
+    await bulkCards(fx, 'todo', 120); // well past the old 50-card page size
 
     const board = await boardsService.getBoard(fx.projectId, fx.ctx);
     const todo = board.columns.find((c) => c.statusKeys[0] === 'todo')!;
-    expect(todo.totalCount).toBe(51);
-    expect(todo.cards).toHaveLength(50); // never the whole column
-    expect(todo.cursor).not.toBeNull();
+    // The whole bounded set loads — not a 50-card first page — and there is no
+    // cursor (the per-column paging is retired; the client virtualizes).
+    expect(todo.totalCount).toBe(120);
+    expect(todo.cards).toHaveLength(120);
+    expect(todo.cursor).toBeNull();
+    // A normal-sized board is not truncated.
+    expect(board.truncated).toBe(false);
+    expect(board.cap).toBe(BOARD_ISSUE_CAP);
+  });
 
-    const next = await boardsService.loadColumnCards(board.boardId, todo.id, todo.cursor, fx.ctx);
-    expect(next.cards).toHaveLength(1);
-    expect(next.cursor).toBeNull();
-    // no row appears on both pages
-    const firstIds = new Set(todo.cards.map((c) => c.id));
-    expect(next.cards.every((c) => !firstIds.has(c.id))).toBe(true);
+  it('caps the load at BOARD_ISSUE_CAP and sets truncated when the board exceeds it (3.8.2)', async () => {
+    const fx = await makeFixture('proj-cap@example.com');
+    await bulkCards(fx, 'todo', BOARD_ISSUE_CAP + 1); // one over the cap
+
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx);
+    const todo = board.columns.find((c) => c.statusKeys[0] === 'todo')!;
+    // Full count is surfaced (the denominator), but the load is bounded by the cap.
+    expect(todo.totalCount).toBe(BOARD_ISSUE_CAP + 1);
+    expect(todo.cards).toHaveLength(BOARD_ISSUE_CAP);
+    // Board total exceeds the cap → truncated (the 3.8.4 over-cap banner shows).
+    expect(board.truncated).toBe(true);
+    expect(board.cap).toBe(BOARD_ISSUE_CAP);
+  }, 60_000);
+
+  it('windows a terminal (done) column to the Done-age window; old done items are excluded but still counted (3.8.2)', async () => {
+    const fx = await makeFixture('proj-doneage@example.com');
+    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const mkDone = async (key: number, title: string) =>
+      db.workItem.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          kind: 'task',
+          key,
+          identifier: `${project.identifier}-${key}`,
+          title,
+          status: 'done',
+          reporterId: fx.ctx.userId,
+          position: `p${key}`,
+        },
+      });
+    const recent = await mkDone(3001, 'recent done');
+    const old = await mkDone(3002, 'old done');
+    // Backdate the old card past the Done-age window. `updatedAt` is @updatedAt
+    // (auto-managed), so it can only be moved via raw SQL.
+    await db.$executeRaw`
+      UPDATE "work_item"
+         SET "updatedAt" = now() - (${DONE_AGE_WINDOW_DAYS + 6} || ' days')::interval
+       WHERE "id" = ${old.id}`;
+
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx);
+    const done = board.columns.find((c) => c.statusKeys[0] === 'done')!;
+    // The full count includes the old card (the denominator is unwindowed)...
+    expect(done.totalCount).toBe(2);
+    // ...but only the in-window card is loaded.
+    expect(done.cards.map((c) => c.id)).toEqual([recent.id]);
   });
 
   it('orders a terminal (done) column by recency, not rank', async () => {

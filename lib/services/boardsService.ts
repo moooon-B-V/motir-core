@@ -29,7 +29,6 @@ import type {
   BoardTypeDto,
   MoveCardResultDto,
   MoveCardTarget,
-  PagedColumnCardsDto,
 } from '@/lib/dto/boards';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -148,12 +147,23 @@ export const boardsService = {
   },
 
   /**
-   * The board READ projection (Subtask 3.1.4) — turn a project's default board +
-   * workflow + issues into the column-of-cards shape the 3.2 UI renders, BOUNDED
-   * (never load-all, finding #57). For each column it returns the column meta,
-   * its mapped status keys, the FULL card count, a bounded first page of cards
-   * (ranked by `position`, or by recency for a terminal/done column), and a
-   * `cursor` for lazy "load more". Plus a top-level `unmappedStatuses` — every
+   * The board READ projection (Subtask 3.1.4, load model corrected by 3.8.2) —
+   * turn a project's default board + workflow + issues into the column-of-cards
+   * shape the 3.2 UI renders, the **mirror-faithful** way: the board loads the
+   * **whole bounded set** (NOT a per-column first page + cursor), bounded by a
+   * **board-level cap** (`BOARD_ISSUE_CAP`) with a **Done-age window** trimming
+   * terminal columns, and the client virtualizes the render. This is still
+   * BOUNDED (the cap is the bound; never "load every row", finding #57) — it just
+   * drops the per-column "Load more" the mirror product (Jira) never had
+   * (`notes.html` mistake #33).
+   *
+   * For each column it returns the column meta, its mapped status keys, the FULL
+   * card count (`totalCount`, the denominator — unaffected by the Done-age
+   * window), and the column's bounded card set (ranked by `position`, or by
+   * recency + windowed to the last ~14 days for a terminal/done column). At the
+   * board level it returns `cap` (the bound) and `truncated` — true exactly when
+   * the board's total card count exceeds the cap, so the 3.8.4 UI shows the
+   * "refine the filter" banner. Plus a top-level `unmappedStatuses` — every
    * project status mapped to NO column (Jira's behaviour: surfaced, never
    * dropped). Read-only: no transaction; the explicit `workspaceId` gate
    * (finding #26) is carried into every repo read.
@@ -189,14 +199,16 @@ export const boardsService = {
       liveByColumn.set(m.columnId, list);
     }
 
-    // Build each column's count + bounded first page (per-column, NOT per-card —
-    // bounded by column count, so no N+1 over cards).
+    // Build each column's full count + bounded card set (per-column, NOT per-card
+    // — bounded by the board cap, so no N+1 over cards). Terminal columns are
+    // windowed to issues touched within the Done-age window (3.8.2).
+    const doneSince = doneAgeCutoff();
     const built = await Promise.all(
       columns.map((col) => {
         const live = (liveByColumn.get(col.id) ?? []).slice().sort(byPosition);
         const statusKeys = live.map((s) => s.key);
         const terminal = isTerminalColumn(statusKeys, terminalKeys);
-        return buildColumnPage(projectId, col, statusKeys, terminal, ctx);
+        return buildColumnCards(projectId, col, statusKeys, terminal, doneSince, ctx);
       }),
     );
 
@@ -213,12 +225,18 @@ export const boardsService = {
     // the lane list are both resolved over that set — a bounded aggregate, never
     // a load-all (finding #57). For the flat `none` board both are no-ops: an
     // empty `swimlanes` and no per-card `swimlaneKey` (so the projection is
-    // byte-for-byte the 3.1.4 shape).
+    // byte-for-byte the 3.1.4 shape). The board TOTAL (over the same status
+    // union) is the truncation denominator: `truncated` when it exceeds the cap.
     const groupBy = board.swimlaneGroupBy as BoardSwimlaneGroupByDto;
     const boardStatusKeys = [...new Set(built.flatMap((b) => b.statusKeys))];
-    const [swimlaneKeyByCard, swimlanes] = await Promise.all([
+    const [swimlaneKeyByCard, swimlanes, boardTotal] = await Promise.all([
       resolveSwimlaneKeys(groupBy, allRows, ctx),
       buildSwimlanes(groupBy, projectId, boardStatusKeys, ctx),
+      boardStatusKeys.length
+        ? workItemRepository.countProjectIssues(projectId, ctx.workspaceId, {
+            statuses: boardStatusKeys,
+          })
+        : Promise.resolve(0),
     ]);
 
     const columnsDto: BoardColumnDto[] = built.map((b) => ({
@@ -234,7 +252,10 @@ export const boardsService = {
         }),
       ),
       totalCount: b.totalCount,
-      cursor: b.cursor,
+      // Retired in 3.8.2: the board loads the whole bounded set, never a paged
+      // window, so there is no "next page". The field stays (always null) until
+      // 3.8.3 / 3.8.5 strip it with the UI's load-more plumbing.
+      cursor: null,
     }));
 
     return {
@@ -245,74 +266,8 @@ export const boardsService = {
       columns: columnsDto,
       swimlanes,
       unmappedStatuses: statuses.filter((s) => !mappedStatusIds.has(s.id)),
-    };
-  },
-
-  /**
-   * One lazy "load more" page for a single column (Subtask 3.1.4, finding #57) —
-   * the next slice of cards after `cursor` (null/absent = the first page) plus
-   * the cursor for the page after it (null at the end of the column's bounded
-   * window). The 3.2 UI calls this as a column scrolls. Same column resolution +
-   * terminal/recent ordering + tenant gate as `getBoard`.
-   *
-   * Throws `BoardNotFoundError` / `BoardColumnNotFoundError` (404) for an
-   * unknown board or a column that isn't on it.
-   */
-  async loadColumnCards(
-    boardId: string,
-    columnId: string,
-    cursor: string | null | undefined,
-    ctx: ServiceContext,
-  ): Promise<PagedColumnCardsDto> {
-    const board = await boardRepository.findById(boardId, ctx.workspaceId);
-    if (!board) throw new BoardNotFoundError(boardId);
-    const column = await boardColumnRepository.findById(columnId, ctx.workspaceId);
-    if (!column || column.boardId !== boardId) throw new BoardColumnNotFoundError(columnId);
-
-    const [mappings, statuses] = await Promise.all([
-      boardColumnStatusRepository.findByColumn(columnId, ctx.workspaceId),
-      workflowsService.listStatusesByProject(board.projectId, ctx.workspaceId),
-    ]);
-    const statusById = new Map(statuses.map((s) => [s.id, s]));
-    const statusKeys = mappings
-      .map((m) => statusById.get(m.statusId))
-      .filter((s): s is WorkflowStatusDto => s != null)
-      .map((s) => s.key);
-    if (statusKeys.length === 0) return { cards: [], cursor: null };
-
-    const terminal = isTerminalColumn(statusKeys, terminalKeySet(statuses));
-    const offset = parseCursor(cursor);
-    const [totalCount, rows] = await Promise.all([
-      workItemRepository.countProjectIssues(board.projectId, ctx.workspaceId, {
-        statuses: statusKeys,
-      }),
-      workItemRepository.findColumnCards(
-        board.projectId,
-        ctx.workspaceId,
-        statusKeys,
-        terminal ? 'recent' : 'position',
-        { limit: BOARD_COLUMN_PAGE_SIZE, offset },
-      ),
-    ]);
-    const readyById = await workItemsService.getReadinessForItems(
-      rows.map((r) => r.id),
-      ctx,
-    );
-    // Stamp each load-more card with its lane key (Subtask 3.3.4) so the UI
-    // buckets the paged-in cards into the same (lane, column) cells.
-    const swimlaneKeyByCard = await resolveSwimlaneKeys(
-      board.swimlaneGroupBy as BoardSwimlaneGroupByDto,
-      rows,
-      ctx,
-    );
-    return {
-      cards: rows.map((r) =>
-        toBoardCardDto(r, {
-          ready: readyById.get(r.id) ?? true,
-          swimlaneKey: swimlaneKeyByCard.get(r.id),
-        }),
-      ),
-      cursor: nextCursor(offset, BOARD_COLUMN_PAGE_SIZE, totalCount, terminal),
+      cap: BOARD_ISSUE_CAP,
+      truncated: boardTotal > BOARD_ISSUE_CAP,
     };
   },
 
@@ -553,18 +508,32 @@ function isValidWipLimit(limit: number | null): boolean {
   return limit === null || (Number.isInteger(limit) && limit >= 0);
 }
 
-/** Default per-column page size — the projection ships at most this many cards
- * per column per page (finding #57: never the whole column). */
-const BOARD_COLUMN_PAGE_SIZE = 50;
+/**
+ * The board-level issue cap (Subtask 3.8.2) — the GENEROUS bound the board loads
+ * up to, the mirror-faithful replacement for per-column "Load more" (Jira loads
+ * its whole saved-filter set up to 5,000 Software / 3,000 Business; this is the
+ * Software figure). It is the bound, NOT a page size: there is no "next page",
+ * the board loads up to the cap and stops, and `truncated` flags the rare board
+ * that exceeds it (the 3.8.4 over-cap banner then points at the Epic-6 filter
+ * seam). A real team's active board fits comfortably under it. Still
+ * finding-#57-bounded (the cap IS the bound), the opposite of "load all rows".
+ */
+export const BOARD_ISSUE_CAP = 5000;
 
 /**
- * Terminal (done / cancelled) columns are bounded to a RECENT WINDOW — Jira
- * hides done issues older than ~14 days; lacking a `completedAt` column we order
- * terminal columns by `updatedAt` desc and cap the lazily-pageable window at the
- * most-recent N, with the FULL count still surfaced (`totalCount`). This is the
- * durable shape (a bounded recent window), not a magic display cap.
+ * Done-age window (Subtask 3.8.2) — terminal (done / cancelled) columns load
+ * only issues touched within the last ~14 days, the age-based shape Jira uses
+ * (it hides done issues older than ~14 days). Lacking a `completedAt` column we
+ * window by `updatedAt`; the FULL count is still surfaced (`totalCount`), so the
+ * header denominator is unchanged. This refines 3.2.5's count-based window to
+ * the age-based behaviour.
  */
-const TERMINAL_COLUMN_WINDOW = 200;
+export const DONE_AGE_WINDOW_DAYS = 14;
+
+/** The cutoff instant for the Done-age window: now minus {@link DONE_AGE_WINDOW_DAYS}. */
+function doneAgeCutoff(): Date {
+  return new Date(Date.now() - DONE_AGE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+}
 
 /** The per-project terminal-status key set (category `done`) — the finding-#21
  * terminal generalization, reused for both readiness and terminal-column order. */
@@ -583,51 +552,29 @@ function byPosition(a: WorkflowStatusDto, b: WorkflowStatusDto): number {
   return a.position < b.position ? -1 : a.position > b.position ? 1 : 0;
 }
 
-/** The card window actually reachable by paging — capped for terminal columns. */
-function pageableTotal(total: number, terminal: boolean): number {
-  return terminal ? Math.min(total, TERMINAL_COLUMN_WINDOW) : total;
-}
-
-/** The cursor for the page AFTER `offset` (null when the bounded window is
- * exhausted). The cursor is the opaque next offset; paging is offset-based,
- * mirroring the List's `?page=` window (Subtask 2.5.12). */
-function nextCursor(
-  offset: number,
-  limit: number,
-  total: number,
-  terminal: boolean,
-): string | null {
-  const next = offset + limit;
-  return next < pageableTotal(total, terminal) ? String(next) : null;
-}
-
-/** Decode a load-more cursor to its offset; absent/garbage → 0 (first page). */
-function parseCursor(cursor: string | null | undefined): number {
-  if (!cursor) return 0;
-  const n = Number.parseInt(cursor, 10);
-  return Number.isFinite(n) && n >= 0 ? n : 0;
-}
-
 /**
- * Build one column's projection page: its full card count + the bounded first
- * page of card rows (terminal columns ordered by recency, others by rank) + the
- * load-more cursor. A column mapping no live status is an empty column.
+ * Build one column's projection (Subtask 3.8.2): its FULL card count + the
+ * column's bounded card set (terminal columns ordered by recency and windowed to
+ * the Done-age cutoff; others ranked by `position`), capped at the board-level
+ * cap. No cursor — the whole bounded set loads at once (the client virtualizes).
+ * `totalCount` is the full count (NOT windowed), so the header denominator is
+ * unchanged. A column mapping no live status is an empty column.
  */
-async function buildColumnPage(
+async function buildColumnCards(
   projectId: string,
   col: BoardColumn,
   statusKeys: string[],
   terminal: boolean,
+  doneSince: Date,
   ctx: ServiceContext,
 ): Promise<{
   col: BoardColumn;
   statusKeys: string[];
   rows: WorkItem[];
   totalCount: number;
-  cursor: string | null;
 }> {
   if (statusKeys.length === 0) {
-    return { col, statusKeys, rows: [], totalCount: 0, cursor: null };
+    return { col, statusKeys, rows: [], totalCount: 0 };
   }
   const [totalCount, rows] = await Promise.all([
     workItemRepository.countProjectIssues(projectId, ctx.workspaceId, { statuses: statusKeys }),
@@ -636,19 +583,10 @@ async function buildColumnPage(
       ctx.workspaceId,
       statusKeys,
       terminal ? 'recent' : 'position',
-      {
-        limit: BOARD_COLUMN_PAGE_SIZE,
-        offset: 0,
-      },
+      { limit: BOARD_ISSUE_CAP, updatedSince: terminal ? doneSince : undefined },
     ),
   ]);
-  return {
-    col,
-    statusKeys,
-    rows,
-    totalCount,
-    cursor: nextCursor(0, BOARD_COLUMN_PAGE_SIZE, totalCount, terminal),
-  };
+  return { col, statusKeys, rows, totalCount };
 }
 
 /**

@@ -191,12 +191,12 @@ describe('boardsService.getBoard — swimlane projection (3.3.4)', () => {
     expect(board.swimlanes[board.swimlanes.length - 1]!.key).toBe(BOARD_SWIMLANE_NO_VALUE);
   });
 
-  it('preserves bounding under a group-by: column pages to 50 while the lane count is the full aggregate (no load-all)', async () => {
+  it('buckets the whole bounded set under a group-by while the lane count is the full aggregate (no load-all, 3.8.2)', async () => {
     const fx = await makeFixture('swl-bound@example.com');
     const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
-    // 51 unassigned todo cards — one over the page size
+    // 120 unassigned todo cards — well past the old 50-card page size
     await db.workItem.createMany({
-      data: Array.from({ length: 51 }, (_, i) => {
+      data: Array.from({ length: 120 }, (_, i) => {
         const key = 1000 + i;
         return {
           workspaceId: fx.workspaceId,
@@ -215,17 +215,15 @@ describe('boardsService.getBoard — swimlane projection (3.3.4)', () => {
 
     const board = await boardsService.getBoard(fx.projectId, fx.ctx);
     const todo = todoColumn(board);
-    expect(todo.totalCount).toBe(51);
-    expect(todo.cards).toHaveLength(50); // still bounded — never the whole column
-    expect(todo.cursor).not.toBeNull();
-    // the lane list is the AGGREGATE over all 51, not the 50 loaded — proving it
-    // is not derived from a load-all of the cards
+    // 3.8.2: the whole bounded set loads (no per-column page); no cursor.
+    expect(todo.totalCount).toBe(120);
+    expect(todo.cards).toHaveLength(120);
+    expect(todo.cursor).toBeNull();
+    // the lane list is the AGGREGATE over all 120 (a bounded distinct query, not
+    // derived from the loaded cards) and every loaded card carries its lane key
     const catchAll = board.swimlanes.find((l) => l.key === BOARD_SWIMLANE_NO_VALUE)!;
-    expect(catchAll.count).toBe(51);
-    // load-more cards also carry the lane key
-    const next = await boardsService.loadColumnCards(board.boardId, todo.id, todo.cursor, fx.ctx);
-    expect(next.cards).toHaveLength(1);
-    expect(next.cards[0]!.swimlaneKey).toBe(BOARD_SWIMLANE_NO_VALUE);
+    expect(catchAll.count).toBe(120);
+    expect(todo.cards.every((c) => c.swimlaneKey === BOARD_SWIMLANE_NO_VALUE)).toBe(true);
   });
 
   it('lane aggregates + epic-ancestor lookup short-circuit empty input without a query', async () => {
