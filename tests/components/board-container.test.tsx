@@ -26,6 +26,19 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+// The board's empty-state CTA reuses NewIssueButton → useCreateIssue (Subtask
+// 3.2.6); stub the create context so importing BoardContainer doesn't pull the
+// real CreateIssueModal + its server action (→ db) into this DB-free unit test.
+vi.mock('@/app/(authed)/_components/CreateIssueProvider', () => ({
+  useCreateIssue: () => ({
+    open: false,
+    setOpen: vi.fn(),
+    openCreateIssue: vi.fn(),
+    canCreate: true,
+    issuesChangedAt: 0,
+  }),
+}));
+
 import { BoardContainer } from '@/app/(authed)/boards/_components/BoardContainer';
 import type { BoardCardDto, BoardColumnDto, BoardProjectionDto } from '@/lib/dto/boards';
 

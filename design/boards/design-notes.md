@@ -148,9 +148,17 @@ bounded first page + a `total` + a `cursor`.
 From `BoardProjectionDto.unmappedStatuses` (project statuses mapped to no column;
 the Jira behaviour — Story 3.1.4 surfaces them, never drops them). Rendered as a
 **yellow tray** (`--el-tint-yellow`) above the board: an alert-triangle, the copy
-`{n} statuses aren't on this board — issues in them are hidden here:` + the status
-names as neutral pills + a `Map columns →` link to the board/workflow admin
-(Story 2.2.5). **Absent when `unmappedStatuses` is empty.**
+`These statuses aren't on this board — work items in them are hidden here:` + the
+status names as neutral pills + a link to the workflow admin (Story 2.2.5).
+**Absent when `unmappedStatuses` is empty.**
+
+> **CTA reality (3.2.6 build note):** the mock drew a `Map columns →` link, but a
+> column→status **mapping admin is not in v1** (Story 3.1/3.2/3.3 defer "board
+> CRUD / column-remap admin"; Story 3.1 deliberately leaves a later-added status
+> **unmapped, not auto-columned**). So the shipped link is labelled
+> **`Manage statuses →`** and points at the workflow editor — the real place to
+> review / rename / remove a stray status — rather than promising a mapping
+> action that doesn't exist. When a board-column admin lands, repoint + relabel.
 
 ## States (panels 6) — completeness, not the happy path only
 
