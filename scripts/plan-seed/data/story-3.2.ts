@@ -439,7 +439,7 @@ export const story_3_2: PlanStory = {
       id: '3.2.8',
       title:
         'Board column polish — auto scroll-to-load (drop the button + loaded-count); uniform column height',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 16,
