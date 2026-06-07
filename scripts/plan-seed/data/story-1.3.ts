@@ -10,8 +10,11 @@ export const story_1_3: PlanStory = {
   status: 'done',
   descriptionMd:
     'A workspace contains projects. Each project has a name, slug, and identifier (e.g., PROD). ' +
-    'v1 supports one active project per workspace at the UI level, but the schema accommodates ' +
-    'many — so v2 can light up multi-project support with no migration.\n\n' +
+    'A workspace holds many projects (the project switcher lists them); the app scopes to one ' +
+    '**active** project at a time at the UI level, and the non-unique `workspaceId` FK accommodates ' +
+    'as many projects as a workspace needs — no per-workspace cap. Cross-project views that span ' +
+    'projects at once (unified search / reporting) belong to the **Search, reporting & admin** ' +
+    'epic (Epic 6).\n\n' +
     '**Prerequisites:** [Story 1.2 (Workspaces)](story-1.2-workspaces.html) ' +
     'must be complete — `project` FKs against `Workspace` with ' +
     '`onDelete: Cascade`, the project RLS policies key off the same ' +
@@ -81,8 +84,9 @@ export const story_1_3: PlanStory = {
         'calls this allocator; 1.3.1 ships the column + the repo method + a unit test for it.\n\n' +
         '**Why `archivedAt`, not hard delete:** once Story 1.4 hangs work ' +
         'items off a project, hard-deleting a project would cascade-destroy issue history. Soft-delete ' +
-        'via `archivedAt` is the durable shape; the "delete" UI in 1.3.4 archives. (A true ' +
-        'hard-delete-with-cascade can be a later admin Subtask if ever needed — not v1.)\n\n' +
+        'via `archivedAt` is the durable shape a complete product ships; the "delete" UI in 1.3.4 ' +
+        'archives. (A true hard-delete-with-cascade is an optional admin operation, addable later ' +
+        'if ever needed — soft-delete is the default, not a stopgap.)\n\n' +
         "**What you'll do:** Extend `prisma/schema.prisma`; generate a " +
         'migration (`add_projects`). Add `lib/repositories/projectRepository.ts` ' +
         '(single-op: `findById`, `findBySlug`, `findByWorkspace`, ' +

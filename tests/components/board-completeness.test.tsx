@@ -68,6 +68,8 @@ function projection(over: Partial<BoardProjectionDto> = {}): BoardProjectionDto 
     boardId: 'b1',
     name: 'Default',
     type: 'kanban',
+    swimlaneGroupBy: 'none',
+    swimlanes: [],
     unmappedStatuses: [],
     columns: [column({ id: 'c1', name: 'To Do' }), column({ id: 'c2', name: 'In Progress' })],
     ...over,

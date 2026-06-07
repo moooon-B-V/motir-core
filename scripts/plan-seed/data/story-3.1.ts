@@ -39,7 +39,8 @@ export const story_3_1: PlanStory = {
     '**default** board generated for a new project IS one-column-per-status (the column-from-workflow ' +
     'projection) — but that is a seeded *default over the durable mapping*, not a hardcoded shape. ' +
     'v1 auto-creates exactly ONE Kanban board per project; the `board.projectId` FK is non-unique, so ' +
-    'multiple boards per project is a non-breaking later addition (board CRUD is not v1 scope). The ' +
+    'multiple boards per project is a non-breaking addition planned as **Story 3.7** (board CRUD + ' +
+    'switcher). The ' +
     'Scrum (sprint-scoped) board is Story 3.4.\n\n' +
     '**Scale shape — the projection is bounded, never "load every row" (finding #57).** A real ' +
     "team's project has thousands of issues; a board that reads them all to render is prototype- " +
@@ -87,7 +88,8 @@ export const story_3_1: PlanStory = {
         'Prisma enum `BoardType { kanban, scrum }` (the durable shape — Jira has both; the Scrum ' +
         'sprint-scoped view is Story 3.4, but the enum value exists now so 3.4 adds no enum ' +
         'migration). `projectId` is a plain FK, **NOT unique** — one project may own many boards ' +
-        '(multiple-boards-per-project is a non-breaking later addition; v1 seeds exactly one). ' +
+        '(multiple-boards-per-project is a non-breaking addition planned as **Story 3.7**; the seed ' +
+        'creates exactly one default board). ' +
         '`@@index([projectId])` for the per-project board lookup.\n' +
         '- `board_column`: `(id, workspaceId, projectId, boardId, name, position, wipLimit, createdAt, ' +
         'updatedAt)`. `boardId` FK with `onDelete: Cascade`. `position` is `Decimal(20,10)` matching ' +
@@ -160,7 +162,9 @@ export const story_3_1: PlanStory = {
         'script under `scripts/` or a data-migration step, mirroring how prior stories backfilled): ' +
         'for each project lacking a board, build + persist the default board from its current ' +
         'statuses. Idempotent — re-running skips projects that already have a board.\n\n' +
-        '**Out of scope:** board CRUD / rename / multi-board (not v1); reacting to LATER status ' +
+        '**Out of scope (own stories):** board CRUD / rename / multi-board (**Story 3.7**); the ' +
+        'column↔status mapping admin (**Story 3.6** — where an unmapped status gets put on a ' +
+        'column); reacting to LATER status ' +
         'additions (a custom status added post-seed lands **unmapped**, surfaced by the 3.1.4 ' +
         'projection — this story does not auto-append a column for it, matching Jira).\n\n' +
         '## Acceptance criteria\n\n' +

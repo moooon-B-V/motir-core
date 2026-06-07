@@ -700,6 +700,117 @@ export const workItemRepository = {
     }
   },
 
+  // --- Board swimlane lane aggregates (Subtask 3.3.4, finding #57) ----------
+  // Each returns one row PER LANE (a grouped/distinct aggregate), NOT one row
+  // per card — so the board never fetches every card to discover its lanes.
+  // `statusKeys` is the union of the board's mapped column statuses (a card on
+  // the board has a status in this set); an empty set short-circuits.
+
+  /**
+   * Per-assignee card counts among the board's cards — one row per distinct
+   * `assigneeId` (incl. `null` = the unassigned/catch-all bucket). The service
+   * resolves the null bucket + the assignee display names into lane DTOs.
+   */
+  async aggregateBoardLanesByAssignee(
+    projectId: string,
+    workspaceId: string,
+    statusKeys: string[],
+  ): Promise<Array<{ assigneeId: string | null; count: number }>> {
+    if (statusKeys.length === 0) return [];
+    const rows = await db.workItem.groupBy({
+      by: ['assigneeId'],
+      where: { projectId, workspaceId, archivedAt: null, status: { in: statusKeys } },
+      _count: { _all: true },
+    });
+    return rows.map((r) => ({ assigneeId: r.assigneeId, count: r._count._all }));
+  },
+
+  /**
+   * Per-priority card counts among the board's cards — one row per distinct
+   * `priority`. `priority` is non-null (default `medium`), so there is no
+   * catch-all lane for this dimension.
+   */
+  async aggregateBoardLanesByPriority(
+    projectId: string,
+    workspaceId: string,
+    statusKeys: string[],
+  ): Promise<Array<{ priority: WorkItemPriority; count: number }>> {
+    if (statusKeys.length === 0) return [];
+    const rows = await db.workItem.groupBy({
+      by: ['priority'],
+      where: { projectId, workspaceId, archivedAt: null, status: { in: statusKeys } },
+      _count: { _all: true },
+    });
+    return rows.map((r) => ({ priority: r.priority, count: r._count._all }));
+  },
+
+  /**
+   * Per-ANCESTOR-EPIC card counts among the board's cards — one row per epic
+   * that is the nearest epic ancestor of at least one board card. A recursive
+   * CTE walks each card UP its `parentId` chain, stopping at the first `epic`
+   * (an epic has no epic ancestor, so each card maps to AT MOST one epic), then
+   * GROUPs in SQL — so this returns lane rows, never a row per card (finding
+   * #57). A card whose chain has no epic contributes no row here; the service
+   * derives the "No epic" catch-all count by subtraction (total − Σ epic
+   * counts). A board card that IS an epic counts in its own lane.
+   * `workspaceId` is filtered on both the anchor and the climb (no cross-tenant
+   * leak).
+   */
+  async aggregateBoardLanesByEpic(
+    projectId: string,
+    workspaceId: string,
+    statusKeys: string[],
+  ): Promise<Array<{ epicId: string; count: number }>> {
+    if (statusKeys.length === 0) return [];
+    return db.$queryRaw<Array<{ epicId: string; count: number }>>`
+      WITH RECURSIVE up AS (
+        SELECT w."id" AS card_id, w."id" AS node_id, w."parentId", w."kind"::text AS kind
+          FROM "work_item" w
+          WHERE w."projectId" = ${projectId}
+            AND w."workspaceId" = ${workspaceId}
+            AND w."archivedAt" IS NULL
+            AND w."status" = ANY(${statusKeys})
+        UNION ALL
+        SELECT u.card_id, p."id", p."parentId", p."kind"::text
+          FROM up u
+          JOIN "work_item" p ON p."id" = u."parentId" AND p."workspaceId" = ${workspaceId}
+          WHERE u.kind <> 'epic'
+      )
+      SELECT node_id AS "epicId", COUNT(*)::int AS "count"
+        FROM up
+        WHERE kind = 'epic'
+        GROUP BY node_id`;
+  },
+
+  /**
+   * Resolve the nearest ANCESTOR-EPIC id for each of `itemIds` (the loaded
+   * board page) — the per-card half of the epic group-by, so the client never
+   * re-derives lane membership. Same upward recursive walk as
+   * `aggregateBoardLanesByEpic`, but anchored on a BOUNDED id set (≤ the loaded
+   * page) and returning (card → epic) pairs instead of grouping. A card with no
+   * epic ancestor yields no row (the service buckets it into the catch-all).
+   */
+  async findEpicAncestors(
+    itemIds: string[],
+    workspaceId: string,
+  ): Promise<Array<{ cardId: string; epicId: string }>> {
+    if (itemIds.length === 0) return [];
+    return db.$queryRaw<Array<{ cardId: string; epicId: string }>>`
+      WITH RECURSIVE up AS (
+        SELECT w."id" AS card_id, w."id" AS node_id, w."parentId", w."kind"::text AS kind
+          FROM "work_item" w
+          WHERE w."id" = ANY(${itemIds}) AND w."workspaceId" = ${workspaceId}
+        UNION ALL
+        SELECT u.card_id, p."id", p."parentId", p."kind"::text
+          FROM up u
+          JOIN "work_item" p ON p."id" = u."parentId" AND p."workspaceId" = ${workspaceId}
+          WHERE u.kind <> 'epic'
+      )
+      SELECT card_id AS "cardId", node_id AS "epicId"
+        FROM up
+        WHERE kind = 'epic'`;
+  },
+
   /**
    * Patch a work item. Required `tx`. The triggers re-validate on a
    * parentId/kind change (and reject re-parent cycles); a missing row yields

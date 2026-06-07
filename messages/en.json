@@ -686,6 +686,11 @@
     "unmappedLabel": "Statuses not on this board",
     "unmappedText": "These statuses aren’t on this board — work items in them are hidden here:",
     "unmappedManageStatuses": "Manage statuses",
-    "pagerPosition": "{name} · {index} of {count}"
+    "pagerPosition": "{name} · {index} of {count}",
+    "loadMore": "Load more",
+    "loadingMore": "Loading…",
+    "loadMoreError": "Couldn’t load more cards.",
+    "loadMoreRetry": "Retry",
+    "virtNote": "{loaded} loaded · rows virtualized"
   }
 }

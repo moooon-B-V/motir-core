@@ -101,7 +101,9 @@ export const story_3_3: PlanStory = {
     '**Out of scope (Epic-3 siblings / later):** the sprint-scoped Scrum board (Story 3.4); the ' +
     'cross-cutting drag + WIP + swimlane Playwright journey **at scale** (Story 3.5 — this story ' +
     'ships its OWN component tests + the focused swimlane/WIP E2E, the same split 3.1.7 / 3.2.7 ' +
-    'used); per-lane (rather than per-column) WIP limits; board CRUD / column-remap admin (not v1); ' +
+    'used); per-lane (rather than per-column) WIP limits (no stated use case → match the mirror); ' +
+    'the column↔status mapping admin (**Story 3.6**, which extends THIS story’s board-config ' +
+    'service/API seam) and board CRUD / multi-board (**Story 3.7**); ' +
     'saved swimlane queries / JQL-style custom lanes (Jira has them; not in the stub, no stated use ' +
     'case → deferred). The flat board, the drag-as-transition contract, the per-column count, and ' +
     'the load-more/virtualization all come from Stories 3.1 + 3.2 and are reused, not rebuilt.',
@@ -208,7 +210,7 @@ export const story_3_3: PlanStory = {
     {
       id: '3.3.3',
       title: 'Board config service + API — set swimlane group-by + per-column WIP limit',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
@@ -255,7 +257,7 @@ export const story_3_3: PlanStory = {
       id: '3.3.4',
       title:
         'Projection — swimlane grouping (resolved `swimlaneKey` + bounded lane list) + WIP count, in `getBoard`',
-      status: 'planned',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
@@ -346,7 +348,7 @@ export const story_3_3: PlanStory = {
         "working within each lane's column slice (do NOT add a second virtualization lib; reuse the " +
         '2.5.15 primitive). A collapsed lane unmounts its card bodies (cheap) but keeps its header + ' +
         'count.\n\n' +
-        '**Out of scope here:** the WIP config + over-limit warning (3.3.6); per-lane WIP (not v1).\n\n' +
+        '**Out of scope here:** the WIP config + over-limit warning (3.3.6); per-lane WIP (per-column matches the mirror; no stated use case for per-lane).\n\n' +
         '## Acceptance criteria\n\n' +
         '- A board-header group-by control (None/Assignee/Epic/Priority) PATCHes `board.swimlaneGroupBy` (3.3.3) and re-lays the board from the projection with a loading transition; the active value is shared (read from the projection).\n' +
         '- Group-by ≠ none renders one collapsible lane per `swimlanes[]` entry (sticky header + label/kind + aggregate count + chevron), cards bucketed by `swimlaneKey`, column boundaries aligned across lanes, the catch-all lane last; collapse state persists client-side; group-by none is the flat 3.2 board.\n' +
@@ -364,7 +366,7 @@ export const story_3_3: PlanStory = {
     {
       id: '3.3.6',
       title: 'WIP-limit UI — per-column config (column `[⋯]` menu) + SOFT over-limit warning',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 18,
