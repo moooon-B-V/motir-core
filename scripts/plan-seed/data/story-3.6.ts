@@ -143,7 +143,7 @@ export const story_3_6: PlanStory = {
     {
       id: '3.6.2',
       title: 'Column config service + API — add/rename/reorder/delete column; map/unmap status',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
