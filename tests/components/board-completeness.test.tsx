@@ -139,6 +139,36 @@ describe('board completeness (3.2.6)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('refetches when the active project changes (project / workspace switch)', async () => {
+    // Switching project persists a new WorkspaceMembership.activeProjectId then
+    // router.refresh() — which only re-runs Server Components. The board page
+    // re-renders with the new activeProjectId prop; the client container must
+    // refetch for the new project instead of showing the previous one's board.
+    // (Regression: switching project left /boards on the old project's data.)
+    const populated = projection({
+      columns: [column({ id: 'c1', name: 'To Do', totalCount: 1 })],
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => projection() })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => populated });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { rerender } = render(<BoardContainer activeProjectId="proj-1" />);
+    await waitFor(() => expect(screen.getByText('No work items yet')).toBeTruthy());
+
+    // The refresh re-renders the page with the newly-active project's id.
+    rerender(
+      <ToastProvider>
+        <BoardContainer activeProjectId="proj-2" />
+      </ToastProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('board')).toBeTruthy());
+    expect(screen.queryByText('No work items yet')).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps the columns (not the empty state) when work items are hidden in unmapped statuses', async () => {
     // Every column is empty BUT a status is unmapped — work items may be hidden,
     // so the board must NOT claim "no work items" (the rung-2 guard).

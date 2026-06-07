@@ -62,10 +62,23 @@ import {
 // `members` (the workspace member directory the board page already resolves) lets
 // the cards map each `BoardCardDto.assigneeId` to a display name for the avatar —
 // the projection card carries only the id (Story 3.1.4).
+//
+// `activeProjectId` is the currently-active project (resolved server-side from
+// `WorkspaceMembership.activeProjectId`). The board is client-fetched, so when
+// the user switches project/workspace — which persists the new active project and
+// calls `router.refresh()` (Server Components only) — the board would otherwise
+// stay on the OLD project's data. Passing the id as a prop and watching it lets
+// the refresh re-render the page with the new id, which re-runs the fetch.
 
 type BoardStatus = 'loading' | 'ready' | 'error' | 'no-board';
 
-export function BoardContainer({ members = [] }: { members?: WorkspaceMemberDTO[] }) {
+export function BoardContainer({
+  members = [],
+  activeProjectId,
+}: {
+  members?: WorkspaceMemberDTO[];
+  activeProjectId?: string;
+}) {
   const t = useTranslations('boards');
   const [board, setBoard] = useState<BoardProjectionDto | null>(null);
   // Starts 'loading' — the mount effect fires the fetch immediately (flipping it
@@ -118,7 +131,10 @@ export function BoardContainer({ members = [] }: { members?: WorkspaceMemberDTO[
     return () => {
       active = false;
     };
-  }, [reloadKey, issuesChangedAt]);
+    // `activeProjectId` is in the deps so switching project/workspace (→ a new
+    // active project + router.refresh()) re-runs the fetch for the new project's
+    // board instead of leaving the previous project's board on screen.
+  }, [reloadKey, issuesChangedAt, activeProjectId]);
 
   // Reset to the loading shell (an event-handler setState — allowed) and bump the
   // key so the fetch effect re-runs.
