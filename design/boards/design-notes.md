@@ -48,8 +48,12 @@ Kanban board (Story 3.1 auto-seeds one per project).
 
 ## Column anatomy (`BoardColumn` — subtask 3.2.3)
 
-- Container: `--el-surface` fill, `--el-border`, `--radius-card`, capped height
-  with an internal scroll on `.col-body`.
+- Container: `--el-surface` fill, `--el-border`, `--radius-card`, a **uniform
+  height** with an internal scroll on `.col-body`. Every column is the SAME height
+  regardless of card count (3.2.8) — a sparse column shows empty space below its
+  cards rather than hugging them, so the columns line up. In the app this is a
+  viewport-relative `h-[calc(100dvh-12rem)]` LAYOUT height (a raw `calc`, not a
+  `--height-*` token, since it is not a shaped-control size).
 - **Header**: column `name` (13px semibold, `--el-text-strong`) + a **card-count
   badge** (`.col-count`, the per-column total from the projection) + a spacer +
   a **WIP-limit slot** (`.wip-slot`, drawn as a placeholder e.g. `3/5` — **NOT
@@ -131,17 +135,24 @@ mirror-product standard, not a deviation.
 The board never loads every card. From the 3.1 projection each column carries a
 bounded first page + a `total` + a `cursor`.
 
-- The column header **count** shows the full total (e.g. `214`, `1,280`).
-- A **"Load more"** button (`.load-more`) in the column footer fetches
+- The column header **count** shows the full total (e.g. `214`, `1,280`) — the
+  denominator. It **stays**; it is the column's issue count, distinct from "how
+  many are loaded".
+- Paging is **PURE auto scroll-to-load (3.2.8)**: an `IntersectionObserver`
+  sentinel at the bottom of the scroll area fetches
   `GET …/columns/[id]/cards?cursor=` and **appends** the next page (advancing the
-  cursor); shows a `Spinner` + "Loading…" while in flight. May also trigger via a
-  scroll sentinel.
+  cursor) when it scrolls into view. There is **no explicit "Load more" button**
+  and **no "{n} loaded" note** — both were dropped. While a page is in flight a
+  small in-flow **`Spinner` + "Loading…"** (`.load-spin`) shows at the bottom; a
+  **failed** page leaves a minimal, **focusable inline retry** (`.load-retry`) so
+  it is recoverable without a reload and reachable by keyboard (the card links are
+  focusable, so keyboard scroll also trips the sentinel).
 - Tall columns **virtualize** (only viewport rows render — bounded DOM),
   **reusing the windowing primitive Story 2.5.15** established (no second lib).
-  Virtualization is invisible; a `.virt-note` documents it for review.
-- **Done/terminal columns** are additionally **windowed** to a recent set with
-  the full count still surfaced (`recent 20 of 1,280 · terminal window`),
-  mirroring Jira's "hide done older than ~14 days".
+  Virtualization is invisible — it is documented here, not surfaced on the column.
+- **Done/terminal columns** are additionally **windowed** server-side to a recent
+  set (mirroring Jira's "hide done older than ~14 days") with the full count still
+  in the header; the windowing is invisible on the column (no on-column note).
 
 ## Unmapped-statuses tray (subtask 3.2.6) — panel 5
 

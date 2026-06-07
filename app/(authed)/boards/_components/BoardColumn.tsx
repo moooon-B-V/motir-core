@@ -33,10 +33,13 @@ import { columnHasMore } from './boardPaging';
 // The `SortableContext` `items` list stays the FULL ordered set so dnd-kit knows
 // every card's rank even when only a window is mounted, and the actively-dragged
 // card (+ its neighbours) is force-mounted so a drag never detaches mid-flight.
-// A `.col-foot` "Load more" footer pages in the next bounded slice via
-// `onLoadMore` (the parent calls the Story-3.1.6 cursor route + appends in place);
-// an IntersectionObserver sentinel auto-loads on scroll-to-bottom. The board never
-// loads every card. Colour strictly `--el-*`, shape via element tokens.
+// Paging is PURE scroll-to-load (3.2.8): an IntersectionObserver sentinel at the
+// bottom of the scroll area auto-pages the next bounded slice via `onLoadMore`
+// (the parent calls the Story-3.1.6 cursor route + appends in place) — there is
+// NO explicit "Load more" button and NO "{n} loaded" note. A small in-flow spinner
+// gives in-flight feedback; a failed page leaves a minimal, focusable inline retry
+// (recoverable without a reload). The board never loads every card. Colour strictly
+// `--el-*`, shape via element tokens.
 
 // Estimated card height (px) used before a card's real height is measured; the
 // title clamps to 1–2 lines so true heights vary — `useRowWindow` measures each.
@@ -85,10 +88,12 @@ export function BoardColumn({
     getScrollElement,
   });
 
-  // Auto-load on scroll: a sentinel at the bottom of the (full-height) scroll area
-  // pages the next slice when it enters view. The footer button is the explicit
-  // fallback; the parent's `loadMore` guards against a double-fire. Suspended
-  // while a drag is active so content never shifts mid-drag.
+  // Auto-load on scroll (3.2.8 — the ONLY load path now): a sentinel at the bottom
+  // of the (full-height) scroll area pages the next slice when it enters view. The
+  // parent's `loadMore` guards against a double-fire. Suspended while a drag is
+  // active so content never shifts mid-drag. Keyboard users reach later pages by
+  // tabbing through the focusable cards (which scroll into view and trip the
+  // sentinel) and via the inline retry affordance on error.
   const sentinelRef = useRef<HTMLDivElement>(null);
   const columnId = column.id;
   useEffect(() => {
@@ -126,16 +131,19 @@ export function BoardColumn({
   }
 
   return (
-    // The column caps its height to the available screen height (viewport minus
-    // the top nav + page header + gutters ≈ 12rem); the card body scrolls
-    // internally, the footer stays pinned at the bottom. While a card is dragged
-    // over, the accent ring + lavender tint mark it as the drop target.
+    // The column takes a UNIFORM height — the available screen height (viewport
+    // minus the top nav + page header + gutters ≈ 12rem) — so every column lines up
+    // regardless of card count (3.2.8); a sparse column shows empty space below its
+    // cards rather than shrinking to fit. This is a viewport-relative LAYOUT height,
+    // not a shaped-control size, so a raw `calc` is correct (no `--height-*` token).
+    // The card body scrolls internally. While a card is dragged over, the accent
+    // ring + lavender tint mark it as the drop target.
     <section
       ref={setNodeRef}
       aria-label={t('columnLabel', { name: column.name, count: column.totalCount })}
       data-testid={`board-column-${column.id}`}
       data-over={isOver ? 'true' : undefined}
-      className={`flex max-h-[calc(100dvh-12rem)] w-72 shrink-0 flex-col rounded-(--radius-card) border bg-(--el-surface) transition-colors ${
+      className={`flex h-[calc(100dvh-12rem)] w-72 shrink-0 flex-col rounded-(--radius-card) border bg-(--el-surface) transition-colors ${
         isOver
           ? 'border-(--el-accent) bg-(--el-tint-lavender) outline outline-2 outline-(--el-accent)'
           : 'border-(--el-border)'
@@ -201,50 +209,37 @@ export function BoardColumn({
                 );
               })}
             </div>
-            {/* Scroll-to-load sentinel (enhancement; the footer button is the
-                explicit affordance). Sits just past the full-height card area. */}
+            {/* Scroll-to-load sentinel — the ONLY load trigger (3.2.8): when it
+                scrolls into view (rootMargin 200px) the next page is fetched. Sits
+                just past the full-height card area. */}
             {hasMore ? <div ref={sentinelRef} aria-hidden className="h-px w-full" /> : null}
           </SortableContext>
-        </div>
-      )}
 
-      {/* `.col-foot` — the Load more button + the virtualization note (finding
-          #57). Shown when there are more pages OR the stack is virtualized. */}
-      {!empty && (hasMore || windowing) ? (
-        <div className="shrink-0 px-2.5 pt-1 pb-2.5">
-          {loadError ? (
-            <p className="pb-1.5 text-center text-xs text-(--el-danger)">{t('loadMoreError')}</p>
-          ) : null}
-          {hasMore ? (
+          {/* In-flight + error feedback for the scroll-load (3.2.8) — replaces the
+              removed `.col-foot` button. A small spinner while a page streams; a
+              minimal, focusable inline retry when it failed (recoverable without a
+              reload, and the keyboard-reachable load affordance the a11y AC asks
+              for). The per-column total badge in the header stays the denominator. */}
+          {loadingMore ? (
+            <div
+              className="flex items-center justify-center gap-1.5 pt-2 text-xs text-(--el-text-muted)"
+              data-testid={`board-loading-more-${column.id}`}
+            >
+              <Spinner size="sm" aria-label={t('loadingMore')} />
+              {t('loadingMore')}
+            </div>
+          ) : loadError ? (
             <button
               type="button"
               onClick={() => onLoadMore(column.id)}
-              disabled={loadingMore}
-              data-testid={`board-load-more-${column.id}`}
-              className="flex h-(--height-control) w-full items-center justify-center gap-1.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-page-bg) text-[13px] font-medium text-(--el-text-secondary) hover:border-(--el-border-strong) disabled:cursor-not-allowed disabled:opacity-60"
+              data-testid={`board-load-more-retry-${column.id}`}
+              className="flex w-full items-center justify-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-xs font-medium text-(--el-danger) hover:bg-(--el-muted)"
             >
-              {loadingMore ? (
-                <>
-                  <Spinner size="sm" aria-label={t('loadingMore')} />
-                  {t('loadingMore')}
-                </>
-              ) : loadError ? (
-                t('loadMoreRetry')
-              ) : (
-                t('loadMore')
-              )}
+              {t('loadMoreError')} {t('loadMoreRetry')}
             </button>
           ) : null}
-          {windowing ? (
-            <p
-              className="pt-1.5 text-center font-mono text-[11px] text-(--el-text-faint)"
-              data-testid={`board-virt-note-${column.id}`}
-            >
-              {t('virtNote', { loaded: cards.length })}
-            </p>
-          ) : null}
         </div>
-      ) : null}
+      )}
     </section>
   );
 }

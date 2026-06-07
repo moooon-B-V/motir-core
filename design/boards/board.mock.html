@@ -32,7 +32,7 @@
             target-column highlight + the aria-live announcement
         (2) illegal-move SNAP-BACK — the card returning + a danger toast (409)
         (3) KEYBOARD DnD — a "picked up" card + the keyboard model + announcement
-        (4) SCALE — a tall column: count + "Load more" + the virtualization note
+        (4) SCALE — a tall column: count + auto scroll-to-load (spinner only) + virtualization
         (5) UNMAPPED-statuses tray — statuses with no column (the Jira behaviour)
         (6) STATES — loading skeleton · empty board · error
         (7) MOBILE — the narrow single-column layout
@@ -295,7 +295,11 @@
         border-radius: var(--radius-card);
         display: flex;
         flex-direction: column;
-        max-height: 560px;
+        /* Uniform column height (3.2.8): every column is the same height
+           regardless of card count — a sparse column shows empty space below its
+           cards rather than hugging them. In the app this is a viewport-relative
+           `h-[calc(100dvh-12rem)]` layout height; the mock fixes it for the board view. */
+        height: 560px;
       }
       .col-head {
         display: flex;
@@ -665,39 +669,36 @@
         margin-top: 2px;
       }
 
-      /* ── Scale: load-more + virtualization ────────────────────────────────── */
-      .load-more {
-        display: inline-flex;
+      /* ── Scale: PURE scroll-to-load (3.2.8) ───────────────────────────────────
+         No "Load more" button and no "{n} loaded" note — the column auto-pages on
+         scroll-to-bottom (an IntersectionObserver sentinel). The only visible
+         affordance is a small in-flow spinner while a page is in flight (and, on a
+         failed page, a minimal focusable inline retry — `.load-retry`). */
+      .load-spin {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 0 2px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .load-retry {
+        display: flex;
         align-items: center;
         justify-content: center;
         gap: 6px;
         width: 100%;
-        height: var(--height-control);
-        border-radius: var(--radius-btn);
-        border: 1px solid var(--el-border);
-        background: var(--el-page-bg);
-        color: var(--el-text-secondary);
-        font-size: 13px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-danger);
+        font-size: 12px;
         font-weight: 500;
         cursor: pointer;
       }
-      .load-more:hover {
-        background: var(--el-page-bg);
-        border-color: var(--el-border-strong);
-      }
-      .load-more svg {
-        width: 14px;
-        height: 14px;
-      }
-      .col-foot {
-        padding: 4px 10px 10px;
-      }
-      .virt-note {
-        font-size: 11px;
-        color: var(--el-text-faint);
-        font-family: var(--font-mono);
-        text-align: center;
-        padding: 6px 0 0;
+      .load-retry:hover {
+        background: var(--el-muted);
       }
 
       /* ── Unmapped-statuses tray (banner) ──────────────────────────────────── */
@@ -1225,9 +1226,6 @@
                 </div>
               </a>
             </div>
-            <div class="col-foot">
-              <button class="load-more">Load 5 more</button>
-            </div>
           </section>
 
           <!-- In Progress -->
@@ -1365,9 +1363,6 @@
                   <span class="avatar" title="Yue Zhu">YZ</span>
                 </div>
               </a>
-            </div>
-            <div class="col-foot">
-              <div class="virt-note">recent 20 of 41 · older hidden</div>
             </div>
           </section>
 
@@ -1712,12 +1707,12 @@
 
     <!-- ════════════════ PANEL 4 — scale ════════════════ -->
     <div class="panel-label">
-      4 · Scale — per-column count + Load more + virtualization (finding #57)
+      4 · Scale — per-column count + auto scroll-to-load + virtualization (finding #57)
     </div>
     <div class="panel">
       <div class="stage">
         <div class="board">
-          <section class="col" aria-label="To Do, 214 issues" style="max-height: 520px">
+          <section class="col" aria-label="To Do, 214 issues" style="height: 520px">
             <div class="col-head">
               <span class="nm">To Do</span><span class="col-count">214</span
               ><span class="spacer"></span
@@ -1771,16 +1766,15 @@
                   ><span class="spacer"></span><span class="avatar">AR</span>
                 </div></a
               >
-              <div class="virt-note">… 47 loaded · rows virtualized (bounded DOM)</div>
-            </div>
-            <div class="col-foot">
-              <button class="load-more">
+              <!-- In-flight feedback only — the next page auto-loads on scroll
+                   (no button, no "{n} loaded" note). 3.2.8. -->
+              <div class="load-spin">
                 <span class="spinner" aria-hidden="true"></span>
                 Loading…
-              </button>
+              </div>
             </div>
           </section>
-          <section class="col" aria-label="Done, 1280 issues" style="max-height: 520px">
+          <section class="col" aria-label="Done, 1280 issues" style="height: 520px">
             <div class="col-head">
               <span class="nm">Done</span><span class="col-count">1,280</span
               ><span class="spacer"></span
@@ -1805,18 +1799,17 @@
                 </div></a
               >
             </div>
-            <div class="col-foot">
-              <button class="load-more">Load 20 more</button>
-              <div class="virt-note">recent 20 of 1,280 · terminal window</div>
-            </div>
           </section>
         </div>
       </div>
       <p class="legend">
-        The board never loads every card. Each column shows its total count and a "Load more" that
-        fetches GET …/columns/[id]/cards?cursor= and appends a page; tall columns virtualize (only
-        viewport rows render — bounded DOM). Done/terminal columns are additionally windowed to a
-        recent set with the full count surfaced.
+        The board never loads every card. Each column shows its total count in the header (the
+        denominator) and auto-pages the next slice purely on scroll-to-bottom (an
+        IntersectionObserver sentinel fetches GET …/columns/[id]/cards?cursor= and appends a page) —
+        there is no "Load more" button and no "{n} loaded" note (3.2.8). A small spinner shows while
+        a page is in flight; a failed page leaves a minimal focusable inline retry. Tall columns
+        virtualize (only viewport rows render — bounded DOM); every column renders at the same
+        height regardless of card count.
       </p>
     </div>
 
