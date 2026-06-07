@@ -120,7 +120,7 @@ export const story_3_4: PlanStory = {
     'flow / one-active-sprint guard (Story 4.1 + 4.4); the backlog + assign-to-sprint + grooming ' +
     '(Story 4.2); story-point estimation itself (Story 4.3); the burndown + velocity CHARTS (Story ' +
     '4.5 — 3.4 shows numeric remaining + leaves the chart seam); board CRUD / scrum-board ' +
-    'provisioning / multi-board navigation (Epic 4 / not v1, as in Story 3.3); parallel multiple ' +
+    'provisioning / multi-board navigation (**Story 3.7**); parallel multiple ' +
     'active sprints (the 4.4 guard is one active sprint per board — no multi-sprint selector or ' +
     'stacked-sprint board, matching the planned guard, no complexity for nothing); the cross-cutting ' +
     'Epic-3 board journey at scale (Story 3.5). The board surface, the move contract, swimlanes/WIP, ' +
@@ -312,7 +312,7 @@ export const story_3_4: PlanStory = {
         '+ the page-level type resolution.\n\n' +
         '**Out of scope here:** the projection/aggregates (3.4.2); the sprint lifecycle + complete-' +
         'sprint flow (4.4); the burndown chart (4.5 — the header shows numeric remaining + leaves a ' +
-        'seam); board CRUD / multi-board nav (Epic 4 / not v1).\n\n' +
+        'seam); board CRUD / multi-board nav (**Story 3.7**).\n\n' +
         '## Acceptance criteria\n\n' +
         '- `/boards` renders the Scrum variant when the resolved board `type == scrum` and the existing Kanban view when `type == kanban` (no regression); no new navigation wiring.\n' +
         '- The sprint header renders name + state pill + goal (with reveal) + date range + time remaining ("Ended" at `daysRemaining == 0` past `endDate`) + committed/completed/remaining points ("—" when unestimated), as a labelled landmark, text+number not colour-alone (finding #35); per-column point totals render in the reused column headers without crowding the count/WIP slots.\n' +
