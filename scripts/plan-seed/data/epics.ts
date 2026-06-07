@@ -97,6 +97,62 @@ export const EPICS: EpicMeta[] = [
       'visualize issues as cards in columns mapped to the workflow statuses from Epic 2. Drag-drop ' +
       'to transition, swimlanes to group, WIP limits to enforce flow. This is where the PM core ' +
       'stops being a database and starts feeling like Jira / Linear.',
+    items: [
+      {
+        id: 'bug-attachment-fk-migration-drift',
+        kind: 'bug',
+        title: 'Every `prisma migrate dev` re-proposes dropping the hand-managed attachment FK',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 3 · **Discovered in:** Subtask 3.3.2 (board ' +
+          '`swimlaneGroupBy` enum + migration) · **Root cause owned by:** Story 2.3.7 (the ' +
+          '`attachment` table + `add_attachment_and_rls` migration) · **Status:** open.\n\n' +
+          'There is **persistent drift between `prisma/schema.prisma` and the migration history** ' +
+          'on `main`: the `attachment` table carries an `attachment_uploader_user_id_fkey` foreign ' +
+          'key created in raw SQL by `20260603120000_add_attachment_and_rls`, but the Prisma model ' +
+          '`Attachment` deliberately declares `uploaderUserId` as a **plain scalar with no Prisma ' +
+          '`@relation`** (so the `User` model needs no back-relation — see the model comment). ' +
+          'Because the FK exists in the migration-built shadow DB but NOT in the schema graph, ' +
+          '**every `prisma migrate dev` invocation auto-generates a spurious ' +
+          '`ALTER TABLE "attachment" DROP CONSTRAINT "attachment_uploader_user_id_fkey";`** at the ' +
+          'top of the new migration.\n\n' +
+          '**Impact.** It is a recurring foot-gun, not a runtime bug: any author who runs ' +
+          '`migrate dev` and commits the generated SQL verbatim will **silently drop a real FK** ' +
+          '(losing referential integrity on `attachment.uploader_user_id`). Each migration must be ' +
+          'hand-curated to delete that line — 3.1.1 (boards) and 3.3.2 (swimlane enum) both had to. ' +
+          'It also makes `migrate dev` output noisy and easy to misread.\n\n' +
+          '**Repro:** on `main`, edit any model in `prisma/schema.prisma`, run ' +
+          '`pnpm prisma migrate dev --name probe`, and observe the generated migration begins with ' +
+          'a `DROP CONSTRAINT "attachment_uploader_user_id_fkey"` unrelated to the edit.\n\n' +
+          '**Fix options (decide at fix time):**\n' +
+          '1. **Model the relation in Prisma** — add the `uploader User @relation(...)` (+ the ' +
+          '`User` back-relation) so the schema graph matches the DB, eliminating the diff. This is ' +
+          'the clean fix but adds the back-relation the 2.3.7 comment intentionally avoided; weigh ' +
+          'that trade-off.\n' +
+          '2. **Drop the FK from the DB too** and rely on the application layer (mirrors how some ' +
+          'other scalar FKs are handled) — only if the referential guarantee is not wanted.\n' +
+          'Either way, land a corrective migration so the schema and migration history agree and ' +
+          '`migrate dev` stops re-proposing the drop. Until then, **every migration PR must curate ' +
+          'the spurious `DROP CONSTRAINT` line out** (note it in the migration header, as 3.3.2 ' +
+          'did).\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- `pnpm prisma migrate dev` on an otherwise-unchanged schema produces **no** migration ' +
+          '(empty diff) — i.e. no spurious `attachment_uploader_user_id_fkey` drop.\n' +
+          '- The chosen fix lands as one corrective migration that applies cleanly on a fresh DB ' +
+          'and is idempotent; `attachment.uploader_user_id` integrity ends up in the intended state ' +
+          '(FK kept-and-modeled, or intentionally dropped — whichever option is chosen).\n' +
+          '- A short note in `prodect-core/CLAUDE.md` (migration conventions) records the decision ' +
+          'so the pattern is not reintroduced.\n\n' +
+          '## Context refs\n\n' +
+          '- `prisma/schema.prisma` — the `Attachment` model (`uploaderUserId` scalar, no relation) ' +
+          '+ the `User` model\n' +
+          '- `prisma/migrations/20260603120000_add_attachment_and_rls/migration.sql` — where the FK ' +
+          'is created in raw SQL (Story 2.3.7)\n' +
+          '- 3.3.2 feature PR — the curated migration whose header documents this drift; ' +
+          '`prodect-core/CLAUDE.md` — migration conventions',
+      },
+    ],
   },
   {
     id: '4',
