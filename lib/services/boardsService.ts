@@ -7,6 +7,7 @@ import { boardColumnStatusRepository } from '@/lib/repositories/boardColumnStatu
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -17,11 +18,14 @@ import { toBoardCardDto, toBoardColumnConfigDto, toBoardDto } from '@/lib/mapper
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { buildDefaultBoard } from '@/lib/boards/defaultBoard';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
 import type {
   BoardColumnConfigDto,
   BoardColumnDto,
   BoardDto,
   BoardProjectionDto,
+  BoardSwimlaneDto,
+  BoardSwimlaneGroupByDto,
   BoardTypeDto,
   MoveCardResultDto,
   MoveCardTarget,
@@ -204,13 +208,31 @@ export const boardsService = {
       ctx,
     );
 
+    // Swimlanes (Subtask 3.3.4). The union of the board's mapped column statuses
+    // IS the board's card population, so lane membership (per loaded card) and
+    // the lane list are both resolved over that set — a bounded aggregate, never
+    // a load-all (finding #57). For the flat `none` board both are no-ops: an
+    // empty `swimlanes` and no per-card `swimlaneKey` (so the projection is
+    // byte-for-byte the 3.1.4 shape).
+    const groupBy = board.swimlaneGroupBy as BoardSwimlaneGroupByDto;
+    const boardStatusKeys = [...new Set(built.flatMap((b) => b.statusKeys))];
+    const [swimlaneKeyByCard, swimlanes] = await Promise.all([
+      resolveSwimlaneKeys(groupBy, allRows, ctx),
+      buildSwimlanes(groupBy, projectId, boardStatusKeys, ctx),
+    ]);
+
     const columnsDto: BoardColumnDto[] = built.map((b) => ({
       id: b.col.id,
       name: b.col.name,
       position: b.col.position.toString(),
       wipLimit: b.col.wipLimit,
       statusKeys: b.statusKeys,
-      cards: b.rows.map((r) => toBoardCardDto(r, { ready: readyById.get(r.id) ?? true })),
+      cards: b.rows.map((r) =>
+        toBoardCardDto(r, {
+          ready: readyById.get(r.id) ?? true,
+          swimlaneKey: swimlaneKeyByCard.get(r.id),
+        }),
+      ),
       totalCount: b.totalCount,
       cursor: b.cursor,
     }));
@@ -219,7 +241,9 @@ export const boardsService = {
       boardId: board.id,
       name: board.name,
       type: board.type as BoardTypeDto,
+      swimlaneGroupBy: groupBy,
       columns: columnsDto,
+      swimlanes,
       unmappedStatuses: statuses.filter((s) => !mappedStatusIds.has(s.id)),
     };
   },
@@ -274,8 +298,20 @@ export const boardsService = {
       rows.map((r) => r.id),
       ctx,
     );
+    // Stamp each load-more card with its lane key (Subtask 3.3.4) so the UI
+    // buckets the paged-in cards into the same (lane, column) cells.
+    const swimlaneKeyByCard = await resolveSwimlaneKeys(
+      board.swimlaneGroupBy as BoardSwimlaneGroupByDto,
+      rows,
+      ctx,
+    );
     return {
-      cards: rows.map((r) => toBoardCardDto(r, { ready: readyById.get(r.id) ?? true })),
+      cards: rows.map((r) =>
+        toBoardCardDto(r, {
+          ready: readyById.get(r.id) ?? true,
+          swimlaneKey: swimlaneKeyByCard.get(r.id),
+        }),
+      ),
       cursor: nextCursor(offset, BOARD_COLUMN_PAGE_SIZE, totalCount, terminal),
     };
   },
@@ -302,86 +338,106 @@ export const boardsService = {
     target: MoveCardTarget,
     ctx: ServiceContext,
   ): Promise<MoveCardResultDto> {
-    const { row, appliedStatus, columnName } = await db.$transaction(async (tx) => {
-      // Lock the card up front — serialize the status + rank writes against a
-      // concurrent move of the same card (lost-update guard, like updateStatus).
-      const locked = await workItemRepository.lockById(workItemId, tx);
-      if (!locked) throw new WorkItemNotFoundError(workItemId);
+    const { row, appliedStatus, columnName, swimlaneGroupBy } = await db.$transaction(
+      async (tx) => {
+        // Lock the card up front — serialize the status + rank writes against a
+        // concurrent move of the same card (lost-update guard, like updateStatus).
+        const locked = await workItemRepository.lockById(workItemId, tx);
+        if (!locked) throw new WorkItemNotFoundError(workItemId);
 
-      // Resolve + tenant-gate the board and the target column. The column must
-      // belong to THIS board (a column id from another board is a 404).
-      const board = await boardRepository.findById(boardId, ctx.workspaceId, tx);
-      if (!board) throw new BoardNotFoundError(boardId);
-      const column = await boardColumnRepository.findById(target.toColumnId, ctx.workspaceId, tx);
-      if (!column || column.boardId !== boardId) {
-        throw new BoardColumnNotFoundError(target.toColumnId);
-      }
-
-      // Tenant-gate the card and confirm it lives on this board's project.
-      const item = await workItemRepository.findById(workItemId, tx);
-      if (!item || item.workspaceId !== ctx.workspaceId || item.projectId !== board.projectId) {
-        throw new WorkItemNotFoundError(workItemId);
-      }
-
-      // Resolve the target column's mapped statuses → keys (the status of a card
-      // in the column) + positions (the multi-status pick order). A column that
-      // maps no LIVE status (none, or only deleted statuses) is an unmapped
-      // target — there is nothing to move the card into.
-      const mappings = await boardColumnStatusRepository.findByColumn(
-        target.toColumnId,
-        ctx.workspaceId,
-        tx,
-      );
-      const statuses = await workflowsService.listStatusesByProject(
-        board.projectId,
-        ctx.workspaceId,
-      );
-      const statusById = new Map(statuses.map((s) => [s.id, s]));
-      const mappedStatuses = mappings
-        .map((m) => statusById.get(m.statusId))
-        .filter((s): s is WorkflowStatusDto => s != null);
-      if (mappedStatuses.length === 0) throw new UnmappedColumnTargetError(target.toColumnId);
-      const mappedKeys = new Set(mappedStatuses.map((s) => s.key));
-
-      // STATUS. If the card's current status is already in the target column's
-      // mapped set (a within-column drop, OR a drop into a multi-status column
-      // that already contains the card's status) → NO transition. Otherwise the
-      // target status is the column's mapped status ordered FIRST by
-      // `status.position` (Jira's multi-status rule).
-      let appliedStatus = item.status;
-      if (!mappedKeys.has(item.status)) {
-        const targetStatus = [...mappedStatuses].sort((a, b) =>
-          a.position < b.position ? -1 : a.position > b.position ? 1 : 0,
-        )[0]!;
-        try {
-          await workItemsService.applyStatusTransition(workItemId, targetStatus.key, ctx, tx);
-        } catch (err) {
-          // Re-raise an illegal transition as the board-shaped 409 (snapback).
-          if (err instanceof IllegalTransitionError) {
-            throw new IllegalBoardMoveError(err.fromKey, err.toKey, 'no such workflow transition');
-          }
-          throw err;
+        // Resolve + tenant-gate the board and the target column. The column must
+        // belong to THIS board (a column id from another board is a 404).
+        const board = await boardRepository.findById(boardId, ctx.workspaceId, tx);
+        if (!board) throw new BoardNotFoundError(boardId);
+        const column = await boardColumnRepository.findById(target.toColumnId, ctx.workspaceId, tx);
+        if (!column || column.boardId !== boardId) {
+          throw new BoardColumnNotFoundError(target.toColumnId);
         }
-        appliedStatus = targetStatus.key;
-      }
 
-      // RANK. The new position sorts strictly between the bracketing neighbours
-      // (a missing neighbour = the open end of the column). A pure within-column
-      // reorder reaches here having attempted NO transition.
-      const prev = await resolveNeighbourPosition(target.beforeId, board.projectId, ctx, tx);
-      const next = await resolveNeighbourPosition(target.afterId, board.projectId, ctx, tx);
-      const position = keyBetween(prev, next);
-      const row = await workItemRepository.update(workItemId, { position }, tx);
+        // Tenant-gate the card and confirm it lives on this board's project.
+        const item = await workItemRepository.findById(workItemId, tx);
+        if (!item || item.workspaceId !== ctx.workspaceId || item.projectId !== board.projectId) {
+          throw new WorkItemNotFoundError(workItemId);
+        }
 
-      return { row, appliedStatus, columnName: column.name };
-    });
+        // Resolve the target column's mapped statuses → keys (the status of a card
+        // in the column) + positions (the multi-status pick order). A column that
+        // maps no LIVE status (none, or only deleted statuses) is an unmapped
+        // target — there is nothing to move the card into.
+        const mappings = await boardColumnStatusRepository.findByColumn(
+          target.toColumnId,
+          ctx.workspaceId,
+          tx,
+        );
+        const statuses = await workflowsService.listStatusesByProject(
+          board.projectId,
+          ctx.workspaceId,
+        );
+        const statusById = new Map(statuses.map((s) => [s.id, s]));
+        const mappedStatuses = mappings
+          .map((m) => statusById.get(m.statusId))
+          .filter((s): s is WorkflowStatusDto => s != null);
+        if (mappedStatuses.length === 0) throw new UnmappedColumnTargetError(target.toColumnId);
+        const mappedKeys = new Set(mappedStatuses.map((s) => s.key));
+
+        // STATUS. If the card's current status is already in the target column's
+        // mapped set (a within-column drop, OR a drop into a multi-status column
+        // that already contains the card's status) → NO transition. Otherwise the
+        // target status is the column's mapped status ordered FIRST by
+        // `status.position` (Jira's multi-status rule).
+        let appliedStatus = item.status;
+        if (!mappedKeys.has(item.status)) {
+          const targetStatus = [...mappedStatuses].sort((a, b) =>
+            a.position < b.position ? -1 : a.position > b.position ? 1 : 0,
+          )[0]!;
+          try {
+            await workItemsService.applyStatusTransition(workItemId, targetStatus.key, ctx, tx);
+          } catch (err) {
+            // Re-raise an illegal transition as the board-shaped 409 (snapback).
+            if (err instanceof IllegalTransitionError) {
+              throw new IllegalBoardMoveError(
+                err.fromKey,
+                err.toKey,
+                'no such workflow transition',
+              );
+            }
+            throw err;
+          }
+          appliedStatus = targetStatus.key;
+        }
+
+        // RANK. The new position sorts strictly between the bracketing neighbours
+        // (a missing neighbour = the open end of the column). A pure within-column
+        // reorder reaches here having attempted NO transition.
+        const prev = await resolveNeighbourPosition(target.beforeId, board.projectId, ctx, tx);
+        const next = await resolveNeighbourPosition(target.afterId, board.projectId, ctx, tx);
+        const position = keyBetween(prev, next);
+        const row = await workItemRepository.update(workItemId, { position }, tx);
+
+        return {
+          row,
+          appliedStatus,
+          columnName: column.name,
+          swimlaneGroupBy: board.swimlaneGroupBy,
+        };
+      },
+    );
 
     // Readiness (finding #21) is independent of THIS card's own move (it depends
     // on the card's blockers, which the move doesn't touch) — compute it after
     // the commit, via the read-only path, to complete the returned card.
     const { ready } = await workItemsService.getReadiness(workItemId, ctx);
+    // Stamp the moved card with its lane key (Subtask 3.3.4) so the UI
+    // reconciles it back into the right lane (a status-only move never changes
+    // the card's lane, but the card shape must stay consistent under a grouped
+    // board).
+    const swimlaneKeyByCard = await resolveSwimlaneKeys(
+      swimlaneGroupBy as BoardSwimlaneGroupByDto,
+      [row],
+      ctx,
+    );
     return {
-      card: toBoardCardDto(row, { ready }),
+      card: toBoardCardDto(row, { ready, swimlaneKey: swimlaneKeyByCard.get(row.id) }),
       appliedStatus,
       column: { id: target.toColumnId, name: columnName },
     };
@@ -616,4 +672,144 @@ async function resolveNeighbourPosition(
     throw new WorkItemNotFoundError(neighbourId);
   }
   return neighbour.position;
+}
+
+/** Lane order for the `priority` group-by — Jira shows highest severity first;
+ * the catch-all does not apply (priority is non-null). */
+const PRIORITY_LANE_ORDER = ['highest', 'high', 'medium', 'low', 'lowest'];
+
+/**
+ * Resolve each loaded card's `swimlaneKey` under the active group-by (Subtask
+ * 3.3.4), so the client never re-derives lane membership: `assignee` → the
+ * card's `assigneeId` (or the catch-all sentinel when unassigned); `priority` →
+ * the priority value; `epic` → the card's NEAREST ANCESTOR epic id (or the
+ * catch-all when it has none). Returns an EMPTY map for `none` — the flat board
+ * stamps no key (the mapper then omits the field). assignee/priority read
+ * straight off the loaded row (no query); epic needs ONE bounded recursive walk
+ * over the loaded ids (no N+1).
+ */
+async function resolveSwimlaneKeys(
+  groupBy: BoardSwimlaneGroupByDto,
+  rows: WorkItem[],
+  ctx: ServiceContext,
+): Promise<Map<string, string>> {
+  const keyByCard = new Map<string, string>();
+  if (groupBy === 'none' || rows.length === 0) return keyByCard;
+  if (groupBy === 'assignee') {
+    for (const r of rows) keyByCard.set(r.id, r.assigneeId ?? BOARD_SWIMLANE_NO_VALUE);
+  } else if (groupBy === 'priority') {
+    for (const r of rows) keyByCard.set(r.id, r.priority);
+  } else {
+    const pairs = await workItemRepository.findEpicAncestors(
+      rows.map((r) => r.id),
+      ctx.workspaceId,
+    );
+    const epicByCard = new Map(pairs.map((p) => [p.cardId, p.epicId]));
+    for (const r of rows) keyByCard.set(r.id, epicByCard.get(r.id) ?? BOARD_SWIMLANE_NO_VALUE);
+  }
+  return keyByCard;
+}
+
+/**
+ * Build the ordered lane list for the board (Subtask 3.3.4) from a BOUNDED
+ * grouped aggregate over the board's cards — lanes-with-cards + the catch-all,
+ * NEVER a per-card fetch (finding #57). `statusKeys` is the union of the
+ * board's mapped column statuses (the card population). Lane order: assignee by
+ * display name (alpha), priority by severity rank, epic by epic `position`; the
+ * catch-all (unassigned / no epic) always sorts LAST. `none` → no lanes.
+ */
+async function buildSwimlanes(
+  groupBy: BoardSwimlaneGroupByDto,
+  projectId: string,
+  statusKeys: string[],
+  ctx: ServiceContext,
+): Promise<BoardSwimlaneDto[]> {
+  if (groupBy === 'none' || statusKeys.length === 0) return [];
+
+  if (groupBy === 'assignee') {
+    const rows = await workItemRepository.aggregateBoardLanesByAssignee(
+      projectId,
+      ctx.workspaceId,
+      statusKeys,
+    );
+    const assigneeIds = rows.map((r) => r.assigneeId).filter((id): id is string => id !== null);
+    const users = await userRepository.findByIds(assigneeIds);
+    const nameById = new Map(users.map((u) => [u.id, u.name?.trim() || u.email]));
+    const lanes: BoardSwimlaneDto[] = rows
+      .filter((r) => r.assigneeId !== null)
+      .map((r) => ({
+        key: r.assigneeId as string,
+        label: nameById.get(r.assigneeId as string) ?? 'Unknown user',
+        kind: 'assignee' as const,
+        count: r.count,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    const unassigned = rows.find((r) => r.assigneeId === null);
+    if (unassigned) {
+      lanes.push({
+        key: BOARD_SWIMLANE_NO_VALUE,
+        label: 'No assignee',
+        kind: 'assignee',
+        count: unassigned.count,
+      });
+    }
+    return lanes;
+  }
+
+  if (groupBy === 'priority') {
+    const rows = await workItemRepository.aggregateBoardLanesByPriority(
+      projectId,
+      ctx.workspaceId,
+      statusKeys,
+    );
+    return rows
+      .map((r) => ({
+        key: r.priority as string,
+        label: r.priority as string,
+        kind: 'priority' as const,
+        count: r.count,
+      }))
+      .sort((a, b) => PRIORITY_LANE_ORDER.indexOf(a.key) - PRIORITY_LANE_ORDER.indexOf(b.key));
+  }
+
+  // epic — group by ancestor epic; the catch-all count is DERIVED by
+  // subtraction (total board cards − Σ epic-lane counts), so no extra per-card
+  // scan is needed to size the "No epic" lane.
+  const rows = await workItemRepository.aggregateBoardLanesByEpic(
+    projectId,
+    ctx.workspaceId,
+    statusKeys,
+  );
+  const epics = await workItemRepository.findByIds(rows.map((r) => r.epicId));
+  const epicById = new Map(epics.map((e) => [e.id, e]));
+  const lanes: BoardSwimlaneDto[] = rows
+    .map((r) => {
+      const epic = epicById.get(r.epicId);
+      return {
+        lane: {
+          key: r.epicId,
+          label: epic ? `${epic.identifier} ${epic.title}` : 'Epic',
+          kind: 'epic' as const,
+          count: r.count,
+        },
+        position: epic?.position ?? '',
+      };
+    })
+    .sort((a, b) => (a.position < b.position ? -1 : a.position > b.position ? 1 : 0))
+    .map((x) => x.lane);
+
+  const epicCardCount = rows.reduce((sum, r) => sum + r.count, 0);
+  const total = await workItemRepository.countProjectIssues(projectId, ctx.workspaceId, {
+    statuses: statusKeys,
+  });
+  const noEpicCount = total - epicCardCount;
+  if (noEpicCount > 0) {
+    lanes.push({
+      key: BOARD_SWIMLANE_NO_VALUE,
+      label: 'No epic',
+      kind: 'epic',
+      count: noEpicCount,
+    });
+  }
+  return lanes;
 }

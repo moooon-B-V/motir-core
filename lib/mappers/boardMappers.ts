@@ -44,10 +44,16 @@ export function toBoardColumnConfigDto(row: BoardColumn): BoardColumnConfigDto {
  * normalized to a wire-safe ISO string; `position` is already a fractional-
  * index string on the row. `ready` is computed by the caller (the service,
  * via `workItemsService.getReadiness`) — the mapper stays a pure shape
- * converter and does not read the link graph itself.
+ * converter and does not read the link graph itself. `swimlaneKey` (Subtask
+ * 3.3.4) is the caller-resolved lane key under the board's group-by; it is
+ * OMITTED from the DTO when `undefined` (the `none`/flat board), so the flat
+ * projection is byte-for-byte the 3.1.4 card shape.
  */
-export function toBoardCardDto(row: WorkItem, opts: { ready: boolean }): BoardCardDto {
-  return {
+export function toBoardCardDto(
+  row: WorkItem,
+  opts: { ready: boolean; swimlaneKey?: string },
+): BoardCardDto {
+  const dto: BoardCardDto = {
     id: row.id,
     projectId: row.projectId,
     parentId: row.parentId,
@@ -63,4 +69,6 @@ export function toBoardCardDto(row: WorkItem, opts: { ready: boolean }): BoardCa
     position: row.position,
     ready: opts.ready,
   };
+  if (opts.swimlaneKey !== undefined) dto.swimlaneKey = opts.swimlaneKey;
+  return dto;
 }

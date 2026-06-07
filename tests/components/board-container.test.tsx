@@ -63,6 +63,8 @@ const projection: BoardProjectionDto = {
   boardId: 'b1',
   name: 'Default',
   type: 'kanban',
+  swimlaneGroupBy: 'none',
+  swimlanes: [],
   unmappedStatuses: [],
   columns: [
     column({

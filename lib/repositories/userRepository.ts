@@ -15,6 +15,17 @@ export const userRepository = {
   },
 
   /**
+   * Batch-resolve users by id — the one round-trip the board swimlane
+   * projection (Subtask 3.3.4) uses to label assignee lanes (id → name) without
+   * an N+1 per lane. Order is unspecified; callers index by `id`. An empty id
+   * set short-circuits without a query.
+   */
+  async findByIds(ids: string[]): Promise<User[]> {
+    if (ids.length === 0) return [];
+    return db.user.findMany({ where: { id: { in: ids } } });
+  },
+
+  /**
    * Acquire a row-level lock on the user inside the caller's transaction.
    * Used by ensureDefaultWorkspace to serialize the zero-membership
    * check-then-create: two concurrent first-requests both lock the same
