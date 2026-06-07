@@ -19,7 +19,7 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { useToast } from '@/components/ui/Toast';
 import type { BoardCardDto, BoardColumnDto, BoardProjectionDto } from '@/lib/dto/boards';
-import type { MoveCardResultDto } from '@/lib/dto/boards';
+import type { MoveCardResultDto, PagedColumnCardsDto } from '@/lib/dto/boards';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { usePeekOpen } from '../../issues/_components/IssueQuickView';
 import { BoardCardOverlay } from './BoardCard';
@@ -35,6 +35,7 @@ import {
   relocateCard,
   transferCount,
 } from './boardMove';
+import { appendColumnPage } from './boardPaging';
 
 // The board client container (Subtask 3.2.2 · drag-drop wired in 3.2.4) — the
 // data layer + state machine the column/card/DnD subtasks build on. It is a PURE
@@ -174,6 +175,47 @@ function BoardDnd({
     columnsRef.current = columns;
   }, [columns]);
   const snapshotRef = useRef<BoardColumnDto[] | null>(null);
+
+  // Per-column load-more state (Subtask 3.2.5, finding #57): 'loading' while a
+  // page is in flight, 'error' after a failed fetch (offer retry); an absent key
+  // = idle. Held SEPARATELY from `columns` so the 3.2.4 move reducers + dnd code
+  // stay untouched (the cards/cursor themselves live on the column via
+  // `appendColumnPage`). A ref of in-flight ids guards against a double-fire (the
+  // button + the scroll sentinel both call `loadMore`).
+  const [paging, setPaging] = useState<Record<string, 'loading' | 'error'>>({});
+  const inFlightRef = useRef<Set<string>>(new Set());
+
+  const loadMore = useCallback(
+    (columnId: string) => {
+      const col = columnsRef.current.find((c) => c.id === columnId);
+      if (!col || col.cursor === null || inFlightRef.current.has(columnId)) return;
+      inFlightRef.current.add(columnId);
+      const cursor = col.cursor;
+      setPaging((prev) => ({ ...prev, [columnId]: 'loading' }));
+      const url =
+        `/api/board/columns/${encodeURIComponent(columnId)}/cards` +
+        `?boardId=${encodeURIComponent(board.boardId)}&cursor=${encodeURIComponent(cursor)}`;
+      fetch(url, { headers: { accept: 'application/json' } })
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`load-more ${res.status}`);
+          const page = (await res.json()) as PagedColumnCardsDto;
+          // Append in place + advance the cursor; clear this column's paging flag.
+          setColumns((prev) => appendColumnPage(prev, columnId, page));
+          setPaging((prev) => {
+            const next = { ...prev };
+            delete next[columnId];
+            return next;
+          });
+        })
+        .catch(() => {
+          setPaging((prev) => ({ ...prev, [columnId]: 'error' }));
+        })
+        .finally(() => {
+          inFlightRef.current.delete(columnId);
+        });
+    },
+    [board.boardId],
+  );
 
   const sensors = useSensors(
     // 8px before a press becomes a drag — below that it's a click (→ quick view).
@@ -427,6 +469,10 @@ function BoardDnd({
             column={column}
             assigneeNameById={assigneeNameById}
             onOpenQuickView={openPeek}
+            onLoadMore={loadMore}
+            loadingMore={paging[column.id] === 'loading'}
+            loadError={paging[column.id] === 'error'}
+            activeCardId={activeCard?.id ?? null}
           />
         ))}
       </div>
