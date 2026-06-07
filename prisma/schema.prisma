@@ -600,13 +600,17 @@ enum WorkflowPolicyMode {
 /// every write under an active workspace context) — same as `workflow_status`
 /// / `project` / `work_item`, with NO system-admin escape hatch.
 model Board {
-  id          String    @id @default(cuid())
-  workspaceId String    @map("workspace_id")
-  projectId   String    @map("project_id")
-  name        String
-  type        BoardType @default(kanban)
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id              String               @id @default(cuid())
+  workspaceId     String               @map("workspace_id")
+  projectId       String               @map("project_id")
+  name            String
+  type            BoardType            @default(kanban)
+  // Swimlane grouping (Story 3.3.2). `none` is the flat 3.2 board (the default,
+  // so every existing/seeded board is unchanged). The 3.3.4 projection resolves
+  // each card's lane server-side from this value (epic groups by ANCESTOR epic).
+  swimlaneGroupBy BoardSwimlaneGroupBy @default(none) @map("swimlane_group_by")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
 
   workspace      Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project        Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -685,6 +689,24 @@ enum BoardType {
   scrum
 
   @@map("board_type")
+}
+
+/// Board swimlane grouping (Story 3.3 · Subtask 3.3.2). The dimension a board's
+/// cards are sliced into horizontal lanes by. `none` is the flat 3.2 board (the
+/// DEFAULT — `board.swimlaneGroupBy @default(none)`, so every existing/seeded
+/// board is unchanged and needs no backfill). `assignee` / `epic` / `priority`
+/// are the stub-specified group-by dimensions; the lane a card lands in is
+/// resolved server-side by the Story-3.3.4 projection (epic groups by the
+/// ANCESTOR epic, not the immediate parent). Adding a value later (e.g. a
+/// custom-query lane) is a non-breaking enum addition — same as `BoardType.scrum`
+/// shipping ahead of Story 3.4.
+enum BoardSwimlaneGroupBy {
+  none
+  assignee
+  epic
+  priority
+
+  @@map("board_swimlane_group_by")
 }
 
 // Background-job run ledger (Story 1.6 · Subtask 1.6.2). Every invocation of a
