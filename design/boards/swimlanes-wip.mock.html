@@ -837,7 +837,7 @@
         position: absolute;
         top: 28px;
         right: 0;
-        width: 232px;
+        width: 248px;
         background: var(--el-page-bg);
         border: 1px solid var(--el-border);
         border-radius: var(--radius-card);
@@ -881,13 +881,15 @@
         color: var(--el-text-faint);
         margin-bottom: 6px;
       }
+      /* input on its own row; the actions sit right-aligned BELOW it so the
+         Clear/Save buttons never overflow the narrow menu (popover-form shape) */
       .wip-editor .field {
         display: flex;
-        align-items: center;
-        gap: 6px;
+        flex-direction: column;
+        gap: 8px;
       }
       .wip-input {
-        flex: 1;
+        width: 100%;
         height: var(--height-control);
         padding: 0 var(--spacing-control-x);
         border-radius: var(--radius-input);
@@ -897,9 +899,24 @@
         font-size: 13px;
         color: var(--el-text);
       }
+      /* drop the browser number-spinner — the buttons are the affordance */
+      .wip-input::-webkit-outer-spin-button,
+      .wip-input::-webkit-inner-spin-button {
+        appearance: none;
+        margin: 0;
+      }
+      .wip-input {
+        -moz-appearance: textfield;
+        appearance: textfield;
+      }
       .wip-input:focus {
         outline: 2px solid var(--focus-ring-color);
         outline-offset: -1px;
+      }
+      .wip-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
       }
       .btn-sm {
         display: inline-flex;
@@ -2193,12 +2210,14 @@
                         value="5"
                         aria-label="WIP limit (issues)"
                       />
-                      <button class="btn-sm" aria-label="Clear limit">
-                        <svg viewBox="0 0 24 24"><use href="#i-x" /></svg> Clear
-                      </button>
-                      <button class="btn-sm primary" aria-label="Save limit">
-                        <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Save
-                      </button>
+                      <div class="wip-actions">
+                        <button class="btn-sm" aria-label="Clear limit">
+                          <svg viewBox="0 0 24 24"><use href="#i-x" /></svg> Clear
+                        </button>
+                        <button class="btn-sm primary" aria-label="Save limit">
+                          <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Save
+                        </button>
+                      </div>
                     </div>
                     <p class="hint">
                       A non-negative whole number. Soft limit — it warns when exceeded but never
