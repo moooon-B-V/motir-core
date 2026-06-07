@@ -32,9 +32,13 @@ export function BoardColumn({
   const t = useTranslations('boards');
 
   return (
+    // The column caps its height to the available screen height (viewport minus
+    // the top nav + page header + gutters ≈ 12rem) so it uses the full screen on
+    // tall displays, and its card body scrolls internally — per-column scroll, no
+    // fixed 560px cap that ends mid-screen.
     <section
       aria-label={t('columnLabel', { name: column.name, count: column.totalCount })}
-      className="flex max-h-[560px] w-72 shrink-0 flex-col rounded-(--radius-card) border border-(--el-border) bg-(--el-surface)"
+      className="flex max-h-[calc(100dvh-12rem)] w-72 shrink-0 flex-col rounded-(--radius-card) border border-(--el-border) bg-(--el-surface)"
     >
       <header className="flex items-center gap-2 border-b border-(--el-border) px-3 py-2.5">
         <h2 className="text-[13px] font-semibold text-(--el-text-strong)">{column.name}</h2>
