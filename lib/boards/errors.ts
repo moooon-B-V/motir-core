@@ -76,3 +76,56 @@ export class BoardColumnNotFoundError extends Error {
     this.columnId = columnId;
   }
 }
+
+// ── Board CONFIG writes (Subtask 3.3.3) — set swimlane group-by + per-column
+// WIP limit. The validation + authorization errors the config write path
+// raises, mapped to status codes by the PATCH routes.
+
+/**
+ * The caller is a workspace member but NOT the workspace owner, so they may not
+ * change board configuration. v1 routes "board/project admin" to the workspace
+ * OWNER (finding #36), exactly mirroring the Story-2.2.5 workflow editor's
+ * `assertProjectAdmin` gate — full per-project RBAC is Epic 6.4. Distinct from
+ * `NotProjectAdminError` (workflow domain) only so the board domain owns its
+ * own errors file (no cross-domain import); the SHAPE + the v1 owner-tier are
+ * identical. → 403.
+ *
+ * NOTE: the 3.3.3 card prose described this as "any workspace member can write,
+ * RBAC later"; the SHIPPED 2.2.5 precedent the card names is owner-gated
+ * (decision-ladder rung 2 > the card), and Jira gates board config to admins
+ * (rung 1) — so the owner gate is the consistent build. See PRODECT_FINDINGS.
+ */
+export class NotBoardAdminError extends Error {
+  readonly code = 'NOT_BOARD_ADMIN' as const;
+  constructor(message = 'You must be a workspace owner to change board configuration.') {
+    super(message);
+    this.name = 'NotBoardAdminError';
+  }
+}
+
+/**
+ * The requested swimlane group-by is not a `BoardSwimlaneGroupBy` value (the
+ * stub-specified `none` / `assignee` / `epic` / `priority`). → 400.
+ */
+export class InvalidSwimlaneGroupByError extends Error {
+  readonly code = 'INVALID_SWIMLANE_GROUP_BY' as const;
+  readonly value: string;
+  constructor(value: string) {
+    super(`"${value}" is not a valid swimlane group-by.`);
+    this.name = 'InvalidSwimlaneGroupByError';
+    this.value = value;
+  }
+}
+
+/**
+ * The requested WIP limit is neither `null` (clear the limit) nor a
+ * non-negative integer. Negative, fractional, and non-numeric values are all
+ * rejected here rather than written. → 400.
+ */
+export class InvalidWipLimitError extends Error {
+  readonly code = 'INVALID_WIP_LIMIT' as const;
+  constructor(message = 'A WIP limit must be a non-negative integer or null.') {
+    super(message);
+    this.name = 'InvalidWipLimitError';
+  }
+}
