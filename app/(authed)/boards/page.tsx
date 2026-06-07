@@ -58,10 +58,11 @@ export default async function BoardsPage({
   // reload-safe; closing clears the param.
   const peek = sp.peek?.trim() || null;
 
-  // Members resolve the assignee / reporter ids in the quick-view panel — read
-  // only when a peek is open (the board itself doesn't need them). Page calls
-  // services only (never Prisma) per the 4-layer rule.
-  const members = peek ? await workspacesService.listMembers(ctx.workspaceId, ctx.userId) : [];
+  // Members resolve assignee / reporter ids to display names — for the board
+  // cards' assignee avatars (the projection carries only `assigneeId`, Story
+  // 3.1.4) AND for the quick-view panel when a peek is open. Resolved once here;
+  // the page calls services only (never Prisma) per the 4-layer rule.
+  const members = await workspacesService.listMembers(ctx.workspaceId, ctx.userId);
 
   return (
     <div className="flex flex-col gap-6">
@@ -86,7 +87,7 @@ export default async function BoardsPage({
         </div>
       </header>
 
-      <BoardContainer />
+      <BoardContainer members={members} />
 
       {/* Quick-view peek — the modal frame mounts when `?peek` is present; the
           item's fields stream behind a <Suspense> whose fallback is the loading
