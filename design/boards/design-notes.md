@@ -6,10 +6,11 @@ design system (`app/globals.css` `--el-*`/shape tokens + the shipped
 `components/ui/*` and issue-list primitives), so the code subtasks compose the
 same primitives — no Pencil→code gap.
 
-| Surface                            | Asset                                       | Notes                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ---------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Kanban board (columns + cards)** | **`board.mock.html`** (HTML mockup)         | The whole board surface — no `design/boards/` asset existed; the 3.2.1 design gate produces this. Multi-panel: board · drag · snap-back · keyboard · scale · unmapped · states · mobile. Gates 3.2.2–3.2.6. See below.                                                                                                                                                                                                    |
-| **Swimlanes + WIP limits**         | **`swimlanes-wip.mock.html`** (HTML mockup) | EXTENDS the board surface — the 3.2.1 mockup drew a WIP slot only as a NON-enforced placeholder and NO swimlanes / WIP editor / over-limit treatment (unspecified == no design), so the 3.3.1 design gate produces this. Multi-panel: group-by control · swimlanes (assignee/epic/priority + catch-all) · cross-lane drag · WIP config · over-limit · states. Gates 3.3.5–3.3.6. See "Swimlanes + WIP (Story 3.3)" below. |
+| Surface                            | Asset                                       | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Kanban board (columns + cards)** | **`board.mock.html`** (HTML mockup)         | The whole board surface — no `design/boards/` asset existed; the 3.2.1 design gate produces this. Multi-panel: board · drag · snap-back · keyboard · scale · unmapped · states · mobile. Gates 3.2.2–3.2.6. See below.                                                                                                                                                                                                                                                                                                                             |
+| **Swimlanes + WIP limits**         | **`swimlanes-wip.mock.html`** (HTML mockup) | EXTENDS the board surface — the 3.2.1 mockup drew a WIP slot only as a NON-enforced placeholder and NO swimlanes / WIP editor / over-limit treatment (unspecified == no design), so the 3.3.1 design gate produces this. Multi-panel: group-by control · swimlanes (assignee/epic/priority + catch-all) · cross-lane drag · WIP config · over-limit · states. Gates 3.3.5–3.3.6. See "Swimlanes + WIP (Story 3.3)" below.                                                                                                                          |
+| **Board load model (correction)**  | **`board-scale.mock.html`** (HTML mockup)   | EXTENDS the board surface — CORRECTS the scale UI (notes.html mistake #33). The 3.2.1/3.2.8 scale panel paged columns ("Load more" → auto scroll-to-load); Jira does NOT page a board, so the corrected model (whole bounded set + virtualize + over-cap "refine filter" banner + Done-age window) was unspecified (== no design), so the 3.8.1 design gate produces this. Multi-panel: bounded whole-set load · Done-age window · over-cap banner · swimlanes-sans-footer. Gates 3.8.3 / 3.8.4 / 3.8.5. See "Board load model (Story 3.8)" below. |
 
 The board is a **pure consumer** of the Story-3.1 board API
 (`GET …/board` → `BoardProjectionDto`; `GET …/board/columns/[id]/cards` → the
@@ -342,3 +343,101 @@ Group-by + WIP are board-config **writes**. Roles/permissions are Epic 6.4, so
 - Lane headers are operable as `role="button"` with `aria-expanded`; group-by +
   collapse are keyboard-operable; the over-limit state is announced
   (`role="status"`), not signalled by colour alone.
+
+---
+
+# Board load model (Story 3.8)
+
+Design reference for Story 3.8 — the **correction** to the board's scale UI.
+Asset: **`board-scale.mock.html`** (+ `board-scale.png` export). It is the source
+of truth for the UI subtasks **3.8.3** (flat board), **3.8.4** (over-cap banner),
+and **3.8.5** (swimlanes), which all carry **3.8.1** in `dependsOn`.
+
+Built FROM the real design system (the token block is copied 1:1 from
+`app/globals.css`) and **reuses the shipped board / lane primitives unchanged** —
+the `BoardCard`, the column header + `[⋯]`, the swimlane lane/cell grammar
+(3.3.1), and — for the over-cap banner — the **yellow-tray treatment the shipped
+`UnmappedStatusesTray` (3.2.6) already uses, verbatim**. No new card / column /
+lane vocabulary; this is a new LOAD behaviour over the shipped arrangement.
+
+## Why this is a correction (notes.html mistake #33)
+
+The earlier scale UI **paged the board**: first a per-column **"Load more"**
+button (3.2.5), then **PURE auto scroll-to-load** + an in-flight spinner (3.2.8).
+Both are a paging affordance the **mirror product does NOT use**. VERIFIED against
+Jira (June 2026, Atlassian docs): a board renders the **whole saved-filter set up
+to a hard cap** (5,000 Software / 3,000 Business), shows a **"maximum number of
+viewable issues exceeded — refine your filter"** warning past the cap, windows the
+**Done** column to issues resolved in the **last ~14 days**, and **virtualizes**
+the render — it never paginates columns and has no "Load more." **Per surface
+(mistake #33):** Jira's issue _navigator_ DOES paginate, so finding #57's
+list/tree pagination stays correct and is **untouched** — only the _board_
+loads-the-set. This asset is **STILL bounded** (the cap is the bound; it never
+"loads every row," so finding #57 holds): the cap bounds the load, the Done-age
+window trims terminal columns, and virtualization keeps the DOM bounded.
+
+> This story does NOT edit the done subtasks it supersedes (3.1.4 / 3.2.5 / 3.3.4
+> / 3.3.5) — what is done is done; the new 3.8 subtasks supersede them in code.
+
+## The asset is multi-panel (review EACH)
+
+- **(0) Bounded whole-set load** — a tall column rendering its **full bounded
+  card list** with **NO "Load more" button, no scroll-to-load sentinel, no
+  in-flight spinner, no `.col-foot` footer**. The only affordance is the column's
+  own scroll. The header **count** is the FULL total (the denominator),
+  unchanged. A dashed `.virt-note` (a **review-only** annotation, NOT shipped)
+  documents that the rest of the cards render the same way and that tall columns
+  virtualize via the 2.5.15 `useRowWindow` (kept) so the DOM stays bounded. A
+  crossed-out `.removed` box shows the 3.2.5 "Load more" + 3.2.8 scroll-to-load
+  spinner that 3.8.3 / 3.8.5 delete.
+- **(1) Done-age window** — the **terminal** (resolved/closed) column windowed
+  server-side to issues resolved in the **last ~14 days** (newest first), with the
+  **full count still in the header**. Refines 3.2.5's count-based window to Jira's
+  age-based behaviour. The window applies to every terminal status (by workflow
+  status category), not just "Done" by name. Invisible on the column (the
+  `.virt-note` is review-only; no on-column note ships).
+- **(2) Over-cap banner** — when the projection signals **`truncated: true`**
+  (board total > `cap`), a board-level banner renders **above the board** (in
+  `BoardContainer`, so it shows for flat AND swimlane layouts). It **reuses the
+  3.2.6 yellow-tray treatment** (`--el-tint-yellow` background + an
+  `AlertTriangle` in `--el-warning` + `--el-text-strong` copy), pairs **hue +
+  icon + text** (finding #35), and is announced via `role="status"`. Copy: _"This
+  board has more than {cap} work items — refine the board filter to see them all.
+  Only the first {cap} are shown."_ The affordance is the **Epic-6 `[Filter]`
+  seam** (the disabled toolbar `[Filter]` button 3.2 already reserves) — rendered
+  **disabled** (`aria-disabled`, "Board filters arrive in Epic 6") until Epic 6
+  lands board filters. **Absent when `truncated` is false** (panels 0–1 show no
+  banner).
+- **(3) Swimlanes, no per-column footer** — the lane × column grid (3.3.1) with
+  each `(lane, column)` cell rendered **in full**, virtualized per cell via
+  `useRowWindow` (kept). The awkward per-column **"Load more" footer row** (3.3.5)
+  is **gone** (3.8.5). Everything else is unchanged: group-by, collapsible lanes,
+  the catch-all lane (always last), cross-lane drag-reassign, and the per-column
+  WIP chip in the pinned column-header row.
+
+## The cap is a generous bound, not a paging knob
+
+`BOARD_ISSUE_CAP` (3.8.2) is a **generous bound** — a real team's active board
+fits comfortably under it (Jira's figure is 5,000 Software / 3,000 Business). It
+is **not** a page size and there is **no "next page"**: the board loads up to the
+cap and stops. The rare board that exceeds it gets the over-cap banner, exactly as
+Jira does. The control that lets a user shrink an over-cap board is the **board
+filter / saved query — Epic 6**; until it lands, the banner explains the cap and
+the `[Filter]` seam stays **disabled** (a documented seam, not an invented
+control). This is **finding-#57-bounded** (the cap is the bound), the opposite of
+"load all rows."
+
+## Token / a11y rules honoured
+
+- **Colour** strictly via `--el-*` (finding #54): type hues, `Pill` tones, the
+  `--el-tint-yellow` over-cap tray, `--el-warning` alert icon. The tray carries
+  the hue in the BACKGROUND with `--el-text-strong` text (finding #35, AA — never
+  a tinted page surface).
+- **Shape** via element-semantic tokens (`--radius-card`/`-btn`/`-badge`/
+  `-control`, `--shadow-subtle`, `--spacing-control-*`/`-chip-*`,
+  `--height-control`).
+- **Not colour-alone** (finding #35): the over-cap banner pairs the yellow hue
+  with the alert-triangle icon + the cap text; nothing relies on hue alone.
+- The over-cap banner is announced (`role="status"`); the column landmarks
+  (`<section aria-label="{name}, {n} issues">`) and keyboard operability from
+  3.2.1 are unchanged (this story changes loading, not interaction).
