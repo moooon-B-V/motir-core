@@ -90,12 +90,12 @@ export const EPICS: EpicMeta[] = [
         id: 'bug-ready-banner-no-deps',
         kind: 'bug',
         title: '"Ready to start" banner is suppressed for items with no dependencies',
-        status: 'planned',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 2 · **Surfaces:** issue detail relationships panel ' +
-          '(Subtask 2.4.5) + issue-list quick-view peek (Subtask 2.5.21) · **Status:** open · ' +
-          '**Reported by:** Yue.\n\n' +
+          '(Subtask 2.4.5) + issue-list quick-view peek (Subtask 2.5.21) · **Status:** fixed ' +
+          '(PR #250, merged) · **Reported by:** Yue.\n\n' +
           'The green **"Ready to start"** readiness banner only appears on a work item that **has ' +
           'at least one `is_blocked_by` blocker** (all of them terminal). An item with **no ' +
           'depended-on work item at all** shows **no banner** — even though "nothing blocks it" is ' +
@@ -147,7 +147,16 @@ export const EPICS: EpicMeta[] = [
           'true` (no change expected)\n' +
           '- `lib/services/workItemsService.ts` — `getReadiness` / `isReady` (already returns ' +
           '`ready: true`, empty blockers, for the no-dependency case — no change expected)\n' +
-          '- `design/work-items/relationships.mock.html` — the readiness-banner design source',
+          '- `design/work-items/relationships.mock.html` — the readiness-banner design source\n\n' +
+          '**Resolution (PR #250, merged).** Dropped the `blockedBy.length > 0` precondition from ' +
+          'BOTH call-site gates, keeping only the `category` todo guard: `RelationshipsPanel`’s ' +
+          "`showReadiness` is now just `currentCategory === 'todo'`, and `IssueQuickViewContent` " +
+          'always builds the `readiness` verdict (the quick-view panel still suppresses it past ' +
+          '`todo` via `statusCategory`). No service / DTO / badge change — exactly as diagnosed. ' +
+          'Regression coverage added: `relationships-panel.test.tsx` + `issue-quick-view.test.tsx` ' +
+          'assert a no-blocker todo item renders "Ready to start" on both surfaces, and ' +
+          '`issue-detail-flow.spec.ts` (E2E) asserts a fresh item reads "Ready to start" before ' +
+          'any link is added, then flips to "Blocked".',
       },
     ],
   },
