@@ -83,7 +83,8 @@ export const story_3_2: PlanStory = {
     'mobile layout). These are planned as their own subtask, not bolted on.\n\n' +
     '**Out of scope (Epic-3 siblings):** swimlanes + WIP-limit enforcement / over-limit warnings ' +
     '(Story 3.3 — this story renders the `wipLimit` the projection returns as a count display only, ' +
-    'and leaves a slot for 3.3); the sprint-scoped Scrum board (Story 3.4); the cross-cutting ' +
+    'and leaves a slot for 3.3); the sprint-scoped Scrum board (Story 4.5 — moved to Epic 4 per ' +
+    'mistake #32); the cross-cutting ' +
     'drag-drop + WIP + swimlane Playwright journey (Story 3.5 — this story ships its OWN UI ' +
     'component tests + the core drag/snapback E2E, the same split 3.1.7 used). The column↔status ' +
     'mapping admin — where an unmapped status is put on a column (this story’s unmapped-tray links ' +

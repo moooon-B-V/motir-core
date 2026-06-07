@@ -93,10 +93,14 @@ export const EPICS: EpicMeta[] = [
     title: 'Boards',
     status: 'planned',
     descriptionMd:
-      'The primary day-to-day surface for a working team: **Kanban and Scrum boards** that ' +
-      'visualize issues as cards in columns mapped to the workflow statuses from Epic 2. Drag-drop ' +
-      'to transition, swimlanes to group, WIP limits to enforce flow. This is where the PM core ' +
-      'stops being a database and starts feeling like Jira / Linear.',
+      'The primary day-to-day surface for a working team: the **Kanban board** that visualizes ' +
+      'issues as cards in columns mapped to the workflow statuses from Epic 2. Drag-drop to ' +
+      'transition, swimlanes to group, WIP limits to enforce flow. This is where the PM core stops ' +
+      'being a database and starts feeling like Jira / Linear. The **Scrum board** (the ' +
+      'sprint-scoped variant of the same surface) lives in Epic 4 as Story 4.5 — it needs ' +
+      'sprints, which are Epic 4, so per `notes.html` mistake #32 it ships from inside Epic 4 ' +
+      'rather than forward-pointing across epics from here. Kanban-only is a valid standalone ' +
+      'use (mirror products: Jira and Linear both ship Kanban without sprints).',
     items: [
       {
         id: 'bug-attachment-fk-migration-drift',
@@ -160,9 +164,12 @@ export const EPICS: EpicMeta[] = [
     status: 'planned',
     descriptionMd:
       'Sprint-based delivery on top of the issue tracker: the **backlog**, **sprints** (create / ' +
-      'start / complete), **story-point estimation**, and the velocity + burndown that make ' +
-      'iteration measurable. Turns Prodect from an issue tracker into a full agile-planning tool — ' +
-      'the Scrum half of the Jira feature set.',
+      'start / complete), **story-point estimation**, the **Scrum board** (the Epic-3 Kanban ' +
+      "surface scoped to a board's active sprint, under a sprint header — Story 4.5, moved here " +
+      'from Epic 3 per mistake #32 so it ships alongside the sprints it depends on), and the ' +
+      'velocity + burndown charts that make iteration measurable. Turns Prodect from an issue ' +
+      'tracker into a full agile-planning tool — the Scrum half of the Jira feature set, with ' +
+      'the Scrum view sitting on the same board substrate Epic 3 already shipped.',
   },
   {
     id: '5',
