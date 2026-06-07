@@ -85,7 +85,7 @@ export const story_3_8: PlanStory = {
       id: '3.8.1',
       title:
         'Design — extend design/boards/ with the corrected scale model (no "Load more"; over-cap "refine filter" banner; Done-age window)',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 40,
