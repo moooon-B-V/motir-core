@@ -65,6 +65,26 @@ export const boardRepository = {
     return client.board.findFirst({ where: { id: boardId, workspaceId } });
   },
 
+  /**
+   * Lock the board row `FOR UPDATE` inside a transaction (Subtask 3.6.2 — the
+   * column-config admin's lost-update guard). `deleteColumn` takes this lock so
+   * two concurrent column deletes on the SAME board serialize, and the second
+   * sees the first's decremented column count (closing the TOCTOU on the
+   * last-column invariant). `tx` REQUIRED; the workspace filter keeps the lock
+   * tenant-scoped (finding #26). Returns the locked row's id, or null if no
+   * board matched (caller maps to a 404). Mirrors `workItemRepository.lockById`.
+   */
+  async lockById(
+    boardId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string } | null> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "board" WHERE "id" = ${boardId} AND "workspace_id" = ${workspaceId} FOR UPDATE
+    `;
+    return rows[0] ?? null;
+  },
+
   // Write (3.1.2's default-board seed). `tx` is REQUIRED — the board is
   // persisted inside createProject's transaction so the project + its workflow
   // + its default board are atomic. The `Unchecked` create input takes the

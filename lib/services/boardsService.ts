@@ -652,23 +652,54 @@ export const boardsService = {
     if (!column) throw new BoardColumnNotFoundError(columnId);
     await assertBoardConfigAdmin(ctx.userId, column.projectId, ctx.workspaceId);
 
-    // Last-column guard — a board must keep at least one column.
-    const columns = await boardColumnRepository.findByBoard(column.boardId, ctx.workspaceId);
-    if (columns.length <= 1) throw new LastColumnError();
-
-    // Not-empty guard — refuse if any of the column's mapped (live) statuses
-    // still holds non-archived work items on the board.
-    const statusKeys = await mappedLiveStatusKeys(columnId, column.projectId, ctx.workspaceId);
-    if (statusKeys.length > 0) {
-      const cardCount = await workItemRepository.countProjectIssues(
-        column.projectId,
-        ctx.workspaceId,
-        { statuses: statusKeys },
-      );
-      if (cardCount > 0) throw new ColumnNotEmptyError(columnId, cardCount);
-    }
+    // The project's statuses are stable w.r.t. this op (deleteColumn never
+    // touches the workflow), so resolve them once outside the tx; the column
+    // mappings + counts are read INSIDE the tx, after the lock.
+    const statuses = await workflowsService.listStatusesByProject(
+      column.projectId,
+      ctx.workspaceId,
+    );
+    const statusById = new Map(statuses.map((s) => [s.id, s]));
 
     await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+      // Lock the board row so concurrent column adds/deletes on this board
+      // serialize — without it two deletes of DIFFERENT columns each read
+      // `count == 2`, both pass the last-column guard, and the board is zeroed
+      // out (the TOCTOU on the ≥1-column invariant). The not-empty guard's race
+      // against a card transitioning INTO the column mid-delete stays
+      // best-effort (work-item writes don't touch the board row, so no lock can
+      // serialize them) — but that race only UNMAPS a card (it returns to the
+      // tray), never loses it, matching Jira's config-vs-issue separation.
+      await boardRepository.lockById(column.boardId, ctx.workspaceId, tx);
+
+      // Re-read the board's columns under the lock. A concurrent delete of THIS
+      // column (resolved before the lock) leaves it absent now → 404.
+      const columns = await boardColumnRepository.findByBoard(column.boardId, ctx.workspaceId, tx);
+      if (!columns.some((c) => c.id === columnId)) throw new BoardColumnNotFoundError(columnId);
+      // Last-column guard — a board must keep at least one column.
+      if (columns.length <= 1) throw new LastColumnError();
+
+      // Not-empty guard — refuse if any of the column's mapped (live) statuses
+      // still holds non-archived work items on the board.
+      const mappings = await boardColumnStatusRepository.findByColumn(
+        columnId,
+        ctx.workspaceId,
+        tx,
+      );
+      const statusKeys = mappings
+        .map((m) => statusById.get(m.statusId))
+        .filter((s): s is WorkflowStatusDto => s != null)
+        .map((s) => s.key);
+      if (statusKeys.length > 0) {
+        const cardCount = await workItemRepository.countProjectIssues(
+          column.projectId,
+          ctx.workspaceId,
+          { statuses: statusKeys },
+          tx,
+        );
+        if (cardCount > 0) throw new ColumnNotEmptyError(columnId, cardCount);
+      }
+
       // Unmap the column's statuses (back to the tray), then drop the column.
       await boardColumnStatusRepository.deleteByColumn(columnId, tx);
       await boardColumnRepository.delete(columnId, tx);
@@ -821,30 +852,6 @@ async function assertBoardConfigAdmin(
 /** True iff `value` is one of the `BoardSwimlaneGroupBy` enum values. */
 function isSwimlaneGroupBy(value: string): value is BoardSwimlaneGroupBy {
   return (Object.values(BoardSwimlaneGroupBy) as string[]).includes(value);
-}
-
-/**
- * The LIVE status keys a column maps (Subtask 3.6.2 — the delete-column
- * not-empty guard). Resolves the column's `board_column_status` rows against
- * the project's current workflow statuses, dropping any mapping to a status
- * that no longer exists (a stale edge maps no live key, so it holds no cards).
- * The returned keys feed `countProjectIssues({ statuses })` — if any card sits
- * in one of them the column isn't empty.
- */
-async function mappedLiveStatusKeys(
-  columnId: string,
-  projectId: string,
-  workspaceId: string,
-): Promise<string[]> {
-  const [mappings, statuses] = await Promise.all([
-    boardColumnStatusRepository.findByColumn(columnId, workspaceId),
-    workflowsService.listStatusesByProject(projectId, workspaceId),
-  ]);
-  const statusById = new Map(statuses.map((s) => [s.id, s]));
-  return mappings
-    .map((m) => statusById.get(m.statusId))
-    .filter((s): s is WorkflowStatusDto => s != null)
-    .map((s) => s.key);
 }
 
 /** True iff `limit` is `null` (clear) or a non-negative integer. */
