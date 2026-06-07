@@ -4,11 +4,12 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { MoreHorizontal } from 'lucide-react';
 import { Spinner } from '@/components/ui/Spinner';
 import { useRowWindow } from '@/components/ui/useRowWindow';
 import type { BoardColumnDto } from '@/lib/dto/boards';
 import { BoardCard } from './BoardCard';
+import { ColumnActionsMenu } from './ColumnActionsMenu';
+import { ColumnWipBadge } from './ColumnWipBadge';
 import { columnHasMore } from './boardPaging';
 
 // BoardColumn (Subtask 3.2.3 · drop 3.2.4 · scale 3.2.5) — one board column per
@@ -16,9 +17,11 @@ import { columnHasMore } from './boardPaging';
 // stack, with a designed empty-column state. The header carries (in order):
 //   - the column `name` + the per-column total count badge (the projection's
 //     `totalCount` — the denominator, independent of how many cards are loaded)
-//   - an optional WIP-limit placeholder slot drawn as a `count / limit` display
-//     ONLY — Story 3.3 enforces WIP + over-limit warnings; this is not enforced
-//   - a disabled column-actions seam (board/column admin is not v1)
+//   - the WIP-limit chip (`ColumnWipBadge`, 3.3.6): `n/limit` with the SOFT
+//     over-limit warning when `n > limit`
+//   - the column-actions `[⋯]` menu (`ColumnActionsMenu`, 3.3.6) whose "Set WIP
+//     limit" editor sets/clears the limit via `onSetWipLimit` (config only —
+//     SOFT, so it never gates the droppable; the 3.2.4 move contract is intact)
 //
 // DROP TARGET (3.2.4): the whole column is a dnd-kit droppable and the cards are a
 // vertical `SortableContext`; while a card is dragged over, the accent ring +
@@ -51,6 +54,7 @@ export function BoardColumn({
   loadingMore,
   loadError,
   activeCardId,
+  onSetWipLimit,
 }: {
   column: BoardColumnDto;
   assigneeNameById: Map<string, string>;
@@ -59,6 +63,7 @@ export function BoardColumn({
   loadingMore: boolean;
   loadError: boolean;
   activeCardId: string | null;
+  onSetWipLimit: (columnId: string, limit: number | null) => void;
 }) {
   const t = useTranslations('boards');
   // The whole column is the droppable, so a drop anywhere in it (incl. the empty
@@ -145,26 +150,18 @@ export function BoardColumn({
           {column.totalCount}
         </span>
         <span className="flex-1" />
-        {/* WIP-limit slot — a count/limit placeholder; Story 3.3 enforces it. */}
-        {column.wipLimit != null ? (
-          <span
-            className="font-mono text-[11px] font-semibold text-(--el-text-faint)"
-            title={t('wipTitle')}
-            data-testid={`board-wip-${column.id}`}
-          >
-            {column.totalCount}/{column.wipLimit}
-          </span>
-        ) : null}
-        {/* Column actions — a disabled seam (board/column admin is not v1). */}
-        <button
-          type="button"
-          disabled
-          aria-label={t('columnActions')}
-          title={t('columnActionsComingSoon')}
-          className="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <MoreHorizontal className="h-4 w-4" aria-hidden />
-        </button>
+        {/* WIP-limit chip — `n/limit` + the SOFT over-limit warning (3.3.6). */}
+        <ColumnWipBadge
+          columnId={column.id}
+          totalCount={column.totalCount}
+          wipLimit={column.wipLimit}
+        />
+        {/* Column actions — the `[⋯]` menu hosting the WIP-limit editor (3.3.6). */}
+        <ColumnActionsMenu
+          columnId={column.id}
+          wipLimit={column.wipLimit}
+          onSetWipLimit={onSetWipLimit}
+        />
       </header>
 
       {empty ? (
