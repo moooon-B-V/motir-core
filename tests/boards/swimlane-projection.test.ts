@@ -5,6 +5,7 @@ import { boardsService } from '@/lib/services/boardsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
 import type { BoardCardDto, BoardProjectionDto } from '@/lib/dto/boards';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -225,6 +226,16 @@ describe('boardsService.getBoard — swimlane projection (3.3.4)', () => {
     const next = await boardsService.loadColumnCards(board.boardId, todo.id, todo.cursor, fx.ctx);
     expect(next.cards).toHaveLength(1);
     expect(next.cards[0]!.swimlaneKey).toBe(BOARD_SWIMLANE_NO_VALUE);
+  });
+
+  it('lane aggregates + epic-ancestor lookup short-circuit empty input without a query', async () => {
+    // A board with no mapped statuses (and a load-more with no ids) never hits
+    // the DB — the empty-input guards return [] (mirrors the
+    // findBlockerStatesForItems([]) short-circuit).
+    expect(await workItemRepository.aggregateBoardLanesByAssignee('p', 'w', [])).toEqual([]);
+    expect(await workItemRepository.aggregateBoardLanesByPriority('p', 'w', [])).toEqual([]);
+    expect(await workItemRepository.aggregateBoardLanesByEpic('p', 'w', [])).toEqual([]);
+    expect(await workItemRepository.findEpicAncestors([], 'w')).toEqual([]);
   });
 
   it('is workspace-scoped: epic ancestry never crosses tenants', async () => {
