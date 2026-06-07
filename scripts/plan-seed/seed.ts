@@ -5,12 +5,21 @@
  * archive). The plan tree lives in `./data/` (one typed module per story);
  * this loader walks it and writes the work-item tree + dependency links.
  *
- * Tenant (fixed): the `moooon` workspace + `prodect` project owned by a single
- * user. Re-running is IDEMPOTENT — it clears ONLY this tenant's `moooon`
- * workspace (by name, owned by the fixed user) and reseeds; it never touches
- * any other workspace's data. Everything is written through the shipped
- * services / repositories (no raw inserts that would skip the kind-parent
- * triggers), so the seed exercises the same create path the app does.
+ * Tenant (fixed): the `moooon` workspace + `prodect` project owned by
+ * **zhuyue@prodect.co** (the project manager), with a small **team** of members
+ * (see SEED_USERS). Every work item gets a **reporter + assignee drawn from the
+ * team** and a **varied priority** — deterministically (a hash of the plan id),
+ * so reseeds are stable and the board/list show real people + a spread of
+ * priorities rather than one owner + all-medium. Access is **workspace-level**
+ * (there is no separate project membership), so adding the team to the workspace
+ * is what gates the project too.
+ *
+ * Re-running is IDEMPOTENT — it clears ONLY the `moooon` workspace(s) owned by a
+ * seed user (old or new) and reseeds; it never touches any other workspace's
+ * data. The legacy single-owner account `info@moooon.net` is removed. Everything
+ * is written through the shipped services / repositories (no raw inserts that
+ * would skip the kind-parent triggers), so the seed exercises the same create
+ * path the app does.
  *
  * Production: unlike `db:seed:large` (a pure dev tool), this seed is the
  * authoritative plan and may run against production on merge to main (the
@@ -21,7 +30,7 @@
  */
 /* eslint-disable no-console -- a CLI script: console IS its output surface */
 import '../_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads (helper is in scripts/, one level up)
-import type { Prisma } from '@prisma/client';
+import type { Prisma, WorkItemPriority } from '@prisma/client';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -32,12 +41,45 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { PLAN } from './data';
 import { PLAN_STATUS_MAP, type PlanItem } from './types';
 
-const SEED_EMAIL = 'info@moooon.net';
 const SEED_PASSWORD = '!QAZ1qaz';
-const SEED_OWNER_NAME = 'Moooon';
 const SEED_WORKSPACE_NAME = 'moooon';
 const SEED_PROJECT_NAME = 'prodect';
 const SEED_PROJECT_IDENTIFIER = 'PROD';
+
+/**
+ * The seed team. The first entry (zhuyue@prodect.co) is the workspace OWNER +
+ * project manager; the rest are members. Reporters + assignees are drawn from
+ * this whole pool. All passwords are SEED_PASSWORD.
+ */
+const SEED_USERS: ReadonlyArray<{ email: string; name: string }> = [
+  { email: 'zhuyue@prodect.co', name: 'Zhu Yue' }, // [0] owner / project manager
+  { email: 'bophilips@prodect.co', name: 'Bo Philips' },
+  { email: 'odie@prodect.co', name: 'Odie' },
+  { email: 'mo@prodect.co', name: 'Mo' },
+  { email: 'julian@prodect.co', name: 'Julian' },
+  { email: 'eikooc@prodect.co', name: 'Eikooc' },
+];
+const OWNER_EMAIL = SEED_USERS[0]!.email;
+/** Removed by this seed (the old single-owner tenant account). */
+const LEGACY_EMAIL = 'info@moooon.net';
+
+/** Every priority value, so seeded items span the spectrum, not all `medium`. */
+const PRIORITIES: readonly WorkItemPriority[] = ['lowest', 'low', 'medium', 'high', 'highest'];
+
+/** FNV-1a — a tiny deterministic string hash (stable reporter/assignee/priority across reseeds). */
+function hash(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/** Deterministically pick an element of `arr` keyed by `key`. */
+function pick<T>(arr: readonly T[], key: string): T {
+  return arr[hash(key) % arr.length]!;
+}
 
 /** Compose the work-item description: a metadata blockquote + the card prose. */
 function composeDescription(item: PlanItem): string | null {
@@ -60,40 +102,67 @@ async function main() {
     );
   }
 
-  // ── Idempotent clear: drop this tenant's prior `moooon` workspace ──────────
-  const existingUser = await db.user.findUnique({ where: { email: SEED_EMAIL } });
-  if (existingUser) {
+  // ── Idempotent clear: drop every `moooon` workspace owned by a seed user ────
+  // (old single-owner OR the new team), then remove the legacy account. Keyed by
+  // the seed emails + workspace NAME, so it never touches a real user's data.
+  const knownEmails = [LEGACY_EMAIL, ...SEED_USERS.map((u) => u.email)];
+  const knownUsers = await db.user.findMany({ where: { email: { in: knownEmails } } });
+  if (knownUsers.length) {
     const memberships = await db.workspaceMembership.findMany({
-      where: { userId: existingUser.id },
+      where: { userId: { in: knownUsers.map((u) => u.id) } },
       include: { workspace: true },
     });
-    for (const m of memberships) {
-      if (m.workspace.name === SEED_WORKSPACE_NAME) {
-        // work_item.parent is onDelete:NoAction, so clear the set in one
-        // statement first; the workspace then cascades project + memberships.
-        await db.workItem.deleteMany({ where: { workspaceId: m.workspaceId } });
-        await db.workspace.delete({ where: { id: m.workspaceId } });
-      }
+    const workspaceIds = new Set(
+      memberships.filter((m) => m.workspace.name === SEED_WORKSPACE_NAME).map((m) => m.workspaceId),
+    );
+    for (const workspaceId of workspaceIds) {
+      // work_item.parent is onDelete:NoAction, so clear the set in one statement
+      // first; the workspace then cascades project + memberships. Clearing the
+      // items also frees the legacy user from any reporter FK so it can be removed.
+      await db.workItem.deleteMany({ where: { workspaceId } });
+      await db.workspace.delete({ where: { id: workspaceId } });
     }
+    const legacy = knownUsers.find((u) => u.email === LEGACY_EMAIL);
+    if (legacy) await db.user.delete({ where: { id: legacy.id } });
   }
 
-  // ── Tenant: fixed user (reused if present) + fresh workspace + project ─────
-  const owner =
-    existingUser ??
-    (await usersService.createUser({
-      email: SEED_EMAIL,
-      password: SEED_PASSWORD,
-      name: SEED_OWNER_NAME,
-    }));
+  // ── Team: create (or reuse) each user; zhuyue@prodect.co owns the workspace ─
+  const userIdByEmail = new Map<string, string>();
+  for (const u of SEED_USERS) {
+    const existing = await db.user.findUnique({ where: { email: u.email } });
+    const user =
+      existing ??
+      (await usersService.createUser({ email: u.email, password: SEED_PASSWORD, name: u.name }));
+    userIdByEmail.set(u.email, user.id);
+  }
+  const ownerId = userIdByEmail.get(OWNER_EMAIL)!;
+  /** The reporter/assignee pool, in SEED_USERS order (keeps `pick` deterministic). */
+  const memberIds = SEED_USERS.map((u) => userIdByEmail.get(u.email)!);
+
   const { workspace } = await workspacesService.createWorkspace({
     name: SEED_WORKSPACE_NAME,
-    ownerUserId: owner.id,
+    ownerUserId: ownerId,
   });
+  // The rest of the team join as members (owner is already a member via createWorkspace).
+  for (const u of SEED_USERS) {
+    if (u.email === OWNER_EMAIL) continue;
+    await workspacesService.addMember({
+      userId: userIdByEmail.get(u.email)!,
+      workspaceId: workspace.id,
+      role: 'member',
+    });
+  }
   const project = await projectsService.createProject({
     name: SEED_PROJECT_NAME,
     identifier: SEED_PROJECT_IDENTIFIER,
     workspaceId: workspace.id,
-    actorUserId: owner.id,
+    actorUserId: ownerId,
+  });
+  // Point every member's active project at `prodect` so they all land on it
+  // (access is workspace-level; this is just the convenience default).
+  await db.workspaceMembership.updateMany({
+    where: { workspaceId: workspace.id },
+    data: { activeProjectId: project.id },
   });
 
   // ── Tree pass: create every epic → story → leaf through the shipped path ──
@@ -111,6 +180,11 @@ async function main() {
     estimateMinutes?: number | null;
     parentId: string | null;
   }): Promise<string> {
+    // Deterministic reporter / assignee / priority from the plan id, so the
+    // tenant shows real people + a spread of priorities and reseeds are stable.
+    const reporterId = pick(memberIds, `${args.planId}:reporter`);
+    const assigneeId = pick(memberIds, `${args.planId}:assignee`);
+    const priority = pick(PRIORITIES, `${args.planId}:priority`);
     const id = await db.$transaction(async (tx: Prisma.TransactionClient) => {
       const key = await projectRepository.allocateWorkItemNumber(project.id, tx);
       const row = await workItemRepository.create(
@@ -125,8 +199,10 @@ async function main() {
           descriptionMd: args.descriptionMd ?? undefined,
           explanationMd: args.explanationMd ?? undefined,
           status: args.status,
+          priority,
           estimateMinutes: args.estimateMinutes ?? undefined,
-          reporterId: owner.id,
+          reporterId,
+          assigneeId,
           position: String(key).padStart(8, '0'),
         },
         tx,
@@ -211,7 +287,7 @@ async function main() {
           fromId,
           toId,
           kind: 'is_blocked_by',
-          createdById: owner.id,
+          createdById: ownerId,
         },
         tx,
       ),
@@ -222,7 +298,11 @@ async function main() {
   console.log(`\n✅ Seeded ${created} work items, ${links} dependency links.`);
   if (dangling) console.log(`   (${dangling} depends_on edge(s) referenced unknown ids — skipped)`);
   console.log('────────────────────────────────────────────────────────');
-  console.log(`  Sign in:   ${SEED_EMAIL} / ${SEED_PASSWORD}`);
+  console.log(`  Sign in:   ${OWNER_EMAIL} / ${SEED_PASSWORD}  (project manager)`);
+  console.log(`  Team:      ${SEED_USERS.map((u) => u.email).join(', ')}`);
+  console.log(
+    `             (all passwords ${SEED_PASSWORD}; reporters/assignees drawn from the team)`,
+  );
   console.log(`  Workspace: ${SEED_WORKSPACE_NAME}`);
   console.log(`  Project:   ${SEED_PROJECT_NAME} (${project.identifier})`);
   console.log('  Open the project to browse the plan as an issue tree.');
