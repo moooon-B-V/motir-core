@@ -253,7 +253,8 @@ export const story_3_8: PlanStory = {
         '## Acceptance criteria\n\n' +
         '- `pnpm test` covers the bounded projection + `truncated`/`cap` + Done-age window, the banner predicate, the no-load-more assertions (flat + swimlane), and DOM-bounded virtualization.\n' +
         '- `pnpm test:e2e --grep board-load` runs green over the real stack: no "Load more", virtualized scroll, the over-cap banner present/absent correctly, the Done-age window.\n' +
-        '- The suite reuses `tests/helpers/db.ts` truncation + the seeded project; the at-scale combined journey stays in Story 3.5.\n\n' +
+        '- The suite reuses `tests/helpers/db.ts` truncation + the seeded project; the at-scale combined journey stays in Story 3.5.\n' +
+        '- This subtask OWNS the board load-model coverage and SUPERSEDES the retired per-column "Load more"/cursor-paging assertions in 3.2.7 (if 3.2.7 landed first, update its specs); 3.2.7 / 3.3.7 keep their drag / reducer / grouping / reassign / WIP coverage unchanged — they are NOT cancelled.\n\n' +
         '## Context refs\n\n' +
         '- `tests/e2e/board-ui.spec.ts` (3.2.7) + `tests/e2e/board-projection.spec.ts` (3.1.7) — the board E2E this extends\n' +
         '- `tests/helpers/db.ts`; the 3.8.2 projection + 3.8.3/3.8.4/3.8.5 UI under test; `prodect-core/CLAUDE.md` (real Postgres, no mocks)',
