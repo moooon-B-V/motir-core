@@ -86,6 +86,69 @@ export const EPICS: EpicMeta[] = [
           'header and data rows carry the same fixed-px grid template (not `max-content`), plus a ' +
           'browser pixel-alignment measurement during the fix.',
       },
+      {
+        id: 'bug-ready-banner-no-deps',
+        kind: 'bug',
+        title: '"Ready to start" banner is suppressed for items with no dependencies',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 2 · **Surfaces:** issue detail relationships panel ' +
+          '(Subtask 2.4.5) + issue-list quick-view peek (Subtask 2.5.21) · **Status:** open · ' +
+          '**Reported by:** Yue.\n\n' +
+          'The green **"Ready to start"** readiness banner only appears on a work item that **has ' +
+          'at least one `is_blocked_by` blocker** (all of them terminal). An item with **no ' +
+          'depended-on work item at all** shows **no banner** — even though "nothing blocks it" is ' +
+          'the *most* ready an item can be. It SHOULD show "Ready to start" too: a todo-category ' +
+          'item with zero open blockers is ready, whether that is because every blocker resolved ' +
+          'OR because it never had any.\n\n' +
+          '**Repro:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz`, open the `moooon` / `prodect` ' +
+          'project, open any todo-status issue that has **no** "blocked by" links, and observe the ' +
+          'relationships panel shows no readiness banner. Open one that IS blocked by an issue that ' +
+          'is already done → it correctly shows the green "Ready to start". The no-dependency item ' +
+          'should match. Same gap in the issue-list quick-view peek.\n\n' +
+          '**Root cause.** NOT the service and NOT the badge — both already handle the no-blocker ' +
+          'case correctly. `workItemsService.getReadiness` returns `ready: true` with an empty ' +
+          'open-blocker set when an item has no blockers ("An item with no blockers → ready"), and ' +
+          '`components/ui/ReadinessBadge` renders the green "Ready to start" state whenever ' +
+          '`ready` is true (its prop doc: "true iff every blocker is terminal **or none exist**"). ' +
+          'The suppression is purely the **call-site gate** in the two consuming components, which ' +
+          'short-circuit on the blocker COUNT before ever rendering the badge:\n' +
+          '- `app/(authed)/issues/[key]/_components/RelationshipsPanel.tsx` — ' +
+          "`const showReadiness = blockedBy.length > 0 && currentCategory === 'todo';`\n" +
+          '- `app/(authed)/issues/_components/IssueQuickViewContent.tsx` — ' +
+          '`detail.blockedBy.length > 0 ? {…} : null` (mirrors the same rule by design).\n\n' +
+          'Both carry a comment rationalizing it ("an item nothing blocks has no signal to give") — ' +
+          'that decision is what is being reversed: a no-dependency todo item DOES have a signal, ' +
+          '"Ready to start".\n\n' +
+          '**Fix.** Drop the `blockedBy.length > 0` precondition from BOTH gates; keep the ' +
+          "`category === 'todo'` guard (readiness is still moot once in-progress / done). The " +
+          'banner then renders off the `readiness` verdict alone: `ready` (no blockers, or all ' +
+          'terminal) → green "Ready to start"; not-ready → peach "Blocked" naming the open ' +
+          'blockers. No service or DTO change — the `readiness` verdict and `ReadinessBadge` ' +
+          'already cover the empty-blocker case. Update the two stale "shows only when there ARE ' +
+          'blockers" comments accordingly.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- A **todo-category** work item with **no** `is_blocked_by` blockers shows the green ' +
+          '**"Ready to start"** banner on the issue detail relationships panel.\n' +
+          '- The same item shows the "Ready to start" peek in the issue-list quick-view.\n' +
+          '- An in-progress / done item still shows **no** readiness banner (the `todo` guard is ' +
+          'retained on both surfaces).\n' +
+          '- Existing behaviour is unchanged for items that DO have blockers: all-terminal → ' +
+          '"Ready to start"; any open blocker → "Blocked" naming the open blockers.\n' +
+          '- A regression test (component or E2E) covers the no-blocker todo item rendering ' +
+          '"Ready to start" on both surfaces.\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/issues/[key]/_components/RelationshipsPanel.tsx` — the `showReadiness` ' +
+          'gate (the primary fix site) + its rationalizing comment\n' +
+          '- `app/(authed)/issues/_components/IssueQuickViewContent.tsx` — the mirrored quick-view ' +
+          'gate\n' +
+          '- `components/ui/ReadinessBadge.tsx` — already renders the ready state for `ready: ' +
+          'true` (no change expected)\n' +
+          '- `lib/services/workItemsService.ts` — `getReadiness` / `isReady` (already returns ' +
+          '`ready: true`, empty blockers, for the no-dependency case — no change expected)\n' +
+          '- `design/work-items/relationships.mock.html` — the readiness-banner design source',
+      },
     ],
   },
   {
