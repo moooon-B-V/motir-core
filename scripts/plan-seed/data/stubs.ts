@@ -18,7 +18,10 @@ export const STUB_STORIES: PlanStory[] = [
     status: 'planned',
     descriptionMd:
       'Vitest over the projection + transition validation; Playwright over drag-drop happy path + ' +
-      'illegal-move snapback + WIP warning.',
+      'illegal-move snapback + WIP warning. The cross-cutting AT-SCALE journey that 3.2.7 / 3.3.7 ' +
+      'defer here MUST reflect the Story-3.8 load model — NO per-column "Load more"; the board loads ' +
+      'the filtered set + virtualizes + shows the over-cap "refine filter" warning + the Done-age ' +
+      'window (not the retired cursor paging).',
     items: [],
   },
   {

@@ -411,8 +411,9 @@ export const story_3_2: PlanStory = {
         '**Component / unit (vitest).** The optimistic-move reducer (apply → confirm on 200 → ' +
         'revert on 409/422, with correct column-count deltas); `BoardCard` rendering (type hue, ' +
         'key/title/assignee/priority/points, blocked indicator); `BoardColumn` (count, empty ' +
-        'state); the column page-append logic (cursor advance, no dupes); the unmapped-tray ' +
-        'present/absent branch.\n\n' +
+        'state); the unmapped-tray present/absent branch. The per-column LOAD model — virtualization ' +
+        'with NO "Load more"/cursor paging — and its tests are owned by Story 3.8 (3.8.6); this story ' +
+        'does not test per-column paging.\n\n' +
         '**E2E (Playwright) `tests/e2e/board-ui.spec.ts`.** Against a freshly seeded project:\n' +
         '- **Render** — `/boards` shows the default columns in workflow order with cards grouped ' +
         'into the right columns + per-column counts.\n' +
@@ -428,7 +429,7 @@ export const story_3_2: PlanStory = {
         'Defers to Story 3.5: WIP-limit and swimlane journeys, and the large-scale virtualization ' +
         "E2E (this story's scale proof is the 3.2.5 acceptance check against `db:seed:large`).\n\n" +
         '## Acceptance criteria\n\n' +
-        '- `pnpm test` covers the optimistic-move reducer (confirm/revert), `BoardCard`/`BoardColumn` render, the page-append logic, and the unmapped-tray branch.\n' +
+        '- `pnpm test` covers the optimistic-move reducer (confirm/revert), `BoardCard`/`BoardColumn` render, and the unmapped-tray branch (the per-column load model is Story 3.8, not tested here).\n' +
         '- `pnpm test:e2e --grep board-ui` runs green over the real stack, asserting: column render + grouping + counts, a legal drag move (status persists), an illegal-move snap-back (409, status unchanged), an in-column reorder (rank only), and a keyboard-DnD move.\n' +
         '- The E2E reuses the real-Postgres harness (`tests/helpers/db.ts` truncation) and the seeded project; it does NOT duplicate the WIP/swimlane/scale journeys (Story 3.5).\n\n' +
         '## Context refs\n\n' +
