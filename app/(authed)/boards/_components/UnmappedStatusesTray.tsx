@@ -8,11 +8,18 @@ import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 
 // The unmapped-statuses tray (Subtask 3.2.6 · design `board.mock.html` panel 5).
 // Surfaces project workflow statuses mapped to NO board column
-// (`BoardProjectionDto.unmappedStatuses`, Story 3.1.4 — the Jira behaviour). A
-// yellow callout above the board names the statuses + links to the workflow
-// admin (Story 2.2.5) to map them: work items in those statuses are HIDDEN from
-// the board, never silently dropped. The caller renders this ONLY when
-// `statuses` is non-empty (an empty tray never shows).
+// (`BoardProjectionDto.unmappedStatuses`, Story 3.1.4 — the Jira behaviour): a
+// yellow callout above the board naming the statuses, so work items in them are
+// HIDDEN from the board but never silently dropped. The caller renders this
+// ONLY when `statuses` is non-empty (an empty tray never shows).
+//
+// CTA note: column→status MAPPING admin is not in v1 (Story 3.1/3.2/3.3 defer
+// "board CRUD / column-remap admin"; a status added after the board was seeded
+// is deliberately left unmapped, NOT auto-columned — Story 3.1). Until that
+// admin lands, the link goes to the workflow editor (Story 2.2.5) — the real
+// place to review / rename / remove a stray status — and is labelled for what's
+// actually there ("Manage statuses"), NOT a "Map columns" action that doesn't
+// exist yet.
 //
 // Tokens: the yellow tint carries the hue in the BACKGROUND with
 // `--el-text-strong` text (finding #35 AA — never a tinted page surface), and
@@ -44,7 +51,7 @@ export function UnmappedStatusesTray({ statuses }: { statuses: WorkflowStatusDto
         className="text-sm font-semibold whitespace-nowrap text-(--el-link) hover:underline"
         data-testid="board-unmapped-link"
       >
-        {t('unmappedMapColumns')} →
+        {t('unmappedManageStatuses')} →
       </Link>
     </aside>
   );

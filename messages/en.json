@@ -685,7 +685,7 @@
     "emptyDescription": "This board doesn’t have any work items yet. Create one and it’ll show up here.",
     "unmappedLabel": "Statuses not on this board",
     "unmappedText": "These statuses aren’t on this board — work items in them are hidden here:",
-    "unmappedMapColumns": "Map columns",
+    "unmappedManageStatuses": "Manage statuses",
     "pagerPosition": "{name} · {index} of {count}"
   }
 }

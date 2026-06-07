@@ -20,9 +20,17 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-const { openCreateIssue } = vi.hoisted(() => ({ openCreateIssue: vi.fn() }));
+// `issuesChangedAt` is mutable so a test can simulate the provider ticking it
+// after a successful create (the signal BoardContainer refetches on).
+const createState = vi.hoisted(() => ({ openCreateIssue: vi.fn(), issuesChangedAt: 0 }));
 vi.mock('@/app/(authed)/_components/CreateIssueProvider', () => ({
-  useCreateIssue: () => ({ open: false, setOpen: vi.fn(), openCreateIssue, canCreate: true }),
+  useCreateIssue: () => ({
+    open: false,
+    setOpen: vi.fn(),
+    openCreateIssue: createState.openCreateIssue,
+    canCreate: true,
+    issuesChangedAt: createState.issuesChangedAt,
+  }),
 }));
 
 import { BoardContainer } from '@/app/(authed)/boards/_components/BoardContainer';
@@ -82,6 +90,7 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.useRealTimers();
+  createState.issuesChangedAt = 0;
 });
 
 describe('board completeness (3.2.6)', () => {
@@ -96,7 +105,38 @@ describe('board completeness (3.2.6)', () => {
     // The CTA reuses the shipped create flow (NewIssueButton → openCreateIssue).
     const cta = screen.getByRole('button', { name: 'New work item' });
     fireEvent.click(cta);
-    expect(openCreateIssue).toHaveBeenCalledTimes(1);
+    expect(createState.openCreateIssue).toHaveBeenCalledTimes(1);
+  });
+
+  it('refetches and leaves the empty state when a work item is created', async () => {
+    // The board is client-fetched, so router.refresh() can't update it — it
+    // watches the provider's issuesChangedAt tick instead. Empty first, then a
+    // create bumps the tick → refetch returns a populated board → the empty
+    // state is gone. (Regression: creating from the empty state used to leave
+    // the board stuck on "No work items yet".)
+    const populated = projection({
+      columns: [column({ id: 'c1', name: 'To Do', totalCount: 1 })],
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => projection() })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => populated });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { rerender } = render(<BoardContainer />);
+    await waitFor(() => expect(screen.getByText('No work items yet')).toBeTruthy());
+
+    // Simulate the provider's post-create tick + re-render (what a real create does).
+    createState.issuesChangedAt = 1;
+    rerender(
+      <ToastProvider>
+        <BoardContainer />
+      </ToastProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('board')).toBeTruthy());
+    expect(screen.queryByText('No work items yet')).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('keeps the columns (not the empty state) when work items are hidden in unmapped statuses', async () => {

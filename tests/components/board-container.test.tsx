@@ -35,6 +35,7 @@ vi.mock('@/app/(authed)/_components/CreateIssueProvider', () => ({
     setOpen: vi.fn(),
     openCreateIssue: vi.fn(),
     canCreate: true,
+    issuesChangedAt: 0,
   }),
 }));
 

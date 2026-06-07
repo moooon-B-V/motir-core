@@ -685,7 +685,7 @@
     "emptyDescription": "此看板还没有任何工作项。创建一个，它就会显示在这里。",
     "unmappedLabel": "不在此看板上的状态",
     "unmappedText": "以下状态不在此看板上——其中的工作项不会显示在这里：",
-    "unmappedMapColumns": "映射列",
+    "unmappedManageStatuses": "管理状态",
     "pagerPosition": "{name} · 第 {index}/{count}"
   }
 }

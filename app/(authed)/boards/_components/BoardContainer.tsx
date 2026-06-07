@@ -21,6 +21,7 @@ import { useToast } from '@/components/ui/Toast';
 import type { BoardCardDto, BoardColumnDto, BoardProjectionDto } from '@/lib/dto/boards';
 import type { MoveCardResultDto } from '@/lib/dto/boards';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+import { useCreateIssue } from '../../_components/CreateIssueProvider';
 import { usePeekOpen } from '../../issues/_components/IssueQuickView';
 import { BoardCardOverlay } from './BoardCard';
 import { BoardColumn } from './BoardColumn';
@@ -73,6 +74,18 @@ export function BoardContainer({ members = [] }: { members?: WorkspaceMemberDTO[
   const [status, setStatus] = useState<BoardStatus>('loading');
   // Bumped by `retry` to re-run the fetch effect.
   const [reloadKey, setReloadKey] = useState(0);
+  // Bumped on every successful fetch so the interactive `BoardDnd` (whose column
+  // state seeds from the projection only on mount) RE-SEEDS — keying it by this
+  // remounts it with the fresh projection after a refetch (e.g. a create), so a
+  // new card actually appears instead of the stale local state lingering.
+  const [boardVersion, setBoardVersion] = useState(0);
+
+  // A create (the empty-state CTA, or any "+ New" while the board is open) goes
+  // through the shell's CreateIssueProvider. The board is client-fetched, so
+  // `router.refresh()` (which only re-runs Server Components) does NOT refresh
+  // it — instead we watch the provider's `issuesChangedAt` tick and refetch.
+  // Fixes: creating from the empty state left the board stuck on "No work items".
+  const { issuesChangedAt } = useCreateIssue();
 
   useEffect(() => {
     let active = true;
@@ -82,6 +95,7 @@ export function BoardContainer({ members = [] }: { members?: WorkspaceMemberDTO[
           const data = (await res.json()) as BoardProjectionDto;
           if (!active) return;
           setBoard(data);
+          setBoardVersion((v) => v + 1);
           setStatus('ready');
           return;
         }
@@ -104,7 +118,7 @@ export function BoardContainer({ members = [] }: { members?: WorkspaceMemberDTO[
     return () => {
       active = false;
     };
-  }, [reloadKey]);
+  }, [reloadKey, issuesChangedAt]);
 
   // Reset to the loading shell (an event-handler setState — allowed) and bump the
   // key so the fetch effect re-runs.
@@ -132,9 +146,29 @@ export function BoardContainer({ members = [] }: { members?: WorkspaceMemberDTO[
     return <ErrorState title={t('errorTitle')} description={t('errorDescription')} retry={retry} />;
   }
 
-  // Key by boardId so switching boards (a future multi-board addition) resets the
-  // local drag state cleanly rather than reconciling across boards.
-  return <BoardDnd key={board.boardId} board={board} assigneeNameById={assigneeNameById} />;
+  // Completeness states (Subtask 3.2.6) are derived from the freshly-FETCHED
+  // projection (not BoardDnd's local drag state), so a refetch updates them
+  // immediately:
+  //   - unmapped-statuses TRAY above the board (absent when all are mapped);
+  //   - the board EMPTY state when every column is empty AND nothing is unmapped
+  //     (when statuses are unmapped, work items may be hidden in them — present,
+  //     not absent — so we keep the columns + tray rather than claim "no work
+  //     items"; rung-2 guard).
+  const hasUnmapped = board.unmappedStatuses.length > 0;
+  const isEmpty = !hasUnmapped && board.columns.every((c) => c.totalCount === 0);
+
+  return (
+    <div className="flex min-w-0 flex-col gap-3">
+      {hasUnmapped ? <UnmappedStatusesTray statuses={board.unmappedStatuses} /> : null}
+      {isEmpty ? (
+        <BoardEmptyState />
+      ) : (
+        // Key by `boardVersion` so each refetch re-seeds the interactive board
+        // (its column state is mount-seeded); a create then shows the new card.
+        <BoardDnd key={boardVersion} board={board} assigneeNameById={assigneeNameById} />
+      )}
+    </div>
+  );
 }
 
 // The interactive board (Subtask 3.2.4) — the horizontally-scrolling row of
@@ -172,19 +206,9 @@ function BoardDnd({
   // The horizontal scroll region (the column row) + which column is centred in
   // it — drives the mobile pager (Subtask 3.2.6, design panel 7). On a narrow
   // viewport the board reads as a single-column scroll; the pager shows
-  // "{name} · {i} of {n}". The hook is a no-op (returns 0) until the row mounts,
-  // so it's safe to call even when the empty state renders instead of the row.
+  // "{name} · {i} of {n}".
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeColumn = useActiveColumnIndex(scrollRef, columns.length);
-
-  // A project with no work items shows the board empty state (design panel 6),
-  // NOT six blank columns. But when statuses are unmapped, work items may live
-  // in a status mapped to no column — present but HIDDEN — so we keep the
-  // columns + the unmapped tray rather than claim "no work items". (Rung-2: the
-  // schema lets a status map to no column, so "all columns empty" ≠ "no work
-  // items" once unmapped statuses exist.)
-  const hasUnmapped = board.unmappedStatuses.length > 0;
-  const isEmpty = !hasUnmapped && columns.every((c) => c.totalCount === 0);
 
   // A mirror ref so the drag handlers read the LATEST columns synchronously
   // (a dnd lifecycle event can fire before a state update has re-rendered),
@@ -427,67 +451,54 @@ function BoardDnd({
   }, [colName, t]);
 
   return (
-    <div className="flex min-w-0 flex-col gap-3">
-      {/* Unmapped-statuses tray (3.2.6, design panel 5) — above the board,
-          absent when every status is mapped. */}
-      {hasUnmapped ? <UnmappedStatusesTray statuses={board.unmappedStatuses} /> : null}
-
-      {isEmpty ? (
-        <BoardEmptyState />
-      ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
-          onDragEnd={handleDragEnd}
-          onDragCancel={handleDragCancel}
-          accessibility={{
-            announcements,
-            screenReaderInstructions: { draggable: t('dndInstructions') },
-          }}
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+      accessibility={{
+        announcements,
+        screenReaderInstructions: { draggable: t('dndInstructions') },
+      }}
+    >
+      <div className="flex min-w-0 flex-col gap-2">
+        {/* The horizontally-scrolling column row. Scroll-snap (proximity, so it
+            never fights a deliberate scroll) makes narrow viewports read as a
+            single-column pager (3.2.6, panel 7); each column is wrapped with
+            `data-board-column` so the pager hook can locate it. The wrapper is
+            the snap target — BoardColumn keeps its own droppable ref + width. */}
+        <div
+          ref={scrollRef}
+          role="group"
+          aria-label={t('boardLabel')}
+          tabIndex={0}
+          className="flex snap-x snap-proximity gap-4 overflow-x-auto pb-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          data-testid="board"
         >
-          <div className="flex min-w-0 flex-col gap-2">
-            {/* The horizontally-scrolling column row. Scroll-snap (proximity, so
-                it never fights a deliberate scroll) makes narrow viewports read
-                as a single-column pager (3.2.6, panel 7); each column is wrapped
-                with `data-board-column` so the pager hook can locate it. The
-                wrapper is the snap target — BoardColumn keeps its own droppable
-                ref + width unchanged. */}
-            <div
-              ref={scrollRef}
-              role="group"
-              aria-label={t('boardLabel')}
-              tabIndex={0}
-              className="flex snap-x snap-proximity gap-4 overflow-x-auto pb-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-              data-testid="board"
-            >
-              {columns.map((column) => (
-                <div key={column.id} data-board-column className="flex shrink-0 snap-start">
-                  <BoardColumn
-                    column={column}
-                    assigneeNameById={assigneeNameById}
-                    onOpenQuickView={openPeek}
-                  />
-                </div>
-              ))}
-            </div>
-            <BoardColumnPager columns={columns} activeIndex={activeColumn} />
-          </div>
-          <DragOverlay>
-            {activeCard ? (
-              <BoardCardOverlay
-                card={activeCard}
-                assigneeName={
-                  activeCard.assigneeId
-                    ? (assigneeNameById.get(activeCard.assigneeId) ?? null)
-                    : null
-                }
+          {columns.map((column) => (
+            <div key={column.id} data-board-column className="flex shrink-0 snap-start">
+              <BoardColumn
+                column={column}
+                assigneeNameById={assigneeNameById}
+                onOpenQuickView={openPeek}
               />
-            ) : null}
-          </DragOverlay>
-        </DndContext>
-      )}
-    </div>
+            </div>
+          ))}
+        </div>
+        <BoardColumnPager columns={columns} activeIndex={activeColumn} />
+      </div>
+      <DragOverlay>
+        {activeCard ? (
+          <BoardCardOverlay
+            card={activeCard}
+            assigneeName={
+              activeCard.assigneeId ? (assigneeNameById.get(activeCard.assigneeId) ?? null) : null
+            }
+          />
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
