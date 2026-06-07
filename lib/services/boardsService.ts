@@ -11,10 +11,15 @@ import { userRepository } from '@/lib/repositories/userRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { keyBetween } from '@/lib/workItems/positioning';
+import { keyBetween, keyForAppend } from '@/lib/workItems/positioning';
 import { isOwnerRole } from '@/lib/workspaces/roles';
 import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
-import { toBoardCardDto, toBoardColumnConfigDto, toBoardDto } from '@/lib/mappers/boardMappers';
+import {
+  toBoardCardDto,
+  toBoardColumnConfigDto,
+  toBoardColumnStatusDto,
+  toBoardDto,
+} from '@/lib/mappers/boardMappers';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { buildDefaultBoard } from '@/lib/boards/defaultBoard';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -22,6 +27,7 @@ import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
 import type {
   BoardColumnConfigDto,
   BoardColumnDto,
+  BoardColumnStatusDto,
   BoardDto,
   BoardProjectionDto,
   BoardSwimlaneDto,
@@ -36,13 +42,20 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
   BoardColumnNotFoundError,
   BoardNotFoundError,
+  ColumnNotEmptyError,
   IllegalBoardMoveError,
+  InvalidBoardNameError,
+  InvalidColumnNameError,
+  InvalidColumnPositionError,
   InvalidSwimlaneGroupByError,
   InvalidWipLimitError,
+  LastColumnError,
   NotBoardAdminError,
+  StatusMappingConflictError,
   UnmappedColumnTargetError,
 } from '@/lib/boards/errors';
 import { IllegalTransitionError, WorkItemNotFoundError } from '@/lib/workItems/errors';
+import { WorkflowStatusNotFoundError } from '@/lib/workflows/errors';
 
 // Boards service (Story 3.1) — business logic for the board entity. It hosts
 // two surfaces:
@@ -507,6 +520,268 @@ export const boardsService = {
     );
     return toBoardColumnConfigDto(row);
   },
+
+  // ── Column / board ADMIN writes (Subtask 3.6.2) ────────────────────────────
+  // The board-configuration admin surface (Story 3.6): add / rename / reorder /
+  // delete a column, map / unmap a status onto a column, rename the board. Each
+  // extends the 3.3 config seam — same order (resolve + tenant-gate 404 →
+  // owner-authorize 403 → validate 400 → write under withWorkspaceContext so
+  // the FORCE-RLS WITH CHECK passes), same `assertBoardConfigAdmin` gate, same
+  // scalar-FK `Unchecked` writes (finding #33). NO new table, NO migration —
+  // pure config over the Story-3.1 schema. A card's column is always DERIVED
+  // from its `work_item.status`, so NONE of these writes ever touch a work item.
+
+  /**
+   * Add a column to a board (Subtask 3.6.2). Appends to the end of the board's
+   * columns unless an explicit `position` (a fractional-index key the client
+   * mints to insert at a spot) is given — mirrors `workflowsService.createStatus`'s
+   * append. Returns the new column's config DTO.
+   *
+   * Throws: `BoardNotFoundError` (404), `NotBoardAdminError` (403),
+   * `InvalidColumnNameError` (400).
+   */
+  async addColumn(
+    boardId: string,
+    input: { name: string; position?: string },
+    ctx: ServiceContext,
+  ): Promise<BoardColumnConfigDto> {
+    const board = await boardRepository.findById(boardId, ctx.workspaceId);
+    if (!board) throw new BoardNotFoundError(boardId);
+    await assertBoardConfigAdmin(ctx.userId, board.projectId, ctx.workspaceId);
+
+    const name = input.name?.trim();
+    if (!name) throw new InvalidColumnNameError();
+
+    let position = input.position;
+    if (position == null) {
+      const columns = await boardColumnRepository.findByBoard(boardId, ctx.workspaceId);
+      const last = columns.length ? columns[columns.length - 1]!.position : null;
+      position = keyForAppend(last);
+    }
+
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) =>
+        boardColumnRepository.create(
+          { workspaceId: ctx.workspaceId, projectId: board.projectId, boardId, name, position },
+          tx,
+        ),
+    );
+    return toBoardColumnConfigDto(row);
+  },
+
+  /**
+   * Rename a board column (Subtask 3.6.2). The column row carries its scalar
+   * `projectId` (3.1.3) so the admin gate needs no extra board read, exactly
+   * like `setColumnWipLimit`. Returns the updated column config DTO.
+   *
+   * Throws: `BoardColumnNotFoundError` (404), `NotBoardAdminError` (403),
+   * `InvalidColumnNameError` (400).
+   */
+  async renameColumn(
+    columnId: string,
+    name: string,
+    ctx: ServiceContext,
+  ): Promise<BoardColumnConfigDto> {
+    const column = await boardColumnRepository.findById(columnId, ctx.workspaceId);
+    if (!column) throw new BoardColumnNotFoundError(columnId);
+    await assertBoardConfigAdmin(ctx.userId, column.projectId, ctx.workspaceId);
+
+    const trimmed = name?.trim();
+    if (!trimmed) throw new InvalidColumnNameError();
+
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) => boardColumnRepository.update(columnId, { name: trimmed }, tx),
+    );
+    return toBoardColumnConfigDto(row);
+  },
+
+  /**
+   * Reorder a board column (Subtask 3.6.2). `position` is the opaque
+   * fractional-index sort key the client mints strictly between the two
+   * neighbours it dropped the column between (the SAME rank scheme work items /
+   * statuses use, `lib/workItems/positioning.ts`) — a reorder is a single-row
+   * rewrite needing no cascade, mirroring the status-reorder path
+   * (`updateStatus({ position })`). Returns the updated column config DTO.
+   *
+   * Throws: `BoardColumnNotFoundError` (404), `NotBoardAdminError` (403),
+   * `InvalidColumnPositionError` (400).
+   */
+  async reorderColumn(
+    columnId: string,
+    position: string,
+    ctx: ServiceContext,
+  ): Promise<BoardColumnConfigDto> {
+    const column = await boardColumnRepository.findById(columnId, ctx.workspaceId);
+    if (!column) throw new BoardColumnNotFoundError(columnId);
+    await assertBoardConfigAdmin(ctx.userId, column.projectId, ctx.workspaceId);
+
+    if (typeof position !== 'string' || position.length === 0) {
+      throw new InvalidColumnPositionError();
+    }
+
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) => boardColumnRepository.update(columnId, { position }, tx),
+    );
+    return toBoardColumnConfigDto(row);
+  },
+
+  /**
+   * Delete a board column (Subtask 3.6.2). Two guards, both decided from the
+   * mirror product (Jira board settings → Columns, decision-authority rung 1):
+   *   - `LastColumnError` (409) — a board must keep ≥1 column (Jira never lets
+   *     you delete down to zero columns).
+   *   - `ColumnNotEmptyError` (409) — refuse while a mapped status still holds
+   *     work items on the board ("you can't delete a column with issues"); the
+   *     admin remaps those statuses elsewhere first.
+   * When it proceeds, it unmaps the column's statuses (they return to
+   * `unmappedStatuses` — the 3.2.6 tray) and deletes the `board_column` row, in
+   * ONE transaction. It NEVER deletes a work item (a card's column is derived
+   * from its `work_item.status`). NOTE: it does NOT specially guard a column
+   * mapping the INITIAL status — Story 3.1 deliberately ALLOWS an unmapped
+   * status (it surfaces in the tray, its issues simply hidden from the board),
+   * so an initial-status guard would contradict that shipped decision (rung 2).
+   *
+   * Throws: `BoardColumnNotFoundError` (404), `NotBoardAdminError` (403),
+   * `LastColumnError` (409), `ColumnNotEmptyError` (409).
+   */
+  async deleteColumn(columnId: string, ctx: ServiceContext): Promise<void> {
+    const column = await boardColumnRepository.findById(columnId, ctx.workspaceId);
+    if (!column) throw new BoardColumnNotFoundError(columnId);
+    await assertBoardConfigAdmin(ctx.userId, column.projectId, ctx.workspaceId);
+
+    // Last-column guard — a board must keep at least one column.
+    const columns = await boardColumnRepository.findByBoard(column.boardId, ctx.workspaceId);
+    if (columns.length <= 1) throw new LastColumnError();
+
+    // Not-empty guard — refuse if any of the column's mapped (live) statuses
+    // still holds non-archived work items on the board.
+    const statusKeys = await mappedLiveStatusKeys(columnId, column.projectId, ctx.workspaceId);
+    if (statusKeys.length > 0) {
+      const cardCount = await workItemRepository.countProjectIssues(
+        column.projectId,
+        ctx.workspaceId,
+        { statuses: statusKeys },
+      );
+      if (cardCount > 0) throw new ColumnNotEmptyError(columnId, cardCount);
+    }
+
+    await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+      // Unmap the column's statuses (back to the tray), then drop the column.
+      await boardColumnStatusRepository.deleteByColumn(columnId, tx);
+      await boardColumnRepository.delete(columnId, tx);
+    });
+  },
+
+  /**
+   * Map (or MOVE) a workflow status onto a board column (Subtask 3.6.2). The
+   * mapping table carries `@@unique([boardId, statusId])` (3.1.1) — a status
+   * lives in AT MOST ONE column per board — so this is a MOVE, not a duplicate:
+   * in ONE transaction it deletes any existing mapping for the status on this
+   * board (`deleteByStatus`) then creates the new edge (`create`). Re-mapping a
+   * status therefore REPLACES its row; a P2002 backstop covers the concurrent
+   * race (mirrors `createStatus`). Returns the new mapping edge DTO.
+   *
+   * The status must belong to the board's project (else nothing to map);
+   * the column must belong to this board.
+   *
+   * Throws: `BoardNotFoundError` / `BoardColumnNotFoundError` (404),
+   * `WorkflowStatusNotFoundError` (404), `NotBoardAdminError` (403),
+   * `StatusMappingConflictError` (409).
+   */
+  async mapStatusToColumn(
+    boardId: string,
+    columnId: string,
+    statusId: string,
+    ctx: ServiceContext,
+  ): Promise<BoardColumnStatusDto> {
+    const board = await boardRepository.findById(boardId, ctx.workspaceId);
+    if (!board) throw new BoardNotFoundError(boardId);
+    await assertBoardConfigAdmin(ctx.userId, board.projectId, ctx.workspaceId);
+
+    const column = await boardColumnRepository.findById(columnId, ctx.workspaceId);
+    if (!column || column.boardId !== boardId) throw new BoardColumnNotFoundError(columnId);
+
+    const status = await workflowsRepository.findStatusById(statusId, ctx.workspaceId);
+    if (!status || status.projectId !== board.projectId) {
+      throw new WorkflowStatusNotFoundError(statusId);
+    }
+
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        // MOVE-not-duplicate: drop any existing column for this status on this
+        // board, then create the new edge — both in this one transaction so the
+        // unique invariant never sees two rows.
+        await boardColumnStatusRepository.deleteByStatus(boardId, statusId, tx);
+        try {
+          return await boardColumnStatusRepository.create(
+            {
+              workspaceId: ctx.workspaceId,
+              projectId: board.projectId,
+              boardId,
+              columnId,
+              statusId,
+            },
+            tx,
+          );
+        } catch (err) {
+          /* istanbul ignore next -- defensive: P2002 only fires when a concurrent map of the same (boardId, statusId) commits between this tx's delete and create; not deterministically testable (mirrors createStatus's P2002 guard) */
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+            throw new StatusMappingConflictError(statusId);
+          }
+          /* istanbul ignore next -- defensive rethrow: the only expected write error here is the P2002 handled above */
+          throw err;
+        }
+      },
+    );
+    return toBoardColumnStatusDto(row);
+  },
+
+  /**
+   * Unmap a workflow status from the board (Subtask 3.6.2) — delete its
+   * `board_column_status` edge so the status returns to `unmappedStatuses` (the
+   * 3.2.6 tray); its work items are simply hidden from the board, never deleted.
+   * Idempotent: unmapping a status that is already unmapped (0 rows) is a no-op
+   * success — the desired end-state (not mapped) holds either way, so there is
+   * no 404 for an already-unmapped / unknown status (the board + admin gates
+   * already bound the operation to this workspace).
+   *
+   * Throws: `BoardNotFoundError` (404), `NotBoardAdminError` (403).
+   */
+  async unmapStatus(boardId: string, statusId: string, ctx: ServiceContext): Promise<void> {
+    const board = await boardRepository.findById(boardId, ctx.workspaceId);
+    if (!board) throw new BoardNotFoundError(boardId);
+    await assertBoardConfigAdmin(ctx.userId, board.projectId, ctx.workspaceId);
+
+    await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
+      boardColumnStatusRepository.deleteByStatus(boardId, statusId, tx),
+    );
+  },
+
+  /**
+   * Rename a board (Subtask 3.6.2). Same gate + order as `setSwimlaneGroupBy`;
+   * returns the updated board config DTO so the 3.6.3 UI reconciles.
+   *
+   * Throws: `BoardNotFoundError` (404), `NotBoardAdminError` (403),
+   * `InvalidBoardNameError` (400).
+   */
+  async renameBoard(boardId: string, name: string, ctx: ServiceContext): Promise<BoardDto> {
+    const board = await boardRepository.findById(boardId, ctx.workspaceId);
+    if (!board) throw new BoardNotFoundError(boardId);
+    await assertBoardConfigAdmin(ctx.userId, board.projectId, ctx.workspaceId);
+
+    const trimmed = name?.trim();
+    if (!trimmed) throw new InvalidBoardNameError();
+
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) => boardRepository.update(boardId, { name: trimmed }, tx),
+    );
+    return toBoardDto(row);
+  },
 };
 
 /**
@@ -546,6 +821,30 @@ async function assertBoardConfigAdmin(
 /** True iff `value` is one of the `BoardSwimlaneGroupBy` enum values. */
 function isSwimlaneGroupBy(value: string): value is BoardSwimlaneGroupBy {
   return (Object.values(BoardSwimlaneGroupBy) as string[]).includes(value);
+}
+
+/**
+ * The LIVE status keys a column maps (Subtask 3.6.2 — the delete-column
+ * not-empty guard). Resolves the column's `board_column_status` rows against
+ * the project's current workflow statuses, dropping any mapping to a status
+ * that no longer exists (a stale edge maps no live key, so it holds no cards).
+ * The returned keys feed `countProjectIssues({ statuses })` — if any card sits
+ * in one of them the column isn't empty.
+ */
+async function mappedLiveStatusKeys(
+  columnId: string,
+  projectId: string,
+  workspaceId: string,
+): Promise<string[]> {
+  const [mappings, statuses] = await Promise.all([
+    boardColumnStatusRepository.findByColumn(columnId, workspaceId),
+    workflowsService.listStatusesByProject(projectId, workspaceId),
+  ]);
+  const statusById = new Map(statuses.map((s) => [s.id, s]));
+  return mappings
+    .map((m) => statusById.get(m.statusId))
+    .filter((s): s is WorkflowStatusDto => s != null)
+    .map((s) => s.key);
 }
 
 /** True iff `limit` is `null` (clear) or a non-negative integer. */

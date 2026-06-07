@@ -1,7 +1,8 @@
-import type { Board, BoardColumn, WorkItem } from '@prisma/client';
+import type { Board, BoardColumn, BoardColumnStatus, WorkItem } from '@prisma/client';
 import type {
   BoardCardDto,
   BoardColumnConfigDto,
+  BoardColumnStatusDto,
   BoardDto,
   BoardSwimlaneGroupByDto,
   BoardTypeDto,
@@ -36,6 +37,20 @@ export function toBoardColumnConfigDto(row: BoardColumn): BoardColumnConfigDto {
     name: row.name,
     position: row.position,
     wipLimit: row.wipLimit,
+  };
+}
+
+/**
+ * Map a `board_column_status` row to a `BoardColumnStatusDto` (Subtask 3.6.2 —
+ * the map-status write return). Just the mapping edge's identity (board /
+ * column / status ids) — the rows carry timestamps + a workspace/project FK the
+ * wire shape omits.
+ */
+export function toBoardColumnStatusDto(row: BoardColumnStatus): BoardColumnStatusDto {
+  return {
+    boardId: row.boardId,
+    columnId: row.columnId,
+    statusId: row.statusId,
   };
 }
 
