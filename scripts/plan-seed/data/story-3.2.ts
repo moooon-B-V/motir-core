@@ -218,7 +218,7 @@ export const story_3_2: PlanStory = {
     {
       id: '3.2.3',
       title: 'Column + card components — `BoardColumn` / `BoardCard` reusing issue primitives',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
