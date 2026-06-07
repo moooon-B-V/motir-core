@@ -104,7 +104,10 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
     );
   });
 
-  it('ready: renders "Ready to start" when the item has blockers that are all resolved', () => {
+  it('ready: renders "Ready to start" when the verdict is ready (all blockers resolved, OR none — bug-ready-banner-no-deps)', () => {
+    // `{ ready: true, blockers: [] }` is the payload for BOTH "every blocker is
+    // terminal" and "the item has no blockers at all" — a no-dependency todo item
+    // is the most ready it can be and shows the same green banner.
     render(
       <IssueQuickViewPanel
         state="ready"
@@ -115,7 +118,7 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
     expect(screen.getByText('All blockers resolved')).toBeTruthy();
   });
 
-  it('no blockers: renders NO readiness banner (readiness === null)', () => {
+  it('null verdict: renders NO readiness banner (no verdict carried)', () => {
     render(<IssueQuickViewPanel state="ready" data={{ ...TODO, readiness: null }} />);
     expect(screen.queryByText('Blocked')).toBeNull();
     expect(screen.queryByText('Ready to start')).toBeNull();

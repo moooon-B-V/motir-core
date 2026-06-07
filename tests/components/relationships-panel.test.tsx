@@ -81,8 +81,8 @@ const EMPTY: Omit<React.ComponentProps<typeof RelationshipsPanel>, 'readiness' |
   relatesTo: [],
   duplicates: [],
   clones: [],
-  // The item itself is in the todo category, so the readiness banner is eligible
-  // to show (gated further by whether it has blockers).
+  // The item itself is in the todo category, so the readiness banner shows —
+  // the only gate is the category, not the blocker count (bug-ready-banner-no-deps).
   currentStatus: 'todo',
 };
 const READY: ReadinessVerdictDto = { ready: true, openBlockers: [] };
@@ -126,9 +126,19 @@ describe('RelationshipsPanel (2.4.5 read-only)', () => {
     render(<RelationshipsPanel {...EMPTY} readiness={READY} workflow={workflow} />);
     screen.getByText('Relationships');
     screen.getByText('No linked work items yet.');
-    expect(screen.queryByText('Ready to start')).toBeNull();
+    // A todo item with no blockers is the most ready it can be — the "Ready to
+    // start" banner shows above the empty links list (bug-ready-banner-no-deps).
+    screen.getByText('Ready to start');
     // Not editable → no "+ Link issue" entry point.
     expect(screen.queryByRole('button', { name: /Link work item/ })).toBeNull();
+  });
+
+  it('shows "Ready to start" for a todo item with NO blockers (bug-ready-banner-no-deps)', () => {
+    // The most ready an item can be: nothing depends on it. The banner reads off
+    // the verdict (ready), not the blocker count.
+    render(<RelationshipsPanel {...EMPTY} readiness={READY} workflow={workflow} />);
+    screen.getByText('Ready to start');
+    screen.getByText('All blockers resolved');
   });
 
   it('groups links by kind, each linked item a navigable row with its status', () => {

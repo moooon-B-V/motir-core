@@ -270,6 +270,9 @@ test('@smoke link management — add a blocked-by link via the panel; persists +
   const b = await mk(page, projectId, { title: 'The blocker issue' });
 
   await page.goto(`/issues/${a.identifier}`);
+  // A fresh todo item with no blockers is the most ready it can be — it reads
+  // "Ready to start" before any dependency exists (bug-ready-banner-no-deps).
+  await expect(page.getByText('Ready to start')).toBeVisible();
   await page.getByRole('button', { name: 'Link work item' }).click();
   // Default relationship is "Blocked by" — just pick the target + Add.
   await page.getByRole('combobox', { name: 'Work item to link' }).click();

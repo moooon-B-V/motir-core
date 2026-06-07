@@ -146,11 +146,14 @@ export function RelationshipsPanel({
     { key: 'clones', label: tl('relationship.clones'), items: clones, blockerGroup: false },
   ];
   const nonEmpty = groups.filter((g) => g.items.length > 0);
-  // The readiness banner shows only for a TODO-category item that has blockers:
-  // "can I start this?" is moot once the item is in-progress or done (2.5.21,
-  // matching the quick-view peek).
+  // The readiness banner shows for any TODO-category item: "can I start this?"
+  // is moot once the item is in-progress or done (2.5.21, matching the
+  // quick-view peek). An item with NO blockers is the most ready it can be, so
+  // it shows the green "Ready to start" too — the badge renders off the
+  // `readiness` verdict (ready when no blockers OR all terminal), not the
+  // blocker count (bug-ready-banner-no-deps).
   const currentCategory = workflow.statuses.find((s) => s.key === currentStatus)?.category;
-  const showReadiness = blockedBy.length > 0 && currentCategory === 'todo';
+  const showReadiness = currentCategory === 'todo';
   const openBlockerIds = new Set(readiness.openBlockers.map((b) => b.id));
   const canEdit = Boolean(editable && currentItemId && identifier);
 
@@ -161,9 +164,9 @@ export function RelationshipsPanel({
           <AddLinkControl currentItemId={currentItemId!} identifier={identifier!} />
         ) : null}
 
-        {/* Readiness reads off the dependency in-edges, so it shows only when
-            there ARE blockers — an item nothing blocks has no signal to give —
-            AND only while the item is still in the todo category (2.5.21). */}
+        {/* Readiness shows while the item is still in the todo category
+            (2.5.21): green "Ready to start" when ready (no blockers, or all
+            terminal), peach "Blocked" naming the open blockers otherwise. */}
         {showReadiness ? (
           <ReadinessBadge
             ready={readiness.ready}
