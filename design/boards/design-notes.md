@@ -6,9 +6,10 @@ design system (`app/globals.css` `--el-*`/shape tokens + the shipped
 `components/ui/*` and issue-list primitives), so the code subtasks compose the
 same primitives — no Pencil→code gap.
 
-| Surface                            | Asset                               | Notes                                                                                                                                                                                                                  |
-| ---------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Kanban board (columns + cards)** | **`board.mock.html`** (HTML mockup) | The whole board surface — no `design/boards/` asset existed; the 3.2.1 design gate produces this. Multi-panel: board · drag · snap-back · keyboard · scale · unmapped · states · mobile. Gates 3.2.2–3.2.6. See below. |
+| Surface                            | Asset                                       | Notes                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Kanban board (columns + cards)** | **`board.mock.html`** (HTML mockup)         | The whole board surface — no `design/boards/` asset existed; the 3.2.1 design gate produces this. Multi-panel: board · drag · snap-back · keyboard · scale · unmapped · states · mobile. Gates 3.2.2–3.2.6. See below.                                                                                                                                                                                                    |
+| **Swimlanes + WIP limits**         | **`swimlanes-wip.mock.html`** (HTML mockup) | EXTENDS the board surface — the 3.2.1 mockup drew a WIP slot only as a NON-enforced placeholder and NO swimlanes / WIP editor / over-limit treatment (unspecified == no design), so the 3.3.1 design gate produces this. Multi-panel: group-by control · swimlanes (assignee/epic/priority + catch-all) · cross-lane drag · WIP config · over-limit · states. Gates 3.3.5–3.3.6. See "Swimlanes + WIP (Story 3.3)" below. |
 
 The board is a **pure consumer** of the Story-3.1 board API
 (`GET …/board` → `BoardProjectionDto`; `GET …/board/columns/[id]/cards` → the
@@ -179,3 +180,146 @@ keyboard); long-press lifts a card on touch.
   rely on hue alone.
 - Columns are landmarked (`<section aria-label="{name}, {n} issues">`) and the
   drag flow is fully keyboard-operable with live announcements.
+
+---
+
+# Swimlanes + WIP (Story 3.3)
+
+Design reference for Story 3.3 — the board's flow-management layer on top of the
+3.2 Kanban surface. Asset: **`swimlanes-wip.mock.html`** (+ `swimlanes-wip.png`
+export). It is the source of truth for the UI subtasks **3.3.5** (swimlanes +
+cross-lane drag) and **3.3.6** (WIP config + over-limit warning), which both
+carry **3.3.1** in `dependsOn`.
+
+Built FROM the real design system (the token block is copied 1:1 from
+`app/globals.css`) and **reuses the shipped board/issue primitives unchanged** —
+the `BoardColumn`, the `BoardCard` (`IssueTypeIcon` in the `--el-type-*` hue ·
+mono key · 2-line title · priority `Pill` · story-point chip · assignee
+`Avatar` · the Blocked peach pill), the column `[⋯]` menu, `Tooltip`. Swimlanes
+
+- WIP are a **new arrangement + two new affordances**, not a new board.
+
+Mirror product = **Jira / Linear** swimlanes + column WIP (decision-ladder rung
+1). Config is persisted on the `board` entity and shared across viewers.
+
+The asset is multi-panel (review EACH): **(0)** group-by control · **(1)**
+swimlanes by Assignee (+ collapse + catch-all) · **(2)** by Epic · **(3)** by
+Priority · **(4)** cross-lane drag = reassign · **(5)** WIP config · **(6)**
+over-limit (SOFT) · **(7)** states.
+
+## Composing primitives (what 3.3.5 / 3.3.6 build with)
+
+- **Group-by control** — the shipped **Segmented** control (`components/ui`,
+  the `.seg`), in the 3.2.1-reserved 3.3-controls slot in the board header.
+  Options **None / Assignee / Epic / Priority** with a leading lucide glyph
+  (`user` / `zap` / `flag`); the active option carries `aria-pressed="true"` +
+  the `--el-page-bg` raised treatment. Do NOT invent a control.
+- **Lane header** — chevron (`chevron-down`, rotated −90° when collapsed) +
+  the group label + a `.lane-count` aggregate badge. Label by dimension:
+  - assignee → the `Avatar` (initial-letter, `.sm`) + name;
+  - epic → the epic `IssueTypeIcon` (`zap`, `--el-type-epic`) + mono `epic-key`
+    - `epic-title`;
+  - priority → the priority `Pill` (the exact `PRIORITY_META` tone + direction
+    icon the cards use);
+  - catch-all → a muted label ("No assignee" / "No epic") + dashed/faint marker.
+- **Card** — the unchanged 3.2.3 `BoardCard`, bucketed into `(lane, column)`
+  cells by the projection's `swimlaneKey`.
+- **WIP config** — the column `[⋯]` **menu** primitive gains a **"Set WIP
+  limit"** item opening an inline integer field + **Clear** / **Save** (the
+  shipped input + small buttons). `Tooltip` on the over-limit chip.
+
+## Lane layout + order
+
+- A lane is a horizontal row slicing **every** column; the board is a grid of
+  `(column × lane)` cells. Column headers stay **pinned** at the top; the lane
+  header is **sticky-left** so it stays visible while the board scrolls
+  horizontally. Column boundaries align across lanes (same fixed 288px column
+  width + gutters as the flat board).
+- **Only group values present on the board get a lane** (no empty 200-row
+  assignee list). The **catch-all** lane ("No assignee" / "No epic" — the
+  unassigned / no-ancestor-epic bucket) **always sorts LAST**.
+- **Lane-order rule:** assignee → alphabetical by name; priority → priority
+  rank (Highest → Lowest); epic → epic backlog/position order; **catch-all last
+  in every mode.**
+- **Collapse** is per-lane and **persists client-side** (e.g. localStorage
+  keyed by `boardId + laneKey`). A collapsed lane shows only its header +
+  count; its card bodies unmount (cheap) — but the per-column total (which
+  drives the WIP chip) still counts its cards.
+- **group-by None** is the flat 3.2 board, unchanged (no lanes).
+
+## Cross-lane drag = reassign the grouped field
+
+Dragging a card to a **different lane** must DO something (a lane that silently
+snaps back is a broken affordance). It reassigns the grouped field via the
+**existing Story-2.5 issue-field update endpoints** (the same paths
+`IssueInlineEdit` calls) — **NOT** the board/move endpoint (status only) and
+**NOT** a new backend:
+
+- assignee lane → reassign assignee · priority lane → change priority · epic
+  lane → reparent to that epic · drop into the **catch-all** → clear the field
+  (unassign / remove epic) where legal.
+- A **column** change is the 3.2 transition (`POST …/board/move`). A
+  **diagonal** drop (different column AND lane) applies **both** writes.
+- Each write is **optimistic with INDEPENDENT snap-back** (the 3.2.4 pattern):
+  if the transition is rejected (409) only the column axis reverts; the lane
+  reassign stays (and vice-versa). The card never rests in a lying position.
+- **Drop affordances (not colour-alone, finding #35):** the target lane shows a
+  ring + `--el-tint-lavender` tint; the specific target cell (diagonal) shows
+  its own ring + an **insertion bar**. Keyboard DnD moves a card across lanes
+  too (`Shift`+`↑/↓`).
+- **`aria-live` copy** (distinct per move kind):
+  - reassign (lane only): `{key} moved to {group}'s lane. {Field} changed to {value}.`
+  - transition (column only): `{key} moved to {col}, position {i} of {n}.`
+  - diagonal (column + lane): `{key} moved to {col} and reassigned to {value}.`
+  - catch-all clear: `{key} unassigned.` / `{key} removed from its epic.`
+
+## WIP limits — per-column, SOFT (advisory, never blocks)
+
+- The limit is **per-column** (Jira-classic), counted across **all** swimlanes
+  (the per-column total, not per lane). Per-lane WIP is out of scope (no stated
+  use case → match the mirror).
+- The header count renders as **`n/limit`** (the `.wip` chip). States:
+  - **under** (`3/5`) and **at** (`5/5`) → **quiet** (no warning). At-limit is
+    `n == limit` and is **NOT** warned.
+  - **over** (`n > limit`, strictly greater, e.g. `6/5`) → the over-limit
+    treatment: a warning hue (`--el-tint-peach` background + `--el-warning`
+    alert icon) **PAIRED with the icon + the `n/limit` label** so it is **not
+    colour-alone** (finding #35), and announced via `role="status"`.
+- **SOFT = advisory:** an over-limit column does **NOT** reject drops — the
+  3.2.4 move contract is untouched; a drop into an at/over-limit column still
+  succeeds and the warning persists. There is **no HARD/blocking enforcement**
+  (the stub says soft).
+- No limit set → the count renders **plain** (the neutral `.col-count` badge,
+  no `n/limit` chip, no warning). Clearing a limit returns to this state.
+
+## States (completeness)
+
+- **group-by re-lay** — switching group-by shows a loading transition (the new
+  layout streams in; the old layout does NOT flash).
+- **single-lane** — one group value present collapses to one lane sensibly.
+- **catch-all-only** — the catch-all lane renders even as the only populated
+  lane.
+- **over-limit + collapsed** — the WIP warning is independent of lane collapse;
+  a collapsed lane keeps its header + count, and the per-column total still
+  drives the chip.
+
+## Permissions
+
+Group-by + WIP are board-config **writes**. Roles/permissions are Epic 6.4, so
+(matching the 2.2.5 workflow editor) they are **membership-gated now** with a
+`TODO(6.4)` to role-gate later — no early RBAC build.
+
+## Token / a11y rules honoured
+
+- **Colour** strictly via `--el-*` (finding #54): type hues, `Pill` tones, the
+  lavender drop tint, the peach over-limit tint. Tints carry the hue in the
+  BACKGROUND with `--el-text-strong` text (finding #35, AA).
+- **Shape** via element-semantic tokens (`--radius-card`/`-btn`/`-input`/
+  `-badge`/`-control`, `--shadow-subtle`/`-elevated`, `--spacing-*`,
+  `--height-control`).
+- **Not colour-alone** (finding #35): the over-limit chip pairs hue with an
+  icon + the `n/limit` label; drop targets pair the tint with a ring +
+  insertion bar; lane state carries text + chevron, never hue alone.
+- Lane headers are operable as `role="button"` with `aria-expanded`; group-by +
+  collapse are keyboard-operable; the over-limit state is announced
+  (`role="status"`), not signalled by colour alone.
