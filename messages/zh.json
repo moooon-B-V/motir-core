@@ -671,6 +671,15 @@
     "estimateLabel": "预估 {value}",
     "assignedTo": "负责人：{name}",
     "unassigned": "未分配",
-    "boardLabel": "看板列"
+    "boardLabel": "看板列",
+    "dndInstructions": "按空格键拿起卡片。拖动时，使用方向键移动卡片。再次按空格键放下，或按 Esc 取消。",
+    "announcementPickedUp": "已拿起 {key}。位于 {col} 列，第 {index} / {count} 个位置。",
+    "announcementMoved": "{key} 已移动到 {col} 列，第 {index} / {count} 个位置。按空格键放下，按 Esc 取消。",
+    "announcementDropped": "{key} 已放入 {col} 列。",
+    "announcementCancelled": "已取消移动，{key} 已返回 {col} 列。",
+    "moveRejectedTitle": "无法移动",
+    "moveIllegalDescription": "{from} → {to} 不是允许的状态流转，{key} 已返回原位。",
+    "moveUnmappedDescription": "该列未映射任何状态，{key} 已返回原位。",
+    "moveErrorDescription": "无法移动 {key}，已返回原位。"
   }
 }

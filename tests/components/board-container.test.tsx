@@ -1,7 +1,17 @@
 // @vitest-environment happy-dom
+import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
-import { renderWithIntl as render } from '../helpers/renderWithIntl';
+import { renderWithIntl } from '../helpers/renderWithIntl';
+import { ToastProvider } from '@/components/ui/Toast';
+
+// The board's ready state mounts the dnd-kit container, which uses the toast
+// context for the snap-back feedback (Subtask 3.2.4) — wrap every render in the
+// ToastProvider so that branch mounts (the same way the create/edit modal tests
+// do).
+function render(ui: ReactElement) {
+  return renderWithIntl(<ToastProvider>{ui}</ToastProvider>);
+}
 
 // BoardContainer (Subtask 3.2.2) is a pure client consumer of the Story-3.1.6
 // board API: it fetches GET /api/board on mount and renders the board-level
