@@ -197,16 +197,6 @@ export const STUB_STORIES: PlanStory[] = [
     items: [],
   },
   {
-    id: '6.4',
-    title: 'Roles & permissions',
-    status: 'planned',
-    descriptionMd:
-      "Role model (admin/member/viewer + project-level assignment) extending Story 1.2's flat " +
-      'membership; permission enforcement at the service layer; UI gating. Migration-aware ' +
-      '(existing memberships map to a default role).',
-    items: [],
-  },
-  {
     id: '6.5',
     title: 'Project admin surface',
     status: 'planned',
