@@ -257,7 +257,7 @@ export const story_3_3: PlanStory = {
       id: '3.3.4',
       title:
         'Projection — swimlane grouping (resolved `swimlaneKey` + bounded lane list) + WIP count, in `getBoard`',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
