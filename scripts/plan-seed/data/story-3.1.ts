@@ -41,7 +41,8 @@ export const story_3_1: PlanStory = {
     'v1 auto-creates exactly ONE Kanban board per project; the `board.projectId` FK is non-unique, so ' +
     'multiple boards per project is a non-breaking addition planned as **Story 3.7** (board CRUD + ' +
     'switcher). The ' +
-    'Scrum (sprint-scoped) board is Story 3.4.\n\n' +
+    'Scrum (sprint-scoped) board is Story 4.5 (moved to Epic 4 per mistake #32 — see ' +
+    '`data/story-4.5.ts`).\n\n' +
     '**Scale shape — the projection is bounded, never "load every row" (finding #57).** A real ' +
     "team's project has thousands of issues; a board that reads them all to render is prototype- " +
     'thinking. The projection paginates **per column**: each column returns its first N cards ' +
@@ -86,7 +87,8 @@ export const story_3_1: PlanStory = {
         '**Tables and key constraints:**\n\n' +
         '- `board`: `(id, workspaceId, projectId, name, type, createdAt, updatedAt)`. `type` is a ' +
         'Prisma enum `BoardType { kanban, scrum }` (the durable shape — Jira has both; the Scrum ' +
-        'sprint-scoped view is Story 3.4, but the enum value exists now so 3.4 adds no enum ' +
+        'sprint-scoped view is Story 4.5 — moved to Epic 4 per mistake #32 — but the enum value ' +
+        'exists now so 4.5 adds no enum ' +
         'migration). `projectId` is a plain FK, **NOT unique** — one project may own many boards ' +
         '(multiple-boards-per-project is a non-breaking addition planned as **Story 3.7**; the seed ' +
         'creates exactly one default board). ' +

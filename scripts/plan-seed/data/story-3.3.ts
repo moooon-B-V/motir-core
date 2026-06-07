@@ -98,7 +98,8 @@ export const story_3_3: PlanStory = {
     'limit removes the warning. Swimlanes + WIP must remain keyboard- and screen-reader-navigable ' +
     '(lane headers are landmarks/regions; collapse is operable; over-limit state is announced, not ' +
     'colour-only).\n\n' +
-    '**Out of scope (Epic-3 siblings / later):** the sprint-scoped Scrum board (Story 3.4); the ' +
+    '**Out of scope (Epic-3 siblings / later):** the sprint-scoped Scrum board (Story 4.5 — moved ' +
+    'to Epic 4 per mistake #32); the ' +
     'cross-cutting drag + WIP + swimlane Playwright journey **at scale** (Story 3.5 — this story ' +
     'ships its OWN component tests + the focused swimlane/WIP E2E, the same split 3.1.7 / 3.2.7 ' +
     'used); per-lane (rather than per-column) WIP limits (no stated use case → match the mirror); ' +

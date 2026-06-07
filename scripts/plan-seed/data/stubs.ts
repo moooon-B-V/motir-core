@@ -9,8 +9,9 @@ import type { PlanStory } from '../types';
  */
 export const STUB_STORIES: PlanStory[] = [
   // ── Epic 3: Boards ─────────────────────────────────────────────────────────
-  // 3.1, 3.2, 3.3, 3.4, 3.6 are fully expanded → data/story-3.1.ts … data/story-3.6.ts
-  // (assembled in index.ts).
+  // 3.1, 3.2, 3.3, 3.6 are fully expanded → data/story-3.1.ts … data/story-3.6.ts
+  // (assembled in index.ts). The Scrum board (formerly Story 3.4) moved to
+  // Epic 4 as Story 4.5 per `notes.html` mistake #32 — see `data/story-4.5.ts`.
   {
     id: '3.5',
     title: 'Tests — board projection, drag transitions, WIP',
@@ -33,8 +34,9 @@ export const STUB_STORIES: PlanStory[] = [
       '(Story 3.6 generalized from the single default board to any board). The Story-3.1 schema + ' +
       'API already carry a `boardId` (the projection, move, and column routes are board-scoped), so ' +
       'this is additive — no breaking change to the default-board path.\n\n' +
-      'Out of scope here: the Scrum board variant (Story 3.4) and the column/status-mapping admin ' +
-      'itself (Story 3.6 — this story REUSES it per board). Expand to canonical subtask depth ' +
+      'Out of scope here: the Scrum board variant (Story 4.5 — moved to Epic 4 per mistake #32) ' +
+      'and the column/status-mapping admin itself (Story 3.6 — this story REUSES it per board). ' +
+      'Expand to canonical subtask depth ' +
       '(schema/guards for N boards per project · board-CRUD service+API · the switcher + create/' +
       'rename/delete UI · per-board config wiring · tests) when it reaches the ready set, per the ' +
       'async-expansion rule.',
@@ -78,22 +80,29 @@ export const STUB_STORIES: PlanStory[] = [
       'rails (one active sprint per board). Sprint report on completion.',
     items: [],
   },
+  // 4.5 is the Scrum board (formerly Story 3.4) — fully expanded as
+  // data/story-4.5.ts. Moved here from Epic 3 per `notes.html` mistake #32.
   {
-    id: '4.5',
+    id: '4.6',
     title: 'Velocity + burndown charts',
     status: 'planned',
     descriptionMd:
       'Velocity (completed points/sprint history) and in-sprint burndown (remaining points vs. ' +
-      'days). Reads the sprint + points data; no new write model.',
+      'days). Reads the sprint + points data; no new write model. Wires the in-sprint burndown ' +
+      "into the Story 4.5 sprint header's documented chart seam (Story 4.5 shows numeric " +
+      'remaining only and leaves the chart slot for this story).',
     items: [],
   },
   {
-    id: '4.6',
-    title: 'Tests — sprint lifecycle, estimation roll-ups, charts',
+    id: '4.7',
+    title: 'Tests — sprint lifecycle, estimation roll-ups, charts, at-scale Scrum journey',
     status: 'planned',
     descriptionMd:
       'Vitest over the sprint state machine + point roll-ups + carry-over; Playwright over plan → ' +
-      'start → move cards → complete.',
+      'start → move cards → complete. Also owns the **at-scale combined Scrum journey** Story 4.5 ' +
+      'defers (the Scrum analogue of Story 3.5 for Kanban): drag + WIP + swimlanes + sprint-scope ' +
+      'on a large-active-sprint board with virtualization, exercising the bounded projection ' +
+      '(finding #57) end-to-end.',
     items: [],
   },
 
