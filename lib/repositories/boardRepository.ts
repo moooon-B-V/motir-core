@@ -78,4 +78,15 @@ export const boardRepository = {
   ): Promise<Board> {
     return tx.board.create({ data });
   },
+
+  /** Update a board (the swimlane group-by config write — Subtask 3.3.3). `tx`
+   * REQUIRED; the caller (boardsService.setSwimlaneGroupBy) has already tenant-
+   * gated the board by id + workspaceId, so this is a plain id-keyed update. */
+  async update(
+    boardId: string,
+    data: Prisma.BoardUncheckedUpdateInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<Board> {
+    return tx.board.update({ where: { id: boardId }, data });
+  },
 };

@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, BoardSwimlaneGroupBy } from '@prisma/client';
 import type { BoardColumn, WorkItem } from '@prisma/client';
 import { db } from '@/lib/db';
 import { boardRepository } from '@/lib/repositories/boardRepository';
@@ -7,16 +7,20 @@ import { boardColumnStatusRepository } from '@/lib/repositories/boardColumnStatu
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { keyBetween } from '@/lib/workItems/positioning';
+import { isOwnerRole } from '@/lib/workspaces/roles';
 import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
-import { toBoardCardDto } from '@/lib/mappers/boardMappers';
+import { toBoardCardDto, toBoardColumnConfigDto, toBoardDto } from '@/lib/mappers/boardMappers';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { buildDefaultBoard } from '@/lib/boards/defaultBoard';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type {
+  BoardColumnConfigDto,
   BoardColumnDto,
+  BoardDto,
   BoardProjectionDto,
   BoardTypeDto,
   MoveCardResultDto,
@@ -29,6 +33,9 @@ import {
   BoardColumnNotFoundError,
   BoardNotFoundError,
   IllegalBoardMoveError,
+  InvalidSwimlaneGroupByError,
+  InvalidWipLimitError,
+  NotBoardAdminError,
   UnmappedColumnTargetError,
 } from '@/lib/boards/errors';
 import { IllegalTransitionError, WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -379,7 +386,116 @@ export const boardsService = {
       column: { id: target.toColumnId, name: columnName },
     };
   },
+
+  /**
+   * Set a board's swimlane group-by (Subtask 3.3.3) — the write half of the
+   * board flow-management config. `groupBy` must be a `BoardSwimlaneGroupBy`
+   * (`none` / `assignee` / `epic` / `priority`); `none` is the flat 3.2 board.
+   * Returns the updated board config DTO so the 3.3.5 UI reconciles.
+   *
+   * Order mirrors the 2.2.5 workflow mutations: resolve + tenant-gate (404) →
+   * authorize (403) → validate input (400) → write. Tenant gate (finding #26):
+   * a board id from another workspace resolves to `null` → `BoardNotFoundError`
+   * (no cross-tenant existence leak). Config writes are workspace-OWNER-gated
+   * (finding #36), mirroring the workflow editor — see `assertBoardConfigAdmin`.
+   *
+   * Throws: `BoardNotFoundError` (404), `NotBoardAdminError` (403),
+   * `InvalidSwimlaneGroupByError` (400).
+   */
+  async setSwimlaneGroupBy(
+    boardId: string,
+    groupBy: string,
+    ctx: ServiceContext,
+  ): Promise<BoardDto> {
+    const board = await boardRepository.findById(boardId, ctx.workspaceId);
+    if (!board) throw new BoardNotFoundError(boardId);
+    await assertBoardConfigAdmin(ctx.userId, board.projectId, ctx.workspaceId);
+    if (!isSwimlaneGroupBy(groupBy)) throw new InvalidSwimlaneGroupByError(groupBy);
+
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) => boardRepository.update(boardId, { swimlaneGroupBy: groupBy }, tx),
+    );
+    return toBoardDto(row);
+  },
+
+  /**
+   * Set (or clear) a board column's WIP limit (Subtask 3.3.3). `limit` is a
+   * non-negative integer, or `null` to remove the limit; a negative, fractional,
+   * or non-numeric value is rejected with `InvalidWipLimitError`. The limit is
+   * advisory only — the over-limit warning is a UI treatment (3.3.6), never a
+   * blocked drop (the 3.2.4 move contract is untouched). Returns the updated
+   * column config DTO so the 3.3.6 UI reconciles its optimistic edit.
+   *
+   * Same order + gates as `setSwimlaneGroupBy`: resolve + tenant-gate the column
+   * (404) → owner-authorize via the column's project (403) → validate (400) →
+   * write. The column row carries its scalar `projectId` (3.1.3), so the admin
+   * gate needs no extra board read.
+   *
+   * Throws: `BoardColumnNotFoundError` (404), `NotBoardAdminError` (403),
+   * `InvalidWipLimitError` (400).
+   */
+  async setColumnWipLimit(
+    columnId: string,
+    limit: number | null,
+    ctx: ServiceContext,
+  ): Promise<BoardColumnConfigDto> {
+    const column = await boardColumnRepository.findById(columnId, ctx.workspaceId);
+    if (!column) throw new BoardColumnNotFoundError(columnId);
+    await assertBoardConfigAdmin(ctx.userId, column.projectId, ctx.workspaceId);
+    if (!isValidWipLimit(limit)) throw new InvalidWipLimitError();
+
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) => boardColumnRepository.update(columnId, { wipLimit: limit }, tx),
+    );
+    return toBoardColumnConfigDto(row);
+  },
 };
+
+/**
+ * Board-config admin gate (Subtask 3.3.3). v1 routes "board admin" to the
+ * workspace OWNER (finding #36), EXACTLY mirroring `workflowsService`'s
+ * `assertProjectAdmin` — board configuration (swimlanes, WIP) is project-
+ * settings, the same tier the workflow editor guards. Full per-project RBAC is
+ * Epic 6.4 (TODO(6.4): widen the role-set behind this gate; the gate SHAPE is
+ * already durable, only the allowed roles change). Also asserts the project
+ * belongs to the workspace (404 no-existence-leak) so a foreign projectId can't
+ * probe membership.
+ *
+ * NOTE (decision-ladder + PRODECT_FINDINGS): the 3.3.3 card prose said board
+ * config is "a write any workspace member can make today". The SHIPPED 2.2.5
+ * editor it names as the precedent is owner-gated (rung 2 > the card), and Jira
+ * gates board config to admins (rung 1) — so the owner gate is the consistent
+ * build, not "any member". Logged as a finding.
+ */
+async function assertBoardConfigAdmin(
+  userId: string,
+  projectId: string,
+  workspaceId: string,
+): Promise<void> {
+  const project = await projectRepository.findById(projectId);
+  if (!project || project.workspaceId !== workspaceId) {
+    throw new ProjectNotFoundError(projectId);
+  }
+  const membership = await workspaceMembershipRepository.findByUserAndWorkspace(
+    userId,
+    workspaceId,
+  );
+  if (!isOwnerRole(membership?.role)) {
+    throw new NotBoardAdminError();
+  }
+}
+
+/** True iff `value` is one of the `BoardSwimlaneGroupBy` enum values. */
+function isSwimlaneGroupBy(value: string): value is BoardSwimlaneGroupBy {
+  return (Object.values(BoardSwimlaneGroupBy) as string[]).includes(value);
+}
+
+/** True iff `limit` is `null` (clear) or a non-negative integer. */
+function isValidWipLimit(limit: number | null): boolean {
+  return limit === null || (Number.isInteger(limit) && limit >= 0);
+}
 
 /** Default per-column page size — the projection ships at most this many cards
  * per column per page (finding #57: never the whole column). */

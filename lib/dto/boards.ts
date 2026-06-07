@@ -18,6 +18,43 @@ import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 export type BoardTypeDto = 'kanban' | 'scrum';
 
 /**
+ * Swimlane group-by — mirrors the Prisma `BoardSwimlaneGroupBy` enum (Subtask
+ * 3.3.2). `none` is the flat 3.2 board (the default); the others slice the
+ * board into horizontal lanes by that dimension (3.3.4 resolves each card's
+ * lane server-side, `epic` by ANCESTOR epic).
+ */
+export type BoardSwimlaneGroupByDto = 'none' | 'assignee' | 'epic' | 'priority';
+
+/**
+ * The board's config row (Subtask 3.3.3) — the wire shape `setSwimlaneGroupBy`
+ * returns after a config write so the 3.3.5 UI reconciles. Deliberately the
+ * board's identity + config only (NOT the heavy `BoardProjectionDto`, which the
+ * 3.1.4 read path / 3.3.4 lane extension owns): `id`, `name`, `type`, and the
+ * active `swimlaneGroupBy`.
+ */
+export interface BoardDto {
+  id: string;
+  name: string;
+  type: BoardTypeDto;
+  swimlaneGroupBy: BoardSwimlaneGroupByDto;
+}
+
+/**
+ * One column's config row (Subtask 3.3.3) — the wire shape `setColumnWipLimit`
+ * returns so the 3.3.6 UI reconciles its optimistic WIP edit. The column's
+ * identity + its `wipLimit` (null = no limit); NOT the projection's cards /
+ * statusKeys / counts (those belong to the read projection, 3.1.4 / 3.3.4).
+ */
+export interface BoardColumnConfigDto {
+  id: string;
+  name: string;
+  /** Fractional-index sort key (opaque string). */
+  position: string;
+  /** WIP limit, or null when no limit is set (Story 3.3). */
+  wipLimit: number | null;
+}
+
+/**
  * One work item rendered as a board card. The row-render fields a column card
  * shows (kind icon, identifier, title, assignee, status, priority) plus the
  * board wiring (`position` for rank, `parentId`), the schedule fields a card
