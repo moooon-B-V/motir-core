@@ -262,7 +262,7 @@ export const story_3_2: PlanStory = {
     {
       id: '3.2.4',
       title: 'Drag-drop transitions — dnd-kit, optimistic move, snap-back on illegal/unmapped',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 26,
