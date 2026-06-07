@@ -219,6 +219,93 @@ export const EPICS: EpicMeta[] = [
           '- 3.3.2 feature PR — the curated migration whose header documents this drift; ' +
           '`prodect-core/CLAUDE.md` — migration conventions',
       },
+      {
+        id: 'bug-swimlane-lane-header-not-spanning-scrolled-columns',
+        kind: 'bug',
+        title:
+          'Swimlane lane-header band stops at the viewport edge — does NOT extend over columns revealed by horizontal scroll (e.g. "Cancelled")',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 3 · **Surfaces:** swimlane board (Subtask 3.3.5 — ' +
+          '`SwimlaneBoard.tsx`) · **Status:** open · **Reported by:** Yue.\n\n' +
+          'On the `/boards` swimlane view (group-by Assignee / Priority / Epic), the **lane-header ' +
+          'group row** (the soft tinted band that introduces each lane, with the chevron + label + ' +
+          'count) only paints across the columns that fit in the viewport at render time. When the ' +
+          'column track is wider than the viewport and the user scrolls horizontally to reveal more ' +
+          'columns — e.g. the rightmost **Cancelled** column in the reported repro — **the band is ' +
+          'absent over those scrolled-into-view columns**. The pinned top column-header row (the ' +
+          'row that names each workflow column with its count + WIP chip) spans the full track ' +
+          'correctly; only the lane band breaks. Result: each lane visually "ends" mid-board and ' +
+          'the trailing columns look ungrouped, breaking the swimlane grouping illusion that the ' +
+          '3.3.1 design promises.\n\n' +
+          '**Repro:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz`, open the `moooon` / `prodect` ' +
+          'project → `/boards`, switch group-by to anything other than `none` (Assignee / Epic / ' +
+          'Priority). Narrow the browser so the column track overflows horizontally (or use a ' +
+          'project with the full default workflow `todo · in_progress · in_review · done · ' +
+          'cancelled` — five columns at 288px + gutters overflow most laptop viewports). Scroll ' +
+          'right inside the board. Observe that the soft lane-header band (`bg-(--el-surface-soft)` ' +
+          'for normal lanes / `bg-(--el-muted)` for the catch-all) does NOT extend over the ' +
+          'Cancelled column header area — only the bottom border of the lane (the row separator) ' +
+          'continues, the tinted band itself stops. The pinned top column-header row spans the full ' +
+          'track correctly, which is the visual giveaway that the lane header is the broken row.\n\n' +
+          '**Root cause.** In `app/(authed)/boards/_components/SwimlaneBoard.tsx` (Subtask 3.3.5), ' +
+          'the lane-header element is `sticky left-0 z-[2] flex w-full …` inside the outer ' +
+          '`overflow-x-auto` container. The track rows (column-header, lane cells, load-more) use ' +
+          '`flex min-w-max gap-3.5 px-6` so they grow to the intrinsic width of all columns. The ' +
+          'lane header does NOT — it uses `w-full`, which on a `position: sticky` child inside an ' +
+          "overflow-x scroller resolves to the **containing block's width = the scroller's " +
+          'visible (clientWidth) area**, NOT the scroll width. So the band is exactly as wide as ' +
+          'whatever portion of the board fits in the viewport when the lane mounts, and stays that ' +
+          'width as you scroll right. The `sticky left-0` keeps the lane LABEL pinned to the left ' +
+          'edge (correct behaviour — that IS the design), but the lane BAND should still extend ' +
+          'across the full track behind the columns; today the two intents collide on the same ' +
+          'element.\n\n' +
+          '**Fix (decide at fix time — both are mechanical):**\n' +
+          '1. **Split label and band.** Make the lane row a `track`-class row (so it gains ' +
+          '`min-w-max`) and put a `sticky left-0` *inner* element around just the label + chevron ' +
+          '+ count. The outer row paints the band across the full track; only the label sticks to ' +
+          "the left edge. Mirrors the column-header row's shape; lowest risk.\n" +
+          '2. **Replace `w-full` with `w-max` on the current element.** Keeps the structure but ' +
+          'lets the sticky box grow to the scroll width; the `sticky left-0` still pins the visible ' +
+          'portion. Verify the click target + keyboard semantics stay sensible (the whole band is ' +
+          'an `aria-expanded` `role="button"` today — a wider band still works, but a fix-time ' +
+          'sanity-check is warranted).\n' +
+          'Option 1 is the cleaner of the two and matches the design-notes intent ("sticky-left ' +
+          '`.lane-head` … above its `.lane-cols`"). Either way the fix is contained to ' +
+          '`SwimlaneBoard.tsx`; no projection / service / DTO change. The same `track` measurement ' +
+          "already used by the column-header row should drive the lane band's width to keep them " +
+          'in lockstep when columns are added/removed.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- On a swimlane-grouped board whose column track is wider than the viewport, the ' +
+          'lane-header band paints over the **full** track — including columns revealed by ' +
+          'horizontal scroll (the Cancelled column in the repro).\n' +
+          '- The lane label + chevron + count still STICK to the left edge as the user scrolls ' +
+          "horizontally (the sticky-label behaviour is preserved — only the band's width extent " +
+          'changes).\n' +
+          '- The pinned top column-header row remains unchanged (it already spans correctly today, ' +
+          'guard against regression).\n' +
+          '- Collapsed lanes still collapse correctly; the catch-all lane (`bg-(--el-muted)`) and ' +
+          'the named lanes (`bg-(--el-surface-soft)`) both render the band across the full track; ' +
+          'AA contrast preserved.\n' +
+          '- A Playwright regression in `tests/e2e/board-swimlanes.spec.ts` (or a sibling) ' +
+          "asserts that the lane-header element's rendered width matches the column track's " +
+          'width on a board narrower than its content (measure via ' +
+          '`element.getBoundingClientRect()` rather than CSS rule inspection — same posture as ' +
+          'the tree-header-misalignment fix).\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/boards/_components/SwimlaneBoard.tsx` — the lane-header `div` with ' +
+          '`sticky left-0 z-[2] flex w-full …` (the fix site) + the `track` shared-class for the ' +
+          'column-header / cell / load-more rows it should align with\n' +
+          '- `design/boards/swimlanes-wip.mock.html` + `design/boards/design-notes.md` (Subtask ' +
+          '3.3.1) — the design source: a sticky-left `.lane-head` LABEL above its `.lane-cols` ' +
+          'row, with the band intended to span the full track\n' +
+          '- `prodect-core/CLAUDE.md` — colour via `--el-*`, shape via element-shape tokens ' +
+          '(applies to whatever new wrapper the fix introduces)\n' +
+          '- `tests/e2e/board-swimlanes.spec.ts` — where the regression check belongs, mirroring ' +
+          'the structural posture of the `bug-tree-header-misalignment` fix (measure rendered ' +
+          'width, not CSS rules)',
+      },
     ],
   },
   {
