@@ -1,0 +1,1836 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Board load model — bounded set + over-cap banner (Story 3.8 · 3.8.1)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the CORRECTED board LOAD MODEL — Story 3.8.
+      This EXTENDS design/boards/board.mock.html (3.2.1) + swimlanes-wip.mock.html
+      (3.3.1). It is the layout source of truth for the UI subtasks 3.8.3 (flat
+      board), 3.8.4 (over-cap banner), and 3.8.5 (swimlane) — all of which carry
+      3.8.1 in dependsOn.
+
+      WHY a correction (notes.html mistake #33). The earlier scale UI paged the
+      board: first the per-column "Load more" button (3.2.5), then PURE auto
+      scroll-to-load (3.2.8). Both are a paging affordance the mirror product does
+      NOT use. VERIFIED against Jira (June 2026, Atlassian docs): a board renders
+      the WHOLE saved-filter set up to a HARD CAP (5,000 Software / 3,000
+      Business), shows a "maximum number of viewable issues exceeded — refine your
+      filter" warning past the cap, windows the Done column to issues resolved in
+      the last ~14 days, and VIRTUALIZES the render — it never paginates columns
+      and has no "Load more". PER SURFACE matters (mistake #33): Jira's issue
+      NAVIGATOR paginates (finding #57's list/tree pagination stays correct and is
+      untouched); only the BOARD loads-the-set. This mock specifies that corrected
+      board.
+
+      Built FROM the real design system: the token block below is copied 1:1 from
+      app/globals.css (Tier-0 --color-* + Tier-3 --el-* + the shape tokens), and
+      the markup REUSES the SHIPPED primitives unchanged — the BoardCard
+      (IssueTypeIcon in the --el-type-* hue · mono key · 2-line title · priority
+      Pill · story-point chip · assignee Avatar · the Blocked peach pill), the
+      column header + [⋯] menu, the swimlane lane/cell grammar (3.3.1), and the
+      yellow tray treatment the shipped UnmappedStatusesTray (3.2.6) uses — reused
+      verbatim for the over-cap banner. No new card / column / lane vocabulary;
+      this is a new LOAD behaviour over the shipped arrangement.
+
+      Covers (multi-panel):
+        (0) BOUNDED WHOLE-SET load — a tall column rendered in full, NO "Load
+            more"/spinner/footer; a .virt-note documents the (invisible) windowing
+        (1) DONE-AGE window — the terminal column windowed to ~14 days, full count
+            still in the header
+        (2) OVER-CAP banner — the yellow "refine the filter" tray above the board
+            (truncated == true), absent below the cap
+        (3) SWIMLANES — the lane × column grid, NO per-column load-more footer,
+            each cell rendered in full (virtualized per cell)
+      Toggle dark mode to confirm token parity. See design-notes.md
+      ("Board load model (Story 3.8)") for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1240px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 760px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel {
+        max-width: 1240px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 40px auto 10px;
+        padding-left: 2px;
+        max-width: 1240px;
+      }
+      .stage {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      /* the "what changed" framing strip (review chrome, not part of the design) */
+      .correction {
+        max-width: 1240px;
+        margin: 0 auto;
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        padding: 14px 16px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+      }
+      .correction .cx {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-warning);
+        flex: none;
+        margin-top: 2px;
+      }
+      .correction strong {
+        color: var(--el-text-strong);
+      }
+      .correction del {
+        color: var(--el-text-faint);
+      }
+
+      /* ── Page shell — header + toolbar (mirrors app/(authed) board route) ─── */
+      .page {
+        padding: 24px 24px 8px;
+      }
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin: 4px 0 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .tb-btn .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn.primary {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+      }
+      .tb-btn.primary .ic {
+        color: var(--el-accent-text);
+      }
+      .tb-btn.is-disabled {
+        color: var(--el-text-muted);
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+      /* the Epic-6 [Filter] seam, called out as the banner's target */
+      .tb-btn.is-seam {
+        outline: 2px dashed var(--el-warning);
+        outline-offset: 2px;
+      }
+
+      /* ── The board: a horizontally-scrolling row of columns ───────────────── */
+      .board {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        overflow-x: auto;
+        padding: 4px 24px 24px;
+        scroll-snap-type: x proximity;
+      }
+      .col {
+        scroll-snap-align: start;
+        flex: 0 0 288px;
+        width: 288px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        display: flex;
+        flex-direction: column;
+        /* Uniform column height (3.2.8): every column is the same height
+           regardless of card count. In the app this is a viewport-relative
+           `h-[calc(100dvh-12rem)]` layout height; the mock fixes it. */
+        height: 560px;
+      }
+      .col-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 12px 10px;
+      }
+      .col-head .nm {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        letter-spacing: 0.01em;
+      }
+      /* per-column card count (the FULL total from the projection — the
+         denominator; unchanged by the load model) */
+      .col-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 20px;
+        padding: 0 7px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .col-head .spacer {
+        flex: 1;
+      }
+      .wip-slot {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-faint);
+        font-family: var(--font-mono);
+      }
+      .col-head .icon-btn {
+        width: 24px;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        border: 0;
+        background: none;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .col-head .icon-btn:hover {
+        background: var(--el-muted);
+      }
+      .col-head .icon-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .col-body {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 0 10px 10px;
+        overflow-y: auto;
+      }
+
+      /* ── Board card — REUSES the issue primitives, compactly (3.2.3) ───────── */
+      .bcard {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        cursor: grab;
+        text-decoration: none;
+        color: inherit;
+      }
+      .bcard:hover {
+        border-color: var(--el-border-strong);
+      }
+      .bcard:hover .bc-title {
+        text-decoration: underline;
+      }
+      .bc-top {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .type-icon {
+        width: 15px;
+        height: 15px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+      .bc-id {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .bc-top .spacer {
+        flex: 1;
+      }
+      .grip {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-faint);
+        flex: none;
+        opacity: 0;
+        transition: opacity 0.1s ease;
+      }
+      .bcard:hover .grip {
+        opacity: 1;
+      }
+      .bc-title {
+        font-size: 13.5px;
+        line-height: 1.35;
+        color: var(--el-text);
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .bc-meta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .bc-meta .spacer {
+        flex: 1;
+      }
+
+      /* Pill (components/ui/Pill.tsx): hue in tint background, strong text */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill .pic {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .pill--highest,
+      .pill--high {
+        background: var(--el-tint-rose);
+      }
+      .pill--highest .pic,
+      .pill--high .pic {
+        color: var(--el-danger);
+      }
+      .pill--medium {
+        background: var(--el-tint-sky);
+      }
+      .pill--medium .pic {
+        color: var(--el-info);
+      }
+      .pill--low {
+        background: var(--el-tint-mint);
+      }
+      .pill--low .pic {
+        color: var(--el-success);
+      }
+      .pill--blocked {
+        background: var(--el-tint-peach);
+      }
+      .pill--blocked .pic {
+        color: var(--el-warning);
+      }
+      .pts {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        font-family: var(--font-mono);
+      }
+      .avatar {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .avatar.unassigned {
+        background: var(--el-muted);
+        color: var(--el-text-faint);
+        border: 1px dashed var(--el-border-strong);
+      }
+
+      /* ── Review-only annotation: the (invisible) windowing note ─────────────
+         In the SHIPPED board there is NO on-column note — windowing +
+         virtualization are invisible. This `.virt-note` is a REVIEW annotation
+         (dashed, mono) so the reviewer can SEE what the column does without a
+         visible affordance. It is NOT rendered in the app. */
+      .virt-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin: 2px 2px 0;
+        padding: 8px 10px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        line-height: 1.45;
+        color: var(--el-text-tertiary);
+      }
+      .virt-note .vn-tag {
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        flex: none;
+      }
+
+      /* the crossed-out artefact the correction removes (review chrome) */
+      .removed {
+        position: relative;
+        margin: 4px 10px 0;
+        padding: 8px 10px;
+        border: 1px dashed var(--el-danger);
+        border-radius: var(--radius-control);
+        font-size: 11.5px;
+        color: var(--el-text-faint);
+        text-align: center;
+        background: repeating-linear-gradient(
+          135deg,
+          transparent,
+          transparent 7px,
+          color-mix(in srgb, var(--el-danger) 8%, transparent) 7px,
+          color-mix(in srgb, var(--el-danger) 8%, transparent) 9px
+        );
+      }
+      .removed s {
+        color: var(--el-text-muted);
+      }
+
+      /* ── Over-cap banner — REUSES the 3.2.6 yellow-tray treatment verbatim ─── */
+      .tray {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        margin: 0 24px 14px;
+        padding: 10px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-yellow);
+        border: 1px solid transparent;
+      }
+      .tray .tr-ic {
+        width: 18px;
+        height: 18px;
+        color: var(--el-warning);
+        flex: none;
+      }
+      .tray .tr-text {
+        font-size: 13px;
+        color: var(--el-text-strong);
+        flex: 1;
+        min-width: 280px;
+      }
+      .tray .tr-text b {
+        font-weight: 600;
+      }
+      /* the banner's affordance: the Epic-6 [Filter] seam (disabled until then) */
+      .tray .tr-seam {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
+        color: var(--el-text-muted);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-page-bg);
+        cursor: not-allowed;
+        opacity: 0.7;
+      }
+      .tray .tr-seam svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .pill--neutral {
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+
+      /* empty column */
+      .col-empty {
+        margin: 4px 0 12px;
+        padding: 18px 10px;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        text-align: center;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Swimlanes (REUSES the 3.3.1 lane/cell grammar) ─────────────────────── */
+      .swimboard {
+        overflow-x: auto;
+        padding: 4px 0 24px;
+        scroll-snap-type: x proximity;
+      }
+      .colrow,
+      .lane-cols {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        padding: 0 24px;
+        min-width: max-content;
+      }
+      .colrow {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        background: var(--el-page-bg);
+        padding-top: 10px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .colhd {
+        scroll-snap-align: start;
+        flex: 0 0 288px;
+        width: 288px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .colhd .nm {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        letter-spacing: 0.01em;
+      }
+      .colhd .spacer {
+        flex: 1;
+      }
+      .wip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: 20px;
+        padding: 0 8px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 11.5px;
+        font-weight: 600;
+        font-family: var(--font-mono);
+      }
+      .lane {
+        border-bottom: 1px solid var(--el-border);
+      }
+      .lane:last-child {
+        border-bottom: 0;
+      }
+      .lane-head {
+        position: sticky;
+        left: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 24px;
+        background: var(--el-surface-soft);
+        cursor: pointer;
+        user-select: none;
+      }
+      .lane-head:hover {
+        background: var(--el-surface);
+      }
+      .lane-chevron {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .lane.collapsed .lane-chevron {
+        transform: rotate(-90deg);
+      }
+      .lane-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .lane-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 18px;
+        padding: 0 6px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .lane-head .spacer {
+        flex: 1;
+      }
+      .lane-meta {
+        font-size: 11.5px;
+        color: var(--el-text-faint);
+        font-family: var(--font-mono);
+      }
+      .lane.catchall .lane-head {
+        background: var(--el-muted);
+      }
+      .lane.catchall .lane-label {
+        color: var(--el-text-muted);
+        font-weight: 500;
+      }
+      .lane-cols {
+        padding-top: 8px;
+        padding-bottom: 12px;
+      }
+      .lane.collapsed .lane-cols {
+        display: none;
+      }
+      .lane-col {
+        scroll-snap-align: start;
+        flex: 0 0 288px;
+        width: 288px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 28px;
+      }
+      .lane-col.cell-empty {
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        align-items: center;
+        justify-content: center;
+        min-height: 56px;
+        font-size: 11.5px;
+        color: var(--el-text-faint);
+      }
+      .avatar.sm {
+        width: 18px;
+        height: 18px;
+        font-size: 9px;
+      }
+
+      .legend {
+        max-width: 1240px;
+        margin: 8px auto 0;
+        font-size: 12px;
+        color: var(--el-text-faint);
+        padding-left: 2px;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Board load model — bounded set + over-cap banner</h1>
+        <p>
+          Story 3.8 · Subtask 3.8.1 design asset — the CORRECTION to the board's scale UI
+          (notes.html mistake #33). Extends board.mock.html (3.2.1) + swimlanes-wip.mock.html
+          (3.3.1); reuses the shipped BoardCard, column, lane, and yellow-tray (3.2.6) primitives.
+          Source of truth = this HTML; see design-notes.md → "Board load model (Story 3.8)".
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <div class="correction">
+      <span class="cx">Correction</span>
+      <span>
+        The board no longer <del>pages columns</del>. The earlier scale UI drew a per-column
+        <s>"Load more" button</s> (3.2.5), then <s>auto scroll-to-load + spinner</s> (3.2.8) — a
+        paging affordance Jira does NOT use. <strong>Verified mirror behaviour:</strong> a Jira
+        board renders the whole saved-filter set up to a <strong>hard cap</strong> (5,000 Software /
+        3,000 Business), <strong>virtualizes</strong> the render, windows the
+        <strong>Done</strong> column to issues resolved in the <strong>last ~14 days</strong>, and
+        shows a <strong>"maximum viewable issues exceeded — refine your filter"</strong> warning
+        past the cap. Per surface (mistake #33): the issue NAVIGATOR still paginates (finding #57) —
+        only the BOARD loads-the-set. This is still bounded — the cap is the bound; it never "loads
+        every row."
+      </span>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke, used by <use>) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <g
+          id="i-subtask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </g>
+        <g
+          id="i-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+        </g>
+        <g
+          id="i-grip"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="9" cy="6" r="1" />
+          <circle cx="9" cy="12" r="1" />
+          <circle cx="9" cy="18" r="1" />
+          <circle cx="15" cy="6" r="1" />
+          <circle cx="15" cy="12" r="1" />
+          <circle cx="15" cy="18" r="1" />
+        </g>
+        <g
+          id="i-more"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="5" cy="12" r="1" />
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-filter"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </g>
+        <g
+          id="i-user"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </g>
+        <g
+          id="i-clock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════════ PANEL 0 — bounded whole-set load, NO "Load more" ════════════════ -->
+    <div class="panel-label">
+      0 · Bounded whole-set load — the column renders in full, no "Load more" / spinner / footer
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="page-head">
+            <div>
+              <h2>Board</h2>
+              <p class="sub">Prodect · all issues, grouped by status</p>
+            </div>
+            <div class="toolbar">
+              <button class="tb-btn is-disabled" title="Filter — Epic 6">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-filter" /></svg
+                ></span>
+                Filter
+              </button>
+              <button class="tb-btn primary">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                ></span>
+                New issue
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="board">
+          <!-- A tall To Do column: the WHOLE bounded set rendered directly. No
+               "Load more", no scroll sentinel, no in-flight spinner — the only
+               affordance is the column's own scroll. Virtualization is invisible. -->
+          <section class="col" aria-label="To Do, 214 issues">
+            <div class="col-head">
+              <span class="nm">To Do</span>
+              <span class="col-count">214</span>
+              <span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-31 Google OAuth sign-in">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-31</span>
+                  <span class="spacer"></span>
+                  <span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Google OAuth sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--high"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                    >High</span
+                  >
+                  <span class="pts">5</span>
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Yue Zhu">YZ</span>
+                </div>
+              </a>
+              <a class="bcard" href="#" aria-label="PROD-34 Password reset email">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-34</span>
+                  <span class="spacer"></span>
+                  <span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Password reset email — copy + template</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                    >Medium</span
+                  >
+                  <span class="pts">2</span>
+                  <span class="spacer"></span>
+                  <span class="avatar unassigned" title="Unassigned">–</span>
+                </div>
+              </a>
+              <a class="bcard" href="#" aria-label="PROD-41 Set up Google Cloud OAuth credentials">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-41</span>
+                  <span class="spacer"></span>
+                  <span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Set up Google Cloud OAuth credentials</div>
+                <div class="bc-meta">
+                  <span class="pill pill--low"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg></span
+                    >Low</span
+                  >
+                  <span class="pts">3</span>
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Ana Ruiz">AR</span>
+                </div>
+              </a>
+              <a
+                class="bcard"
+                href="#"
+                aria-label="PROD-49 OAuth callback drops the state param, blocked"
+              >
+                <div class="bc-top">
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-49</span>
+                  <span class="spacer"></span>
+                  <span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">OAuth callback drops the `state` param on Safari ≤16</div>
+                <div class="bc-meta">
+                  <span class="pill pill--blocked"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg></span
+                    >Blocked</span
+                  >
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Ben Ito">BI</span>
+                </div>
+              </a>
+              <!-- REVIEW annotation only — not rendered in the app. -->
+              <div class="virt-note">
+                <span class="vn-tag">virtualized</span>
+                <span
+                  >…the remaining 210 of 214 cards render the same way. The list is the WHOLE
+                  bounded set (≤ cap); only viewport rows mount (2.5.15 useRowWindow), so the DOM
+                  stays bounded. No "Load more", no scroll-to-load sentinel, no spinner.</span
+                >
+              </div>
+            </div>
+          </section>
+
+          <!-- the OLD per-column paging artefact, shown crossed-out for the reviewer -->
+          <section class="col" aria-label="In Progress, 38 issues">
+            <div class="col-head">
+              <span class="nm">In Progress</span>
+              <span class="col-count">38</span>
+              <span class="spacer"></span>
+              <span class="wip-slot" title="WIP limit — Story 3.3">5/8</span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-23 Email + password sign-in">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-23</span>
+                  <span class="spacer"></span>
+                  <span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Email + password sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--highest"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                    >Highest</span
+                  >
+                  <span class="pts">8</span>
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Yue Zhu">YZ</span>
+                </div>
+              </a>
+              <a class="bcard" href="#" aria-label="PROD-42 Add Google OAuth to sign-in">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-42</span>
+                  <span class="spacer"></span>
+                  <span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Add Google OAuth to sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                    >Medium</span
+                  >
+                  <span class="pts">3</span>
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Ben Ito">BI</span>
+                </div>
+              </a>
+              <!-- what 3.8.3 / 3.8.5 REMOVE — drawn crossed out so the diff is legible -->
+              <div class="removed" role="presentation">
+                Removed by 3.8.3 / 3.8.5:
+                <s>"Load more" button</s> · <s>scroll-to-load sentinel + "Loading…" spinner</s>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+      <p class="legend">
+        The column renders the projection's full (bounded) card list and scrolls — no paging
+        affordance at all. The header count (214, 38) is the FULL total (the denominator),
+        unchanged. Tall columns virtualize via the 2.5.15 <code>useRowWindow</code> (kept) so the
+        DOM stays bounded; virtualization is invisible. The crossed-out box shows the per-column
+        "Load more" (3.2.5) + scroll-to-load spinner (3.2.8) that 3.8.3 / 3.8.5 delete.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 1 — Done-age window ════════════════ -->
+    <div class="panel-label">
+      1 · Done-age window — the terminal column shows only recently-resolved items; full count stays
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="board">
+          <section class="col" aria-label="Done, 1,280 issues" style="height: 460px">
+            <div class="col-head">
+              <span class="nm">Done</span>
+              <!-- the FULL count is still surfaced in the header -->
+              <span class="col-count">1,280</span>
+              <span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-220 Sign-out clears the session cookie">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-220</span>
+                  <span class="spacer"></span>
+                  <span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Sign-out clears the session cookie</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                    >Medium</span
+                  >
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Yue Zhu">YZ</span>
+                </div>
+              </a>
+              <a class="bcard" href="#" aria-label="PROD-215 Verify email on sign-up">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-215</span>
+                  <span class="spacer"></span>
+                  <span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Verify email on sign-up</div>
+                <div class="bc-meta">
+                  <span class="pill pill--low"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg></span
+                    >Low</span
+                  >
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Ben Ito">BI</span>
+                </div>
+              </a>
+              <a class="bcard" href="#" aria-label="PROD-204 Session cookie SameSite=Lax">
+                <div class="bc-top">
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-204</span>
+                  <span class="spacer"></span>
+                  <span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Session cookie should be SameSite=Lax</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                    >Medium</span
+                  >
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Ana Ruiz">AR</span>
+                </div>
+              </a>
+              <!-- REVIEW annotation only — the window is invisible on the column. -->
+              <div class="virt-note">
+                <span class="vn-tag">~14-day window</span>
+                <span
+                  >Only the <b>62</b> issues resolved in the last ~14 days are loaded here (newest
+                  first). The header keeps the FULL <b>1,280</b> total. Older done items aren't
+                  fetched — the same server-side window Jira applies to its Done column. No
+                  on-column note ships; this box is review-only.</span
+                >
+              </div>
+            </div>
+          </section>
+
+          <section class="col" aria-label="Cancelled, 47 issues" style="height: 460px">
+            <div class="col-head">
+              <span class="nm">Cancelled</span>
+              <span class="col-count">47</span>
+              <span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-188 Drop the legacy magic-link flow">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-188</span>
+                  <span class="spacer"></span>
+                  <span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Drop the legacy magic-link flow</div>
+                <div class="bc-meta">
+                  <span class="pill pill--low"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg></span
+                    >Low</span
+                  >
+                  <span class="spacer"></span>
+                  <span class="avatar unassigned" title="Unassigned">–</span>
+                </div>
+              </a>
+              <div class="virt-note">
+                <span class="vn-tag">terminal</span>
+                <span
+                  >The age-window applies to every TERMINAL status (the resolved/closed set), not
+                  just "Done" by name — derived from the workflow status category.</span
+                >
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+      <p class="legend">
+        Terminal (resolved/closed) columns are windowed server-side to issues resolved in the last
+        ~14 days (3.8.2), newest first — the full count still shows in the header (the denominator).
+        This refines 3.2.5's count-based window to Jira's age-based behaviour. Non-terminal columns
+        load the whole bounded set (panel 0).
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 2 — over-cap banner ════════════════ -->
+    <div class="panel-label">
+      2 · Over-cap warning — the board exceeds the cap (truncated == true); reuses the 3.2.6 tray
+    </div>
+    <div class="panel">
+      <!-- the banner: REUSES the UnmappedStatusesTray (3.2.6) yellow-tray treatment verbatim —
+           --el-tint-yellow bg + AlertTriangle in --el-warning + --el-text-strong copy. Hue +
+           icon + text (finding #35). Announced via role="status". -->
+      <div class="tray" role="status">
+        <span class="tr-ic"
+          ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+        ></span>
+        <span class="tr-text">
+          This board has more than <b>5,000</b> work items — refine the board filter to see them
+          all. Only the first 5,000 are shown.
+        </span>
+        <span class="tr-seam" title="Board filters arrive in Epic 6" aria-disabled="true">
+          <svg viewBox="0 0 24 24"><use href="#i-filter" /></svg>
+          Refine filter
+        </span>
+      </div>
+      <div class="stage">
+        <div class="page" style="padding-bottom: 0">
+          <div class="page-head" style="margin-bottom: 12px">
+            <div>
+              <h2>Board</h2>
+              <p class="sub">Prodect · all issues, grouped by status</p>
+            </div>
+            <div class="toolbar">
+              <!-- the Epic-6 [Filter] seam the banner points at — disabled until Epic 6 -->
+              <button class="tb-btn is-disabled is-seam" title="Filter — Epic 6">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-filter" /></svg
+                ></span>
+                Filter
+              </button>
+              <button class="tb-btn primary">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                ></span>
+                New issue
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="board">
+          <section class="col" aria-label="To Do, 3,910 issues" style="height: 360px">
+            <div class="col-head">
+              <span class="nm">To Do</span>
+              <span class="col-count">3,910</span>
+              <span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-31 Google OAuth sign-in">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-31</span>
+                  <span class="spacer"></span>
+                </div>
+                <div class="bc-title">Google OAuth sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--high"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                    >High</span
+                  >
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Yue Zhu">YZ</span>
+                </div>
+              </a>
+              <a class="bcard" href="#" aria-label="PROD-34 Password reset email">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-34</span>
+                  <span class="spacer"></span>
+                </div>
+                <div class="bc-title">Password reset email — copy + template</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                    >Medium</span
+                  >
+                  <span class="spacer"></span>
+                  <span class="avatar unassigned" title="Unassigned">–</span>
+                </div>
+              </a>
+              <div class="virt-note">
+                <span class="vn-tag">capped</span>
+                <span
+                  >The load stops at the 5,000-item board cap (bounded — still never "load every
+                  row"). The count header keeps the true total. The banner above explains the cap
+                  and points at the (disabled) filter seam.</span
+                >
+              </div>
+            </div>
+          </section>
+          <section class="col" aria-label="In Progress, 1,090 issues" style="height: 360px">
+            <div class="col-head">
+              <span class="nm">In Progress</span>
+              <span class="col-count">1,090</span>
+              <span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-23 Email + password sign-in">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-23</span>
+                  <span class="spacer"></span>
+                </div>
+                <div class="bc-title">Email + password sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--highest"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                    >Highest</span
+                  >
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Yue Zhu">YZ</span>
+                </div>
+              </a>
+            </div>
+          </section>
+        </div>
+      </div>
+      <p class="legend">
+        When the projection signals <code>truncated: true</code> (board total &gt;
+        <code>cap</code>), a board-level banner renders ABOVE the board (in
+        <code>BoardContainer</code>, so it shows for flat AND swimlane layouts) — Jira's "maximum
+        viewable issues exceeded" mirror. Copy carries the cap; the affordance is the Epic-6
+        <code>[Filter]</code> seam (dashed outline above), disabled until Epic 6 lands board
+        filters. Absent when <code>truncated</code> is false (panels 0–1 show no banner). Hue + icon
+        + text, never colour-alone (finding #35).
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 3 — swimlanes, no per-column load-more footer ════════════════ -->
+    <div class="panel-label">
+      3 · Swimlanes — the lane × column grid, NO per-column "Load more" footer (each cell in full)
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page" style="padding-bottom: 0">
+          <div class="page-head" style="margin-bottom: 10px">
+            <div>
+              <h2>Board</h2>
+              <p class="sub">Grouped by assignee</p>
+            </div>
+            <div class="toolbar">
+              <button class="tb-btn is-disabled" title="Filter — Epic 6">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-filter" /></svg
+                ></span>
+                Filter
+              </button>
+              <button class="tb-btn primary">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                ></span>
+                New issue
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="swimboard">
+          <!-- pinned column-header row -->
+          <div class="colrow">
+            <div class="colhd"><span class="nm">To Do</span><span class="col-count">214</span></div>
+            <div class="colhd">
+              <span class="nm">In Progress</span><span class="col-count">38</span
+              ><span class="spacer"></span><span class="wip" title="WIP 5/8">5/8</span>
+            </div>
+            <div class="colhd">
+              <span class="nm">Done</span><span class="col-count">1,280</span>
+            </div>
+          </div>
+
+          <!-- lane: Yue Zhu -->
+          <div class="lane">
+            <div class="lane-head" role="button" aria-expanded="true">
+              <span class="lane-chevron"
+                ><svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg
+              ></span>
+              <span class="lane-label"
+                ><span class="avatar sm" title="Yue Zhu">YZ</span> Yue Zhu</span
+              >
+              <span class="lane-count">96</span>
+              <span class="spacer"></span>
+              <span class="lane-meta">virtualized per cell</span>
+            </div>
+            <div class="lane-cols">
+              <div class="lane-col">
+                <a class="bcard" href="#" aria-label="PROD-31 Google OAuth sign-in">
+                  <div class="bc-top">
+                    <span class="type-icon t-story"
+                      ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                    ></span>
+                    <span class="bc-id">PROD-31</span>
+                    <span class="spacer"></span>
+                  </div>
+                  <div class="bc-title">Google OAuth sign-in</div>
+                  <div class="bc-meta">
+                    <span class="pill pill--high"
+                      ><span class="pic"
+                        ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                      >High</span
+                    >
+                    <span class="spacer"></span><span class="avatar sm" title="Yue Zhu">YZ</span>
+                  </div>
+                </a>
+                <a class="bcard" href="#" aria-label="PROD-52 Rate-limit the sign-in endpoint">
+                  <div class="bc-top">
+                    <span class="type-icon t-task"
+                      ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                    ></span>
+                    <span class="bc-id">PROD-52</span>
+                    <span class="spacer"></span>
+                  </div>
+                  <div class="bc-title">Rate-limit the sign-in endpoint</div>
+                  <div class="bc-meta">
+                    <span class="pill pill--medium"
+                      ><span class="pic"
+                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                      >Medium</span
+                    >
+                    <span class="spacer"></span><span class="avatar sm" title="Yue Zhu">YZ</span>
+                  </div>
+                </a>
+              </div>
+              <div class="lane-col">
+                <a class="bcard" href="#" aria-label="PROD-23 Email + password sign-in">
+                  <div class="bc-top">
+                    <span class="type-icon t-story"
+                      ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                    ></span>
+                    <span class="bc-id">PROD-23</span>
+                    <span class="spacer"></span>
+                  </div>
+                  <div class="bc-title">Email + password sign-in</div>
+                  <div class="bc-meta">
+                    <span class="pill pill--highest"
+                      ><span class="pic"
+                        ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                      >Highest</span
+                    >
+                    <span class="spacer"></span><span class="avatar sm" title="Yue Zhu">YZ</span>
+                  </div>
+                </a>
+              </div>
+              <div class="lane-col cell-empty">No issues</div>
+            </div>
+          </div>
+
+          <!-- lane: Ben Ito -->
+          <div class="lane">
+            <div class="lane-head" role="button" aria-expanded="true">
+              <span class="lane-chevron"
+                ><svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg
+              ></span>
+              <span class="lane-label"
+                ><span class="avatar sm" title="Ben Ito">BI</span> Ben Ito</span
+              >
+              <span class="lane-count">71</span>
+              <span class="spacer"></span>
+              <span class="lane-meta">virtualized per cell</span>
+            </div>
+            <div class="lane-cols">
+              <div class="lane-col">
+                <a class="bcard" href="#" aria-label="PROD-42 Add Google OAuth to sign-in">
+                  <div class="bc-top">
+                    <span class="type-icon t-task"
+                      ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                    ></span>
+                    <span class="bc-id">PROD-42</span>
+                    <span class="spacer"></span>
+                  </div>
+                  <div class="bc-title">Add Google OAuth to sign-in</div>
+                  <div class="bc-meta">
+                    <span class="pill pill--medium"
+                      ><span class="pic"
+                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                      >Medium</span
+                    >
+                    <span class="spacer"></span><span class="avatar sm" title="Ben Ito">BI</span>
+                  </div>
+                </a>
+              </div>
+              <div class="lane-col cell-empty">No issues</div>
+              <div class="lane-col">
+                <a class="bcard" href="#" aria-label="PROD-215 Verify email on sign-up">
+                  <div class="bc-top">
+                    <span class="type-icon t-task"
+                      ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                    ></span>
+                    <span class="bc-id">PROD-215</span>
+                    <span class="spacer"></span>
+                  </div>
+                  <div class="bc-title">Verify email on sign-up</div>
+                  <div class="bc-meta">
+                    <span class="pill pill--low"
+                      ><span class="pic"
+                        ><svg viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg></span
+                      >Low</span
+                    >
+                    <span class="spacer"></span><span class="avatar sm" title="Ben Ito">BI</span>
+                  </div>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- catch-all lane (always last) -->
+          <div class="lane catchall">
+            <div class="lane-head" role="button" aria-expanded="true">
+              <span class="lane-chevron"
+                ><svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg
+              ></span>
+              <span class="lane-label"
+                ><span class="avatar sm unassigned" title="No assignee">–</span> No assignee</span
+              >
+              <span class="lane-count">47</span>
+              <span class="spacer"></span>
+              <span class="lane-meta">virtualized per cell</span>
+            </div>
+            <div class="lane-cols">
+              <div class="lane-col">
+                <a class="bcard" href="#" aria-label="PROD-34 Password reset email">
+                  <div class="bc-top">
+                    <span class="type-icon t-task"
+                      ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                    ></span>
+                    <span class="bc-id">PROD-34</span>
+                    <span class="spacer"></span>
+                  </div>
+                  <div class="bc-title">Password reset email — copy + template</div>
+                  <div class="bc-meta">
+                    <span class="pill pill--medium"
+                      ><span class="pic"
+                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                      >Medium</span
+                    >
+                    <span class="spacer"></span
+                    ><span class="avatar sm unassigned" title="Unassigned">–</span>
+                  </div>
+                </a>
+              </div>
+              <div class="lane-col cell-empty">No issues</div>
+              <div class="lane-col cell-empty">No issues</div>
+            </div>
+          </div>
+        </div>
+        <!-- where the OLD per-column load-more footer used to sit (3.3.5) — removed by 3.8.5 -->
+        <div class="removed" style="margin: 0 24px 16px" role="presentation">
+          Removed by 3.8.5: the per-column
+          <s>"Load more" footer row</s> that sprinkled paged cards into the lanes above it
+        </div>
+      </div>
+      <p class="legend">
+        Swimlanes bucket the whole bounded set (3.8.2) into <code>(lane, column)</code> cells — each
+        cell renders in full, virtualized per cell via <code>useRowWindow</code> (kept). The awkward
+        bottom row of per-column "Load more" buttons (3.3.5) is gone (3.8.5). Everything else is
+        unchanged: group-by, collapsible lanes, the catch-all lane (always last), cross-lane
+        drag-reassign, and the per-column WIP chip in the column-header row.
+      </p>
+    </div>
+  </body>
+</html>
