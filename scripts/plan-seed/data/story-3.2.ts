@@ -48,7 +48,8 @@ export const story_3_2: PlanStory = {
     '"Boards" nav link + the Cmd-K "Go to Boards" entry are already wired (Story 1.5). This story ' +
     '**replaces the stub** with the real surface — no new navigation wiring. The board renders the ' +
     "active project's single default Kanban board (3.1 auto-seeds one per project); multi-board " +
-    'routing is a later, non-breaking addition (the API already takes a `boardId`).\n\n' +
+    'routing is a non-breaking addition planned as **Story 3.7** (the API already takes a ' +
+    '`boardId`).\n\n' +
     '**Reuse, do not reinvent (the card visual language).** A board card is the same issue, shown ' +
     'compactly — so it REUSES the issue-list card primitives, not a parallel set: the ' +
     '`IssueTypeIcon` (kind hue via `--el-type-*`), the `Pill` tones for status/priority, the ' +
@@ -84,8 +85,9 @@ export const story_3_2: PlanStory = {
     '(Story 3.3 — this story renders the `wipLimit` the projection returns as a count display only, ' +
     'and leaves a slot for 3.3); the sprint-scoped Scrum board (Story 3.4); the cross-cutting ' +
     'drag-drop + WIP + swimlane Playwright journey (Story 3.5 — this story ships its OWN UI ' +
-    'component tests + the core drag/snapback E2E, the same split 3.1.7 used). Board CRUD / ' +
-    'column-remap admin is not v1.',
+    'component tests + the core drag/snapback E2E, the same split 3.1.7 used). The column↔status ' +
+    'mapping admin — where an unmapped status is put on a column (this story’s unmapped-tray links ' +
+    'there) — is **Story 3.6**; board CRUD / multi-board is **Story 3.7**.',
   verificationRecipeMd:
     '- Pull the Story branch, `pnpm install` (picks up the new `@dnd-kit/*` deps), `pnpm prisma migrate dev`, `pnpm db:seed`, `pnpm dev`.\n' +
     '- `pnpm test` — vitest covers the optimistic-move / snapback reducer (move applied → confirmed on 200; reverted on 409/422), the `BoardCard` / `BoardColumn` render (type hue, readiness, count), and the column lazy-load page-append logic.\n' +
@@ -368,8 +370,12 @@ export const story_3_2: PlanStory = {
         "**Unmapped-statuses tray.** 3.1's projection returns `unmappedStatuses` — project " +
         'statuses mapped to no board column (e.g. a custom status added after the board was seeded; ' +
         'the Jira behaviour). Surface them as a **tray/banner** (the 3.2.1 treatment) listing the ' +
-        'unmapped statuses with a path to the board/workflow admin to map them — **never silently ' +
-        'drop them**. When `unmappedStatuses` is empty the tray does not render.\n\n' +
+        'unmapped statuses with a link to act on them — **never silently ' +
+        'drop them**. When `unmappedStatuses` is empty the tray does not render. ' +
+        '(NB: the column↔status **mapping** admin is **Story 3.6**, not yet built when this ships — ' +
+        'so the tray CTA is the honest INTERIM **"Manage statuses →"** to the workflow editor (2.2.5, ' +
+        'where a stray status can be reviewed/removed); **Story 3.6.3 repoints it to "Map columns →"** ' +
+        'once the mapping surface exists.)\n\n' +
         '**Responsive + a11y polish.** Horizontal column scroll on desktop with a usable **mobile** ' +
         'layout (per 3.2.1); the board exposes the right landmark/roles so the column structure is ' +
         'navigable by assistive tech (complementing the 3.2.4 drag announcements); focus order is ' +
@@ -383,7 +389,7 @@ export const story_3_2: PlanStory = {
         '- Component tests assert the empty state (with create affordance) and the unmapped-tray present/absent branches.\n\n' +
         '## Context refs\n\n' +
         '- `components/ui/EmptyState`; `app/(authed)/_components/CreateIssueButton.tsx` / `CreateIssueModal.tsx` — the create flow to reuse\n' +
-        '- Story 3.1.4 — the `unmappedStatuses` field on `BoardProjectionDto`; Story 2.2.5 — the workflow editor the tray links to\n' +
+        '- Story 3.1.4 — the `unmappedStatuses` field on `BoardProjectionDto`; Story 2.2.5 — the workflow editor the tray links to (interim); Story 3.6 — the column↔status mapping admin that resolves an unmapped status (3.6.3 repoints this tray)\n' +
         '- `design/boards/board.mock.html` + `design-notes.md` (3.2.1) — the empty + unmapped-tray + responsive specs\n' +
         '- finding #57 (completeness/states in scope); `prodect-core/CLAUDE.md` — token rules',
     },
