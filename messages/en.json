@@ -680,6 +680,11 @@
     "moveRejectedTitle": "Move not allowed",
     "moveIllegalDescription": "{from} → {to} isn’t a permitted transition. {key} returned.",
     "moveUnmappedDescription": "That column maps no status. {key} returned.",
-    "moveErrorDescription": "Couldn’t move {key}. It was returned to its place."
+    "moveErrorDescription": "Couldn’t move {key}. It was returned to its place.",
+    "loadMore": "Load more",
+    "loadingMore": "Loading…",
+    "loadMoreError": "Couldn’t load more cards.",
+    "loadMoreRetry": "Retry",
+    "virtNote": "{loaded} loaded · rows virtualized"
   }
 }

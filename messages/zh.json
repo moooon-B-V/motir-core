@@ -680,6 +680,11 @@
     "moveRejectedTitle": "无法移动",
     "moveIllegalDescription": "{from} → {to} 不是允许的状态流转，{key} 已返回原位。",
     "moveUnmappedDescription": "该列未映射任何状态，{key} 已返回原位。",
-    "moveErrorDescription": "无法移动 {key}，已返回原位。"
+    "moveErrorDescription": "无法移动 {key}，已返回原位。",
+    "loadMore": "加载更多",
+    "loadingMore": "加载中…",
+    "loadMoreError": "无法加载更多卡片。",
+    "loadMoreRetry": "重试",
+    "virtNote": "已加载 {loaded} 张 · 行已虚拟化"
   }
 }
