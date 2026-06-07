@@ -176,7 +176,7 @@ export const story_3_3: PlanStory = {
     {
       id: '3.3.2',
       title: 'Schema — `board.swimlaneGroupBy` enum + migration (WIP column already exists)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 12,
