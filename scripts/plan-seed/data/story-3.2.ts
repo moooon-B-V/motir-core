@@ -315,7 +315,7 @@ export const story_3_2: PlanStory = {
     {
       id: '3.2.5',
       title: 'Per-column lazy load-more + virtualization (finding #57) — consume cursor/count',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 20,
