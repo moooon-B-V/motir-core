@@ -364,7 +364,7 @@ export const story_3_3: PlanStory = {
     {
       id: '3.3.6',
       title: 'WIP-limit UI — per-column config (column `[⋯]` menu) + SOFT over-limit warning',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 18,
