@@ -680,6 +680,12 @@
     "moveRejectedTitle": "Move not allowed",
     "moveIllegalDescription": "{from} → {to} isn’t a permitted transition. {key} returned.",
     "moveUnmappedDescription": "That column maps no status. {key} returned.",
-    "moveErrorDescription": "Couldn’t move {key}. It was returned to its place."
+    "moveErrorDescription": "Couldn’t move {key}. It was returned to its place.",
+    "emptyTitle": "No work items yet",
+    "emptyDescription": "This board doesn’t have any work items yet. Create one and it’ll show up here.",
+    "unmappedLabel": "Statuses not on this board",
+    "unmappedText": "These statuses aren’t on this board — work items in them are hidden here:",
+    "unmappedMapColumns": "Map columns",
+    "pagerPosition": "{name} · {index} of {count}"
   }
 }

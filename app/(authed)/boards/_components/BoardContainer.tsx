@@ -24,7 +24,10 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { usePeekOpen } from '../../issues/_components/IssueQuickView';
 import { BoardCardOverlay } from './BoardCard';
 import { BoardColumn } from './BoardColumn';
+import { BoardColumnPager, useActiveColumnIndex } from './BoardColumnPager';
+import { BoardEmptyState } from './BoardEmptyState';
 import { BoardSkeleton } from './BoardSkeleton';
+import { UnmappedStatusesTray } from './UnmappedStatusesTray';
 import {
   cardIndex,
   columnOfOverId,
@@ -48,7 +51,12 @@ import {
 // State shape: the projection lives in component state as `board`, with its
 // `columns[].cards` arrays held so the later subtasks can mutate ONE column's
 // card list in place (3.2.4 optimistic moves, 3.2.5 appended pages) without
-// refetching the whole board; `unmappedStatuses` is carried for the 3.2.6 tray.
+// refetching the whole board.
+//
+// Completeness (Subtask 3.2.6): an all-empty board renders the board EMPTY
+// state (a "New work item" CTA, not six blank columns); `unmappedStatuses`
+// renders the unmapped-statuses TRAY above the board; and the column row is a
+// scroll-snap single-column pager on narrow viewports — see `BoardDnd`.
 //
 // `members` (the workspace member directory the board page already resolves) lets
 // the cards map each `BoardCardDto.assigneeId` to a display name for the avatar —
@@ -160,6 +168,23 @@ function BoardDnd({
 
   const [columns, setColumns] = useState<BoardColumnDto[]>(board.columns);
   const [activeCard, setActiveCard] = useState<BoardCardDto | null>(null);
+
+  // The horizontal scroll region (the column row) + which column is centred in
+  // it — drives the mobile pager (Subtask 3.2.6, design panel 7). On a narrow
+  // viewport the board reads as a single-column scroll; the pager shows
+  // "{name} · {i} of {n}". The hook is a no-op (returns 0) until the row mounts,
+  // so it's safe to call even when the empty state renders instead of the row.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const activeColumn = useActiveColumnIndex(scrollRef, columns.length);
+
+  // A project with no work items shows the board empty state (design panel 6),
+  // NOT six blank columns. But when statuses are unmapped, work items may live
+  // in a status mapped to no column — present but HIDDEN — so we keep the
+  // columns + the unmapped tray rather than claim "no work items". (Rung-2: the
+  // schema lets a status map to no column, so "all columns empty" ≠ "no work
+  // items" once unmapped statuses exist.)
+  const hasUnmapped = board.unmappedStatuses.length > 0;
+  const isEmpty = !hasUnmapped && columns.every((c) => c.totalCount === 0);
 
   // A mirror ref so the drag handlers read the LATEST columns synchronously
   // (a dnd lifecycle event can fire before a state update has re-rendered),
@@ -402,44 +427,67 @@ function BoardDnd({
   }, [colName, t]);
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCorners}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-      onDragCancel={handleDragCancel}
-      accessibility={{
-        announcements,
-        screenReaderInstructions: { draggable: t('dndInstructions') },
-      }}
-    >
-      <div
-        role="group"
-        aria-label={t('boardLabel')}
-        tabIndex={0}
-        className="flex gap-4 overflow-x-auto pb-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-        data-testid="board"
-      >
-        {columns.map((column) => (
-          <BoardColumn
-            key={column.id}
-            column={column}
-            assigneeNameById={assigneeNameById}
-            onOpenQuickView={openPeek}
-          />
-        ))}
-      </div>
-      <DragOverlay>
-        {activeCard ? (
-          <BoardCardOverlay
-            card={activeCard}
-            assigneeName={
-              activeCard.assigneeId ? (assigneeNameById.get(activeCard.assigneeId) ?? null) : null
-            }
-          />
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+    <div className="flex min-w-0 flex-col gap-3">
+      {/* Unmapped-statuses tray (3.2.6, design panel 5) — above the board,
+          absent when every status is mapped. */}
+      {hasUnmapped ? <UnmappedStatusesTray statuses={board.unmappedStatuses} /> : null}
+
+      {isEmpty ? (
+        <BoardEmptyState />
+      ) : (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+          accessibility={{
+            announcements,
+            screenReaderInstructions: { draggable: t('dndInstructions') },
+          }}
+        >
+          <div className="flex min-w-0 flex-col gap-2">
+            {/* The horizontally-scrolling column row. Scroll-snap (proximity, so
+                it never fights a deliberate scroll) makes narrow viewports read
+                as a single-column pager (3.2.6, panel 7); each column is wrapped
+                with `data-board-column` so the pager hook can locate it. The
+                wrapper is the snap target — BoardColumn keeps its own droppable
+                ref + width unchanged. */}
+            <div
+              ref={scrollRef}
+              role="group"
+              aria-label={t('boardLabel')}
+              tabIndex={0}
+              className="flex snap-x snap-proximity gap-4 overflow-x-auto pb-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              data-testid="board"
+            >
+              {columns.map((column) => (
+                <div key={column.id} data-board-column className="flex shrink-0 snap-start">
+                  <BoardColumn
+                    column={column}
+                    assigneeNameById={assigneeNameById}
+                    onOpenQuickView={openPeek}
+                  />
+                </div>
+              ))}
+            </div>
+            <BoardColumnPager columns={columns} activeIndex={activeColumn} />
+          </div>
+          <DragOverlay>
+            {activeCard ? (
+              <BoardCardOverlay
+                card={activeCard}
+                assigneeName={
+                  activeCard.assigneeId
+                    ? (assigneeNameById.get(activeCard.assigneeId) ?? null)
+                    : null
+                }
+              />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      )}
+    </div>
   );
 }
