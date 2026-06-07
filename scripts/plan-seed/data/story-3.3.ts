@@ -208,7 +208,7 @@ export const story_3_3: PlanStory = {
     {
       id: '3.3.3',
       title: 'Board config service + API — set swimlane group-by + per-column WIP limit',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
