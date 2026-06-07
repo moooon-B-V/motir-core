@@ -94,7 +94,7 @@ export const story_3_6: PlanStory = {
     {
       id: '3.6.1',
       title: 'Design — board-configuration surface: column manager + status mapping',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 45,
