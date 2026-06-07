@@ -120,7 +120,7 @@ export const story_3_3: PlanStory = {
       id: '3.3.1',
       title:
         'Design — swimlanes layout + group-by control + WIP config + over-limit warning (extends design/boards/)',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 45,
