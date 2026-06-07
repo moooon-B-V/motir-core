@@ -698,6 +698,20 @@
     "pagerPosition": "{name} · 第 {index}/{count}",
     "loadingMore": "加载中…",
     "loadMoreError": "无法加载更多卡片。",
-    "loadMoreRetry": "重试"
+    "loadMoreRetry": "重试",
+    "groupByLabel": "分组方式",
+    "groupByAria": "泳道分组方式",
+    "groupByNone": "无",
+    "groupByAssignee": "负责人",
+    "groupByEpic": "史诗",
+    "groupByPriority": "优先级",
+    "groupByErrorTitle": "无法更新分组",
+    "groupByErrorDescription": "无法更改泳道分组，看板未发生变化。",
+    "laneCollapse": "{label} 泳道，{count} 个工作项。收起。",
+    "laneExpand": "{label} 泳道，{count} 个工作项。展开。",
+    "announcementReassigned": "{key} 已移动到「{group}」泳道。",
+    "announcementDiagonal": "{key} 已移动到 {col} 列及「{group}」泳道。",
+    "reassignRejectedTitle": "无法重新分配",
+    "reassignErrorDescription": "无法更新 {key}，更改已撤销。"
   }
 }

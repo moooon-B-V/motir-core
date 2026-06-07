@@ -698,6 +698,20 @@
     "pagerPosition": "{name} · {index} of {count}",
     "loadingMore": "Loading…",
     "loadMoreError": "Couldn’t load more cards.",
-    "loadMoreRetry": "Retry"
+    "loadMoreRetry": "Retry",
+    "groupByLabel": "Group by",
+    "groupByAria": "Swimlane group by",
+    "groupByNone": "None",
+    "groupByAssignee": "Assignee",
+    "groupByEpic": "Epic",
+    "groupByPriority": "Priority",
+    "groupByErrorTitle": "Couldn’t update grouping",
+    "groupByErrorDescription": "Couldn’t change the swimlane grouping. The board is unchanged.",
+    "laneCollapse": "{label} lane, {count} issues. Collapse.",
+    "laneExpand": "{label} lane, {count} issues. Expand.",
+    "announcementReassigned": "{key} moved to the {group} lane.",
+    "announcementDiagonal": "{key} moved to {col} and the {group} lane.",
+    "reassignRejectedTitle": "Couldn’t reassign",
+    "reassignErrorDescription": "Couldn’t update {key}. The change was reverted."
   }
 }

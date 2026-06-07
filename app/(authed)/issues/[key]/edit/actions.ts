@@ -27,7 +27,13 @@ const ISSUES_PATH = '/issues';
 
 export interface UpdateIssueInput {
   id: string;
-  expectedUpdatedAt: string;
+  // Optimistic-concurrency token the edit form reads and submits. OPTIONAL so a
+  // caller without a freshly-read `updatedAt` can reuse this same field-update
+  // path — the board's cross-lane drag-reassign (Subtask 3.3.5) does this: a
+  // `BoardCardDto` carries no `updatedAt`, and a board drop is last-write-wins
+  // (mirror-faithful — Jira board drags don't concurrency-check). When omitted,
+  // `updateWorkItem` skips the stale check (it already treats it as optional).
+  expectedUpdatedAt?: string;
   kind?: WorkItemKindDto;
   title?: string;
   descriptionMd?: string | null;
