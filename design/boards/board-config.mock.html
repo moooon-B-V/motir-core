@@ -1,0 +1,2145 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Board configuration — columns + status mapping (Story 3.6 · 3.6.1)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the BOARD-CONFIGURATION admin surface — Story 3.6.
+      No design/boards/ asset drew this admin (the 3.2.1 board.mock.html is the
+      board ITSELF; its column [⋯] menu is a disabled seam). The planning-time
+      design gate (3.6.1) produces this. It is the layout source of truth the UI
+      subtask (3.6.3) builds against; the service/API is 3.6.2.
+
+      Built FROM the real design system: the token block below is copied 1:1 from
+      app/globals.css (Tier-0 --color-* + Tier-3 --el-* + the shape tokens), and the
+      markup reuses the SHIPPED primitives + vocabulary — the settings-page grammar
+      from app/(authed)/settings/project/workflow (serif h1 + muted subtitle + an
+      mx-auto editor), the board column visual language from board.mock.html (3.2.1),
+      the neutral Pill from the 3.2.6 unmapped tray, Input, Button, Modal/confirm,
+      and the dropdown Menu (the keyboard fallback). No new card vocabulary; this is
+      a new ARRANGEMENT of shipped pieces.
+
+      Where it lives: a new project-settings page `settings/project/board`, a SIBLING
+      of the Workflow editor (`settings/project/workflow`, Story 2.2.5). The two are
+      reached from the project-settings landing page's nav CARDS (the
+      WorkflowSettingsCard pattern, finding #47) — there is no settings sidebar.
+      Membership-gated now, `TODO(6.4)` to role-gate later (matches 2.2.5 + the 3.3
+      board config — no early RBAC build).
+
+      Mirror product: Jira board settings → COLUMNS (the column manager where an admin
+      creates columns and maps statuses into them). The mapping is a MOVE, never a
+      duplicate — `board_column_status` carries @@unique([boardId, statusId]) (3.1.1):
+      a status sits in AT MOST ONE column. Unmapping returns it to the unmapped rail;
+      its work items are hidden from the board but NEVER deleted (a card's column is
+      DERIVED from work_item.status — config never touches work items).
+
+      Covers (multi-panel — review EACH, not just the first):
+        (0) the full board-settings page — name field + unmapped rail + column manager
+        (1) inline column RENAME + the Add-column affordance expanded
+        (2) status MAPPING via drag — DragOverlay + target ring/tint + insertion bar + aria-live
+        (3) status MAPPING via the non-drag KEYBOARD fallback — the per-column picker menu (finding #35)
+        (4) DELETE-COLUMN confirm — (a) normal (statuses → unmapped) and (b) the guard (status still holds cards → remap first)
+        (5) READ-ONLY (non-admin) treatment
+        (6) STATES — loading skeleton · error · all-mapped (empty unmapped rail)
+        (7) CROSS-LINKS — the 3.2.6 tray "Map columns →", the column [⋯] menu, and the settings-landing nav cards
+      Toggle dark mode to confirm token parity. See design-notes.md "Board configuration (Story 3.6)" for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 16px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 24px 56px rgba(15, 15, 15, 0.2);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 8px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-icon-btn: 6px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 24px 56px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 820px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 40px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+      }
+      .stage {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        position: relative;
+      }
+      .legend {
+        max-width: 1180px;
+        margin: 8px auto 0;
+        font-size: 12px;
+        color: var(--el-text-faint);
+        padding-left: 2px;
+        line-height: 1.5;
+      }
+
+      /* ── Settings page shell — mirrors app/(authed)/settings/project/workflow ── */
+      .page {
+        padding: 28px 28px 32px;
+      }
+      .editor {
+        max-width: 860px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .ed-head {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .ed-head .crumb {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        font-family: var(--font-sans);
+      }
+      .ed-head h2 {
+        font-family: var(--font-serif);
+        font-size: 28px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .ed-head .sub {
+        margin: 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+        max-width: 640px;
+        line-height: 1.5;
+      }
+
+      /* card surface (components/ui/Card) */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        box-shadow: var(--shadow-subtle);
+      }
+      .field-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        display: block;
+        margin-bottom: 6px;
+      }
+      .field-hint {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin: 6px 0 0;
+      }
+      /* Input (components/ui/Input) */
+      .input {
+        height: var(--height-input);
+        width: 100%;
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+      }
+      .input:focus-visible {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .input[disabled] {
+        background: var(--el-muted);
+        color: var(--el-text-muted);
+        cursor: not-allowed;
+      }
+      .name-row {
+        display: flex;
+        align-items: flex-end;
+        gap: 12px;
+      }
+      .name-row .grow {
+        flex: 1;
+        max-width: 360px;
+      }
+
+      /* Buttons (components/ui/Button) */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-btn-sm);
+        padding: 0 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .btn.primary {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+      }
+      .btn.danger {
+        background: var(--el-danger);
+        border-color: transparent;
+        color: var(--el-text-inverted);
+      }
+      .btn.ghost {
+        background: transparent;
+        border-color: transparent;
+        color: var(--el-text-secondary);
+      }
+      .btn[disabled] {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      /* save-state indicator (auto-save reconcile feedback) */
+      .savestate {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-text-muted);
+      }
+      .savestate svg {
+        width: 14px;
+        height: 14px;
+      }
+      .savestate.saved {
+        color: var(--el-success);
+      }
+      .savestate.saving .spinner {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* ── Unmapped-statuses rail (config working surface) ─────────────────────
+         Distinct from the board's READ-only 3.2.6 yellow tray: here it is an
+         interactive drop source/target. Carries the same yellow hue (the hue lives
+         in a small icon + header, NOT a tinted page surface — finding #35) and the
+         same neutral status Pills. */
+      .unmapped {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .unmapped-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .unmapped-head .tr-ic {
+        width: 17px;
+        height: 17px;
+        color: var(--el-warning);
+        flex: none;
+      }
+      .unmapped-head .ttl {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .unmapped-head .cnt {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 18px;
+        padding: 0 6px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .unmapped-head .spacer {
+        flex: 1;
+      }
+      .unmapped-head .hint {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .unmapped-body {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 14px 16px;
+        min-height: 56px;
+        align-content: flex-start;
+      }
+      .unmapped-body.is-drop {
+        outline: 2px dashed var(--el-accent);
+        outline-offset: -6px;
+        background: var(--el-tint-lavender);
+      }
+      .unmapped-empty {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .unmapped-empty svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-success);
+      }
+
+      /* ── Status chip — the mappable unit (a moveable Pill row) ───────────────
+         Reuses the 3.2.6 neutral Pill tone; here it is a draggable row carrying a
+         grip (drag affordance — NOT colour-alone, finding #35) + label + a remove
+         (×) that unmaps it (returns it to the rail). */
+      .schip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--spacing-chip-y) 8px var(--spacing-chip-y) 4px;
+        border-radius: var(--radius-badge);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        color: var(--el-text-secondary);
+        font-size: 12.5px;
+        font-weight: 500;
+        cursor: grab;
+      }
+      .schip .ch-grip {
+        width: 13px;
+        height: 13px;
+        color: var(--el-text-faint);
+        flex: none;
+      }
+      .schip .ch-rm {
+        width: 18px;
+        height: 18px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        border: 0;
+        background: none;
+        color: var(--el-text-faint);
+        cursor: pointer;
+        flex: none;
+      }
+      .schip .ch-rm:hover {
+        background: var(--el-muted);
+        color: var(--el-danger);
+      }
+      .schip .ch-rm svg {
+        width: 12px;
+        height: 12px;
+      }
+      .schip.ghost {
+        opacity: 0.4;
+        border-style: dashed;
+        cursor: grabbing;
+      }
+      .schip.picked {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: 1px;
+        box-shadow: var(--shadow-elevated);
+        cursor: grabbing;
+      }
+
+      /* ── Column manager — reuses the board column visual language (3.2.1) ──── */
+      .cols {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        overflow-x: auto;
+        padding: 4px 2px 8px;
+        scroll-snap-type: x proximity;
+      }
+      .col {
+        scroll-snap-align: start;
+        flex: 0 0 264px;
+        width: 264px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        display: flex;
+        flex-direction: column;
+        min-height: 240px;
+      }
+      .col-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 8px 10px 6px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .col-grip {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-faint);
+        flex: none;
+        cursor: grab;
+      }
+      .col-head .nm {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        flex: 1;
+        letter-spacing: 0.01em;
+      }
+      .col-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 18px;
+        padding: 0 6px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .icon-btn {
+        width: 26px;
+        height: 26px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        border: 0;
+        background: none;
+        color: var(--el-text-muted);
+        cursor: pointer;
+        flex: none;
+      }
+      .icon-btn:hover {
+        background: var(--el-muted);
+      }
+      .icon-btn.danger:hover {
+        color: var(--el-danger);
+      }
+      .icon-btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .col-body {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px 10px;
+        flex: 1;
+      }
+      /* a mapped status sits as a full-width row inside its column */
+      .col-body .schip {
+        width: 100%;
+        justify-content: flex-start;
+      }
+      .col-body .schip .ch-sp {
+        flex: 1;
+      }
+      .col.drop-target {
+        outline: 2px solid var(--el-accent);
+        outline-offset: -1px;
+        background: var(--el-tint-lavender);
+      }
+      .col-empty {
+        margin: 2px 0;
+        padding: 16px 10px;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-control);
+        text-align: center;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      /* insertion indicator (NOT colour-alone — a bar + the column ring) */
+      .insertion {
+        height: 3px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        margin: 1px 2px;
+      }
+      /* the per-column "Add status" affordance — opens the picker menu (kbd path) */
+      .add-status {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        width: 100%;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        border: 1px dashed var(--el-border-strong);
+        background: transparent;
+        color: var(--el-text-secondary);
+        font-size: 12.5px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: var(--font-sans);
+      }
+      .add-status:hover {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      .add-status svg {
+        width: 14px;
+        height: 14px;
+      }
+      /* the trailing "Add column" ghost column */
+      .col.add-col {
+        background: transparent;
+        border: 1px dashed var(--el-border-strong);
+        align-items: center;
+        justify-content: center;
+        min-height: 240px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .col.add-col .ac-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .col.add-col .ac-inner .ic {
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-muted);
+        color: var(--el-text-muted);
+      }
+      .col.add-col .ac-inner .ic svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* inline rename (input + confirm/cancel) inside the column header */
+      .rename {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex: 1;
+      }
+      .rename input {
+        height: 30px;
+        flex: 1;
+        min-width: 0;
+        padding: 0 8px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-accent);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .rename input:focus-visible {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+
+      /* ── Dropdown menu (the per-column status picker = the keyboard fallback) ─ */
+      .menu-anchor {
+        position: relative;
+      }
+      .menu {
+        position: absolute;
+        z-index: 20;
+        left: 0;
+        right: 0;
+        margin-top: 6px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .menu .menu-cap {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        padding: 4px 8px 2px;
+      }
+      .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        border: 0;
+        background: none;
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        cursor: pointer;
+        text-align: left;
+        width: 100%;
+      }
+      .menu-item:hover,
+      .menu-item.active {
+        background: var(--el-muted);
+      }
+      .menu-item .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 9999px;
+        background: var(--el-border-strong);
+        flex: none;
+      }
+      .menu-item .sp {
+        flex: 1;
+      }
+      .menu-item .ret {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--el-text-faint);
+      }
+      .menu-empty {
+        padding: 10px 8px;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        text-align: center;
+      }
+
+      /* small popover for the column [⋯] actions menu (panel 7) */
+      .pop {
+        position: absolute;
+        z-index: 20;
+        width: 196px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 6px;
+      }
+
+      /* ── aria-live announcement region (shown for review; sr-only in prod) ─── */
+      .live {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 12px 0 0;
+        padding: 8px 12px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+        border: 1px dashed var(--el-border-strong);
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .live .tag {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+      }
+      .kbd-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 12px 0 0;
+        align-items: center;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      kbd {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        line-height: 1;
+        padding: 3px 6px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+        box-shadow: var(--shadow-subtle);
+      }
+
+      /* ── DragOverlay clone (the lifted chip following the cursor) ──────────── */
+      .drag-overlay {
+        position: absolute;
+        pointer-events: none;
+        transform: rotate(2deg);
+        box-shadow: var(--shadow-elevated);
+      }
+      .drag-overlay .schip {
+        cursor: grabbing;
+        border-color: var(--el-accent);
+        background: var(--el-page-bg);
+      }
+
+      /* ── Modal / confirm (components/ui/Modal) ────────────────────────────── */
+      .scrim {
+        position: absolute;
+        inset: 0;
+        background: rgba(15, 15, 15, 0.36);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .modal {
+        width: 100%;
+        max-width: 440px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: 22px;
+      }
+      .modal h3 {
+        margin: 0 0 8px;
+        font-family: var(--font-serif);
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .modal h3 .m-ic {
+        width: 20px;
+        height: 20px;
+        flex: none;
+      }
+      .modal h3 .m-ic.warn {
+        color: var(--el-warning);
+      }
+      .modal h3 .m-ic.danger {
+        color: var(--el-danger);
+      }
+      .modal p {
+        margin: 0 0 8px;
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .modal .chips-inline {
+        display: inline-flex;
+        gap: 6px;
+        vertical-align: middle;
+      }
+      .modal .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 18px;
+      }
+      .callout {
+        display: flex;
+        gap: 8px;
+        padding: 10px 12px;
+        border-radius: var(--radius-control);
+        font-size: 12.5px;
+        line-height: 1.5;
+        margin: 4px 0 0;
+      }
+      .callout svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .callout.warn {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .callout.warn svg {
+        color: var(--el-warning);
+      }
+      .callout.info {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+      }
+      .callout.info svg {
+        color: var(--el-text-muted);
+      }
+
+      /* ── Read-only banner (non-admin) ─────────────────────────────────────── */
+      .ro-banner {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .ro-banner svg {
+        width: 17px;
+        height: 17px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+
+      /* ── States: skeleton / error / spinner ───────────────────────────────── */
+      .sk {
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+      .pulse {
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      .spinner {
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        border: 2px solid var(--el-border);
+        border-top-color: var(--el-accent);
+        display: inline-block;
+        animation: spin 0.7s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .state-box {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 40px 24px;
+      }
+      .state-box .ic-wrap {
+        width: 46px;
+        height: 46px;
+        margin-bottom: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-muted);
+        background: var(--el-surface);
+        border-radius: 9999px;
+      }
+      .state-box.err .ic-wrap {
+        color: var(--el-danger);
+      }
+      .state-box .ic-wrap svg {
+        width: 22px;
+        height: 22px;
+      }
+      .state-box h3 {
+        margin: 0 0 6px;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        font-family: var(--font-serif);
+      }
+      .state-box p {
+        margin: 0 0 16px;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+        max-width: 340px;
+      }
+
+      /* ── Settings-landing nav cards (panel 7 — Board beside Workflow) ─────── */
+      .navcard {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 18px 20px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        text-decoration: none;
+        color: inherit;
+        cursor: pointer;
+      }
+      .navcard:hover {
+        box-shadow: var(--shadow-card);
+      }
+      .navcard .lead {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .navcard .nc-ic {
+        width: 34px;
+        height: 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        flex: none;
+      }
+      .navcard .nc-ic svg {
+        width: 18px;
+        height: 18px;
+      }
+      .navcard .nc-t {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .navcard .nc-d {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+      .navcard .chev {
+        width: 18px;
+        height: 18px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .navcard.is-active {
+        border-color: var(--el-accent);
+      }
+
+      /* the 3.2.6 board tray (read-only board view) shown for the cross-link */
+      .tray {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-yellow);
+        border: 1px solid transparent;
+      }
+      .tray .tr-ic {
+        width: 18px;
+        height: 18px;
+        color: var(--el-warning);
+        flex: none;
+      }
+      .tray .tr-text {
+        font-size: 13px;
+        color: var(--el-text-strong);
+        flex: 1;
+      }
+      .tray .tr-chips {
+        display: inline-flex;
+        gap: 6px;
+      }
+      .tray .tr-link {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-link);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .pill-neutral {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+        font-size: 12px;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      @media (max-width: 760px) {
+        .grid-2 {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Board configuration — columns + status mapping</h1>
+        <p>
+          Story 3.6 · Subtask 3.6.1 design asset — built from app/globals.css tokens + the shipped
+          settings/board/UI primitives. The admin surface the 3.2.6 unmapped-statuses tray points
+          at: manage the board’s columns and the column ↔ status mapping. Mirror = Jira board
+          settings → Columns. Source of truth = this HTML; see design-notes.md.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke, used by <use>) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-grip"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="9" cy="6" r="1" />
+          <circle cx="9" cy="12" r="1" />
+          <circle cx="9" cy="18" r="1" />
+          <circle cx="15" cy="6" r="1" />
+          <circle cx="15" cy="12" r="1" />
+          <circle cx="15" cy="18" r="1" />
+        </g>
+        <g
+          id="i-more"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="5" cy="12" r="1" />
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-pencil"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          />
+          <path d="m15 5 4 4" />
+        </g>
+        <g
+          id="i-trash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 6h18" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          <path d="M10 11v6" />
+          <path d="M14 11v6" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-circle-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 8v4" />
+          <path d="M12 16h.01" />
+        </g>
+        <g
+          id="i-columns"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+        </g>
+        <g
+          id="i-workflow"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="8" height="8" x="3" y="3" rx="2" />
+          <path d="M7 11v4a2 2 0 0 0 2 2h4" />
+          <rect width="8" height="8" x="13" y="13" rx="2" />
+        </g>
+        <g
+          id="i-chevron-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-circle-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════════ PANEL 0 — the full board-settings page ════════════════ -->
+    <div class="panel-label">
+      0 · The board-settings page — name field + unmapped rail + column manager (admin, idle)
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="editor">
+            <div class="ed-head">
+              <span class="crumb">Settings · prodect · Board</span>
+              <h2>
+                <span style="color: var(--el-text-muted); display: inline-flex"
+                  ><svg viewBox="0 0 24 24" width="22" height="22">
+                    <use href="#i-columns" /></svg
+                ></span>
+                Board
+              </h2>
+              <p class="sub">
+                Manage the board’s columns and which workflow statuses each column shows. A status
+                with no column is hidden from the board — its work items keep their status and are
+                never deleted.
+              </p>
+            </div>
+
+            <!-- Board name -->
+            <div class="card">
+              <label class="field-label" for="bn">Board name</label>
+              <div class="name-row">
+                <div class="grow">
+                  <input class="input" id="bn" type="text" value="prodect board" />
+                </div>
+                <span class="savestate saved" aria-live="polite">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  Saved
+                </span>
+              </div>
+              <p class="field-hint">Shown in the board header on /boards.</p>
+            </div>
+
+            <!-- Unmapped statuses rail -->
+            <div class="unmapped">
+              <div class="unmapped-head">
+                <span class="tr-ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+                ></span>
+                <span class="ttl">Unmapped statuses</span>
+                <span class="cnt">2</span>
+                <span class="spacer"></span>
+                <span class="hint">Drag onto a column, or use a column’s “Add status” menu.</span>
+              </div>
+              <div class="unmapped-body">
+                <span class="schip" draggable="true"
+                  ><svg class="ch-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>Needs
+                  Triage</span
+                >
+                <span class="schip" draggable="true"
+                  ><svg class="ch-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>On
+                  Hold</span
+                >
+              </div>
+            </div>
+
+            <!-- Column manager -->
+            <div class="cols" role="list" aria-label="Board columns">
+              <!-- To Do -->
+              <section class="col" role="listitem" aria-label="To Do column, 1 status">
+                <div class="col-head">
+                  <svg class="col-grip" viewBox="0 0 24 24" aria-label="Reorder column">
+                    <use href="#i-grip" />
+                  </svg>
+                  <span class="nm">To Do</span>
+                  <span class="col-count" title="1 mapped status">1</span>
+                  <button class="icon-btn" aria-label="Rename To Do column">
+                    <svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+                  </button>
+                  <button class="icon-btn danger" aria-label="Delete To Do column">
+                    <svg viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                  </button>
+                </div>
+                <div class="col-body">
+                  <span class="schip"
+                    ><svg class="ch-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>To Do<span
+                      class="ch-sp"
+                    ></span
+                    ><button class="ch-rm" aria-label="Remove To Do from this column">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <button class="add-status">
+                    <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Add status
+                  </button>
+                </div>
+              </section>
+
+              <!-- In Progress -->
+              <section class="col" role="listitem" aria-label="In Progress column, 2 statuses">
+                <div class="col-head">
+                  <svg class="col-grip" viewBox="0 0 24 24" aria-label="Reorder column">
+                    <use href="#i-grip" />
+                  </svg>
+                  <span class="nm">In Progress</span>
+                  <span class="col-count" title="2 mapped statuses">2</span>
+                  <button class="icon-btn" aria-label="Rename In Progress column">
+                    <svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+                  </button>
+                  <button class="icon-btn danger" aria-label="Delete In Progress column">
+                    <svg viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                  </button>
+                </div>
+                <div class="col-body">
+                  <span class="schip"
+                    ><svg class="ch-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>In
+                    Progress<span class="ch-sp"></span
+                    ><button class="ch-rm" aria-label="Remove In Progress from this column">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <span class="schip"
+                    ><svg class="ch-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>In
+                    Review<span class="ch-sp"></span
+                    ><button class="ch-rm" aria-label="Remove In Review from this column">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <button class="add-status">
+                    <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Add status
+                  </button>
+                </div>
+              </section>
+
+              <!-- Done -->
+              <section class="col" role="listitem" aria-label="Done column, 1 status">
+                <div class="col-head">
+                  <svg class="col-grip" viewBox="0 0 24 24" aria-label="Reorder column">
+                    <use href="#i-grip" />
+                  </svg>
+                  <span class="nm">Done</span>
+                  <span class="col-count" title="1 mapped status">1</span>
+                  <button class="icon-btn" aria-label="Rename Done column">
+                    <svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+                  </button>
+                  <button class="icon-btn danger" aria-label="Delete Done column">
+                    <svg viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                  </button>
+                </div>
+                <div class="col-body">
+                  <span class="schip"
+                    ><svg class="ch-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>Done<span
+                      class="ch-sp"
+                    ></span
+                    ><button class="ch-rm" aria-label="Remove Done from this column">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <button class="add-status">
+                    <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Add status
+                  </button>
+                </div>
+              </section>
+
+              <!-- Add column ghost -->
+              <button class="col add-col" aria-label="Add column">
+                <span class="ac-inner"
+                  ><span class="ic"
+                    ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg></span
+                  >Add column</span
+                >
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        Beside the <strong>Workflow</strong> editor (settings/project/workflow, 2.2.5) — same
+        settings grammar (serif title + muted subtitle + an mx-auto editor). Board name is an
+        auto-save Input (the “Saved” reconcile chip mirrors the WIP-limit save feedback). The
+        unmapped rail lists statuses with no column (from
+        <code>BoardProjectionDto.unmappedStatuses</code>); the column manager reuses the board’s
+        264–288px column language. Every write is optimistic-with-reconcile against the 3.6.2 API.
+        Mirror: Jira board settings → Columns.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 1 — inline rename + add-column input ════════════════ -->
+    <div class="panel-label">1 · Rename a column inline · the Add-column affordance expanded</div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="editor">
+            <div class="cols" aria-label="Board columns (rename in progress)">
+              <!-- column being renamed -->
+              <section class="col" aria-label="Renaming In Progress column">
+                <div class="col-head">
+                  <svg class="col-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                  <span class="rename">
+                    <input type="text" value="In Progress" aria-label="Column name" />
+                    <button class="icon-btn" aria-label="Save name">
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                    </button>
+                    <button class="icon-btn" aria-label="Cancel rename">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                    </button>
+                  </span>
+                </div>
+                <div class="col-body">
+                  <span class="schip"
+                    ><svg class="ch-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>In
+                    Progress<span class="ch-sp"></span
+                    ><button class="ch-rm" aria-label="Remove In Progress from this column">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <button class="add-status">
+                    <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Add status
+                  </button>
+                </div>
+              </section>
+
+              <!-- the Add-column ghost expanded into an input -->
+              <section class="col" aria-label="New column">
+                <div class="col-head">
+                  <svg class="col-grip" viewBox="0 0 24 24" style="opacity: 0.4">
+                    <use href="#i-grip" />
+                  </svg>
+                  <span class="rename">
+                    <input
+                      type="text"
+                      value=""
+                      placeholder="Column name"
+                      aria-label="New column name"
+                    />
+                    <button class="icon-btn" aria-label="Create column">
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                    </button>
+                    <button class="icon-btn" aria-label="Cancel">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                    </button>
+                  </span>
+                </div>
+                <div class="col-body">
+                  <div class="col-empty">No statuses yet — map one from the rail.</div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        Rename is inline: the pencil swaps the name for an Input bordered in
+        <code>--el-accent</code> with confirm (check) / cancel (×); <kbd>Enter</kbd> commits,
+        <kbd>Esc</kbd> cancels. “Add column” appends a new column already in name-edit mode (empty
+        body, the “No statuses yet” placeholder). Both write through the 3.6.2 endpoints (<code
+          >PATCH …/columns/[id]</code
+        >
+        name, <code>POST …/columns</code>). A new column starts empty; the admin maps statuses into
+        it.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 2 — status mapping via DRAG ════════════════ -->
+    <div class="panel-label">
+      2 · Map a status by dragging it onto a column — target ring + tint + insertion bar (not
+      colour-alone, finding #35)
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="editor">
+            <!-- the dragged source leaves a ghost in the rail -->
+            <div class="unmapped">
+              <div class="unmapped-head">
+                <span class="tr-ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+                ></span>
+                <span class="ttl">Unmapped statuses</span>
+                <span class="cnt">2</span>
+                <span class="spacer"></span>
+                <span class="hint">Dragging “Needs Triage”…</span>
+              </div>
+              <div class="unmapped-body">
+                <span class="schip ghost"
+                  ><svg class="ch-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>Needs
+                  Triage</span
+                >
+                <span class="schip" draggable="true"
+                  ><svg class="ch-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>On
+                  Hold</span
+                >
+              </div>
+            </div>
+
+            <div class="cols" aria-label="Board columns (drag in progress)">
+              <section class="col" aria-label="To Do column">
+                <div class="col-head">
+                  <svg class="col-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                  <span class="nm">To Do</span><span class="col-count">1</span>
+                  <button class="icon-btn" aria-label="Rename">
+                    <svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+                  </button>
+                  <button class="icon-btn danger" aria-label="Delete">
+                    <svg viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                  </button>
+                </div>
+                <div class="col-body">
+                  <span class="schip"
+                    ><svg class="ch-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>To Do<span
+                      class="ch-sp"
+                    ></span
+                    ><button class="ch-rm" aria-label="Remove">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <button class="add-status">
+                    <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Add status
+                  </button>
+                </div>
+              </section>
+
+              <!-- the drop target: ring + lavender tint + an insertion bar -->
+              <section class="col drop-target" aria-label="In Progress column (drop target)">
+                <div class="col-head">
+                  <svg class="col-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                  <span class="nm">In Progress</span><span class="col-count">2</span>
+                  <button class="icon-btn" aria-label="Rename">
+                    <svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+                  </button>
+                  <button class="icon-btn danger" aria-label="Delete">
+                    <svg viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                  </button>
+                </div>
+                <div class="col-body">
+                  <span class="schip"
+                    ><svg class="ch-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>In
+                    Progress<span class="ch-sp"></span
+                    ><button class="ch-rm" aria-label="Remove">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <span class="schip"
+                    ><svg class="ch-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>In
+                    Review<span class="ch-sp"></span
+                    ><button class="ch-rm" aria-label="Remove">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <div class="insertion"></div>
+                  <button class="add-status">
+                    <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Add status
+                  </button>
+                </div>
+              </section>
+            </div>
+
+            <div class="live" aria-live="assertive">
+              <span class="tag">aria-live</span>
+              Picked up Needs Triage. Over “In Progress”. Drop to map it here; Escape to cancel.
+            </div>
+          </div>
+        </div>
+        <!-- the DragOverlay clone following the cursor -->
+        <div class="drag-overlay" style="left: 360px; top: 250px">
+          <span class="schip"
+            ><svg class="ch-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>Needs Triage</span
+          >
+        </div>
+      </div>
+      <p class="legend">
+        dnd-kit (reuses the 3.2.4 board setup — no second DnD lib). The source chip leaves a dashed
+        40%-opacity ghost; a tilted DragOverlay clone follows the cursor; the target column shows an
+        accent ring + a lavender tint AND an insertion bar — redundant cues, never colour-alone
+        (finding #35). On drop it’s a MOVE (<code>mapStatusToColumn</code>): a status sits in
+        exactly one column (the <code>@@unique([boardId, statusId])</code> invariant), so dragging
+        it from another column re-maps rather than duplicating.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 3 — the non-drag KEYBOARD fallback ════════════════ -->
+    <div class="panel-label">
+      3 · Map without a mouse — the per-column “Add status” picker menu (finding #35) + keyboard DnD
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="editor">
+            <div class="cols" aria-label="Board columns (status picker open)">
+              <section class="col" aria-label="To Do column">
+                <div class="col-head">
+                  <svg class="col-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                  <span class="nm">To Do</span><span class="col-count">1</span>
+                  <button class="icon-btn" aria-label="Rename">
+                    <svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+                  </button>
+                  <button class="icon-btn danger" aria-label="Delete">
+                    <svg viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                  </button>
+                </div>
+                <div class="col-body">
+                  <span class="schip"
+                    ><svg class="ch-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>To Do<span
+                      class="ch-sp"
+                    ></span
+                    ><button class="ch-rm" aria-label="Remove">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <!-- the picker menu opened from "Add status" -->
+                  <div class="menu-anchor">
+                    <button class="add-status" aria-expanded="true" aria-haspopup="menu">
+                      <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Add status
+                    </button>
+                    <div class="menu" role="menu" aria-label="Add a status to To Do">
+                      <span class="menu-cap">Unmapped statuses</span>
+                      <button class="menu-item active" role="menuitem">
+                        <span class="dot"></span>Needs Triage<span class="sp"></span
+                        ><span class="ret">↵</span>
+                      </button>
+                      <button class="menu-item" role="menuitem">
+                        <span class="dot"></span>On Hold<span class="sp"></span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="col" aria-label="In Progress column" style="margin-left: 220px">
+                <div class="col-head">
+                  <svg class="col-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                  <span class="nm">In Progress</span><span class="col-count">2</span>
+                  <button class="icon-btn" aria-label="Rename">
+                    <svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+                  </button>
+                  <button class="icon-btn danger" aria-label="Delete">
+                    <svg viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                  </button>
+                </div>
+                <div class="col-body">
+                  <span class="schip"
+                    ><svg class="ch-grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>In
+                    Progress<span class="ch-sp"></span
+                    ><button class="ch-rm" aria-label="Remove">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <button class="add-status">
+                    <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Add status
+                  </button>
+                </div>
+              </section>
+            </div>
+
+            <div class="kbd-row">
+              <strong style="font-weight: 600; color: var(--el-text-strong)">Picker:</strong>
+              <kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Enter</kbd> map the status here · <kbd>Esc</kbd>
+              close.
+              <span style="width: 14px"></span>
+              <strong style="font-weight: 600; color: var(--el-text-strong)"
+                >Reorder a chip:</strong
+              >
+              <kbd>Space</kbd> pick up · <kbd>↑</kbd><kbd>↓</kbd> within · <kbd>←</kbd
+              ><kbd>→</kbd> across columns · <kbd>Space</kbd> drop · <kbd>Esc</kbd> cancel.
+            </div>
+            <div class="live" aria-live="assertive">
+              <span class="tag">aria-live</span>
+              Needs Triage mapped to “To Do”. Now in column 1 of 3.
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        Mapping is NOT drag-only (finding #35). Every column’s “Add status” button opens a menu of
+        the currently-unmapped statuses; pick one to map it (the same write the drag fires). Chip
+        reorder/move across columns is keyboard-operable via the dnd-kit keyboard sensor, with an
+        <code>aria-live</code> region announcing each step. So a keyboard or screen-reader user can
+        fully configure the board.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 4 — delete-column confirm (normal + guard) ════════════════ -->
+    <div class="panel-label">
+      4 · Delete a column — (a) normal: its statuses return to Unmapped · (b) guard: refused while a
+      mapped status still holds board cards
+    </div>
+    <div class="panel">
+      <div class="grid-2">
+        <!-- (a) normal delete -->
+        <div class="stage" style="min-height: 280px">
+          <div class="scrim" style="position: relative; inset: auto; padding: 28px">
+            <div class="modal">
+              <h3>
+                <span class="m-ic danger"
+                  ><svg viewBox="0 0 24 24"><use href="#i-trash" /></svg
+                ></span>
+                Delete “In Review” column?
+              </h3>
+              <p>
+                Its mapped status returns to <strong>Unmapped statuses</strong> — work items keep
+                that status and are <strong>not deleted</strong>; they’re just hidden from the board
+                until the status is mapped again.
+              </p>
+              <div class="callout info">
+                <svg viewBox="0 0 24 24"><use href="#i-circle-alert" /></svg>
+                <span
+                  >Returns to Unmapped:
+                  <span class="chips-inline"
+                    ><span class="pill-neutral">In Review</span></span
+                  ></span
+                >
+              </div>
+              <div class="actions">
+                <button class="btn ghost">Cancel</button>
+                <button class="btn danger">
+                  <svg viewBox="0 0 24 24"><use href="#i-trash" /></svg>Delete column
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- (b) guard: cannot delete -->
+        <div class="stage" style="min-height: 280px">
+          <div class="scrim" style="position: relative; inset: auto; padding: 28px">
+            <div class="modal">
+              <h3>
+                <span class="m-ic warn"
+                  ><svg viewBox="0 0 24 24"><use href="#i-circle-alert" /></svg
+                ></span>
+                Can’t delete “In Progress” yet
+              </h3>
+              <p>
+                Its status <strong>In Progress</strong> still has <strong>12 work items</strong> on
+                the board. Map that status to another column first, then delete this one. No work
+                item is ever removed by a board change.
+              </p>
+              <div class="callout warn">
+                <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+                <span
+                  >Still holding cards:
+                  <span class="chips-inline"
+                    ><span class="pill-neutral">In Progress · 12</span></span
+                  ></span
+                >
+              </div>
+              <div class="actions">
+                <button class="btn ghost">Cancel</button>
+                <button class="btn primary">Remap “In Progress” →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        Decided at 3.6.2 (mirrors Jira’s “you can’t delete a column with issues”): deleting a column
+        unmaps its statuses (they return to the rail) and removes only the
+        <code>board_column</code> row — never a work item. A column whose mapped status STILL holds
+        board cards is refused (<code>ColumnNotEmptyError</code> → 409); the confirm becomes a guard
+        whose primary action deep-links to remap that status first. State carried by text + icon,
+        never colour alone (finding #35).
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 5 — read-only (non-admin) ════════════════ -->
+    <div class="panel-label">
+      5 · Read-only — a non-admin member; every write affordance is gone
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="editor">
+            <div class="ro-banner">
+              <svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>
+              You have read-only access to board settings. Ask a project admin to add, rename, or
+              remap columns.
+            </div>
+
+            <div class="card">
+              <label class="field-label">Board name</label>
+              <div class="name-row">
+                <div class="grow">
+                  <input class="input" type="text" value="prodect board" disabled />
+                </div>
+              </div>
+            </div>
+
+            <div class="cols" aria-label="Board columns (read-only)">
+              <section class="col" aria-label="To Do column">
+                <div class="col-head">
+                  <span class="nm" style="padding-left: 6px">To Do</span>
+                  <span class="col-count">1</span>
+                </div>
+                <div class="col-body">
+                  <span class="pill-neutral" style="align-self: flex-start">To Do</span>
+                </div>
+              </section>
+              <section class="col" aria-label="In Progress column">
+                <div class="col-head">
+                  <span class="nm" style="padding-left: 6px">In Progress</span>
+                  <span class="col-count">2</span>
+                </div>
+                <div class="col-body">
+                  <span class="pill-neutral" style="align-self: flex-start">In Progress</span>
+                  <span class="pill-neutral" style="align-self: flex-start">In Review</span>
+                </div>
+              </section>
+              <section class="col" aria-label="Done column">
+                <div class="col-head">
+                  <span class="nm" style="padding-left: 6px">Done</span>
+                  <span class="col-count">1</span>
+                </div>
+                <div class="col-body">
+                  <span class="pill-neutral" style="align-self: flex-start">Done</span>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        Membership-gated affordances (the 2.2.5 / 3.3 pattern, <code>TODO(6.4)</code> to role-gate
+        later): a non-admin sees the columns + mapping read-only — no grips, no rename/delete, no
+        “Add status”, the name field disabled, no unmapped rail drop target — and the server
+        re-gates every write 403 even if the markup is bypassed (the <code>isAdmin</code> flag only
+        governs whether affordances render). The chips collapse to plain neutral Pills.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 6 — states ════════════════ -->
+    <div class="panel-label">6 · States — loading skeleton · error · all-mapped (empty rail)</div>
+    <div class="panel">
+      <div class="grid-2">
+        <!-- loading -->
+        <div class="stage">
+          <div class="page" style="padding: 22px">
+            <div class="sk pulse" style="height: 16px; width: 120px; margin-bottom: 18px"></div>
+            <div class="sk pulse" style="height: 56px; margin-bottom: 16px"></div>
+            <div style="display: flex; gap: 14px">
+              <div class="sk pulse" style="height: 180px; width: 200px"></div>
+              <div class="sk pulse" style="height: 180px; width: 200px"></div>
+              <div class="sk pulse" style="height: 180px; width: 200px"></div>
+            </div>
+          </div>
+        </div>
+        <!-- error -->
+        <div class="stage">
+          <div class="state-box err">
+            <span class="ic-wrap"
+              ><svg viewBox="0 0 24 24"><use href="#i-circle-alert" /></svg
+            ></span>
+            <h3>Couldn’t load board settings</h3>
+            <p>Something went wrong loading this board’s configuration. Try again.</p>
+            <button class="btn">Retry</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- all-mapped (empty unmapped rail) -->
+      <div style="margin-top: 16px">
+        <div class="unmapped">
+          <div class="unmapped-head">
+            <span class="tr-ic" style="color: var(--el-text-muted)"
+              ><svg viewBox="0 0 24 24"><use href="#i-columns" /></svg
+            ></span>
+            <span class="ttl">Unmapped statuses</span>
+            <span class="spacer"></span>
+          </div>
+          <div class="unmapped-body">
+            <span class="unmapped-empty">
+              <svg viewBox="0 0 24 24"><use href="#i-circle-check" /></svg>
+              Every status is on the board — nothing is hidden.
+            </span>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        Loading: a header + name-field + column skeletons stream in. Error / no-board: an
+        <code>ErrorState</code> with Retry (the 3.2.2 board pattern). All-mapped: the rail shows a
+        positive empty state, not a blank box. (A board always auto-seeds ≥1 column per the
+        Story-3.1 seed — 3.1.2 — so there is no zero-column state; “empty” means a brand-new board
+        whose only column holds the initial status and whose rail is empty.) Save feedback: the
+        per-write “Saving…/Saved” chip on the name field; a failed write surfaces a danger Toast and
+        reverts the optimistic change.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 7 — cross-links + settings nav ════════════════ -->
+    <div class="panel-label">
+      7 · Cross-links — the 3.2.6 board tray “Map columns →”, the column [⋯] menu, and the
+      settings-landing nav (Board beside Workflow)
+    </div>
+    <div class="panel">
+      <div class="grid-2">
+        <!-- the board's 3.2.6 unmapped tray, repointed -->
+        <div>
+          <div class="legend" style="margin: 0 0 8px">On /boards — the read-only 3.2.6 tray:</div>
+          <div class="stage" style="padding: 16px">
+            <div class="tray">
+              <span class="tr-ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+              ></span>
+              <span class="tr-text">
+                2 statuses aren’t on this board — work items in them are hidden here:
+                <span class="tr-chips">
+                  <span class="pill-neutral">Needs Triage</span>
+                  <span class="pill-neutral">On Hold</span>
+                </span>
+              </span>
+              <a class="tr-link" href="#">Map columns →</a>
+            </div>
+          </div>
+          <div class="legend" style="margin-top: 8px">
+            3.6.3 repoints the tray CTA from the interim <strong>“Manage statuses →”</strong> (which
+            went to the Workflow editor because no mapping admin existed) to
+            <strong>“Map columns →”</strong> → <code>settings/project/board</code> — this surface.
+            i18n keys updated en + zh.
+          </div>
+        </div>
+
+        <!-- the column [⋯] menu on the board, now wired -->
+        <div>
+          <div class="legend" style="margin: 0 0 8px">On /boards — the column header [⋯] menu:</div>
+          <div class="stage" style="padding: 16px; min-height: 150px; position: relative">
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 8px 6px;
+                border: 1px solid var(--el-border);
+                border-radius: var(--radius-card);
+                background: var(--el-surface);
+                max-width: 240px;
+              "
+            >
+              <span
+                class="nm"
+                style="font-size: 13px; font-weight: 600; color: var(--el-text-strong)"
+                >In Review</span
+              >
+              <span class="col-count">7</span>
+              <span style="flex: 1"></span>
+              <button class="icon-btn" aria-label="Column actions" aria-expanded="true">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="pop" style="right: 16px; top: 56px">
+              <button class="menu-item" role="menuitem">
+                <svg
+                  viewBox="0 0 24 24"
+                  style="width: 15px; height: 15px; color: var(--el-text-muted)"
+                >
+                  <use href="#i-plus" />
+                </svg>
+                Set WIP limit
+              </button>
+              <button class="menu-item" role="menuitem">
+                <svg
+                  viewBox="0 0 24 24"
+                  style="width: 15px; height: 15px; color: var(--el-text-muted)"
+                >
+                  <use href="#i-columns" />
+                </svg>
+                Board settings →
+              </button>
+            </div>
+          </div>
+          <div class="legend" style="margin-top: 8px">
+            The 3.2.3 column <code>[⋯]</code> menu (a disabled seam until now) gains a
+            <strong>“Board settings →”</strong> item opening this surface.
+          </div>
+        </div>
+      </div>
+
+      <!-- settings-landing nav cards -->
+      <div class="legend" style="margin: 20px 0 8px">
+        On /settings/project — the nav cards (the WorkflowSettingsCard pattern, finding #47; there
+        is no settings sidebar). “Board” is a NEW sibling card next to “Workflow”:
+      </div>
+      <div class="stage" style="padding: 18px">
+        <div
+          style="display: flex; flex-direction: column; gap: 12px; max-width: 620px; margin: 0 auto"
+        >
+          <a class="navcard">
+            <span class="lead">
+              <span class="nc-ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-workflow" /></svg
+              ></span>
+              <span>
+                <span class="nc-t">Workflow</span>
+                <span class="nc-d">Statuses and the transitions between them.</span>
+              </span>
+            </span>
+            <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+          </a>
+          <a class="navcard is-active">
+            <span class="lead">
+              <span class="nc-ic" style="color: var(--el-accent)"
+                ><svg viewBox="0 0 24 24"><use href="#i-columns" /></svg
+              ></span>
+              <span>
+                <span class="nc-t">Board</span>
+                <span class="nc-d">Columns and which statuses each column shows.</span>
+              </span>
+            </span>
+            <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+          </a>
+        </div>
+      </div>
+      <p class="legend">
+        Three entry points land here: the board’s unmapped-statuses tray (the headline — it finally
+        does what its “Map columns →” copy promises), the column <code>[⋯]</code> menu, and the new
+        project-settings nav card. Workflow (statuses/transitions) and Board (columns/mapping) are
+        siblings: the Workflow editor owns the statuses; Board settings owns how those statuses map
+        onto columns.
+      </p>
+    </div>
+  </body>
+</html>

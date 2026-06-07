@@ -24,27 +24,6 @@ export const STUB_STORIES: PlanStory[] = [
       'window (not the retired cursor paging).',
     items: [],
   },
-  {
-    id: '3.7',
-    title: 'Multiple boards per project (board CRUD + switcher)',
-    status: 'planned',
-    descriptionMd:
-      'The home for the **board CRUD / multi-board** capability the earlier Epic-3 stories ' +
-      'forward-reference (NOT a "v1 vs later" deferral — Prodect has no V1 tier; the planned epics ' +
-      'are the complete product, so a Jira-equivalent’s multi-board support must be a real story). ' +
-      'A project can have **more than one board** (e.g. a team board + a triage board): create / ' +
-      'rename / delete boards, a **board switcher** on `/boards`, and per-board configuration ' +
-      '(Story 3.6 generalized from the single default board to any board). The Story-3.1 schema + ' +
-      'API already carry a `boardId` (the projection, move, and column routes are board-scoped), so ' +
-      'this is additive — no breaking change to the default-board path.\n\n' +
-      'Out of scope here: the Scrum board variant (Story 4.5 — moved to Epic 4 per mistake #32) ' +
-      'and the column/status-mapping admin itself (Story 3.6 — this story REUSES it per board). ' +
-      'Expand to canonical subtask depth ' +
-      '(schema/guards for N boards per project · board-CRUD service+API · the switcher + create/' +
-      'rename/delete UI · per-board config wiring · tests) when it reaches the ready set, per the ' +
-      'async-expansion rule.',
-    items: [],
-  },
 
   // ── Epic 4: Agile planning ────────────────────────────────────────────────
   {

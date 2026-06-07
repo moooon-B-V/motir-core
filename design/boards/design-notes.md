@@ -10,6 +10,7 @@ same primitives — no Pencil→code gap.
 | ---------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Kanban board (columns + cards)** | **`board.mock.html`** (HTML mockup)         | The whole board surface — no `design/boards/` asset existed; the 3.2.1 design gate produces this. Multi-panel: board · drag · snap-back · keyboard · scale · unmapped · states · mobile. Gates 3.2.2–3.2.6. See below.                                                                                                                                                                                                                                                                                                                             |
 | **Swimlanes + WIP limits**         | **`swimlanes-wip.mock.html`** (HTML mockup) | EXTENDS the board surface — the 3.2.1 mockup drew a WIP slot only as a NON-enforced placeholder and NO swimlanes / WIP editor / over-limit treatment (unspecified == no design), so the 3.3.1 design gate produces this. Multi-panel: group-by control · swimlanes (assignee/epic/priority + catch-all) · cross-lane drag · WIP config · over-limit · states. Gates 3.3.5–3.3.6. See "Swimlanes + WIP (Story 3.3)" below.                                                                                                                          |
+| **Board configuration (admin)**    | **`board-config.mock.html`** (HTML mockup)  | The board ADMIN surface — the column manager + column ↔ status mapping the 3.2.6 unmapped tray points at; NO `design/boards/` asset drew it (the 3.2.1 board mockup is the board itself; its `[⋯]` menu is a disabled seam), so the 3.6.1 design gate produces this. A SIBLING of the Workflow editor (`settings/project/board`). Multi-panel: page · rename/add column · map-by-drag · map-by-keyboard · delete-confirm + guard · read-only · states · cross-links. Gates 3.6.3. See "Board configuration (Story 3.6)" below.                     |
 | **Board load model (correction)**  | **`board-scale.mock.html`** (HTML mockup)   | EXTENDS the board surface — CORRECTS the scale UI (notes.html mistake #33). The 3.2.1/3.2.8 scale panel paged columns ("Load more" → auto scroll-to-load); Jira does NOT page a board, so the corrected model (whole bounded set + virtualize + over-cap "refine filter" banner + Done-age window) was unspecified (== no design), so the 3.8.1 design gate produces this. Multi-panel: bounded whole-set load · Done-age window · over-cap banner · swimlanes-sans-footer. Gates 3.8.3 / 3.8.4 / 3.8.5. See "Board load model (Story 3.8)" below. |
 
 The board is a **pure consumer** of the Story-3.1 board API
@@ -343,6 +344,183 @@ Group-by + WIP are board-config **writes**. Roles/permissions are Epic 6.4, so
 - Lane headers are operable as `role="button"` with `aria-expanded`; group-by +
   collapse are keyboard-operable; the over-limit state is announced
   (`role="status"`), not signalled by colour alone.
+
+---
+
+# Board configuration (Story 3.6)
+
+Design reference for Story 3.6 — the board's **administration** surface. Asset:
+**`board-config.mock.html`** (+ `board-config.png` export). It is the source of
+truth for the UI subtask **3.6.3** (the column manager + status mapping + the
+unmapped-tray repoint), which carries **3.6.1** in `dependsOn`. The service /
+API it consumes is **3.6.2**.
+
+Built FROM the real design system (the token block is copied 1:1 from
+`app/globals.css`) and reuses shipped vocabulary: the **settings-page grammar**
+from `app/(authed)/settings/project/workflow` (serif `h2` + muted subtitle + an
+`mx-auto` editor), the **board column visual language** from `board.mock.html`
+(3.2.1), the **neutral `Pill`** from the 3.2.6 unmapped tray, `Input`, `Button`,
+`Modal`/confirm, and the dropdown **Menu** (the keyboard fallback). No new card
+vocabulary — a new ARRANGEMENT of shipped pieces.
+
+**Mirror product = Jira board settings → COLUMNS** (decision-ladder rung 1): the
+column manager where an admin creates columns and maps statuses into them.
+
+The asset is multi-panel (review EACH): **(0)** the full board-settings page ·
+**(1)** inline column rename + the Add-column input · **(2)** map a status by
+DRAG · **(3)** map by the non-drag KEYBOARD fallback · **(4)** delete-column
+confirm (normal + guard) · **(5)** read-only (non-admin) · **(6)** states ·
+**(7)** cross-links + the settings nav.
+
+## Where it lives
+
+A new project-settings page **`app/(authed)/settings/project/board/`**, a
+**SIBLING of the Workflow editor** (`settings/project/workflow`, Story 2.2.5).
+The two are reached from the **project-settings landing page's nav CARDS** (the
+`WorkflowSettingsCard` pattern, finding #47) — there is **no settings sidebar**,
+so "the Board nav entry, next to Workflow" means a new sibling `Card`-as-`Link`
+("Board", "Columns and which statuses each column shows.") added to
+`settings/project/page.tsx` beside the existing Workflow card. The page mirrors
+the Workflow page grammar: a server component resolves the active project + the
+caller's admin role and hands typed data to a client `BoardConfigEditor`.
+
+**Division of labour:** the **Workflow** editor owns the statuses and the
+transitions between them; **Board** settings owns how those statuses map onto
+board columns. Renaming/adding a status is Workflow; putting it on the board is
+Board.
+
+## Composing primitives (what 3.6.3 builds with)
+
+- **Page** — the `settings/project/workflow` page shell: serif title (with a
+  leading `columns` glyph), muted subtitle, an `mx-auto max-w-[…]` editor column.
+- **Board-name field** — `Input` + an auto-save reconcile indicator (a
+  "Saving…/Saved" chip, mirroring the 3.3 WIP-limit save feedback). No explicit
+  Save button needed — writes are optimistic-with-reconcile.
+- **Unmapped-statuses rail** — a bordered surface (header + body) listing the
+  statuses with no column (`BoardProjectionDto.unmappedStatuses`) as draggable
+  status chips. It carries the same warning hue as the 3.2.6 board tray, but the
+  hue lives in a small icon + a count badge (NOT a tinted page surface — finding
+  #35); it is an interactive drop source AND drop target (drop a chip back to
+  unmap). Empty state = a positive "Every status is on the board — nothing is
+  hidden."
+- **Column manager** — a horizontally-scrolling row of columns reusing the board
+  column language. Each column: a **drag handle** (`grip`, reorder), an editable
+  **name** (a `pencil` swaps it for an accent-bordered `Input` with check/cancel;
+  Enter commits, Esc cancels), a **count** badge (mapped-status count), a
+  **delete** (`trash`) affordance, the **mapped status chips** (full-width neutral
+  `Pill` rows, each with a grip + an `×` remove that unmaps it), and a dashed
+  **"Add status"** button. A trailing dashed **"Add column"** ghost column
+  appends a new column already in name-edit mode.
+- **Status chip (`.schip`)** — the mappable unit: the 3.2.6 neutral `Pill` tone
+  as a moveable row (grip + label + `×`). The drag affordance is the grip + the
+  cursor, never colour alone (finding #35).
+- **Delete-column confirm** — a `Modal`/confirm. Two shapes (see below).
+- **Per-column status picker** — the dropdown `Menu` primitive, the non-drag
+  keyboard path (see "Status mapping").
+
+## The mapping contract (the invariant the UI must respect)
+
+`board_column_status` carries `@@unique([boardId, statusId])` (Story 3.1.1) — a
+status maps to **at most one column per board**. So mapping is a **MOVE, never a
+duplicate**:
+
+- Dragging a status from the rail (or from another column) into column C
+  **moves** its mapping to C (`mapStatusToColumn`, the 3.6.2 transactional
+  delete-then-create). It never appears in two columns.
+- The `×` on a chip (or dropping it back on the rail) **unmaps** it — it returns
+  to the unmapped rail, and its work items are **hidden from the board but never
+  deleted** (a card's column is DERIVED from `work_item.status` — config never
+  touches work items).
+- Every write is **optimistic-with-reconcile** against the 3.6.2 endpoints; a
+  failed write reverts the optimistic change + surfaces a danger `Toast`.
+
+## Status mapping — drag AND a non-drag keyboard path (finding #35)
+
+Mapping is **NOT drag-only**. Two equivalent paths, both firing the same 3.6.2
+write:
+
+- **Drag (panel 2)** — dnd-kit (reuses the 3.2.4 board setup, no second DnD
+  lib). The source chip leaves a dashed 40%-opacity ghost; a tilted
+  `DragOverlay` clone follows the cursor; the **target column** shows an accent
+  **ring** + a lavender **tint** AND an **insertion bar** — redundant cues, never
+  colour-alone (finding #35).
+- **Keyboard / non-drag (panel 3)** — every column's **"Add status"** button
+  opens a `Menu` of the currently-unmapped statuses; choosing one maps it. Chip
+  reorder/move-across-columns is keyboard-operable via the dnd-kit **keyboard
+  sensor** (`Space` pick up · `↑↓` within · `←→` across · `Space` drop · `Esc`
+  cancel). Both paths drive an **`aria-live`** region that announces each step,
+  so a keyboard or screen-reader user can fully configure the board.
+
+## Delete-column — confirm + the Jira-style guard
+
+`deleteColumn` unmaps the column's statuses (they return to the rail) and removes
+only the `board_column` row — **never a work item** (decided at 3.6.2). Two
+confirm shapes:
+
+- **Normal (panel 4a)** — "Delete '{column}'? Its mapped status(es) return to
+  Unmapped statuses — work items keep their status and are not deleted." An info
+  callout names which statuses return. Destructive (`Button` danger) confirm.
+- **Guard (panel 4b)** — when a mapped status **still holds board cards**, the
+  delete is refused (`ColumnNotEmptyError` → 409, mirroring Jira's "you can't
+  delete a column with issues"). The confirm becomes a guard: a warning callout
+  naming the status + its card count, and a **primary action that deep-links to
+  remap** that status first. No work item is ever removed by a board change.
+
+State is carried by **text + icon**, never colour alone (finding #35); the
+peach/danger callouts put the hue in the BACKGROUND with `--el-text-strong`
+(finding #35 AA).
+
+## Cross-links — the three entry points (panel 7)
+
+1. **The board's 3.2.6 unmapped-statuses tray (the headline).** 3.6.3 repoints
+   its CTA from the interim **"Manage statuses →"** (which went to the Workflow
+   editor because no mapping admin existed) to **"Map columns →"** →
+   `settings/project/board` — the real surface. The `boards` i18n keys update
+   (en + zh) and this note's **"CTA reality"** block (in the Story-3.2 section
+   above) is superseded: the tray now does what its copy promises.
+2. **The board column `[⋯]` menu (3.2.3)** — a disabled seam until now — gains a
+   **"Board settings →"** item that opens this surface.
+3. **The project-settings nav** — a new **"Board"** card beside **"Workflow"** on
+   `settings/project`.
+
+## States (completeness)
+
+- **Loading** — a header + name-field + column skeletons stream in.
+- **Error / no-board** — an `ErrorState` with Retry (the 3.2.2 board pattern).
+- **All-mapped** — the unmapped rail shows a positive empty state, not a blank
+  box. (A board always auto-seeds ≥1 column per the Story-3.1 seed — 3.1.2 — so
+  there is no zero-column state; "empty / brand-new board" means its only column
+  holds the initial status and the rail is empty.)
+- **Save feedback** — the per-write "Saving…/Saved" chip on the name field; a
+  failed write surfaces a danger `Toast` and reverts the optimistic change.
+
+## Permissions
+
+Column + mapping writes are board-config **writes**. Roles/permissions are Epic
+6.4, so (matching the 2.2.5 workflow editor + the 3.3 board config) the surface
+is **membership-gated now** with a `TODO(6.4)` to role-gate later — no early RBAC
+build. A non-admin sees the surface **read-only** (panel 5): no grips, no
+rename/delete, no "Add status", the name field disabled, no rail drop target; the
+server re-gates every write 403 regardless of the rendered affordances.
+
+## Token / a11y rules honoured
+
+- **Colour** strictly via `--el-*` (finding #54): the warning hue on the rail +
+  guard callout, the `--el-accent` drop ring/tint + rename border, the success
+  green on "Saved" / all-mapped, the danger red on delete. Tints carry the hue in
+  the BACKGROUND with `--el-text-strong` text (finding #35 AA — never a tinted
+  page surface).
+- **Shape** via element-semantic tokens (`--radius-card`/`-btn`/`-input`/
+  `-modal`/`-badge`/`-control`, `--shadow-subtle`/`-elevated`/`-modal`,
+  `--spacing-*`, `--height-input`/`-btn-sm`/`-control`).
+- **Not colour-alone** (finding #35): the drop target pairs the tint with a ring
+  - insertion bar; the rail icon + the chip grip signal interactivity; delete /
+    guard state carries text + icon. Mapping is operable by keyboard (the picker
+    menu + the dnd-kit keyboard sensor) with `aria-live` announcements, not
+    drag-only.
+- Columns are landmarked (`role="listitem"` with an `aria-label` carrying the
+  name + mapped-status count); the rename/add/delete controls have explicit
+  `aria-label`s; the picker is a `role="menu"`.
 
 ---
 
