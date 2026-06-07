@@ -129,3 +129,98 @@ export class InvalidWipLimitError extends Error {
     this.name = 'InvalidWipLimitError';
   }
 }
+
+// ── Column / board ADMIN writes (Subtask 3.6.2) — add / rename / reorder /
+// delete a column, map / unmap a status, rename the board. The validation,
+// guard, and conflict errors the column-config write path raises, mapped to
+// status codes by the 3.6.2 routes.
+
+/**
+ * A board column or board name is empty (or whitespace-only) after trimming.
+ * Both `addColumn` / `renameColumn` reject it; a board / column needs a
+ * non-empty display name. → 400.
+ */
+export class InvalidColumnNameError extends Error {
+  readonly code = 'INVALID_COLUMN_NAME' as const;
+  constructor(message = 'A column name must not be empty.') {
+    super(message);
+    this.name = 'InvalidColumnNameError';
+  }
+}
+
+/**
+ * A column reorder was given a missing / empty `position`. `position` is the
+ * opaque fractional-index sort key the client mints between two neighbours
+ * (the same scheme `work_item` / `workflow_status` use); an empty value would
+ * corrupt the column order, so it is rejected rather than written. → 400.
+ */
+export class InvalidColumnPositionError extends Error {
+  readonly code = 'INVALID_COLUMN_POSITION' as const;
+  constructor(message = 'A column position must be a non-empty fractional-index string.') {
+    super(message);
+    this.name = 'InvalidColumnPositionError';
+  }
+}
+
+/** A board name is empty (or whitespace-only) after trimming. → 400. */
+export class InvalidBoardNameError extends Error {
+  readonly code = 'INVALID_BOARD_NAME' as const;
+  constructor(message = 'A board name must not be empty.') {
+    super(message);
+    this.name = 'InvalidBoardNameError';
+  }
+}
+
+/**
+ * `deleteColumn` was asked to remove a column whose mapped status(es) still
+ * hold work items on the board. Mirrors Jira's "you can't delete a column with
+ * issues" guard (decision-authority rung 1): the admin must remap those
+ * statuses to another column first. No work item is ever deleted by a board-
+ * config write (a card's column is DERIVED from its `work_item.status`), so the
+ * guard protects the admin from accidentally hiding live cards. → 409.
+ */
+export class ColumnNotEmptyError extends Error {
+  readonly code = 'COLUMN_NOT_EMPTY' as const;
+  readonly columnId: string;
+  readonly cardCount: number;
+  constructor(columnId: string, cardCount: number) {
+    super(
+      `Board column ${columnId} still holds ${cardCount} work item(s) — remap its statuses before deleting it.`,
+    );
+    this.name = 'ColumnNotEmptyError';
+    this.columnId = columnId;
+    this.cardCount = cardCount;
+  }
+}
+
+/**
+ * `deleteColumn` was asked to remove the board's ONLY remaining column. A board
+ * must keep at least one column (Jira's board-settings invariant — you cannot
+ * delete down to zero columns, which would leave nowhere for any status to
+ * map). The admin adds another column first, or renames this one instead.
+ * → 409.
+ */
+export class LastColumnError extends Error {
+  readonly code = 'LAST_COLUMN' as const;
+  constructor(message = 'A board must keep at least one column.') {
+    super(message);
+    this.name = 'LastColumnError';
+  }
+}
+
+/**
+ * A concurrent map of the SAME status on the SAME board won the
+ * `@@unique([boardId, statusId])` race between this map's in-transaction
+ * delete-then-create. The backstop for the move-not-duplicate write (mirrors
+ * `workflowsService.createStatus`'s P2002 guard) — not deterministically
+ * reproducible, but turns the raw Prisma P2002 into a typed conflict. → 409.
+ */
+export class StatusMappingConflictError extends Error {
+  readonly code = 'STATUS_MAPPING_CONFLICT' as const;
+  readonly statusId: string;
+  constructor(statusId: string) {
+    super(`Status ${statusId} was concurrently mapped to another column on this board.`);
+    this.name = 'StatusMappingConflictError';
+    this.statusId = statusId;
+  }
+}

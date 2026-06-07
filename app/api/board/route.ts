@@ -4,6 +4,7 @@ import { getActiveProject } from '@/lib/projects';
 import { boardsService } from '@/lib/services/boardsService';
 import {
   BoardNotFoundError,
+  InvalidBoardNameError,
   InvalidSwimlaneGroupByError,
   NotBoardAdminError,
 } from '@/lib/boards/errors';
@@ -48,17 +49,20 @@ export async function GET(): Promise<Response> {
   }
 }
 
-// PATCH /api/board (Subtask 3.3.3) — set the active project's board swimlane
-// group-by. Body: { boardId, swimlaneGroupBy }. Thin HTTP layer over
-// boardsService.setSwimlaneGroupBy; session-required; workspace from the
+// PATCH /api/board — mutate one of the active project's board attributes. ONE
+// attribute per request, routed to a single service method (one service call
+// per happy-path branch, CLAUDE.md):
+//   - { boardId, swimlaneGroupBy } → setSwimlaneGroupBy (Subtask 3.3.3)
+//   - { boardId, name }            → renameBoard        (Subtask 3.6.2)
+// Thin HTTP layer over boardsService; session-required; workspace from the
 // active-project context (NEVER the client). `boardId` rides in the body — the
 // same forward-compatible multi-board shape the move route uses (the client
 // holds it from the GET projection). No db / no transaction here.
 //
 // Typed errors → status codes:
-//   InvalidSwimlaneGroupByError → 400 (not a BoardSwimlaneGroupBy value)
-//   NotBoardAdminError          → 403 (not the workspace owner — finding #36)
-//   BoardNotFoundError          → 404 (unknown / cross-workspace board)
+//   InvalidSwimlaneGroupByError / InvalidBoardNameError → 400
+//   NotBoardAdminError                                  → 403 (not owner, #36)
+//   BoardNotFoundError                                  → 404 (unknown board)
 
 export async function PATCH(req: Request): Promise<Response> {
   const session = await getSession();
@@ -82,22 +86,44 @@ export async function PATCH(req: Request): Promise<Response> {
     );
   }
 
-  const { boardId, swimlaneGroupBy } = (body ?? {}) as Record<string, unknown>;
-  if (typeof boardId !== 'string' || typeof swimlaneGroupBy !== 'string') {
+  const { boardId, swimlaneGroupBy, name } = (body ?? {}) as Record<string, unknown>;
+  if (typeof boardId !== 'string') {
     return NextResponse.json(
-      { code: 'BAD_REQUEST', error: '`boardId` and `swimlaneGroupBy` are required.' },
+      { code: 'BAD_REQUEST', error: '`boardId` is required.' },
       { status: 400 },
     );
   }
+  const serviceCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
 
   try {
-    const board = await boardsService.setSwimlaneGroupBy(boardId, swimlaneGroupBy, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
-    return NextResponse.json(board);
+    if (swimlaneGroupBy !== undefined) {
+      if (typeof swimlaneGroupBy !== 'string') {
+        return NextResponse.json(
+          { code: 'BAD_REQUEST', error: '`swimlaneGroupBy` must be a string.' },
+          { status: 400 },
+        );
+      }
+      const board = await boardsService.setSwimlaneGroupBy(boardId, swimlaneGroupBy, serviceCtx);
+      return NextResponse.json(board);
+    }
+
+    if (name !== undefined) {
+      if (typeof name !== 'string') {
+        return NextResponse.json(
+          { code: 'BAD_REQUEST', error: '`name` must be a string.' },
+          { status: 400 },
+        );
+      }
+      const board = await boardsService.renameBoard(boardId, name, serviceCtx);
+      return NextResponse.json(board);
+    }
+
+    return NextResponse.json(
+      { code: 'BAD_REQUEST', error: 'Expected one of `swimlaneGroupBy` or `name`.' },
+      { status: 400 },
+    );
   } catch (err) {
-    if (err instanceof InvalidSwimlaneGroupByError) {
+    if (err instanceof InvalidSwimlaneGroupByError || err instanceof InvalidBoardNameError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
     }
     if (err instanceof NotBoardAdminError) {

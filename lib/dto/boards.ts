@@ -94,6 +94,22 @@ export interface BoardColumnConfigDto {
 }
 
 /**
+ * One column↔status mapping edge (Subtask 3.6.2) — the wire shape
+ * `mapStatusToColumn` returns after a status is mapped/moved into a column, so
+ * the 3.6.3 UI reconciles its optimistic edit. It is the `board_column_status`
+ * row's identity: which `statusId` now lives in which `columnId` on which
+ * `boardId`. (Unmapping returns no DTO — the edge is gone — and `void` is the
+ * end state.) A status maps to AT MOST ONE column per board
+ * (`@@unique([boardId, statusId])`, Story 3.1.1), so this single edge fully
+ * describes the status's placement.
+ */
+export interface BoardColumnStatusDto {
+  boardId: string;
+  columnId: string;
+  statusId: string;
+}
+
+/**
  * One work item rendered as a board card. The row-render fields a column card
  * shows (kind icon, identifier, title, assignee, status, priority) plus the
  * board wiring (`position` for rank, `parentId`), the schedule fields a card

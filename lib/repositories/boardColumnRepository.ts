@@ -70,12 +70,25 @@ export const boardColumnRepository = {
     return tx.boardColumn.create({ data });
   },
 
-  /** Update a column (rename / WIP-limit / reorder — a later admin story). */
+  /** Update a column (rename / WIP-limit / reorder — Subtasks 3.3.3 / 3.6.2). */
   async update(
     columnId: string,
     data: Prisma.BoardColumnUncheckedUpdateInput,
     tx: Prisma.TransactionClient,
   ): Promise<BoardColumn> {
     return tx.boardColumn.update({ where: { id: columnId }, data });
+  },
+
+  /**
+   * Delete a column row (Subtask 3.6.2 — the column-config admin). `tx`
+   * REQUIRED: the caller (`boardsService.deleteColumn`) drops the column's
+   * status mappings (`boardColumnStatusRepository.deleteByColumn`) in the SAME
+   * transaction first, so the unmap + delete are atomic. The caller has already
+   * tenant-gated + guarded the column, so this is a plain id-keyed delete. (The
+   * `board_column_status` rows would also cascade on the FK, but the explicit
+   * unmap keeps the operation a single transaction the service controls.)
+   */
+  async delete(columnId: string, tx: Prisma.TransactionClient): Promise<BoardColumn> {
+    return tx.boardColumn.delete({ where: { id: columnId } });
   },
 };
