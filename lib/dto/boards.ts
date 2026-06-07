@@ -26,6 +26,45 @@ export type BoardTypeDto = 'kanban' | 'scrum';
 export type BoardSwimlaneGroupByDto = 'none' | 'assignee' | 'epic' | 'priority';
 
 /**
+ * The swimlane dimensions that actually slice the board into lanes — the
+ * group-by values MINUS `none` (which is the flat board, no lanes). It is the
+ * `kind` a `BoardSwimlaneDto` carries so the 3.3.5 UI knows which lane-header
+ * renderer to use (assignee summary / epic key+title / priority pill).
+ */
+export type BoardSwimlaneKindDto = Exclude<BoardSwimlaneGroupByDto, 'none'>;
+
+/**
+ * The reserved `swimlaneKey` for the **catch-all lane** — a card with no value
+ * for the active group-by (unassigned, or no ancestor epic). Both the per-card
+ * `swimlaneKey` and the catch-all `BoardSwimlaneDto.key` use this sentinel, so
+ * the UI buckets catch-all cards into the catch-all lane by key equality. It is
+ * NOT a real id (cuid) or priority value, so it can never collide with a live
+ * lane key. Priority has no catch-all (the column is non-null, default
+ * `medium`), so this only appears under `assignee` / `epic` group-by.
+ */
+export const BOARD_SWIMLANE_NO_VALUE = '__no_value__';
+
+/**
+ * One swimlane in the board projection (Subtask 3.3.4) — a horizontal row the
+ * board is sliced into under a non-`none` group-by. Built from a BOUNDED
+ * grouped/distinct aggregate over the board's cards (lanes-with-cards + the
+ * catch-all), NEVER by loading every card (finding #57). `key` is the value the
+ * cards' `swimlaneKey` matches (an assignee/epic id, a priority value, or
+ * {@link BOARD_SWIMLANE_NO_VALUE} for the catch-all); `label` is the
+ * display-ready header text (assignee name / `PROD-12 Epic title` / priority /
+ * "No assignee" / "No epic"); `kind` is the active dimension; `count` is the
+ * per-lane TOTAL across all columns (the aggregate, independent of how many
+ * cards are loaded per column). Lanes arrive in the documented order (assignee
+ * alpha / priority rank / epic position) with the catch-all always last.
+ */
+export interface BoardSwimlaneDto {
+  key: string;
+  label: string;
+  kind: BoardSwimlaneKindDto;
+  count: number;
+}
+
+/**
  * The board's config row (Subtask 3.3.3) — the wire shape `setSwimlaneGroupBy`
  * returns after a config write so the 3.3.5 UI reconciles. Deliberately the
  * board's identity + config only (NOT the heavy `BoardProjectionDto`, which the
@@ -79,6 +118,15 @@ export interface BoardCardDto {
   position: string;
   /** False iff an `is_blocked_by` blocker remains in a non-terminal status (finding #21). */
   ready: boolean;
+  /**
+   * The lane this card belongs to under the board's active swimlane group-by
+   * (Subtask 3.3.4), resolved SERVER-SIDE so the client never re-derives it:
+   * the `assigneeId` / priority value / **ancestor-epic** id, or
+   * {@link BOARD_SWIMLANE_NO_VALUE} for the catch-all (unassigned / no epic).
+   * OMITTED entirely when the board is `none` (the flat 3.2 board) — so the
+   * `none` projection is byte-for-byte the 3.1.4 card shape, no regression.
+   */
+  swimlaneKey?: string;
 }
 
 /**
@@ -142,7 +190,21 @@ export interface BoardProjectionDto {
   boardId: string;
   name: string;
   type: BoardTypeDto;
+  /**
+   * The board's active swimlane group-by (Subtask 3.3.4). `none` is the flat
+   * 3.2 board; under a non-`none` value the board slices into `swimlanes` and
+   * each card carries a `swimlaneKey`.
+   */
+  swimlaneGroupBy: BoardSwimlaneGroupByDto;
   columns: BoardColumnDto[];
+  /**
+   * The ordered lane list when `swimlaneGroupBy` is non-`none` (lanes-with-cards
+   * + the catch-all, in the documented order); an EMPTY array when the board is
+   * `none` (the flat board has no lanes). Built from a bounded aggregate, never
+   * a load-all (finding #57). The 3.3.5 UI buckets each column's loaded cards
+   * into (lane, column) cells by matching `card.swimlaneKey` to `lane.key`.
+   */
+  swimlanes: BoardSwimlaneDto[];
   unmappedStatuses: WorkflowStatusDto[];
 }
 
