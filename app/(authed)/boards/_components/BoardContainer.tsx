@@ -16,23 +16,28 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { Flag, LayoutGrid, User, Zap } from 'lucide-react';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { Segmented } from '@/components/ui/Segmented';
 import { useToast } from '@/components/ui/Toast';
 import type {
   BoardCardDto,
   BoardColumnConfigDto,
   BoardColumnDto,
   BoardProjectionDto,
+  BoardSwimlaneGroupByDto,
 } from '@/lib/dto/boards';
 import type { MoveCardResultDto, PagedColumnCardsDto } from '@/lib/dto/boards';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { useCreateIssue } from '../../_components/CreateIssueProvider';
 import { usePeekOpen } from '../../issues/_components/IssueQuickView';
+import { updateIssueAction } from '../../issues/[key]/edit/actions';
 import { BoardCardOverlay } from './BoardCard';
 import { BoardColumn } from './BoardColumn';
 import { BoardColumnPager, useActiveColumnIndex } from './BoardColumnPager';
 import { BoardEmptyState } from './BoardEmptyState';
 import { BoardSkeleton } from './BoardSkeleton';
+import { SwimlaneBoard } from './SwimlaneBoard';
 import { UnmappedStatusesTray } from './UnmappedStatusesTray';
 import {
   cardIndex,
@@ -44,16 +49,31 @@ import {
   relocateCard,
   transferCount,
 } from './boardMove';
+import {
+  cellOfOverId,
+  laneKeyOfCard,
+  moveCardToColumn,
+  parseCellId,
+  reassignPatchForLane,
+  relocateCardToCell,
+  resolveCellMove,
+  setCardSwimlaneKey,
+} from './boardSwimlanes';
 import { appendColumnPage } from './boardPaging';
 
-// The board client container (Subtask 3.2.2 · drag-drop wired in 3.2.4) — the
-// data layer + state machine the column/card/DnD subtasks build on. It is a PURE
-// CONSUMER of the Story-3.1.6 board API: it fetches `GET /api/board` (the active
-// project's default board) on mount and renders the board-level states from
-// `design/boards/board.mock.html` (panel 6): a loading skeleton while the
-// projection streams, an ErrorState (with retry) on a failed fetch, and the
-// defensive no-board case. There is NO data access here beyond the board fetch +
-// the move POST — no Prisma, no new route (CLAUDE.md).
+// The board client container (Subtask 3.2.2 · drag-drop 3.2.4 · scale 3.2.5 ·
+// swimlanes + WIP 3.3). A PURE CONSUMER of the Story-3.1/3.3 board API: it
+// fetches `GET /api/board` (the active project's default board) on mount and
+// renders the board-level states from `design/boards/board.mock.html` (panel 6).
+//
+// Story 3.3.5 adds the swimlane layer ON TOP, without forking the board: a
+// board-header **group-by control** (the 3.2.1-reserved 3.3-controls slot) that
+// PATCHes `board.swimlaneGroupBy` (3.3.3) and RE-LAYS from the projection (a
+// loading transition, never a flash of the old layout); when the group-by is
+// `none` the flat 3.2 column row renders unchanged, otherwise `SwimlaneBoard`
+// renders the `(column × lane)` grid. There is NO data access here beyond the
+// board fetch, the move POST, the group-by PATCH, the WIP-config PATCH, and the
+// existing 2.5 field-update action the cross-lane drag reuses — no new route.
 //
 // State shape: the projection lives in component state as `board`, with its
 // `columns[].cards` arrays held so the later subtasks can mutate ONE column's
@@ -62,8 +82,8 @@ import { appendColumnPage } from './boardPaging';
 //
 // Completeness (Subtask 3.2.6): an all-empty board renders the board EMPTY
 // state (a "New work item" CTA, not six blank columns); `unmappedStatuses`
-// renders the unmapped-statuses TRAY above the board; and the column row is a
-// scroll-snap single-column pager on narrow viewports — see `BoardDnd`.
+// renders the unmapped-statuses TRAY above the board; and the flat column row is
+// a scroll-snap single-column pager on narrow viewports — see `BoardDnd`.
 //
 // `members` (the workspace member directory the board page already resolves) lets
 // the cards map each `BoardCardDto.assigneeId` to a display name for the avatar —
@@ -86,12 +106,13 @@ export function BoardContainer({
   activeProjectId?: string;
 }) {
   const t = useTranslations('boards');
+  const { toast } = useToast();
   const [board, setBoard] = useState<BoardProjectionDto | null>(null);
-  // Starts 'loading' — the mount effect fires the fetch immediately (flipping it
-  // synchronously inside the effect is the cascading-render anti-pattern the lint
-  // forbids, so the initial value carries the loading state).
   const [status, setStatus] = useState<BoardStatus>('loading');
-  // Bumped by `retry` to re-run the fetch effect.
+  // 'relaying' = a group-by change is fetching the new projection; the toolbar
+  // stays mounted (so the control is still visible) while the grid shows the
+  // skeleton — the re-lay loading transition, not a flash of the old layout.
+  const [relaying, setRelaying] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   // Bumped on every successful fetch so the interactive `BoardDnd` (whose column
   // state seeds from the projection only on mount) RE-SEEDS — keying it by this
@@ -118,10 +139,6 @@ export function BoardContainer({
           setStatus('ready');
           return;
         }
-        // A 404 BOARD_NOT_FOUND is the defensive no-board case (3.1 auto-seeds a
-        // board per project, so this is rare); any other non-OK is a generic
-        // load failure. Read the typed `code` to distinguish; a non-JSON body
-        // falls through to the generic error.
         let code: string | undefined;
         try {
           code = ((await res.json()) as { code?: string }).code;
@@ -142,28 +159,53 @@ export function BoardContainer({
     // board instead of leaving the previous project's board on screen.
   }, [reloadKey, issuesChangedAt, activeProjectId]);
 
-  // Reset to the loading shell (an event-handler setState — allowed) and bump the
-  // key so the fetch effect re-runs.
   const retry = useCallback(() => {
     setStatus('loading');
     setReloadKey((k) => k + 1);
   }, []);
 
-  // userId → display name, so a card resolves its `assigneeId` to an avatar
-  // (name || email, the same fallback the issue-list inline-edit cell uses).
+  // Change the swimlane group-by: persist it (PATCH, 3.3.3) so every viewer
+  // shares it, then refetch the projection and re-lay. The grid drops to the
+  // skeleton during the round-trip; on failure the old board stays and a toast
+  // explains. The active value is always read from the projection (never local).
+  const changeGroupBy = useCallback(
+    async (next: BoardSwimlaneGroupByDto) => {
+      if (!board || next === board.swimlaneGroupBy) return;
+      setRelaying(true);
+      try {
+        const patch = await fetch('/api/board', {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify({ boardId: board.boardId, swimlaneGroupBy: next }),
+        });
+        if (!patch.ok) throw new Error(`group-by ${patch.status}`);
+        const res = await fetch('/api/board', { headers: { accept: 'application/json' } });
+        if (!res.ok) throw new Error(`reload ${res.status}`);
+        setBoard((await res.json()) as BoardProjectionDto);
+      } catch {
+        toast({
+          variant: 'error',
+          title: t('groupByErrorTitle'),
+          description: t('groupByErrorDescription'),
+        });
+      } finally {
+        setRelaying(false);
+      }
+    },
+    [board, t, toast],
+  );
+
   const assigneeNameById = useMemo(
     () => new Map(members.map((m) => [m.userId, m.name || m.email])),
     [members],
   );
 
   if (status === 'loading') return <BoardSkeleton />;
-
   if (status === 'no-board') {
     return (
       <ErrorState title={t('noBoardTitle')} description={t('noBoardDescription')} retry={retry} />
     );
   }
-
   if (status === 'error' || !board) {
     return <ErrorState title={t('errorTitle')} description={t('errorDescription')} retry={retry} />;
   }
@@ -175,7 +217,8 @@ export function BoardContainer({
   //   - the board EMPTY state when every column is empty AND nothing is unmapped
   //     (when statuses are unmapped, work items may be hidden in them — present,
   //     not absent — so we keep the columns + tray rather than claim "no work
-  //     items"; rung-2 guard).
+  //     items"; rung-2 guard). An empty board has nothing to group, so the
+  //     group-by control is omitted there (the CTA is the focus).
   const hasUnmapped = board.unmappedStatuses.length > 0;
   const isEmpty = !hasUnmapped && board.columns.every((c) => c.totalCount === 0);
 
@@ -185,32 +228,80 @@ export function BoardContainer({
       {isEmpty ? (
         <BoardEmptyState />
       ) : (
-        // Key by `boardVersion` so each refetch re-seeds the interactive board
-        // (its column state is mount-seeded); a create then shows the new card.
-        <BoardDnd key={boardVersion} board={board} assigneeNameById={assigneeNameById} />
+        <>
+          <GroupByControl
+            value={board.swimlaneGroupBy}
+            onChange={changeGroupBy}
+            disabled={relaying}
+          />
+          {relaying ? (
+            <BoardSkeleton />
+          ) : (
+            // Key by `boardVersion` (re-seed BoardDnd's mount-seeded column state
+            // after a refetch — e.g. a create shows the new card) AND by the
+            // group-by (a group-by change remounts with the fresh lane layout
+            // rather than reconciling across layouts).
+            <BoardDnd
+              key={`${boardVersion}:${board.swimlaneGroupBy}`}
+              board={board}
+              assigneeNameById={assigneeNameById}
+            />
+          )}
+        </>
       )}
     </div>
   );
 }
 
-// The interactive board (Subtask 3.2.4) — the horizontally-scrolling row of
-// columns (design panel 0) wrapped in a dnd-kit `DndContext`. It owns the
-// mutable `columns` state (seeded from the projection) so a drag can move a card
-// optimistically, then reconcile it against `POST /api/board/move`:
-//   - cross-column drop  → a workflow TRANSITION (server resolves the target
-//     status + validates via `canTransition`); the UI defers legality to it.
-//   - in-column drop     → a rank change (`work_item.position`).
-// On 200 it reconciles to the returned card (+ moves one unit of `totalCount`);
-// on 409 (illegal transition) / 422 (unmapped target) / any other error it
-// SNAPS the card back to the pre-drag snapshot and toasts — the card never rests
-// in a rejected position (the contract carried from Story 3.1).
+// The board-header group-by control (3.3.5) — the shipped Segmented primitive in
+// the 3.2.1-reserved 3.3-controls slot. None = the flat 3.2 board.
+function GroupByControl({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: BoardSwimlaneGroupByDto;
+  onChange: (v: BoardSwimlaneGroupByDto) => void;
+  disabled: boolean;
+}) {
+  const t = useTranslations('boards');
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-medium text-(--el-text-muted)">{t('groupByLabel')}</span>
+      <Segmented<BoardSwimlaneGroupByDto>
+        label={t('groupByAria')}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        options={[
+          { value: 'none', label: t('groupByNone'), icon: <LayoutGrid /> },
+          { value: 'assignee', label: t('groupByAssignee'), icon: <User /> },
+          { value: 'epic', label: t('groupByEpic'), icon: <Zap /> },
+          { value: 'priority', label: t('groupByPriority'), icon: <Flag /> },
+        ]}
+      />
+    </div>
+  );
+}
+
+// The interactive board (Subtask 3.2.4 · swimlanes 3.3.5) — a dnd-kit
+// `DndContext` over EITHER the flat 3.2 column row (group-by `none`) or the
+// `SwimlaneBoard` grid (group-by ≠ `none`). It owns the mutable `columns` state
+// (seeded from the projection); each card carries its resolved `swimlaneKey`
+// (3.3.4), so the lane a card sits in is derived, never re-computed.
 //
-// Pointer + keyboard sensors both drive it (the stub mandates accessible keyboard
-// DnD): the pointer sensor's 8px activation distance keeps a plain click opening
-// the quick view, while the keyboard sensor's sole start key is Space (Enter
-// stays the quick-view activator, per 3.2.2). Live `aria-live` announcements
-// (copy from `design/boards/design-notes.md`) narrate pick-up / move / drop /
-// cancel; the rejection is announced via the toast (role=status).
+// FLAT drop (3.2.4, unchanged): a cross-column drop is a workflow TRANSITION
+// (`POST /api/board/move`); 200 reconciles, 409/422/error snaps back + toasts.
+//
+// SWIMLANE drop (3.3.5): a drop resolves a target COLUMN and a target LANE.
+//   - column change → the SAME 3.2 transition (`/board/move`).
+//   - lane change   → reassign the grouped field via the EXISTING 2.5
+//     `updateIssueAction` (assignee / priority / epic-reparent; the catch-all
+//     clears it) — NOT the move endpoint, NO new backend.
+//   - a diagonal drop applies BOTH writes, each optimistic with INDEPENDENT
+//     snap-back: a rejected transition reverts only the column axis, a rejected
+//     reassign reverts only the lane axis — the card never rests in a lying
+//     position.
 function BoardDnd({
   board,
   assigneeNameById,
@@ -221,14 +312,19 @@ function BoardDnd({
   const t = useTranslations('boards');
   const { toast } = useToast();
   const openPeek = usePeekOpen();
+  const groupBy = board.swimlaneGroupBy;
+  const swimlaned = groupBy !== 'none';
 
   const [columns, setColumns] = useState<BoardColumnDto[]>(board.columns);
   const [activeCard, setActiveCard] = useState<BoardCardDto | null>(null);
+  // The lane currently under the drag (swimlane mode) — drives the target-lane
+  // ring/tint (paired with the cell `isOver` outline; never colour-alone, #35).
+  const [overLaneKey, setOverLaneKey] = useState<string | null>(null);
 
-  // The horizontal scroll region (the column row) + which column is centred in
-  // it — drives the mobile pager (Subtask 3.2.6, design panel 7). On a narrow
-  // viewport the board reads as a single-column scroll; the pager shows
-  // "{name} · {i} of {n}".
+  // The horizontal scroll region (the flat column row) + which column is centred
+  // in it — drives the mobile pager (Subtask 3.2.6, design panel 7). On a narrow
+  // viewport the flat board reads as a single-column scroll; the pager shows
+  // "{name} · {i} of {n}". (Swimlane mode has its own scroll container.)
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeColumn = useActiveColumnIndex(scrollRef, columns.length);
 
@@ -246,12 +342,6 @@ function BoardDnd({
   }, [columns]);
   const snapshotRef = useRef<BoardColumnDto[] | null>(null);
 
-  // Per-column load-more state (Subtask 3.2.5, finding #57): 'loading' while a
-  // page is in flight, 'error' after a failed fetch (offer retry); an absent key
-  // = idle. Held SEPARATELY from `columns` so the 3.2.4 move reducers + dnd code
-  // stay untouched (the cards/cursor themselves live on the column via
-  // `appendColumnPage`). A ref of in-flight ids guards against a double-fire (the
-  // button + the scroll sentinel both call `loadMore`).
   const [paging, setPaging] = useState<Record<string, 'loading' | 'error'>>({});
   const inFlightRef = useRef<Set<string>>(new Set());
 
@@ -269,7 +359,6 @@ function BoardDnd({
         .then(async (res) => {
           if (!res.ok) throw new Error(`load-more ${res.status}`);
           const page = (await res.json()) as PagedColumnCardsDto;
-          // Append in place + advance the cursor; clear this column's paging flag.
           setColumns((prev) => appendColumnPage(prev, columnId, page));
           setPaging((prev) => {
             const next = { ...prev };
@@ -288,10 +377,7 @@ function BoardDnd({
   );
 
   const sensors = useSensors(
-    // 8px before a press becomes a drag — below that it's a click (→ quick view).
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    // Space picks up / drops, Escape cancels; Enter is intentionally NOT a start
-    // key so it still activates the card's quick-view click (3.2.2 contract).
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
       keyboardCodes: { start: ['Space'], cancel: ['Escape'], end: ['Space'] },
@@ -302,9 +388,11 @@ function BoardDnd({
     (cols: BoardColumnDto[], colId: string | null) => cols.find((c) => c.id === colId)?.name ?? '',
     [],
   );
+  const laneLabel = useCallback(
+    (key: string) => board.swimlanes.find((l) => l.key === key)?.label ?? key,
+    [board.swimlanes],
+  );
 
-  // Snap the optimistic state back to the pre-drag snapshot + explain why. Shared
-  // by the 409 / 422 / network / generic-error branches.
   const snapBack = useCallback(
     (snapshot: BoardColumnDto[], description: string) => {
       setColumns(snapshot);
@@ -313,9 +401,7 @@ function BoardDnd({
     [t, toast],
   );
 
-  // Fire the move and reconcile. Apply already happened optimistically; here we
-  // confirm (200) or snap back (rejection). Manual-mode: no CI blocking, fire
-  // and forget the request.
+  // FLAT-mode move (3.2.4) — full-snapshot revert (no lane axis to isolate).
   const runMove = useCallback(
     async (args: {
       workItemId: string;
@@ -360,6 +446,97 @@ function BoardDnd({
       }
     },
     [board.boardId, snapBack, t],
+  );
+
+  // SWIMLANE transition (column axis) — INDEPENDENT revert: on rejection, move
+  // the card back to its origin column (keeping any accepted lane reassign) and
+  // undo the optimistic count, rather than restoring the whole snapshot.
+  const runTransition = useCallback(
+    async (args: {
+      workItemId: string;
+      originColId: string;
+      targetColId: string;
+      beforeId?: string;
+      afterId?: string;
+      card: BoardCardDto;
+      fromColName: string;
+      toColName: string;
+    }) => {
+      const revert = () => {
+        setColumns((prev) =>
+          transferCount(
+            moveCardToColumn(prev, args.workItemId, args.originColId),
+            args.targetColId,
+            args.originColId,
+          ),
+        );
+      };
+      try {
+        const res = await fetch('/api/board/move', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify({
+            boardId: board.boardId,
+            workItemId: args.workItemId,
+            toColumnId: args.targetColId,
+            beforeId: args.beforeId,
+            afterId: args.afterId,
+          }),
+        });
+        if (res.ok) {
+          const result = (await res.json()) as MoveCardResultDto;
+          // Keep the optimistic swimlaneKey (the reassign axis owns it); take the
+          // server's confirmed status / position / ready.
+          setColumns((prev) =>
+            reconcileCard(prev, { ...result.card, swimlaneKey: laneKeyOfCard(args.card) }),
+          );
+          return;
+        }
+        const key = args.card.identifier;
+        revert();
+        const description =
+          res.status === 409
+            ? t('moveIllegalDescription', { from: args.fromColName, to: args.toColName, key })
+            : res.status === 422
+              ? t('moveUnmappedDescription', { to: args.toColName, key })
+              : t('moveErrorDescription', { key });
+        toast({ variant: 'error', title: t('moveRejectedTitle'), description });
+      } catch {
+        revert();
+        toast({
+          variant: 'error',
+          title: t('moveRejectedTitle'),
+          description: t('moveErrorDescription', { key: args.card.identifier }),
+        });
+      }
+    },
+    [board.boardId, t, toast],
+  );
+
+  // SWIMLANE reassign (lane axis) — reuses the EXISTING 2.5 field-update action.
+  // INDEPENDENT revert: on rejection, restore only the card's `swimlaneKey` to
+  // its origin lane (any accepted transition stays).
+  const runReassign = useCallback(
+    async (args: {
+      workItemId: string;
+      originLaneKey: string;
+      targetLaneKey: string;
+      card: BoardCardDto;
+    }) => {
+      const result = await updateIssueAction({
+        id: args.workItemId,
+        ...reassignPatchForLane(groupBy, args.targetLaneKey),
+      });
+      if (!result.ok) {
+        setColumns((prev) => setCardSwimlaneKey(prev, args.workItemId, args.originLaneKey));
+        toast({
+          variant: 'error',
+          title: t('reassignRejectedTitle'),
+          description: result.error || t('reassignErrorDescription', { key: args.card.identifier }),
+        });
+      }
+    },
+    [groupBy, t, toast],
   );
 
   // Set or clear a column's WIP limit (Subtask 3.3.6) — the optimistic config
@@ -410,48 +587,62 @@ function BoardDnd({
     setActiveCard(findCard(columnsRef.current, String(e.active.id)));
   }, []);
 
-  // Live cross-column AND in-column relocation while dragging — the standard
-  // dnd-kit multi-container pattern, so the dashed ghost tracks the insertion
-  // slot and the keyboard drag visibly crosses columns. Counts are not touched
-  // here (they move once, at drop) to avoid churn from repeated over-events.
-  const handleDragOver = useCallback((e: DragOverEvent) => {
-    const { active, over } = e;
-    if (!over) return;
-    const cols = columnsRef.current;
-    const activeId = String(active.id);
-    const overId = String(over.id);
-    const fromColId = findCardColumnId(cols, activeId);
-    const overColId = columnOfOverId(cols, overId);
-    if (!fromColId || !overColId) return;
+  const handleDragOver = useCallback(
+    (e: DragOverEvent) => {
+      const { active, over } = e;
+      if (!over) return;
+      const cols = columnsRef.current;
+      const activeId = String(active.id);
+      const overId = String(over.id);
 
-    const overCol = cols.find((c) => c.id === overColId);
-    const overIsColumn = overId === overColId;
-    const len = overCol?.cards.length ?? 0;
+      if (!swimlaned) {
+        // FLAT (3.2.4) — relocate within / across columns.
+        const fromColId = findCardColumnId(cols, activeId);
+        const overColId = columnOfOverId(cols, overId);
+        if (!fromColId || !overColId) return;
+        const overCol = cols.find((c) => c.id === overColId);
+        const overIsColumn = overId === overColId;
+        const len = overCol?.cards.length ?? 0;
+        if (fromColId === overColId) {
+          if (overIsColumn || overId === activeId) return;
+          const fromIndex = cardIndex(cols, fromColId, activeId);
+          const overIndex = cardIndex(cols, overColId, overId);
+          if (fromIndex === -1 || overIndex === -1 || fromIndex === overIndex) return;
+          setColumns(relocateCard(cols, activeId, overColId, overIndex));
+          return;
+        }
+        const toIndex = overIsColumn ? len : Math.max(0, cardIndex(cols, overColId, overId));
+        setColumns(relocateCard(cols, activeId, overColId, toIndex));
+        return;
+      }
 
-    if (fromColId === overColId) {
-      // In-column reorder: slot the card at the over card's index.
-      if (overIsColumn || overId === activeId) return;
-      const fromIndex = cardIndex(cols, fromColId, activeId);
-      const overIndex = cardIndex(cols, overColId, overId);
-      if (fromIndex === -1 || overIndex === -1 || fromIndex === overIndex) return;
-      setColumns(relocateCard(cols, activeId, overColId, overIndex));
-      return;
-    }
-
-    // Cross-column: insert at the over card's index, or append for a column-body
-    // / empty-column drop.
-    const toIndex = overIsColumn ? len : Math.max(0, cardIndex(cols, overColId, overId));
-    setColumns(relocateCard(cols, activeId, overColId, toIndex));
-  }, []);
+      // SWIMLANE (3.3.5) — relocate into the target (column × lane) cell.
+      const targetCell = cellOfOverId(cols, overId);
+      if (!targetCell) return;
+      setOverLaneKey(targetCell.laneKey);
+      // Hovering a CARD (not the cell body / itself) inserts before it; a cell
+      // droppable id resolves to an append.
+      const overCardId = parseCellId(overId) !== null || overId === activeId ? null : overId;
+      const next = relocateCardToCell(
+        cols,
+        activeId,
+        targetCell.columnId,
+        targetCell.laneKey,
+        overCardId,
+      );
+      if (next !== cols) setColumns(next);
+    },
+    [swimlaned],
+  );
 
   const handleDragEnd = useCallback(
     (e: DragEndEvent) => {
       const { active, over } = e;
       setActiveCard(null);
+      setOverLaneKey(null);
       const snapshot = snapshotRef.current ?? columnsRef.current;
       snapshotRef.current = null;
-
-      const cols = columnsRef.current; // already reflects the live over-moves
+      const cols = columnsRef.current;
       const activeId = String(active.id);
 
       if (!over) {
@@ -459,61 +650,108 @@ function BoardDnd({
         return;
       }
 
-      const targetColId = findCardColumnId(cols, activeId);
-      const originColId = findCardColumnId(snapshot, activeId);
-      if (!targetColId || !originColId) {
+      if (!swimlaned) {
+        // FLAT (3.2.4) — unchanged.
+        const targetColId = findCardColumnId(cols, activeId);
+        const originColId = findCardColumnId(snapshot, activeId);
+        if (!targetColId || !originColId) {
+          setColumns(snapshot);
+          return;
+        }
+        const originIndex = cardIndex(snapshot, originColId, activeId);
+        const finalIndex = cardIndex(cols, targetColId, activeId);
+        if (originColId === targetColId && originIndex === finalIndex) {
+          setColumns(snapshot);
+          return;
+        }
+        const optimistic = transferCount(cols, originColId, targetColId);
+        setColumns(optimistic);
+        const card = findCard(optimistic, activeId);
+        if (!card) {
+          setColumns(snapshot);
+          return;
+        }
+        const { beforeId, afterId } = neighborsOf(optimistic, targetColId, activeId);
+        void runMove({
+          workItemId: activeId,
+          toColumnId: targetColId,
+          beforeId,
+          afterId,
+          snapshot,
+          card,
+          fromColName: colName(snapshot, originColId),
+          toColName: colName(optimistic, targetColId),
+        });
+        return;
+      }
+
+      // SWIMLANE (3.3.5).
+      const move = resolveCellMove(snapshot, cols, activeId);
+      if (!move) {
+        setColumns(snapshot);
+        return;
+      }
+      const { columnChanged, laneChanged } = move;
+      const rankChanged =
+        !columnChanged && !laneChanged && move.originIndexInCell !== move.finalIndexInCell;
+      if (!columnChanged && !laneChanged && !rankChanged) {
+        // Dropped back where it started — restore the canonical snapshot.
         setColumns(snapshot);
         return;
       }
 
-      // No real change (dropped back where it started) → restore the canonical
-      // snapshot and skip the server round-trip.
-      const originIndex = cardIndex(snapshot, originColId, activeId);
-      const finalIndex = cardIndex(cols, targetColId, activeId);
-      if (originColId === targetColId && originIndex === finalIndex) {
-        setColumns(snapshot);
-        return;
-      }
-
-      // Transfer one unit of count (cross-column only), then read the rank
-      // neighbours from the settled position for the move request.
-      const optimistic = transferCount(cols, originColId, targetColId);
-      setColumns(optimistic);
+      // Optimistic count transfer for a column change, then read the settled card.
+      const optimistic = columnChanged
+        ? transferCount(cols, move.originColId, move.targetColId)
+        : cols;
+      if (optimistic !== cols) setColumns(optimistic);
       const card = findCard(optimistic, activeId);
       if (!card) {
         setColumns(snapshot);
         return;
       }
-      const { beforeId, afterId } = neighborsOf(optimistic, targetColId, activeId);
-      void runMove({
-        workItemId: activeId,
-        toColumnId: targetColId,
-        beforeId,
-        afterId,
-        snapshot,
-        card,
-        fromColName: colName(snapshot, originColId),
-        toColName: colName(optimistic, targetColId),
-      });
+
+      if (columnChanged || rankChanged) {
+        void runTransition({
+          workItemId: activeId,
+          originColId: move.originColId,
+          targetColId: move.targetColId,
+          beforeId: move.beforeId,
+          afterId: move.afterId,
+          card,
+          fromColName: colName(snapshot, move.originColId),
+          toColName: colName(optimistic, move.targetColId),
+        });
+      }
+      if (laneChanged) {
+        void runReassign({
+          workItemId: activeId,
+          originLaneKey: move.originLaneKey,
+          targetLaneKey: move.targetLaneKey,
+          card,
+        });
+      }
     },
-    [colName, runMove],
+    [swimlaned, colName, runMove, runTransition, runReassign],
   );
 
   const handleDragCancel = useCallback(() => {
     setActiveCard(null);
+    setOverLaneKey(null);
     if (snapshotRef.current) {
       setColumns(snapshotRef.current);
       snapshotRef.current = null;
     }
   }, []);
 
-  // aria-live narration (copy from design/boards/design-notes.md). Position is
-  // reported within the loaded card set (i of n) — the conventional sortable
-  // announcement granularity.
+  // aria-live narration. In swimlane mode the DROP announcement distinguishes a
+  // reassign (lane only) / transition (column only) / diagonal (both) per the
+  // 3.3.1 copy; pick-up + move reuse the flat copy.
   const announcements = useMemo<Announcements>(() => {
+    const keyOf = (id: string) => findCard(columnsRef.current, id)?.identifier ?? id;
     const at = (overId: string) => {
       const cols = columnsRef.current;
-      const colId = columnOfOverId(cols, overId);
+      const colId = swimlaned ? cellOfOverId(cols, overId)?.columnId : columnOfOverId(cols, overId);
       const col = cols.find((c) => c.id === colId);
       if (!col) return null;
       const idx = overId === colId ? col.cards.length : cardIndex(cols, col.id, overId);
@@ -523,27 +761,38 @@ function BoardDnd({
         count: col.cards.length,
       };
     };
-    const keyOf = (id: string) => findCard(columnsRef.current, id)?.identifier ?? id;
     return {
       onDragStart({ active }) {
         const info = at(String(active.id));
-        if (!info) return undefined;
-        return t('announcementPickedUp', { key: keyOf(String(active.id)), ...info });
+        return info
+          ? t('announcementPickedUp', { key: keyOf(String(active.id)), ...info })
+          : undefined;
       },
       onDragOver({ active, over }) {
         if (!over) return undefined;
         const info = at(String(over.id));
-        if (!info) return undefined;
-        return t('announcementMoved', { key: keyOf(String(active.id)), ...info });
+        return info
+          ? t('announcementMoved', { key: keyOf(String(active.id)), ...info })
+          : undefined;
       },
       onDragEnd({ active, over }) {
         if (!over) return undefined;
+        const key = keyOf(String(active.id));
         const cols = columnsRef.current;
-        const colId = columnOfOverId(cols, String(over.id));
-        return t('announcementDropped', {
-          key: keyOf(String(active.id)),
-          col: colName(cols, colId),
-        });
+        if (!swimlaned) {
+          const colId = columnOfOverId(cols, String(over.id));
+          return t('announcementDropped', { key, col: colName(cols, colId) });
+        }
+        const move = snapshotRef.current
+          ? resolveCellMove(snapshotRef.current, cols, String(active.id))
+          : null;
+        if (!move) return undefined;
+        const col = colName(cols, move.targetColId);
+        const group = laneLabel(move.targetLaneKey);
+        if (move.columnChanged && move.laneChanged)
+          return t('announcementDiagonal', { key, col, group });
+        if (move.laneChanged) return t('announcementReassigned', { key, group });
+        return t('announcementDropped', { key, col });
       },
       onDragCancel({ active }) {
         const snap = snapshotRef.current ?? columnsRef.current;
@@ -554,7 +803,7 @@ function BoardDnd({
         });
       },
     };
-  }, [colName, t]);
+  }, [swimlaned, colName, laneLabel, t]);
 
   return (
     <DndContext
@@ -569,37 +818,52 @@ function BoardDnd({
         screenReaderInstructions: { draggable: t('dndInstructions') },
       }}
     >
-      <div className="flex min-w-0 flex-col gap-2">
-        {/* The horizontally-scrolling column row. Scroll-snap (proximity, so it
-            never fights a deliberate scroll) makes narrow viewports read as a
-            single-column pager (3.2.6, panel 7); each column is wrapped with
-            `data-board-column` so the pager hook can locate it. The wrapper is
-            the snap target — BoardColumn keeps its own droppable ref + width. */}
-        <div
-          ref={scrollRef}
-          role="group"
-          aria-label={t('boardLabel')}
-          tabIndex={0}
-          className="flex snap-x snap-proximity gap-4 overflow-x-auto pb-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-          data-testid="board"
-        >
-          {columns.map((column) => (
-            <div key={column.id} data-board-column className="flex shrink-0 snap-start">
-              <BoardColumn
-                column={column}
-                assigneeNameById={assigneeNameById}
-                onOpenQuickView={openPeek}
-                onLoadMore={loadMore}
-                loadingMore={paging[column.id] === 'loading'}
-                loadError={paging[column.id] === 'error'}
-                activeCardId={activeCard?.id ?? null}
-                onSetWipLimit={setColumnWip}
-              />
-            </div>
-          ))}
+      {swimlaned ? (
+        <SwimlaneBoard
+          boardId={board.boardId}
+          columns={columns}
+          swimlanes={board.swimlanes}
+          assigneeNameById={assigneeNameById}
+          onOpenQuickView={openPeek}
+          onLoadMore={loadMore}
+          onSetWipLimit={setColumnWip}
+          paging={paging}
+          activeCardId={activeCard?.id ?? null}
+          overLaneKey={overLaneKey}
+        />
+      ) : (
+        <div className="flex min-w-0 flex-col gap-2">
+          {/* The horizontally-scrolling column row. Scroll-snap (proximity, so it
+              never fights a deliberate scroll) makes narrow viewports read as a
+              single-column pager (3.2.6, panel 7); each column is wrapped with
+              `data-board-column` so the pager hook can locate it. The wrapper is
+              the snap target — BoardColumn keeps its own droppable ref + width. */}
+          <div
+            ref={scrollRef}
+            role="group"
+            aria-label={t('boardLabel')}
+            tabIndex={0}
+            className="flex snap-x snap-proximity gap-4 overflow-x-auto pb-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            data-testid="board"
+          >
+            {columns.map((column) => (
+              <div key={column.id} data-board-column className="flex shrink-0 snap-start">
+                <BoardColumn
+                  column={column}
+                  assigneeNameById={assigneeNameById}
+                  onOpenQuickView={openPeek}
+                  onLoadMore={loadMore}
+                  loadingMore={paging[column.id] === 'loading'}
+                  loadError={paging[column.id] === 'error'}
+                  activeCardId={activeCard?.id ?? null}
+                  onSetWipLimit={setColumnWip}
+                />
+              </div>
+            ))}
+          </div>
+          <BoardColumnPager columns={columns} activeIndex={activeColumn} />
         </div>
-        <BoardColumnPager columns={columns} activeIndex={activeColumn} />
-      </div>
+      )}
       <DragOverlay>
         {activeCard ? (
           <BoardCardOverlay
