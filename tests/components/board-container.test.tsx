@@ -164,3 +164,49 @@ describe('BoardContainer', () => {
     await waitFor(() => expect(screen.getByText('No board yet')).toBeTruthy());
   });
 });
+
+// WIP-limit config (Subtask 3.3.6) — setting a limit from the column `[⋯]` menu
+// PATCHes `…/board/columns/[id]` (3.3.3), updates the chip optimistically, and
+// reconciles to the returned column DTO. Soft over-limit is presentational only
+// (the move path is WIP-agnostic — proven live by the 3.3.7 E2E).
+describe('BoardContainer — WIP config (3.3.6)', () => {
+  function routedFetch(updatedWipLimit: number | null) {
+    return vi.fn((url: string, init?: RequestInit) => {
+      if (typeof url === 'string' && url.includes('/board/columns/') && init?.method === 'PATCH') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'c1',
+            name: 'To Do',
+            position: 'a0',
+            wipLimit: updatedWipLimit,
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => projection });
+    });
+  }
+
+  it('PATCHes the column WIP limit and updates the chip optimistically', async () => {
+    const fetchMock = routedFetch(4);
+    vi.stubGlobal('fetch', fetchMock);
+    render(<BoardContainer />);
+
+    await waitFor(() => expect(screen.getByTestId('board')).toBeTruthy());
+    // Open the To Do (c1) column menu → "Set WIP limit" → enter 4 → Save.
+    fireEvent.click(screen.getByTestId('board-column-actions-c1'));
+    fireEvent.click(screen.getByText('Set WIP limit'));
+    fireEvent.change(screen.getByTestId('board-wip-input-c1'), { target: { value: '4' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/board/columns/c1',
+        expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ wipLimit: 4 }) }),
+      ),
+    );
+    // c1 holds 2 → `2/4`, under-limit/quiet.
+    await waitFor(() => expect(screen.getByTestId('board-wip-c1').textContent).toBe('2/4'));
+  });
+});

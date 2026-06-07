@@ -18,7 +18,12 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { useToast } from '@/components/ui/Toast';
-import type { BoardCardDto, BoardColumnDto, BoardProjectionDto } from '@/lib/dto/boards';
+import type {
+  BoardCardDto,
+  BoardColumnConfigDto,
+  BoardColumnDto,
+  BoardProjectionDto,
+} from '@/lib/dto/boards';
 import type { MoveCardResultDto, PagedColumnCardsDto } from '@/lib/dto/boards';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { useCreateIssue } from '../../_components/CreateIssueProvider';
@@ -357,6 +362,49 @@ function BoardDnd({
     [board.boardId, snapBack, t],
   );
 
+  // Set or clear a column's WIP limit (Subtask 3.3.6) — the optimistic config
+  // write the `[⋯]` menu's "Set WIP limit" editor triggers. Apply the new
+  // `wipLimit` to the column immediately, PATCH `…/board/columns/[id]` (3.3.3),
+  // then reconcile to the returned column DTO; on any failure revert to the
+  // pre-edit snapshot and toast. Config only — it never touches a card's
+  // column/position, so the 3.2.4 move contract is unaffected (WIP is a SOFT,
+  // advisory warning that does not gate drops).
+  const setColumnWip = useCallback(
+    async (columnId: string, limit: number | null) => {
+      const snapshot = columnsRef.current;
+      const name = colName(snapshot, columnId);
+      setColumns((prev) => prev.map((c) => (c.id === columnId ? { ...c, wipLimit: limit } : c)));
+      try {
+        const res = await fetch(`/api/board/columns/${columnId}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify({ wipLimit: limit }),
+        });
+        if (res.ok) {
+          const dto = (await res.json()) as BoardColumnConfigDto;
+          setColumns((prev) =>
+            prev.map((c) => (c.id === columnId ? { ...c, wipLimit: dto.wipLimit } : c)),
+          );
+          return;
+        }
+        setColumns(snapshot);
+        toast({
+          variant: 'error',
+          title: t('wipSaveErrorTitle'),
+          description: t('wipSaveErrorDescription', { column: name }),
+        });
+      } catch {
+        setColumns(snapshot);
+        toast({
+          variant: 'error',
+          title: t('wipSaveErrorTitle'),
+          description: t('wipSaveErrorDescription', { column: name }),
+        });
+      }
+    },
+    [colName, t, toast],
+  );
+
   const handleDragStart = useCallback((e: DragStartEvent) => {
     snapshotRef.current = columnsRef.current;
     setActiveCard(findCard(columnsRef.current, String(e.active.id)));
@@ -545,6 +593,7 @@ function BoardDnd({
                 loadingMore={paging[column.id] === 'loading'}
                 loadError={paging[column.id] === 'error'}
                 activeCardId={activeCard?.id ?? null}
+                onSetWipLimit={setColumnWip}
               />
             </div>
           ))}
