@@ -663,7 +663,14 @@
     "noBoardDescription": "此项目尚未配置看板。",
     "emptyColumn": "暂无工作项",
     "columnLabel": "{name}，{count} 个工作项",
+    "columnActions": "列操作",
+    "columnActionsComingSoon": "列操作即将推出",
+    "wipTitle": "在制品限制",
     "openIssueAria": "打开 {key}：{title}",
+    "blocked": "受阻",
+    "estimateLabel": "预估 {value}",
+    "assignedTo": "负责人：{name}",
+    "unassigned": "未分配",
     "boardLabel": "看板列"
   }
 }

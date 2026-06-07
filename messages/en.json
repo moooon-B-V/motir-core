@@ -663,7 +663,14 @@
     "noBoardDescription": "This project doesn’t have a board configured yet.",
     "emptyColumn": "No work items",
     "columnLabel": "{name}, {count} work items",
+    "columnActions": "Column actions",
+    "columnActionsComingSoon": "Column actions are coming soon",
+    "wipTitle": "Work-in-progress limit",
     "openIssueAria": "Open {key}: {title}",
+    "blocked": "Blocked",
+    "estimateLabel": "Estimate {value}",
+    "assignedTo": "Assigned to {name}",
+    "unassigned": "Unassigned",
     "boardLabel": "Board columns"
   }
 }
