@@ -20,20 +20,25 @@ import { Flag, LayoutGrid, User, Zap } from 'lucide-react';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Segmented } from '@/components/ui/Segmented';
 import { useToast } from '@/components/ui/Toast';
-import {
-  type BoardCardDto,
-  type BoardColumnDto,
-  type BoardProjectionDto,
-  type BoardSwimlaneGroupByDto,
+import type {
+  BoardCardDto,
+  BoardColumnConfigDto,
+  BoardColumnDto,
+  BoardProjectionDto,
+  BoardSwimlaneGroupByDto,
 } from '@/lib/dto/boards';
 import type { MoveCardResultDto, PagedColumnCardsDto } from '@/lib/dto/boards';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+import { useCreateIssue } from '../../_components/CreateIssueProvider';
 import { usePeekOpen } from '../../issues/_components/IssueQuickView';
 import { updateIssueAction } from '../../issues/[key]/edit/actions';
 import { BoardCardOverlay } from './BoardCard';
 import { BoardColumn } from './BoardColumn';
+import { BoardColumnPager, useActiveColumnIndex } from './BoardColumnPager';
+import { BoardEmptyState } from './BoardEmptyState';
 import { BoardSkeleton } from './BoardSkeleton';
 import { SwimlaneBoard } from './SwimlaneBoard';
+import { UnmappedStatusesTray } from './UnmappedStatusesTray';
 import {
   cardIndex,
   columnOfOverId,
@@ -67,12 +72,39 @@ import { appendColumnPage } from './boardPaging';
 // loading transition, never a flash of the old layout); when the group-by is
 // `none` the flat 3.2 column row renders unchanged, otherwise `SwimlaneBoard`
 // renders the `(column × lane)` grid. There is NO data access here beyond the
-// board fetch, the move POST, the group-by PATCH, and the existing 2.5
-// field-update action the cross-lane drag reuses — no new route (CLAUDE.md).
+// board fetch, the move POST, the group-by PATCH, the WIP-config PATCH, and the
+// existing 2.5 field-update action the cross-lane drag reuses — no new route.
+//
+// State shape: the projection lives in component state as `board`, with its
+// `columns[].cards` arrays held so the later subtasks can mutate ONE column's
+// card list in place (3.2.4 optimistic moves, 3.2.5 appended pages) without
+// refetching the whole board.
+//
+// Completeness (Subtask 3.2.6): an all-empty board renders the board EMPTY
+// state (a "New work item" CTA, not six blank columns); `unmappedStatuses`
+// renders the unmapped-statuses TRAY above the board; and the flat column row is
+// a scroll-snap single-column pager on narrow viewports — see `BoardDnd`.
+//
+// `members` (the workspace member directory the board page already resolves) lets
+// the cards map each `BoardCardDto.assigneeId` to a display name for the avatar —
+// the projection card carries only the id (Story 3.1.4).
+//
+// `activeProjectId` is the currently-active project (resolved server-side from
+// `WorkspaceMembership.activeProjectId`). The board is client-fetched, so when
+// the user switches project/workspace — which persists the new active project and
+// calls `router.refresh()` (Server Components only) — the board would otherwise
+// stay on the OLD project's data. Passing the id as a prop and watching it lets
+// the refresh re-render the page with the new id, which re-runs the fetch.
 
 type BoardStatus = 'loading' | 'ready' | 'error' | 'no-board';
 
-export function BoardContainer({ members = [] }: { members?: WorkspaceMemberDTO[] }) {
+export function BoardContainer({
+  members = [],
+  activeProjectId,
+}: {
+  members?: WorkspaceMemberDTO[];
+  activeProjectId?: string;
+}) {
   const t = useTranslations('boards');
   const { toast } = useToast();
   const [board, setBoard] = useState<BoardProjectionDto | null>(null);
@@ -82,6 +114,18 @@ export function BoardContainer({ members = [] }: { members?: WorkspaceMemberDTO[
   // skeleton — the re-lay loading transition, not a flash of the old layout.
   const [relaying, setRelaying] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  // Bumped on every successful fetch so the interactive `BoardDnd` (whose column
+  // state seeds from the projection only on mount) RE-SEEDS — keying it by this
+  // remounts it with the fresh projection after a refetch (e.g. a create), so a
+  // new card actually appears instead of the stale local state lingering.
+  const [boardVersion, setBoardVersion] = useState(0);
+
+  // A create (the empty-state CTA, or any "+ New" while the board is open) goes
+  // through the shell's CreateIssueProvider. The board is client-fetched, so
+  // `router.refresh()` (which only re-runs Server Components) does NOT refresh
+  // it — instead we watch the provider's `issuesChangedAt` tick and refetch.
+  // Fixes: creating from the empty state left the board stuck on "No work items".
+  const { issuesChangedAt } = useCreateIssue();
 
   useEffect(() => {
     let active = true;
@@ -91,6 +135,7 @@ export function BoardContainer({ members = [] }: { members?: WorkspaceMemberDTO[
           const data = (await res.json()) as BoardProjectionDto;
           if (!active) return;
           setBoard(data);
+          setBoardVersion((v) => v + 1);
           setStatus('ready');
           return;
         }
@@ -109,7 +154,10 @@ export function BoardContainer({ members = [] }: { members?: WorkspaceMemberDTO[
     return () => {
       active = false;
     };
-  }, [reloadKey]);
+    // `activeProjectId` is in the deps so switching project/workspace (→ a new
+    // active project + router.refresh()) re-runs the fetch for the new project's
+    // board instead of leaving the previous project's board on screen.
+  }, [reloadKey, issuesChangedAt, activeProjectId]);
 
   const retry = useCallback(() => {
     setStatus('loading');
@@ -162,19 +210,44 @@ export function BoardContainer({ members = [] }: { members?: WorkspaceMemberDTO[
     return <ErrorState title={t('errorTitle')} description={t('errorDescription')} retry={retry} />;
   }
 
+  // Completeness states (Subtask 3.2.6) are derived from the freshly-FETCHED
+  // projection (not BoardDnd's local drag state), so a refetch updates them
+  // immediately:
+  //   - unmapped-statuses TRAY above the board (absent when all are mapped);
+  //   - the board EMPTY state when every column is empty AND nothing is unmapped
+  //     (when statuses are unmapped, work items may be hidden in them — present,
+  //     not absent — so we keep the columns + tray rather than claim "no work
+  //     items"; rung-2 guard). An empty board has nothing to group, so the
+  //     group-by control is omitted there (the CTA is the focus).
+  const hasUnmapped = board.unmappedStatuses.length > 0;
+  const isEmpty = !hasUnmapped && board.columns.every((c) => c.totalCount === 0);
+
   return (
-    <div className="flex flex-col gap-3">
-      <GroupByControl value={board.swimlaneGroupBy} onChange={changeGroupBy} disabled={relaying} />
-      {relaying ? (
-        <BoardSkeleton />
+    <div className="flex min-w-0 flex-col gap-3">
+      {hasUnmapped ? <UnmappedStatusesTray statuses={board.unmappedStatuses} /> : null}
+      {isEmpty ? (
+        <BoardEmptyState />
       ) : (
-        // Key by board + group-by so a group-by change remounts with a fresh
-        // columns/lanes state rather than reconciling across layouts.
-        <BoardDnd
-          key={`${board.boardId}:${board.swimlaneGroupBy}`}
-          board={board}
-          assigneeNameById={assigneeNameById}
-        />
+        <>
+          <GroupByControl
+            value={board.swimlaneGroupBy}
+            onChange={changeGroupBy}
+            disabled={relaying}
+          />
+          {relaying ? (
+            <BoardSkeleton />
+          ) : (
+            // Key by `boardVersion` (re-seed BoardDnd's mount-seeded column state
+            // after a refetch — e.g. a create shows the new card) AND by the
+            // group-by (a group-by change remounts with the fresh lane layout
+            // rather than reconciling across layouts).
+            <BoardDnd
+              key={`${boardVersion}:${board.swimlaneGroupBy}`}
+              board={board}
+              assigneeNameById={assigneeNameById}
+            />
+          )}
+        </>
       )}
     </div>
   );
@@ -248,6 +321,21 @@ function BoardDnd({
   // ring/tint (paired with the cell `isOver` outline; never colour-alone, #35).
   const [overLaneKey, setOverLaneKey] = useState<string | null>(null);
 
+  // The horizontal scroll region (the flat column row) + which column is centred
+  // in it — drives the mobile pager (Subtask 3.2.6, design panel 7). On a narrow
+  // viewport the flat board reads as a single-column scroll; the pager shows
+  // "{name} · {i} of {n}". (Swimlane mode has its own scroll container.)
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const activeColumn = useActiveColumnIndex(scrollRef, columns.length);
+
+  // A mirror ref so the drag handlers read the LATEST columns synchronously
+  // (a dnd lifecycle event can fire before a state update has re-rendered),
+  // and a snapshot of the columns at pick-up for the snap-back on rejection.
+  // The mirror is kept in sync via a LAYOUT effect (writing a ref during render
+  // is forbidden) — a layout effect flushes synchronously at commit, before the
+  // next pointer/keyboard drag event, so each handler reads the prior event's
+  // committed columns (a passive effect could lag a fast move→drop). BoardDnd
+  // only mounts client-side (the ready branch), so there is no SSR warning.
   const columnsRef = useRef(columns);
   useLayoutEffect(() => {
     columnsRef.current = columns;
@@ -449,6 +537,49 @@ function BoardDnd({
       }
     },
     [groupBy, t, toast],
+  );
+
+  // Set or clear a column's WIP limit (Subtask 3.3.6) — the optimistic config
+  // write the `[⋯]` menu's "Set WIP limit" editor triggers. Apply the new
+  // `wipLimit` to the column immediately, PATCH `…/board/columns/[id]` (3.3.3),
+  // then reconcile to the returned column DTO; on any failure revert to the
+  // pre-edit snapshot and toast. Config only — it never touches a card's
+  // column/position, so the 3.2.4 move contract is unaffected (WIP is a SOFT,
+  // advisory warning that does not gate drops).
+  const setColumnWip = useCallback(
+    async (columnId: string, limit: number | null) => {
+      const snapshot = columnsRef.current;
+      const name = colName(snapshot, columnId);
+      setColumns((prev) => prev.map((c) => (c.id === columnId ? { ...c, wipLimit: limit } : c)));
+      try {
+        const res = await fetch(`/api/board/columns/${columnId}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify({ wipLimit: limit }),
+        });
+        if (res.ok) {
+          const dto = (await res.json()) as BoardColumnConfigDto;
+          setColumns((prev) =>
+            prev.map((c) => (c.id === columnId ? { ...c, wipLimit: dto.wipLimit } : c)),
+          );
+          return;
+        }
+        setColumns(snapshot);
+        toast({
+          variant: 'error',
+          title: t('wipSaveErrorTitle'),
+          description: t('wipSaveErrorDescription', { column: name }),
+        });
+      } catch {
+        setColumns(snapshot);
+        toast({
+          variant: 'error',
+          title: t('wipSaveErrorTitle'),
+          description: t('wipSaveErrorDescription', { column: name }),
+        });
+      }
+    },
+    [colName, t, toast],
   );
 
   const handleDragStart = useCallback((e: DragStartEvent) => {
@@ -695,30 +826,42 @@ function BoardDnd({
           assigneeNameById={assigneeNameById}
           onOpenQuickView={openPeek}
           onLoadMore={loadMore}
+          onSetWipLimit={setColumnWip}
           paging={paging}
           activeCardId={activeCard?.id ?? null}
           overLaneKey={overLaneKey}
         />
       ) : (
-        <div
-          role="group"
-          aria-label={t('boardLabel')}
-          tabIndex={0}
-          className="flex gap-4 overflow-x-auto pb-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-          data-testid="board"
-        >
-          {columns.map((column) => (
-            <BoardColumn
-              key={column.id}
-              column={column}
-              assigneeNameById={assigneeNameById}
-              onOpenQuickView={openPeek}
-              onLoadMore={loadMore}
-              loadingMore={paging[column.id] === 'loading'}
-              loadError={paging[column.id] === 'error'}
-              activeCardId={activeCard?.id ?? null}
-            />
-          ))}
+        <div className="flex min-w-0 flex-col gap-2">
+          {/* The horizontally-scrolling column row. Scroll-snap (proximity, so it
+              never fights a deliberate scroll) makes narrow viewports read as a
+              single-column pager (3.2.6, panel 7); each column is wrapped with
+              `data-board-column` so the pager hook can locate it. The wrapper is
+              the snap target — BoardColumn keeps its own droppable ref + width. */}
+          <div
+            ref={scrollRef}
+            role="group"
+            aria-label={t('boardLabel')}
+            tabIndex={0}
+            className="flex snap-x snap-proximity gap-4 overflow-x-auto pb-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            data-testid="board"
+          >
+            {columns.map((column) => (
+              <div key={column.id} data-board-column className="flex shrink-0 snap-start">
+                <BoardColumn
+                  column={column}
+                  assigneeNameById={assigneeNameById}
+                  onOpenQuickView={openPeek}
+                  onLoadMore={loadMore}
+                  loadingMore={paging[column.id] === 'loading'}
+                  loadError={paging[column.id] === 'error'}
+                  activeCardId={activeCard?.id ?? null}
+                  onSetWipLimit={setColumnWip}
+                />
+              </div>
+            ))}
+          </div>
+          <BoardColumnPager columns={columns} activeIndex={activeColumn} />
         </div>
       )}
       <DragOverlay>

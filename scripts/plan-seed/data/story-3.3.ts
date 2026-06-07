@@ -313,7 +313,7 @@ export const story_3_3: PlanStory = {
       id: '3.3.5',
       title:
         'Swimlane UI — group-by control, collapsible lanes + catch-all, cross-lane drag-reassign',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,

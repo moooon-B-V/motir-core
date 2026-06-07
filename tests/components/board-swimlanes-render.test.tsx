@@ -2,7 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { DndContext } from '@dnd-kit/core';
-import type { ReactNode } from 'react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { SwimlaneBoard } from '@/app/(authed)/boards/_components/SwimlaneBoard';
 import { COLLAPSED_LANES_STORAGE_PREFIX } from '@/lib/hooks/useCollapsedLanes';
@@ -76,7 +75,7 @@ const SWIMLANES: BoardSwimlaneDto[] = [
 
 const noop = () => {};
 
-function renderBoard(boardId: string): ReactNode {
+function renderBoard(boardId: string) {
   return render(
     <DndContext>
       <SwimlaneBoard
@@ -91,6 +90,7 @@ function renderBoard(boardId: string): ReactNode {
         }
         onOpenQuickView={noop}
         onLoadMore={noop}
+        onSetWipLimit={noop}
         paging={{}}
         activeCardId={null}
         overLaneKey={null}

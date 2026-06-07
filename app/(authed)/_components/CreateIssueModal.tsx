@@ -36,9 +36,15 @@ const MAX_TITLE_LENGTH = 200;
 export interface CreateIssueModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Called after a work item is successfully created (alongside the
+   * `router.refresh()`). Lets client-fetched surfaces that `router.refresh()`
+   * can't reach — e.g. the board — refetch. Optional.
+   */
+  onCreated?: () => void;
 }
 
-export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) {
+export function CreateIssueModal({ open, onOpenChange, onCreated }: CreateIssueModalProps) {
   const t = useTranslations('shell');
   const tc = useTranslations('common');
   const tErr = useTranslations('errors');
@@ -132,6 +138,7 @@ export function CreateIssueModal({ open, onOpenChange }: CreateIssueModalProps) 
         });
         close();
         router.refresh();
+        onCreated?.();
       } else if (result.field === 'parent') {
         // The picker pre-filters to legal parents, so this only fires on a
         // forged/edge payload (e.g. subtask + no parent) — surface it inline.

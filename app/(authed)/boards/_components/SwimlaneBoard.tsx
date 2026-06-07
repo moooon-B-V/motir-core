@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { ChevronDown, MoreHorizontal } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Spinner } from '@/components/ui/Spinner';
 import { useCollapsedLanes } from '@/lib/hooks/useCollapsedLanes';
@@ -12,6 +12,8 @@ import {
 } from '@/lib/dto/boards';
 import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
 import { Avatar, PriorityValue } from '../../issues/_components/issueCellPrimitives';
+import { ColumnActionsMenu } from './ColumnActionsMenu';
+import { ColumnWipBadge } from './ColumnWipBadge';
 import { LaneCell } from './LaneCell';
 import { bucketLanes } from './boardSwimlanes';
 import { columnHasMore } from './boardPaging';
@@ -33,9 +35,11 @@ import { columnHasMore } from './boardPaging';
 // every lane because all share the same cell width + gutter + gap. Colour via
 // `--el-*`, shape via element tokens.
 //
-// NOTE (Subtask 3.3.6 seam): the column-header WIP slot here is the same
-// non-enforced `n/limit` placeholder the flat `BoardColumn` renders today;
-// 3.3.6 adds the SOFT over-limit warning treatment (it lands in both layouts).
+// The pinned column header reuses the SAME 3.3.6 WIP affordances as the flat
+// board — `ColumnWipBadge` (the `n/limit` chip + SOFT over-limit warning) and
+// `ColumnActionsMenu` (the `[⋯]` "Set WIP limit" editor) — so WIP config + the
+// over-limit treatment work identically in both layouts. The WIP limit is the
+// per-column total across all lanes (the projection's `totalCount`).
 
 export function SwimlaneBoard({
   boardId,
@@ -44,6 +48,7 @@ export function SwimlaneBoard({
   assigneeNameById,
   onOpenQuickView,
   onLoadMore,
+  onSetWipLimit,
   paging,
   activeCardId,
   overLaneKey,
@@ -54,6 +59,7 @@ export function SwimlaneBoard({
   assigneeNameById: Map<string, string>;
   onOpenQuickView: (identifier: string) => void;
   onLoadMore: (columnId: string) => void;
+  onSetWipLimit: (columnId: string, limit: number | null) => void;
   paging: Record<string, 'loading' | 'error'>;
   activeCardId: string | null;
   overLaneKey: string | null;
@@ -89,25 +95,18 @@ export function SwimlaneBoard({
               {column.totalCount}
             </span>
             <span className="flex-1" />
-            {/* WIP placeholder (3.3.6 adds the soft over-limit warning here). */}
-            {column.wipLimit != null ? (
-              <span
-                className="font-mono text-[11px] font-semibold text-(--el-text-faint)"
-                title={t('wipTitle')}
-                data-testid={`board-wip-${column.id}`}
-              >
-                {column.totalCount}/{column.wipLimit}
-              </span>
-            ) : null}
-            <button
-              type="button"
-              disabled
-              aria-label={t('columnActions')}
-              title={t('columnActionsComingSoon')}
-              className="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <MoreHorizontal className="h-4 w-4" aria-hidden />
-            </button>
+            {/* WIP chip + over-limit warning — the per-column total across lanes (3.3.6). */}
+            <ColumnWipBadge
+              columnId={column.id}
+              totalCount={column.totalCount}
+              wipLimit={column.wipLimit}
+            />
+            {/* The `[⋯]` menu hosting the WIP-limit editor (3.3.6). */}
+            <ColumnActionsMenu
+              columnId={column.id}
+              wipLimit={column.wipLimit}
+              onSetWipLimit={onSetWipLimit}
+            />
           </div>
         ))}
       </div>

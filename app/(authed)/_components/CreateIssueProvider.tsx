@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useShortcut } from '@/lib/hooks/useShortcut';
 import { SHORTCUTS } from '@/lib/shortcuts';
 import { CreateIssueModal } from './CreateIssueModal';
@@ -22,6 +22,13 @@ interface CreateIssueContextValue {
   setOpen: (open: boolean) => void;
   openCreateIssue: () => void;
   canCreate: boolean;
+  /**
+   * A monotonically increasing tick bumped each time a work item is
+   * successfully created. Client-fetched surfaces (e.g. the board, which
+   * `router.refresh()` can't reach) watch this to refetch. It carries no
+   * payload — it's a "something was created, re-read if you cache" signal.
+   */
+  issuesChangedAt: number;
 }
 
 const CreateIssueContext = createContext<CreateIssueContextValue | null>(null);
@@ -34,10 +41,16 @@ export function CreateIssueProvider({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [issuesChangedAt, setIssuesChangedAt] = useState(0);
 
   // "C" opens the modal — but only when NOT typing (so a literal "c" in a text
   // field stays a character) and only when there's a project to create into.
   useShortcut(SHORTCUTS.createIssue.combo, () => setOpen(true), { enabled: hasProject });
+
+  // The modal calls this on a successful create; bumping the tick lets
+  // client-fetched consumers refetch (the modal's own `router.refresh()` only
+  // reaches Server Components).
+  const notifyIssueCreated = useCallback(() => setIssuesChangedAt((n) => n + 1), []);
 
   const value = useMemo<CreateIssueContextValue>(
     () => ({
@@ -45,14 +58,17 @@ export function CreateIssueProvider({
       setOpen,
       openCreateIssue: () => setOpen(true),
       canCreate: hasProject,
+      issuesChangedAt,
     }),
-    [open, hasProject],
+    [open, hasProject, issuesChangedAt],
   );
 
   return (
     <CreateIssueContext.Provider value={value}>
       {children}
-      {hasProject && <CreateIssueModal open={open} onOpenChange={setOpen} />}
+      {hasProject && (
+        <CreateIssueModal open={open} onOpenChange={setOpen} onCreated={notifyIssueCreated} />
+      )}
     </CreateIssueContext.Provider>
   );
 }

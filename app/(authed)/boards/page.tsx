@@ -87,7 +87,7 @@ export default async function BoardsPage({
         </div>
       </header>
 
-      <BoardContainer members={members} />
+      <BoardContainer members={members} activeProjectId={ctx.projectId} />
 
       {/* Quick-view peek — the modal frame mounts when `?peek` is present; the
           item's fields stream behind a <Suspense> whose fallback is the loading

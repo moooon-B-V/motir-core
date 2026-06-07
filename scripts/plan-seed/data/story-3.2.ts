@@ -356,7 +356,7 @@ export const story_3_2: PlanStory = {
     {
       id: '3.2.6',
       title: 'Board completeness — empty state, unmapped-statuses tray, responsive + a11y',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 16,
@@ -400,7 +400,7 @@ export const story_3_2: PlanStory = {
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 20,
-      dependsOn: ['3.2.2', '3.2.3', '3.2.4', '3.2.5', '3.2.6'],
+      dependsOn: ['3.2.2', '3.2.3', '3.2.4', '3.2.5', '3.2.6', '3.2.8'],
       descriptionMd:
         'The closing test subtask for the board UI — the same split Story 3.1.7 used: this story ' +
         'ships its OWN component tests + the core drag/snap-back/keyboard E2E, while the ' +
@@ -434,6 +434,68 @@ export const story_3_2: PlanStory = {
         '- `tests/e2e/board-projection.spec.ts` (Story 3.1.7) — the API-level board E2E this builds the UI E2E on top of; `tests/e2e/workflow-flow.spec.ts` — the closing-E2E pattern\n' +
         '- `tests/helpers/db.ts` — real-Postgres truncation; the dnd-kit testing notes for driving keyboard/pointer DnD in Playwright\n' +
         '- Story 3.5 — the Epic-3 test story this defers WIP/swimlane/scale journeys to; `prodect-core/CLAUDE.md` — test conventions (real Postgres, no mocks)',
+    },
+    {
+      id: '3.2.8',
+      title:
+        'Board column polish — auto scroll-to-load (drop the button + loaded-count); uniform column height',
+      status: 'planned',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 16,
+      dependsOn: ['3.2.5', '3.2.6'],
+      descriptionMd:
+        'A board-column UX refinement (user-requested, 2026-06-07). Two changes to the shipped ' +
+        '`BoardColumn` (3.2.3 + 3.2.5 scale + 3.2.6 completeness), both within the EXISTING scale ' +
+        'vocabulary — no new component, no new behaviour the design did not already contemplate, so ' +
+        'this folds the design-asset update into the one subtask rather than a separate design pass ' +
+        '(justified deviation from design-before-code: the owner specified the exact intent and ' +
+        'scroll-to-load is already documented in `design/boards/design-notes.md`).\n\n' +
+        '**1. Pure auto scroll-to-load — drop the explicit "Load more" button AND the ' +
+        '"{n} loaded · rows virtualized" note.** 3.2.5 shipped BOTH an `IntersectionObserver` ' +
+        'scroll-sentinel (auto-load on scroll-to-bottom) AND a redundant `.col-foot` **"Load more" ' +
+        'button** + a `virtNote` showing how many cards are loaded. Keep ONLY the scroll-to-load: ' +
+        'remove the button and the loaded-count note. When a scroll-triggered page is in flight, ' +
+        'show a small bottom **`Spinner`** (the `loadingMore` state) so there is still feedback; on ' +
+        'a failed page keep a minimal inline **error + retry** affordance (a drop of the whole ' +
+        'button is fine, but a scroll-load that errors must still be recoverable without a reload — ' +
+        'a small "Couldn’t load — retry" link, NOT the big button). The per-column **total-count ' +
+        'badge in the header STAYS** — that is the column’s issue count (the Jira-standard ' +
+        'denominator), distinct from the removed "how many loaded" note. **a11y:** loading more must ' +
+        'remain reachable without a mouse — the column body is focusable/scrollable so keyboard ' +
+        'scroll still trips the sentinel; verify a keyboard user can reach later pages (if the ' +
+        'sentinel alone can’t guarantee it, keep a visually-minimal but focusable load affordance ' +
+        'rather than a pointer-only one).\n\n' +
+        '**2. Uniform column height — every column the same height, even with one card.** Today the ' +
+        'column `<section>` uses `max-h-[calc(100dvh-12rem)]`, so a column with one card shrinks to ' +
+        'its content and columns are ragged. Switch to a CONSISTENT height (`h-[calc(100dvh-12rem)]` ' +
+        '— a viewport-relative LAYOUT height, not a shaped-control size, so a raw `calc` is correct, ' +
+        'not a `--height-*` token) so all columns are the same height; the card body (`flex-1`, ' +
+        'internal scroll) fills it and a sparse column shows empty space below its cards. The ' +
+        'empty-column placeholder (3.2.6) sits inside the same full-height column. Keep it usable on ' +
+        'mobile (the 3.2.6 pager / short viewports) — the height stays viewport-relative.\n\n' +
+        '**Design asset + i18n upkeep.** Update `design/boards/board.mock.html` (the scale panel + ' +
+        'the states panel’s column) and the `design-notes.md` scale section to match: scroll-to-load ' +
+        'only (no button, no loaded-count note), uniform column height. Remove the now-unused boards ' +
+        'i18n keys (`loadMore`, `virtNote`) from `messages/en.json` + `zh.json` (keep `loadingMore` / ' +
+        '`loadMoreError` / `loadMoreRetry` for the in-flight spinner + the inline error-retry); ' +
+        'catalog parity (`tests/i18n-catalog.test.ts`) must stay green.\n\n' +
+        '**Out of scope:** the virtualization/windowing itself (3.2.5 — kept, just no visible ' +
+        'note), the load paging contract (unchanged — still the 3.1.6 cursor route appended in ' +
+        'place), and WIP/swimlanes (3.3).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- The `.col-foot` "Load more" button and the "{n} loaded · rows virtualized" note are gone; a column pages in the next slice purely on scroll-to-bottom (the `IntersectionObserver` sentinel), with a bottom `Spinner` while a page is in flight.\n' +
+        '- A scroll-load that fails still shows a minimal, focusable retry affordance (no full reload needed); loading more is reachable by keyboard, not pointer-only.\n' +
+        '- The per-column header total-count badge is unchanged (it is the column issue count, not the removed loaded-count).\n' +
+        '- Every board column renders at the same height regardless of card count (one-card and full columns line up); the card body scrolls internally and a sparse column shows empty space; the empty-column + empty-board states still render correctly; mobile/pager layout (3.2.6) still works.\n' +
+        '- `design/boards/board.mock.html` + `design-notes.md` updated to the new scale affordance + uniform height (render-checklist clean); unused i18n keys removed with en/zh parity green; colours via `--el-*`, shape via element tokens.\n' +
+        '- Component tests updated: the column auto-loads on sentinel intersection (no button), renders the in-flight spinner + the error-retry, and the uniform-height/empty branches; no test asserts the removed button/note.\n\n' +
+        '## Context refs\n\n' +
+        '- `app/(authed)/boards/_components/BoardColumn.tsx` — the `.col-foot` button + `virtNote` to remove, the sentinel to keep, the `max-h-[calc(100dvh-12rem)]` → `h-…` change; `boardPaging.ts` / `useRowWindow` (3.2.5) — unchanged\n' +
+        '- `app/(authed)/boards/_components/BoardContainer.tsx` — the `loadMore`/`paging` wiring (unchanged contract)\n' +
+        '- `design/boards/board.mock.html` (scale + states panels) + `design/boards/design-notes.md` (scale section) — the asset to update\n' +
+        '- `messages/en.json` + `zh.json` `boards.*` (`loadMore`/`virtNote` to remove); `tests/i18n-catalog.test.ts` — parity gate\n' +
+        '- `tests/components/board-column.test.tsx` / `board-completeness.test.tsx` — the component tests to update; `prodect-core/CLAUDE.md` — `--el-*` + element-shape rules',
     },
   ],
 };
