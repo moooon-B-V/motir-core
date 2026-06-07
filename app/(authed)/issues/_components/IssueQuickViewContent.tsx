@@ -51,18 +51,17 @@ export async function IssueQuickViewContent({
 
   // Readiness (Subtask 2.5.21) — render the SAME `detail.readiness` verdict the
   // detail page feeds to ReadinessBadge (no new read, no re-derivation; the
-  // service owns the terminal classification — finding #21). Mirror the
-  // detail-page rule: an item with NO `is_blocked_by` in-edge has no readiness
-  // signal, so `null` ⇒ no banner. The panel maps the open-blocker identifiers
-  // to `?peek=` swap-peek hrefs (the 2.5.20 design's only delta from the
-  // detail-page badge).
-  const readiness =
-    detail.blockedBy.length > 0
-      ? {
-          ready: detail.readiness.ready,
-          blockers: detail.readiness.openBlockers.map((b) => b.identifier),
-        }
-      : null;
+  // service owns the terminal classification — finding #21). An item with NO
+  // blockers is the most ready it can be, so it still shows the green "Ready to
+  // start" — the verdict is `ready` when no blockers OR all terminal, never the
+  // blocker count (bug-ready-banner-no-deps). The panel suppresses the banner
+  // past the todo category (via `statusCategory`) and maps the open-blocker
+  // identifiers to `?peek=` swap-peek hrefs (the 2.5.20 design's only delta from
+  // the detail-page badge).
+  const readiness = {
+    ready: detail.readiness.ready,
+    blockers: detail.readiness.openBlockers.map((b) => b.identifier),
+  };
 
   const data: QuickViewData = {
     identifier: item.identifier,

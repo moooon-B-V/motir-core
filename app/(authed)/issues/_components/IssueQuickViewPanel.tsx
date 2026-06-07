@@ -43,15 +43,15 @@ export interface QuickViewData {
   parent: { identifier: string; title: string; kind: WorkItemKindDto } | null;
   /**
    * The ready/blocked readiness signal (Subtask 2.5.21), shaped for the shipped
-   * ReadinessBadge. `null` when the item has NO `is_blocked_by` in-edge — mirror
-   * the detail-page rule: nothing blocks it, so there's no readiness signal to
-   * give. Otherwise `ready` is the service verdict and `blockers` names the OPEN
-   * (non-terminal) blockers; the panel maps each to a `?peek=` swap-peek href (so
-   * a blocker link swaps the peeked item in-list, never leaving `/issues` — the
-   * 2.5.20 design's justified deviation from the detail-page badge, which links
-   * to `/issues/[key]`). The panel additionally suppresses the banner once the
-   * item leaves the `todo` category (see `statusCategory`): "can I start this?"
-   * is moot for an item already in progress or done.
+   * ReadinessBadge. `ready` is the service verdict (true when the item has no
+   * blockers OR every blocker is terminal — bug-ready-banner-no-deps) and
+   * `blockers` names the OPEN (non-terminal) blockers; the panel maps each to a
+   * `?peek=` swap-peek href (so a blocker link swaps the peeked item in-list,
+   * never leaving `/issues` — the 2.5.20 design's justified deviation from the
+   * detail-page badge, which links to `/issues/[key]`). The panel suppresses the
+   * banner once the item leaves the `todo` category (see `statusCategory`):
+   * "can I start this?" is moot for an item already in progress or done. `null`
+   * only when the read carried no readiness verdict at all.
    */
   readiness: { ready: boolean; blockers: string[] } | null;
 }
