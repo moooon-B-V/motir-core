@@ -696,10 +696,8 @@
     "unmappedText": "以下状态不在此看板上——其中的工作项不会显示在这里：",
     "unmappedManageStatuses": "管理状态",
     "pagerPosition": "{name} · 第 {index}/{count}",
-    "loadMore": "加载更多",
     "loadingMore": "加载中…",
     "loadMoreError": "无法加载更多卡片。",
-    "loadMoreRetry": "重试",
-    "virtNote": "已加载 {loaded} 张 · 行已虚拟化"
+    "loadMoreRetry": "重试"
   }
 }
