@@ -354,7 +354,7 @@ export const story_3_2: PlanStory = {
     {
       id: '3.2.6',
       title: 'Board completeness — empty state, unmapped-statuses tray, responsive + a11y',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 16,
