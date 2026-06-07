@@ -9,17 +9,8 @@ import type { PlanStory } from '../types';
  */
 export const STUB_STORIES: PlanStory[] = [
   // ── Epic 3: Boards ─────────────────────────────────────────────────────────
-  // 3.1, 3.2, 3.3 are fully expanded → data/story-3.1.ts, data/story-3.2.ts,
-  // data/story-3.3.ts (assembled in index.ts).
-  {
-    id: '3.4',
-    title: 'Scrum board (sprint-scoped view)',
-    status: 'planned',
-    descriptionMd:
-      'The board filtered to the active sprint. Thin once Epic 4 lands sprints — mostly a scope ' +
-      'filter + sprint header (goal, dates, remaining points). Depends on Epic 4.',
-    items: [],
-  },
+  // 3.1, 3.2, 3.3, 3.4 are fully expanded → data/story-3.1.ts … data/story-3.4.ts
+  // (assembled in index.ts).
   {
     id: '3.5',
     title: 'Tests — board projection, drag transitions, WIP',
