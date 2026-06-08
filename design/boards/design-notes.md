@@ -6,13 +6,14 @@ design system (`app/globals.css` `--el-*`/shape tokens + the shipped
 `components/ui/*` and issue-list primitives), so the code subtasks compose the
 same primitives — no Pencil→code gap.
 
-| Surface                               | Asset                                       | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Kanban board (columns + cards)**    | **`board.mock.html`** (HTML mockup)         | The whole board surface — no `design/boards/` asset existed; the 3.2.1 design gate produces this. Multi-panel: board · drag · snap-back · keyboard · scale · unmapped · states · mobile. Gates 3.2.2–3.2.6. See below.                                                                                                                                                                                                                                                                                                                                                                                                          |
-| **Swimlanes + WIP limits**            | **`swimlanes-wip.mock.html`** (HTML mockup) | EXTENDS the board surface — the 3.2.1 mockup drew a WIP slot only as a NON-enforced placeholder and NO swimlanes / WIP editor / over-limit treatment (unspecified == no design), so the 3.3.1 design gate produces this. Multi-panel: group-by control · swimlanes (assignee/epic/priority + catch-all) · cross-lane drag · WIP config · over-limit · states. Gates 3.3.5–3.3.6. See "Swimlanes + WIP (Story 3.3)" below.                                                                                                                                                                                                       |
-| **Board configuration (admin)**       | **`board-config.mock.html`** (HTML mockup)  | The board ADMIN surface — the column manager + column ↔ status mapping the 3.2.6 unmapped tray points at; NO `design/boards/` asset drew it (the 3.2.1 board mockup is the board itself; its `[⋯]` menu is a disabled seam), so the 3.6.1 design gate produces this. A SIBLING of the Workflow editor (`settings/project/board`). Multi-panel: page · rename/add column · map-by-drag · map-by-keyboard · delete-confirm + guard · read-only · states · cross-links. Gates 3.6.3. See "Board configuration (Story 3.6)" below.                                                                                                  |
-| **Board load model (correction)**     | **`board-scale.mock.html`** (HTML mockup)   | EXTENDS the board surface — CORRECTS the scale UI (notes.html mistake #33). The 3.2.1/3.2.8 scale panel paged columns ("Load more" → auto scroll-to-load); Jira does NOT page a board, so the corrected model (whole bounded set + virtualize + over-cap "refine filter" banner + Done-age window) was unspecified (== no design), so the 3.8.1 design gate produces this. Multi-panel: bounded whole-set load · Done-age window · over-cap banner · swimlanes-sans-footer. Gates 3.8.3 / 3.8.4 / 3.8.5. See "Board load model (Story 3.8)" below.                                                                              |
-| **Multiple boards (switcher + CRUD)** | **`multi-board.mock.html`** (HTML mockup)   | EXTENDS the board surface — the **board switcher** + **create / rename / set-default / delete** board UI. The 3.2.1 board mockup draws a SINGLE default board (its column `[⋯]` a disabled seam); the switcher + board-CRUD surfaces are unspecified (== no design), so the 3.7.1 design gate produces this. Multi-panel: header switcher (closed) · switcher open (active checked · default badged · New board) · manage menu (rename/set-default/delete) · New-board modal · rename modal · delete confirm · last-board guard + one-board state · states + permissions. Gates 3.7.4. See "Multiple boards (Story 3.7)" below. |
+| Surface                               | Asset                                            | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Kanban board (columns + cards)**    | **`board.mock.html`** (HTML mockup)              | The whole board surface — no `design/boards/` asset existed; the 3.2.1 design gate produces this. Multi-panel: board · drag · snap-back · keyboard · scale · unmapped · states · mobile. Gates 3.2.2–3.2.6. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Swimlanes + WIP limits**            | **`swimlanes-wip.mock.html`** (HTML mockup)      | EXTENDS the board surface — the 3.2.1 mockup drew a WIP slot only as a NON-enforced placeholder and NO swimlanes / WIP editor / over-limit treatment (unspecified == no design), so the 3.3.1 design gate produces this. Multi-panel: group-by control · swimlanes (assignee/epic/priority + catch-all) · cross-lane drag · WIP config · over-limit · states. Gates 3.3.5–3.3.6. See "Swimlanes + WIP (Story 3.3)" below.                                                                                                                                                                                                                                                             |
+| **Board configuration (admin)**       | **`board-config.mock.html`** (HTML mockup)       | The board ADMIN surface — the column manager + column ↔ status mapping the 3.2.6 unmapped tray points at; NO `design/boards/` asset drew it (the 3.2.1 board mockup is the board itself; its `[⋯]` menu is a disabled seam), so the 3.6.1 design gate produces this. A SIBLING of the Workflow editor (`settings/project/board`). Multi-panel: page · rename/add column · map-by-drag · map-by-keyboard · delete-confirm + guard · read-only · states · cross-links. Gates 3.6.3. See "Board configuration (Story 3.6)" below.                                                                                                                                                        |
+| **Board load model (correction)**     | **`board-scale.mock.html`** (HTML mockup)        | EXTENDS the board surface — CORRECTS the scale UI (notes.html mistake #33). The 3.2.1/3.2.8 scale panel paged columns ("Load more" → auto scroll-to-load); Jira does NOT page a board, so the corrected model (whole bounded set + virtualize + over-cap "refine filter" banner + Done-age window) was unspecified (== no design), so the 3.8.1 design gate produces this. Multi-panel: bounded whole-set load · Done-age window · over-cap banner · swimlanes-sans-footer. Gates 3.8.3 / 3.8.4 / 3.8.5. See "Board load model (Story 3.8)" below.                                                                                                                                    |
+| **Multiple boards (switcher + CRUD)** | **`multi-board.mock.html`** (HTML mockup)        | EXTENDS the board surface — the **board switcher** + **create / rename / set-default / delete** board UI. The 3.2.1 board mockup draws a SINGLE default board (its column `[⋯]` a disabled seam); the switcher + board-CRUD surfaces are unspecified (== no design), so the 3.7.1 design gate produces this. Multi-panel: header switcher (closed) · switcher open (active checked · default badged · New board) · manage menu (rename/set-default/delete) · New-board modal · rename modal · delete confirm · last-board guard + one-board state · states + permissions. Gates 3.7.4. See "Multiple boards (Story 3.7)" below.                                                       |
+| **Per-board settings (entry + page)** | **`per-board-settings.mock.html`** (HTML mockup) | EXTENDS the 3.6.1 board-config page + the 3.7.1 switcher — makes board SETTINGS **per-board**. The 3.6 admin only configures the project DEFAULT board, and every entry point links there with NO board context; with many boards per project (3.7) each board has its OWN config, so settings must target the SELECTED board. That gap is unspecified (== no design), so the 3.7.7 design gate produces this. Multi-panel: board-scoped settings page (header names the board + switcher) · switcher open (change which board) · manage menu "Board settings" item · cross-links carrying `?board=` · states + permissions. Gates 3.7.8. See "Per-board settings (Story 3.7)" below. |
 
 The board is a **pure consumer** of the Story-3.1 board API
 (`GET …/board` → `BoardProjectionDto`; `GET …/board/columns/[id]/cards` → the
@@ -765,3 +766,125 @@ hidden and the server re-gating every write `403`. No early RBAC build.
 - **No nested buttons** — a board row is a `div` holding the `.bsw-pick` and the
   `.icon-btn` as siblings, so the pick target and the manage target are distinct
   controls.
+
+---
+
+# Per-board settings (Story 3.7)
+
+Design reference for Story 3.7's per-board **settings** delta. Asset:
+**`per-board-settings.mock.html`** (+ `per-board-settings.png` export). It is the
+source of truth for the UI subtask **3.7.8** (thread the selected board through
+the settings page + entries), which carries **3.7.7** in `dependsOn`. The
+selected-board read it relies on is **3.7.5**; the settings surface it scopes is
+**3.6.3**; the switcher + manage menu it extends are **3.7.4**.
+
+Built FROM the real design system (the token block is copied 1:1 from
+`app/globals.css`) and **EXTENDS two shipped surfaces with NO new vocabulary** —
+the **3.6.1 board-config page** (the `settings/project/workflow` grammar: serif
+`h2` + muted subtitle + an `mx-auto` editor; the unmapped tray; the column `[⋯]`
+menu; the settings-landing nav cards) and the **3.7.1 board switcher** (the
+trigger + dropdown `Menu` + the per-board manage menu). It is a new ARRANGEMENT
+of shipped pieces, not a new screen.
+
+## Why this is a delta (the gap it closes)
+
+Today board settings configure the project **default** board only:
+`settings/project/board` resolves the default board (`boardsService.getBoard`
+without a `boardId`), and every entry point — the column `[⋯]` "Board
+settings →", the unmapped-tray "Map columns", the settings landing card — links
+there with **no board context**. With many boards per project (Story 3.7) each
+board carries its OWN columns / column→status mapping / swimlane group-by / WIP
+(all already board-scoped in the schema), so settings must target the
+**selected** board. That scoping was unspecified in `design/boards/`, so the
+planning-time design gate (3.7.7) produces this asset FIRST — it gates 3.7.8.
+
+**Mirror product = Jira's per-board "Configure board"** (decision-ladder rung 1;
+VERIFIED June 2026, Atlassian docs — checked, not asserted, per `notes.html`
+mistake #33): each board has its OWN configuration, reached FROM that board
+(board → ⋯ → **Board settings / Configure board**), and the config screen NAMES
+the board it edits and lets you switch board. Per-board settings reached from the
+board is the standard; default-only is the gap.
+
+## The asset is multi-panel (review EACH)
+
+- **(0) Board-scoped settings page** — the 3.6.1 page, now board-scoped. The new
+  header element is a right-aligned **board switcher** under a **"Configuring
+  board"** label that NAMES the board being edited (here `Triage`, not the
+  default); the crumb carries the board name (`Settings · prodect · Board ·
+Triage`). The editor body (name field · unmapped rail · column manager) is the
+  **unchanged 3.6.3 surface**, just built from THAT board's projection.
+- **(1) Switcher open on the settings page** — reuses the 3.7.4 switcher
+  vocabulary (the dropdown `Menu` with `menuitemradio` rows ordered by
+  `board.position`, the active board's **check**, the project default's
+  **Default** Pill), but picking a board **re-targets which board you
+  configure**: it updates `?board=<id>` and re-lays the settings editor. There is
+  **no "New board" action here** — creating a board is the 3.7.4 switcher's job
+  on `/boards`; this menu only switches the configured board.
+- **(2) Manage-menu "Board settings" item** — the 3.7.4 switcher manage menu
+  (a board row's `[⋯]`) gains a **"Board settings"** item (a `sliders` glyph)
+  between **Set as default** and the destructive **Delete**. It navigates to
+  `/settings/project/board?board=<id>` for THAT board — the Jira-faithful
+  reached-from-the-board path.
+- **(3) Cross-links carry the active board** — the column `[⋯]` **"Board
+  settings →"** (`ColumnActionsMenu`), the unmapped-tray **"Map columns →"**
+  (`UnmappedStatusesTray`), and the settings landing **"Board"** card all reflect
+  board context. The three reached **from `/boards`** (manage menu, tray, column
+  menu) carry `?board=<id>` so they open the board being viewed; the
+  **settings-landing card** has no board context (it lives outside `/boards`), so
+  it opens the **default** board, and the in-page switcher (panel 1) is then the
+  way to any other board's settings.
+- **(4) States + permissions** — **absent `?board=`** resolves the project's
+  `isDefault` board (the default-only behaviour preserved, never broken); a
+  **board outside the active project / workspace** → a 404 `ErrorState`, never a
+  cross-tenant read (the 3.7.5 tenant-safety guard); **membership-gated now**,
+  project-admin-gated under Story 6.4 (a non-admin then sees the 3.6.1 panel-5
+  read-only treatment and the server re-gates every write `403`).
+
+## Composing primitives (what 3.7.8 builds with)
+
+- **Settings-page header** — the 3.6.1 `ed-head` (serif title + muted subtitle),
+  PLUS a right-aligned **board switcher** reusing the 3.7.4 `BoardSwitcher`
+  trigger + menu vocabulary, under a small "Configuring board" `SectionLabel`.
+  The page reads `?board=<id>` (defaulting to the default board) and builds its
+  `BoardConfigModel` from that board.
+- **Manage-menu item** — a new `MenuItem` ("Board settings", `sliders`
+  glyph) added to the 3.7.4 manage `Menu`, a `Link` to
+  `/settings/project/board?board=<id>`.
+- **Cross-link entries** — the existing `ColumnActionsMenu` "Board settings →",
+  `UnmappedStatusesTray` "Map columns →", and `BoardSettingsCard` thread the
+  active `?board=` (the board ones from the `/boards` URL; the landing card opens
+  the default).
+
+No service / schema change: 3.7.5 already taught `getBoard` to take a `boardId`,
+and the 3.6.2 config writes are already board-scoped — this is a UI/URL threading
+of the selected board.
+
+## Permissions
+
+Board settings is a board-config **write**. Roles/permissions are Epic 6.4, so
+(matching the 2.2.5 workflow editor + the 3.3 / 3.6 / 3.7 board config) the
+surface is **membership-gated now** with a `TODO(6.4)` to role-gate later —
+board admin becomes **project-admin-gated under Story 6.4**, after which a
+non-admin sees the page read-only and the server re-gates every write `403`. No
+early RBAC build.
+
+## Token / a11y rules honoured
+
+- **Colour** strictly via `--el-*` (finding #54): the `--el-accent` on the active
+  board's check, the neutral `Pill` for the Default badge, the `--el-tint-yellow`
+  unmapped tray + `--el-tint-peach` warn callout (the cross-tenant not-found
+  note), the `--el-info` info callouts, the danger red on Delete. Tints carry the
+  hue in the BACKGROUND with `--el-text-strong` text (finding #35 AA — never a
+  tinted page surface).
+- **Shape** via element-semantic tokens (`--radius-input`/`-card`/`-badge`/
+  `-control`, `--shadow-subtle`/`-elevated`, `--spacing-control-*`/`-chip-*`/
+  `-input-*`/`-card-padding`, `--height-control`/`-input`).
+- **Not colour-alone** (finding #35): the active board carries a check (not just
+  the highlight); the default carries the **Default** Pill; the "Board settings"
+  item carries the `sliders` icon + label; the state callouts pair hue with an
+  icon + text.
+- **No nested buttons** — the switcher board rows stay the 3.7.1 `div` holding
+  the `.bsw-pick` + `.icon-btn` siblings; the navcards are `<a>` links. The
+  switcher is a `role="menu"` with `menuitemradio` rows; the settings-page
+  switcher is announced as "Configure which board"; board switches re-lay the
+  editor (the 3.7.5 selected-board re-read).
