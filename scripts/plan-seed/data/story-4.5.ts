@@ -166,7 +166,7 @@ export const story_4_5: PlanStory = {
       id: '4.5.1',
       title:
         'Design — Scrum board view: sprint header (goal/dates/remaining + points), no-active-sprint state, per-column point totals (extends design/boards/)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 40,
