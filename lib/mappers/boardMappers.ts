@@ -4,6 +4,7 @@ import type {
   BoardColumnConfigDto,
   BoardColumnStatusDto,
   BoardDto,
+  BoardSummaryDto,
   BoardSwimlaneGroupByDto,
   BoardTypeDto,
 } from '@/lib/dto/boards';
@@ -23,6 +24,22 @@ export function toBoardDto(row: Board): BoardDto {
     name: row.name,
     type: row.type as BoardTypeDto,
     swimlaneGroupBy: row.swimlaneGroupBy as BoardSwimlaneGroupByDto,
+  };
+}
+
+/**
+ * Map a `board` row to a `BoardSummaryDto` (the switcher shape, Subtask 3.7.3).
+ * Like `toBoardDto` but carries `isDefault` + `position` (the switcher's badge +
+ * order) instead of `swimlaneGroupBy` (a projection concern). `position` is
+ * already the opaque fractional-index string on the row.
+ */
+export function toBoardSummaryDto(row: Board): BoardSummaryDto {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type as BoardTypeDto,
+    isDefault: row.isDefault,
+    position: row.position,
   };
 }
 

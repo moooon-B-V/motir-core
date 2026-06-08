@@ -79,6 +79,26 @@ export interface BoardDto {
 }
 
 /**
+ * A board's switcher row (Subtask 3.7.3) — the wire shape the multi-board CRUD
+ * surface returns: `GET /api/boards` lists these for the active project, and
+ * `createBoard` / `setDefaultBoard` return the affected board as one. It is the
+ * board's identity + the two fields the 3.7.4 switcher renders that `BoardDto`
+ * omits: `isDefault` (badge the project default) and `position` (the
+ * fractional-index key the switcher orders boards by). NOT the heavy
+ * `BoardProjectionDto` (the read path owns that) — just enough to populate the
+ * switcher without a projection fetch per board.
+ */
+export interface BoardSummaryDto {
+  id: string;
+  name: string;
+  type: BoardTypeDto;
+  /** True for the project's one default board (the one `/boards` opens absent `?board=`). */
+  isDefault: boolean;
+  /** Fractional-index sort key (opaque string) — the switcher's board order. */
+  position: string;
+}
+
+/**
  * One column's config row (Subtask 3.3.3) — the wire shape `setColumnWipLimit`
  * returns so the 3.3.6 UI reconciles its optimistic WIP edit. The column's
  * identity + its `wipLimit` (null = no limit); NOT the projection's cards /

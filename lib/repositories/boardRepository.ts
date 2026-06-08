@@ -37,6 +37,27 @@ export const boardRepository = {
   },
 
   /**
+   * A project's boards in SWITCHER order (`position asc`, Subtask 3.7.3) — the
+   * multi-board order the 3.7.4 switcher lists and the lifecycle service reads
+   * to append a new board after the last position + to promote the next board
+   * by position on a default delete. Hits the `(projectId, position)` composite
+   * index (3.7.2). Distinct from `findByProject` (which orders by `createdAt`
+   * for the legacy single-board reads); both carry the explicit `workspaceId`
+   * gate (finding #26).
+   */
+  async findByProjectByPosition(
+    projectId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Board[]> {
+    const client = tx ?? db;
+    return client.board.findMany({
+      where: { projectId, workspaceId },
+      orderBy: { position: 'asc' },
+    });
+  },
+
+  /**
    * The project's default board for the v1 single-board case, or null. Returns
    * the oldest board (`createdAt asc`) — the one `createProject` seeds — so a
    * future multi-board project still resolves the original default
@@ -85,6 +106,27 @@ export const boardRepository = {
     return rows[0] ?? null;
   },
 
+  /**
+   * Lock ALL of a project's board rows `FOR UPDATE` (Subtask 3.7.3 — the
+   * delete-board lost-update guard). `deleteBoard` takes this lock so two
+   * concurrent deletes of DIFFERENT boards in the same project serialize: the
+   * second blocks until the first commits, then re-reads and sees the
+   * decremented board count (closing the TOCTOU on the ≥1-board invariant — the
+   * board analogue of `lockById` guarding the ≥1-column invariant in
+   * `deleteColumn`). `tx` REQUIRED; the workspace filter keeps the lock
+   * tenant-scoped (finding #26). Returns the locked rows' ids (empty when the
+   * project has no boards).
+   */
+  async lockByProject(
+    projectId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string }>> {
+    return tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "board" WHERE "project_id" = ${projectId} AND "workspace_id" = ${workspaceId} FOR UPDATE
+    `;
+  },
+
   // Write (3.1.2's default-board seed). `tx` is REQUIRED — the board is
   // persisted inside createProject's transaction so the project + its workflow
   // + its default board are atomic. The `Unchecked` create input takes the
@@ -108,5 +150,39 @@ export const boardRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<Board> {
     return tx.board.update({ where: { id: boardId }, data });
+  },
+
+  /**
+   * Clear the default flag on EVERY currently-default board of a project
+   * (Subtask 3.7.3 — `setDefaultBoard`'s first write). The partial unique index
+   * `board_one_default_per_project` (`WHERE is_default`) forbids two default
+   * rows, so a default flip must clear the prior default BEFORE setting the new
+   * one in the same transaction; this is that clear (a no-op `count: 0` when the
+   * default was already deleted, e.g. the promote path). `tx` REQUIRED; the
+   * workspace filter keeps it tenant-scoped. Returns the number of rows cleared.
+   */
+  async clearDefaultForProject(
+    projectId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const r = await tx.board.updateMany({
+      where: { projectId, workspaceId, isDefault: true },
+      data: { isDefault: false },
+    });
+    return r.count;
+  },
+
+  /**
+   * Delete a board row (Subtask 3.7.3 — `deleteBoard`). `tx` REQUIRED; the
+   * caller has already tenant-gated + guarded the board (last-board / promote-
+   * default) under a project-wide `FOR UPDATE` lock. The board's `board_column`
+   * + `board_column_status` rows are removed by the FK `onDelete: Cascade`
+   * (schema), so the card-less board config is fully torn down; work items are
+   * NEVER touched (a card's column is derived from its `work_item.status`, and
+   * issues belong to the project, not a board).
+   */
+  async delete(boardId: string, tx: Prisma.TransactionClient): Promise<Board> {
+    return tx.board.delete({ where: { id: boardId } });
   },
 };
