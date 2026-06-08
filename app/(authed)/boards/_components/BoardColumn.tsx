@@ -1,20 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { Spinner } from '@/components/ui/Spinner';
 import { useRowWindow } from '@/components/ui/useRowWindow';
 import type { BoardColumnDto } from '@/lib/dto/boards';
 import { BoardCard } from './BoardCard';
 import { ColumnActionsMenu } from './ColumnActionsMenu';
 import { ColumnWipBadge } from './ColumnWipBadge';
-import { columnHasMore } from './boardPaging';
 
-// BoardColumn (Subtask 3.2.3 · drop 3.2.4 · scale 3.2.5) — one board column per
-// `design/boards/board.mock.html` (`.col`): a header over a scrollable card
-// stack, with a designed empty-column state. The header carries (in order):
+// BoardColumn (Subtask 3.2.3 · drop 3.2.4 · scale 3.2.5 · load model 3.8.3) — one
+// board column per `design/boards/board-scale.mock.html` (panel 0, the corrected
+// scale UI): a header over a scrollable card stack, with a designed empty-column
+// state. The header carries (in order):
 //   - the column `name` + the per-column total count badge (the projection's
 //     `totalCount` — the denominator, independent of how many cards are loaded)
 //   - the WIP-limit chip (`ColumnWipBadge`, 3.3.6): `n/limit` with the SOFT
@@ -27,19 +26,20 @@ import { columnHasMore } from './boardPaging';
 // vertical `SortableContext`; while a card is dragged over, the accent ring +
 // lavender tint mark it (paired cues, finding #35).
 //
-// SCALE (3.2.5, finding #57): the card stack VIRTUALIZES — only the cards in (or
-// near) the column's own scroll viewport mount, via `useRowWindow` (the hand-
-// rolled 2.5.15 windowing generalized to variable-height cards; no second lib).
-// The `SortableContext` `items` list stays the FULL ordered set so dnd-kit knows
-// every card's rank even when only a window is mounted, and the actively-dragged
-// card (+ its neighbours) is force-mounted so a drag never detaches mid-flight.
-// Paging is PURE scroll-to-load (3.2.8): an IntersectionObserver sentinel at the
-// bottom of the scroll area auto-pages the next bounded slice via `onLoadMore`
-// (the parent calls the Story-3.1.6 cursor route + appends in place) — there is
-// NO explicit "Load more" button and NO "{n} loaded" note. A small in-flow spinner
-// gives in-flight feedback; a failed page leaves a minimal, focusable inline retry
-// (recoverable without a reload). The board never loads every card. Colour strictly
-// `--el-*`, shape via element tokens.
+// LOAD MODEL (3.8.3, the mirror-faithful CORRECTION of 3.2.5 / 3.2.8 — `notes.html`
+// mistake #33): the column renders the WHOLE bounded set the 3.8.2 projection
+// returns (the board loads up to `BOARD_ISSUE_CAP`, never a per-column page) — so
+// there is NO "Load more" button, NO scroll-to-load sentinel, and NO in-flight
+// spinner / inline-retry footer; the only affordance is the column's own scroll,
+// exactly as a Jira board behaves. The stack still VIRTUALIZES — only the cards in
+// (or near) the column's own scroll viewport mount, via `useRowWindow` (the hand-
+// rolled 2.5.15 windowing generalized to variable-height cards; no second lib) — so
+// a tall column stays DOM-bounded. The `SortableContext` `items` list stays the
+// FULL ordered set so dnd-kit knows every card's rank even when only a window is
+// mounted, and the actively-dragged card (+ its neighbours) is force-mounted so a
+// drag never detaches mid-flight. The per-column total badge in the header stays
+// the denominator. Still bounded, never "load every row" (finding #57: the cap is
+// the bound). Colour strictly `--el-*`, shape via element tokens.
 
 // Estimated card height (px) used before a card's real height is measured; the
 // title clamps to 1–2 lines so true heights vary — `useRowWindow` measures each.
@@ -53,18 +53,12 @@ export function BoardColumn({
   column,
   assigneeNameById,
   onOpenQuickView,
-  onLoadMore,
-  loadingMore,
-  loadError,
   activeCardId,
   onSetWipLimit,
 }: {
   column: BoardColumnDto;
   assigneeNameById: Map<string, string>;
   onOpenQuickView: (identifier: string) => void;
-  onLoadMore: (columnId: string) => void;
-  loadingMore: boolean;
-  loadError: boolean;
   activeCardId: string | null;
   onSetWipLimit: (columnId: string, limit: number | null) => void;
 }) {
@@ -75,8 +69,6 @@ export function BoardColumn({
 
   const cards = column.cards;
   const empty = cards.length === 0;
-  const hasMore = columnHasMore(column);
-  const dragActive = activeCardId !== null;
 
   // The column body is the scroll viewport the card stack windows against.
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -87,29 +79,6 @@ export function BoardColumn({
     gap: CARD_GAP_PX,
     getScrollElement,
   });
-
-  // Auto-load on scroll (3.2.8 — the ONLY load path now): a sentinel at the bottom
-  // of the (full-height) scroll area pages the next slice when it enters view. The
-  // parent's `loadMore` guards against a double-fire. Suspended while a drag is
-  // active so content never shifts mid-drag. Keyboard users reach later pages by
-  // tabbing through the focusable cards (which scroll into view and trip the
-  // sentinel) and via the inline retry affordance on error.
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  const columnId = column.id;
-  useEffect(() => {
-    if (!hasMore || dragActive) return;
-    const root = bodyRef.current;
-    const sentinel = sentinelRef.current;
-    if (!root || !sentinel || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) onLoadMore(columnId);
-      },
-      { root, rootMargin: '200px' },
-    );
-    io.observe(sentinel);
-    return () => io.disconnect();
-  }, [hasMore, dragActive, columnId, onLoadMore]);
 
   // The card indices to mount: the window, plus the dragged card and its
   // neighbours (so a drag never detaches). Whole list when not windowing.
@@ -209,35 +178,7 @@ export function BoardColumn({
                 );
               })}
             </div>
-            {/* Scroll-to-load sentinel — the ONLY load trigger (3.2.8): when it
-                scrolls into view (rootMargin 200px) the next page is fetched. Sits
-                just past the full-height card area. */}
-            {hasMore ? <div ref={sentinelRef} aria-hidden className="h-px w-full" /> : null}
           </SortableContext>
-
-          {/* In-flight + error feedback for the scroll-load (3.2.8) — replaces the
-              removed `.col-foot` button. A small spinner while a page streams; a
-              minimal, focusable inline retry when it failed (recoverable without a
-              reload, and the keyboard-reachable load affordance the a11y AC asks
-              for). The per-column total badge in the header stays the denominator. */}
-          {loadingMore ? (
-            <div
-              className="flex items-center justify-center gap-1.5 pt-2 text-xs text-(--el-text-muted)"
-              data-testid={`board-loading-more-${column.id}`}
-            >
-              <Spinner size="sm" aria-label={t('loadingMore')} />
-              {t('loadingMore')}
-            </div>
-          ) : loadError ? (
-            <button
-              type="button"
-              onClick={() => onLoadMore(column.id)}
-              data-testid={`board-load-more-retry-${column.id}`}
-              className="flex w-full items-center justify-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-xs font-medium text-(--el-danger) hover:bg-(--el-muted)"
-            >
-              {t('loadMoreError')} {t('loadMoreRetry')}
-            </button>
-          ) : null}
         </div>
       )}
     </section>

@@ -5,15 +5,15 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { BoardColumn } from '@/app/(authed)/boards/_components/BoardColumn';
 import type { BoardCardDto, BoardColumnDto } from '@/lib/dto/boards';
 
-// BoardColumn (Subtask 3.2.3 · scale 3.2.5 · WIP 3.3.6 · polish 3.2.8): a column
+// BoardColumn (Subtask 3.2.3 · scale 3.2.5 · WIP 3.3.6 · load model 3.8.3): a column
 // header (name + per-column total count + the WIP chip + the `[⋯]` actions menu)
-// over a card stack, with the designed empty-column state, plus the finding-#57
-// PURE scroll-to-load (3.2.8 dropped the explicit "Load more" button + the loaded-
-// count note): an IntersectionObserver sentinel auto-pages, a small spinner shows
-// in flight, and a failed page leaves a focusable inline retry. Rendered with the
-// real `en` catalog. Under happy-dom there is no measurable scroll viewport, so the
-// windowing degrades to render-all (no absolute positioning) and the sentinel
-// effect needs IntersectionObserver stubbed to fire.
+// over a card stack, with the designed empty-column state. The 3.8.3 load-model
+// CORRECTION (`notes.html` mistake #33) renders the WHOLE bounded 3.8.2 set with NO
+// "Load more" affordance at all — no button, no scroll-to-load sentinel, no
+// in-flight spinner, no inline retry — exactly as a Jira board behaves; the stack
+// still virtualizes via `useRowWindow` so a tall column stays DOM-bounded. Rendered
+// with the real `en` catalog. Under happy-dom there is no measurable scroll
+// viewport, so the windowing degrades to render-all (no absolute positioning).
 
 function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardCardDto {
   return {
@@ -51,9 +51,6 @@ function renderColumn(
   col: BoardColumnDto,
   extra: Partial<{
     onOpenQuickView: (id: string) => void;
-    onLoadMore: (id: string) => void;
-    loadingMore: boolean;
-    loadError: boolean;
     activeCardId: string | null;
     onSetWipLimit: (columnId: string, limit: number | null) => void;
   }> = {},
@@ -63,9 +60,6 @@ function renderColumn(
       column={col}
       assigneeNameById={new Map()}
       onOpenQuickView={extra.onOpenQuickView ?? noop}
-      onLoadMore={extra.onLoadMore ?? noop}
-      loadingMore={extra.loadingMore ?? false}
-      loadError={extra.loadError ?? false}
       activeCardId={extra.activeCardId ?? null}
       onSetWipLimit={extra.onSetWipLimit ?? noop}
     />,
@@ -102,9 +96,6 @@ describe('BoardColumn', () => {
         })}
         assigneeNameById={new Map([['u1', 'Bea Lin']])}
         onOpenQuickView={noop}
-        onLoadMore={noop}
-        loadingMore={false}
-        loadError={false}
         activeCardId={null}
         onSetWipLimit={noop}
       />,
@@ -112,103 +103,62 @@ describe('BoardColumn', () => {
     expect(screen.getByTitle('Assigned to Bea Lin')).toBeTruthy();
   });
 
-  // 3.2.8 — paging is PURE scroll-to-load: the explicit "Load more" button and the
-  // "{n} loaded" note are GONE. The IntersectionObserver sentinel is the only load
-  // trigger; a spinner shows in flight and a failed page leaves a focusable retry.
-  it('renders NO explicit "Load more" button or loaded-count note even with a cursor (3.2.8)', () => {
+  // 3.8.3 — the load-model CORRECTION (`notes.html` mistake #33): the column loads
+  // the WHOLE bounded 3.8.2 set, so EVERY "Load more" affordance is gone — no
+  // button, no scroll-to-load sentinel, no in-flight spinner, no inline retry. Even
+  // a (now-permanently-null) cursor + a big total surfaces none of them; the cards
+  // render directly and the header count stays the full denominator.
+  it('renders NO load-more affordance at all — no button, spinner, or retry (3.8.3)', () => {
     renderColumn(
       column({
         id: 'c1',
         name: 'To Do',
         totalCount: 60,
+        // `cursor` is permanently null post-3.8.2; even a stray non-null value must
+        // not resurrect a load-more affordance — the flat board no longer reads it.
         cursor: '50',
-        cards: [card({ id: 'w1', key: 1 })],
+        cards: [card({ id: 'w1', key: 1 }), card({ id: 'w2', key: 2 })],
       }),
     );
-    // The dropped affordances must not reappear.
+    // None of the retired affordances may render.
     expect(screen.queryByTestId('board-load-more-c1')).toBeNull();
-    expect(screen.queryByTestId('board-virt-note-c1')).toBeNull();
+    expect(screen.queryByTestId('board-load-more-retry-c1')).toBeNull();
+    expect(screen.queryByTestId('board-loading-more-c1')).toBeNull();
     expect(screen.queryByText('Load more')).toBeNull();
+    expect(screen.queryByText('Loading…')).toBeNull();
+    // The whole bounded set renders directly; the header count is the full total.
+    expect(screen.getByTestId('board-card-PROD-1')).toBeTruthy();
+    expect(screen.getByTestId('board-card-PROD-2')).toBeTruthy();
+    expect(screen.getByTestId('board-count-c1').textContent).toBe('60');
   });
 
-  it('auto-pages via the IntersectionObserver sentinel (no click), calling onLoadMore', () => {
-    // Stub IntersectionObserver to capture the callback the column registers, then
-    // fire an intersection — the sentinel is the sole load trigger now.
-    const observed: Array<{ cb: IntersectionObserverCallback }> = [];
-    class MockIO {
-      cb: IntersectionObserverCallback;
-      constructor(cb: IntersectionObserverCallback) {
-        this.cb = cb;
-        observed.push({ cb });
-      }
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-      takeRecords() {
-        return [];
-      }
-    }
-    const prior = globalThis.IntersectionObserver;
-    // @ts-expect-error — test stub, only the constructor/observe surface is used
-    globalThis.IntersectionObserver = MockIO;
+  it('keeps a tall column DOM-bounded by windowing once a scroll viewport is measurable (3.8.3)', () => {
+    // happy-dom does no layout, so `useRowWindow` measures a 0-height viewport and
+    // degrades to render-all. Give the column body a measurable `clientHeight` so
+    // the hook windows: a 1000-card column must mount only a bounded slice — proving
+    // virtualization (the 2.5.15 `useRowWindow`) is KEPT after the "Load more"
+    // removal. getBoundingClientRect stays happy-dom's all-zeros (scroll-invariant
+    // body offset 0), which is the geometry the hook expects.
+    const prior = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight');
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get() {
+        return 600;
+      },
+    });
     try {
-      const onLoadMore = vi.fn();
-      renderColumn(
-        column({
-          id: 'c1',
-          name: 'To Do',
-          totalCount: 60,
-          cursor: '50',
-          cards: [card({ id: 'w1', key: 1 })],
-        }),
-        { onLoadMore },
-      );
-      expect(observed.length).toBeGreaterThan(0);
-      // The sentinel scrolls into view → the column pages the next slice.
-      observed[observed.length - 1]!.cb(
-        [{ isIntersecting: true } as IntersectionObserverEntry],
-        {} as IntersectionObserver,
-      );
-      expect(onLoadMore).toHaveBeenCalledWith('c1');
+      const cards = Array.from({ length: 1000 }, (_, i) => card({ id: `w${i}`, key: i }));
+      renderColumn(column({ id: 'c1', name: 'To Do', totalCount: 1000, cards }));
+      const mounted = screen.queryAllByTestId(/^board-card-/);
+      // Bounded: only a window of the 1000 cards is in the DOM, not the whole set.
+      expect(mounted.length).toBeGreaterThan(0);
+      expect(mounted.length).toBeLessThan(1000);
+      // The header still surfaces the FULL count (the denominator), not the window.
+      expect(screen.getByTestId('board-count-c1').textContent).toBe('1000');
     } finally {
-      globalThis.IntersectionObserver = prior;
+      if (prior) Object.defineProperty(HTMLElement.prototype, 'clientHeight', prior);
+      else delete (HTMLElement.prototype as { clientHeight?: unknown }).clientHeight;
     }
-  });
-
-  it('shows a small in-flight spinner (not a button) while a page is loading', () => {
-    renderColumn(
-      column({
-        id: 'c1',
-        name: 'To Do',
-        totalCount: 60,
-        cursor: '50',
-        cards: [card({ id: 'w1', key: 1 })],
-      }),
-      { loadingMore: true },
-    );
-    expect(screen.getByTestId('board-loading-more-c1').textContent).toContain('Loading');
-    expect(screen.queryByTestId('board-load-more-c1')).toBeNull();
-  });
-
-  it('shows a focusable inline retry after a failed load, calling onLoadMore on click', () => {
-    const onLoadMore = vi.fn();
-    renderColumn(
-      column({
-        id: 'c1',
-        name: 'To Do',
-        totalCount: 60,
-        cursor: '50',
-        cards: [card({ id: 'w1', key: 1 })],
-      }),
-      { loadError: true, onLoadMore },
-    );
-    const retry = screen.getByTestId('board-load-more-retry-c1');
-    // Recoverable without a reload + keyboard-reachable: it's a real <button>.
-    expect(retry.tagName).toBe('BUTTON');
-    expect(retry.textContent).toContain('Retry');
-    expect(screen.getByText('Couldn’t load more cards.', { exact: false })).toBeTruthy();
-    fireEvent.click(retry);
-    expect(onLoadMore).toHaveBeenCalledWith('c1');
   });
 
   it('renders every column at the same fixed height regardless of card count (3.2.8)', () => {
