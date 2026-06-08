@@ -135,6 +135,14 @@ export const story_4_2: PlanStory = {
     '**loading** → a backlog skeleton (reuse the 3.2.2 scaffold idiom); **error** → `ErrorState` with ' +
     'retry; **scale** → the bounded count header + virtualized list. Every state is drawn in 4.2.1, not ' +
     'improvised.\n\n' +
+    '**See all issues — the issue-navigator link (mirror rung 1, Jira "View in Issue Navigator").** ' +
+    "The page-head toolbar carries a **View all issues** link that deep-links to the project's issue " +
+    'navigator — the **Story-2.5 `/issues` List/Tree** (every issue across the backlog AND all sprints, ' +
+    'sortable/filterable/paginated). VERIFIED against Jira (June 2026): the backlog/board does NOT ' +
+    'flatten its grouped planning view into a flat "all issues" list on the same page — it LINKS OUT to ' +
+    'the navigator with the board filter applied. Prodect already ships that navigator, so 4.2 reuses ' +
+    'it via a plain `<a>` (no new view, no flat list duplicated here — "no complexity for nothing"); ' +
+    'when Epic-6 board/saved filters land the link can carry the active filter query.\n\n' +
     '**Nav + a11y + tokens.** A new **Backlog** sidebar item + ⌘K entry (project-scoped, adjacent to ' +
     'Boards, with a `nav.backlog` i18n key); drag is keyboard-operable (dnd-kit keyboard sensor, per ' +
     '3.2); selection + counts are read as text (not colour/shape alone — finding #35); colour via ' +
@@ -156,6 +164,7 @@ export const story_4_2: PlanStory = {
     '- `pnpm test` — vitest (real Postgres) covers the 4.2.2 composition: `bulkAssignToSprint` / `bulkMoveToBacklog` move every selected issue in ONE transaction (partial failure rolls back), the same-project guard rejects a cross-project member of the batch, the batch size is bounded, and `createBacklogIssue` creates + appends a `backlog_rank` + optionally assigns in one tx and records a 1.4.6 revision.\n' +
     '- `pnpm test:e2e --grep backlog` — Playwright drives a real grooming session: the `/backlog` page renders the sprint containers + the ranked backlog; drag a row to reorder (its `backlog_rank` changes, neighbours do not); drag a row into a sprint (it leaves the backlog and the sprint count increments); multi-select two rows and bulk-move them to a sprint atomically; inline-create an issue into the backlog and into a sprint; the Start-sprint entry point is present (the flow is 4.4).\n' +
     "- **Backlog render check:** sign in as `zhuyue@prodect.co`, open the `prodect` project → the **Backlog** nav item leads to `/backlog`, which shows the sprint-planning container(s) above the ranked backlog list, each issue row with type icon / key / summary / epic chip / assignee / status, the empty **estimate slot** (the 4.3 seam, not a number yet) and the sprint header's empty **committed-points slot** (the 4.3 seam) + **velocity slot** (the 4.6 seam). Layout matches `design/backlog/backlog.mock.html`.\n" +
+    '- **View-all-issues check:** the page-head toolbar shows a **View all issues** link that navigates to the project\'s issue navigator (`/issues`, Story 2.5) — every issue across the backlog and all sprints in the sortable/filterable list; the backlog page does NOT rebuild a flat all-issues list (Jira\'s "View in Issue Navigator" mirror).\n' +
     "- **Rank check:** dragging an issue between two neighbours writes a single `backlog_rank` (4.1.4 `keyBetween`) that lands it strictly between them; no other row's rank changes; the order survives reload.\n" +
     '- **Assign check:** dragging a backlog issue into a sprint sets its `sprint_id` (it disappears from the backlog list, appears in the sprint container, the counts update); dragging it back to the backlog restores it in rank order.\n' +
     '- **Bulk check:** selecting multiple rows (click + shift-range + ⌘-toggle) and choosing "Move to sprint" moves them all atomically (one request); a forced mid-batch failure leaves NONE moved (transaction rollback), not a partial set.\n' +
@@ -303,7 +312,13 @@ export const story_4_2: PlanStory = {
         '**Route + nav.** A new `/backlog` route under `app/(authed)/backlog/` (project-scoped — the ' +
         'active project from the shell context, like `/boards`). Add a **Backlog** item to `SidebarNav` ' +
         '(adjacent to Boards) + an `AppCommandPalette` ⌘K entry, with a `nav.backlog` i18n key (and ' +
-        "every shipped locale's value). No other nav change.\n\n" +
+        "every shipped locale's value). No other nav change. The page-head toolbar carries a **View " +
+        'all issues** link (mirror rung 1 — Jira "View in Issue Navigator", VERIFIED June 2026): a ' +
+        "plain `<a>` to the project's issue navigator (`/issues`, the Story-2.5 List/Tree — every issue " +
+        'across the backlog AND all sprints). NOT a flat list rebuilt on this page (Jira links out to ' +
+        'the navigator, it does not flatten the grouped planning view) — the navigator already exists, ' +
+        'so this is a link, no new view; a `backlog.viewAllIssues` i18n key (every shipped locale). It ' +
+        'sits beside the disabled `[Filter]` seam (Epic 6) + `[+ New issue]`.\n\n' +
         "**Sprint-planning containers (read render).** Bind to 4.1.3 `listByProject` (the project's " +
         'sprints) + 4.1.4 `getSprintIssues` per sprint: render each as a collapsible container with the ' +
         'name + state `Pill` + date range + **issue count**, the ranked issue rows, the ' +
@@ -331,6 +346,7 @@ export const story_4_2: PlanStory = {
         '4.3 / 4.6 fill the seams); the Start-sprint FLOW (Story 4.4).\n\n' +
         '## Acceptance criteria\n\n' +
         '- A new `/backlog` route renders the sprint-planning containers above the ranked backlog list for the active project; a **Backlog** `SidebarNav` item + ⌘K entry (with a `nav.backlog` i18n key in every shipped locale) lead to it; no other nav change.\n' +
+        '- The page-head toolbar carries a **View all issues** link (a plain `<a>`, `backlog.viewAllIssues` i18n key) deep-linking to the project issue navigator (`/issues`, Story 2.5) — the Jira "View in Issue Navigator" affordance; NO flat all-issues list is rebuilt on this page.\n' +
         '- The backlog list binds to 4.1.4 `getBacklog` (cursor-paginated): a bounded count header, a `useRowWindow`-virtualized list (only visible rows in the DOM), and lazy-load-on-scroll via the cursor — NEVER a load-all read.\n' +
         '- Each sprint container renders name + state pill + date range + issue count + the committed-points SLOT + velocity SLOT (reserved empty seams, labelled, not computed) + the Start-sprint entry-point seam + the Create-sprint affordance; the backlog + sprint rows are the SAME work-items-vocabulary row with a RESERVED estimate slot.\n' +
         '- Empty / no-sprints / loading / error states render per `design/backlog/backlog.mock.html`; colour via `--el-*`, shape via element tokens, AA-safe; the backlog + each sprint container are labelled landmarks and counts read as text (finding #35).\n' +
@@ -340,6 +356,7 @@ export const story_4_2: PlanStory = {
         '- `design/backlog/backlog.mock.html` + `design-notes.md` (4.2.1) — the layout + seam spec this matches\n' +
         '- `app/(authed)/boards/page.tsx` + `app/(authed)/boards/_components/BoardColumn.tsx` (`useRowWindow`) / `BoardColumnPager.tsx` (3.2.2 / 3.2.5) — the page scaffold + virtualization + load-more idioms to reuse\n' +
         '- `app/(authed)/_components/SidebarNav.tsx` + `AppCommandPalette.tsx` — where the Backlog nav item + ⌘K entry land; the i18n `nav.*` key pattern\n' +
+        '- `app/(authed)/issues/` (Story 2.5 List/Tree — the issue navigator the **View all issues** toolbar link targets); Jira "View in Issue Navigator" is the mirror — link out, do not rebuild a flat list here\n' +
         '- Story 4.1.4 (`getBacklog` / `getSprintIssues`) + 4.1.3 (`listByProject` / `createSprint`) — the reads/CRUD this binds to; `components/ui/*` (`Pill`, `EmptyState`, `ErrorState`) + the work-items row\n' +
         '- finding #57 (bounded/virtualized list), #35 (not colour-alone), #54 (palette); `prodect-core/CLAUDE.md` (`--el-*` + element-shape rules)',
     },
