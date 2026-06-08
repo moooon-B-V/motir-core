@@ -123,9 +123,17 @@ export function BoardContainer({
   // the control sits in the header while its state stays with the board. (In an
   // isolated unit render with no page header, the slot is absent → the portal
   // renders nothing, which is fine — the E2E covers the real header.)
-  const [groupBySlot] = useState<HTMLElement | null>(() =>
-    typeof document === 'undefined' ? null : document.getElementById('board-toolbar-groupby-slot'),
-  );
+  // Capture the header group-by slot AFTER mount (an effect, NOT a lazy useState
+  // initializer): on a CLIENT navigation to /boards the slot is rendered in the
+  // SAME commit as this component, so it isn't in the DOM yet during the first
+  // render — a render-time lookup returns null and the portal never mounts (the
+  // group-by control vanishes). The effect runs post-commit, when the sibling
+  // slot exists, on both first load and client nav.
+  const [groupBySlot, setGroupBySlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- capturing a portal target that commits in the same render pass; it must be read post-commit, which is exactly what an effect is for (DOM sync)
+    setGroupBySlot(document.getElementById('board-toolbar-groupby-slot'));
+  }, []);
   const [board, setBoard] = useState<BoardProjectionDto | null>(null);
   const [status, setStatus] = useState<BoardStatus>('loading');
   // 'relaying' = a group-by change is fetching the new projection; the toolbar
