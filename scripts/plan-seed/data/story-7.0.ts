@@ -456,7 +456,7 @@ export const story_7_0: PlanStory = {
     {
       id: '7.0.6',
       title: '/ready page + sidebar nav entry + count badge',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 55,
