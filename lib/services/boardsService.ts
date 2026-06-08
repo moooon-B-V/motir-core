@@ -109,8 +109,21 @@ export const boardsService = {
     const statusIdByKey = new Map(statuses.map((s) => [s.key, s.id]));
     const spec = buildDefaultBoard(statuses.map(toWorkflowStatusDto));
 
+    // The seeded board is the project's DEFAULT (Story 3.7.2 — the one
+    // `/boards` opens when no `?board=` is given) and takes the first
+    // fractional-index position. `keyForAppend(null)` mints the same `a0` the
+    // migration backfills onto pre-3.7 boards, so a seeded board and a migrated
+    // board carry identical initial state. The partial unique index guarantees
+    // this stays the project's only default until 3.7.3's `setDefaultBoard`.
     const board = await boardRepository.create(
-      { workspaceId, projectId, name: spec.name, type: spec.type },
+      {
+        workspaceId,
+        projectId,
+        name: spec.name,
+        type: spec.type,
+        isDefault: true,
+        position: keyForAppend(null),
+      },
       tx,
     );
 
