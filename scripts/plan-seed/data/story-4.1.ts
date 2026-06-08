@@ -133,7 +133,7 @@ export const story_4_1: PlanStory = {
       id: '4.1.1',
       title:
         'Schema + migration — `Sprint` model + `SprintState` enum + `work_item.sprint_id` / `backlog_rank`, one-active-per-project partial-unique index, RLS, rank backfill',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
