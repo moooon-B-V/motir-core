@@ -413,7 +413,7 @@ export const story_7_0: PlanStory = {
     {
       id: '7.0.5',
       title: '`POST /api/ready/next` — dispatch endpoint (the BYOK agent consumer)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 25,
@@ -445,7 +445,13 @@ export const story_7_0: PlanStory = {
         '- The returned DTO carries `descriptionMd`, `contextRefs`, `blockerKeys` (the ' +
         'resolved keys of items that USED to block this one), and `runCommand`.\n' +
         '- Route imports no Prisma; the 4-layer gate holds.',
-      dependsOn: ['7.0.2', '7.0.3'],
+      // Depends on 7.0.4 too: the `projectsService.getByKey` / `projectRepository.findByIdentifier`
+      // resolver that turns the body's `projectKey` into a `projectId` is SHARED agent-dispatch
+      // infra both endpoints consume, and it is authored by 7.0.4 (the GET endpoint), not main.
+      // Recorded here so the DAG is honest (Principle #14) — see PRODECT_FINDINGS #64. The 7.0.5
+      // route adds ONLY `app/api/ready/next/route.ts`; it does not duplicate the resolver, so it
+      // stacks cleanly on 7.0.4 (merge 7.0.4 first; 7.0.5 then rebases green).
+      dependsOn: ['7.0.2', '7.0.3', '7.0.4'],
     },
     {
       id: '7.0.6',
