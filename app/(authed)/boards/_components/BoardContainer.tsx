@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   DndContext,
@@ -107,6 +108,13 @@ export function BoardContainer({
 }) {
   const t = useTranslations('boards');
   const { toast } = useToast();
+  // The selected board (Subtask 3.7.4) — the switcher writes `?board=<id>`; we
+  // read it and re-fetch the projection for that board. The GET resolves the
+  // board id server-side in Subtask 3.7.5 (until then it returns the project's
+  // default board regardless, so the switch updates the URL + refetches but the
+  // projection is the default's — the switcher UI is complete on its own).
+  const searchParams = useSearchParams();
+  const selectedBoardId = searchParams?.get('board') ?? null;
   const [board, setBoard] = useState<BoardProjectionDto | null>(null);
   const [status, setStatus] = useState<BoardStatus>('loading');
   // 'relaying' = a group-by change is fetching the new projection; the toolbar
@@ -129,7 +137,10 @@ export function BoardContainer({
 
   useEffect(() => {
     let active = true;
-    fetch('/api/board', { headers: { accept: 'application/json' } })
+    const url = selectedBoardId
+      ? `/api/board?boardId=${encodeURIComponent(selectedBoardId)}`
+      : '/api/board';
+    fetch(url, { headers: { accept: 'application/json' } })
       .then(async (res) => {
         if (res.ok) {
           const data = (await res.json()) as BoardProjectionDto;
@@ -157,7 +168,10 @@ export function BoardContainer({
     // `activeProjectId` is in the deps so switching project/workspace (→ a new
     // active project + router.refresh()) re-runs the fetch for the new project's
     // board instead of leaving the previous project's board on screen.
-  }, [reloadKey, issuesChangedAt, activeProjectId]);
+    // `selectedBoardId` is in the deps so the 3.7.4 switcher's `?board=<id>`
+    // change re-fetches that board's projection (re-lay; 3.7.5 wires the server
+    // resolution of the id).
+  }, [reloadKey, issuesChangedAt, activeProjectId, selectedBoardId]);
 
   const retry = useCallback(() => {
     setStatus('loading');
