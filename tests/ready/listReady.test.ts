@@ -19,8 +19,8 @@ import { truncateAuthTables } from '../helpers/db';
 // behaviour + the `extractContextRefs` parser that supplies the dispatch DTO's
 // `contextRefs` input. createTestProject auto-seeds the default workflow:
 // `done` + `cancelled` are category=done; the initial status is category=todo.
-// A work item is READY when its own status is non-terminal AND every
-// is_blocked_by blocker is terminal in its own project.
+// A work item is READY when its own status is in the `todo` category (not yet
+// started) AND every is_blocked_by blocker is terminal in its own project.
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -91,14 +91,20 @@ describe('listReady — readiness predicate', () => {
     expect(keys(res.items)).not.toContain(blocker.identifier);
   });
 
-  it('a done-category item is excluded (ready = not-yet-terminal)', async () => {
+  it('ready = todo-category only: in_progress and done items are both excluded', async () => {
     const fx = await makeWorkItemFixture();
-    const open = await make(fx, { title: 'open' });
+    const open = await make(fx, { title: 'open' }); // initial status = todo
+    const started = await make(fx, { title: 'started' });
     const finished = await make(fx, { title: 'finished' });
+    // `in_progress` (category in_progress) and `done` (category done) are both
+    // valid keys in the default workflow; a ready item is one to START, so
+    // neither belongs in the dispatch set.
+    await db.workItem.update({ where: { id: started.id }, data: { status: 'in_progress' } });
     await db.workItem.update({ where: { id: finished.id }, data: { status: 'done' } });
 
     const { items } = await workItemsService.listReady(fx.projectId, {}, fx.ctx);
     expect(keys(items)).toContain(open.identifier);
+    expect(keys(items)).not.toContain(started.identifier);
     expect(keys(items)).not.toContain(finished.identifier);
   });
 
@@ -180,7 +186,11 @@ describe('listReady — sort, filters, pagination', () => {
     const unassigned = await workItemsService.listReady(fx.projectId, { assigneeId: null }, fx.ctx);
     expect(keys(unassigned.items)).toEqual([nobody.identifier]);
 
-    const owned = await workItemsService.listReady(fx.projectId, { assigneeId: fx.ownerId }, fx.ctx);
+    const owned = await workItemsService.listReady(
+      fx.projectId,
+      { assigneeId: fx.ownerId },
+      fx.ctx,
+    );
     expect(keys(owned.items)).toEqual([mine.identifier]);
   });
 

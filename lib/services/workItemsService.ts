@@ -1424,14 +1424,15 @@ export const workItemsService = {
   /**
    * The READY SET of a project (Subtask 7.0.2) — the AI dispatch surface's list
    * read, cursor-paginated, returning the 7.0.3 `ReadyItemDto`s. A work item is
-   * "ready" when (a) its own status is non-terminal (not `category = done`) AND
-   * (b) every one of its `is_blocked_by` blockers is terminal in ITS OWN project
-   * (the 2.4.5 / finding #21 predicate, via the batched `getReadinessForItems` —
-   * no N+1).
+   * "ready" when (a) its own status is in the `todo` category (not-yet-started —
+   * a ready item is one to START, so `in_progress` and `done` are both excluded)
+   * AND (b) every one of its `is_blocked_by` blockers is terminal in ITS OWN
+   * project (the 2.4.5 / finding #21 predicate, via the batched
+   * `getReadinessForItems` — no N+1).
    *
    * Tenant gate first (cross-workspace / missing project → `ProjectNotFoundError`
    * → 404, no existence leak). Then ONE candidate read narrows by the cheap SQL
-   * facets (kind / assignee / priority / non-terminal-status) under the
+   * facets (kind / assignee / priority / todo-status) under the
    * `(priority desc, key asc)` sort + the cursor seek-after, fetching `limit + 1`
    * to detect a next page; readiness is applied over that bounded window. **A page
    * may be SHORTER than `limit`** when blocked candidates fall inside the window —

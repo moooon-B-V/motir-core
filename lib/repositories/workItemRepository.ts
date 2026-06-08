@@ -200,7 +200,9 @@ export const workItemRepository = {
 
   /**
    * The CANDIDATE ready set of a project (Subtask 7.0.2): non-archived work
-   * items whose OWN status is non-terminal (`workflow_status.category <> 'done'`),
+   * items whose OWN status is in the `todo` category (not-yet-started —
+   * `workflow_status.category = 'todo'`; a "ready" item is one to START, so
+   * `in_progress` and `done` are both excluded),
    * narrowed by the optional kind / assignee / priority facets and the cursor
    * seek-after, sorted `(priority DESC, key ASC)` and capped at `limit`. ONE
    * `$queryRaw` returning the full `work_item` row (`w.*`) PLUS the joined status
@@ -219,10 +221,11 @@ export const workItemRepository = {
    * (`priority < cp OR (priority = cp AND key > ck)`) resumes strictly after it.
    * `priority` is cast text→enum so the bound param compares against the column.
    *
-   * **Non-terminal via INNER JOIN.** The `JOIN workflow_status` (not LEFT) plus
-   * `ws.category <> 'done'` is the non-terminal filter AND the category source
-   * in one move: an item whose `status` references no live workflow row can't be
-   * "ready to start", so dropping it is correct. Explicit `projectId` +
+   * **Todo-only via INNER JOIN.** The `JOIN workflow_status` (not LEFT) plus
+   * `ws.category = 'todo'` is the not-yet-started filter AND the category source
+   * in one move: a ready item is one to START, so `in_progress` and `done` are
+   * both excluded, and an item whose `status` references no live workflow row
+   * can't be ready either, so dropping it is correct. Explicit `projectId` +
    * `workspaceId` gate (finding #26 — RLS is inert under the dev/CI superuser).
    * Read-only path → `db` singleton.
    */
@@ -273,7 +276,7 @@ export const workItemRepository = {
         WHERE w."projectId" = ${projectId}
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
-          AND ws."category" <> 'done'
+          AND ws."category" = 'todo'
           AND (${where})
         ORDER BY w."priority" DESC, w."key" ASC
         LIMIT ${filter.limit}`;
