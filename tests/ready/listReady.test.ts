@@ -370,6 +370,94 @@ describe('getNextReady — single dispatch', () => {
   });
 });
 
+describe('listReady — leaf-only (a container is not dispatchable, Subtask 7.0.10)', () => {
+  // Decision (card's open decision, decision-ladder rung 1): the GENERAL reading —
+  // ANY work item with ≥1 live child is a container, excluded from the ready set;
+  // the ready set is the dispatchable LEAVES of the execution tree. The reported
+  // rule named epic/story, but the kind-parent matrix (finding #41) lets a task/bug
+  // parent children too, so a childed task/bug is a container as well.
+  const create = (
+    fx: WorkItemFixture,
+    kind: 'epic' | 'story' | 'task' | 'bug' | 'subtask',
+    title: string,
+    opts: { parentId?: string; priority?: Priority } = {},
+  ) =>
+    workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind, title, parentId: opts.parentId, priority: opts.priority },
+      fx.ctx,
+    );
+
+  it('an epic/story WITH a child is excluded; the child (a leaf) stays ready', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await create(fx, 'epic', 'Epic');
+    const story = await create(fx, 'story', 'Story', { parentId: epic.id });
+
+    const { items } = await workItemsService.listReady(fx.projectId, {}, fx.ctx);
+    // epic has a child (the story) → container → excluded; story is a leaf → ready.
+    expect(keys(items)).toContain(story.identifier);
+    expect(keys(items)).not.toContain(epic.identifier);
+  });
+
+  it('a childless epic/story is ready; once it gains a child it drops out, and archiving that child brings it back', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await create(fx, 'story', 'Story');
+
+    // No children yet → the story is an un-decomposed leaf → ready.
+    let res = await workItemsService.listReady(fx.projectId, {}, fx.ctx);
+    expect(keys(res.items)).toContain(story.identifier);
+
+    // Break it down → it becomes a container → excluded; the child is ready.
+    const child = await create(fx, 'task', 'Child task', { parentId: story.id });
+    res = await workItemsService.listReady(fx.projectId, {}, fx.ctx);
+    expect(keys(res.items)).not.toContain(story.identifier);
+    expect(keys(res.items)).toContain(child.identifier);
+
+    // Archive the only child (soft-delete) → no LIVE children → leaf again → ready.
+    await db.workItem.update({ where: { id: child.id }, data: { archivedAt: new Date() } });
+    res = await workItemsService.listReady(fx.projectId, {}, fx.ctx);
+    expect(keys(res.items)).toContain(story.identifier);
+    expect(keys(res.items)).not.toContain(child.identifier); // archived → gone
+  });
+
+  it('GENERAL rule: a task with a child (bug) is also excluded — not epic/story-only', async () => {
+    const fx = await makeWorkItemFixture();
+    const task = await create(fx, 'task', 'Parent task');
+    const bug = await create(fx, 'bug', 'Child bug', { parentId: task.id });
+
+    const { items } = await workItemsService.listReady(fx.projectId, {}, fx.ctx);
+    expect(keys(items)).not.toContain(task.identifier);
+    expect(keys(items)).toContain(bug.identifier);
+  });
+
+  it('countReady matches the list when containers are present (single predicate, no disagreement)', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await create(fx, 'epic', 'Epic');
+    await create(fx, 'story', 'Story under epic', { parentId: epic.id }); // a leaf
+    await create(fx, 'task', 'Standalone task'); // a leaf
+
+    const { items } = await workItemsService.listReady(fx.projectId, {}, fx.ctx);
+    const { count } = await workItemsService.countReady(fx.projectId, {}, fx.ctx);
+    // Ready = the story leaf + the standalone task; the epic container is excluded.
+    expect(items.length).toBe(2);
+    expect(keys(items)).not.toContain(epic.identifier);
+    expect(count).toBe(items.length);
+  });
+
+  it('getNextReady never dispatches a container, even when it sorts first', async () => {
+    const fx = await makeWorkItemFixture();
+    // Story sorts ABOVE the task (highest > medium), but it is a container → skipped.
+    const story = await create(fx, 'story', 'High container', { priority: 'highest' });
+    const child = await create(fx, 'task', 'Low leaf', {
+      parentId: story.id,
+      priority: 'medium',
+    });
+
+    const dto = await workItemsService.getNextReady(fx.projectId, {}, fx.ctx);
+    expect(dto?.key).toBe(child.identifier);
+    expect(dto?.key).not.toBe(story.identifier);
+  });
+});
+
 describe('extractContextRefs (pure)', () => {
   it('reads the Context refs bullets (backtick path or plain text); ignores other sections', () => {
     expect(extractContextRefs(null)).toEqual([]);

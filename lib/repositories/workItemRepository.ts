@@ -228,6 +228,21 @@ export const workItemRepository = {
    * can't be ready either, so dropping it is correct. Explicit `projectId` +
    * `workspaceId` gate (finding #26 — RLS is inert under the dev/CI superuser).
    * Read-only path → `db` singleton.
+   *
+   * **Leaf-only — a container is not dispatchable (Subtask 7.0.10).** A work item
+   * that has been broken down into children is a planning CONTAINER, not a unit
+   * of work: you dispatch its children, never the container itself. So any item
+   * with ≥1 live (non-archived) child is excluded via
+   * `NOT EXISTS (… c."parentId" = w."id" …)`. This is the GENERAL reading of the
+   * reported bug (not epic/story-only): the ready set is the dispatchable LEAVES
+   * of the execution tree — the AI-native intent (decision-ladder rung 1; the
+   * deeper kind-parent matrix that lets a task/bug parent children is finding #41,
+   * so a childed task/bug is a container too). A `subtask` (the matrix's only leaf)
+   * can never have children, so it is unaffected. Archived children don't count
+   * (they're soft-deleted, mirroring the `w."archivedAt" IS NULL` row filter), so
+   * a parent whose children were all archived becomes dispatchable again. Kept
+   * inside the single query (no N+1) → `listReady` / `getNextReady` / `countReady`
+   * all agree automatically.
    */
   async findReadyCandidates(
     projectId: string,
@@ -277,6 +292,11 @@ export const workItemRepository = {
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
           AND ws."category" = 'todo'
+          AND NOT EXISTS (
+            SELECT 1 FROM "work_item" c
+             WHERE c."parentId" = w."id"
+               AND c."archivedAt" IS NULL
+          )
           AND (${where})
         ORDER BY w."priority" DESC, w."key" ASC
         LIMIT ${filter.limit}`;
