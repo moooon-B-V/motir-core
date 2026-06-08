@@ -36,9 +36,24 @@ import type {
   WorkItemForestRow,
   WorkItemTreeRow,
   RepoIssueFilter,
+  ReadyCandidateRow,
 } from '@/lib/repositories/workItemRepository';
 import { ISSUE_LIST_PAGE_SIZE } from '@/lib/issues/issueListView';
 import type { IssueSort } from '@/lib/issues/issueListView';
+import type { ReadyItemDto, ReadyItemDispatchDto } from '@/lib/dto/ready';
+import {
+  toReadyItemDto,
+  toReadyItemDispatchDto,
+  type ReadyItemContext,
+  type ReadyDispatchContext,
+} from '@/lib/mappers/readyMappers';
+import {
+  type ReadyListFilter,
+  clampReadyLimit,
+  decodeReadyCursor,
+  encodeReadyCursor,
+} from '@/lib/workItems/readyFilter';
+import { extractContextRefs } from '@/lib/markdown/contextRefs';
 import type {
   CreateWorkItemInput,
   IssueDetailDto,
@@ -1405,7 +1420,163 @@ export const workItemsService = {
     );
     return rows.map(toWorkItemSummaryDto);
   },
+
+  /**
+   * The READY SET of a project (Subtask 7.0.2) — the AI dispatch surface's list
+   * read, cursor-paginated, returning the 7.0.3 `ReadyItemDto`s. A work item is
+   * "ready" when (a) its own status is in the `todo` category (not-yet-started —
+   * a ready item is one to START, so `in_progress` and `done` are both excluded)
+   * AND (b) every one of its `is_blocked_by` blockers is terminal in ITS OWN
+   * project (the 2.4.5 / finding #21 predicate, via the batched
+   * `getReadinessForItems` — no N+1).
+   *
+   * Tenant gate first (cross-workspace / missing project → `ProjectNotFoundError`
+   * → 404, no existence leak). Then ONE candidate read narrows by the cheap SQL
+   * facets (kind / assignee / priority / todo-status) under the
+   * `(priority desc, key asc)` sort + the cursor seek-after, fetching `limit + 1`
+   * to detect a next page; readiness is applied over that bounded window. **A page
+   * may be SHORTER than `limit`** when blocked candidates fall inside the window —
+   * the cursor still advances past the whole window, so the agent walks the FULL
+   * set deterministically across pages. A malformed cursor throws
+   * `InvalidReadyCursorError` (→ 400); a valid cursor past the tail returns `[]`.
+   */
+  async listReady(
+    projectId: string,
+    filter: ReadyListFilter,
+    ctx: ServiceContext,
+  ): Promise<{ items: ReadyItemDto[]; nextCursor: string | null }> {
+    const { rows, nextCursor } = await pageReadyCandidates(projectId, filter, ctx);
+    return { items: rows.map((r) => toReadyItemDto(r, rowReadyContext(r))), nextCursor };
+  },
+
+  /**
+   * Dispatch ONE ready item (Subtask 7.0.2) — the BYOK `prodect run` /
+   * coding-agent consumer of `POST /api/ready/next`. Returns the FIRST ready
+   * item under the `(priority desc, key asc)` sort that is NOT in `excludeIds`,
+   * as the full `ReadyItemDispatchDto` (body + parsed context refs + resolved
+   * blocker keys + parent key + run command), or `null` when the filtered ready
+   * set is exhausted.
+   *
+   * It walks `listReady`'s candidate pages (SAME predicate + sort — the page and
+   * the agent can never disagree) until it finds a non-excluded item or runs out
+   * of cursor. In practice `excludeIds` is small and the top of the first page
+   * answers. Read-only: no claim row, no audit (those land with stub 7.6).
+   */
+  async getNextReady(
+    projectId: string,
+    filter: Omit<ReadyListFilter, 'limit' | 'cursor'> & { excludeIds?: string[] },
+    ctx: ServiceContext,
+  ): Promise<ReadyItemDispatchDto | null> {
+    const exclude = new Set(filter.excludeIds ?? []);
+    let cursor: string | undefined;
+    // Bounded by the finite candidate set — the cursor advances every iteration
+    // and `pageReadyCandidates` returns `nextCursor: null` at the tail.
+    for (;;) {
+      const { rows, nextCursor }: { rows: ReadyCandidateRow[]; nextCursor: string | null } =
+        await pageReadyCandidates(
+          projectId,
+          {
+            kinds: filter.kinds,
+            assigneeId: filter.assigneeId,
+            priority: filter.priority,
+            cursor,
+          },
+          ctx,
+        );
+      const chosen = rows.find((r) => !exclude.has(r.id));
+      if (chosen) return buildReadyDispatchDto(chosen);
+      if (!nextCursor) return null;
+      cursor = nextCursor;
+    }
+  },
 };
 
 /** Upper bound on the link-picker candidate list (the Combobox filters it). */
 const LINK_CANDIDATE_LIMIT = 50;
+
+/**
+ * Fetch ONE cursor-paginated window of READY candidate rows (Subtask 7.0.2) —
+ * the shared core of `listReady` (which maps the rows to list DTOs) and
+ * `getNextReady` (which needs the raw rows to build the dispatch DTO). Tenant-
+ * gates the project, fetches `limit + 1` candidates under the deterministic
+ * sort + cursor seek-after, then readiness-filters the bounded window via the
+ * batched `getReadinessForItems` (no N+1). `nextCursor` encodes the window's
+ * LAST candidate (ready or not), so paging advances past the whole window and a
+ * short ready page never strands the rest of the set.
+ */
+async function pageReadyCandidates(
+  projectId: string,
+  filter: ReadyListFilter,
+  ctx: ServiceContext,
+): Promise<{ rows: ReadyCandidateRow[]; nextCursor: string | null }> {
+  const project = await projectRepository.findById(projectId);
+  if (!project || project.workspaceId !== ctx.workspaceId) {
+    throw new ProjectNotFoundError(projectId);
+  }
+  const limit = clampReadyLimit(filter.limit);
+  const cursor = filter.cursor ? decodeReadyCursor(filter.cursor) : undefined;
+
+  const candidates = await workItemRepository.findReadyCandidates(projectId, project.workspaceId, {
+    kinds: filter.kinds,
+    assigneeId: filter.assigneeId,
+    priority: filter.priority,
+    cursor,
+    limit: limit + 1,
+  });
+
+  const hasMore = candidates.length > limit;
+  const windowRows = hasMore ? candidates.slice(0, limit) : candidates;
+  const readyMap = await workItemsService.getReadinessForItems(
+    windowRows.map((r) => r.id),
+    ctx,
+  );
+  const rows = windowRows.filter((r) => readyMap.get(r.id) === true);
+
+  const last = windowRows.at(-1);
+  const nextCursor =
+    hasMore && last ? encodeReadyCursor({ priority: last.priority, key: last.key }) : null;
+  return { rows, nextCursor };
+}
+
+/** The resolved status-category + assignee bits the 7.0.3 mapper needs beyond
+ *  the `WorkItem` row — both already carried on the candidate row (joined in the
+ *  single read), so this is a pure projection, no DB call. */
+function rowReadyContext(row: ReadyCandidateRow): ReadyItemContext {
+  return {
+    statusCategory: row.statusCategory,
+    assignee: row.assigneeId
+      ? {
+          id: row.assigneeId,
+          name: row.assigneeName ?? '',
+          email: row.assigneeEmail ?? '',
+          image: row.assigneeImage,
+        }
+      : null,
+  };
+}
+
+/**
+ * Decorate a ready candidate row with the dispatch-only payload (Subtask 7.0.2):
+ * the parent key, the resolved blocker keys, and the `contextRefs` parsed from
+ * the body's `## Context refs` section (finding #62 — Prodect stores refs in
+ * `descriptionMd`, not a column; this supplies REAL paths into the 7.0.3
+ * mapper's `contextRefs` input instead of the `[]` placeholder). For a READY
+ * item the blockers are all terminal — the dependency story the agent's prompt
+ * tells. The candidate row carries the full `WorkItem` body, so no re-read.
+ */
+async function buildReadyDispatchDto(row: ReadyCandidateRow): Promise<ReadyItemDispatchDto> {
+  const [parentRow, blockerLinks] = await Promise.all([
+    row.parentId ? workItemRepository.findById(row.parentId) : Promise.resolve(null),
+    workItemLinkRepository.findByFromItem(row.id, 'is_blocked_by'),
+  ]);
+  const blockerRows = (await workItemRepository.findByIds(blockerLinks.map((l) => l.toId)))
+    .slice()
+    .sort(byKeyAsc);
+
+  const ctx: ReadyDispatchContext = {
+    ...rowReadyContext(row),
+    parent: parentRow ? { identifier: parentRow.identifier } : null,
+    contextRefs: extractContextRefs(row.descriptionMd),
+  };
+  return toReadyItemDispatchDto(row, blockerRows, ctx);
+}

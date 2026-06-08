@@ -1,6 +1,7 @@
 import { Prisma, type WorkItem, type WorkItemKind, type WorkItemPriority } from '@prisma/client';
 import { db } from '@/lib/db';
 import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
+import type { ReadyCursor } from '@/lib/workItems/readyFilter';
 import {
   DepthLimitExceededError,
   IllegalParentTypeError,
@@ -106,6 +107,29 @@ export interface WorkItemTreeRow extends WorkItemListRow {
 }
 
 /**
+ * One CANDIDATE row of the ready set (Subtask 7.0.2): the FULL `work_item` row
+ * (so the `readyMappers` `toReadyItemDto(row: WorkItem, …)` can consume it
+ * directly — the 7.0.3 mapper takes a `WorkItem` + resolved context) PLUS the
+ * three bits resolved by the SAME single read so the service doesn't re-query:
+ * the status `category` (joined from `workflow_status` — the row's `status` is
+ * only the key) and the assignee's display name / email / avatar (left-joined
+ * from `user`). The service hands `row` + `{ statusCategory, assignee }` to the
+ * mapper.
+ *
+ * It is a CANDIDATE row, not a confirmed ready item: the per-blocker terminal
+ * classification (readiness) is computed in the service over a batched
+ * `getReadinessForItems` (finding #21 — "terminal" is a per-blocker-project
+ * property the single-op repo can't express), then the candidates are filtered
+ * to `ready === true`.
+ */
+export type ReadyCandidateRow = WorkItem & {
+  statusCategory: string;
+  assigneeName: string | null;
+  assigneeEmail: string | null;
+  assigneeImage: string | null;
+};
+
+/**
  * The whitelisted ORDER-BY expression per sort column (Subtask 2.5.8). The
  * key is a validated `IssueSortColumn` (parsed/clamped in `issueListView`), so
  * the SQL fragment is never derived from raw user input. `assignee`/`reporter`
@@ -172,6 +196,90 @@ export const workItemRepository = {
   async findByIds(ids: string[]): Promise<WorkItem[]> {
     if (ids.length === 0) return [];
     return db.workItem.findMany({ where: { id: { in: ids } } });
+  },
+
+  /**
+   * The CANDIDATE ready set of a project (Subtask 7.0.2): non-archived work
+   * items whose OWN status is in the `todo` category (not-yet-started —
+   * `workflow_status.category = 'todo'`; a "ready" item is one to START, so
+   * `in_progress` and `done` are both excluded),
+   * narrowed by the optional kind / assignee / priority facets and the cursor
+   * seek-after, sorted `(priority DESC, key ASC)` and capped at `limit`. ONE
+   * `$queryRaw` returning the full `work_item` row (`w.*`) PLUS the joined status
+   * `category` + assignee name/email/avatar — so the service feeds the 7.0.3
+   * mapper (`WorkItem` + resolved context) without any extra read (no N+1).
+   *
+   * Readiness (the per-blocker terminal check) is NOT applied here — it's a
+   * per-blocker-project property the service composes via `getReadinessForItems`
+   * over this candidate set (finding #21). So this returns CANDIDATES; the
+   * service filters to ready ones, which may shorten a page.
+   *
+   * **Sort + cursor.** The `priority` enum sorts by its declaration order
+   * (`lowest < … < highest`); `DESC` puts `highest` first, `key ASC` breaks
+   * ties (stable, monotonic, reseed-safe). The cursor is the (priority, key) of
+   * the previous page's last candidate; the seek-after predicate
+   * (`priority < cp OR (priority = cp AND key > ck)`) resumes strictly after it.
+   * `priority` is cast text→enum so the bound param compares against the column.
+   *
+   * **Todo-only via INNER JOIN.** The `JOIN workflow_status` (not LEFT) plus
+   * `ws.category = 'todo'` is the not-yet-started filter AND the category source
+   * in one move: a ready item is one to START, so `in_progress` and `done` are
+   * both excluded, and an item whose `status` references no live workflow row
+   * can't be ready either, so dropping it is correct. Explicit `projectId` +
+   * `workspaceId` gate (finding #26 — RLS is inert under the dev/CI superuser).
+   * Read-only path → `db` singleton.
+   */
+  async findReadyCandidates(
+    projectId: string,
+    workspaceId: string,
+    filter: {
+      kinds?: WorkItemKind[];
+      assigneeId?: string | null;
+      priority?: WorkItemPriority[];
+      cursor?: ReadyCursor;
+      limit: number;
+    },
+  ): Promise<ReadyCandidateRow[]> {
+    const preds: Prisma.Sql[] = [];
+    if (filter.kinds && filter.kinds.length > 0) {
+      const kinds = filter.kinds.map((k) => k as string);
+      preds.push(Prisma.sql`w."kind"::text = ANY(${kinds})`);
+    }
+    if (filter.priority && filter.priority.length > 0) {
+      const prios = filter.priority.map((p) => p as string);
+      preds.push(Prisma.sql`w."priority"::text = ANY(${prios})`);
+    }
+    if (filter.assigneeId === null) {
+      preds.push(Prisma.sql`w."assigneeId" IS NULL`);
+    } else if (filter.assigneeId !== undefined) {
+      preds.push(Prisma.sql`w."assigneeId" = ${filter.assigneeId}`);
+    }
+    if (filter.cursor) {
+      const cp = filter.cursor.priority;
+      const ck = filter.cursor.key;
+      preds.push(
+        Prisma.sql`(w."priority" < ${cp}::"work_item_priority" OR (w."priority" = ${cp}::"work_item_priority" AND w."key" > ${ck}))`,
+      );
+    }
+    const where = preds.length ? Prisma.join(preds, ' AND ') : Prisma.sql`TRUE`;
+
+    return db.$queryRaw<ReadyCandidateRow[]>`
+      SELECT w.*,
+             ws."category"::text AS "statusCategory",
+             au."name"           AS "assigneeName",
+             au."email"          AS "assigneeEmail",
+             au."image"          AS "assigneeImage"
+        FROM "work_item" w
+        JOIN "workflow_status" ws
+              ON ws."project_id" = w."projectId" AND ws."key" = w."status"
+        LEFT JOIN "user" au ON au."id" = w."assigneeId"
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND ws."category" = 'todo'
+          AND (${where})
+        ORDER BY w."priority" DESC, w."key" ASC
+        LIMIT ${filter.limit}`;
   },
 
   /**
