@@ -246,14 +246,18 @@ let big: BigSeed;
 let small: SmallSeed;
 
 test.beforeAll(async () => {
-  if (CAP === null || WINDOW_DAYS === null) {
-    throw new Error(
-      'board-at-scale requires the 3.5.1 cap/Done-age seam. Run it with the overrides set, e.g.\n' +
-        '  BOARD_ISSUE_CAP_OVERRIDE=40 DONE_AGE_WINDOW_DAYS_OVERRIDE=7 pnpm test:e2e --grep board-at-scale\n' +
-        '(it is excluded from the default `pnpm test:e2e` run and has its own seam-configured CI step).',
-    );
-  }
-  if (SEEDED_TOTAL <= CAP) {
+  // The spec structurally requires the 3.5.1 cap/Done-age seam (it can't reach
+  // the over-cap state with tens of rows otherwise). When it's unset — e.g. a
+  // plain local `pnpm test:e2e` — SKIP the whole block visibly rather than fail:
+  // CI excludes it from the default run (`--grep-invert`) and runs it in its own
+  // seam-configured step, so the real coverage is never silently dropped.
+  test.skip(
+    CAP === null || WINDOW_DAYS === null,
+    'board-at-scale needs the 3.5.1 seam — run `BOARD_ISSUE_CAP_OVERRIDE=40 ' +
+      'DONE_AGE_WINDOW_DAYS_OVERRIDE=7 pnpm test:e2e --grep board-at-scale` (or the dedicated CI step).',
+  );
+  // A set-but-too-high cap is an explicit misconfiguration of THIS run — fail loud.
+  if (SEEDED_TOTAL <= CAP!) {
     throw new Error(
       `board-at-scale: the seeded board total (${SEEDED_TOTAL}) must EXCEED the lowered cap ` +
         `(BOARD_ISSUE_CAP_OVERRIDE=${CAP}) so the over-cap banner shows. Lower the cap override.`,
