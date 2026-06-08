@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { usePathname, useRouter } from 'next/navigation';
 import { Check, Search, SlidersHorizontal, UserX, X } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
-import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
 import { ISSUE_TYPES, type IssueType } from '@/lib/issues/parentRules';
+import { DEFAULT_STATUS_KEYS } from '@/lib/workflows/defaultWorkflow';
 import { buildIssueListHref, type IssueListView, type IssueSort } from '@/lib/issues/issueListView';
 import {
   EMPTY_FILTER,
@@ -123,6 +124,16 @@ export interface IssueFilterBarProps {
 export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueFilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const t = useTranslations('issueViews');
+  const tType = useTranslations('labels.issueType');
+  const tStatus = useTranslations('labels.defaultStatus');
+  // Protected default statuses (To Do · Blocked · In Progress · In Review · Done
+  // · Cancelled) cannot be renamed, so their canonical labels are translated by
+  // key; a project's custom status renders its stored, user-authored `label`
+  // verbatim (user content, not translatable) — the same rule the rest of the app
+  // follows for statuses.
+  const statusLabel = (s: WorkflowStatusDto) =>
+    DEFAULT_STATUS_KEYS.has(s.key) ? tStatus(s.key) : s.label;
   const [open, setOpen] = useState(false);
   const [memberQuery, setMemberQuery] = useState('');
 
@@ -203,7 +214,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
       <Popover.Trigger asChild>
         <button
           type="button"
-          aria-label={active ? `Filter — ${count} active` : 'Filter'}
+          aria-label={active ? t('filterActiveAria', { count }) : t('filter')}
           className={cn(
             'inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border px-3 font-sans text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
             active ? 'border-(--el-accent) bg-(--el-tint-lavender)' : 'border-(--el-border)',
@@ -213,7 +224,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
             className={cn('h-4 w-4', active ? 'text-(--el-accent)' : 'text-(--el-text-muted)')}
             aria-hidden
           />
-          Filter
+          {t('filter')}
           {active ? (
             <span
               aria-hidden
@@ -227,7 +238,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
 
       <Popover.Content
         role="dialog"
-        aria-label="Filter work items"
+        aria-label={t('filterDialogLabel')}
         align="start"
         width={320}
         className="p-0"
@@ -235,7 +246,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
         {/* Header — title + Clear (disabled until something is selected) */}
         <div className="flex items-center justify-between gap-2 border-b border-(--el-border) px-3 py-2.5">
           <span className="font-mono text-[11px] font-semibold tracking-wider text-(--el-text-muted) uppercase">
-            Filter
+            {t('filter')}
           </span>
           <button
             type="button"
@@ -253,7 +264,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
             )}
           >
             <X className="h-3.5 w-3.5" aria-hidden />
-            Clear filters
+            {t('filterClearAll')}
           </button>
         </div>
 
@@ -268,23 +279,23 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
               type="text"
               value={text}
               onChange={(e) => onTextChange(e.target.value)}
-              placeholder="Find by ID or title…"
-              aria-label="Filter by text"
+              placeholder={t('filterFindPlaceholder')}
+              aria-label={t('filterByText')}
               className="h-(--height-control) w-full rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) pr-2.5 pl-8 font-sans text-sm text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             />
           </div>
 
           {/* KIND */}
           <div className="border-t border-(--el-border) py-1.5 first:border-t-0">
-            <FacetLabel label="Kind" count={optimistic.kinds.length} />
-            <div role="listbox" aria-label="Kind" aria-multiselectable="true">
+            <FacetLabel label={t('filterKind')} count={optimistic.kinds.length} />
+            <div role="listbox" aria-label={t('filterKind')} aria-multiselectable="true">
               {ISSUE_TYPES.map((type: IssueType) => (
                 <OptionRow
                   key={type}
                   selected={optimistic.kinds.includes(type)}
                   onToggle={() => apply(toggleKind(filterRef.current, type))}
                   glyph={<IssueTypeIcon type={type} className="h-4 w-4" />}
-                  label={ISSUE_TYPE_META[type].label}
+                  label={tType(type)}
                 />
               ))}
             </div>
@@ -292,15 +303,15 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
 
           {/* STATUS */}
           <div className="border-t border-(--el-border) py-1.5">
-            <FacetLabel label="Status" count={optimistic.statuses.length} />
-            <div role="listbox" aria-label="Status" aria-multiselectable="true">
+            <FacetLabel label={t('status')} count={optimistic.statuses.length} />
+            <div role="listbox" aria-label={t('status')} aria-multiselectable="true">
               {statuses.map((s) => (
                 <OptionRow
                   key={s.id}
                   selected={optimistic.statuses.includes(s.key)}
                   onToggle={() => apply(toggleStatus(filterRef.current, s.key))}
                   glyph={<StatusDot status={s} />}
-                  label={s.label}
+                  label={statusLabel(s)}
                 />
               ))}
             </div>
@@ -309,7 +320,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
           {/* ASSIGNEE */}
           <div className="border-t border-(--el-border) py-1.5">
             <FacetLabel
-              label="Assignee"
+              label={t('assignee')}
               count={optimistic.assigneeIds.length + (optimistic.includeUnassigned ? 1 : 0)}
             />
             <div className="relative mx-1 mt-0.5 mb-1">
@@ -321,12 +332,12 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
                 type="text"
                 value={memberQuery}
                 onChange={(e) => setMemberQuery(e.target.value)}
-                placeholder="Search members…"
-                aria-label="Search members"
+                placeholder={t('filterSearchMembers')}
+                aria-label={t('filterSearchMembersAria')}
                 className="h-8 w-full rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) pr-2.5 pl-[30px] font-sans text-[13px] text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
               />
             </div>
-            <div role="listbox" aria-label="Assignee" aria-multiselectable="true">
+            <div role="listbox" aria-label={t('assignee')} aria-multiselectable="true">
               <OptionRow
                 selected={optimistic.includeUnassigned}
                 onToggle={() => apply(toggleUnassigned(filterRef.current))}
@@ -335,7 +346,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
                     <UserX className="h-3.5 w-3.5" aria-hidden />
                   </span>
                 }
-                label="Unassigned"
+                label={t('unassigned')}
               />
               {memberMatches.map((m) => (
                 <OptionRow
@@ -349,7 +360,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
               ))}
               {memberMatches.length === 0 ? (
                 <p className="px-(--spacing-control-x) py-(--spacing-control-y) text-sm text-(--el-text-muted)">
-                  No matching members.
+                  {t('filterNoMembers')}
                 </p>
               ) : null}
             </div>
