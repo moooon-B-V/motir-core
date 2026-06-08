@@ -126,7 +126,7 @@ export const story_3_5: PlanStory = {
     {
       id: '3.5.1',
       title: 'At-scale board fixture + cap/Done-age test seam',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 25,
