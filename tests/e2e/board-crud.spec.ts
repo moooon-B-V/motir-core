@@ -134,6 +134,15 @@ async function openManageMenu(page: Page, boardId: string): Promise<void> {
   await expect(page.getByTestId(`board-switcher-manage-menu-${boardId}`)).toBeVisible();
 }
 
+// Open a specific board with a FULL page load (the board-swimlanes pattern), so
+// the projection is fully settled on that board before the test acts on its
+// config — avoids the post-create client-switch re-lay race where a config write
+// races the in-flight board switch.
+async function gotoBoard(page: Page, boardId: string): Promise<void> {
+  await page.goto(`/boards?board=${boardId}`);
+  await expect(page.getByTestId('board-switcher-trigger')).toBeVisible({ timeout: 15_000 });
+}
+
 // Switch the active board through the switcher (pick row), waiting for `?board=`.
 async function switchToBoard(page: Page, boardId: string): Promise<void> {
   await page.getByTestId('board-switcher-trigger').click();
@@ -227,17 +236,22 @@ test.describe('board-crud @smoke', () => {
     const defaultBoard = (await listBoards(page))[0]!;
     const triage = await createBoardViaUI(page, 'Triage');
 
-    // Group board B (Triage, now active) by Assignee → it re-lays into swimlanes.
+    // Land on board B with a FULL load (not the post-create client switch) so the
+    // projection is fully settled on Triage before we change its config — the
+    // board-swimlanes.spec pattern. (A group-by fired mid-switch would PATCH the
+    // board whose projection is still mounted, not the one the URL selects.)
+    await gotoBoard(page, triage.id);
+    // Group board B (Triage) by Assignee → it re-lays into swimlanes.
     await setGroupBy(page, 'Assignee');
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
 
-    // The default board A is UNAFFECTED — switch to it and it's still flat.
-    await switchToBoard(page, defaultBoard.id);
+    // The default board A is UNAFFECTED — open it (full load) and it's still flat.
+    await gotoBoard(page, defaultBoard.id);
     await expect(page.getByTestId('board')).toBeVisible();
     await expect(page.getByTestId('swimlane-board')).toHaveCount(0);
 
     // Back to board B → its group-by persisted (still swimlaned): per-board config.
-    await switchToBoard(page, triage.id);
+    await gotoBoard(page, triage.id);
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
   });
 
