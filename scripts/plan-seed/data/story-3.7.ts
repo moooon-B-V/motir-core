@@ -287,7 +287,7 @@ export const story_3_7: PlanStory = {
       id: '3.7.8',
       title:
         'Board-scoped settings — thread the selected board through the settings page + entries',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
