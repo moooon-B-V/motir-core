@@ -28,6 +28,28 @@ export const projectRepository = {
   },
 
   /**
+   * Read a project by its workspace-unique `identifier` (the `PROD`-style key
+   * that prefixes work-item keys). Backs `projectsService.getByKey` — the
+   * `?projectKey=` resolution the agent-dispatch endpoints (7.0.4 / 7.0.5)
+   * use. Keyed on the `@@unique([workspaceId, identifier])` compound, so the
+   * lookup is inherently workspace-scoped: a project living in another
+   * workspace is simply not found (the no-existence-leak contract is enforced
+   * one layer up, in the service). Optionally takes `tx` so the read sees the
+   * project RLS policy's workspace GUC under the non-bypass prodect_app role,
+   * exactly like `findById`.
+   */
+  async findByIdentifier(
+    workspaceId: string,
+    identifier: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Project | null> {
+    const client = tx ?? db;
+    return client.project.findUnique({
+      where: { workspaceId_identifier: { workspaceId, identifier } },
+    });
+  },
+
+  /**
    * Non-archived projects in a workspace, ordered by createdAt asc so the
    * first-created project lands first in any list surface. Optionally takes
    * `tx` so the read happens inside withWorkspaceContext when the caller
