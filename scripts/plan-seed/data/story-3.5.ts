@@ -58,7 +58,7 @@ import type { PlanStory } from '../types';
 export const story_3_5: PlanStory = {
   id: '3.5',
   title: 'Tests — the cross-cutting board journey at scale (load model · drag · swimlanes · WIP)',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The Epic-3 **integration** test story: the COMBINED board journey — bounded load → ' +
     'virtualized render → drag-as-transition → swimlanes → WIP — exercised end-to-end against a ' +
@@ -252,7 +252,7 @@ export const story_3_5: PlanStory = {
       id: '3.5.3',
       title:
         'At-scale interaction E2E — drag-as-transition · snap-back · swimlanes · cross-lane reassign · WIP',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 25,
