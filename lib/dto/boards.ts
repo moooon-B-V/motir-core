@@ -245,15 +245,3 @@ export interface BoardProjectionDto {
    */
   truncated: boolean;
 }
-
-/**
- * @deprecated Retired in Subtask 3.8.2 — the board loads the whole bounded set,
- * so the per-column lazy "load more" page (and its `GET …/columns/[id]/cards`
- * route + `boardsService.loadColumnCards` producer) is gone. The type is kept
- * one PR longer because the flat/swimlane UI's load-more plumbing still
- * references it; it is removed in 3.8.3 / 3.8.5 along with that plumbing.
- */
-export interface PagedColumnCardsDto {
-  cards: BoardCardDto[];
-  cursor: string | null;
-}

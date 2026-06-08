@@ -27,7 +27,7 @@ import type {
   BoardProjectionDto,
   BoardSwimlaneGroupByDto,
 } from '@/lib/dto/boards';
-import type { MoveCardResultDto, PagedColumnCardsDto } from '@/lib/dto/boards';
+import type { MoveCardResultDto } from '@/lib/dto/boards';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { useCreateIssue } from '../../_components/CreateIssueProvider';
 import { usePeekOpen } from '../../issues/_components/IssueQuickView';
@@ -59,7 +59,6 @@ import {
   resolveCellMove,
   setCardSwimlaneKey,
 } from './boardSwimlanes';
-import { appendColumnPage } from './boardPaging';
 
 // The board client container (Subtask 3.2.2 · drag-drop 3.2.4 · scale 3.2.5 ·
 // swimlanes + WIP 3.3). A PURE CONSUMER of the Story-3.1/3.3 board API: it
@@ -341,48 +340,6 @@ function BoardDnd({
     columnsRef.current = columns;
   }, [columns]);
   const snapshotRef = useRef<BoardColumnDto[] | null>(null);
-
-  // Per-column load-more plumbing (3.2.5/3.2.8). The FLAT board no longer uses it
-  // (3.8.3 dropped its "Load more"/sentinel — the column renders the whole bounded
-  // 3.8.2 set, virtualized); it stays ONLY for the `SwimlaneBoard` footer, which is
-  // removed in 3.8.5 along with this `loadMore`/`paging`/`appendColumnPage` plumbing
-  // and the now-permanently-null `BoardColumnDto.cursor`. Inert in the meantime —
-  // 3.8.2 made `cursor` always `null`, so `loadMore` early-returns and no
-  // "Load more" ever renders — but kept wired so the swimlane prop contract holds
-  // until 3.8.5 lands.
-  const [paging, setPaging] = useState<Record<string, 'loading' | 'error'>>({});
-  const inFlightRef = useRef<Set<string>>(new Set());
-
-  const loadMore = useCallback(
-    (columnId: string) => {
-      const col = columnsRef.current.find((c) => c.id === columnId);
-      if (!col || col.cursor === null || inFlightRef.current.has(columnId)) return;
-      inFlightRef.current.add(columnId);
-      const cursor = col.cursor;
-      setPaging((prev) => ({ ...prev, [columnId]: 'loading' }));
-      const url =
-        `/api/board/columns/${encodeURIComponent(columnId)}/cards` +
-        `?boardId=${encodeURIComponent(board.boardId)}&cursor=${encodeURIComponent(cursor)}`;
-      fetch(url, { headers: { accept: 'application/json' } })
-        .then(async (res) => {
-          if (!res.ok) throw new Error(`load-more ${res.status}`);
-          const page = (await res.json()) as PagedColumnCardsDto;
-          setColumns((prev) => appendColumnPage(prev, columnId, page));
-          setPaging((prev) => {
-            const next = { ...prev };
-            delete next[columnId];
-            return next;
-          });
-        })
-        .catch(() => {
-          setPaging((prev) => ({ ...prev, [columnId]: 'error' }));
-        })
-        .finally(() => {
-          inFlightRef.current.delete(columnId);
-        });
-    },
-    [board.boardId],
-  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
