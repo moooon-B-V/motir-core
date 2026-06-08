@@ -165,13 +165,13 @@ the Jira behaviour — Story 3.1.4 surfaces them, never drops them). Rendered as
 status names as neutral pills + a link to the workflow admin (Story 2.2.5).
 **Absent when `unmappedStatuses` is empty.**
 
-> **CTA reality (3.2.6 build note):** the mock drew a `Map columns →` link, but a
-> column→status **mapping admin is not in v1** (Story 3.1/3.2/3.3 defer "board
-> CRUD / column-remap admin"; Story 3.1 deliberately leaves a later-added status
-> **unmapped, not auto-columned**). So the shipped link is labelled
-> **`Manage statuses →`** and points at the workflow editor — the real place to
-> review / rename / remove a stray status — rather than promising a mapping
-> action that doesn't exist. When a board-column admin lands, repoint + relabel.
+> **CTA reality (updated by Subtask 3.6.3):** the board-column admin now exists
+> (`settings/project/board`, Story 3.6 — the column manager + status mapping), so
+> the tray's link finally does what this mock drew: it reads **`Map columns →`**
+> and deep-links to Board settings. This SUPERSEDES the interim 3.2.6 build note,
+> where the link was labelled `Manage statuses →` and pointed at the workflow
+> editor while no mapping admin existed. The `boards` i18n key was renamed
+> `unmappedManageStatuses` → `unmappedMapColumns` (en + zh) to match.
 
 ## States (panels 6) — completeness, not the happy path only
 
