@@ -256,20 +256,19 @@ test.describe('board-swimlanes @smoke', () => {
     await expect(page.getByTestId(`lane-cell-${todoColId}-${ownerId}`)).toHaveCount(0);
   });
 
-  // QUARANTINED (test.fixme) — this E2E reproduces a REAL product bug in the
-  // shipped 3.3.5 swimlane board, NOT a test defect: a cross-lane drag
-  // intermittently crashes the board with React's "Maximum update depth
-  // exceeded" inside `LaneCell` (`useRowWindow`), because the cell measures
-  // against a scroll-ancestor with no explicit scroll element and its content
-  // height oscillates (windowing ↔ natural-flow) under the drag-induced
-  // re-renders, looping `recompute`/`setMeasured`. See PRODECT_FINDINGS #61. The
-  // cross-lane reassign LOGIC itself is fully covered by the 3.3.5 reducer unit
-  // tests (`tests/components/board-swimlanes.test.ts`: resolveCellMove,
-  // reassignPatchForLane, the independent-revert reducers). The body below is
-  // correct and ready — the bug-fix subtask flips `test.fixme` back to `test`
-  // once LaneCell no longer loops under drag. (Authored + verified end-to-end
-  // against the real stack while diagnosing the loop.)
-  test.fixme('a cross-lane drag reassigns the assignee with no status change; a drop into the catch-all unassigns', async ({
+  // Cross-lane reassign — UN-QUARANTINED by Subtask 3.3.8. This E2E reproduced a
+  // REAL product bug in the shipped 3.3.5 swimlane board: a cross-lane drag
+  // intermittently crashed the board with React's "Maximum update depth
+  // exceeded" inside `LaneCell` (`useRowWindow`), because the cell measured
+  // against an inferred scroll-ancestor (no explicit scroll element) and its
+  // content height oscillated (windowing ↔ natural-flow) under the drag-induced
+  // re-renders, looping `recompute`/`setMeasured`. See PRODECT_FINDINGS #61.
+  // 3.3.8 fixes it by disabling per-cell windowing in `LaneCell`
+  // (`getScrollElement: () => null` → the hook's render-all degrade), so the
+  // height can no longer oscillate. This test was shipped by 3.3.7 as
+  // `test.fixme` (body intact + verified end-to-end while diagnosing the loop);
+  // 3.3.8 flips it back to `test` as the fix's acceptance proof.
+  test('a cross-lane drag reassigns the assignee with no status change; a drop into the catch-all unassigns', async ({
     page,
   }) => {
     await signUp(page, OWNER_EMAIL);
@@ -332,7 +331,10 @@ test.describe('board-swimlanes @smoke', () => {
         async () => {
           const b = await getBoard(page.request);
           const card = b.columns.flatMap((c) => c.cards).find((c) => c.id === owned);
-          return card?.assigneeId ?? 'STILL_SET';
+          // Distinguish "card missing" from "assigneeId === null"; a bare
+          // `card?.assigneeId ?? 'X'` would turn a correct null into 'X' and make
+          // `.toBeNull()` unsatisfiable.
+          return card ? card.assigneeId : 'CARD_NOT_FOUND';
         },
         { message: 'a drop into the catch-all unassigned the card' },
       )

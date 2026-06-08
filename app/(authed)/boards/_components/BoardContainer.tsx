@@ -54,10 +54,8 @@ import {
   cellOfOverId,
   laneKeyOfCard,
   moveCardToColumn,
-  parseCellId,
   reassignPatchForLane,
-  relocateCardToCell,
-  resolveCellMove,
+  resolveSwimlaneDrop,
   setCardSwimlaneKey,
 } from './boardSwimlanes';
 
@@ -600,21 +598,20 @@ function BoardDnd({
         return;
       }
 
-      // SWIMLANE (3.3.5) — relocate into the target (column × lane) cell.
+      // SWIMLANE (3.3.5 + 3.3.8) — DO NOT relocate the card across cells during
+      // the drag. A `(column × lane)` cell has no fixed height, so moving the card
+      // in/out resizes the source + target cells; dnd-kit then re-measures, the
+      // closest-corners `over` flips to the resized neighbour, `onDragOver` fires
+      // again, and the relocate → resize → re-measure cycle loops synchronously
+      // until React throws "Maximum update depth exceeded" mid-drag
+      // (PRODECT_FINDINGS #61; the flat board above is immune because its columns
+      // are fixed-height internal scrollers). So here we only track the hovered
+      // lane for the drop highlight; the actual move is resolved ONCE on drop
+      // (handleDragEnd → resolveSwimlaneDrop), and the DragOverlay provides the
+      // in-flight visual feedback.
       const targetCell = cellOfOverId(cols, overId);
       if (!targetCell) return;
       setOverLaneKey(targetCell.laneKey);
-      // Hovering a CARD (not the cell body / itself) inserts before it; a cell
-      // droppable id resolves to an append.
-      const overCardId = parseCellId(overId) !== null || overId === activeId ? null : overId;
-      const next = relocateCardToCell(
-        cols,
-        activeId,
-        targetCell.columnId,
-        targetCell.laneKey,
-        overCardId,
-      );
-      if (next !== cols) setColumns(next);
     },
     [swimlaned],
   );
@@ -669,12 +666,16 @@ function BoardDnd({
         return;
       }
 
-      // SWIMLANE (3.3.5).
-      const move = resolveCellMove(snapshot, cols, activeId);
-      if (!move) {
+      // SWIMLANE (3.3.5 + 3.3.8) — resolve the move from the drop's `over` target.
+      // The card was NOT relocated live on dragOver (it looped — see
+      // handleDragOver), so move it into the target cell ONCE here and derive the
+      // structured move from snapshot → relocated.
+      const resolved = resolveSwimlaneDrop(snapshot, String(over.id), activeId);
+      if (!resolved) {
         setColumns(snapshot);
         return;
       }
+      const { move, relocated } = resolved;
       const { columnChanged, laneChanged } = move;
       const rankChanged =
         !columnChanged && !laneChanged && move.originIndexInCell !== move.finalIndexInCell;
@@ -684,11 +685,12 @@ function BoardDnd({
         return;
       }
 
-      // Optimistic count transfer for a column change, then read the settled card.
+      // Apply the optimistic move (+ count transfer for a column change), then
+      // read the settled card.
       const optimistic = columnChanged
-        ? transferCount(cols, move.originColId, move.targetColId)
-        : cols;
-      if (optimistic !== cols) setColumns(optimistic);
+        ? transferCount(relocated, move.originColId, move.targetColId)
+        : relocated;
+      setColumns(optimistic);
       const card = findCard(optimistic, activeId);
       if (!card) {
         setColumns(snapshot);
@@ -767,8 +769,11 @@ function BoardDnd({
           const colId = columnOfOverId(cols, String(over.id));
           return t('announcementDropped', { key, col: colName(cols, colId) });
         }
+        // Resolve from the drop's `over` (the card isn't relocated live in
+        // swimlane mode anymore — 3.3.8), against the pre-drag snapshot.
         const move = snapshotRef.current
-          ? resolveCellMove(snapshotRef.current, cols, String(active.id))
+          ? (resolveSwimlaneDrop(snapshotRef.current, String(over.id), String(active.id))?.move ??
+            null)
           : null;
         if (!move) return undefined;
         const col = colName(cols, move.targetColId);
