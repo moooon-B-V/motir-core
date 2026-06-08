@@ -9,21 +9,10 @@ import type { PlanStory } from '../types';
  */
 export const STUB_STORIES: PlanStory[] = [
   // ── Epic 3: Boards ─────────────────────────────────────────────────────────
-  // 3.1, 3.2, 3.3, 3.6 are fully expanded → data/story-3.1.ts … data/story-3.6.ts
-  // (assembled in index.ts). The Scrum board (formerly Story 3.4) moved to
-  // Epic 4 as Story 4.5 per `notes.html` mistake #32 — see `data/story-4.5.ts`.
-  {
-    id: '3.5',
-    title: 'Tests — board projection, drag transitions, WIP',
-    status: 'planned',
-    descriptionMd:
-      'Vitest over the projection + transition validation; Playwright over drag-drop happy path + ' +
-      'illegal-move snapback + WIP warning. The cross-cutting AT-SCALE journey that 3.2.7 / 3.3.7 ' +
-      'defer here MUST reflect the Story-3.8 load model — NO per-column "Load more"; the board loads ' +
-      'the filtered set + virtualizes + shows the over-cap "refine filter" warning + the Done-age ' +
-      'window (not the retired cursor paging).',
-    items: [],
-  },
+  // Epic 3 is fully expanded — every story is a data/story-3.*.ts module
+  // (3.1, 3.2, 3.3, 3.5, 3.6, 3.7, 3.8), assembled in index.ts; no Epic-3 stubs
+  // remain. The Scrum board (formerly Story 3.4) moved to Epic 4 as Story 4.5
+  // per `notes.html` mistake #32 — see `data/story-4.5.ts`.
 
   // ── Epic 4: Agile planning ────────────────────────────────────────────────
   {
@@ -207,6 +196,26 @@ export const STUB_STORIES: PlanStory[] = [
       'rule.',
     items: [],
   },
+  {
+    id: '6.8',
+    title: 'Edit project details + change project key (with old-key redirects)',
+    status: 'planned',
+    descriptionMd:
+      'Project-admin editing of project details (name, key, avatar) in the project settings area ' +
+      '(sits alongside 6.5). The load-bearing piece is **changing the project key mid-project, ' +
+      'Jira-faithfully** (decision-ladder rung 1 — Atlassian "Editing a project key"): on a key ' +
+      'change, re-render every issue identifier (`project.identifier` PROD → NIF; the per-project ' +
+      '`work_item.key` numbers are preserved, so PROD-42 → NIF-42) and **keep the old key working ' +
+      'as a permanent redirect** — old links, REST calls, and JQL/saved filters that reference the ' +
+      'old key all still resolve to the new one. Implementation notes: the current schema stores a ' +
+      'denormalized `work_item.identifier` ("PROD-42") per row, so a key change is a bulk re-write ' +
+      'of that column + a search re-index (Jira\'s "background re-index"); and it needs a NEW ' +
+      '`project_key_alias` (key-history) table — which the schema lacks today — so historical keys ' +
+      'redirect. Guards: key format + cross-project uniqueness (incl. against existing aliases), ' +
+      'admin-only, atomic rename in one transaction. This is the capability the 8.7 rebrand uses, ' +
+      'and it turns the PROD-vs-NIF question into a reversible setting rather than a migration.',
+    items: [],
+  },
 
   // ── Epic 7: AI Planning Layer ─────────────────────────────────────────────
   {
@@ -312,8 +321,10 @@ export const STUB_STORIES: PlanStory[] = [
     title: 'Marketing site + brand mark',
     status: 'planned',
     descriptionMd:
-      'Landing page + the deferred wordmark/logomark decision (per the brand-mark-deferral ' +
-      'principle — see PRODECT.md "Current state").',
+      'Landing page + the **nifer** wordmark/logomark (the name is now decided — the product was ' +
+      'renamed Prodect → nifer; see notes.html mistake #34 and story 8.7). Also bakes in ' +
+      'entity-signal SEO so search engines learn the brand fast: Organization/WebSite structured ' +
+      'data, Google Search Console, and early directory listings (G2 / Product Hunt / GitHub).',
     items: [],
   },
   {
@@ -329,8 +340,36 @@ export const STUB_STORIES: PlanStory[] = [
     title: 'Production hardening + observability',
     status: 'planned',
     descriptionMd:
-      'Deploy, domain + SSL, transactional email backend, analytics, error monitoring, backups, ' +
-      'rate limits, day-1 admin tools.',
+      'Deploy, domain + SSL (the nifer.co domain is already registered), transactional email ' +
+      'backend, analytics, error monitoring, backups, rate limits, day-1 admin tools.',
+    items: [],
+  },
+  {
+    id: '8.6',
+    title: 'Go-to-market strategy',
+    status: 'planned',
+    descriptionMd:
+      'The launch *strategy* (distinct from 8.3, which builds the site artifact): positioning for ' +
+      'the first audience — individuals + small companies; launch channels and the open-core ' +
+      'growth loop (Product Hunt / Hacker News / GitHub stars → community); pricing strategy at ' +
+      'the free-PM-core ↔ paid-AI-layer boundary; content/SEO and a pre-launch waitlist. Mostly ' +
+      '`type: decision`/`manual` founder work routed through the queue.',
+    items: [],
+  },
+  {
+    id: '8.7',
+    title: 'Rebrand cutover: Prodect → nifer',
+    status: 'planned',
+    descriptionMd:
+      'One-time cross-repo rename now that the name is decided + secured (nifer.co registered, ' +
+      'EUIPO trademark filed; see notes.html mistake #34). NOT a blind find-replace — touches ' +
+      'prodect-core (UI copy, package names, app/SEO metadata, email templates/chrome), ' +
+      'prodect-ai, prodect-meta (PRODECT.md → NIFER.md), the plan seed (@prodect.co users → ' +
+      '@nifer.co, tenant naming), domain/Vercel/email config, and README + license headers. Open ' +
+      'decision: the `PROD` issue key — keep PROD-N or switch to NIF-N (switching rewrites every ' +
+      'key; lean keep-PROD unless taking the clean break now while there is no real data). ' +
+      'Run-early, NOT gated on other Epic-8 work — cheapest before launch/traction. Also confirm ' +
+      'the EUTM covers Nice classes 9 & 42 (+ USPTO if launching in the US).',
     items: [],
   },
 ];

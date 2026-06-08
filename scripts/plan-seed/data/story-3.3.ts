@@ -456,7 +456,7 @@ export const story_3_3: PlanStory = {
       kind: 'bug',
       title:
         'Fix LaneCell windowing loop — a cross-lane drag crashes the swimlane board with "Maximum update depth exceeded"',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 25,

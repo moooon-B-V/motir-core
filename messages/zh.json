@@ -13,7 +13,7 @@
   },
   "labels": {
     "issueType": {
-      "epic": "史诗",
+      "epic": "篇章",
       "story": "故事",
       "task": "任务",
       "bug": "缺陷",
@@ -762,7 +762,7 @@
     "groupByAria": "泳道分组方式",
     "groupByNone": "无",
     "groupByAssignee": "负责人",
-    "groupByEpic": "史诗",
+    "groupByEpic": "篇章",
     "groupByPriority": "优先级",
     "groupByErrorTitle": "无法更新分组",
     "groupByErrorDescription": "无法更改泳道分组，看板未发生变化。",

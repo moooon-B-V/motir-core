@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   DndContext,
@@ -103,19 +102,20 @@ type BoardStatus = 'loading' | 'ready' | 'error' | 'no-board';
 export function BoardContainer({
   members = [],
   activeProjectId,
+  selectedBoardId,
 }: {
   members?: WorkspaceMemberDTO[];
   activeProjectId?: string;
+  selectedBoardId?: string;
 }) {
   const t = useTranslations('boards');
+  // The selected board (Subtask 3.7.5) — the page's `?board=<id>` selection. It
+  // rides the projection fetch as `?boardId=` so the board the user picked (not
+  // just the default) is what loads; absent → the server resolves the project's
+  // default board. Threaded into the mount fetch AND the group-by re-lay refetch
+  // so a re-lay stays on the SAME selected board.
+  const boardQuery = selectedBoardId ? `?boardId=${encodeURIComponent(selectedBoardId)}` : '';
   const { toast } = useToast();
-  // The selected board (Subtask 3.7.4) — the switcher writes `?board=<id>`; we
-  // read it and re-fetch the projection for that board. The GET resolves the
-  // board id server-side in Subtask 3.7.5 (until then it returns the project's
-  // default board regardless, so the switch updates the URL + refetches but the
-  // projection is the default's — the switcher UI is complete on its own).
-  const searchParams = useSearchParams();
-  const selectedBoardId = searchParams?.get('board') ?? null;
   // The group-by control lives in the PAGE HEADER toolbar row (beside the board
   // switcher), per design/boards/multi-board.mock.html — but its value + change
   // handler live HERE (in the projection state). page.tsx renders an empty
@@ -156,10 +156,7 @@ export function BoardContainer({
 
   useEffect(() => {
     let active = true;
-    const url = selectedBoardId
-      ? `/api/board?boardId=${encodeURIComponent(selectedBoardId)}`
-      : '/api/board';
-    fetch(url, { headers: { accept: 'application/json' } })
+    fetch(`/api/board${boardQuery}`, { headers: { accept: 'application/json' } })
       .then(async (res) => {
         if (res.ok) {
           const data = (await res.json()) as BoardProjectionDto;
@@ -187,10 +184,9 @@ export function BoardContainer({
     // `activeProjectId` is in the deps so switching project/workspace (→ a new
     // active project + router.refresh()) re-runs the fetch for the new project's
     // board instead of leaving the previous project's board on screen.
-    // `selectedBoardId` is in the deps so the 3.7.4 switcher's `?board=<id>`
-    // change re-fetches that board's projection (re-lay; 3.7.5 wires the server
-    // resolution of the id).
-  }, [reloadKey, issuesChangedAt, activeProjectId, selectedBoardId]);
+    // `boardQuery` is in the deps so changing the `?board=` selection (the 3.7.4
+    // switcher) refetches the newly-selected board's projection.
+  }, [reloadKey, issuesChangedAt, activeProjectId, boardQuery]);
 
   const retry = useCallback(() => {
     setStatus('loading');
@@ -212,7 +208,9 @@ export function BoardContainer({
           body: JSON.stringify({ boardId: board.boardId, swimlaneGroupBy: next }),
         });
         if (!patch.ok) throw new Error(`group-by ${patch.status}`);
-        const res = await fetch('/api/board', { headers: { accept: 'application/json' } });
+        const res = await fetch(`/api/board${boardQuery}`, {
+          headers: { accept: 'application/json' },
+        });
         if (!res.ok) throw new Error(`reload ${res.status}`);
         setBoard((await res.json()) as BoardProjectionDto);
       } catch {
@@ -225,7 +223,7 @@ export function BoardContainer({
         setRelaying(false);
       }
     },
-    [board, t, toast],
+    [board, boardQuery, t, toast],
   );
 
   const assigneeNameById = useMemo(

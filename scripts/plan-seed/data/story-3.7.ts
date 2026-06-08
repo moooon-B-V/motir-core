@@ -30,7 +30,10 @@ import type { PlanStory } from '../types';
  * ⚠️ Design gate (planning-time): the **board switcher** + the **create / rename
  * / delete / set-default** board UI are new, unspecified in `design/boards/` — so
  * 3.7.1 is a `type: design` subtask producing them FIRST; the UI code subtask
- * (3.7.4) carries it in `dependsOn` (Principle #13).
+ * (3.7.4) carries it in `dependsOn` (Principle #13). Likewise the **per-board
+ * settings** entry (manage-menu "Board settings" + the board-scoped settings
+ * page) is unspecified — so 3.7.7 is a `type: design` subtask producing it and
+ * the code subtask (3.7.8) carries it in `dependsOn`.
  */
 export const story_3_7: PlanStory = {
   id: '3.7',
@@ -65,7 +68,8 @@ export const story_3_7: PlanStory = {
     '`// TODO(6.4): gate by project role` note (consistent with 2.2.5 / 3.3.3); when Story 6.4 ' +
     'lands, board admin is gated by the project **admin** role. No early RBAC build.\n\n' +
     '**Out of scope:** the Scrum board variant (Story 4.5 — moved to Epic 4 per mistake #32); the ' +
-    'column/status-mapping admin itself (Story 3.6 — reused per board, not rebuilt); filter-backed ' +
+    'column/status-mapping admin itself (Story 3.6 — reused, not rebuilt; made PER-BOARD by 3.7.7 ' +
+    'design + 3.7.8 code so settings target the selected board, not only the default); filter-backed ' +
     '/ cross-project boards (Epic 6); board sharing / favourites (Jira has them; no stated need → ' +
     'deferred).',
   verificationRecipeMd:
@@ -166,7 +170,7 @@ export const story_3_7: PlanStory = {
     {
       id: '3.7.4',
       title: 'UI — board switcher + create / rename / delete / set-default',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
@@ -191,7 +195,7 @@ export const story_3_7: PlanStory = {
       id: '3.7.5',
       title:
         'Board-scoped read — resolve the selected board (`?board=`/default) through the projection',
-      status: 'planned',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 18,
@@ -219,8 +223,8 @@ export const story_3_7: PlanStory = {
       status: 'planned',
       type: 'test',
       executor: 'coding_agent',
-      estimateMinutes: 22,
-      dependsOn: ['3.7.2', '3.7.3', '3.7.4', '3.7.5'],
+      estimateMinutes: 26,
+      dependsOn: ['3.7.2', '3.7.3', '3.7.4', '3.7.5', '3.7.8'],
       descriptionMd:
         'Prove multi-board end-to-end — the 3.1.7 / 3.2.7 split. **Component / unit (vitest, real ' +
         'Postgres):** the CRUD services (create-with-seeded-columns, rename, set-default invariant, ' +
@@ -230,14 +234,89 @@ export const story_3_7: PlanStory = {
         'board → it appears in the switcher + becomes active with default columns; set group-by/WIP ' +
         'on one board, confirm the other is unaffected; switch boards (URL `?board=` + reload ' +
         'persists); set default; delete a non-default board (its issues still show on the remaining ' +
-        'board); the last board can’t be deleted. Reuses the real-Postgres harness + the seeded ' +
-        'project.\n\n' +
+        'board); the last board can’t be deleted. **Per-board SETTINGS (3.7.8):** from a non-default ' +
+        'board, open its “Board settings” (the switcher manage-menu item) → the settings page edits ' +
+        'THAT board (its columns / mapping), not the default; an edit on board A’s config leaves ' +
+        'board B’s untouched. Reuses the real-Postgres harness + the seeded project.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- `pnpm test` covers the CRUD services + guards + the one-default invariant + board-scoped read resolution.\n' +
-        '- `pnpm test:e2e --grep board-crud` runs green: create/switch/rename/set-default/delete, per-board config isolation, the `?board=` URL + reload, and the last-board guard.\n' +
+        '- `pnpm test` covers the CRUD services + guards + the one-default invariant + board-scoped read resolution + the per-board settings page resolution (selected vs default vs cross-tenant).\n' +
+        '- `pnpm test:e2e --grep board-crud` runs green: create/switch/rename/set-default/delete, per-board config isolation, the `?board=` URL + reload, the last-board guard, AND per-board settings (the manage-menu “Board settings” opens the selected board’s config).\n' +
         '- Reuses `tests/helpers/db.ts` truncation + the seeded project; no mocks beyond `getSession`.\n\n' +
         '## Context refs\n\n' +
         '- `tests/e2e/board-ui.spec.ts` (3.2.7) + the board projection tests (3.1.7) — the board E2E this builds on; the 3.7.2–3.7.5 surfaces under test; `prodect-core/CLAUDE.md` (real Postgres, no mocks)',
+    },
+    {
+      id: '3.7.7',
+      title:
+        'Design — per-board settings entry + board-scoped settings page (extends design/boards/)',
+      status: 'planned',
+      type: 'design',
+      executor: 'coding_agent',
+      estimateMinutes: 30,
+      dependsOn: [],
+      descriptionMd:
+        'The design asset for making board SETTINGS per-board. Today the 3.6 board-config admin only ' +
+        'configures the project DEFAULT board: `settings/project/board` resolves the default board, ' +
+        'and every entry point (the column `[⋯]` “Board settings →”, the unmapped-tray “Map columns”, ' +
+        'the settings landing card) links there with NO board context. With many boards per project ' +
+        '(3.7) each board has its OWN columns / column→status mapping / swimlane group-by / WIP (all ' +
+        'already board-scoped in the schema), so settings must target the SELECTED board — this gap ' +
+        'is unspecified in `design/boards/`, so the design gate produces it FIRST (gates 3.7.8).\n\n' +
+        '**Verified mirror (rung 1, mistake #33):** in Jira each board has its OWN configuration, ' +
+        'reached FROM that board (board → ⋯ → **Board settings / Configure board**), and the config ' +
+        'screen names the board it edits + lets you switch board. Per-board settings reached from the ' +
+        'board is the standard; default-only is the gap.\n\n' +
+        'Specify: (a) a **“Board settings”** item in the **switcher manage menu** (the 3.7.4 manage ' +
+        'menu — alongside Rename / Set as default / Delete) that opens the settings page for THAT ' +
+        'board; (b) the **settings-page board context** — `settings/project/board` gains a header that ' +
+        'NAMES the board being configured + a **board switcher** to change which board you’re editing ' +
+        '(reuse the 3.7.4 switcher vocabulary), since the page is now per-board; (c) the **column ' +
+        '`[⋯]` “Board settings →”** + **unmapped-tray “Map columns”** + the settings landing card ' +
+        'carry the active board. Output: extend `design/boards/` (a `*.mock.html` from ' +
+        '`components/ui/*` + `--el-*`/shape tokens) + PNG + a “Per-board settings (Story 3.7)” section ' +
+        'in `design/boards/design-notes.md`.\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- The asset + a “Per-board settings (Story 3.7)” notes section exist; built from `components/ui/*` + `--el-*`/element-shape tokens (no Tier-0 `--color-*`, no raw shape utilities), AA-safe, passes the render checklist.\n' +
+        '- Draws: the manage-menu “Board settings” item, the settings-page header naming the board + its board switcher, and the per-board scoping of the column `[⋯]` / unmapped-tray / landing-card entries.\n' +
+        '- `design-notes.md` names the composing primitives (the manage-menu item, the switcher reuse, the settings-page header) and states board settings is membership-gated now / project-admin-gated under Story 6.4.\n\n' +
+        '## Context refs\n\n' +
+        '- `design/boards/multi-board.mock.html` + `design-notes.md` (3.7.1 — the switcher + manage menu this extends); `design/boards/board-config.mock.html` (3.6.1 — the settings surface getting board context)\n' +
+        '- `components/ui/*` (the dropdown Menu, the board switcher); Jira’s per-board “Configure board” as the mirror (rung 1)',
+    },
+    {
+      id: '3.7.8',
+      title:
+        'Board-scoped settings — thread the selected board through the settings page + entries',
+      status: 'planned',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 24,
+      dependsOn: ['3.7.7', '3.7.5'],
+      descriptionMd:
+        'Make board SETTINGS per-board, per `design/boards/` (3.7.7). Today `settings/project/board` ' +
+        'resolves the project DEFAULT board (`boardsService.getBoard(projectId, ctx)`); 3.7.5 already ' +
+        'taught `getBoard` to take a `boardId`, so this threads the SELECTED board through the admin ' +
+        'surface (no service/schema change — the 3.6.2 config writes are already board-scoped):\n\n' +
+        '- The **settings page** reads `?board=<id>` (defaulting to the project’s default board when ' +
+        'absent; a board outside the active project/workspace → not-found, never cross-tenant) and ' +
+        'builds its `BoardConfigModel` from THAT board’s projection.\n' +
+        '- A **“Board settings” item** is added to the 3.7.4 switcher **manage menu** → navigates to ' +
+        '`/settings/project/board?board=<id>` for that board.\n' +
+        '- The settings page gains the **board header + switcher** (per 3.7.7) so the admin sees WHICH ' +
+        'board they’re editing and can switch (updates `?board=` and re-lays the config).\n' +
+        '- The existing **column `[⋯]` “Board settings →”** (`ColumnActionsMenu`), **unmapped-tray ' +
+        '“Map columns”** (`UnmappedStatusesTray`), and the **settings landing card** ' +
+        '(`BoardSettingsCard`) carry the active `?board=` so they open the board being viewed, not ' +
+        'the default.\n\n' +
+        'Membership-gated as today (the page already re-gates writes server-side; `TODO(6.4)` ' +
+        'project-admin).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- `settings/project/board?board=<id>` configures THAT board (columns / mapping / group-by / WIP); absent `?board=` → the default board; a board outside the active project/workspace → not-found (tenant-safe).\n' +
+        '- The switcher manage menu has a “Board settings” item → `/settings/project/board?board=<id>`; the settings page shows the board name + a board switcher; the column `[⋯]` + unmapped-tray + landing-card links carry the active board.\n' +
+        '- Component tests cover the manage-menu “Board settings” entry + the settings page resolving `?board=` (selected vs default vs cross-tenant not-found).\n\n' +
+        '## Context refs\n\n' +
+        '- `app/(authed)/settings/project/board/page.tsx` (resolves the default board today) + `_components/BoardConfigEditor.tsx` (3.6.3); `boardsService.getBoard` (now `boardId`-taking, 3.7.5)\n' +
+        '- `app/(authed)/boards/_components/BoardSwitcher.tsx` (3.7.4 manage menu), `ColumnActionsMenu.tsx`, `UnmappedStatusesTray.tsx`, `settings/project/_components/BoardSettingsCard.tsx` — the entry points to thread `?board=`; `design/boards/` (3.7.7)',
     },
   ],
 };

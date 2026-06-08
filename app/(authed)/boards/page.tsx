@@ -59,6 +59,14 @@ export default async function BoardsPage({
   // reload-safe; closing clears the param.
   const peek = sp.peek?.trim() || null;
 
+  // The selected board (Subtask 3.7.5) — `?board=<id>` picks which of the
+  // project's boards to show; absent → the project's default board. URL-driven
+  // (mirrors `?peek`) so it's shareable / reload-safe; the 3.7.4 switcher writes
+  // it. Passed to the client BoardContainer, which fetches that board's
+  // projection (`GET /api/board?boardId=`); a stale / cross-project id resolves
+  // to a 404 board-not-found, surfaced as the board error state.
+  const selectedBoardId = sp.board?.trim() || undefined;
+
   // Members resolve assignee / reporter ids to display names — for the board
   // cards' assignee avatars (the projection carries only `assigneeId`, Story
   // 3.1.4) AND for the quick-view panel when a peek is open. Resolved once here;
@@ -98,7 +106,11 @@ export default async function BoardsPage({
         </div>
       </header>
 
-      <BoardContainer members={members} activeProjectId={ctx.projectId} />
+      <BoardContainer
+        members={members}
+        activeProjectId={ctx.projectId}
+        selectedBoardId={selectedBoardId}
+      />
 
       {/* Quick-view peek — the modal frame mounts when `?peek` is present; the
           item's fields stream behind a <Suspense> whose fallback is the loading
