@@ -10,12 +10,100 @@ export const EPICS: EpicMeta[] = [
   {
     id: '1',
     title: 'Foundation',
-    status: 'done',
+    status: 'in_progress',
     descriptionMd:
       'The architectural floor every other epic stands on: **project bootstrap**, **design ' +
       'system & brand**, authentication, multi-tenant workspaces, projects, the work-item schema, ' +
       'the web app shell, and async job infrastructure. Boring, foundational, non-negotiable. If ' +
-      "this isn't solid, every other epic builds on sand. Built — all 8 stories (1.0–1.6) shipped.",
+      "this isn't solid, every other epic builds on sand. All 8 stories (1.0–1.6) shipped; a " +
+      'post-completion legal-posture task (1.7 — CLA Assistant setup) was added when the open-core ' +
+      'license boundary was reviewed (a CLA is required from day one if a future relicense — to ' +
+      'BSL/SSPL — must remain optional without retroactive contributor consent chasing).',
+    items: [
+      {
+        id: '1.7',
+        kind: 'task',
+        title: 'Set up CLA Assistant + commit Apache ICLA on prodect-core',
+        status: 'planned',
+        type: 'manual',
+        executor: 'human',
+        estimateMinutes: 30,
+        descriptionMd:
+          '**Type:** task · **Parent:** Epic 1 · **Executor:** human (no PR-of-code; ' +
+          'GitHub-side install + a tiny doc commit).\n\n' +
+          '**Why now, not at launch (Epic 8).** Industry pattern (MongoDB, Elastic, GitLab, ' +
+          'Sentry, Plane) is unambiguous: introduce the CLA on day one. Without it, every outside ' +
+          "contributor's commit becomes a copyright fragment we cannot unilaterally relicense — " +
+          "even a single drive-by typo fix poisons the codebase's future optionality. The " +
+          '**asymmetry is severe**: setting it up costs ~30 minutes; retrofitting it costs ' +
+          'months-to-years of contributor outreach (Elastic took ~2 years). The relicense option ' +
+          "we're protecting is NOT a current plan — it's the floor under all open-core options " +
+          'should economics ever break (HashiCorp/Elastic/Redis/MongoDB all eventually exercised ' +
+          'theirs, each one made possible by a CLA they had in place from earlier).\n\n' +
+          '**Template chosen by the planner: Apache ICLA (a LICENSE, not an assignment).** Apache ' +
+          'ICLA grants Prodect Inc. a broad license to the contribution; the contributor retains ' +
+          'their copyright. This is contributor-friendly (low friction, the de-facto industry ' +
+          'standard for individual contributions) AND broad enough to permit a future ' +
+          'BSL/SSPL/source-available relicense — the rights granted include sublicensing, which ' +
+          'is what a relicense needs. Considered and REJECTED: (a) **MongoDB-style copyright ' +
+          'assignment** — broader rights but creates contributor pushback that hurts the ' +
+          'community side of the moat; only worth it if a relicense is concretely planned, which ' +
+          'it is not; (b) **DCO alone** (Developer Certificate of Origin, `Signed-off-by:` per ' +
+          'commit) — much lower friction, used by Linux kernel + GitLab alongside their CLA, but ' +
+          "the DCO is an ATTESTATION not a grant, so it doesn't carry the relicensing rights " +
+          "we're protecting. DCO solves a different problem (provenance) and is not a CLA " +
+          'substitute for our purpose.\n\n' +
+          '**What you do.** (1) Sign in to https://cla-assistant.io with GitHub. ' +
+          '(2) Authorize CLA Assistant on `moooon-B-V/prodect-core` (prodect-ai is private and ' +
+          "won't have outside contributors — skip it). (3) Paste the Apache ICLA text " +
+          '(https://www.apache.org/licenses/icla.pdf — convert to plain text), modified to name ' +
+          '**"Prodect Inc."** as the receiving party in §1. Save. CLA Assistant now hooks every ' +
+          'PR on prodect-core: it comments asking outside contributors to sign, and adds a ' +
+          'required status check that turns green only once signed. (4) On a `seed/cla-setup` ' +
+          'branch in prodect-core, commit **`prodect-core/CLA.md`** (the Apache ICLA text + a ' +
+          "short preamble naming Prodect Inc. and linking to CLA Assistant's signing flow) AND " +
+          'either create `prodect-core/CONTRIBUTING.md` or amend the existing one with a short ' +
+          'paragraph: *"By opening a PR, you\'ll be asked to sign our CLA via CLA Assistant. This ' +
+          "grants us the rights we need to maintain the project's open-source license and to " +
+          'potentially relicense the codebase in the future. You retain copyright of your ' +
+          'contribution."* Open + merge that PR (the `seed/*` prefix skips E2E + Vercel preview ' +
+          'per PRODECT.md § Plan seed). (5) Open a throwaway PR from a second GitHub account ' +
+          '(or any account without a signed CLA on file); confirm the bot comments + the status ' +
+          'check appears red until signed. Close the throwaway PR. (6) Record the throwaway PR ' +
+          "URL in the seed PR's body as the verification artifact (so future-me can audit that " +
+          'the gate is live).\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- CLA Assistant is installed and active on `moooon-B-V/prodect-core` (visible in the ' +
+          "repo's installed-apps list and in CLA Assistant's dashboard).\n" +
+          '- `prodect-core/CLA.md` exists at repo root, contains Apache ICLA text adapted to ' +
+          'name Prodect Inc. as the receiving party.\n' +
+          '- `prodect-core/CONTRIBUTING.md` carries a paragraph naming the CLA requirement and ' +
+          'pointing contributors at the signing flow.\n' +
+          '- A throwaway PR from an unsigned account demonstrates the bot comments + the ' +
+          'required status check, recorded in the seed PR body.\n' +
+          '- This task flips to `done` only on user confirmation that steps 1–5 are complete ' +
+          '(mirrors 1.6.7 — manual SaaS provisioning, no PR-of-code to gate on).\n\n' +
+          '## Context refs\n\n' +
+          '- `PRODECT.md` § Source of truth (open-core architecture paragraph) — names the ' +
+          'GPL-3.0 / closed-source `prodect-ai` split this CLA underwrites.\n' +
+          '- `notes.html` mistake #17 — open-core is an architectural shift, not a license toggle; ' +
+          'the CLA is the legal half of that architecture.\n' +
+          '- Apache ICLA template: https://www.apache.org/licenses/icla.pdf\n' +
+          '- CLA Assistant: https://cla-assistant.io\n' +
+          '- Related: a follow-up task to land PRODECT.md "License boundary" + "Fork posture" ' +
+          'doc edits (from the same legal-posture conversation) is out of scope here — separate ' +
+          '`seed/*` PR against prodect-meta. The trademark filing (~$500, ~12 months) is ALSO ' +
+          'out of scope and tracked as a finding rather than a planned task (it has no software ' +
+          'artifact and no dependency on the seed).',
+        explanationMd:
+          'The CLA is the legal floor under the open-core moat. The license boundary rule ' +
+          '(`prodect-core` GPL-3.0 calling `prodect-ai` closed over HTTP) survives only if ' +
+          'Prodect Inc. retains enough rights over `prodect-core` to relicense if the open-core ' +
+          'economics ever require it. Without a CLA, every outside contributor holds a copyright ' +
+          'fragment we cannot unilaterally move — and the relicense option dies. With a CLA from ' +
+          "day one, the option stays alive for the project's full lifetime at zero ongoing cost.",
+      },
+    ],
   },
   {
     id: '2',
