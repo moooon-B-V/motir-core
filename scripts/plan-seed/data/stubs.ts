@@ -312,8 +312,10 @@ export const STUB_STORIES: PlanStory[] = [
     title: 'Marketing site + brand mark',
     status: 'planned',
     descriptionMd:
-      'Landing page + the deferred wordmark/logomark decision (per the brand-mark-deferral ' +
-      'principle — see PRODECT.md "Current state").',
+      'Landing page + the **nifer** wordmark/logomark (the name is now decided — the product was ' +
+      'renamed Prodect → nifer; see notes.html mistake #34 and story 8.7). Also bakes in ' +
+      'entity-signal SEO so search engines learn the brand fast: Organization/WebSite structured ' +
+      'data, Google Search Console, and early directory listings (G2 / Product Hunt / GitHub).',
     items: [],
   },
   {
@@ -329,8 +331,36 @@ export const STUB_STORIES: PlanStory[] = [
     title: 'Production hardening + observability',
     status: 'planned',
     descriptionMd:
-      'Deploy, domain + SSL, transactional email backend, analytics, error monitoring, backups, ' +
-      'rate limits, day-1 admin tools.',
+      'Deploy, domain + SSL (the nifer.co domain is already registered), transactional email ' +
+      'backend, analytics, error monitoring, backups, rate limits, day-1 admin tools.',
+    items: [],
+  },
+  {
+    id: '8.6',
+    title: 'Go-to-market strategy',
+    status: 'planned',
+    descriptionMd:
+      'The launch *strategy* (distinct from 8.3, which builds the site artifact): positioning for ' +
+      'the first audience — individuals + small companies; launch channels and the open-core ' +
+      'growth loop (Product Hunt / Hacker News / GitHub stars → community); pricing strategy at ' +
+      'the free-PM-core ↔ paid-AI-layer boundary; content/SEO and a pre-launch waitlist. Mostly ' +
+      '`type: decision`/`manual` founder work routed through the queue.',
+    items: [],
+  },
+  {
+    id: '8.7',
+    title: 'Rebrand cutover: Prodect → nifer',
+    status: 'planned',
+    descriptionMd:
+      'One-time cross-repo rename now that the name is decided + secured (nifer.co registered, ' +
+      'EUIPO trademark filed; see notes.html mistake #34). NOT a blind find-replace — touches ' +
+      'prodect-core (UI copy, package names, app/SEO metadata, email templates/chrome), ' +
+      'prodect-ai, prodect-meta (PRODECT.md → NIFER.md), the plan seed (@prodect.co users → ' +
+      '@nifer.co, tenant naming), domain/Vercel/email config, and README + license headers. Open ' +
+      'decision: the `PROD` issue key — keep PROD-N or switch to NIF-N (switching rewrites every ' +
+      'key; lean keep-PROD unless taking the clean break now while there is no real data). ' +
+      'Run-early, NOT gated on other Epic-8 work — cheapest before launch/traction. Also confirm ' +
+      'the EUTM covers Nice classes 9 & 42 (+ USPTO if launching in the US).',
     items: [],
   },
 ];
