@@ -1,0 +1,1449 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Ready set — the AI dispatch surface (Story 7.0 · 7.0.1, gating 7.0.6)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the `/ready` surface — the AGENT DISPATCH
+      surface (Story 7.0). No `design/ready/` asset existed; the 7.0.1 design
+      gate produces this. It is the layout source of truth for the UI code
+      subtask 7.0.6 (the /ready page + sidebar entry + count badge), which
+      carries 7.0.1 in `dependsOn`.
+
+      Built FROM the real design system: the token block below is copied 1:1
+      from app/globals.css (Tier-0 --color-* + the shape tokens + Tier-3 --el-*),
+      and the markup mirrors the SHIPPED primitives — Card / EmptyState,
+      Pill (the PRIORITY_META priority chip + the neutral count badge),
+      IssueTypeIcon (lucide glyph in the --el-type-* hue), the initial-letter
+      Avatar (issueCellPrimitives), the SidebarNav rail + Sidebar item grammar,
+      Tooltip (dark --el-text bubble), and Toast. The /ready row is a NEW
+      ARRANGEMENT of these primitives (a dispatch card) — no new vocabulary.
+
+      Covers (multi-panel — review EACH, mistake #31):
+        (1) the populated /ready page — header + "What is this?" popover (OPEN) +
+            the flat list of ready dispatch cards, one row showing the hover
+            copy-button + its tooltip; a review-only virtualization annotation.
+        (2) the sidebar rail with the new "Ready" entry (active) BETWEEN Issues
+            and Boards, carrying the readiness count badge.
+        (3) the empty state (zero ready items) — the EmptyState primitive.
+        (4) the per-row "Copy prodect run …" confirmation toast.
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        /* Tier 0 — colour (light defaults) */
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Tier 0 — shape (default display style) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1080px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 40px auto 10px;
+        padding-left: 2px;
+        max-width: 1080px;
+      }
+      .panel {
+        max-width: 1080px;
+        margin: 0 auto;
+      }
+
+      /* ── Page shell — header (mirrors app/(authed)/issues/page.tsx <header>) ─ */
+      .page-head {
+        position: relative;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+      .page-head .titles {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .page-head .title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin: 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+
+      /* "What is this?" — a ghost Button (variant=ghost size=sm) */
+      .help-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid transparent;
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .help-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .help-btn .ic {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+      }
+
+      /* Popover (Radix Popover → Card-ish container) — the predicate explainer */
+      .popover {
+        position: absolute;
+        top: calc(var(--height-btn-sm) + 8px);
+        right: 0;
+        z-index: 30;
+        width: 320px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 16px;
+      }
+      .popover.standalone {
+        position: static;
+        width: 340px;
+      }
+      .popover h4 {
+        margin: 0 0 6px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .popover p {
+        margin: 0 0 8px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .popover p:last-child {
+        margin-bottom: 0;
+      }
+      .popover code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+
+      /* count chip beside the title — the neutral Pill */
+      .count-pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+        white-space: nowrap;
+      }
+
+      /* ── The flat list of ready dispatch cards ──────────────────────────── */
+      .ready-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      /* A dispatch card — a NEW arrangement of shipped primitives (not a new
+         vocabulary). Card shape: --radius-card + --el-border + --shadow-subtle. */
+      .rcard {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        cursor: pointer;
+        transition:
+          border-color 0.12s ease,
+          background 0.12s ease;
+      }
+      .rcard:hover {
+        border-color: var(--el-border-strong);
+        background: var(--el-surface-soft);
+      }
+      .rcard:hover .rc-title {
+        text-decoration: underline;
+      }
+      /* type icon (IssueTypeIcon — lucide in --el-type-* hue) */
+      .type-icon {
+        width: 18px;
+        height: 18px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+      .rc-key {
+        flex: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .rc-title {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .rc-meta {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex: none;
+      }
+
+      /* Pill (components/ui/Pill.tsx) — priority chip: tint bg + --el-text-strong */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill .pic {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .pill--danger {
+        background: var(--el-tint-rose);
+      }
+      .pill--warning {
+        background: var(--el-tint-peach);
+      }
+      .pill--info {
+        background: var(--el-tint-sky);
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+
+      /* Avatar (issueCellPrimitives) — initial-letter on --el-text */
+      .person {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .avatar {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .person .nm {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .unassigned {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        border-radius: 9999px;
+        border: 1px dashed var(--el-border-strong);
+      }
+
+      /* Copy icon-button — square icon button, revealed on row hover */
+      .copy-wrap {
+        position: relative;
+        flex: none;
+      }
+      .copy-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+        opacity: 0;
+        transition:
+          opacity 0.12s ease,
+          background 0.12s ease,
+          color 0.12s ease;
+      }
+      .rcard:hover .copy-btn,
+      .copy-btn:focus-visible {
+        opacity: 1;
+      }
+      .copy-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .copy-btn:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .copy-btn .ic {
+        width: 16px;
+        height: 16px;
+      }
+      /* a permanently-shown variant for the panel-1 "hover" demo row */
+      .rcard.is-hover {
+        border-color: var(--el-border-strong);
+        background: var(--el-surface-soft);
+      }
+      .rcard.is-hover .copy-btn {
+        opacity: 1;
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+
+      /* Tooltip (components/ui/Tooltip.tsx) — dark --el-text bubble */
+      .tooltip {
+        position: absolute;
+        bottom: calc(100% + 6px);
+        right: -4px;
+        z-index: 40;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        border-radius: var(--radius-control);
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        white-space: nowrap;
+        box-shadow: var(--shadow-elevated);
+      }
+      .tooltip code {
+        font-family: var(--font-mono);
+      }
+      .tooltip::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        right: 12px;
+        border: 5px solid transparent;
+        border-top-color: var(--el-text);
+      }
+
+      /* review-only virtualization annotation (NOT shipped) */
+      .virt-note {
+        margin-top: 10px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 8px 12px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        background: transparent;
+      }
+      .virt-note strong {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+
+      /* ── Sidebar rail (panel 2) — mirrors components/ui/Sidebar.tsx ──────── */
+      .rail {
+        width: 240px;
+        background: var(--el-sidebar-bg);
+        border: 1px solid var(--el-sidebar-border);
+        border-radius: var(--radius-card);
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      /* header slot — a stand-in for the ProjectSwitcher (SidebarHeader) */
+      .rail-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 8px;
+        border-radius: var(--radius-control);
+      }
+      .rail-head .pj {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+        font-family: var(--font-serif);
+      }
+      .rail-head .pj-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .rail-head .pj-sub {
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .rail-sec {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .rail hr {
+        border: 0;
+        border-top: 1px solid var(--el-sidebar-border);
+        margin: 0;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+        border: 1px solid transparent;
+      }
+      .nav-item:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .nav-item .ic {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .nav-item .lbl {
+        flex: 1;
+        white-space: nowrap;
+      }
+      /* active row = canvas inset into the rail (--el-sidebar-item-bg-active) */
+      .nav-item.active {
+        background: var(--el-sidebar-item-bg-active);
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .nav-item.active .ic {
+        color: var(--el-accent);
+      }
+      /* the readiness count badge — the neutral Pill grammar, sized for the rail */
+      .nav-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 18px;
+        padding: 0 6px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+        font-size: 11px;
+        font-weight: 600;
+        font-family: var(--font-sans);
+      }
+      .rail-foot {
+        display: flex;
+        justify-content: flex-end;
+        padding-top: 4px;
+      }
+      .rail-foot .toggle-ic {
+        width: var(--height-control);
+        height: var(--height-control);
+        border-radius: var(--radius-control);
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--el-text-muted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .rail-foot .toggle-ic:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .rail-foot .toggle-ic .ic {
+        width: 16px;
+        height: 16px;
+      }
+      .between-note {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        max-width: 260px;
+        line-height: 1.5;
+      }
+      .between-note .pin {
+        color: var(--el-accent);
+        font-weight: 600;
+      }
+      .rail-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 28px;
+      }
+
+      /* ── EmptyState (panel 3) — Card + icon + title + desc + action ──────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        box-shadow: var(--shadow-card);
+      }
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .empty .ic-wrap {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-muted);
+      }
+      .empty .ic-wrap svg {
+        width: 48px;
+        height: 48px;
+      }
+      .empty h3 {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 400;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 12px 0 0;
+        max-width: 52ch;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-muted);
+      }
+      .empty .action {
+        margin-top: 16px;
+      }
+      .btn-secondary {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 18px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      .btn-secondary .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Toast (panel 4) — components/ui/Toast.tsx ──────────────────────── */
+      .toast-stage {
+        position: relative;
+        background:
+          repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 10px,
+            rgba(120, 118, 113, 0.04) 10px,
+            rgba(120, 118, 113, 0.04) 20px
+          ),
+          var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        height: 200px;
+        overflow: hidden;
+      }
+      .toast {
+        position: absolute;
+        bottom: 16px;
+        right: 16px;
+        width: 360px;
+        max-width: calc(100% - 32px);
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-success);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 12px 16px;
+      }
+      .toast .t-ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-success);
+      }
+      .toast .t-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .toast .t-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .toast .t-desc {
+        margin-top: 2px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .toast .t-desc code {
+        font-family: var(--font-mono);
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 1px 4px;
+      }
+      .toast .t-close {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-muted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .toast .t-close .ic {
+        width: 14px;
+        height: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Ready set — the AI dispatch surface</h1>
+        <p>
+          Story 7.0 · design for 7.0.1, gating the 7.0.6 page + sidebar entry. Built from the real
+          design-system tokens / primitives. Multi-panel — review each.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke, used by <use>) — paths copied from lucide-react -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <!-- task = square-check-big -->
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <!-- subtask = list-checks -->
+        <g
+          id="i-subtask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </g>
+        <g
+          id="i-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+        </g>
+        <!-- copy -->
+        <g
+          id="i-copy"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+        </g>
+        <!-- circle-question-mark (the real glyph behind CircleHelp) -->
+        <g
+          id="i-help"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+          <path d="M12 17h.01" />
+        </g>
+        <!-- circle-play (LOCKED nav glyph for Ready — see design-notes) -->
+        <g
+          id="i-circle-play"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"
+          />
+          <circle cx="12" cy="12" r="10" />
+        </g>
+        <!-- layout-dashboard -->
+        <g
+          id="i-dashboard"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="7" height="9" x="3" y="3" rx="1" />
+          <rect width="7" height="5" x="14" y="3" rx="1" />
+          <rect width="7" height="9" x="14" y="12" rx="1" />
+          <rect width="7" height="5" x="3" y="16" rx="1" />
+        </g>
+        <!-- circle-dot (Issues) -->
+        <g
+          id="i-circle-dot"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <circle cx="12" cy="12" r="1" />
+        </g>
+        <!-- columns-3 (Boards) -->
+        <g
+          id="i-columns"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+        </g>
+        <!-- chart-column (Reports / BarChart3) -->
+        <g
+          id="i-chart"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+          <path d="M18 17V9" />
+          <path d="M13 17V5" />
+          <path d="M8 17v-3" />
+        </g>
+        <!-- settings -->
+        <g
+          id="i-settings"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <!-- chevrons-left (collapse toggle) -->
+        <g
+          id="i-chevrons-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m11 17-5-5 5-5" />
+          <path d="m18 17-5-5 5-5" />
+        </g>
+        <!-- inbox (empty state) -->
+        <g
+          id="i-inbox"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+          <path
+            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+          />
+        </g>
+        <!-- check-circle-2 (toast success) -->
+        <g
+          id="i-check-circle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <!-- x (toast close) -->
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════ PANEL 1 — the populated /ready page ════════════ -->
+    <div class="panel-label">
+      1 · The populated /ready page — header + "What is this?" popover (shown OPEN) + the flat list
+      of ready dispatch cards. Row 3 is shown in its hover state with the copy-button + tooltip.
+    </div>
+    <div class="panel">
+      <div class="page-head">
+        <div class="titles">
+          <div class="title-row">
+            <h2>Ready to start</h2>
+            <span class="count-pill">6 ready</span>
+          </div>
+          <p class="sub">Prodect · PROD</p>
+        </div>
+        <button class="help-btn" aria-haspopup="dialog" aria-expanded="false">
+          <svg class="ic" viewBox="0 0 24 24"><use href="#i-help" /></svg>What is this?
+        </button>
+      </div>
+
+      <div class="ready-list" role="list" aria-label="Ready work items">
+        <!-- row 1 — bug, highest -->
+        <div class="rcard" role="listitem">
+          <span class="type-icon t-bug"
+            ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+          ></span>
+          <span class="rc-key">PROD-49</span>
+          <span class="rc-title">OAuth callback drops the `state` param on Safari ≤16</span>
+          <div class="rc-meta">
+            <span class="pill pill--danger"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>Highest</span
+            >
+            <span class="person"
+              ><span class="avatar">J</span><span class="nm">Jamal Tate</span></span
+            >
+            <span class="copy-wrap">
+              <button class="copy-btn" aria-label="Copy run command for PROD-49">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+              </button>
+            </span>
+          </div>
+        </div>
+
+        <!-- row 2 — story, high -->
+        <div class="rcard" role="listitem">
+          <span class="type-icon t-story"
+            ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+          ></span>
+          <span class="rc-key">PROD-31</span>
+          <span class="rc-title">Google OAuth sign-in</span>
+          <div class="rc-meta">
+            <span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            >
+            <span class="person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="copy-wrap">
+              <button class="copy-btn" aria-label="Copy run command for PROD-31">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+              </button>
+            </span>
+          </div>
+        </div>
+
+        <!-- row 3 — task, high — SHOWN HOVERED with the copy tooltip -->
+        <div class="rcard is-hover" role="listitem">
+          <span class="type-icon t-task"
+            ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+          ></span>
+          <span class="rc-key">PROD-42</span>
+          <span class="rc-title">Add Google OAuth to sign-in</span>
+          <div class="rc-meta">
+            <span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            >
+            <span class="person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="copy-wrap">
+              <div class="tooltip" role="tooltip">Copy <code>prodect run PROD-42</code></div>
+              <button class="copy-btn" aria-label="Copy run command for PROD-42">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+              </button>
+            </span>
+          </div>
+        </div>
+
+        <!-- row 4 — task, medium -->
+        <div class="rcard" role="listitem">
+          <span class="type-icon t-task"
+            ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+          ></span>
+          <span class="rc-key">PROD-34</span>
+          <span class="rc-title">Password reset email — copy + template</span>
+          <div class="rc-meta">
+            <span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            >
+            <span class="person"
+              ><span class="avatar">R</span><span class="nm">Riya Shah</span></span
+            >
+            <span class="copy-wrap">
+              <button class="copy-btn" aria-label="Copy run command for PROD-34">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+              </button>
+            </span>
+          </div>
+        </div>
+
+        <!-- row 5 — subtask, low — UNASSIGNED -->
+        <div class="rcard" role="listitem">
+          <span class="type-icon t-subtask"
+            ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg
+          ></span>
+          <span class="rc-key">PROD-58</span>
+          <span class="rc-title">Write E2E test: email-first user signs in with Google</span>
+          <div class="rc-meta">
+            <span class="pill pill--info"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg>Low</span
+            >
+            <span class="person"><span class="unassigned"></span></span>
+            <span class="copy-wrap">
+              <button class="copy-btn" aria-label="Copy run command for PROD-58">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+              </button>
+            </span>
+          </div>
+        </div>
+
+        <!-- row 6 — epic, medium -->
+        <div class="rcard" role="listitem">
+          <span class="type-icon t-epic"
+            ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+          ></span>
+          <span class="rc-key">PROD-12</span>
+          <span class="rc-title">Q3 launch — Auth &amp; sign-in</span>
+          <div class="rc-meta">
+            <span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            >
+            <span class="person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="copy-wrap">
+              <button class="copy-btn" aria-label="Copy run command for PROD-12">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+              </button>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="virt-note">
+        <strong>Review-only annotation (not shipped):</strong> sorted
+        <code>(priority desc, key asc)</code> — the same order
+        <code>POST /api/ready/next</code> dispatches. The list virtualizes via the 2.5.15
+        <code>useRowWindow</code> primitive (only viewport rows render; the DOM stays bounded); more
+        pages stream in by cursor as the list scrolls.
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 1b — the "What is this?" popover, open ════════════ -->
+    <div class="panel-label">
+      1b · The "What is this?" popover, open — the first-run explainer of the readiness predicate
+      (anchored under the header help button on the real page; shown standalone here).
+    </div>
+    <div class="panel">
+      <div class="popover standalone" role="dialog" aria-label="What is the ready set?">
+        <h4>What is "ready"?</h4>
+        <p>
+          A work item is <strong>ready</strong> when every issue blocking it has been completed — so
+          it has no unfinished blockers and can be started right now.
+        </p>
+        <p>
+          Click <code>Copy</code> on any row to put its <code>prodect run PROD-…</code> command on
+          your clipboard, then paste it into your own coding agent to dispatch the work.
+        </p>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 2 — sidebar rail with the new "Ready" entry ════════════ -->
+    <div class="panel-label">
+      2 · The sidebar rail — the new "Ready" entry sits BETWEEN Issues and Boards, carrying the
+      readiness count badge. Shown active (the user is on /ready).
+    </div>
+    <div class="panel">
+      <div class="rail-row">
+        <nav class="rail" aria-label="Primary">
+          <div class="rail-head">
+            <span class="pj">P</span>
+            <div>
+              <div class="pj-name">Prodect</div>
+              <div class="pj-sub">moooon workspace</div>
+            </div>
+          </div>
+
+          <div class="rail-sec">
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-dashboard" /></svg>
+              <span class="lbl">Dashboard</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
+              <span class="lbl">Issues</span>
+            </a>
+            <a class="nav-item active" href="#" aria-current="page">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-play" /></svg>
+              <span class="lbl">Ready</span>
+              <span class="nav-badge">6</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-columns" /></svg>
+              <span class="lbl">Boards</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-chart" /></svg>
+              <span class="lbl">Reports</span>
+            </a>
+          </div>
+
+          <hr />
+
+          <div class="rail-sec">
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-settings" /></svg>
+              <span class="lbl">Settings</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-subtask" /></svg>
+              <span class="lbl">Job runs</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-book" /></svg>
+              <span class="lbl">Docs</span>
+            </a>
+          </div>
+
+          <div class="rail-foot">
+            <button class="toggle-ic" aria-label="Collapse sidebar">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-chevrons-left" /></svg>
+            </button>
+          </div>
+        </nav>
+
+        <p class="between-note">
+          The <span class="pin">Ready</span> entry is inserted into the existing primary nav section
+          of <code>SidebarNav.tsx</code>, immediately after <strong>Issues</strong> and before
+          <strong>Boards</strong>. Its glyph is lucide <code>circle-play</code> (signals "run /
+          dispatch"), label <code>t('nav.ready')</code>, href <code>/ready</code>. The badge is the
+          neutral count chip — the readiness total, never coloured by urgency. The same entry
+          appears in the mobile <code>SidebarDrawer</code>.
+        </p>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 3 — empty state ════════════ -->
+    <div class="panel-label">
+      3 · Empty state — the active project has zero ready items. The shipped EmptyState primitive
+      (Card + icon + title + description + action).
+    </div>
+    <div class="panel">
+      <div class="card empty">
+        <span class="ic-wrap"
+          ><svg viewBox="0 0 24 24"><use href="#i-inbox" /></svg
+        ></span>
+        <h3>Nothing's ready right now</h3>
+        <p>
+          A work item appears here once every issue blocking it is done. Right now nothing is fully
+          unblocked — head to Issues to see what's still in progress and what it's waiting on.
+        </p>
+        <div class="action">
+          <a class="btn-secondary" href="#">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>View all issues
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 4 — copy-affordance confirmation toast ════════════ -->
+    <div class="panel-label">
+      4 · Copy confirmation — clicking a row's "Copy prodect run …" fires the shipped Toast (success
+      variant), bottom-right of the viewport.
+    </div>
+    <div class="panel">
+      <div class="toast-stage" aria-hidden="true">
+        <div class="toast" role="status">
+          <svg class="t-ic" viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>
+          <div class="t-body">
+            <div class="t-title">Copied</div>
+            <div class="t-desc">Paste <code>prodect run PROD-42</code> into your terminal.</div>
+          </div>
+          <button class="t-close" aria-label="Close">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
