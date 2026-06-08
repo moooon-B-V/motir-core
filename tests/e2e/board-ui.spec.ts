@@ -238,8 +238,10 @@ test.describe('board-ui @smoke', () => {
     expect(((await res.json()) as { code: string }).code).toBe('ILLEGAL_BOARD_MOVE');
 
     // The rejection is surfaced (a toast), and the card animates BACK to To Do —
-    // it never rests in the In Review column it was dropped on.
-    await expect(page.getByText('Move not allowed')).toBeVisible();
+    // it never rests in the In Review column it was dropped on. `exact` keeps the
+    // toast TITLE distinct from the aria-live announcement, which embeds the same
+    // phrase in a longer "Notification Move not allowed…" string.
+    await expect(page.getByText('Move not allowed', { exact: true })).toBeVisible();
     await expect(
       page.getByTestId(`board-column-${todoCol.id}`).getByTestId(cardTid(card.identifier)),
     ).toBeVisible();
@@ -300,20 +302,36 @@ test.describe('board-ui @smoke', () => {
   }) => {
     await signUp(page, OWNER_EMAIL);
     const { projectId } = await seedActiveProject(OWNER_EMAIL);
-    const item = await createItem(page.request, projectId, 'keyboard mover');
+    const mover = await createItem(page.request, projectId, 'keyboard mover');
+    // Seed the adjacent destination column (Blocked, the next column right of To
+    // Do; todo → blocked is a legal transition) with a card, so the keyboard
+    // navigation has a concrete sortable target to land on rather than an empty
+    // droppable.
+    const anchor = await createItem(page.request, projectId, 'lives in blocked');
+    expect((await transition(page.request, anchor.id, 'blocked')).status()).toBe(200);
 
     const board = await getBoard(page.request);
     const todoCol = columnByStatus(board, 'todo');
-    const card = todoCol.cards.find((c) => c.id === item.id)!;
+    const moverCard = todoCol.cards.find((c) => c.id === mover.id)!;
 
     await openBoard(page);
 
-    // Focus the card, pick it up (Space), move one column to the right (→ Blocked,
-    // the next column; todo → blocked is a legal transition), and drop (Space) —
-    // all with the keyboard, no pointer.
-    await page.getByTestId(cardTid(card.identifier)).focus();
+    // dnd-kit narrates the drag through an `aria-live` region; the joined live
+    // text is the deterministic signal that the keyboard drag has advanced (and
+    // doubles as the a11y-announcement check). Polling it between key presses
+    // avoids racing the next key against an async drag-state transition (a
+    // back-to-back Space→Arrow fires the arrow before the pick-up is live).
+    const liveText = async () =>
+      (await page.locator('[role="status"]').allTextContents()).join(' ');
+
+    // Focus the card, pick it up (Space) → wait for the pick-up announcement, move
+    // one column to the right (→ Blocked) → wait for the over-Blocked
+    // announcement, then drop (Space) — all with the keyboard, no pointer.
+    await page.getByTestId(cardTid(moverCard.identifier)).focus();
     await page.keyboard.press('Space');
+    await expect.poll(liveText).toContain(moverCard.identifier);
     await page.keyboard.press('ArrowRight');
+    await expect.poll(liveText).toContain('Blocked');
     const move = page.waitForResponse(
       (r) => r.url().endsWith('/api/board/move') && r.request().method() === 'POST',
       { timeout: 10_000 },
@@ -322,9 +340,10 @@ test.describe('board-ui @smoke', () => {
     const res = await move;
     expect(res.status(), 'the keyboard move is a legal transition (200)').toBe(200);
 
-    // The move happened: the card left To Do via a real transition.
+    // The move happened via a real transition: the card left To Do and landed in
+    // the Blocked column.
     const after = await getBoard(page.request);
-    expect(cardIdsIn(after, 'todo')).not.toContain(item.id);
-    expect(after.columns.flatMap((c) => c.cards).map((c) => c.id)).toContain(item.id);
+    expect(cardIdsIn(after, 'todo')).not.toContain(mover.id);
+    expect(cardIdsIn(after, 'blocked')).toContain(mover.id);
   });
 });
