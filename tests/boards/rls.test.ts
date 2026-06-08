@@ -89,6 +89,7 @@ async function makeBoard(args: {
       workspaceId: args.workspaceId,
       projectId: args.projectId,
       name: args.name ?? 'Board',
+      position: 'a0',
     },
   });
   return row.id;
@@ -295,7 +296,12 @@ describe('board RLS — write isolation (WITH CHECK)', () => {
     const fx = await makeBoardTenants();
     const created = await asAppRole({ workspaceId: fx.workspaceW1Id }, (tx) =>
       tx.board.create({
-        data: { workspaceId: fx.workspaceW1Id, projectId: fx.projectP1Id, name: 'Second Board' },
+        data: {
+          workspaceId: fx.workspaceW1Id,
+          projectId: fx.projectP1Id,
+          name: 'Second Board',
+          position: 'a1',
+        },
       }),
     );
     expect(created.workspaceId).toBe(fx.workspaceW1Id);
@@ -306,7 +312,12 @@ describe('board RLS — write isolation (WITH CHECK)', () => {
     await expect(
       asAppRole({ workspaceId: fx.workspaceW1Id }, (tx) =>
         tx.board.create({
-          data: { workspaceId: fx.workspaceW2Id, projectId: fx.projectP2Id, name: 'Sneaky' },
+          data: {
+            workspaceId: fx.workspaceW2Id,
+            projectId: fx.projectP2Id,
+            name: 'Sneaky',
+            position: 'a1',
+          },
         }),
       ),
     ).rejects.toThrow();

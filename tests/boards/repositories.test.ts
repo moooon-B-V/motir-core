@@ -96,7 +96,7 @@ async function makeBoardTenant(label: string): Promise<BoardTenantFixture> {
   const status2Id = await makeStatus({ workspaceId, projectId, key: 'done' });
 
   const board = await db.board.create({
-    data: { workspaceId, projectId, name: 'Board', type: 'kanban' },
+    data: { workspaceId, projectId, name: 'Board', type: 'kanban', position: 'a0' },
   });
   const column1 = await db.boardColumn.create({
     data: { workspaceId, projectId, boardId: board.id, name: 'To Do', position: nextPosition() },
@@ -236,7 +236,13 @@ describe('board writes — required-tx create + delete under a transaction', () 
 
     const created = await db.$transaction(async (tx) => {
       const board = await boardRepository.create(
-        { workspaceId: fx.workspaceId, projectId: project.id, name: 'Board', type: 'kanban' },
+        {
+          workspaceId: fx.workspaceId,
+          projectId: project.id,
+          name: 'Board',
+          type: 'kanban',
+          position: 'a0',
+        },
         tx,
       );
       const column = await boardColumnRepository.create(

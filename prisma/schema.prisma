@@ -605,6 +605,20 @@ model Board {
   projectId       String               @map("project_id")
   name            String
   type            BoardType            @default(kanban)
+  // The project's ONE default board (Story 3.7.2). Multiple boards per project
+  // now exist (CRUD is 3.7.3); exactly one is the default — the board `/boards`
+  // opens when no `?board=` is given. The invariant ("at most one default per
+  // project") is enforced by a PARTIAL unique index in the migration
+  // (`board_one_default_per_project`, `WHERE is_default`) — Prisma's DSL can't
+  // express a filtered unique index, so it lives as raw SQL there, exactly like
+  // `workflow_status_one_initial_per_project`. The 3.1-seeded board backfills to
+  // `true`; `seedDefaultBoard` sets it on every new project's first board.
+  isDefault       Boolean              @default(false) @map("is_default")
+  // Stable switcher ordering (Story 3.7.2). The SAME opaque base-62 fractional-
+  // index String the `work_item` / `board_column` / `workflow_status` positions
+  // use (`lib/workItems/positioning.ts`) — app-assigned (no DB default), so a
+  // reorder is a single-row write. Seeded/backfilled to the first key (`a0`).
+  position        String               @db.Text
   // Swimlane grouping (Story 3.3.2). `none` is the flat 3.2 board (the default,
   // so every existing/seeded board is unchanged). The 3.3.4 projection resolves
   // each card's lane server-side from this value (epic groups by ANCESTOR epic).
@@ -618,8 +632,9 @@ model Board {
   columnStatuses BoardColumnStatus[]
 
   @@index([workspaceId])
-  // Non-unique — the per-project board lookup (v1 returns the single board).
-  @@index([projectId])
+  // Non-unique — a project has N boards (3.7); the switcher lists them by
+  // `position` (3.7.2), so the lookup is ordered on this composite index.
+  @@index([projectId, position])
   @@map("board")
 }
 

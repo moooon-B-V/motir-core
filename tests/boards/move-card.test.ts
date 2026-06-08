@@ -71,7 +71,7 @@ async function makeFixture(email = 'move-a@example.com'): Promise<Fixture> {
   const statusIdByKey = new Map(statuses.map((s) => [s.key, s.id]));
 
   const board = await db.board.create({
-    data: { workspaceId, projectId: project.id, name: 'Board', type: 'kanban' },
+    data: { workspaceId, projectId: project.id, name: 'Board', type: 'kanban', position: 'a0' },
   });
 
   // One single-status column per status (the default-board projection shape).
@@ -102,7 +102,13 @@ async function makeFixture(email = 'move-a@example.com'): Promise<Fixture> {
   // so they don't collide with board 1's per-status mappings under
   // `@@unique([boardId, statusId])`.
   const multiBoard = await db.board.create({
-    data: { workspaceId, projectId: project.id, name: 'Working Board', type: 'kanban' },
+    data: {
+      workspaceId,
+      projectId: project.id,
+      name: 'Working Board',
+      type: 'kanban',
+      position: 'a1',
+    },
   });
 
   // A multi-status column mapping BOTH in_progress and in_review (the Jira
