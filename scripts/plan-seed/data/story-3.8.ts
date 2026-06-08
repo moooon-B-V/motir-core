@@ -232,7 +232,7 @@ export const story_3_8: PlanStory = {
       id: '3.8.6',
       title:
         'Tests — board load model (no "Load more", over-cap banner, Done-age window, virtualization)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 22,
