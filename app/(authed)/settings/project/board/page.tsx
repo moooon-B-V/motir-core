@@ -185,19 +185,25 @@ async function BoardSettingsHeader({
           {t('board.breadcrumb', { project: projectName, board: boardName })}
         </p>
       ) : null}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
+      {/* Side-by-side, NON-wrapping head-row (title left, switcher right) per the
+          design mock. The left block shrinks (`min-w-0`) and the switcher block
+          holds its width (`shrink-0`) so the switcher stays on the SAME row — a
+          wrap here would push the whole board-config editor down far enough that
+          the column-reorder drag's target lands at the viewport bottom and dnd
+          autoscroll never settles (it never fires the reorder PATCH). */}
+      <div className="flex items-start justify-between gap-6">
+        <div className="flex min-w-0 flex-col gap-1">
           <h1 className="flex items-center gap-2.5 font-serif text-3xl font-semibold text-(--el-text)">
             <Columns3 className="text-(--el-text-muted) size-6 shrink-0" aria-hidden />
             {t('board.title')}
           </h1>
-          <p className="text-(--el-text-muted) max-w-[40rem] font-sans text-sm">
+          <p className="text-(--el-text-muted) max-w-[34rem] font-sans text-sm">
             {t('board.subtitle')}
           </p>
         </div>
         {/* The per-board switcher — NAMES which board is being configured + lets
             the admin switch which board they edit. */}
-        <div className="flex flex-col items-start gap-1.5 sm:items-end">
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
           <SectionLabel label={t('board.configuringBoardLabel')} />
           <BoardSwitcher variant="settings" />
         </div>
