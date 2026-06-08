@@ -342,6 +342,14 @@ function BoardDnd({
   }, [columns]);
   const snapshotRef = useRef<BoardColumnDto[] | null>(null);
 
+  // Per-column load-more plumbing (3.2.5/3.2.8). The FLAT board no longer uses it
+  // (3.8.3 dropped its "Load more"/sentinel — the column renders the whole bounded
+  // 3.8.2 set, virtualized); it stays ONLY for the `SwimlaneBoard` footer, which is
+  // removed in 3.8.5 along with this `loadMore`/`paging`/`appendColumnPage` plumbing
+  // and the now-permanently-null `BoardColumnDto.cursor`. Inert in the meantime —
+  // 3.8.2 made `cursor` always `null`, so `loadMore` early-returns and no
+  // "Load more" ever renders — but kept wired so the swimlane prop contract holds
+  // until 3.8.5 lands.
   const [paging, setPaging] = useState<Record<string, 'loading' | 'error'>>({});
   const inFlightRef = useRef<Set<string>>(new Set());
 
@@ -850,9 +858,6 @@ function BoardDnd({
                   column={column}
                   assigneeNameById={assigneeNameById}
                   onOpenQuickView={openPeek}
-                  onLoadMore={loadMore}
-                  loadingMore={paging[column.id] === 'loading'}
-                  loadError={paging[column.id] === 'error'}
                   activeCardId={activeCard?.id ?? null}
                   onSetWipLimit={setColumnWip}
                 />
