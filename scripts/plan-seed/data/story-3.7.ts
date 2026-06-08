@@ -80,7 +80,7 @@ export const story_3_7: PlanStory = {
       id: '3.7.1',
       title:
         'Design — board switcher + create / rename / delete / set-default UI (extends design/boards/)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 40,
