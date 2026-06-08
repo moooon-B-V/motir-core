@@ -629,7 +629,7 @@ export const story_7_0: PlanStory = {
       kind: 'bug',
       title:
         'Bug — an epic/story with children appears in the ready set (a container is not a dispatchable unit)',
-      status: 'in_progress',
+      status: 'done',
       type: 'bug',
       executor: 'coding_agent',
       estimateMinutes: 30,
