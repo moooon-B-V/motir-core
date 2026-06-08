@@ -15,6 +15,7 @@ import {
   reassignPatchForLane,
   relocateCardToCell,
   resolveCellMove,
+  resolveSwimlaneDrop,
   setCardSwimlaneKey,
 } from '@/app/(authed)/boards/_components/boardSwimlanes';
 
@@ -250,5 +251,62 @@ describe('resolveCellMove', () => {
 
   it('returns null when the card is missing from a side', () => {
     expect(resolveCellMove(snapshot, snapshot, 'ghost')).toBeNull();
+  });
+});
+
+describe('resolveSwimlaneDrop (3.3.8 — resolve-on-drop, the loop fix)', () => {
+  // The swimlane board no longer relocates live on dragOver (it looped — a
+  // resizing cell re-measures, the `over` flips, and the relocate cycle never
+  // settles). The move is resolved ONCE on drop from the dnd-kit `over` id. This
+  // mirrors the real cross-lane reassign E2E (un-quarantined by 3.3.8).
+  const snapshot = [
+    column({
+      id: 'c1',
+      name: 'To Do',
+      cards: [
+        card({ id: 'w1', key: 1, swimlaneKey: 'u1' }), // assignee u1
+        card({ id: 'w2', key: 2, swimlaneKey: BOARD_SWIMLANE_NO_VALUE }), // unassigned
+      ],
+    }),
+    column({ id: 'c2', name: 'Done', cards: [card({ id: 'w3', key: 3, swimlaneKey: 'u1' })] }),
+  ];
+
+  it('resolves a cross-lane reassign when `over` is a CELL id (append)', () => {
+    const resolved = resolveSwimlaneDrop(snapshot, cellId('c1', 'u2'), 'w2')!;
+    expect(resolved).not.toBeNull();
+    expect(resolved.move.columnChanged).toBe(false);
+    expect(resolved.move.laneChanged).toBe(true);
+    expect(resolved.move.originLaneKey).toBe(BOARD_SWIMLANE_NO_VALUE);
+    expect(resolved.move.targetLaneKey).toBe('u2');
+    // the optimistic state has the card re-stamped into the target lane
+    expect(laneKeyOfCard(resolved.relocated[0]!.cards.find((c) => c.id === 'w2')!)).toBe('u2');
+  });
+
+  it('resolves a reassign when `over` is a CARD id (insert before that card)', () => {
+    // drop w2 onto w1 (in the u1 lane) → reassign to u1, inserted before w1.
+    const resolved = resolveSwimlaneDrop(snapshot, 'w1', 'w2')!;
+    expect(resolved.move.laneChanged).toBe(true);
+    expect(resolved.move.targetLaneKey).toBe('u1');
+    expect(resolved.move.afterId).toBe('w1');
+  });
+
+  it('resolves a drop into the catch-all lane (the unassign case)', () => {
+    // w1 (assignee u1) dropped into the "No assignee" catch-all cell.
+    const resolved = resolveSwimlaneDrop(snapshot, cellId('c1', BOARD_SWIMLANE_NO_VALUE), 'w1')!;
+    expect(resolved.move.laneChanged).toBe(true);
+    expect(resolved.move.originLaneKey).toBe('u1');
+    expect(resolved.move.targetLaneKey).toBe(BOARD_SWIMLANE_NO_VALUE);
+  });
+
+  it('resolves a diagonal drop (column AND lane change)', () => {
+    const resolved = resolveSwimlaneDrop(snapshot, cellId('c2', BOARD_SWIMLANE_NO_VALUE), 'w1')!;
+    expect(resolved.move.columnChanged).toBe(true);
+    expect(resolved.move.laneChanged).toBe(true);
+    expect(resolved.move.targetColId).toBe('c2');
+    expect(resolved.move.targetLaneKey).toBe(BOARD_SWIMLANE_NO_VALUE);
+  });
+
+  it('returns null when `over` resolves to neither a cell nor a card', () => {
+    expect(resolveSwimlaneDrop(snapshot, 'nonexistent-id', 'w1')).toBeNull();
   });
 });

@@ -277,6 +277,43 @@ export function resolveCellMove(
   };
 }
 
+/**
+ * Resolve a swimlane drag from the dnd-kit `over` id at DROP time (Subtask 3.3.8).
+ *
+ * The swimlane board does NOT relocate the card live on `onDragOver` — doing so
+ * looped: a `(column × lane)` cell has no fixed height, so moving the card in/out
+ * resizes the source + target cells, dnd-kit re-measures, the closest-corners
+ * `over` flips to the resized neighbour, `onDragOver` fires again, and the
+ * relocate → resize → re-measure cycle never settles, throwing React's "Maximum
+ * update depth exceeded" mid-drag (PRODECT_FINDINGS #61; the flat board escapes
+ * this only because its columns are fixed-height internal scrollers with stable
+ * rects). Instead the move is resolved ONCE here, on drop: move the card into the
+ * `over`'s target cell against the pre-drag `snapshot`, then derive the structured
+ * `CellMove` from `snapshot → relocated`. Returns `{ move, relocated }` (the move
+ * descriptor + the optimistic board state to apply), or null when `over` resolves
+ * to neither a cell nor a card.
+ */
+export function resolveSwimlaneDrop(
+  snapshot: BoardColumnDto[],
+  overId: string,
+  cardId: string,
+): { move: CellMove; relocated: BoardColumnDto[] } | null {
+  const targetCell = cellOfOverId(snapshot, overId);
+  if (!targetCell) return null;
+  // Hovering a CARD (not the cell body / itself) inserts before it; a cell
+  // droppable id resolves to an append.
+  const overCardId = parseCellId(overId) !== null || overId === cardId ? null : overId;
+  const relocated = relocateCardToCell(
+    snapshot,
+    cardId,
+    targetCell.columnId,
+    targetCell.laneKey,
+    overCardId,
+  );
+  const move = resolveCellMove(snapshot, relocated, cardId);
+  return move ? { move, relocated } : null;
+}
+
 /** A rendered lane = the projection's lane meta + its per-column loaded cards. */
 export interface RenderedLane {
   lane: BoardSwimlaneDto;

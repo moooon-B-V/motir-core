@@ -54,10 +54,8 @@ import {
   cellOfOverId,
   laneKeyOfCard,
   moveCardToColumn,
-  parseCellId,
   reassignPatchForLane,
-  relocateCardToCell,
-  resolveCellMove,
+  resolveSwimlaneDrop,
   setCardSwimlaneKey,
 } from './boardSwimlanes';
 
@@ -101,11 +99,19 @@ type BoardStatus = 'loading' | 'ready' | 'error' | 'no-board';
 export function BoardContainer({
   members = [],
   activeProjectId,
+  selectedBoardId,
 }: {
   members?: WorkspaceMemberDTO[];
   activeProjectId?: string;
+  selectedBoardId?: string;
 }) {
   const t = useTranslations('boards');
+  // The selected board (Subtask 3.7.5) — the page's `?board=<id>` selection. It
+  // rides the projection fetch as `?boardId=` so the board the user picked (not
+  // just the default) is what loads; absent → the server resolves the project's
+  // default board. Threaded into the mount fetch AND the group-by re-lay refetch
+  // so a re-lay stays on the SAME selected board.
+  const boardQuery = selectedBoardId ? `?boardId=${encodeURIComponent(selectedBoardId)}` : '';
   const { toast } = useToast();
   const [board, setBoard] = useState<BoardProjectionDto | null>(null);
   const [status, setStatus] = useState<BoardStatus>('loading');
@@ -129,7 +135,7 @@ export function BoardContainer({
 
   useEffect(() => {
     let active = true;
-    fetch('/api/board', { headers: { accept: 'application/json' } })
+    fetch(`/api/board${boardQuery}`, { headers: { accept: 'application/json' } })
       .then(async (res) => {
         if (res.ok) {
           const data = (await res.json()) as BoardProjectionDto;
@@ -157,7 +163,9 @@ export function BoardContainer({
     // `activeProjectId` is in the deps so switching project/workspace (→ a new
     // active project + router.refresh()) re-runs the fetch for the new project's
     // board instead of leaving the previous project's board on screen.
-  }, [reloadKey, issuesChangedAt, activeProjectId]);
+    // `boardQuery` is in the deps so changing the `?board=` selection (the 3.7.4
+    // switcher) refetches the newly-selected board's projection.
+  }, [reloadKey, issuesChangedAt, activeProjectId, boardQuery]);
 
   const retry = useCallback(() => {
     setStatus('loading');
@@ -179,7 +187,9 @@ export function BoardContainer({
           body: JSON.stringify({ boardId: board.boardId, swimlaneGroupBy: next }),
         });
         if (!patch.ok) throw new Error(`group-by ${patch.status}`);
-        const res = await fetch('/api/board', { headers: { accept: 'application/json' } });
+        const res = await fetch(`/api/board${boardQuery}`, {
+          headers: { accept: 'application/json' },
+        });
         if (!res.ok) throw new Error(`reload ${res.status}`);
         setBoard((await res.json()) as BoardProjectionDto);
       } catch {
@@ -192,7 +202,7 @@ export function BoardContainer({
         setRelaying(false);
       }
     },
-    [board, t, toast],
+    [board, boardQuery, t, toast],
   );
 
   const assigneeNameById = useMemo(
@@ -588,21 +598,20 @@ function BoardDnd({
         return;
       }
 
-      // SWIMLANE (3.3.5) — relocate into the target (column × lane) cell.
+      // SWIMLANE (3.3.5 + 3.3.8) — DO NOT relocate the card across cells during
+      // the drag. A `(column × lane)` cell has no fixed height, so moving the card
+      // in/out resizes the source + target cells; dnd-kit then re-measures, the
+      // closest-corners `over` flips to the resized neighbour, `onDragOver` fires
+      // again, and the relocate → resize → re-measure cycle loops synchronously
+      // until React throws "Maximum update depth exceeded" mid-drag
+      // (PRODECT_FINDINGS #61; the flat board above is immune because its columns
+      // are fixed-height internal scrollers). So here we only track the hovered
+      // lane for the drop highlight; the actual move is resolved ONCE on drop
+      // (handleDragEnd → resolveSwimlaneDrop), and the DragOverlay provides the
+      // in-flight visual feedback.
       const targetCell = cellOfOverId(cols, overId);
       if (!targetCell) return;
       setOverLaneKey(targetCell.laneKey);
-      // Hovering a CARD (not the cell body / itself) inserts before it; a cell
-      // droppable id resolves to an append.
-      const overCardId = parseCellId(overId) !== null || overId === activeId ? null : overId;
-      const next = relocateCardToCell(
-        cols,
-        activeId,
-        targetCell.columnId,
-        targetCell.laneKey,
-        overCardId,
-      );
-      if (next !== cols) setColumns(next);
     },
     [swimlaned],
   );
@@ -657,12 +666,16 @@ function BoardDnd({
         return;
       }
 
-      // SWIMLANE (3.3.5).
-      const move = resolveCellMove(snapshot, cols, activeId);
-      if (!move) {
+      // SWIMLANE (3.3.5 + 3.3.8) — resolve the move from the drop's `over` target.
+      // The card was NOT relocated live on dragOver (it looped — see
+      // handleDragOver), so move it into the target cell ONCE here and derive the
+      // structured move from snapshot → relocated.
+      const resolved = resolveSwimlaneDrop(snapshot, String(over.id), activeId);
+      if (!resolved) {
         setColumns(snapshot);
         return;
       }
+      const { move, relocated } = resolved;
       const { columnChanged, laneChanged } = move;
       const rankChanged =
         !columnChanged && !laneChanged && move.originIndexInCell !== move.finalIndexInCell;
@@ -672,11 +685,12 @@ function BoardDnd({
         return;
       }
 
-      // Optimistic count transfer for a column change, then read the settled card.
+      // Apply the optimistic move (+ count transfer for a column change), then
+      // read the settled card.
       const optimistic = columnChanged
-        ? transferCount(cols, move.originColId, move.targetColId)
-        : cols;
-      if (optimistic !== cols) setColumns(optimistic);
+        ? transferCount(relocated, move.originColId, move.targetColId)
+        : relocated;
+      setColumns(optimistic);
       const card = findCard(optimistic, activeId);
       if (!card) {
         setColumns(snapshot);
@@ -755,8 +769,11 @@ function BoardDnd({
           const colId = columnOfOverId(cols, String(over.id));
           return t('announcementDropped', { key, col: colName(cols, colId) });
         }
+        // Resolve from the drop's `over` (the card isn't relocated live in
+        // swimlane mode anymore — 3.3.8), against the pre-drag snapshot.
         const move = snapshotRef.current
-          ? resolveCellMove(snapshotRef.current, cols, String(active.id))
+          ? (resolveSwimlaneDrop(snapshotRef.current, String(over.id), String(active.id))?.move ??
+            null)
           : null;
         if (!move) return undefined;
         const col = colName(cols, move.targetColId);
