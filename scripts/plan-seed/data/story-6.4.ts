@@ -168,7 +168,7 @@ export const story_6_4: PlanStory = {
       id: '6.4.4',
       title:
         'Project members + access API — manage memberships, roles, access level (project-admin-gated)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
