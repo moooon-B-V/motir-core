@@ -518,6 +518,20 @@ swap can redefine the full shape language, not just colour.
 - **Conventional Commits** for commit messages. Type prefixes used so far:
   `feat`, `fix`, `chore`. Scope is the affected area (e.g.
   `feat(workspaces): ...`).
+- **Migrations — every foreign key MUST be modelled as a Prisma `@relation`,
+  never hand-managed in raw migration SQL alone.** A column whose FK is created
+  in raw SQL (e.g. `ADD CONSTRAINT ... FOREIGN KEY`) but left as a plain scalar
+  in `schema.prisma` (no `@relation`) puts the schema graph and the
+  migration-built DB in permanent drift: **every `prisma migrate dev` then
+  re-proposes `DROP CONSTRAINT` for that FK** at the top of the next migration,
+  and committing it verbatim silently drops a real FK. So if you want the
+  referential guarantee, model the relation on BOTH sides (forward field +
+  back-relation) with the same `onDelete`/`onUpdate` actions the SQL used; if
+  you don't want it, drop the FK from the DB too — never split the two. (Fixed
+  by `bug-attachment-fk-migration-drift`: the `attachment.uploader_user_id` FK
+  from 2.3.7 was raw-SQL-only; it is now modelled as `Attachment.uploader` ↔
+  `User.uploadedAttachments`, so `migrate dev` reports "No difference detected"
+  with no spurious drop.)
 - **Out-of-scope findings** go to
   `/Users/yuezhu/projects/prodect/prodect_plan/PRODECT_FINDINGS.md`,
   not into a CLAUDE.md or PRODECT.md update. The planner promotes
