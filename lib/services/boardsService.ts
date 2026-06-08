@@ -230,13 +230,19 @@ export const boardsService = {
     // Build each column's full count + bounded card set (per-column, NOT per-card
     // — bounded by the board cap, so no N+1 over cards). Terminal columns are
     // windowed to issues touched within the Done-age window (3.8.2).
+    // Resolve the load-model bounds ONCE at the service boundary (Subtask
+    // 3.5.1's test seam over 3.8.2): the same `cap` bounds every column's load
+    // AND is the `truncated` denominator below, and the same `doneSince` windows
+    // every terminal column — so a test override is consistent across the whole
+    // projection.
+    const cap = resolveBoardIssueCap();
     const doneSince = doneAgeCutoff();
     const built = await Promise.all(
       columns.map((col) => {
         const live = (liveByColumn.get(col.id) ?? []).slice().sort(byPosition);
         const statusKeys = live.map((s) => s.key);
         const terminal = isTerminalColumn(statusKeys, terminalKeys);
-        return buildColumnCards(projectId, col, statusKeys, terminal, doneSince, ctx);
+        return buildColumnCards(projectId, col, statusKeys, terminal, doneSince, cap, ctx);
       }),
     );
 
@@ -294,8 +300,8 @@ export const boardsService = {
       columns: columnsDto,
       swimlanes,
       unmappedStatuses: statuses.filter((s) => !mappedStatusIds.has(s.id)),
-      cap: BOARD_ISSUE_CAP,
-      truncated: boardTotal > BOARD_ISSUE_CAP,
+      cap,
+      truncated: boardTotal > cap,
     };
   },
 
@@ -1068,9 +1074,39 @@ export const BOARD_ISSUE_CAP = 5000;
  */
 export const DONE_AGE_WINDOW_DAYS = 14;
 
-/** The cutoff instant for the Done-age window: now minus {@link DONE_AGE_WINDOW_DAYS}. */
+/**
+ * Test-only seam (Subtask 3.5.1) over the two board load-model bounds. When the
+ * matching override env is set to a POSITIVE INTEGER it REPLACES the shipped
+ * constant; unset (or non-positive / non-numeric — production), the shipped
+ * constant is used byte-for-byte. The override is wired ONLY into the test
+ * `webServer` env (`playwright.config.ts`) and the vitest setup, so the at-scale
+ * states — the over-cap "refine your filter" banner and the Done-age trim — are
+ * reachable with TENS of rows instead of the 5,000 / 14-day production scale.
+ * A unit test asserts the unset-env default equals the shipped constants, so
+ * this is a test seam, NOT a behaviour change: production is untouched.
+ */
+function envPositiveInt(name: string): number | null {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return null;
+  const v = Number(raw);
+  return Number.isInteger(v) && v > 0 ? v : null;
+}
+
+/** The board issue cap in effect: the {@link BOARD_ISSUE_CAP_OVERRIDE} env when a
+ * positive integer, else the shipped {@link BOARD_ISSUE_CAP}. */
+export function resolveBoardIssueCap(): number {
+  return envPositiveInt('BOARD_ISSUE_CAP_OVERRIDE') ?? BOARD_ISSUE_CAP;
+}
+
+/** The Done-age window (days) in effect: the {@link DONE_AGE_WINDOW_DAYS_OVERRIDE}
+ * env when a positive integer, else the shipped {@link DONE_AGE_WINDOW_DAYS}. */
+export function resolveDoneAgeWindowDays(): number {
+  return envPositiveInt('DONE_AGE_WINDOW_DAYS_OVERRIDE') ?? DONE_AGE_WINDOW_DAYS;
+}
+
+/** The cutoff instant for the Done-age window: now minus the resolved window. */
 function doneAgeCutoff(): Date {
-  return new Date(Date.now() - DONE_AGE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  return new Date(Date.now() - resolveDoneAgeWindowDays() * 24 * 60 * 60 * 1000);
 }
 
 /** The per-project terminal-status key set (category `done`) — the finding-#21
@@ -1104,6 +1140,7 @@ async function buildColumnCards(
   statusKeys: string[],
   terminal: boolean,
   doneSince: Date,
+  cap: number,
   ctx: ServiceContext,
 ): Promise<{
   col: BoardColumn;
@@ -1121,7 +1158,7 @@ async function buildColumnCards(
       ctx.workspaceId,
       statusKeys,
       terminal ? 'recent' : 'position',
-      { limit: BOARD_ISSUE_CAP, updatedSince: terminal ? doneSince : undefined },
+      { limit: cap, updatedSince: terminal ? doneSince : undefined },
     ),
   ]);
   return { col, statusKeys, rows, totalCount };

@@ -20,6 +20,15 @@
  *
  * Tune the size with env: SEED_ROOTS, SEED_BIG_CHILDREN, SEED_SMALL_CHILDREN,
  * SEED_DEEP_CHILDREN (defaults below ≈ 2,000 issues).
+ *
+ * SEED_SHAPE=board (Subtask 3.5.1) switches to the BOARD-shaped variant: instead
+ * of the tree/list shape above, it spreads the `BIG` project's issues across the
+ * board's columns (every status), swimlanes (many assignees + epics + every
+ * priority, each with a catch-all), and a Done-age spread in the terminal
+ * columns — the at-scale fixture the Epic-3 cross-cutting board journey
+ * (Stories 3.5.2 / 3.5.3) runs against. Board-shape size knobs: SEED_BOARD_MEMBERS,
+ * SEED_BOARD_EPICS, SEED_BOARD_STORIES_PER_EPIC, SEED_BOARD_ROOT_STORIES,
+ * SEED_BOARD_TALL_EXTRA. See scripts/seedLargeBoard.ts.
  */
 /* eslint-disable no-console -- a CLI dev script: console IS its output surface */
 import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads
@@ -30,9 +39,16 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import {
+  seedLargeBoard,
+  SEED_LARGE_BOARD_DEFAULTS,
+  SEED_LARGE_OWNER_EMAIL,
+  SEED_LARGE_OWNER_PASSWORD,
+  type SeedLargeBoardManifest,
+} from './seedLargeBoard';
 
-const SEED_EMAIL = 'seed-large@prodect.dev';
-const SEED_PASSWORD = 'hunter2hunter2'; // satisfies the credential-strength rule
+const SEED_EMAIL = SEED_LARGE_OWNER_EMAIL;
+const SEED_PASSWORD = SEED_LARGE_OWNER_PASSWORD;
 const SEED_WORKSPACE_NAME = 'Seed — Large (finding #57)';
 const SEED_PROJECT_NAME = 'Large backlog';
 const SEED_PROJECT_IDENTIFIER = 'BIG';
@@ -45,6 +61,62 @@ const ROOTS = n('SEED_ROOTS', 60); // → ~2 List pages of roots, roots paginate
 const BIG_CHILDREN = n('SEED_BIG_CHILDREN', 130); // epic[0] → "Load more children" (50/50/30)
 const DEEP_CHILDREN = n('SEED_DEEP_CHILDREN', 90); // a story under epic[0] → nested load-more
 const SMALL_CHILDREN = n('SEED_SMALL_CHILDREN', 30); // the other epics
+
+// SEED_SHAPE=board (Subtask 3.5.1) seeds the board-shaped variant instead of the
+// tree/list shape — issues spread across columns + swimlanes + a Done-age spread,
+// the fixture the Epic-3 at-scale board journey (3.5.2/3.5.3) runs against.
+const SEED_SHAPE = (process.env.SEED_SHAPE ?? 'tree').toLowerCase();
+const BOARD_MEMBERS = n('SEED_BOARD_MEMBERS', 6); // assignee-lane pool size
+
+/**
+ * The assignee pool for the board-shaped seed — `count` workspace members the
+ * cards round-robin across (group-by Assignee lanes). Idempotent: reuses the
+ * member user rows by email when present (they survive the workspace clear,
+ * which only cascades their membership), and re-adds membership each run.
+ */
+async function ensureBoardMembers(workspaceId: string, count: number): Promise<string[]> {
+  const ids: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const email = `seed-large-board-m${i + 1}@prodect.dev`;
+    const existing = await db.user.findUnique({ where: { email } });
+    const user =
+      existing ??
+      (await usersService.createUser({
+        email,
+        password: SEED_PASSWORD,
+        name: `Board Member ${i + 1}`,
+      }));
+    await workspacesService.addMember({ userId: user.id, workspaceId, role: 'member' });
+    ids.push(user.id);
+  }
+  return ids;
+}
+
+function printBoardSummary(
+  identifier: string,
+  memberCount: number,
+  m: SeedLargeBoardManifest,
+): void {
+  const perStatus = m.statusKeys.map((k) => `${k}=${m.perStatus[k]}`).join('  ');
+  console.log(`\n✅ Seeded ${m.created} board-shaped issues.`);
+  console.log('────────────────────────────────────────────────────────');
+  console.log(`  Sign in:    ${SEED_EMAIL} / ${SEED_PASSWORD}`);
+  console.log(`  Workspace:  ${SEED_WORKSPACE_NAME}`);
+  console.log(`  Project:    ${SEED_PROJECT_NAME} (${identifier})`);
+  console.log(`  Columns:    ${perStatus}`);
+  console.log(
+    `  Tall col:   ${m.tallStatusKey} (${m.perStatus[m.tallStatusKey]} cards — virtualizes)`,
+  );
+  console.log(
+    `  Assignees:  ${m.assigneeCount}/${memberCount} used + ${m.unassignedCount} unassigned (catch-all)`,
+  );
+  console.log(`  Epic lanes: ${m.epicLaneCount} + ${m.noEpicCount} with no epic (catch-all)`);
+  console.log(
+    `  Done-age:   ${m.terminalInWindow} in-window + ${m.terminalAgedOut} aged-out (trimmed)`,
+  );
+  console.log('  Then open  /boards  — every column filled, swimlanes by Assignee/Epic/Priority.');
+  console.log('────────────────────────────────────────────────────────');
+}
 
 async function main() {
   if (process.env.NODE_ENV === 'production') {
@@ -87,6 +159,36 @@ async function main() {
     workspaceId: workspace.id,
     actorUserId: owner.id,
   });
+
+  // ── SEED_SHAPE=board (Subtask 3.5.1): the board-shaped at-scale fixture ─────
+  if (SEED_SHAPE === 'board') {
+    const memberIds = await ensureBoardMembers(workspace.id, BOARD_MEMBERS);
+    console.log(`Seeding board-shaped issues across ${memberIds.length} assignees…`);
+    const manifest = await seedLargeBoard(
+      {
+        workspaceId: workspace.id,
+        projectId: project.id,
+        projectIdentifier: project.identifier,
+        ownerId: owner.id,
+        memberIds,
+      },
+      // Full-size by default; tunable via SEED_BOARD_* envs.
+      {
+        epics: n('SEED_BOARD_EPICS', SEED_LARGE_BOARD_DEFAULTS.epics),
+        storiesPerEpic: n('SEED_BOARD_STORIES_PER_EPIC', SEED_LARGE_BOARD_DEFAULTS.storiesPerEpic),
+        rootStories: n('SEED_BOARD_ROOT_STORIES', SEED_LARGE_BOARD_DEFAULTS.rootStories),
+        tallColumnExtra: n('SEED_BOARD_TALL_EXTRA', SEED_LARGE_BOARD_DEFAULTS.tallColumnExtra),
+      },
+    );
+    // Pin the project active for the owner so the active-project-scoped /boards
+    // route resolves it on sign-in (manual eyeballing + the at-scale E2E specs).
+    await db.workspaceMembership.update({
+      where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },
+      data: { activeProjectId: project.id },
+    });
+    printBoardSummary(project.identifier, memberIds.length, manifest);
+    return;
+  }
 
   // ── Bulk create through the shipped allocate-key + repo.create dance ───────
   let created = 0;

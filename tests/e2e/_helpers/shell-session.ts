@@ -25,6 +25,20 @@ export async function signUp(page: Page, email: string): Promise<void> {
   await page.waitForURL('**/dashboard', { timeout: 30_000 });
 }
 
+// Sign IN an EXISTING user (vs. signUp's fresh account) through the real
+// sign-in UI — the two-step email→password flow, both steps submitted with the
+// "Continue" button (Subtask 3.5.1). Used by the at-scale board specs to sign in
+// as the server-seeded board-seed owner, who is created via usersService (not
+// signed up), then land on the project board. Lands on the default `/dashboard`.
+export async function signIn(page: Page, email: string, password: string): Promise<void> {
+  await page.goto('/sign-in');
+  await page.getByPlaceholder('Email address').fill(email);
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByPlaceholder('Password').fill(password);
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.waitForURL('**/dashboard', { timeout: 30_000 });
+}
+
 // Create the first project via the dashboard empty-state CTA, so the
 // project-scoped sidebar nav (Dashboard / Issues / Boards / Reports) renders.
 export async function createFirstProject(page: Page, name: string): Promise<void> {
