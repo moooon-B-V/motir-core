@@ -20,18 +20,12 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp, createProject, createItem, transition } from './_helpers/workflow';
-import {
-  getBoard,
-  loadColumnCards,
-  moveCard,
-  columnByStatus,
-  cardIdsIn,
-  addCustomStatus,
-} from './_helpers/board';
+import { getBoard, moveCard, columnByStatus, cardIdsIn, addCustomStatus } from './_helpers/board';
 
-// BOARD_COLUMN_PAGE_SIZE in boardsService is 50; seed one more than a page so
-// the first page is bounded and a second page exists (finding #57).
-const PAGE_SIZE = 50;
+// 3.8.2 retired the per-column page; the board loads the whole bounded set up to
+// BOARD_ISSUE_CAP (5,000). Seed comfortably past the OLD 50-card page size to
+// prove the whole column loads at once with no cursor / "Load more".
+const OLD_PAGE_SIZE = 50;
 
 test.beforeEach(async () => {
   await resetDatabase();
@@ -94,34 +88,28 @@ test.describe('board-projection @smoke', () => {
     expect(board.columns).toHaveLength(6);
   });
 
-  test('a column with more than a page of cards returns a bounded first page + count + cursor; the cursor pages the rest (finding #57)', async () => {
-    test.setTimeout(120_000); // seeding PAGE_SIZE+2 cards over HTTP is the slow part
+  test('a column past the old page size loads the WHOLE bounded set at once — no cursor, not truncated (3.8.2)', async () => {
+    test.setTimeout(120_000); // seeding the cards over HTTP is the slow part
     const owner = await signUp('e2e-board-paging@example.com');
     const project = await createProject(owner, 'Paging', 'PAG');
 
-    const total = PAGE_SIZE + 2;
+    const total = OLD_PAGE_SIZE + 12; // comfortably past the retired 50-card page
     for (let i = 0; i < total; i++) {
       await createItem(owner.ctx, project.id, `card ${i}`); // all land in To Do
     }
 
     const board = await getBoard(owner.ctx);
     const todo = columnByStatus(board, 'todo');
-    // First page is BOUNDED (never load-all), count is the full denominator, and
-    // there is a cursor because more remain.
-    expect(todo.cards).toHaveLength(PAGE_SIZE);
+    // The whole bounded column loads at once: every card, the full count, and NO
+    // cursor (the per-column paging is gone; the client virtualizes).
+    expect(todo.cards).toHaveLength(total);
     expect(todo.totalCount).toBe(total);
-    expect(todo.cursor).toBeTruthy();
-
-    // The cursor pages the remainder; the final page has no further cursor.
-    const next = await loadColumnCards(owner.ctx, board.boardId, todo.id, todo.cursor);
-    expect(next.cards).toHaveLength(total - PAGE_SIZE);
-    expect(next.cursor).toBeNull();
-
-    // The two pages are disjoint and together cover the whole column.
-    const firstIds = new Set(todo.cards.map((c) => c.id));
-    const nextIds = next.cards.map((c) => c.id);
-    expect(nextIds.some((id) => firstIds.has(id))).toBe(false);
-    expect(firstIds.size + nextIds.length).toBe(total);
+    expect(todo.cursor).toBeNull();
+    // A normal-sized board is under the cap → not truncated, no over-cap banner.
+    expect(board.truncated).toBe(false);
+    expect(board.cap).toBeGreaterThan(total);
+    // Every card is unique (the whole set, no dupes).
+    expect(new Set(todo.cards.map((c) => c.id)).size).toBe(total);
   });
 
   test('a legal cross-column move applies the workflow transition; the new status shows in a re-fetched projection', async () => {

@@ -1,12 +1,7 @@
 import { expect, type APIRequestContext, type APIResponse } from '@playwright/test';
 import { workflowsService } from '@/lib/services/workflowsService';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
-import type {
-  BoardColumnDto,
-  BoardProjectionDto,
-  MoveCardTarget,
-  PagedColumnCardsDto,
-} from '@/lib/dto/boards';
+import type { BoardColumnDto, BoardProjectionDto, MoveCardTarget } from '@/lib/dto/boards';
 import type { TestUser } from './work-item-setup';
 
 // Board-API helpers for the Story-3.1 closing E2E (Subtask 3.1.7), lifted into
@@ -21,24 +16,6 @@ export async function getBoard(ctx: APIRequestContext): Promise<BoardProjectionD
   const res = await ctx.get('/api/board');
   expect(res.status(), 'GET /api/board').toBe(200);
   return (await res.json()) as BoardProjectionDto;
-}
-
-/**
- * GET /api/board/columns/[columnId]/cards?boardId=&cursor= → one lazy "load
- * more" page for a single column (finding #57). `cursor` is the opaque string
- * the previous page returned; omit it for the first page.
- */
-export async function loadColumnCards(
-  ctx: APIRequestContext,
-  boardId: string,
-  columnId: string,
-  cursor?: string | null,
-): Promise<PagedColumnCardsDto> {
-  const qs = new URLSearchParams({ boardId });
-  if (cursor) qs.set('cursor', cursor);
-  const res = await ctx.get(`/api/board/columns/${columnId}/cards?${qs.toString()}`);
-  expect(res.status(), 'GET column cards page').toBe(200);
-  return (await res.json()) as PagedColumnCardsDto;
 }
 
 /**

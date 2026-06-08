@@ -172,13 +172,14 @@ export interface MoveCardResultDto {
 }
 
 /**
- * One column of the board projection (Subtask 3.1.4): the column meta, its
- * mapped status keys, a BOUNDED first page of cards (ordered by rank, or by
- * recency for a terminal column), the FULL count of cards in the column
- * (`totalCount` — the denominator the UI shows, independent of how many are
- * loaded), and a `cursor` for lazy "load more" (null when the column has no
- * further pages). The board NEVER returns every card (finding #57); the 3.2 UI
- * pages with `cursor` and virtualizes a tall column.
+ * One column of the board projection (Subtask 3.1.4, load model corrected by
+ * 3.8.2): the column meta, its mapped status keys, the column's BOUNDED card set
+ * (ordered by rank, or by recency + windowed to the Done-age cutoff for a
+ * terminal column), and the FULL count of cards in the column (`totalCount` —
+ * the denominator the UI shows, unaffected by the Done-age window). The board
+ * loads the whole bounded set up to the board-level `cap`, NOT a paged window
+ * (finding #57: the cap is the bound, never "load every row"); the client
+ * virtualizes a tall column.
  */
 export interface BoardColumnDto {
   id: string;
@@ -191,16 +192,23 @@ export interface BoardColumnDto {
   statusKeys: string[];
   cards: BoardCardDto[];
   totalCount: number;
+  /**
+   * @deprecated Retired in Subtask 3.8.2 — the board loads the whole bounded set
+   * (no per-column paging), so this is ALWAYS `null`. The field is kept one PR
+   * longer because the flat/swimlane UI's load-more plumbing still reads it; it
+   * is removed in 3.8.3 / 3.8.5 along with that plumbing.
+   */
   cursor: string | null;
 }
 
 /**
- * The board read projection (Subtask 3.1.4): the default board's columns (in
- * `position` order), each with its bounded first page of cards, plus
- * `unmappedStatuses` — every project workflow status mapped to NO column
- * (Jira's behaviour: surfaced, never silently dropped, so the 3.2 UI can offer
- * to map them). The board itself stores no card placement; a card's column is
- * derived from its `work_item.status`.
+ * The board read projection (Subtask 3.1.4, load model corrected by 3.8.2): the
+ * default board's columns (in `position` order), each with its bounded card set,
+ * a board-level `cap` + `truncated` signal, plus `unmappedStatuses` — every
+ * project workflow status mapped to NO column (Jira's behaviour: surfaced, never
+ * silently dropped, so the 3.2 UI can offer to map them). The board itself
+ * stores no card placement; a card's column is derived from its
+ * `work_item.status`.
  */
 export interface BoardProjectionDto {
   boardId: string;
@@ -222,13 +230,28 @@ export interface BoardProjectionDto {
    */
   swimlanes: BoardSwimlaneDto[];
   unmappedStatuses: WorkflowStatusDto[];
+  /**
+   * The board-level issue cap (Subtask 3.8.2) — the generous bound the board
+   * loads up to (the mirror-faithful replacement for per-column "Load more").
+   * Echoed so the 3.8.4 over-cap banner can name it in its copy.
+   */
+  cap: number;
+  /**
+   * True when the board's total card count exceeds `cap` (Subtask 3.8.2) — the
+   * load stopped at the cap and the 3.8.4 UI shows the "this board is too large
+   * — refine the filter" banner. The board is STILL bounded either way (the cap
+   * is the bound, finding #57); `truncated` only distinguishes "everything fit"
+   * from "the cap was hit".
+   */
+  truncated: boolean;
 }
 
 /**
- * One lazy "load more" page for a single column (`boardsService.loadColumnCards`
- * / the 3.1.6 `GET …/columns/[id]/cards` route): the next slice of cards plus
- * the cursor for the page after it (null at the end of the column's bounded
- * window). Same `BoardCardDto` shape the projection returns.
+ * @deprecated Retired in Subtask 3.8.2 — the board loads the whole bounded set,
+ * so the per-column lazy "load more" page (and its `GET …/columns/[id]/cards`
+ * route + `boardsService.loadColumnCards` producer) is gone. The type is kept
+ * one PR longer because the flat/swimlane UI's load-more plumbing still
+ * references it; it is removed in 3.8.3 / 3.8.5 along with that plumbing.
  */
 export interface PagedColumnCardsDto {
   cards: BoardCardDto[];
