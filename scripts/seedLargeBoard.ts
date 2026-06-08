@@ -42,6 +42,7 @@ import { db } from '@/lib/db';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { keyForAppend } from '@/lib/workItems/positioning';
 
 /** The five priority enum values, lowest→highest (the group-by Priority lanes). */
 const PRIORITIES: WorkItemPriority[] = ['lowest', 'low', 'medium', 'high', 'highest'];
@@ -148,6 +149,18 @@ export async function seedLargeBoard(
   let noEpicCount = 0;
   const terminalIds: string[] = [];
 
+  // `position` MUST be a valid fractional-indexing key (the `keyForAppend` /
+  // `keyBetween` form the app mints), NOT a zero-padded number: a board MOVE
+  // recomputes the dropped card's key via `generateKeyBetween` against its new
+  // neighbours' positions, and that library REJECTS keys like "00000001"
+  // ("invalid order key head: 0"). A plain numeric pad sorts fine — so the board
+  // RENDERS in order — but every drag 500s, which is exactly the at-scale
+  // interaction journey (3.5.2/3.5.3) this fixture exists to support. So mint a
+  // monotonically-appended valid key per card (creation order = board order),
+  // the same path `workItemsService.create` uses.
+  let positionCursor: string | null = null;
+  const nextPosition = (): string => (positionCursor = keyForAppend(positionCursor));
+
   async function createOne(args: {
     kind: WorkItemKind;
     title: string;
@@ -171,7 +184,7 @@ export async function seedLargeBoard(
           status: args.status,
           priority: args.priority,
           assigneeId: args.assigneeId,
-          position: String(key).padStart(8, '0'),
+          position: nextPosition(),
         },
         tx,
       );
