@@ -207,6 +207,26 @@ export const STUB_STORIES: PlanStory[] = [
       'rule.',
     items: [],
   },
+  {
+    id: '6.8',
+    title: 'Edit project details + change project key (with old-key redirects)',
+    status: 'planned',
+    descriptionMd:
+      'Project-admin editing of project details (name, key, avatar) in the project settings area ' +
+      '(sits alongside 6.5). The load-bearing piece is **changing the project key mid-project, ' +
+      'Jira-faithfully** (decision-ladder rung 1 — Atlassian "Editing a project key"): on a key ' +
+      'change, re-render every issue identifier (`project.identifier` PROD → NIF; the per-project ' +
+      '`work_item.key` numbers are preserved, so PROD-42 → NIF-42) and **keep the old key working ' +
+      'as a permanent redirect** — old links, REST calls, and JQL/saved filters that reference the ' +
+      'old key all still resolve to the new one. Implementation notes: the current schema stores a ' +
+      'denormalized `work_item.identifier` ("PROD-42") per row, so a key change is a bulk re-write ' +
+      'of that column + a search re-index (Jira\'s "background re-index"); and it needs a NEW ' +
+      '`project_key_alias` (key-history) table — which the schema lacks today — so historical keys ' +
+      'redirect. Guards: key format + cross-project uniqueness (incl. against existing aliases), ' +
+      'admin-only, atomic rename in one transaction. This is the capability the 8.7 rebrand uses, ' +
+      'and it turns the PROD-vs-NIF question into a reversible setting rather than a migration.',
+    items: [],
+  },
 
   // ── Epic 7: AI Planning Layer ─────────────────────────────────────────────
   {
