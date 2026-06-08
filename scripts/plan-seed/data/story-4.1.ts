@@ -234,7 +234,7 @@ export const story_4_1: PlanStory = {
       id: '4.1.3',
       title:
         '`sprintsService` — sprint CRUD + `assertSprintTransition` state-machine guard + DTOs/errors',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
