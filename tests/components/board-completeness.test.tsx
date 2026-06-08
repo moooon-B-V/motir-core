@@ -34,7 +34,12 @@ vi.mock('@/app/(authed)/_components/CreateIssueProvider', () => ({
 }));
 
 import { BoardContainer } from '@/app/(authed)/boards/_components/BoardContainer';
-import type { BoardColumnDto, BoardProjectionDto } from '@/lib/dto/boards';
+import type {
+  BoardCardDto,
+  BoardColumnDto,
+  BoardProjectionDto,
+  BoardSwimlaneDto,
+} from '@/lib/dto/boards';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 
 function column(over: Partial<BoardColumnDto> & { id: string; name: string }): BoardColumnDto {
@@ -45,6 +50,24 @@ function column(over: Partial<BoardColumnDto> & { id: string; name: string }): B
     cards: [],
     totalCount: 0,
     cursor: null,
+    ...over,
+  };
+}
+
+function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardCardDto {
+  return {
+    projectId: 'p1',
+    parentId: null,
+    kind: 'task',
+    identifier: `PROD-${over.key}`,
+    title: `Card ${over.key}`,
+    status: 'todo',
+    priority: 'medium',
+    assigneeId: null,
+    dueDate: null,
+    estimateMinutes: null,
+    position: 'a0',
+    ready: true,
     ...over,
   };
 }
@@ -253,5 +276,84 @@ describe('board completeness (3.2.6)', () => {
     const pager = await screen.findByTestId('board-pager');
     // The position label defaults to the first column before any scroll.
     expect(pager.textContent).toContain('To Do · 1 of 3');
+  });
+});
+
+describe('over-cap warning banner (3.8.4)', () => {
+  const SWIMLANES: BoardSwimlaneDto[] = [
+    { key: 'u1', label: 'Ana Ruiz', kind: 'assignee', count: 1 },
+  ];
+
+  it('renders the over-cap banner with the cap in the copy when the board is truncated', async () => {
+    // The 3.8.2 projection signals `truncated` when the bounded load hit the
+    // cap (board total > BOARD_ISSUE_CAP) — the banner mirrors Jira's "maximum
+    // viewable issues exceeded — refine your filter" warning and names the cap.
+    vi.stubGlobal(
+      'fetch',
+      mockFetchOk(
+        projection({
+          truncated: true,
+          cap: 5000,
+          columns: [column({ id: 'c1', name: 'To Do', totalCount: 7321 })],
+        }),
+      ),
+    );
+    render(<BoardContainer />);
+
+    const banner = await screen.findByTestId('board-overcap-banner');
+    // The cap is interpolated through the catalog's `{cap, number}` (grouped).
+    expect(banner.textContent).toContain('5,000');
+    expect(banner.textContent).toContain('refine the board filter');
+    // role="status" so the warning is announced when it appears after a fetch.
+    expect(banner.getAttribute('role')).toBe('status');
+    // The affordance is the disabled Epic-6 filter seam (not an invented control).
+    const seam = screen.getByTestId('board-overcap-filter');
+    expect((seam as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('omits the over-cap banner when the board is not truncated', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchOk(
+        projection({
+          truncated: false,
+          columns: [column({ id: 'c1', name: 'To Do', totalCount: 12 })],
+        }),
+      ),
+    );
+    render(<BoardContainer />);
+
+    await waitFor(() => expect(screen.getByTestId('board')).toBeTruthy());
+    expect(screen.queryByTestId('board-overcap-banner')).toBeNull();
+  });
+
+  it('shows the banner above the swimlane layout too (it sits in the container, not a layout)', async () => {
+    // The banner is a board-level signal mounted above BoardDnd, so it shows
+    // for the swimlane board (group-by ≠ none) exactly as for the flat one.
+    vi.stubGlobal(
+      'fetch',
+      mockFetchOk(
+        projection({
+          truncated: true,
+          cap: 5000,
+          swimlaneGroupBy: 'assignee',
+          swimlanes: SWIMLANES,
+          columns: [
+            column({
+              id: 'c1',
+              name: 'To Do',
+              totalCount: 9001,
+              cards: [card({ id: 'w1', key: 1, swimlaneKey: 'u1', assigneeId: 'u1' })],
+            }),
+          ],
+        }),
+      ),
+    );
+    render(<BoardContainer />);
+
+    // The swimlane board rendered (the lane label is present)…
+    await waitFor(() => expect(screen.getByText('Ana Ruiz')).toBeTruthy());
+    // …and the over-cap banner sits above it.
+    expect(screen.getByTestId('board-overcap-banner')).toBeTruthy();
   });
 });
