@@ -1,4 +1,10 @@
-import { Prisma, type User, type Workspace, type WorkspaceMembership } from '@prisma/client';
+import {
+  type MemberRole,
+  Prisma,
+  type User,
+  type Workspace,
+  type WorkspaceMembership,
+} from '@prisma/client';
 import { db } from '@/lib/db';
 
 // A membership row joined with the slice of its user the members list
@@ -130,7 +136,7 @@ export const workspaceMembershipRepository = {
   },
 
   async create(
-    data: { userId: string; workspaceId: string; role: string },
+    data: { userId: string; workspaceId: string; role: MemberRole },
     tx: Prisma.TransactionClient,
   ): Promise<WorkspaceMembership> {
     return tx.workspaceMembership.create({ data });

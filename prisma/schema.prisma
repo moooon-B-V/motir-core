@@ -84,6 +84,10 @@ model User {
   // uploaded blobs' audit rows). Modelled to keep the schema graph in sync
   // with the migration-built FK (bug-attachment-fk-migration-drift).
   uploadedAttachments       Attachment[]
+  // Back-relation for ProjectMembership (Subtask 6.4.2). A user holds explicit
+  // membership in many projects (Cascade on the FK: deleting a user removes
+  // their project-membership rows, mirroring workspaceMemberships).
+  projectMemberships        ProjectMembership[]
 
   @@map("user")
 }
@@ -176,6 +180,7 @@ model Workspace {
   boardColumns        BoardColumn[]
   boardColumnStatuses BoardColumnStatus[]
   sprints             Sprint[]
+  projectMemberships  ProjectMembership[]
 
   @@map("workspace")
 }
@@ -206,6 +211,14 @@ model Project {
   /// flip back to `restricted` restores the graph. Jira and Linear both ship
   /// this same "guarded vs anything-goes" project-level toggle.
   workflowPolicyMode WorkflowPolicyMode @default(restricted)
+  /// Browse-access level (Story 6.4), mirroring Jira team-managed projects:
+  /// `open` = any workspace member views + edits; `limited` = any member views
+  /// + comments (no edit); `private` = only explicit project members (+ the
+  /// workspace owner/admin, who always pass) can see it. Defaults to `open` so
+  /// existing projects backfill to it on migration — a `private` default would
+  /// lock every current member out. The browse/edit policy that reads this is
+  /// computed at the service layer in Subtask 6.4.3.
+  accessLevel        ProjectAccessLevel @default(open)
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   archivedAt         DateTime?
@@ -223,6 +236,9 @@ model Project {
   boardColumns        BoardColumn[]
   boardColumnStatuses BoardColumnStatus[]
   sprints             Sprint[]
+  // Explicit project membership (Story 6.4). Cascades: deleting a project
+  // removes its membership rows.
+  memberships         ProjectMembership[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -233,20 +249,23 @@ model Project {
 /// Join table — a user belongs to one-or-more workspaces. Cascades on both
 /// FKs: deleting a Workspace or a User removes the membership row. The
 /// (userId, workspaceId) uniqueness prevents accidental double-inserts.
-/// The role column ships with 'member' default; future RBAC reads this
-/// without a schema migration.
+/// `role` is the `MemberRole` enum — Story 6.4 formalized the original free
+/// `String` column into the explicit set it now shares with `ProjectMembership`.
+/// The migration mapped existing values (owner→owner, everything else→member);
+/// the `owner` row is the workspace founder, who always has access to every
+/// project regardless of project membership.
 model WorkspaceMembership {
-  id              String   @id @default(cuid())
+  id              String     @id @default(cuid())
   userId          String
   workspaceId     String
-  role            String   @default("member")
+  role            MemberRole @default(member)
   /// The member's currently-active project within this workspace. Clears
   /// to NULL (onDelete: SetNull) — not cascades — when that project is
   /// archived/deleted, so losing a project never removes the membership.
   /// Resolution (getActiveProject) + RLS land in Subtask 1.3.2.
   activeProjectId String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -257,6 +276,73 @@ model WorkspaceMembership {
   @@index([workspaceId])
   @@index([activeProjectId])
   @@map("workspace_membership")
+}
+
+/// Per-project membership + role (Story 6.4) — the project-scoped sibling of
+/// `WorkspaceMembership`. A user is explicitly added to a project with a
+/// `MemberRole`, which (combined with `project.accessLevel`) decides browse +
+/// edit access; the computed policy lands at the service layer in 6.4.3. A
+/// `private` project is visible ONLY to its members (plus the workspace
+/// owner/admin, who always pass). The `[userId, projectId]` uniqueness prevents
+/// double-adds.
+///
+/// `workspaceId` is denormalized from the project — the SAME pattern
+/// `work_item` / `work_item_link` / `workflow_status` use — so the RLS gate is a
+/// direct `workspace_id = app.workspace_id` comparison with no join (every
+/// membership read/write happens inside an active workspace context). It is kept
+/// honest by the FK chain: the project and its memberships share one workspace.
+/// All three FKs cascade — deleting the user, project, or workspace removes the
+/// row (a membership is meaningless without all three).
+model ProjectMembership {
+  id          String     @id @default(cuid())
+  workspaceId String     @map("workspace_id")
+  projectId   String     @map("project_id")
+  userId      String     @map("user_id")
+  role        MemberRole @default(member)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_membership")
+}
+
+/// The role a user holds in a workspace or project (Story 6.4). Formalizes
+/// Story 1.2's flat `WorkspaceMembership.role` string into an explicit, closed
+/// set shared by `WorkspaceMembership.role` and `ProjectMembership.role`:
+///   - `owner`  — the workspace founder; always has access to every project.
+///   - `admin`  — can manage members + settings (workspace or project scope).
+///   - `member` — can view + edit.
+///   - `viewer` — read-only (view + comment, no edit).
+/// A Postgres enum (closed, stable set), same shape as the other role/mode
+/// enums. The migration maps the existing free-string column (owner→owner,
+/// everything else→member) so no membership is dropped on deploy.
+enum MemberRole {
+  owner
+  admin
+  member
+  viewer
+
+  @@map("member_role")
+}
+
+/// A project's browse-access level (`project.accessLevel`, Story 6.4),
+/// mirroring Jira team-managed projects: `open` = any workspace member views +
+/// edits; `limited` = any member views + comments (no edit); `private` = only
+/// explicit project members. Defaults to `open` so existing projects backfill
+/// safely (no lockout). Closed + stable, so a Postgres enum.
+enum ProjectAccessLevel {
+  open
+  limited
+  private
+
+  @@map("project_access_level")
 }
 
 /// Workspace-level setting controlling whether Subtask PRs auto-merge into

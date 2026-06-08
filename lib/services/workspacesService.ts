@@ -1,4 +1,4 @@
-import { Prisma, type Workspace, type WorkspaceMembership } from '@prisma/client';
+import { type MemberRole, Prisma, type Workspace, type WorkspaceMembership } from '@prisma/client';
 import { db } from '@/lib/db';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -295,7 +295,7 @@ export const workspacesService = {
   async addMember(input: {
     userId: string;
     workspaceId: string;
-    role?: string;
+    role?: MemberRole;
   }): Promise<WorkspaceMembership> {
     try {
       return await db.$transaction(async (tx) => {
