@@ -236,7 +236,7 @@ export const story_3_6: PlanStory = {
     {
       id: '3.6.4',
       title: 'Story tests — column config service + the unmapped→mapped resolution E2E',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 18,
