@@ -6,14 +6,15 @@ design system (`app/globals.css` `--el-*`/shape tokens + the shipped
 `components/ui/*` and issue-list primitives), so the code subtasks compose the
 same primitives — no Pencil→code gap.
 
-| Surface                               | Asset                                            | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Kanban board (columns + cards)**    | **`board.mock.html`** (HTML mockup)              | The whole board surface — no `design/boards/` asset existed; the 3.2.1 design gate produces this. Multi-panel: board · drag · snap-back · keyboard · scale · unmapped · states · mobile. Gates 3.2.2–3.2.6. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| **Swimlanes + WIP limits**            | **`swimlanes-wip.mock.html`** (HTML mockup)      | EXTENDS the board surface — the 3.2.1 mockup drew a WIP slot only as a NON-enforced placeholder and NO swimlanes / WIP editor / over-limit treatment (unspecified == no design), so the 3.3.1 design gate produces this. Multi-panel: group-by control · swimlanes (assignee/epic/priority + catch-all) · cross-lane drag · WIP config · over-limit · states. Gates 3.3.5–3.3.6. See "Swimlanes + WIP (Story 3.3)" below.                                                                                                                                                                                                                                                             |
-| **Board configuration (admin)**       | **`board-config.mock.html`** (HTML mockup)       | The board ADMIN surface — the column manager + column ↔ status mapping the 3.2.6 unmapped tray points at; NO `design/boards/` asset drew it (the 3.2.1 board mockup is the board itself; its `[⋯]` menu is a disabled seam), so the 3.6.1 design gate produces this. A SIBLING of the Workflow editor (`settings/project/board`). Multi-panel: page · rename/add column · map-by-drag · map-by-keyboard · delete-confirm + guard · read-only · states · cross-links. Gates 3.6.3. See "Board configuration (Story 3.6)" below.                                                                                                                                                        |
-| **Board load model (correction)**     | **`board-scale.mock.html`** (HTML mockup)        | EXTENDS the board surface — CORRECTS the scale UI (notes.html mistake #33). The 3.2.1/3.2.8 scale panel paged columns ("Load more" → auto scroll-to-load); Jira does NOT page a board, so the corrected model (whole bounded set + virtualize + over-cap "refine filter" banner + Done-age window) was unspecified (== no design), so the 3.8.1 design gate produces this. Multi-panel: bounded whole-set load · Done-age window · over-cap banner · swimlanes-sans-footer. Gates 3.8.3 / 3.8.4 / 3.8.5. See "Board load model (Story 3.8)" below.                                                                                                                                    |
-| **Multiple boards (switcher + CRUD)** | **`multi-board.mock.html`** (HTML mockup)        | EXTENDS the board surface — the **board switcher** + **create / rename / set-default / delete** board UI. The 3.2.1 board mockup draws a SINGLE default board (its column `[⋯]` a disabled seam); the switcher + board-CRUD surfaces are unspecified (== no design), so the 3.7.1 design gate produces this. Multi-panel: header switcher (closed) · switcher open (active checked · default badged · New board) · manage menu (rename/set-default/delete) · New-board modal · rename modal · delete confirm · last-board guard + one-board state · states + permissions. Gates 3.7.4. See "Multiple boards (Story 3.7)" below.                                                       |
-| **Per-board settings (entry + page)** | **`per-board-settings.mock.html`** (HTML mockup) | EXTENDS the 3.6.1 board-config page + the 3.7.1 switcher — makes board SETTINGS **per-board**. The 3.6 admin only configures the project DEFAULT board, and every entry point links there with NO board context; with many boards per project (3.7) each board has its OWN config, so settings must target the SELECTED board. That gap is unspecified (== no design), so the 3.7.7 design gate produces this. Multi-panel: board-scoped settings page (header names the board + switcher) · switcher open (change which board) · manage menu "Board settings" item · cross-links carrying `?board=` · states + permissions. Gates 3.7.8. See "Per-board settings (Story 3.7)" below. |
+| Surface                               | Asset                                            | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Kanban board (columns + cards)**    | **`board.mock.html`** (HTML mockup)              | The whole board surface — no `design/boards/` asset existed; the 3.2.1 design gate produces this. Multi-panel: board · drag · snap-back · keyboard · scale · unmapped · states · mobile. Gates 3.2.2–3.2.6. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **Swimlanes + WIP limits**            | **`swimlanes-wip.mock.html`** (HTML mockup)      | EXTENDS the board surface — the 3.2.1 mockup drew a WIP slot only as a NON-enforced placeholder and NO swimlanes / WIP editor / over-limit treatment (unspecified == no design), so the 3.3.1 design gate produces this. Multi-panel: group-by control · swimlanes (assignee/epic/priority + catch-all) · cross-lane drag · WIP config · over-limit · states. Gates 3.3.5–3.3.6. See "Swimlanes + WIP (Story 3.3)" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **Board configuration (admin)**       | **`board-config.mock.html`** (HTML mockup)       | The board ADMIN surface — the column manager + column ↔ status mapping the 3.2.6 unmapped tray points at; NO `design/boards/` asset drew it (the 3.2.1 board mockup is the board itself; its `[⋯]` menu is a disabled seam), so the 3.6.1 design gate produces this. A SIBLING of the Workflow editor (`settings/project/board`). Multi-panel: page · rename/add column · map-by-drag · map-by-keyboard · delete-confirm + guard · read-only · states · cross-links. Gates 3.6.3. See "Board configuration (Story 3.6)" below.                                                                                                                                                                                                                                                                                                                                                          |
+| **Board load model (correction)**     | **`board-scale.mock.html`** (HTML mockup)        | EXTENDS the board surface — CORRECTS the scale UI (notes.html mistake #33). The 3.2.1/3.2.8 scale panel paged columns ("Load more" → auto scroll-to-load); Jira does NOT page a board, so the corrected model (whole bounded set + virtualize + over-cap "refine filter" banner + Done-age window) was unspecified (== no design), so the 3.8.1 design gate produces this. Multi-panel: bounded whole-set load · Done-age window · over-cap banner · swimlanes-sans-footer. Gates 3.8.3 / 3.8.4 / 3.8.5. See "Board load model (Story 3.8)" below.                                                                                                                                                                                                                                                                                                                                      |
+| **Multiple boards (switcher + CRUD)** | **`multi-board.mock.html`** (HTML mockup)        | EXTENDS the board surface — the **board switcher** + **create / rename / set-default / delete** board UI. The 3.2.1 board mockup draws a SINGLE default board (its column `[⋯]` a disabled seam); the switcher + board-CRUD surfaces are unspecified (== no design), so the 3.7.1 design gate produces this. Multi-panel: header switcher (closed) · switcher open (active checked · default badged · New board) · manage menu (rename/set-default/delete) · New-board modal · rename modal · delete confirm · last-board guard + one-board state · states + permissions. Gates 3.7.4. See "Multiple boards (Story 3.7)" below.                                                                                                                                                                                                                                                         |
+| **Per-board settings (entry + page)** | **`per-board-settings.mock.html`** (HTML mockup) | EXTENDS the 3.6.1 board-config page + the 3.7.1 switcher — makes board SETTINGS **per-board**. The 3.6 admin only configures the project DEFAULT board, and every entry point links there with NO board context; with many boards per project (3.7) each board has its OWN config, so settings must target the SELECTED board. That gap is unspecified (== no design), so the 3.7.7 design gate produces this. Multi-panel: board-scoped settings page (header names the board + switcher) · switcher open (change which board) · manage menu "Board settings" item · cross-links carrying `?board=` · states + permissions. Gates 3.7.8. See "Per-board settings (Story 3.7)" below.                                                                                                                                                                                                   |
+| **Scrum board (sprint view)**         | **`scrum.mock.html`** (HTML mockup)              | EXTENDS the board surface — the SCRUM variant: the same 3.2/3.3 board scoped to a board's active sprint, under a **sprint header** (name + state · goal-with-reveal · dates + time remaining · committed/completed/remaining points · complete-sprint entry point) + **per-column point totals**. The 3.2.1 board mockup drew the Kanban surface only — the sprint header / points / no-active-sprint state / complete-sprint affordance were unspecified (== no design), so the 4.5.1 design gate produces this. CHROME over the reused board — it does NOT redraw columns / cards / drag / swimlanes / WIP. Multi-panel: full scrum board · sprint-header anatomy (Tooltip reveal) · no-active-sprint EmptyState (→ Backlog) · edge states ("—" unestimated · "Ended" overdue · loading skeleton) · column-header slot coexistence. Gates 4.5.3. See "Scrum board (Story 4.5)" below. |
 
 The board is a **pure consumer** of the Story-3.1 board API
 (`GET …/board` → `BoardProjectionDto`; `GET …/board/columns/[id]/cards` → the
@@ -888,3 +889,177 @@ early RBAC build.
   switcher is a `role="menu"` with `menuitemradio` rows; the settings-page
   switcher is announced as "Configure which board"; board switches re-lay the
   editor (the 3.7.5 selected-board re-read).
+
+---
+
+# Scrum board (Story 4.5)
+
+Design reference for the **Scrum** variant of the board. Asset:
+**`scrum.mock.html`** (+ `scrum.png` export). It is the source of truth for the
+UI subtask **4.5.3** (scrum page resolution + sprint header + per-column point
+totals + no-active-sprint state), which carries **4.5.1** in `dependsOn` and
+binds to the **4.5.2** projection (`sprint` + `columnPoints`). The complete-
+sprint flow it mounts is **Story 4.4**; the Backlog its empty-state links to is
+**Story 4.2**; the burndown chart it seams for is **Story 4.6**.
+
+Built FROM the real design system (the token block is copied 1:1 from
+`app/globals.css`) and is **CHROME over the EXISTING board with NO new board
+vocabulary** — it REUSES the **3.2 board** (columns, cards, drag-as-transition,
+load-more / virtualization) and the **3.3 swimlanes / WIP** layer wholesale, fed
+the 4.5.2 sprint-scoped projection. It draws ONLY the net-new Scrum surfaces (the
+sprint header, the per-column point pill, the no-active-sprint state); it does
+**not** redraw columns / cards / drag states / swimlanes / WIP (those are
+referenced from `board.mock.html` + `swimlanes-wip.mock.html`, not re-spec'd).
+
+## Why this is an extension (the gap it closes)
+
+The 3.2.1 board mockup drew the **Kanban** surface only. A Scrum board is the
+same board scoped to a board's **active sprint**, under a sprint header — and the
+header (name / goal / dates / time remaining / points), the per-column point
+totals, the **no-active-sprint** empty state, and the **complete-sprint** entry
+point were all unspecified in `design/boards/` (== no design under the gate). So
+the planning-time design gate (4.5.1) produces this asset FIRST — it gates 4.5.3.
+
+**Mirror product = Jira's scrum board active-sprint view** (decision-ladder
+rung 1; VERIFIED June 2026, Atlassian docs — checked, not asserted, per
+`notes.html` mistake #33): a scrum board shows the **active sprint** under a
+sprint header carrying the sprint name + goal + dates + a **sprint-health** points
+summary, with **per-column point totals** in the column headers and a **Complete
+sprint** button; before a sprint is started (or after it completes) the board
+area shows a no-active-sprint state pointing at the Backlog. The numeric points +
+per-column totals are the standard; the burndown CHART is a separate report
+(here, Story 4.6).
+
+## The asset is multi-panel (review EACH)
+
+- **(0) The full scrum board** — the 3.2.2 page shell, then the **sprint header**
+  (a labelled landmark), then the REUSED 3.2/3.3 board scoped to the active
+  sprint, each reused column header gaining a muted **point-total pill**. A
+  `reuse-note` ribbon marks what is reused vs net-new.
+- **(1) Sprint-header anatomy** — name + state `Pill`; the **goal** truncated to
+  one line with the `Tooltip` reveal shown OPEN (full goal text); the **date
+  range** + **time remaining**; the **points summary** (committed / completed /
+  remaining as labelled numbers, Remaining on the lavender emphasis tile); the
+  **Complete-sprint** entry point.
+- **(2) No active sprint** — `sprint: null` → the board area is replaced by an
+  `EmptyState` (a **flag** icon, "No active sprint", a one-line explainer, a
+  **Go to Backlog →** CTA). Distinct from the 3.2.6 "No issues yet" _inbox_
+  empty-board state.
+- **(3) Edge states** — **unestimated** (point figures show "—", never `NaN`);
+  **overdue** (time-remaining becomes an "Ended" peach chip with an alert glyph +
+  the word — never colour alone); **loading** (a header skeleton over the 3.2.2
+  column-skeleton scaffold).
+- **(4) Column-header slot coexistence** — the read order **name → card-count
+  badge (3.2.1) → point-total pill (NEW) → spacer → WIP slot (3.3) → actions**,
+  shown with and without a WIP limit so the three header slots are seen not to
+  crowd.
+
+## The sprint header (`SprintHeader` — subtask 4.5.3)
+
+A **labelled landmark** (`<section aria-label="Sprint … — <state>, <remaining>">`)
+above the reused board, built from the 4.5.2 `SprintSummaryDto`. It is a quiet
+card BAND (`--el-surface-soft` + `--el-border` + `--radius-card`), NOT a tinted
+page surface (finding #35). Two clusters:
+
+- **Left (`.sh-main`)** — the sprint **name** (serif, `--el-text-strong`) + a
+  state **`Pill`** (`Active` mint dot · `Planned` muted · `Complete` lavender);
+  the **goal** on one line (`target` glyph + a bold `Goal ·` lead + the text),
+  truncated with `text-overflow: ellipsis` and a `Tooltip` revealing the full
+  text on hover/focus (keyboard-operable, not hover-only); the **dates** line
+  (`calendar` glyph + `Jun 2 – Jun 14`) and **time remaining** (`clock` glyph +
+  "5 days remaining" / "Ends Jun 14" / the "Ended" chip).
+- **Right (`.sh-right`)** — the **points summary** (three `.stat` blocks —
+  Committed / Completed / **Remaining**; Remaining on `--el-tint-lavender`, the
+  others on `--el-muted`) + the **Complete-sprint** `Button`
+  (`secondary`, `check-check` glyph).
+
+`daysRemaining` (from `SprintSummaryDto`) drives time-remaining; it is floored at
+0 (an overdue sprint reads **"Ended"**, never a negative number). The points are
+the `SprintSummaryDto.points` aggregate (NOT a sum over the loaded card page —
+finding #57). The **burndown CHART is Story 4.6** — the header shows numeric
+remaining only and leaves a chart seam.
+
+## Complete-sprint is an ENTRY POINT only (the flow is Story 4.4)
+
+The header mounts a **Complete sprint** button, but the complete-sprint FLOW
+(confirm modal + carry-over of unfinished issues + the sprint report) is **Story
+4.4**. 4.5.3 mounts 4.4's exposed action if available, otherwise renders the
+button as a **seam 4.4 wires** — the same seam pattern 3.2 used for the Epic-6
+**Filter** button. 4.5 implements neither carry-over nor the report.
+
+## Per-column point totals (the "sprint health" pill)
+
+Each REUSED column header gains a `.col-pts` pill (muted, mono, `N pts`) from
+`SprintSummaryDto.columnPoints[columnId]`. It sits in the **left** group, right
+after the 3.2.1 card-count badge (both describe the column's contents), while the
+3.3 **WIP slot** stays right-aligned by the `[⋯]` actions — so count · points ·
+(spacer) · WIP · actions coexist without crowding. Same column-header component
+as the Kanban board; the pill is **conditional** on a scrum board having an
+active sprint (a kanban board never renders it).
+
+## No-active-sprint state (`sprint: null`)
+
+When the 4.5.2 projection returns `sprint: null` for a scrum board (the common
+pre-start / post-complete state), the board area is replaced by an `EmptyState`
+— a **flag** icon (distinct from the 3.2.6 inbox), "No active sprint", a one-line
+explainer, and a CTA **Go to Backlog →** (Story 4.2 route). 4.5 does NOT start a
+sprint (that's 4.2 / 4.4); it links there. It never falls back to showing the
+unscoped backlog as if it were a sprint, and never shows an empty six-column
+board. A project with **no scrum board at all** falls through to the existing
+Kanban board (3.2) — 4.5 only _replaces_ the view when a scrum board is resolved.
+
+## Reuse, not rebuild (the load-bearing scope decision)
+
+The columns, cards, drag-as-transition, snap-back, keyboard DnD, per-column
+load-more + virtualization (3.2) and the swimlanes + WIP layer (3.3) are the
+**SAME** components, rendered with the sprint-scoped projection. Swimlanes / WIP
+compose on the scrum board for free (Jira scrum boards have both) because it is
+the same board component. The ONLY net-new UI is `SprintHeader` + the per-column
+point pill + the no-active-sprint state + the page-level `type == scrum`
+resolution. A card move is still a workflow transition (the 3.2 contract is
+unchanged) and never changes the sprint.
+
+## States (completeness)
+
+- **Loading** — the 3.2.2 board scaffold PLUS a header **skeleton** (name / goal
+  / points / button placeholders).
+- **Error / no board** — the 3.2.2 `ErrorState` (Retry) — referenced from
+  `board.mock.html` panel 6, not redrawn.
+- **No active sprint** — the `EmptyState` above (NOT an empty board).
+- **Unestimated sprint** — point figures show "—" (the DTO stays total, returns
+  0s; the UI owns the "—" presentation). The board still renders.
+- **Overdue sprint** — the "Ended" chip; `daysRemaining` floored at 0.
+
+## Permissions
+
+The scrum board is a **read** of the sprint-scoped projection; viewing is
+**membership-gated now** (matching the 3.2 board), with the finding-#26
+application-layer `workspaceId` gate on `getBoard` covering the new sprint reads.
+The complete-sprint action's gating is **Story 4.4**'s concern (the flow 4.5
+mounts); 4.5 only places the entry point.
+
+## Token / a11y rules honoured
+
+- **Colour** strictly via `--el-*` (finding #54): the **state Pill** tones
+  (`--el-tint-mint` Active · `--el-muted` Planned · `--el-tint-lavender`
+  Complete), the Remaining emphasis tile (`--el-tint-lavender`), the "Ended" chip
+  (`--el-tint-peach` bg + `--el-warning` glyph), the reused card type-hues
+  (`--el-type-*`) + priority `Pill` tones. Tints carry the hue in the BACKGROUND
+  with `--el-text-strong` text (finding #35 AA — never a tinted page surface; the
+  header band is `--el-surface-soft`, not a tint).
+- **Shape** via element-semantic tokens (`--radius-card`/`-btn`/`-badge`/
+  `-control`, `--shadow-subtle`/`-elevated`, `--spacing-chip-*`/`-control-*`/
+  `-btn-x`/`-card-padding`, `--height-btn-sm`/`-control`). `rounded-full` only on
+  the genuinely-circular state dot + avatar.
+- **Not colour-alone** (finding #35): time remaining is **text** ("5 days
+  remaining" / "Ended"), never colour; the state is a Pill with a **dot + word**;
+  the points are **labelled numbers** (not a colour-coded bar); the "Ended"
+  treatment pairs the peach tint with an alert glyph + the word.
+- **Landmark + labels** — the sprint header is a labelled `<section>`; the points
+  summary carries an `aria-label` naming the committed/completed/remaining
+  figures so assistive tech reads them as a sentence; the loading header is
+  `aria-busy`.
+- **No nested buttons** — the header's only controls are the standalone
+  Complete-sprint `<button>` and (in the board) the column `[⋯]` buttons; the
+  empty-state CTA is an `<a>`; cards stay `<a>` (the 3.2 whole-card link). Every
+  icon `<svg>` carries a 24×24 `viewBox`.

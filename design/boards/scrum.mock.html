@@ -1,0 +1,1756 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Scrum board view — sprint header + points (Story 4.5 · 4.5.1)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the SCRUM BOARD view — Story 4.5.
+      The 3.2.1 board.mock.html drew the KANBAN surface only — no sprint header,
+      no points summary, no no-active-sprint empty state, no complete-sprint
+      affordance. Those Scrum surfaces were unspecified (== no design), so the
+      4.5.1 design gate produces this EXTENSION.
+
+      This is CHROME over the EXISTING board. It REUSES the 3.2 board body
+      (columns, cards, drag-as-transition, load-more/virtualization) and the 3.3
+      swimlanes/WIP layer WHOLESALE — same components, fed a sprint-scoped
+      projection. It draws only the net-new Scrum surfaces; it does NOT redraw
+      columns / cards / drag states / swimlanes / WIP (those are referenced from
+      board.mock.html + swimlanes-wip.mock.html, not re-spec'd here).
+
+      Built FROM the real design system: the token block below is copied 1:1 from
+      app/globals.css (Tier-0 --color-* + Tier-3 --el-* + the shape tokens), and
+      the markup composes the SHIPPED primitives — Pill (the sprint-state chip),
+      Tooltip (the goal reveal), EmptyState (no-active-sprint), Button (complete
+      sprint), and the 3.2 BoardColumn / BoardCard it reuses. --el-* only (no
+      Tier-0 --color-*); shape via the element shape tokens; AA-safe.
+
+      The Scrum board is a PURE consumer of the 4.5.2 projection: getBoard returns
+      a sprint-scoped column set PLUS a SprintSummaryDto
+      { id, name, goal, startDate, endDate, state, daysRemaining,
+        points: { committed, completed, remaining }, columnPoints }.
+      The point figures are bounded SUM aggregates (NOT a sum over the loaded card
+      page — finding #57). Moving a card is STILL a workflow transition (the 3.2
+      contract is unchanged) and never changes the sprint.
+
+      Covers (multi-panel):
+        (0) the full scrum board — sprint header + reused board + per-column points
+        (1) sprint-header anatomy — name/state · goal-with-reveal · dates/remaining
+            · committed/completed/remaining points · complete-sprint entry point
+        (2) NO ACTIVE SPRINT — EmptyState replacing the board, CTA → Backlog
+        (3) EDGE STATES — unestimated ("—") · overdue ("Ended") · loading skeleton
+        (4) COLUMN-HEADER SLOTS — the point-total pill coexisting with the 3.2.1
+            count badge + the 3.3 WIP slot
+      Toggle dark mode to confirm token parity. See design-notes.md (the
+      "Scrum board (Story 4.5)" section) for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-btn-x: 14px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1240px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel {
+        max-width: 1240px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 40px auto 10px;
+        padding-left: 2px;
+        max-width: 1240px;
+      }
+      .stage {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .legend {
+        max-width: 1240px;
+        margin: 8px auto 0;
+        font-size: 12px;
+        color: var(--el-text-faint);
+        padding-left: 2px;
+      }
+      /* a "reused from 3.2/3.3" note ribbon over the board body */
+      .reuse-note {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 24px;
+        padding: 7px 12px;
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        border: 1px dashed var(--el-border-strong);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .reuse-note .tag {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+      }
+
+      /* ── Page shell — header + toolbar (mirrors the 3.2.2 board route) ─────── */
+      .page {
+        padding: 24px 24px 4px;
+      }
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin: 4px 0 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .tb-btn .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn.primary {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+      }
+      .tb-btn.primary .ic {
+        color: var(--el-accent-text);
+      }
+      .tb-btn.is-disabled {
+        color: var(--el-text-muted);
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+
+      /* ════════════ SPRINT HEADER (4.5.3) — the one net-new UI surface ════════════
+         A labelled landmark (<section aria-label="Sprint …">) above the reused
+         board. Surface = a quiet card band; it is NOT a page-level surface tint
+         (finding #35) — it uses --el-surface-soft with a bottom border, the same
+         as a toolbar band. */
+      .sprint-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px 24px;
+        margin: 0 24px 4px;
+        padding: 14px 16px;
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .sh-main {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        min-width: 0;
+        flex: 1 1 360px;
+      }
+      .sh-title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .sh-name {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        margin: 0;
+        line-height: 1.2;
+      }
+      /* goal — one line, truncated, with a reveal affordance (Tooltip) */
+      .sh-goal {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        max-width: 560px;
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+      }
+      .sh-goal .gic {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .sh-goal .gtext {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        cursor: default;
+      }
+      .sh-goal .gtext b {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      /* the dates + time-remaining line */
+      .sh-dates {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px 14px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .sh-dates .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .sh-dates .seg svg {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+      }
+      /* "Ended" / overdue treatment — peach tint + warning glyph + the word,
+         never colour alone (finding #35) */
+      .remaining-over {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .remaining-over svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        color: var(--el-warning);
+      }
+
+      /* right cluster — points summary + complete-sprint */
+      .sh-right {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        flex: 0 0 auto;
+      }
+      /* the Jira "sprint health" points summary — labelled NUMBERS (text+number,
+         never colour alone). Three compact stat blocks. */
+      .points-summary {
+        display: flex;
+        align-items: stretch;
+        gap: 4px;
+      }
+      .stat {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        min-width: 64px;
+        padding: 4px 10px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+      }
+      .stat .lab {
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-muted);
+      }
+      .stat .val {
+        font-size: 18px;
+        font-weight: 700;
+        line-height: 1;
+        color: var(--el-text-strong);
+        font-variant-numeric: tabular-nums;
+      }
+      /* the "remaining" stat is the emphasis — accent ring, not colour-only text */
+      .stat.is-remaining {
+        background: var(--el-tint-lavender);
+      }
+      .stat.is-remaining .val {
+        color: var(--el-text-strong);
+      }
+      /* complete-sprint entry point (the FLOW is Story 4.4 — this is placement) */
+      .btn-secondary {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn-secondary svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+
+      /* the state Pill (components/ui/Pill.tsx) — sprint state chip */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 9999px;
+        flex: none;
+      }
+      .pill--active {
+        background: var(--el-tint-mint);
+      }
+      .pill--active .dot {
+        background: var(--el-success);
+      }
+      .pill--planned {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .pill--planned .dot {
+        background: var(--el-text-faint);
+      }
+      .pill--complete {
+        background: var(--el-tint-lavender);
+      }
+      .pill--complete .dot {
+        background: var(--el-accent);
+      }
+
+      /* ── The board: a horizontally-scrolling row of columns (REUSED 3.2) ───── */
+      .board {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        overflow-x: auto;
+        padding: 8px 24px 24px;
+        scroll-snap-type: x proximity;
+      }
+      .col {
+        scroll-snap-align: start;
+        flex: 0 0 288px;
+        width: 288px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        display: flex;
+        flex-direction: column;
+        height: 420px;
+      }
+      .col-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 12px 10px;
+      }
+      .col-head .nm {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        letter-spacing: 0.01em;
+      }
+      /* per-column card count (the total from the projection) */
+      .col-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 20px;
+        padding: 0 7px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      /* NET-NEW (4.5): the per-column point total — the Jira "sprint health"
+         pill. Muted, mono, sits right after the count badge so the three
+         header slots read left→right as count · points · (spacer) · WIP. */
+      .col-pts {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        height: 20px;
+        padding: 0 8px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 11.5px;
+        font-weight: 600;
+        font-family: var(--font-mono);
+      }
+      .col-head .spacer {
+        flex: 1;
+      }
+      /* WIP-limit slot (Story 3.3 owns enforcement) — quiet n/limit */
+      .wip-slot {
+        display: inline-flex;
+        align-items: center;
+        height: 20px;
+        padding: 0 8px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 11.5px;
+        font-weight: 600;
+        font-family: var(--font-mono);
+      }
+      .col-head .icon-btn {
+        width: 24px;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        border: 0;
+        background: none;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .col-head .icon-btn:hover {
+        background: var(--el-muted);
+      }
+      .col-head .icon-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .col-body {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 0 10px 10px;
+        overflow-y: auto;
+      }
+
+      /* ── Board card — REUSES the issue primitives, compactly (3.2) ─────────── */
+      .bcard {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        cursor: grab;
+        text-decoration: none;
+        color: inherit;
+      }
+      .bcard:hover {
+        border-color: var(--el-border-strong);
+      }
+      .bc-top {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .type-icon {
+        width: 15px;
+        height: 15px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+      .bc-id {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .bc-top .spacer {
+        flex: 1;
+      }
+      .bc-title {
+        font-size: 13.5px;
+        line-height: 1.35;
+        color: var(--el-text);
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .bc-meta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .bc-meta .spacer {
+        flex: 1;
+      }
+      .pill-pri {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill-pri .pic {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .pill-pri.highest,
+      .pill-pri.high {
+        background: var(--el-tint-rose);
+      }
+      .pill-pri.highest .pic,
+      .pill-pri.high .pic {
+        color: var(--el-danger);
+      }
+      .pill-pri.medium {
+        background: var(--el-tint-sky);
+      }
+      .pill-pri.medium .pic {
+        color: var(--el-info);
+      }
+      .pill-pri.low {
+        background: var(--el-tint-mint);
+      }
+      .pill-pri.low .pic {
+        color: var(--el-success);
+      }
+      .pts {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        font-family: var(--font-mono);
+      }
+      .avatar {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .avatar.unassigned {
+        background: var(--el-muted);
+        color: var(--el-text-faint);
+        border: 1px dashed var(--el-border-strong);
+      }
+      .col-empty {
+        margin: 4px 0 12px;
+        padding: 18px 10px;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        text-align: center;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Tooltip (components/ui/Tooltip.tsx) — the goal reveal ─────────────── */
+      .tip-wrap {
+        position: relative;
+        display: inline-flex;
+        min-width: 0;
+      }
+      .tooltip {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        max-width: 360px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        background: var(--el-text-strong);
+        color: var(--el-text-inverted);
+        font-size: 12.5px;
+        line-height: 1.45;
+        box-shadow: var(--shadow-elevated);
+        z-index: 5;
+      }
+      .tooltip::before {
+        content: '';
+        position: absolute;
+        bottom: 100%;
+        left: 16px;
+        border: 5px solid transparent;
+        border-bottom-color: var(--el-text-strong);
+      }
+
+      /* ── EmptyState (components/ui/EmptyState.tsx) — no-active-sprint ───────── */
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 16px;
+      }
+      .empty .ic-wrap {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-muted);
+        background: var(--el-surface);
+        border-radius: 9999px;
+      }
+      .empty .ic-wrap svg {
+        width: 24px;
+        height: 24px;
+      }
+      .empty h3 {
+        margin: 0 0 6px;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        font-family: var(--font-serif);
+      }
+      .empty p {
+        margin: 0 0 16px;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+        max-width: 380px;
+      }
+      .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 16px;
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        border: 0;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      .btn-primary svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* ── Skeleton (loading) ────────────────────────────────────────────────── */
+      .sk {
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+        display: inline-block;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+      .pulse {
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      .sk-card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      /* small spacing helper for the stacked edge-state demos */
+      .edge-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Scrum board view — sprint header + points</h1>
+        <p>
+          Story 4.5 · Subtask 4.5.1 design asset — EXTENDS design/boards/ (board.mock.html +
+          swimlanes-wip.mock.html). Chrome over the reused board; see design-notes.md.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke, used by <use>) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <g
+          id="i-subtask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </g>
+        <g
+          id="i-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+        </g>
+        <g
+          id="i-more"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="5" cy="12" r="1" />
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-columns"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+        </g>
+        <!-- arrow-right — the "go to" navigation affordance on the empty-state CTA -->
+        <g
+          id="i-arrow-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </g>
+        <!-- target — the sprint goal glyph -->
+        <g
+          id="i-target"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <circle cx="12" cy="12" r="6" />
+          <circle cx="12" cy="12" r="2" />
+        </g>
+        <!-- calendar-range — the sprint dates glyph -->
+        <g
+          id="i-calendar"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M8 2v4" />
+          <path d="M16 2v4" />
+          <rect width="18" height="18" x="3" y="4" rx="2" />
+          <path d="M3 10h18" />
+        </g>
+        <!-- clock — time remaining glyph -->
+        <g
+          id="i-clock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </g>
+        <!-- check-check — the complete-sprint glyph -->
+        <g
+          id="i-check-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 7 17l-5-5" />
+          <path d="m22 10-7.5 7.5L13 16" />
+        </g>
+        <!-- flag — the no-active-sprint empty-state glyph (distinct from inbox) -->
+        <g
+          id="i-flag"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+          <path d="M4 22v-7" />
+        </g>
+        <!-- alert-triangle — the "Ended"/overdue glyph -->
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════════ PANEL 0 — the full scrum board ════════════════ -->
+    <div class="panel-label">
+      0 · Scrum board — sprint header + reused 3.2/3.3 board, scoped to the active sprint
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="page-head">
+            <div>
+              <h2>Board</h2>
+              <p class="sub">Prodect · Scrum board · active sprint</p>
+            </div>
+            <div class="toolbar">
+              <button class="tb-btn is-disabled" title="Filter — Epic 6">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-columns" /></svg
+                ></span>
+                Filter
+              </button>
+              <button class="tb-btn primary">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                ></span>
+                New issue
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ░░ NET-NEW: the sprint header (a labelled landmark) ░░ -->
+        <section class="sprint-header" aria-label="Sprint 24 — active, 5 days remaining">
+          <div class="sh-main">
+            <div class="sh-title-row">
+              <h3 class="sh-name">Sprint 24</h3>
+              <span class="pill pill--active"><span class="dot"></span>Active</span>
+            </div>
+            <div class="sh-goal">
+              <span class="gic"
+                ><svg viewBox="0 0 24 24"><use href="#i-target" /></svg
+              ></span>
+              <span class="gtext" title="Ship the Auth epic and clear the OAuth callback bugs"
+                ><b>Goal</b> · Ship the Auth epic and clear the OAuth callback bugs before the Q3
+                launch review</span
+              >
+            </div>
+            <div class="sh-dates">
+              <span class="seg"
+                ><svg viewBox="0 0 24 24"><use href="#i-calendar" /></svg>Jun 2 – Jun 14</span
+              >
+              <span class="seg"
+                ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>5 days remaining</span
+              >
+            </div>
+          </div>
+          <div class="sh-right">
+            <div
+              class="points-summary"
+              aria-label="Story points: 34 committed, 12 completed, 22 remaining"
+            >
+              <div class="stat"><span class="val">34</span><span class="lab">Committed</span></div>
+              <div class="stat"><span class="val">12</span><span class="lab">Completed</span></div>
+              <div class="stat is-remaining">
+                <span class="val">22</span><span class="lab">Remaining</span>
+              </div>
+            </div>
+            <button class="btn-secondary" title="Complete sprint (flow is Story 4.4)">
+              <svg viewBox="0 0 24 24"><use href="#i-check-check" /></svg>
+              Complete sprint
+            </button>
+          </div>
+        </section>
+
+        <div class="reuse-note" aria-hidden="true">
+          <span class="tag">reused</span>
+          <span
+            >The columns, cards, drag-as-transition, load-more/virtualization (Story 3.2) and the
+            swimlanes / WIP layer (Story 3.3) are the SAME components — rendered with the 4.5.2
+            sprint-scoped projection. Only the per-column <b>point-total pill</b> is new in the
+            column header.</span
+          >
+        </div>
+
+        <div class="board">
+          <!-- To Do -->
+          <section class="col" aria-label="To Do, 4 issues, 13 points">
+            <div class="col-head">
+              <span class="nm">To Do</span>
+              <span class="col-count">4</span>
+              <span class="col-pts" title="13 story points in this column">13 pts</span>
+              <span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-31 Google OAuth sign-in">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-31</span>
+                  <span class="spacer"></span>
+                </div>
+                <div class="bc-title">Google OAuth sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill-pri high"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                    >High</span
+                  >
+                  <span class="pts">5</span>
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Yue Zhu">YZ</span>
+                </div>
+              </a>
+              <a class="bcard" href="#" aria-label="PROD-34 Password reset email">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-34</span>
+                  <span class="spacer"></span>
+                </div>
+                <div class="bc-title">Password reset email — copy + template</div>
+                <div class="bc-meta">
+                  <span class="pill-pri medium"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                    >Medium</span
+                  >
+                  <span class="pts">3</span>
+                  <span class="spacer"></span>
+                  <span class="avatar unassigned" title="Unassigned">–</span>
+                </div>
+              </a>
+            </div>
+          </section>
+
+          <!-- In Progress -->
+          <section class="col" aria-label="In Progress, 2 issues, 8 points">
+            <div class="col-head">
+              <span class="nm">In Progress</span>
+              <span class="col-count">2</span>
+              <span class="col-pts" title="8 story points in this column">8 pts</span>
+              <span class="spacer"></span>
+              <span class="wip-slot" title="WIP limit — Story 3.3">2/5</span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-23 Email + password sign-in">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-23</span>
+                  <span class="spacer"></span>
+                </div>
+                <div class="bc-title">Email + password sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill-pri highest"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                    >Highest</span
+                  >
+                  <span class="pts">8</span>
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Yue Zhu">YZ</span>
+                </div>
+              </a>
+            </div>
+          </section>
+
+          <!-- In Review -->
+          <section class="col" aria-label="In Review, 1 issue, 2 points">
+            <div class="col-head">
+              <span class="nm">In Review</span>
+              <span class="col-count">1</span>
+              <span class="col-pts" title="2 story points in this column">2 pts</span>
+              <span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-58 Write E2E test">
+                <div class="bc-top">
+                  <span class="type-icon t-subtask"
+                    ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-58</span>
+                  <span class="spacer"></span>
+                </div>
+                <div class="bc-title">Write E2E test: email-first user signs in with Google</div>
+                <div class="bc-meta">
+                  <span class="pill-pri low"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg></span
+                    >Low</span
+                  >
+                  <span class="pts">2</span>
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Ben Ito">BI</span>
+                </div>
+              </a>
+            </div>
+          </section>
+
+          <!-- Done -->
+          <section class="col" aria-label="Done, 3 issues, 12 points">
+            <div class="col-head">
+              <span class="nm">Done</span>
+              <span class="col-count">3</span>
+              <span class="col-pts" title="12 story points in this column">12 pts</span>
+              <span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-42 Add Google OAuth to sign-in">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-42</span>
+                  <span class="spacer"></span>
+                </div>
+                <div class="bc-title">Add Google OAuth to sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill-pri medium"
+                    ><span class="pic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                    >Medium</span
+                  >
+                  <span class="pts">4</span>
+                  <span class="spacer"></span>
+                  <span class="avatar" title="Ben Ito">BI</span>
+                </div>
+              </a>
+            </div>
+          </section>
+        </div>
+      </div>
+      <p class="legend">
+        The sprint header (name + state Pill · goal-with-reveal · dates + time remaining ·
+        committed/completed/remaining points · Complete-sprint entry point) sits above the REUSED
+        3.2/3.3 board. Each reused column header gains a muted <b>point-total pill</b> (the Jira
+        "sprint health" number) after the card-count badge. The board shows ONLY the active sprint's
+        issues (4.5.2 scope). A card move is still a workflow transition (unchanged) and does not
+        change the sprint.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 1 — sprint-header anatomy ════════════════ -->
+    <div class="panel-label">
+      1 · Sprint header — name/state · goal-with-reveal (Tooltip) · dates/remaining · points ·
+      complete-sprint
+    </div>
+    <div class="panel">
+      <div class="stage" style="padding: 20px 24px 28px">
+        <section
+          class="sprint-header"
+          style="margin: 0"
+          aria-label="Sprint 24 — active, 5 days remaining"
+        >
+          <div class="sh-main">
+            <div class="sh-title-row">
+              <h3 class="sh-name">Sprint 24</h3>
+              <span class="pill pill--active"><span class="dot"></span>Active</span>
+            </div>
+            <!-- goal truncated, with the Tooltip OPEN showing the full text -->
+            <div class="sh-goal">
+              <span class="gic"
+                ><svg viewBox="0 0 24 24"><use href="#i-target" /></svg
+              ></span>
+              <span class="tip-wrap">
+                <span class="gtext"
+                  ><b>Goal</b> · Ship the Auth epic and clear the OAuth callback bugs before the
+                  Q3…</span
+                >
+                <span class="tooltip" role="tooltip"
+                  >Ship the Auth epic and clear the OAuth callback bugs before the Q3 launch
+                  review.</span
+                >
+              </span>
+            </div>
+            <div class="sh-dates">
+              <span class="seg"
+                ><svg viewBox="0 0 24 24"><use href="#i-calendar" /></svg>Jun 2 – Jun 14</span
+              >
+              <span class="seg"
+                ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>5 days remaining</span
+              >
+            </div>
+          </div>
+          <div class="sh-right">
+            <div
+              class="points-summary"
+              aria-label="Story points: 34 committed, 12 completed, 22 remaining"
+            >
+              <div class="stat"><span class="val">34</span><span class="lab">Committed</span></div>
+              <div class="stat"><span class="val">12</span><span class="lab">Completed</span></div>
+              <div class="stat is-remaining">
+                <span class="val">22</span><span class="lab">Remaining</span>
+              </div>
+            </div>
+            <button class="btn-secondary" title="Complete sprint (flow is Story 4.4)">
+              <svg viewBox="0 0 24 24"><use href="#i-check-check" /></svg>
+              Complete sprint
+            </button>
+          </div>
+        </section>
+      </div>
+      <p class="legend">
+        <b>Goal</b> truncates to one line; hover / focus reveals the full text in a
+        <code>Tooltip</code> (keyboard-focusable, not hover-only). <b>Time remaining</b> is read as
+        text ("5 days remaining"), never colour alone (finding #35). The <b>points summary</b> is
+        three labelled numbers from <code>SprintSummaryDto.points</code> (committed / completed /
+        remaining) — Remaining gets the lavender emphasis tile, the others are muted. The
+        <b>Complete-sprint</b> button is the ENTRY POINT only — the confirm + carry-over + report
+        FLOW is Story 4.4 (4.5 mounts 4.4's action, or renders this as a seam 4.4 wires — the 3.2
+        Filter-seam pattern). The in-sprint <b>burndown chart is Story 4.6</b>; the header shows the
+        numeric remaining and leaves a chart seam.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 2 — no active sprint ════════════════ -->
+    <div class="panel-label">
+      2 · No active sprint — EmptyState replaces the board, CTA → Backlog
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="page-head">
+            <div>
+              <h2>Board</h2>
+              <p class="sub">Prodect · Scrum board</p>
+            </div>
+            <div class="toolbar">
+              <button class="tb-btn is-disabled" title="Filter — Epic 6">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-columns" /></svg
+                ></span>
+                Filter
+              </button>
+              <button class="tb-btn primary">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                ></span>
+                New issue
+              </button>
+            </div>
+          </div>
+        </div>
+        <div style="padding: 40px 16px 56px">
+          <div class="empty" style="max-width: 460px; margin: 0 auto">
+            <span class="ic-wrap"
+              ><svg viewBox="0 0 24 24"><use href="#i-flag" /></svg
+            ></span>
+            <h3>No active sprint</h3>
+            <p>
+              This board has no sprint in progress. Plan and start a sprint from the backlog, and
+              its issues will appear here in workflow columns.
+            </p>
+            <a class="btn-primary" href="#">
+              Go to Backlog
+              <svg viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+            </a>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        When <code>SprintSummaryDto</code> is <code>sprint: null</code> for a scrum board (the
+        common pre-start / post-complete state), the board area is replaced by an
+        <code>EmptyState</code> — a <b>flag</b> icon (distinct from the 3.2.6 "No issues yet"
+        <i>inbox</i> state), the heading "No active sprint", a one-line explainer, and a CTA linking
+        to the <b>Backlog</b> (Story 4.2). 4.5 does NOT start a sprint (that's 4.2 / 4.4); it links
+        there. It never falls back to showing the unscoped backlog as if it were a sprint, and never
+        shows an empty six-column board.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 3 — edge states ════════════════ -->
+    <div class="panel-label">
+      3 · Edge states — unestimated ("—") · overdue ("Ended") · loading skeleton
+    </div>
+    <div class="panel">
+      <div class="edge-grid">
+        <!-- unestimated: points show "—", not NaN -->
+        <div class="stage" style="margin-bottom: 16px">
+          <section
+            class="sprint-header"
+            style="margin: 16px 24px"
+            aria-label="Sprint 25 — active, unestimated"
+          >
+            <div class="sh-main">
+              <div class="sh-title-row">
+                <h3 class="sh-name">Sprint 25</h3>
+                <span class="pill pill--active"><span class="dot"></span>Active</span>
+              </div>
+              <div class="sh-goal">
+                <span class="gic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-target" /></svg
+                ></span>
+                <span class="gtext"><b>Goal</b> · Discovery spike — estimates not yet added</span>
+              </div>
+              <div class="sh-dates">
+                <span class="seg"
+                  ><svg viewBox="0 0 24 24"><use href="#i-calendar" /></svg>Jun 16 – Jun 27</span
+                >
+                <span class="seg"
+                  ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>12 days remaining</span
+                >
+              </div>
+            </div>
+            <div class="sh-right">
+              <div class="points-summary" aria-label="Story points not estimated">
+                <div class="stat"><span class="val">—</span><span class="lab">Committed</span></div>
+                <div class="stat"><span class="val">—</span><span class="lab">Completed</span></div>
+                <div class="stat is-remaining">
+                  <span class="val">—</span><span class="lab">Remaining</span>
+                </div>
+              </div>
+              <button class="btn-secondary" title="Complete sprint (flow is Story 4.4)">
+                <svg viewBox="0 0 24 24"><use href="#i-check-check" /></svg>
+                Complete sprint
+              </button>
+            </div>
+          </section>
+          <p class="legend" style="margin: 0 24px 16px">
+            Unestimated sprint → point figures render <b>"—"</b> (never a broken <code>NaN</code>);
+            the board still renders. The DTO stays total (returns 0s); the UI owns the "—"
+            presentation.
+          </p>
+        </div>
+
+        <!-- overdue: "Ended" treatment -->
+        <div class="stage" style="margin-bottom: 16px">
+          <section
+            class="sprint-header"
+            style="margin: 16px 24px"
+            aria-label="Sprint 23 — active, ended (overdue)"
+          >
+            <div class="sh-main">
+              <div class="sh-title-row">
+                <h3 class="sh-name">Sprint 23</h3>
+                <span class="pill pill--active"><span class="dot"></span>Active</span>
+              </div>
+              <div class="sh-goal">
+                <span class="gic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-target" /></svg
+                ></span>
+                <span class="gtext"><b>Goal</b> · Close the billing migration</span>
+              </div>
+              <div class="sh-dates">
+                <span class="seg"
+                  ><svg viewBox="0 0 24 24"><use href="#i-calendar" /></svg>May 19 – May 31</span
+                >
+                <span class="remaining-over" title="Past the end date — complete this sprint"
+                  ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>Ended</span
+                >
+              </div>
+            </div>
+            <div class="sh-right">
+              <div
+                class="points-summary"
+                aria-label="Story points: 28 committed, 25 completed, 3 remaining"
+              >
+                <div class="stat">
+                  <span class="val">28</span><span class="lab">Committed</span>
+                </div>
+                <div class="stat">
+                  <span class="val">25</span><span class="lab">Completed</span>
+                </div>
+                <div class="stat is-remaining">
+                  <span class="val">3</span><span class="lab">Remaining</span>
+                </div>
+              </div>
+              <button class="btn-secondary" title="Complete sprint (flow is Story 4.4)">
+                <svg viewBox="0 0 24 24"><use href="#i-check-check" /></svg>
+                Complete sprint
+              </button>
+            </div>
+          </section>
+          <p class="legend" style="margin: 0 24px 16px">
+            When <code>daysRemaining == 0</code> and past <code>endDate</code>, time-remaining
+            becomes an <b>"Ended"</b> chip (peach tint + alert glyph + the word — never colour
+            alone, finding #35), nudging toward completing the sprint. <code>daysRemaining</code> is
+            floored at 0; the header never shows a negative number.
+          </p>
+        </div>
+
+        <!-- loading: header skeleton over the 3.2.2 board scaffold -->
+        <div class="stage">
+          <section
+            class="sprint-header"
+            style="margin: 16px 24px 4px"
+            aria-label="Loading sprint"
+            aria-busy="true"
+          >
+            <div class="sh-main">
+              <div class="sh-title-row">
+                <span class="sk pulse" style="width: 110px; height: 18px"></span>
+                <span
+                  class="sk pulse"
+                  style="width: 56px; height: 18px; border-radius: 9999px"
+                ></span>
+              </div>
+              <span class="sk pulse" style="width: 320px; height: 13px"></span>
+              <span class="sk pulse" style="width: 220px; height: 13px"></span>
+            </div>
+            <div class="sh-right">
+              <span class="sk pulse" style="width: 210px; height: 40px"></span>
+              <span class="sk pulse" style="width: 130px; height: 32px"></span>
+            </div>
+          </section>
+          <div class="board" style="padding-top: 8px">
+            <section class="col">
+              <div class="col-head">
+                <span class="sk pulse" style="width: 64px; height: 14px"></span
+                ><span class="spacer"></span
+                ><span
+                  class="sk pulse"
+                  style="width: 38px; height: 18px; border-radius: 9999px"
+                ></span>
+              </div>
+              <div class="col-body">
+                <div class="sk-card">
+                  <span class="sk pulse" style="width: 70px; height: 12px"></span
+                  ><span class="sk pulse" style="width: 100%; height: 13px"></span
+                  ><span class="sk pulse" style="width: 55%; height: 12px"></span>
+                </div>
+                <div class="sk-card">
+                  <span class="sk pulse" style="width: 70px; height: 12px"></span
+                  ><span class="sk pulse" style="width: 90%; height: 13px"></span
+                  ><span class="sk pulse" style="width: 45%; height: 12px"></span>
+                </div>
+              </div>
+            </section>
+            <section class="col">
+              <div class="col-head">
+                <span class="sk pulse" style="width: 84px; height: 14px"></span
+                ><span class="spacer"></span
+                ><span
+                  class="sk pulse"
+                  style="width: 38px; height: 18px; border-radius: 9999px"
+                ></span>
+              </div>
+              <div class="col-body">
+                <div class="sk-card">
+                  <span class="sk pulse" style="width: 70px; height: 12px"></span
+                  ><span class="sk pulse" style="width: 95%; height: 13px"></span
+                  ><span class="sk pulse" style="width: 50%; height: 12px"></span>
+                </div>
+              </div>
+            </section>
+          </div>
+          <p class="legend" style="margin: 0 24px 16px">
+            Loading reuses the 3.2.2 board scaffold — a header <b>skeleton</b> (name / goal / points
+            / button placeholders) over the column skeletons. Error reuses the 3.2.2
+            <code>ErrorState</code> (the board.mock.html panel-6 "Couldn't load the board" / Retry —
+            referenced, not redrawn here).
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 4 — column-header slot coexistence ════════════════ -->
+    <div class="panel-label">
+      4 · Column-header slots — count badge · NEW point-total pill · WIP slot · actions
+    </div>
+    <div class="panel">
+      <div class="stage" style="padding: 22px 24px 26px">
+        <div style="display: flex; gap: 14px; flex-wrap: wrap">
+          <!-- a column header WITHOUT a WIP limit -->
+          <section class="col" style="height: auto" aria-label="To Do, 4 issues, 13 points">
+            <div class="col-head">
+              <span class="nm">To Do</span>
+              <span class="col-count">4</span>
+              <span class="col-pts" title="13 story points in this column">13 pts</span>
+              <span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+          </section>
+          <!-- a column header WITH a WIP limit — all three slots coexist -->
+          <section
+            class="col"
+            style="height: auto"
+            aria-label="In Progress, 2 issues, 8 points, WIP 2 of 5"
+          >
+            <div class="col-head">
+              <span class="nm">In Progress</span>
+              <span class="col-count">2</span>
+              <span class="col-pts" title="8 story points in this column">8 pts</span>
+              <span class="spacer"></span>
+              <span class="wip-slot" title="WIP limit — Story 3.3">2/5</span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+      <p class="legend">
+        Read order in the header: <b>name</b> → <b>card-count badge</b> (3.2.1) →
+        <b>point-total pill</b> (NEW, 4.5 — muted mono "N pts") → spacer → <b>WIP slot</b> (3.3) →
+        <b>actions</b>. The point pill sits with the count on the left (both describe the column's
+        contents); the WIP chip stays right-aligned by the actions. All three coexist without
+        crowding because the point pill joins the left group rather than competing for the right
+        slot. Same column-header component as the Kanban board — the pill is conditional on a scrum
+        board having an active sprint.
+      </p>
+    </div>
+  </body>
+</html>
