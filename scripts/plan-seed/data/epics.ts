@@ -449,7 +449,15 @@ export const EPICS: EpicMeta[] = [
       'agent-ready prompts dispatched to the user\'s own coding agent (the former "execution" ' +
       'epic). This is the closed `prodect-ai` layer the open core calls into over a documented ' +
       'HTTP API. A team that never opens the chat box still has a full Jira alternative; this epic ' +
-      'makes Prodect AI-native on top of that.',
+      'makes Prodect AI-native on top of that.\n\n' +
+      '**Story 7.0 ships early (justified deviation from linear epic order).** The AI dispatch ' +
+      'surface — the `/ready` page + `GET /api/ready` + `POST /api/ready/next` — is the BYOK ' +
+      "agent contract today and the future native AI-coding layer's contract tomorrow. It has no " +
+      'forward-pointing cross-epic dep (consumes only Epic-2 readiness primitives) and is ' +
+      'independently useful before any AI planning ships, so we pull it in front of the ' +
+      'remaining Epic-6 stubs rather than waiting. Full justification + the front-half/back-' +
+      'half split with stub 7.5 lives in story-7.0.ts. (notes.html #32 — the cross-epic dep ' +
+      'audit passes; this is a deliberate deviation, not the mistake the rule guards against.)',
   },
   {
     id: '8',
