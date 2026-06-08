@@ -226,7 +226,7 @@ export const story_7_0: PlanStory = {
     {
       id: '7.0.2',
       title: '`workItemsService.listReady` + `getNextReady` (service layer, cursor-paginated)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 50,
