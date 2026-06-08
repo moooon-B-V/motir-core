@@ -226,7 +226,20 @@ jobs:
       # script; here we run it explicitly because we don't run build.)
       - run: pnpm prisma migrate deploy
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm test:e2e
+      # board-at-scale (Story 3.5) needs the 3.5.1 cap/Done-age test seam
+      # configured, so it runs in its own seam-set step below — exclude it here.
+      - run: pnpm test:e2e --grep-invert "board-at-scale"
+      # Story 3.5 — the cross-cutting board journey AT SCALE. The spec self-seeds
+      # the 3.5.1 board-shaped fixture; these overrides (the 3.5.1 seam, forwarded
+      # to the dev server by playwright.config.ts) lower the issue cap + Done-age
+      # window so the over-cap banner + Done-age trim are reachable with tens of
+      # rows instead of 5,000. Covers 3.5.2 (load model) and — once it lands —
+      # 3.5.3 (interaction); both carry the `board-at-scale` grep tag.
+      - name: E2E — board at scale (Story 3.5)
+        run: pnpm test:e2e --grep "board-at-scale"
+        env:
+          BOARD_ISSUE_CAP_OVERRIDE: '40'
+          DONE_AGE_WINDOW_DAYS_OVERRIDE: '7'
       # Always upload the report — pass-runs are useful for debugging
       # flakes, and the report is small. The trace/video/screenshot
       # artifacts only exist for failures (config above), so a passing
