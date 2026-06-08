@@ -1,7 +1,7 @@
 import { Prisma, type WorkItem, type WorkItemKind, type WorkItemPriority } from '@prisma/client';
 import { db } from '@/lib/db';
 import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
-import type { ReadyCursor } from '@/lib/workItems/readyFilter';
+import { READY_KIND_RANK, type ReadyCursor } from '@/lib/workItems/readyFilter';
 import {
   DepthLimitExceededError,
   IllegalParentTypeError,
@@ -214,12 +214,18 @@ export const workItemRepository = {
    * over this candidate set (finding #21). So this returns CANDIDATES; the
    * service filters to ready ones, which may shorten a page.
    *
-   * **Sort + cursor.** The `priority` enum sorts by its declaration order
-   * (`lowest < … < highest`); `DESC` puts `highest` first, `key ASC` breaks
-   * ties (stable, monotonic, reseed-safe). The cursor is the (priority, key) of
-   * the previous page's last candidate; the seek-after predicate
-   * (`priority < cp OR (priority = cp AND key > ck)`) resumes strictly after it.
-   * `priority` is cast text→enum so the bound param compares against the column.
+   * **Sort + cursor (Subtask 7.0.11).** `(priority DESC, type ASC, key ASC)`:
+   * the `priority` enum sorts by its declaration order (`lowest < … < highest`)
+   * so `DESC` puts `highest` first; **type breaks the priority tie** via a CASE
+   * rank built from `READY_KIND_RANK` (`subtask` first … `epic` last — the
+   * leaf-most dispatchable unit before a container); `key ASC` breaks the final
+   * tie (stable, monotonic, reseed-safe). The cursor is the (priority, kind,
+   * key) of the previous page's last candidate; the 3-tuple seek-after predicate
+   * (`priority < cp OR (priority = cp AND kindRank > ckr) OR (priority = cp AND
+   * kindRank = ckr AND key > ck)`) resumes strictly after it. `priority` is cast
+   * text→enum so the bound param compares against the column; the same
+   * `READY_KIND_RANK`-derived CASE feeds the ORDER BY and the seek-after so they
+   * can never disagree.
    *
    * **Todo-only via INNER JOIN.** The `JOIN workflow_status` (not LEFT) plus
    * `ws.category = 'todo'` is the not-yet-started filter AND the category source
@@ -255,6 +261,14 @@ export const workItemRepository = {
       limit: number;
     },
   ): Promise<ReadyCandidateRow[]> {
+    // The issue-type rank used by both the ORDER BY tiebreaker and the cursor
+    // seek-after below. Built from READY_KIND_RANK (the single source of the
+    // dispatch order, `subtask` first … `epic` last) so the two never drift.
+    const kindRankSql = Prisma.sql`CASE w."kind"::text ${Prisma.join(
+      Object.entries(READY_KIND_RANK).map(([k, rank]) => Prisma.sql`WHEN ${k} THEN ${rank}`),
+      ' ',
+    )} ELSE ${Object.keys(READY_KIND_RANK).length} END`;
+
     const preds: Prisma.Sql[] = [];
     if (filter.kinds && filter.kinds.length > 0) {
       const kinds = filter.kinds.map((k) => k as string);
@@ -271,9 +285,16 @@ export const workItemRepository = {
     }
     if (filter.cursor) {
       const cp = filter.cursor.priority;
+      const ckr = READY_KIND_RANK[filter.cursor.kind];
       const ck = filter.cursor.key;
+      // Seek-after under `(priority DESC, kindRank ASC, key ASC)`: strictly
+      // after the previous page's last candidate.
       preds.push(
-        Prisma.sql`(w."priority" < ${cp}::"work_item_priority" OR (w."priority" = ${cp}::"work_item_priority" AND w."key" > ${ck}))`,
+        Prisma.sql`(
+          w."priority" < ${cp}::"work_item_priority"
+          OR (w."priority" = ${cp}::"work_item_priority" AND ${kindRankSql} > ${ckr})
+          OR (w."priority" = ${cp}::"work_item_priority" AND ${kindRankSql} = ${ckr} AND w."key" > ${ck})
+        )`,
       );
     }
     const where = preds.length ? Prisma.join(preds, ' AND ') : Prisma.sql`TRUE`;
@@ -298,7 +319,7 @@ export const workItemRepository = {
                AND c."archivedAt" IS NULL
           )
           AND (${where})
-        ORDER BY w."priority" DESC, w."key" ASC
+        ORDER BY w."priority" DESC, ${kindRankSql} ASC, w."key" ASC
         LIMIT ${filter.limit}`;
   },
 

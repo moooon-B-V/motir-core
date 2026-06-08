@@ -1580,7 +1580,9 @@ async function pageReadyCandidates(
 
   const last = windowRows.at(-1);
   const nextCursor =
-    hasMore && last ? encodeReadyCursor({ priority: last.priority, key: last.key }) : null;
+    hasMore && last
+      ? encodeReadyCursor({ priority: last.priority, kind: last.kind, key: last.key })
+      : null;
   return { rows, nextCursor };
 }
 
