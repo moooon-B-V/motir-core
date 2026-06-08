@@ -13,13 +13,13 @@ import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 // HIDDEN from the board but never silently dropped. The caller renders this
 // ONLY when `statuses` is non-empty (an empty tray never shows).
 //
-// CTA note: column→status MAPPING admin is not in v1 (Story 3.1/3.2/3.3 defer
-// "board CRUD / column-remap admin"; a status added after the board was seeded
-// is deliberately left unmapped, NOT auto-columned — Story 3.1). Until that
-// admin lands, the link goes to the workflow editor (Story 2.2.5) — the real
-// place to review / rename / remove a stray status — and is labelled for what's
-// actually there ("Manage statuses"), NOT a "Map columns" action that doesn't
-// exist yet.
+// CTA (repointed in Subtask 3.6.3): the board-column admin now exists
+// (`settings/project/board`, Story 3.6) — the surface that maps a stray status
+// onto a column. So the link finally does what the 3.2.1 mock drew: it reads
+// **"Map columns →"** and deep-links to Board settings, replacing the interim
+// "Manage statuses →" → workflow-editor link that stood in while no mapping
+// admin existed. (The 3.2.6 "CTA reality" note in design-notes.md is updated to
+// match.)
 //
 // Tokens: the yellow tint carries the hue in the BACKGROUND with
 // `--el-text-strong` text (finding #35 AA — never a tinted page surface), and
@@ -47,11 +47,11 @@ export function UnmappedStatusesTray({ statuses }: { statuses: WorkflowStatusDto
         </span>
       </span>
       <Link
-        href="/settings/project/workflow"
+        href="/settings/project/board"
         className="text-sm font-semibold whitespace-nowrap text-(--el-link) hover:underline"
         data-testid="board-unmapped-link"
       >
-        {t('unmappedManageStatuses')} →
+        {t('unmappedMapColumns')} →
       </Link>
     </aside>
   );

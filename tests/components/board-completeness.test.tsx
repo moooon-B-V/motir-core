@@ -187,7 +187,7 @@ describe('board completeness (3.2.6)', () => {
     expect(screen.getByTestId('board-unmapped-tray')).toBeTruthy();
   });
 
-  it('renders the unmapped-statuses tray with the status names + a map-columns link', async () => {
+  it('renders the unmapped-statuses tray with the status names + a Map columns → link to board settings (3.6.3)', async () => {
     vi.stubGlobal(
       'fetch',
       mockFetchOk(
@@ -206,7 +206,10 @@ describe('board completeness (3.2.6)', () => {
     expect(screen.getByText('Needs Triage')).toBeTruthy();
     expect(screen.getByText('On Hold')).toBeTruthy();
     const link = screen.getByTestId('board-unmapped-link');
-    expect(link.getAttribute('href')).toBe('/settings/project/workflow');
+    // Repointed in 3.6.3: from the interim "Manage statuses →" (workflow editor)
+    // to "Map columns →" → the real board-config admin.
+    expect(link.getAttribute('href')).toBe('/settings/project/board');
+    expect(link.textContent).toContain('Map columns');
   });
 
   it('omits the unmapped tray when every status is mapped', async () => {

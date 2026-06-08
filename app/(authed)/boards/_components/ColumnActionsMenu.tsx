@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Check, CircleGauge, MoreHorizontal, X } from 'lucide-react';
+import { Check, CircleGauge, Columns3, MoreHorizontal, X } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { Button } from '@/components/ui/Button';
 
@@ -17,6 +18,11 @@ import { Button } from '@/components/ui/Button';
 // optimistically); Clear hands up `null` (remove the limit). Validation mirrors
 // the service — a negative / non-integer / empty entry is BLOCKED client-side
 // with the error copy and `onSetWipLimit` is not called.
+//
+// The menu also carries (Subtask 3.6.3) a **"Board settings →"** link to
+// `settings/project/board` — the board-configuration admin (column manager +
+// status mapping). The 3.2.1 mock drew this column `[⋯]` entry as a seam; 3.6.3
+// wires it now that the admin surface exists.
 //
 // Shape via element tokens (`--radius-control`/`-input`, `--height-control`,
 // `--spacing-control-x`); colour strictly `--el-*`. Reuses the shipped `Popover`
@@ -99,6 +105,15 @@ export function ColumnActionsMenu({
             <CircleGauge className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
             <span className="flex-1 truncate">{t('setWipLimit')}</span>
           </button>
+
+          <Link
+            href="/settings/project/board"
+            data-testid={`board-column-settings-link-${columnId}`}
+            className="flex h-(--height-control) w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) text-left text-sm text-(--el-text) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          >
+            <Columns3 className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
+            <span className="flex-1 truncate">{t('columnActionsBoardSettings')} →</span>
+          </Link>
 
           {editing ? (
             <>
