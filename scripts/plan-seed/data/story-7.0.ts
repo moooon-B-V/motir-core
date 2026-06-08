@@ -315,7 +315,7 @@ export const story_7_0: PlanStory = {
     {
       id: '7.0.3',
       title: '`ReadyItemDto` + `ReadyItemDispatchDto` types + mappers',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 20,
