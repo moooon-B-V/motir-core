@@ -168,7 +168,7 @@ export const story_4_2: PlanStory = {
       id: '4.2.1',
       title:
         'Design — Backlog / sprint-planning surface: sprint containers, ranked backlog list, issue row, drag + multi-select states, scale + points/velocity seams (NEW design/backlog/)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 48,
