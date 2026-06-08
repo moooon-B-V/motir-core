@@ -1,0 +1,2556 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Backlog / sprint-planning UI (Story 4.2 · 4.2.1)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the BACKLOG / sprint-planning surface —
+      Story 4.2. The Backlog is a brand-new surface: design/ had no backlog/
+      area and no mockup depicted a ranked backlog, a sprint-planning
+      container, a drag-into-sprint state, or a multi-select bulk bar — i.e.
+      the WHOLE surface was unspecified (== NO design under the gate), so the
+      planning-time design gate (4.2.1) produces this. It is the layout source
+      of truth every UI subtask in 4.2 (4.2.3 / 4.2.4 / 4.2.5) builds against.
+
+      Built FROM the real design system: the token block below is copied 1:1
+      from app/globals.css (Tier-0 --color-* + Tier-3 --el-* + the shape
+      tokens), and the markup mirrors the SHIPPED primitives — Pill (status
+      tones), IssueTypeIcon (lucide in the --el-type-* hue), the initial-letter
+      Avatar, EmptyState, ErrorState, Spinner, the dropdown Menu.
+
+      This surface REUSES existing vocabularies (reference, don't redraw):
+        • the issue ROW reuses the Story-2.x work-items list row
+          (type icon · key · summary · epic chip · assignee · status)
+        • the DRAG affordance reuses the Story-3.2 board drag vocabulary
+          (grip handle · drag overlay · drop highlight · insertion bar)
+        • the empty/loading/error states reuse the shipped EmptyState /
+          ErrorState / skeleton idioms.
+      It draws only the NET-NEW backlog/sprint-planning composition.
+
+      ── The SEAMS (mistake #32 resolution; see design-notes.md) ──────────────
+      Story points are Story 4.3 and velocity is Story 4.6, both numbered AFTER
+      4.2 — wiring 4.2 to read them would be a forward-pointing dependency. So
+      4.2 renders DOCUMENTED, RESERVED seam slots that the later stories fill,
+      drawn as dashed empty slots tagged with a dotted-accent REVIEW tag naming
+      the filling story (the tag is a review-only annotation, NOT shipped —
+      like board.mock.html's .virt-note):
+        • row estimate slot          → filled by Story 4.3
+        • sprint committed-points slot → filled by Story 4.3
+        • sprint velocity slot         → filled by Story 4.6
+        • Start-sprint entry point     → flow is Story 4.4 (4.2 mounts the seam)
+
+      Covers (multi-panel — review EACH):
+        (0) PAGE LAYOUT + NAV — the app shell with the new Backlog nav item +
+            the "View all issues" toolbar link (Jira's "View in Issue
+            Navigator" → the Story-2.5 /issues navigator); sprint-planning
+            containers (top) over the ranked backlog (bottom)
+        (1) SPRINT-PLANNING CONTAINER — anatomy (name·state·dates·count·points
+            SEAM·velocity SEAM·Start-sprint·inline create) + empty sprint +
+            Create-sprint affordance
+        (2) ISSUE ROW — the composed row, annotated, with the RESERVED estimate
+            seam in a fixed slot order
+        (3) DRAG states — row mid-drag (overlay) · drop-target highlight on a
+            sprint + a backlog insertion bar · multi-select "N issues" overlay
+        (4) MULTI-SELECT — selected-row treatment + the "N selected" bulk bar
+        (5) CONTEXT MENU (⋯) — Move to sprint ▸ (+ submenu) · Move to top/bottom
+        (6) STATES — empty backlog · no sprints · loading skeleton · error
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied 1:1 from app/globals.css ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 760px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 40px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+      }
+      .stage {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .legend {
+        max-width: 1180px;
+        margin: 10px auto 0;
+        font-size: 12px;
+        color: var(--el-text-faint);
+        padding-left: 2px;
+        line-height: 1.55;
+      }
+      .legend b {
+        color: var(--el-text-secondary);
+      }
+
+      /* ── App shell (panel 0 only — shows the nav-item placement) ─────────── */
+      .shell {
+        display: grid;
+        grid-template-columns: 232px 1fr;
+        min-height: 640px;
+      }
+      .sidebar {
+        background: var(--el-surface);
+        border-right: 1px solid var(--el-border);
+        padding: 14px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .ws {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 6px 10px 12px;
+      }
+      .ws .logo {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 14px;
+        flex: none;
+      }
+      .ws .ws-name {
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--el-text-strong);
+      }
+      .ws .ws-sub {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+      }
+      .nav-sec {
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        padding: 12px 10px 4px;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .nav-item svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .nav-item.active {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        font-weight: 600;
+        box-shadow: var(--shadow-subtle);
+      }
+      .nav-item.active svg {
+        color: var(--el-accent);
+      }
+
+      /* ── Page head + toolbar (mirrors the board route head) ─────────────── */
+      .work {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 24px;
+        background: var(--el-page-bg);
+      }
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin: 4px 0 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        text-decoration: none;
+      }
+      .tb-btn .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn .ic svg {
+        width: 100%;
+        height: 100%;
+      }
+      .tb-btn.primary {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+      }
+      .tb-btn.primary .ic {
+        color: var(--el-accent-text);
+      }
+      .tb-btn.is-disabled {
+        color: var(--el-text-muted);
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+
+      /* ── The two stacked regions (sprint containers + backlog) ──────────── */
+      .regions {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        max-width: 1180px;
+      }
+      .region {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .region-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 14px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .region.collapsed .region-head {
+        border-bottom: 0;
+      }
+      .chev {
+        width: 18px;
+        height: 18px;
+        color: var(--el-text-muted);
+        flex: none;
+        cursor: pointer;
+        transition: transform 0.12s ease;
+      }
+      .region.collapsed .chev {
+        transform: rotate(-90deg);
+      }
+      .region-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        letter-spacing: 0.01em;
+      }
+      .region-dates {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+      .region-dates svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+      .count-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 20px;
+        padding: 0 7px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .region-head .spacer {
+        flex: 1;
+      }
+
+      /* ── The SEAM slots (reserved, filled by later stories) ─────────────── */
+      .seam {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-faint);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-surface-soft);
+        white-space: nowrap;
+      }
+      .seam svg {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .seam.sm {
+        font-size: 11.5px;
+        padding: 1px 7px;
+      }
+      /* the dotted-accent REVIEW tag — annotation only, NOT shipped */
+      .seam-tag {
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-accent);
+        border: 1px dashed var(--el-accent);
+        border-radius: var(--radius-badge);
+        padding: 1px 6px;
+        white-space: nowrap;
+      }
+
+      /* ── Buttons (secondary + ghost-link) ───────────────────────────────── */
+      .btn-sec {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn-sec svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .icon-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .icon-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .icon-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+      }
+
+      /* ── The issue row — reuses the work-items list-row vocabulary ──────── */
+      .rows {
+        display: flex;
+        flex-direction: column;
+      }
+      .brow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 14px;
+        background: var(--el-page-bg);
+        position: relative;
+      }
+      .brow + .brow {
+        border-top: 1px solid var(--el-border);
+      }
+      .grip {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-faint);
+        flex: none;
+        cursor: grab;
+        opacity: 0;
+        transition: opacity 0.1s ease;
+      }
+      .brow:hover .grip {
+        opacity: 1;
+      }
+      .row-check {
+        width: 16px;
+        height: 16px;
+        border-radius: var(--radius-control);
+        border: 1.5px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        flex: none;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: transparent;
+        padding: 0;
+      }
+      .row-check svg {
+        width: 11px;
+        height: 11px;
+      }
+      .row-check.checked {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .brow.selected {
+        background: var(--el-tint-lavender);
+      }
+      .type-icon {
+        width: 15px;
+        height: 15px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+      .brow-id {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .brow-title {
+        font-size: 13.5px;
+        color: var(--el-text);
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .epic-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        max-width: 168px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        flex: none;
+      }
+      .epic-chip .ec-ic {
+        width: 11px;
+        height: 11px;
+        color: var(--el-type-epic);
+        flex: none;
+      }
+      .epic-chip .ec-key {
+        font-family: var(--font-mono);
+      }
+      .epic-chip .ec-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* Pill (components/ui/Pill.tsx): hue in tint background, strong text */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+        flex: none;
+      }
+      .pill .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 9999px;
+        flex: none;
+      }
+      .pill--todo {
+        background: var(--el-tint-lavender);
+      }
+      .pill--todo .dot {
+        background: var(--el-text-faint);
+      }
+      .pill--prog {
+        background: var(--el-tint-sky);
+      }
+      .pill--prog .dot {
+        background: var(--el-info);
+      }
+      .pill--done {
+        background: var(--el-tint-mint);
+      }
+      .pill--done .dot {
+        background: var(--el-success);
+      }
+      .pill--neutral {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .avatar {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .avatar.unassigned {
+        background: var(--el-muted);
+        color: var(--el-text-faint);
+        border: 1px dashed var(--el-border-strong);
+      }
+
+      /* inline "+ Create issue" row + "Create sprint" affordance ───────────── */
+      .create-row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 14px;
+        color: var(--el-link);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border-top: 1px solid var(--el-border);
+      }
+      .create-row svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+      }
+      .create-sprint {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .create-sprint svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      /* empty sprint body placeholder */
+      .sprint-empty {
+        margin: 12px 14px;
+        padding: 16px;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        text-align: center;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Drag states (reuse the 3.2 board drag vocabulary) ──────────────── */
+      .brow.ghost {
+        opacity: 0.4;
+        border-top: 1px dashed var(--el-border-strong);
+        border-bottom: 1px dashed var(--el-border-strong);
+      }
+      .row-insertion {
+        height: 3px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        margin: 0 14px;
+      }
+      .region.drop-target {
+        outline: 2px solid var(--el-accent);
+        outline-offset: -2px;
+      }
+      .region.drop-target .region-head {
+        background: var(--el-tint-lavender);
+      }
+      .drag-overlay {
+        position: relative;
+        width: 540px;
+        margin: 10px 0 10px 40px;
+        border: 1px solid var(--el-accent);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+        transform: rotate(1.4deg);
+      }
+      .drag-overlay.stacked::before,
+      .drag-overlay.stacked::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-card);
+        z-index: -1;
+      }
+      .drag-overlay.stacked::before {
+        transform: translate(5px, 5px) rotate(1deg);
+      }
+      .drag-overlay.stacked::after {
+        transform: translate(10px, 10px) rotate(2deg);
+      }
+      .stack-count {
+        position: absolute;
+        top: -9px;
+        right: -9px;
+        min-width: 22px;
+        height: 22px;
+        padding: 0 6px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 11px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: var(--shadow-subtle);
+      }
+      .live {
+        margin: 0 0 0 40px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: 6px 10px;
+      }
+      .live b {
+        font-family: var(--font-mono);
+        font-weight: 600;
+        color: var(--el-text-faint);
+        text-transform: uppercase;
+        font-size: 10px;
+        letter-spacing: 0.05em;
+      }
+
+      /* ── Multi-select bulk bar ──────────────────────────────────────────── */
+      .selbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 9px 12px 9px 16px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+      }
+      .selbar .sb-count {
+        font-weight: 700;
+        font-size: 13px;
+      }
+      .selbar .spacer {
+        flex: 1;
+      }
+      .sb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .sb-btn svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .sb-clear {
+        background: transparent;
+        border: 0;
+        color: var(--el-accent-text);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        opacity: 0.9;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .sb-clear svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* ── Dropdown Menu (the ⋯ row menu + submenu) ───────────────────────── */
+      .menu {
+        width: 236px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 5px;
+      }
+      .menu-cap {
+        font-size: 10.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        padding: 6px 10px 4px;
+      }
+      .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .menu-item svg.mi {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .menu-item:hover,
+      .menu-item.active {
+        background: var(--el-surface);
+      }
+      .menu-item .chev {
+        margin-left: auto;
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-faint);
+        flex: none;
+      }
+      .menu-item .mi-check {
+        margin-left: auto;
+        width: 15px;
+        height: 15px;
+        color: var(--el-accent);
+        flex: none;
+      }
+      .menu-sep {
+        height: 1px;
+        background: var(--el-border);
+        margin: 5px 4px;
+      }
+      .menu-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      /* ── States: skeleton / empty / error ───────────────────────────────── */
+      .sk {
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+      .pulse {
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      .sk-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 11px 14px;
+      }
+      .sk-row + .sk-row {
+        border-top: 1px solid var(--el-border);
+      }
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 48px 16px;
+      }
+      .empty .ic-wrap {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-muted);
+        background: var(--el-surface);
+        border-radius: 9999px;
+      }
+      .empty .ic-wrap svg {
+        width: 24px;
+        height: 24px;
+      }
+      .empty.err .ic-wrap {
+        color: var(--el-danger);
+        background: var(--el-tint-rose);
+      }
+      .empty h3 {
+        margin: 0 0 6px;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        font-family: var(--font-serif);
+      }
+      .empty p {
+        margin: 0 0 16px;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+        max-width: 380px;
+      }
+      .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 16px;
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        border: 0;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .btn-primary svg {
+        width: 16px;
+        height: 16px;
+      }
+      .spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid var(--el-border-strong);
+        border-top-color: var(--el-accent);
+        border-radius: 9999px;
+        animation: spin 0.7s linear infinite;
+        flex: none;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* anatomy callout (panels 1–2 review annotation) */
+      .anno {
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        padding: 3px 0;
+      }
+      .anno .k {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--el-accent);
+        flex: none;
+        width: 130px;
+      }
+      .anno-grid {
+        padding: 16px 18px;
+        border-top: 1px dashed var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .two {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        align-items: start;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Backlog / sprint-planning UI</h1>
+        <p>
+          Story 4.2 · Subtask 4.2.1 design asset — built from app/globals.css tokens + the shipped
+          issue/UI primitives. The issue row reuses the Story-2.x list row; drag reuses the
+          Story-3.2 board vocabulary. Source of truth = this HTML; see design-notes.md.
+          Dotted-accent
+          <span class="seam-tag">seam → 4.x</span> tags are review annotations, not shipped.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke, used by <use>) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <g
+          id="i-subtask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-grip"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="9" cy="6" r="1" />
+          <circle cx="9" cy="12" r="1" />
+          <circle cx="9" cy="18" r="1" />
+          <circle cx="15" cy="6" r="1" />
+          <circle cx="15" cy="12" r="1" />
+          <circle cx="15" cy="18" r="1" />
+        </g>
+        <g
+          id="i-more"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="5" cy="12" r="1" />
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-chevron-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </g>
+        <g
+          id="i-arrow-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </g>
+        <g
+          id="i-top"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 3h14" />
+          <path d="m18 13-6-6-6 6" />
+          <path d="M12 7v14" />
+        </g>
+        <g
+          id="i-bottom"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 17V3" />
+          <path d="m6 11 6 6 6-6" />
+          <path d="M19 21H5" />
+        </g>
+        <g
+          id="i-play"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polygon points="6 3 20 12 6 21 6 3" />
+        </g>
+        <g
+          id="i-hash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="4" x2="20" y1="9" y2="9" />
+          <line x1="4" x2="20" y1="15" y2="15" />
+          <line x1="10" x2="8" y1="3" y2="21" />
+          <line x1="16" x2="14" y1="3" y2="21" />
+        </g>
+        <g
+          id="i-gauge"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 14 4-4" />
+          <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+        </g>
+        <g
+          id="i-calendar"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M8 2v4" />
+          <path d="M16 2v4" />
+          <rect width="18" height="18" x="3" y="4" rx="2" />
+          <path d="M3 10h18" />
+        </g>
+        <g
+          id="i-inbox"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+          <path
+            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+          />
+        </g>
+        <g
+          id="i-rocket"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"
+          />
+          <path
+            d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"
+          />
+          <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+          <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+        </g>
+        <g
+          id="i-rotate"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+          <path d="M3 3v5h5" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-columns"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+        </g>
+        <g
+          id="i-layout-list"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="7" height="7" x="3" y="3" rx="1" />
+          <rect width="7" height="7" x="3" y="14" rx="1" />
+          <path d="M14 4h7" />
+          <path d="M14 9h7" />
+          <path d="M14 15h7" />
+          <path d="M14 20h7" />
+        </g>
+        <g
+          id="i-list-checks"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-filter"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </g>
+        <g
+          id="i-external"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════════ PANEL 0 — page layout + nav ════════════════ -->
+    <div class="panel-label">
+      0 · Page layout + nav — sprint-planning containers (top) over the ranked backlog (bottom)
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <!-- sidebar: shows where the new Backlog nav item sits -->
+          <aside class="sidebar">
+            <div class="ws">
+              <span class="logo">m</span>
+              <div>
+                <div class="ws-name">moooon</div>
+                <div class="ws-sub">prodect</div>
+              </div>
+            </div>
+            <div class="nav-sec">Project</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-list-checks" /></svg>
+              Issues
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-columns" /></svg>
+              Board
+            </div>
+            <div class="nav-item active" aria-current="page">
+              <svg viewBox="0 0 24 24"><use href="#i-layout-list" /></svg>
+              Backlog
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-gauge" /></svg>
+              Reports
+            </div>
+          </aside>
+
+          <!-- main work area -->
+          <div class="work">
+            <div class="page-head">
+              <div>
+                <h2>Backlog</h2>
+                <p class="sub">prodect · plan & groom — rank, sprint, estimate</p>
+              </div>
+              <div class="toolbar">
+                <a class="tb-btn" href="#" title="View all issues in the issue navigator (/issues)">
+                  <span class="ic"
+                    ><svg viewBox="0 0 24 24"><use href="#i-external" /></svg
+                  ></span>
+                  View all issues
+                </a>
+                <button class="tb-btn is-disabled" title="Filter — Epic 6">
+                  <span class="ic"
+                    ><svg viewBox="0 0 24 24"><use href="#i-filter" /></svg
+                  ></span>
+                  Filter
+                </button>
+                <button class="tb-btn primary">
+                  <span class="ic"
+                    ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                  ></span>
+                  New issue
+                </button>
+              </div>
+            </div>
+
+            <div class="regions">
+              <!-- ACTIVE sprint container -->
+              <section class="region" aria-label="Sprint 24, active, 5 issues">
+                <div class="region-head">
+                  <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                  <span class="region-title">Sprint 24</span>
+                  <span class="pill pill--prog"><span class="dot"></span>Active</span>
+                  <span class="region-dates">
+                    <svg viewBox="0 0 24 24"><use href="#i-calendar" /></svg>
+                    Jun 2 – Jun 16
+                  </span>
+                  <span class="count-badge">5</span>
+                  <span class="spacer"></span>
+                  <span class="seam" title="Committed points — filled by Story 4.3">
+                    <svg viewBox="0 0 24 24"><use href="#i-hash" /></svg>— pts
+                  </span>
+                  <span class="seam-tag">→ 4.3</span>
+                  <span class="seam" title="Velocity — filled by Story 4.6">
+                    <svg viewBox="0 0 24 24"><use href="#i-gauge" /></svg>velocity
+                  </span>
+                  <span class="seam-tag">→ 4.6</span>
+                  <button class="icon-btn" aria-label="Sprint actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+                <div class="rows">
+                  <div class="brow" role="row">
+                    <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                    <button class="row-check" aria-label="Select PROD-118"></button>
+                    <span class="type-icon t-story"
+                      ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                    ></span>
+                    <span class="brow-id">PROD-118</span>
+                    <span class="brow-title">Org-switcher in the top bar with keyboard nav</span>
+                    <span class="epic-chip">
+                      <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                      <span class="ec-key">PROD-9</span>
+                    </span>
+                    <span class="seam sm" title="Estimate — filled by Story 4.3">—</span>
+                    <span class="avatar" title="Yue Zhu">YZ</span>
+                    <span class="pill pill--prog"><span class="dot"></span>In progress</span>
+                    <button class="icon-btn" aria-label="Row actions">
+                      <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                    </button>
+                  </div>
+                  <div class="brow" role="row">
+                    <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                    <button class="row-check" aria-label="Select PROD-121"></button>
+                    <span class="type-icon t-bug"
+                      ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                    ></span>
+                    <span class="brow-id">PROD-121</span>
+                    <span class="brow-title">Avatar initials wrong for single-word names</span>
+                    <span class="epic-chip">
+                      <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                      <span class="ec-key">PROD-9</span>
+                    </span>
+                    <span class="seam sm" title="Estimate — filled by Story 4.3">—</span>
+                    <span class="avatar" title="Ana Ruiz">AR</span>
+                    <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                    <button class="icon-btn" aria-label="Row actions">
+                      <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                    </button>
+                  </div>
+                  <div class="brow" role="row">
+                    <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                    <button class="row-check" aria-label="Select PROD-104"></button>
+                    <span class="type-icon t-task"
+                      ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                    ></span>
+                    <span class="brow-id">PROD-104</span>
+                    <span class="brow-title"
+                      >Wire the audit-log revision write into the sprint move</span
+                    >
+                    <span class="epic-chip">
+                      <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                      <span class="ec-key">PROD-31</span>
+                    </span>
+                    <span class="seam sm" title="Estimate — filled by Story 4.3">—</span>
+                    <span class="avatar unassigned" title="Unassigned">–</span>
+                    <span class="pill pill--done"><span class="dot"></span>Done</span>
+                    <button class="icon-btn" aria-label="Row actions">
+                      <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="create-row">
+                  <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>
+                  Create issue
+                </div>
+              </section>
+
+              <!-- PLANNED sprint container with the Start-sprint entry point -->
+              <section class="region" aria-label="Sprint 25, planned, 4 issues">
+                <div class="region-head">
+                  <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                  <span class="region-title">Sprint 25</span>
+                  <span class="pill pill--todo"><span class="dot"></span>Planned</span>
+                  <span class="region-dates">
+                    <svg viewBox="0 0 24 24"><use href="#i-calendar" /></svg>
+                    Not started
+                  </span>
+                  <span class="count-badge">4</span>
+                  <span class="spacer"></span>
+                  <span class="seam" title="Committed points — filled by Story 4.3">
+                    <svg viewBox="0 0 24 24"><use href="#i-hash" /></svg>— pts
+                  </span>
+                  <span class="seam-tag">→ 4.3</span>
+                  <button class="btn-sec" title="Start sprint — the flow is Story 4.4">
+                    <svg viewBox="0 0 24 24"><use href="#i-play" /></svg>
+                    Start sprint
+                  </button>
+                  <span class="seam-tag">flow → 4.4</span>
+                  <button class="icon-btn" aria-label="Sprint actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+                <div class="rows">
+                  <div class="brow" role="row">
+                    <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                    <button class="row-check" aria-label="Select PROD-140"></button>
+                    <span class="type-icon t-story"
+                      ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                    ></span>
+                    <span class="brow-id">PROD-140</span>
+                    <span class="brow-title">Saved filters — persist a named query</span>
+                    <span class="epic-chip">
+                      <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                      <span class="ec-key">PROD-47</span>
+                    </span>
+                    <span class="seam sm" title="Estimate — filled by Story 4.3">—</span>
+                    <span class="avatar" title="Mo Park">MP</span>
+                    <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                    <button class="icon-btn" aria-label="Row actions">
+                      <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                    </button>
+                  </div>
+                  <div class="brow" role="row">
+                    <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                    <button class="row-check" aria-label="Select PROD-142"></button>
+                    <span class="type-icon t-task"
+                      ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                    ></span>
+                    <span class="brow-id">PROD-142</span>
+                    <span class="brow-title"
+                      >Index work_item(backlog_rank) for the ranked read</span
+                    >
+                    <span class="epic-chip">
+                      <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                      <span class="ec-key">PROD-47</span>
+                    </span>
+                    <span class="seam sm" title="Estimate — filled by Story 4.3">—</span>
+                    <span class="avatar" title="Bo Philips">BP</span>
+                    <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                    <button class="icon-btn" aria-label="Row actions">
+                      <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="create-row">
+                  <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>
+                  Create issue
+                </div>
+              </section>
+
+              <!-- Create-sprint affordance -->
+              <button class="create-sprint">
+                <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>
+                Create sprint
+              </button>
+
+              <!-- BACKLOG container (unassigned, ranked) -->
+              <section class="region" aria-label="Backlog, 12 issues">
+                <div class="region-head">
+                  <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                  <span class="region-title">Backlog</span>
+                  <span class="count-badge">12 issues</span>
+                  <span class="spacer"></span>
+                </div>
+                <div class="rows">
+                  <div class="brow" role="row">
+                    <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                    <button class="row-check" aria-label="Select PROD-150"></button>
+                    <span class="type-icon t-story"
+                      ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                    ></span>
+                    <span class="brow-id">PROD-150</span>
+                    <span class="brow-title"
+                      >Bulk-assign issues to a sprint in one transaction</span
+                    >
+                    <span class="epic-chip">
+                      <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                      <span class="ec-key">PROD-31</span>
+                      <span class="ec-title">Agile planning</span>
+                    </span>
+                    <span class="seam sm" title="Estimate — filled by Story 4.3">—</span>
+                    <span class="avatar" title="Yue Zhu">YZ</span>
+                    <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                    <button class="icon-btn" aria-label="Row actions">
+                      <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                    </button>
+                  </div>
+                  <div class="brow" role="row">
+                    <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                    <button class="row-check" aria-label="Select PROD-151"></button>
+                    <span class="type-icon t-subtask"
+                      ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg
+                    ></span>
+                    <span class="brow-id">PROD-151</span>
+                    <span class="brow-title">Keyboard sensor for drag between regions</span>
+                    <span class="epic-chip">
+                      <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                      <span class="ec-key">PROD-31</span>
+                      <span class="ec-title">Agile planning</span>
+                    </span>
+                    <span class="seam sm" title="Estimate — filled by Story 4.3">—</span>
+                    <span class="avatar unassigned" title="Unassigned">–</span>
+                    <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                    <button class="icon-btn" aria-label="Row actions">
+                      <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                    </button>
+                  </div>
+                  <div class="brow" role="row">
+                    <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                    <button class="row-check" aria-label="Select PROD-153"></button>
+                    <span class="type-icon t-bug"
+                      ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                    ></span>
+                    <span class="brow-id">PROD-153</span>
+                    <span class="brow-title"
+                      >Snap-back animation drops a frame on slow networks</span
+                    >
+                    <span class="epic-chip">
+                      <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                      <span class="ec-key">PROD-9</span>
+                      <span class="ec-title">Workspaces</span>
+                    </span>
+                    <span class="seam sm" title="Estimate — filled by Story 4.3">—</span>
+                    <span class="avatar" title="Odie King">OK</span>
+                    <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                    <button class="icon-btn" aria-label="Row actions">
+                      <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                    </button>
+                  </div>
+                  <div class="brow" role="row">
+                    <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                    <button class="row-check" aria-label="Select PROD-158"></button>
+                    <span class="type-icon t-task"
+                      ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                    ></span>
+                    <span class="brow-id">PROD-158</span>
+                    <span class="brow-title">Virtualize the backlog list with useRowWindow</span>
+                    <span class="epic-chip">
+                      <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                      <span class="ec-key">PROD-31</span>
+                      <span class="ec-title">Agile planning</span>
+                    </span>
+                    <span class="seam sm" title="Estimate — filled by Story 4.3">—</span>
+                    <span class="avatar" title="Julian Vo">JV</span>
+                    <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                    <button class="icon-btn" aria-label="Row actions">
+                      <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="create-row">
+                  <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>
+                  Create issue
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        <b>Two stacked regions.</b> Top: zero-or-more sprint-planning containers (Active / Planned),
+        each a collapsible panel. Bottom: the Backlog container — the ranked unassigned issues. Both
+        regions hold the SAME issue row, so a row drags between them. The Backlog nav item sits
+        between Board and Reports with a <b>layout-list</b> glyph. The header toolbar carries
+        <b>View all issues</b> — the Jira "View in Issue Navigator" affordance: it deep-links to the
+        project's issue navigator (the Story-2.5 <code>/issues</code> List/Tree — every issue across
+        the backlog AND all sprints, sortable/filterable/paginated), the way Jira links the backlog
+        out to the navigator rather than flattening into the planning page. The committed-points
+        <span class="seam-tag">→ 4.3</span>, velocity <span class="seam-tag">→ 4.6</span>, row
+        estimate <span class="seam-tag">→ 4.3</span>, and Start-sprint
+        <span class="seam-tag">flow → 4.4</span>
+        slots are reserved seams (the dotted-accent tags are review-only).
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 1 — sprint-planning container anatomy ════════════════ -->
+    <div class="panel-label">
+      1 · Sprint-planning container — anatomy · empty sprint · Create-sprint affordance
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div style="padding: 22px 24px; background: var(--el-page-bg)">
+          <section class="region" aria-label="Sprint 25, planned, 4 issues">
+            <div class="region-head">
+              <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              <span class="region-title">Sprint 25</span>
+              <span class="pill pill--todo"><span class="dot"></span>Planned</span>
+              <span class="region-dates">
+                <svg viewBox="0 0 24 24"><use href="#i-calendar" /></svg>
+                Jun 16 – Jun 30
+              </span>
+              <span class="count-badge">4</span>
+              <span class="spacer"></span>
+              <span class="seam">
+                <svg viewBox="0 0 24 24"><use href="#i-hash" /></svg>— pts
+              </span>
+              <span class="seam-tag">→ 4.3</span>
+              <span class="seam">
+                <svg viewBox="0 0 24 24"><use href="#i-gauge" /></svg>velocity
+              </span>
+              <span class="seam-tag">→ 4.6</span>
+              <button class="btn-sec">
+                <svg viewBox="0 0 24 24"><use href="#i-play" /></svg>Start sprint
+              </button>
+              <span class="seam-tag">flow → 4.4</span>
+              <button class="icon-btn" aria-label="Sprint actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="rows">
+              <div class="brow" role="row">
+                <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                <button class="row-check" aria-label="Select"></button>
+                <span class="type-icon t-story"
+                  ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                ></span>
+                <span class="brow-id">PROD-140</span>
+                <span class="brow-title">Saved filters — persist a named query</span>
+                <span class="seam sm">—</span>
+                <span class="avatar" title="Mo Park">MP</span>
+                <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                <button class="icon-btn" aria-label="Row actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+            </div>
+            <div class="create-row">
+              <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>
+              Create issue
+            </div>
+          </section>
+
+          <div class="anno-grid" style="border-radius: var(--radius-card); margin-top: 16px">
+            <div class="anno">
+              <span class="k">chevron</span> collapse / expand the container (persists client-side);
+              rotates −90° when collapsed.
+            </div>
+            <div class="anno">
+              <span class="k">name + state</span> the sprint name + a Pill — Planned (lavender) ·
+              Active (sky) · Completed (mint).
+            </div>
+            <div class="anno">
+              <span class="k">date range</span> the sprint window (or "Not started" / "Not started"
+              for a planned sprint with no dates).
+            </div>
+            <div class="anno">
+              <span class="k">count</span> the sprint's issue count (bounded; from the projection,
+              not a loaded-row tally).
+            </div>
+            <div class="anno">
+              <span class="k">points seam → 4.3</span> a reserved, labelled empty slot;
+              <b>Story 4.3</b> drops the committed-points roll-up in.
+            </div>
+            <div class="anno">
+              <span class="k">velocity seam → 4.6</span> a reserved slot; <b>Story 4.6</b> adds the
+              "committed vs velocity" comparison.
+            </div>
+            <div class="anno">
+              <span class="k">Start sprint → 4.4</span> 4.2 mounts the entry point only; the start
+              FLOW (scope-lock, dates) is <b>Story 4.4</b>.
+            </div>
+            <div class="anno">
+              <span class="k">⋯ menu</span> sprint actions (rename · edit dates · delete · start) —
+              same dropdown Menu primitive.
+            </div>
+            <div class="anno">
+              <span class="k">+ Create issue</span> inline create straight into this sprint (4.2.2
+              createBacklogIssue with sprintId).
+            </div>
+          </div>
+
+          <div class="two" style="margin-top: 18px">
+            <div>
+              <div class="nav-sec" style="padding-left: 0">Empty sprint container</div>
+              <section class="region" aria-label="Sprint 26, planned, 0 issues">
+                <div class="region-head">
+                  <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                  <span class="region-title">Sprint 26</span>
+                  <span class="pill pill--todo"><span class="dot"></span>Planned</span>
+                  <span class="count-badge">0</span>
+                  <span class="spacer"></span>
+                  <button class="btn-sec" disabled style="opacity: 0.5; cursor: not-allowed">
+                    <svg viewBox="0 0 24 24"><use href="#i-play" /></svg>Start sprint
+                  </button>
+                  <button class="icon-btn" aria-label="Sprint actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+                <div class="sprint-empty">
+                  No issues — drag from the backlog, or use + Create issue.
+                </div>
+                <div class="create-row">
+                  <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>
+                  Create issue
+                </div>
+              </section>
+            </div>
+            <div>
+              <div class="nav-sec" style="padding-left: 0">Create-sprint affordance</div>
+              <button class="create-sprint">
+                <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>
+                Create sprint
+              </button>
+              <p class="legend" style="margin-top: 10px">
+                Adds an empty planned sprint (4.1.3 <code>createSprint</code>) above the backlog. An
+                empty sprint disables <b>Start sprint</b> (nothing to commit) and shows the
+                drag-from-backlog hint.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 2 — issue row anatomy ════════════════ -->
+    <div class="panel-label">
+      2 · Issue row — the composed row, with the RESERVED estimate seam in a fixed slot order
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div style="padding: 22px 24px; background: var(--el-page-bg)">
+          <section class="region" aria-label="Issue row sample">
+            <div class="rows">
+              <div class="brow" role="row">
+                <svg class="grip" viewBox="0 0 24 24" style="opacity: 1">
+                  <use href="#i-grip" />
+                </svg>
+                <button class="row-check" aria-label="Select"></button>
+                <span class="type-icon t-story"
+                  ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                ></span>
+                <span class="brow-id">PROD-150</span>
+                <span class="brow-title">Bulk-assign issues to a sprint in one transaction</span>
+                <span class="epic-chip">
+                  <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                  <span class="ec-key">PROD-31</span>
+                  <span class="ec-title">Agile planning</span>
+                </span>
+                <span class="seam sm" title="Estimate — filled by Story 4.3">—</span>
+                <span class="avatar" title="Yue Zhu">YZ</span>
+                <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                <button class="icon-btn" aria-label="Row actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <div class="anno-grid" style="border-radius: var(--radius-card); margin-top: 16px">
+            <div class="anno">
+              <span class="k">grip</span> the drag handle (revealed on hover; the row is the drag
+              target, the grip is the cue) — reuses the 3.2 board grip.
+            </div>
+            <div class="anno">
+              <span class="k">checkbox</span> the selection affordance — keyed by issue id (survives
+              lazy-load / virtualized scroll); checked → accent fill + check.
+            </div>
+            <div class="anno">
+              <span class="k">type icon</span> IssueTypeIcon in its <code>--el-type-*</code> hue
+              (epic · story · task · bug · subtask).
+            </div>
+            <div class="anno">
+              <span class="k">key</span> the mono identifier (<code>PROD-150</code>),
+              <code>--el-text-muted</code>.
+            </div>
+            <div class="anno">
+              <span class="k">summary</span> the title — single-line truncate (<code>min-w-0</code>,
+              ellipsis), flexes to fill.
+            </div>
+            <div class="anno">
+              <span class="k">epic chip</span> a neutral pill: a small epic zap glyph (epic hue) +
+              mono epic key + truncated epic title.
+            </div>
+            <div class="anno">
+              <span class="k">estimate seam → 4.3</span> a RESERVED slot in a fixed order so
+              <b>Story 4.3</b> drops a number in with NO relayout.
+            </div>
+            <div class="anno">
+              <span class="k">assignee</span> the initial-letter Avatar (dashed circle when
+              unassigned).
+            </div>
+            <div class="anno">
+              <span class="k">status</span> the lifecycle Pill — dot + text (To do · In progress ·
+              Done), hue in the tint, never colour-alone.
+            </div>
+            <div class="anno">
+              <span class="k">⋯ menu</span> the per-row context menu (panel 5). A sibling button,
+              never nested in a row link.
+            </div>
+          </div>
+          <p class="legend" style="margin-top: 12px">
+            <b>Slot order (left → right):</b> grip · checkbox · type · key · summary (flex) · epic
+            chip · <b>estimate seam</b> · assignee · status · ⋯. Identical in the backlog and inside
+            sprint containers — one global <code>backlog_rank</code>, so a row drags between regions
+            unchanged. The row is a <code>role="row"</code> div with sibling controls (no nested
+            interactive elements — finding #35 / the 2.5.19 stretched-link contract).
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 3 — drag states ════════════════ -->
+    <div class="panel-label">
+      3 · Drag — single-row overlay · drop-target highlight + insertion bar · multi-select "N
+      issues"
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div style="padding: 22px 24px; background: var(--el-page-bg)">
+          <!-- drag a backlog row into a sprint: target sprint highlighted, source ghosted -->
+          <section class="region drop-target" aria-label="Sprint 25 (drop target)">
+            <div class="region-head">
+              <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              <span class="region-title">Sprint 25</span>
+              <span class="pill pill--todo"><span class="dot"></span>Planned</span>
+              <span class="count-badge">4</span>
+              <span class="spacer"></span>
+              <span class="region-dates" style="color: var(--el-accent); font-weight: 600"
+                >Drop to add to this sprint</span
+              >
+            </div>
+            <div class="rows">
+              <div class="brow" role="row">
+                <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                <button class="row-check" aria-label="Select"></button>
+                <span class="type-icon t-story"
+                  ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                ></span>
+                <span class="brow-id">PROD-140</span>
+                <span class="brow-title">Saved filters — persist a named query</span>
+                <span class="seam sm">—</span>
+                <span class="avatar" title="Mo Park">MP</span>
+                <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                <button class="icon-btn" aria-label="Row actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="row-insertion"></div>
+            </div>
+          </section>
+
+          <!-- the lifted source overlay (single) -->
+          <div class="drag-overlay">
+            <div class="brow" role="row" style="border: 0">
+              <svg class="grip" viewBox="0 0 24 24" style="opacity: 1; cursor: grabbing">
+                <use href="#i-grip" />
+              </svg>
+              <button class="row-check" aria-label="Select"></button>
+              <span class="type-icon t-task"
+                ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+              ></span>
+              <span class="brow-id">PROD-158</span>
+              <span class="brow-title">Virtualize the backlog list with useRowWindow</span>
+              <span class="seam sm">—</span>
+              <span class="avatar" title="Julian Vo">JV</span>
+              <span class="pill pill--todo"><span class="dot"></span>To do</span>
+            </div>
+          </div>
+
+          <!-- the source's hole (ghost) inside the backlog -->
+          <section class="region" aria-label="Backlog (source)" style="margin-top: 6px">
+            <div class="region-head">
+              <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              <span class="region-title">Backlog</span>
+              <span class="count-badge">12 issues</span>
+              <span class="spacer"></span>
+            </div>
+            <div class="rows">
+              <div class="brow ghost" role="row">
+                <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                <button class="row-check" aria-label="Select"></button>
+                <span class="type-icon t-task"
+                  ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                ></span>
+                <span class="brow-id">PROD-158</span>
+                <span class="brow-title">Virtualize the backlog list with useRowWindow</span>
+                <span class="seam sm">—</span>
+                <span class="avatar" title="Julian Vo">JV</span>
+                <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                <button class="icon-btn" aria-label="Row actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="brow" role="row">
+                <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                <button class="row-check" aria-label="Select"></button>
+                <span class="type-icon t-bug"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                ></span>
+                <span class="brow-id">PROD-153</span>
+                <span class="brow-title">Snap-back animation drops a frame on slow networks</span>
+                <span class="seam sm">—</span>
+                <span class="avatar" title="Odie King">OK</span>
+                <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                <button class="icon-btn" aria-label="Row actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <div class="live" style="margin-top: 14px">
+            <b>aria-live</b> PROD-158 grabbed. Over Sprint 25, position 5 of 5. Space to drop, Esc
+            to cancel.
+          </div>
+
+          <!-- multi-select drag overlay -->
+          <div class="nav-sec" style="padding-left: 0; margin-top: 24px">
+            Multi-select drag — the "N issues" stacked overlay
+          </div>
+          <div class="drag-overlay stacked">
+            <div class="stack-count">3</div>
+            <div class="brow" role="row" style="border: 0">
+              <svg class="grip" viewBox="0 0 24 24" style="opacity: 1; cursor: grabbing">
+                <use href="#i-grip" />
+              </svg>
+              <button class="row-check checked" aria-label="Selected">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </button>
+              <span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+              ></span>
+              <span class="brow-id">PROD-150</span>
+              <span class="brow-title">Bulk-assign issues to a sprint in one transaction</span>
+              <span class="seam sm">—</span>
+              <span class="avatar" title="Yue Zhu">YZ</span>
+              <span class="pill pill--todo"><span class="dot"></span>To do</span>
+            </div>
+          </div>
+          <p class="legend">
+            Dragging a multi-selection lifts ONE overlay with a stacked shadow + an accent
+            <b>N</b> count badge; the drop routes through the atomic bulk path (4.2.2), not N moves.
+            Drop targets pair the accent ring + lavender tint (on the sprint header) with an
+            <b>insertion bar</b> (between rows) — redundant cues, never colour-alone (finding #35).
+            Moves are <b>optimistic with snap-back</b> on write error (the 3.2 board contract).
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 4 — multi-select + bulk bar ════════════════ -->
+    <div class="panel-label">
+      4 · Multi-select — selected-row treatment + the "N selected" bulk bar
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div style="padding: 22px 24px; background: var(--el-page-bg)">
+          <div class="selbar" style="margin-bottom: 14px">
+            <span class="sb-count">3 selected</span>
+            <button class="sb-btn">
+              <svg viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+              Move to sprint
+              <svg viewBox="0 0 24 24" style="width: 13px; height: 13px">
+                <use href="#i-chevron-right" />
+              </svg>
+            </button>
+            <button class="sb-btn">
+              <svg viewBox="0 0 24 24"><use href="#i-layout-list" /></svg>
+              Move to backlog
+            </button>
+            <span class="spacer"></span>
+            <button class="sb-clear">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear
+            </button>
+          </div>
+
+          <section class="region" aria-label="Backlog (multi-select)">
+            <div class="region-head">
+              <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              <span class="region-title">Backlog</span>
+              <span class="count-badge">12 issues</span>
+              <span class="spacer"></span>
+            </div>
+            <div class="rows">
+              <div class="brow selected" role="row" aria-selected="true">
+                <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                <button class="row-check checked" aria-label="Selected PROD-150">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </button>
+                <span class="type-icon t-story"
+                  ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                ></span>
+                <span class="brow-id">PROD-150</span>
+                <span class="brow-title">Bulk-assign issues to a sprint in one transaction</span>
+                <span class="seam sm">—</span>
+                <span class="avatar" title="Yue Zhu">YZ</span>
+                <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                <button class="icon-btn" aria-label="Row actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="brow selected" role="row" aria-selected="true">
+                <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                <button class="row-check checked" aria-label="Selected PROD-151">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </button>
+                <span class="type-icon t-subtask"
+                  ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg
+                ></span>
+                <span class="brow-id">PROD-151</span>
+                <span class="brow-title">Keyboard sensor for drag between regions</span>
+                <span class="seam sm">—</span>
+                <span class="avatar unassigned" title="Unassigned">–</span>
+                <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                <button class="icon-btn" aria-label="Row actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="brow" role="row">
+                <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                <button class="row-check" aria-label="Select PROD-153"></button>
+                <span class="type-icon t-bug"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                ></span>
+                <span class="brow-id">PROD-153</span>
+                <span class="brow-title">Snap-back animation drops a frame on slow networks</span>
+                <span class="seam sm">—</span>
+                <span class="avatar" title="Odie King">OK</span>
+                <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                <button class="icon-btn" aria-label="Row actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="brow selected" role="row" aria-selected="true">
+                <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                <button class="row-check checked" aria-label="Selected PROD-158">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </button>
+                <span class="type-icon t-task"
+                  ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                ></span>
+                <span class="brow-id">PROD-158</span>
+                <span class="brow-title">Virtualize the backlog list with useRowWindow</span>
+                <span class="seam sm">—</span>
+                <span class="avatar" title="Julian Vo">JV</span>
+                <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                <button class="icon-btn" aria-label="Row actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+            </div>
+          </section>
+          <p class="legend">
+            <b>Click</b> selects · <b>shift-click</b> the range · <b>⌘/ctrl-click</b> toggles one
+            (the Jira selection model). Selected rows carry the lavender tint <b>and</b> the checked
+            box — never colour-alone. The bulk bar shows "<b>N selected</b>" +
+            <b>Move to sprint ▸</b> (submenu of the project's sprints) + <b>Move to backlog</b>,
+            executed as ONE atomic transaction (4.2.2), and clears on success. Selection is keyed by
+            issue id, so it survives lazy-load + virtualized scroll.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 5 — row context menu ════════════════ -->
+    <div class="panel-label">
+      5 · Context menu (⋯) — Move to sprint ▸ (+ submenu) · Move to top / bottom
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div style="padding: 28px 24px; background: var(--el-page-bg)">
+          <div class="menu-row">
+            <div class="menu">
+              <div class="menu-cap">PROD-150</div>
+              <div class="menu-item active">
+                <svg class="mi" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+                Move to sprint
+                <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+              </div>
+              <div class="menu-item">
+                <svg class="mi" viewBox="0 0 24 24"><use href="#i-layout-list" /></svg>
+                Move to backlog
+              </div>
+              <div class="menu-sep"></div>
+              <div class="menu-item">
+                <svg class="mi" viewBox="0 0 24 24"><use href="#i-top" /></svg>
+                Move to top of backlog
+              </div>
+              <div class="menu-item">
+                <svg class="mi" viewBox="0 0 24 24"><use href="#i-bottom" /></svg>
+                Move to bottom of backlog
+              </div>
+            </div>
+            <!-- the open submenu of sprints -->
+            <div class="menu" style="width: 220px; align-self: flex-start; margin-top: 28px">
+              <div class="menu-cap">Move to sprint</div>
+              <div class="menu-item">
+                <span class="pill pill--prog" style="padding: 1px 7px"
+                  ><span class="dot"></span
+                ></span>
+                Sprint 24
+                <span style="margin-left: auto; font-size: 11px; color: var(--el-text-faint)"
+                  >Active</span
+                >
+              </div>
+              <div class="menu-item active">
+                <span class="pill pill--todo" style="padding: 1px 7px"
+                  ><span class="dot"></span
+                ></span>
+                Sprint 25
+                <svg class="mi-check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="menu-item">
+                <span class="pill pill--todo" style="padding: 1px 7px"
+                  ><span class="dot"></span
+                ></span>
+                Sprint 26
+              </div>
+              <div class="menu-sep"></div>
+              <div class="menu-item">
+                <svg class="mi" viewBox="0 0 24 24"><use href="#i-plus" /></svg>
+                New sprint…
+              </div>
+            </div>
+          </div>
+          <p class="legend">
+            The <code>⋯</code> row menu reuses the shipped dropdown <b>Menu</b> primitive (no nested
+            buttons, no hand-rolled popover), keyboard-operable. <b>Move to sprint ▸</b> opens a
+            submenu of the project's sprints; <b>Move to top / bottom of backlog</b> rank to the
+            boundary via 4.1.4 <code>rankIssue</code> append/prepend. The estimate/points seams the
+            later stories add are NOT in this menu.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 6 — states ════════════════ -->
+    <div class="panel-label">
+      6 · States — empty backlog · no sprints · loading skeleton · error
+    </div>
+    <div class="panel">
+      <div class="two">
+        <div>
+          <div class="nav-sec" style="padding-left: 0">Empty backlog</div>
+          <div class="stage">
+            <section class="region" aria-label="Backlog, empty">
+              <div class="region-head">
+                <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                <span class="region-title">Backlog</span>
+                <span class="count-badge">0 issues</span>
+                <span class="spacer"></span>
+              </div>
+              <div class="empty">
+                <span class="ic-wrap"
+                  ><svg viewBox="0 0 24 24"><use href="#i-inbox" /></svg
+                ></span>
+                <h3>Backlog is clear</h3>
+                <p>Every issue is assigned to a sprint. Create an issue to add to the backlog.</p>
+                <button class="btn-primary">
+                  <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Create issue
+                </button>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div>
+          <div class="nav-sec" style="padding-left: 0">No sprints planned</div>
+          <div class="stage">
+            <div style="padding: 16px; background: var(--el-page-bg)">
+              <button class="create-sprint" style="margin-bottom: 14px">
+                <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>
+                Create sprint
+              </button>
+              <section class="region" aria-label="Backlog">
+                <div class="region-head">
+                  <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                  <span class="region-title">Backlog</span>
+                  <span class="count-badge">12 issues</span>
+                  <span class="spacer"></span>
+                </div>
+                <div class="rows">
+                  <div class="brow" role="row">
+                    <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                    <button class="row-check" aria-label="Select"></button>
+                    <span class="type-icon t-story"
+                      ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                    ></span>
+                    <span class="brow-id">PROD-150</span>
+                    <span class="brow-title">Bulk-assign issues to a sprint</span>
+                    <span class="seam sm">—</span>
+                    <span class="avatar" title="Yue Zhu">YZ</span>
+                    <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                    <button class="icon-btn" aria-label="Row actions">
+                      <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                    </button>
+                  </div>
+                </div>
+              </section>
+              <p class="legend" style="margin-top: 8px">
+                No sprints → only the Create-sprint affordance over the ranked backlog.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="nav-sec" style="padding-left: 0">Loading skeleton</div>
+          <div class="stage">
+            <section class="region" aria-label="Loading backlog" aria-busy="true">
+              <div class="region-head">
+                <span class="sk pulse" style="width: 18px; height: 18px; border-radius: 5px"></span>
+                <span class="sk pulse" style="width: 90px; height: 14px"></span>
+                <span class="spacer"></span>
+                <span
+                  class="sk pulse"
+                  style="width: 56px; height: 18px; border-radius: 9999px"
+                ></span>
+              </div>
+              <div class="rows">
+                <div class="sk-row">
+                  <span
+                    class="sk pulse"
+                    style="width: 16px; height: 16px; border-radius: 5px"
+                  ></span>
+                  <span
+                    class="sk pulse"
+                    style="width: 15px; height: 15px; border-radius: 4px"
+                  ></span>
+                  <span class="sk pulse" style="width: 220px; height: 13px"></span>
+                  <span class="spacer" style="flex: 1"></span>
+                  <span
+                    class="sk pulse"
+                    style="width: 22px; height: 22px; border-radius: 9999px"
+                  ></span>
+                  <span
+                    class="sk pulse"
+                    style="width: 56px; height: 18px; border-radius: 9999px"
+                  ></span>
+                </div>
+                <div class="sk-row">
+                  <span
+                    class="sk pulse"
+                    style="width: 16px; height: 16px; border-radius: 5px"
+                  ></span>
+                  <span
+                    class="sk pulse"
+                    style="width: 15px; height: 15px; border-radius: 4px"
+                  ></span>
+                  <span class="sk pulse" style="width: 180px; height: 13px"></span>
+                  <span class="spacer" style="flex: 1"></span>
+                  <span
+                    class="sk pulse"
+                    style="width: 22px; height: 22px; border-radius: 9999px"
+                  ></span>
+                  <span
+                    class="sk pulse"
+                    style="width: 56px; height: 18px; border-radius: 9999px"
+                  ></span>
+                </div>
+                <div class="sk-row">
+                  <span
+                    class="sk pulse"
+                    style="width: 16px; height: 16px; border-radius: 5px"
+                  ></span>
+                  <span
+                    class="sk pulse"
+                    style="width: 15px; height: 15px; border-radius: 4px"
+                  ></span>
+                  <span class="sk pulse" style="width: 240px; height: 13px"></span>
+                  <span class="spacer" style="flex: 1"></span>
+                  <span
+                    class="sk pulse"
+                    style="width: 22px; height: 22px; border-radius: 9999px"
+                  ></span>
+                  <span
+                    class="sk pulse"
+                    style="width: 56px; height: 18px; border-radius: 9999px"
+                  ></span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div>
+          <div class="nav-sec" style="padding-left: 0">Error</div>
+          <div class="stage">
+            <section class="region" aria-label="Backlog error">
+              <div class="empty err">
+                <span class="ic-wrap"
+                  ><svg viewBox="0 0 24 24"><use href="#i-rotate" /></svg
+                ></span>
+                <h3>Couldn't load the backlog</h3>
+                <p>
+                  Something went wrong fetching this project's backlog. Check your connection and
+                  try again.
+                </p>
+                <button class="btn-sec">
+                  <svg viewBox="0 0 24 24"><use href="#i-rotate" /></svg>Retry
+                </button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        Every state is drawn here, not improvised: <b>empty backlog</b> → EmptyState (inbox) +
+        create CTA · <b>no sprints</b> → the Create-sprint affordance only · <b>loading</b> → a
+        backlog skeleton (the 3.2.2 scaffold idiom) · <b>error</b> → ErrorState + Retry. The
+        large-backlog SCALE shape (bounded count + virtualized window + lazy-load) is its own panel
+        — <b>backlog-scale.mock.html</b>.
+      </p>
+    </div>
+  </body>
+</html>
