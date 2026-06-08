@@ -620,5 +620,63 @@ export const story_7_0: PlanStory = {
         '- No new docs file invented — this is a README addition, not a new site/page.',
       dependsOn: ['7.0.4', '7.0.5'],
     },
+    {
+      id: '7.0.10',
+      kind: 'bug',
+      title:
+        'Bug — an epic/story with children appears in the ready set (a container is not a dispatchable unit)',
+      status: 'planned',
+      type: 'bug',
+      executor: 'coding_agent',
+      estimateMinutes: 30,
+      dependsOn: ['7.0.6'],
+      descriptionMd:
+        '**Type:** bug · **Parent:** Story 7.0 (the ready / dispatch surface) · **Reported by:** ' +
+        'Yue.\n\n' +
+        'The ready list (`/ready`, via `workItemsService.listReady`) and its sidebar count badge ' +
+        '(`countReady`) currently include an **epic or story that has children**. An epic/story ' +
+        'that has been broken down into child work items is a planning CONTAINER, not a ' +
+        'dispatchable unit — you run its children, never the container itself. So an epic/story ' +
+        'should appear in the ready set ONLY when it has NO children (it is still a leaf — ' +
+        'un-decomposed work you could start directly). A childless epic/story stays eligible; an ' +
+        'epic/story WITH children must be excluded.\n\n' +
+        '**Root cause (confirmed against `main`).** `workItemRepository.findReadyCandidates` ' +
+        'filters on todo-category + kind/assignee/priority + non-archived, and the service then ' +
+        'drops items with a non-terminal blocker (the finding #21 readiness predicate). There is ' +
+        '**no has-children / leaf predicate** anywhere in that path, so a `todo` epic/story whose ' +
+        'blockers are all terminal (or which has none) surfaces as "ready" and even renders a ' +
+        '`prodect run PROD-<n>` command — dispatching a container, which is wrong. The list AND ' +
+        'the count both read the same `findReadyCandidates`, so a single predicate fixes both.\n\n' +
+        '**Fix.** Add a "has no children" predicate to `findReadyCandidates`: exclude any ' +
+        'epic/story for which a child work item exists (`NOT EXISTS (SELECT 1 FROM "work_item" c ' +
+        'WHERE c."parentId" = w."id")`). Keep it inside the single repository query (no N+1); ' +
+        'because `listReady` + `getNextReady` + `countReady` all go through this method, the page, ' +
+        'the dispatch endpoint, and the badge stay in agreement automatically.\n\n' +
+        '**Open decision for the fixer (decision-ladder rung 1 — the execution-tree intent).** The ' +
+        'reported rule names **epic/story**. But the kind-parent matrix also lets a TASK parent ' +
+        'bugs and a BUG parent subtasks, so a task/bug can ALSO be a container. Decide whether the ' +
+        'rule is epic/story-specific (as reported) or the more general "any work item with children ' +
+        'is not dispatchable" (the AI-native reading: the ready set is the dispatchable LEAVES of ' +
+        'the execution tree). Lean general unless a concrete reason argues otherwise; record the ' +
+        'decision in the fix.\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- An epic or story with ≥1 child is **excluded** from `listReady` AND from `countReady` ' +
+        '(the sidebar badge) AND from `getNextReady` (the dispatch endpoint).\n' +
+        '- A childless epic/story that is otherwise ready (todo, blockers terminal) still appears.\n' +
+        '- Tasks / bugs / subtasks behave per the decision above (leaf-only if generalized; ' +
+        'unchanged otherwise) — documented in the fix.\n' +
+        '- Vitest covers: a parent epic/story with a child is absent from the ready set; the same ' +
+        'item with its child removed appears; the count matches the list (extends the 7.0.7 ' +
+        'service suite).\n' +
+        '- No N+1: the children check is part of the single `findReadyCandidates` query.\n\n' +
+        '## Context refs\n\n' +
+        '- `prodect-core/lib/repositories/workItemRepository.ts` — `findReadyCandidates` (the ' +
+        'predicate to extend).\n' +
+        '- `prodect-core/lib/services/workItemsService.ts` — `listReady` / `getNextReady` / ' +
+        '`countReady` (consumers; the single predicate flows to all three).\n' +
+        '- `prodect-core/lib/issues/parentRules.ts` — the kind-parent matrix (which kinds can have ' +
+        'children).\n' +
+        '- Story 7.0 subtasks 7.0.2 (service) + 7.0.6 (page + badge).',
+    },
   ],
 };
