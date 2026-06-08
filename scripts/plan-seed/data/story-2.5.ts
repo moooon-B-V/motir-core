@@ -1021,5 +1021,109 @@ export const story_2_5: PlanStory = {
         '- `components/ui/ReadinessBadge.tsx` (2.4.5) + `app/(authed)/issues/[key]/page.tsx` (how the detail page feeds `detail.readiness` → `ReadinessBadge`, incl. the `openBlockers` → `{identifier, href}` mapping to reuse)\n' +
         '- `lib/dto/workItems.ts` `ReadinessVerdictDto` / `IssueDetailDto.readiness`; `lib/services/workItemsService.ts` `getReadiness` (the read already wired into `getIssueDetail`); `prodect-core/CLAUDE.md` — `--el-*` tokens',
     },
+    {
+      id: '2.5.22',
+      kind: 'bug',
+      title:
+        'Bug — `/issues` filter popover renders untranslated English strings (FILTER / KIND / STATUS / "Find by ID or title…" / "Clear filters" / kind + status labels) (finding #61)',
+      status: 'planned',
+      type: 'bug',
+      executor: 'coding_agent',
+      estimateMinutes: 12,
+      dependsOn: ['2.5.4'],
+      descriptionMd:
+        '**Regression introduced by 2.5.4** (logged as **finding #61**). The `/issues` toolbar is ' +
+        "translated — the **[Filter]** trigger renders `t('issueViews.filter')`, the view switcher " +
+        "renders `t('issueViews.viewTree')` / `viewList`, and the **新建工作项** button renders " +
+        "`t('issueViews.newIssue')` — but the **popover the [Filter] button opens is rendered with " +
+        'hardcoded English string literals**. With the locale set to `zh`, the popover shows the toolbar ' +
+        'in Chinese (`新建工作项` · `树形` · `Filter` correctly localized at the trigger) but the ' +
+        'popover body is English: `FILTER`, `× Clear filters`, `Find by ID or title…`, `KIND`, `Epic` / ' +
+        '`Story` / `Task` / `Bug` / `Sub-task`, `STATUS`, `To Do` / `Blocked` / `In Progress` / ' +
+        '`In Review` / `Done` (see the attached screenshot for the user-visible state).\n\n' +
+        '**Root cause — collapsed i18n axis.** `app/(authed)/issues/_components/IssueFilterBar.tsx` ' +
+        '(shipped by 2.5.4) was authored before the surrounding surface was threaded through ' +
+        "`next-intl`. The file has **no `useTranslations('issueViews')` import**; every label in the " +
+        'popover is a JSX literal. **Adjacent surfaces in the same folder DO use `next-intl`** — ' +
+        "`app/(authed)/issues/page.tsx` calls `getTranslations('issueViews')`, " +
+        "`[key]/edit/_components/EditIssueForm.tsx` calls `useTranslations('issueViews' | 'common' | " +
+        "`'errors')`, etc. — so the catalog scaffold and the consumption pattern are already in place, " +
+        'and the **only** outlier on this page is the filter popover.\n\n' +
+        '**Fix (mechanical, no new pattern).** Thread `IssueFilterBar` through ' +
+        "`useTranslations('issueViews')` and replace every English literal with a key, REUSING already-" +
+        'shipped catalog keys wherever they exist (do NOT add a duplicate). Concretely:\n\n' +
+        '- **Section + control labels** — add to the `issueViews` namespace in `messages/en.json` AND ' +
+        '`messages/zh.json` (and any other locale catalogs present): `filterPopoverHeading` ' +
+        '(`FILTER` / `筛选`), `filterClearAll` (`Clear filters` / `清除筛选`), `filterFindPlaceholder` ' +
+        '(`Find by ID or title…` / `按 ID 或标题查找…`), `filterKindHeading` (`KIND` / `类型`), ' +
+        '`filterStatusHeading` (`STATUS` / `状态`), `filterAssigneeHeading` (`ASSIGNEE` / ' +
+        "`负责人`), `filterUnassigned` (`Unassigned` / `未分配`). Match the catalog's existing all-" +
+        "caps-for-section-label convention (or the locale's natural shape — Chinese is already " +
+        'non-caps).\n' +
+        '- **Kind labels (Epic · Story · Task · Bug · Sub-task)** — REUSE the existing catalog: ' +
+        '`messages/zh.json` already has `issueTypes.{epic,story,task,bug,subtask}` (`篇章` · `故事` · ' +
+        '`任务` · `缺陷` · `子任务`). Replace any direct read of `ISSUE_TYPE_META[*].label` (or other ' +
+        "hardcoded display string) in the popover with `t('issueTypes.' + kind)` (or the existing " +
+        "namespace's helper). DO NOT add a second copy of these labels.\n" +
+        '- **Status labels (To Do · Blocked · In Progress · In Review · Done)** — these are the ' +
+        '**workflow status names** rendered for each project status row. The catalog already carries ' +
+        'the default-status labels (`defaultStatus.toDo` / `blocked` / `inProgress` / `inReview` / ' +
+        '`done` = `待办` · `受阻` · `进行中` · `审核中` · `已完成`); statuses themselves come from ' +
+        '`WorkflowStatusDto.label` (per-project, user-editable). **For default statuses, render ' +
+        "`t('defaultStatus.<key>')` via the same lookup the StatusPicker uses (e.g. " +
+        '`STATUS_LABEL_FALLBACK[s.key]` if one exists); for custom statuses, render the stored ' +
+        '`s.label` verbatim** (user content, not translatable — same rule the rest of the app already ' +
+        'follows for custom statuses, see the StatusPicker pattern).\n' +
+        '- **Assignee names + the "Unassigned" bucket** — names are user content (no translation); the ' +
+        "`Unassigned` bucket label MUST go through `t('issueViews.filterUnassigned')`.\n\n" +
+        '**Scope guard.** `IssueFilterBar.tsx` is the ONLY file with hardcoded strings on this surface ' +
+        "(verified by `grep -n` against the popover's exact literals). Do **NOT** introduce a generic " +
+        '"translate every issues string" sweep — that\'s out of scope and would collide with surfaces ' +
+        'still in flight. **Do NOT** alter the filter behaviour, the URL serialization, the ' +
+        '`filterRef`/optimistic-state machinery from **2.5.17**, or the popover layout — this is a ' +
+        'pure string-threading change.\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- With `locale=zh`, the `/issues` filter popover renders every label in Chinese: section ' +
+        'headings (`筛选` · `类型` · `状态` · `负责人`), the `清除筛选` action, the ' +
+        '`按 ID 或标题查找…` placeholder, every Kind row (`篇章` / `故事` / `任务` / `缺陷` / ' +
+        '`子任务`), every default-status row (`待办` / `受阻` / `进行中` / `审核中` / `已完成`), and ' +
+        'the `未分配` bucket; custom (user-named) statuses still render their stored `label` verbatim.\n' +
+        "- With `locale=en`, the popover renders identically to today's English (no copy regression).\n" +
+        '- `IssueFilterBar.tsx` imports `useTranslations` from `next-intl` and contains NO English ' +
+        'literal string in JSX or attribute values for these surfaces; `grep -nE "(Clear filters|Find ' +
+        'by ID|KIND|STATUS|FILTER)" app/\\(authed\\)/issues/_components/IssueFilterBar.tsx` returns ' +
+        'zero lines (the literals live only in `messages/*.json`).\n' +
+        '- Kind labels read from the existing `issueTypes.*` keys; default-status labels read from the ' +
+        'existing `defaultStatus.*` keys — no duplicated catalog entries.\n' +
+        '- Behaviour is unchanged: the URL serialization, multi-select check marks, the ' +
+        '`filterRef`/optimistic state from **2.5.17**, the active-count badge, the `Clear filters` ' +
+        'disabled state, and the focus-trap / `Esc` close behaviour all work as before. The 2.5.4 + ' +
+        '2.5.17 regression tests still pass.\n' +
+        '- New regression test in `tests/components/issue-filter-bar.test.tsx`: render the popover ' +
+        'under both `en` and `zh` `NextIntlClientProvider` wrappers and assert the section headings + ' +
+        "`Clear filters` action render the locale's strings (not the English literal) — fails on " +
+        '`main` (catches a future regression that re-introduces hardcoded English).\n' +
+        '- tsc / eslint / prettier clean; `next build` compiles; `pnpm test` + the existing ' +
+        '`tests/e2e/issue-list-flow.spec.ts` pass (the E2E grabs the **English** `Clear filters` ' +
+        'button by name and must continue to work under default `en`).\n\n' +
+        '## Context refs\n\n' +
+        '- **Finding #61** in `prodect-meta/prodect_plan/PRODECT_FINDINGS.md` (full root-cause + ' +
+        'screenshot of the broken popover)\n' +
+        '- `app/(authed)/issues/_components/IssueFilterBar.tsx` — the file to thread; ~L256 ' +
+        '(`Clear filters`) · ~L271 (`Find by ID or title…` placeholder) · the section headings + Kind / ' +
+        'Status / Assignee `OptionRow` labels\n' +
+        '- `messages/en.json` + `messages/zh.json` `issueViews` namespace — where the new keys land; ' +
+        'existing `issueTypes.{epic,story,task,bug,subtask}` + `defaultStatus.{toDo,blocked,inProgress,' +
+        'inReview,done}` to reuse (do NOT duplicate)\n' +
+        '- The `next-intl` consumption pattern already used on this surface: ' +
+        '`app/(authed)/issues/page.tsx` (`getTranslations`) + ' +
+        '`app/(authed)/issues/[key]/edit/_components/EditIssueForm.tsx` (`useTranslations`) — mirror ' +
+        'the client-component variant\n' +
+        '- `components/issues/StatusPicker.tsx` (or equivalent) — the precedent for "translate default ' +
+        'status keys, render custom status `label` verbatim" already in use elsewhere\n' +
+        '- `tests/components/issue-filter-bar.test.tsx` — where the locale-rendering regression test ' +
+        'lands; `tests/e2e/issue-list-flow.spec.ts` L206 (`Clear filters` button name lookup — must ' +
+        'still pass under default `en`)',
+    },
   ],
 };
