@@ -252,7 +252,7 @@ export const story_3_5: PlanStory = {
       id: '3.5.3',
       title:
         'At-scale interaction E2E — drag-as-transition · snap-back · swimlanes · cross-lane reassign · WIP',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 25,
