@@ -1,5 +1,13 @@
-import { expect, type APIRequestContext, type APIResponse } from '@playwright/test';
+import {
+  expect,
+  type APIRequestContext,
+  type APIResponse,
+  type Locator,
+  type Page,
+} from '@playwright/test';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { signIn } from './shell-session';
+import { SEED_LARGE_OWNER_EMAIL, SEED_LARGE_OWNER_PASSWORD } from '../../../scripts/seedLargeBoard';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { BoardColumnDto, BoardProjectionDto, MoveCardTarget } from '@/lib/dto/boards';
 import type { TestUser } from './work-item-setup';
@@ -67,4 +75,77 @@ export async function addCustomStatus(
     category: opts.category ?? 'in_progress',
   });
   return status.key;
+}
+
+// ── At-scale UI helpers (Subtask 3.5.1) ─────────────────────────────────────
+// Page-level (vs. the API helpers above) helpers the cross-cutting at-scale
+// board specs (3.5.2 load model · 3.5.3 interaction) drive against the seeded
+// board-shaped tenant. Additive — they do not touch the existing 3.1.7/3.6.4
+// API helpers. They lean on the board's stable testids (`board`, `board-column-`,
+// `board-card-`, `board-count-`, `board-overcap-banner`), the same set
+// board-load.spec.ts asserts against.
+
+/** The board container testid flips `board-skeleton` → `board` once the projection
+ *  fetch resolves. Navigate to `/boards` and wait for the loaded board. The at-scale
+ *  seed ships a heavy set, so the default budget is generous; raise it for over-cap. */
+export async function gotoLoadedBoard(page: Page, loadTimeout = 30_000): Promise<void> {
+  await page.goto('/boards');
+  await expect(page.getByTestId('board')).toBeVisible({ timeout: loadTimeout });
+}
+
+/** Sign in as the `db:seed:large` (board-shaped) tenant owner, then open the
+ *  loaded board — the seed pins the owner's active project, so `/boards` resolves
+ *  the BIG project. The single entry point the at-scale specs use to reach a
+ *  fully-populated board over the real stack. */
+export async function signInBoardSeedOwnerAndOpenBoard(
+  page: Page,
+  loadTimeout = 30_000,
+): Promise<void> {
+  await signIn(page, SEED_LARGE_OWNER_EMAIL, SEED_LARGE_OWNER_PASSWORD);
+  await gotoLoadedBoard(page, loadTimeout);
+}
+
+/** The mounted card-node Locator for a column (by column id) — `board-card-*`
+ *  descendants of the column. Because the column virtualizes (`useRowWindow`),
+ *  `.count()` is the MOUNTED (rendered) node count, NOT the column total — that
+ *  is the whole point of {@link expectColumnVirtualized}. */
+export function columnCardNodes(page: Page, columnId: string): Locator {
+  return page.getByTestId(`board-column-${columnId}`).locator('[data-testid^="board-card-"]');
+}
+
+/** The column's count badge value (its FULL `totalCount` denominator, unaffected
+ *  by virtualization or the Done-age window). */
+export async function columnTotalBadge(page: Page, columnId: string): Promise<number> {
+  const text = await page.getByTestId(`board-count-${columnId}`).textContent();
+  return Number((text ?? '').trim());
+}
+
+/** Assert a column is DOM-bounded: its mounted card-node count is > 0 but well
+ *  below its full total — i.e. it virtualized rather than mounting every row.
+ *  `total` is the column's full `totalCount` (from the projection / count badge). */
+export async function expectColumnVirtualized(
+  page: Page,
+  columnId: string,
+  total: number,
+): Promise<void> {
+  const nodes = columnCardNodes(page, columnId);
+  await expect(nodes.first()).toBeVisible();
+  const mounted = await nodes.count();
+  expect(mounted, 'mounted card nodes').toBeGreaterThan(0);
+  expect(mounted, 'mounted < total (virtualized)').toBeLessThan(total);
+}
+
+/** Assert NO per-column "Load more" affordance exists anywhere on the board — the
+ *  retired 3.8.3 cursor paging (neither a button nor any "load more" text). The
+ *  board's only load affordance is the column's own scroll. */
+export async function expectNoLoadMore(page: Page): Promise<void> {
+  await expect(page.getByText(/load more/i)).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /load more/i })).toHaveCount(0);
+}
+
+/** The over-cap "refine your filter" banner Locator (`board-overcap-banner`) —
+ *  present iff the board total exceeds the (resolved) cap. Use `.toHaveCount(0)`
+ *  to assert absence under the cap, `.toBeVisible()` past it. */
+export function overCapBanner(page: Page): Locator {
+  return page.getByTestId('board-overcap-banner');
 }

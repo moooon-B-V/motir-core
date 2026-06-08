@@ -29,6 +29,18 @@ const USING_CUSTOM_ORIGIN = Boolean(process.env['E2E_BASE_URL']) || Boolean(proc
 const BASE_URL = process.env['E2E_BASE_URL'] ?? `http://localhost:${process.env['PORT'] ?? '3000'}`;
 const PORT = new URL(BASE_URL).port || '3000';
 
+// Subtask 3.5.1 board load-model test seam: forward the cap / Done-age overrides
+// to the dev server ONLY when the run sets them, so a targeted
+// `BOARD_ISSUE_CAP_OVERRIDE=… pnpm test:e2e --grep board-at-scale` run can reach
+// the over-cap banner + Done-age trim with TENS of rows instead of 5,000. Unset
+// by default → every other E2E spec (and production) keeps the shipped
+// 5,000 / 14 constants (boardsService.resolve{BoardIssueCap,DoneAgeWindowDays}).
+const BOARD_LOAD_SEAM_ENV: Record<string, string> = {};
+for (const k of ['BOARD_ISSUE_CAP_OVERRIDE', 'DONE_AGE_WINDOW_DAYS_OVERRIDE']) {
+  const v = process.env[k];
+  if (v !== undefined && v !== '') BOARD_LOAD_SEAM_ENV[k] = v;
+}
+
 /**
  * Playwright config for prodect-core's E2E auth smoke suite.
  *
@@ -143,6 +155,9 @@ export default defineConfig({
         // toggle during the browser-driven shell-flows journey. next.config.ts
         // reads this flag; a normal `pnpm dev` session keeps its indicator.
         E2E_DISABLE_DEV_INDICATOR: '1',
+        // Subtask 3.5.1: the board load-model overrides, forwarded from the run's
+        // env only when set (empty by default — see BOARD_LOAD_SEAM_ENV above).
+        ...BOARD_LOAD_SEAM_ENV,
       },
     },
     {
