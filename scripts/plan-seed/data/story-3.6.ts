@@ -196,7 +196,7 @@ export const story_3_6: PlanStory = {
     {
       id: '3.6.3',
       title: 'Board-configuration UI — column manager + status mapping; repoint the unmapped tray',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
