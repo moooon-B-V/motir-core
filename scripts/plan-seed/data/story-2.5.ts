@@ -1026,7 +1026,7 @@ export const story_2_5: PlanStory = {
       kind: 'bug',
       title:
         'Bug — `/issues` filter popover renders untranslated English strings (FILTER / KIND / STATUS / "Find by ID or title…" / "Clear filters" / kind + status labels) (finding #61)',
-      status: 'in_progress',
+      status: 'done',
       type: 'bug',
       executor: 'coding_agent',
       estimateMinutes: 12,
