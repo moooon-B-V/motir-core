@@ -134,7 +134,7 @@ export const story_3_7: PlanStory = {
       id: '3.7.3',
       title:
         'Board CRUD service + API — create (seed columns) / rename / set-default / delete (guards)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
