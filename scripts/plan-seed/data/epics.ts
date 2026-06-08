@@ -251,7 +251,7 @@ export const EPICS: EpicMeta[] = [
   {
     id: '3',
     title: 'Boards',
-    status: 'planned',
+    status: 'done',
     descriptionMd:
       'The primary day-to-day surface for a working team: the **Kanban board** that visualizes ' +
       'issues as cards in columns mapped to the workflow statuses from Epic 2. Drag-drop to ' +
