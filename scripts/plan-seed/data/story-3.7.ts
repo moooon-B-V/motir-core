@@ -191,7 +191,7 @@ export const story_3_7: PlanStory = {
       id: '3.7.5',
       title:
         'Board-scoped read — resolve the selected board (`?board=`/default) through the projection',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 18,
