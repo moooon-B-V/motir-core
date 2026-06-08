@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import { EMPTY_FILTER, type IssueFilter } from '@/lib/issues/issueListFilter';
+import { renderWithIntl } from '../helpers/renderWithIntl';
+import zhMessages from '@/messages/zh.json';
 
 // The /issues FILTER bar (Subtask 2.5.4) under happy-dom — the card's component
 // AC: "toggling a filter updates the query + calls back; clear resets." Filters
@@ -87,7 +89,10 @@ const MEMBERS: WorkspaceMemberDTO[] = [
 ];
 
 function renderBar(filter: IssueFilter = EMPTY_FILTER) {
-  return render(
+  // renderWithIntl wraps in a NextIntlClientProvider seeded with the real `en`
+  // catalog, so the bar's useTranslations() resolves the production English
+  // strings — every assertion below stays byte-identical to today's UI.
+  return renderWithIntl(
     <IssueFilterBar
       filter={filter}
       statuses={STATUSES}
@@ -170,7 +175,7 @@ describe('IssueFilterBar — facet toggles navigate (URL-driven)', () => {
   });
 
   it('preserves the active view + sort when a facet changes', () => {
-    render(
+    renderWithIntl(
       <IssueFilterBar
         filter={EMPTY_FILTER}
         statuses={STATUSES}
@@ -301,5 +306,83 @@ describe('IssueFilterBar — text quick-filter (debounced)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('IssueFilterBar — localization (finding #61)', () => {
+  // The popover was authored with hardcoded English literals while the rest of
+  // the surface was threaded through next-intl, so a `zh` user saw an English
+  // filter popover. The bar now reads every label from the `issueViews`,
+  // `labels.issueType`, and `labels.defaultStatus` catalogs. These two renders —
+  // one per shipped locale — guard the fix (and catch a future regression that
+  // re-introduces a hardcoded English string): on `main` the zh case fails
+  // because the bar still emits "Clear filters" / "Kind" / "Status" verbatim.
+
+  // A project's custom (non-default) status: its user-authored label is content,
+  // not translatable, so it must render verbatim regardless of locale.
+  const STATUSES_WITH_CUSTOM: WorkflowStatusDto[] = [
+    ...STATUSES,
+    {
+      id: 's-qa',
+      projectId: 'p',
+      key: 'qa_review',
+      label: 'QA Review',
+      category: 'in_progress',
+      color: null,
+      position: 'b5',
+      isInitial: false,
+    },
+  ];
+
+  function renderZh() {
+    return renderWithIntl(
+      <IssueFilterBar
+        filter={EMPTY_FILTER}
+        statuses={STATUSES_WITH_CUSTOM}
+        members={MEMBERS}
+        view="tree"
+        sort={DEFAULT_SORT}
+      />,
+      { locale: 'zh', messages: zhMessages },
+    );
+  }
+
+  it('renders the English popover under the default (en) locale (no copy regression)', () => {
+    renderBar();
+    open();
+    expect(screen.getByRole('listbox', { name: 'Kind' })).toBeTruthy();
+    expect(screen.getByRole('listbox', { name: 'Status' })).toBeTruthy();
+    expect(screen.getByRole('listbox', { name: 'Assignee' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Clear filters/ })).toBeTruthy();
+    expect(screen.getByPlaceholderText('Find by ID or title…')).toBeTruthy();
+  });
+
+  it('renders the zh popover — headings, Clear, placeholder, kind + default-status rows, Unassigned', () => {
+    renderZh();
+    // Trigger aria-label is localized too, so open via the zh name.
+    fireEvent.click(screen.getByRole('button', { name: /^筛选/ }));
+
+    const kindList = screen.getByRole('listbox', { name: '类型' });
+    const statusList = screen.getByRole('listbox', { name: '状态' });
+    const assigneeList = screen.getByRole('listbox', { name: '负责人' });
+
+    // Section headings + Clear + text placeholder render the zh catalog values…
+    expect(screen.getByRole('button', { name: /清除筛选/ })).toBeTruthy();
+    expect(screen.getByPlaceholderText('按 ID 或标题查找…')).toBeTruthy();
+    // …NOT the English literals (the regression this test exists to catch).
+    expect(screen.queryByRole('button', { name: /Clear filters/ })).toBeNull();
+    expect(screen.queryByPlaceholderText('Find by ID or title…')).toBeNull();
+
+    // Kind rows reuse the existing labels.issueType.* keys.
+    expect(within(kindList).getByRole('option', { name: '缺陷' })).toBeTruthy(); // Bug
+    expect(within(kindList).getByRole('option', { name: '子任务' })).toBeTruthy(); // Sub-task
+
+    // Default statuses reuse labels.defaultStatus.*; a custom status renders verbatim.
+    expect(within(statusList).getByRole('option', { name: '进行中' })).toBeTruthy(); // In Progress
+    expect(within(statusList).getByRole('option', { name: '待办' })).toBeTruthy(); // To Do
+    expect(within(statusList).getByRole('option', { name: 'QA Review' })).toBeTruthy(); // custom, verbatim
+
+    // The Unassigned bucket is localized.
+    expect(within(assigneeList).getByRole('option', { name: '未分配' })).toBeTruthy();
   });
 });
