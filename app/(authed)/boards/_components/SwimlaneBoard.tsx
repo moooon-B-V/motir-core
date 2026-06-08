@@ -104,6 +104,7 @@ export function SwimlaneBoard({
             {/* The `[⋯]` menu hosting the WIP-limit editor (3.3.6). */}
             <ColumnActionsMenu
               columnId={column.id}
+              boardId={boardId}
               wipLimit={column.wipLimit}
               onSetWipLimit={onSetWipLimit}
             />

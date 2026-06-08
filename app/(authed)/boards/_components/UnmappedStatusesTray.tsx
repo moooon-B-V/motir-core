@@ -19,7 +19,8 @@ import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 // **"Map columns →"** and deep-links to Board settings, replacing the interim
 // "Manage statuses →" → workflow-editor link that stood in while no mapping
 // admin existed. (The 3.2.6 "CTA reality" note in design-notes.md is updated to
-// match.)
+// match.) As of Subtask 3.7.8 (multiple boards per project) the link carries
+// `?board=<id>` so it opens the settings for the board BEING VIEWED.
 //
 // Tokens: the yellow tint carries the hue in the BACKGROUND with
 // `--el-text-strong` text (finding #35 AA — never a tinted page surface), and
@@ -27,7 +28,15 @@ import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 // colour-alone (finding #35). Status chips reuse the `Pill` neutral tone; shape
 // via element tokens (`--radius-card`, `--spacing-control-*`).
 
-export function UnmappedStatusesTray({ statuses }: { statuses: WorkflowStatusDto[] }) {
+export function UnmappedStatusesTray({
+  statuses,
+  boardId,
+}: {
+  statuses: WorkflowStatusDto[];
+  /** The board currently being viewed — threaded into the Map-columns link so it
+   *  deep-links to THIS board's config (Subtask 3.7.8). */
+  boardId: string;
+}) {
   const t = useTranslations('boards');
   return (
     <aside
@@ -47,7 +56,7 @@ export function UnmappedStatusesTray({ statuses }: { statuses: WorkflowStatusDto
         </span>
       </span>
       <Link
-        href="/settings/project/board"
+        href={`/settings/project/board?board=${encodeURIComponent(boardId)}`}
         className="text-sm font-semibold whitespace-nowrap text-(--el-link) hover:underline"
         data-testid="board-unmapped-link"
       >

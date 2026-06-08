@@ -258,6 +258,52 @@ describe('BoardSwitcher (3.7.4) — read-only (non-manager, 6.4 seam)', () => {
   });
 });
 
+describe('BoardSwitcher (3.7.8) — manage: Board settings deep-link', () => {
+  it('the manage menu has a Board settings item linking to /settings/project/board?board=<id>', async () => {
+    stubFetch(TWO_BOARDS);
+    render(<BoardSwitcher />);
+    fireEvent.click(await screen.findByTestId('board-switcher-trigger'));
+    fireEvent.click(await screen.findByTestId('board-switcher-manage-b2'));
+
+    const link = await screen.findByTestId('board-switcher-settings-b2');
+    // It is a navigation Link (anchor), not a button — the Jira-faithful
+    // reached-FROM-the-board path into THIS board's config.
+    expect(link.tagName).toBe('A');
+    expect(link.getAttribute('href')).toBe('/settings/project/board?board=b2');
+    expect(link.getAttribute('role')).toBe('menuitem');
+    expect(link.textContent).toContain('Board settings');
+  });
+});
+
+describe('BoardSwitcher (3.7.8) — settings variant (switch-only)', () => {
+  it('renders the switcher on the settings route but hides New + per-row manage', async () => {
+    // The settings page mounts the switcher with `variant="settings"` to
+    // re-target WHICH board is being configured; creating / renaming / deleting a
+    // board stays the /boards switcher's job (per the 3.7.7 design notes).
+    stubFetch(TWO_BOARDS);
+    render(<BoardSwitcher variant="settings" />);
+    fireEvent.click(await screen.findByTestId('board-switcher-trigger'));
+    // can still switch which board to configure…
+    expect(await screen.findByTestId('board-switcher-pick-b2')).toBeTruthy();
+    // …but no New board and no per-row manage [⋯] (so no Board-settings item either)
+    expect(screen.queryByTestId('board-switcher-new')).toBeNull();
+    expect(screen.queryByTestId('board-switcher-manage-b1')).toBeNull();
+    expect(screen.queryByTestId('board-switcher-manage-b2')).toBeNull();
+  });
+
+  it('picking a board re-targets ?board=<id> on the current (settings) route', async () => {
+    // usePathname is mocked to /boards here, but selectBoard preserves the
+    // pathname + sets ?board= — so on the real settings route it re-lays the page.
+    stubFetch(TWO_BOARDS);
+    render(<BoardSwitcher variant="settings" />);
+    fireEvent.click(await screen.findByTestId('board-switcher-trigger'));
+    fireEvent.click(await screen.findByTestId('board-switcher-pick-b2'));
+
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(String(push.mock.calls[0]![0])).toContain('board=b2');
+  });
+});
+
 describe('boardSwitcher helpers (3.7.4)', () => {
   it('resolveActiveBoardId prefers the param, falls back to default', () => {
     expect(resolveActiveBoardId(TWO_BOARDS, 'b2')).toBe('b2');

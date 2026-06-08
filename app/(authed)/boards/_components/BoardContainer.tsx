@@ -273,7 +273,9 @@ export function BoardContainer({
           )
         : null}
       {board.truncated ? <OverCapBanner cap={board.cap} /> : null}
-      {hasUnmapped ? <UnmappedStatusesTray statuses={board.unmappedStatuses} /> : null}
+      {hasUnmapped ? (
+        <UnmappedStatusesTray statuses={board.unmappedStatuses} boardId={board.boardId} />
+      ) : null}
       {isEmpty ? (
         <BoardEmptyState />
       ) : relaying ? (
@@ -861,6 +863,7 @@ function BoardDnd({
               <div key={column.id} data-board-column className="flex shrink-0 snap-start">
                 <BoardColumn
                   column={column}
+                  boardId={board.boardId}
                   assigneeNameById={assigneeNameById}
                   onOpenQuickView={openPeek}
                   activeCardId={activeCard?.id ?? null}

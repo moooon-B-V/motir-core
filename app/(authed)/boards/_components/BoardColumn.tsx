@@ -51,12 +51,15 @@ const DRAG_KEEP = 2;
 
 export function BoardColumn({
   column,
+  boardId,
   assigneeNameById,
   onOpenQuickView,
   activeCardId,
   onSetWipLimit,
 }: {
   column: BoardColumnDto;
+  /** The board being viewed — threaded to the `[⋯]` Board-settings link (3.7.8). */
+  boardId: string;
   assigneeNameById: Map<string, string>;
   onOpenQuickView: (identifier: string) => void;
   activeCardId: string | null;
@@ -136,6 +139,7 @@ export function BoardColumn({
         {/* Column actions — the `[⋯]` menu hosting the WIP-limit editor (3.3.6). */}
         <ColumnActionsMenu
           columnId={column.id}
+          boardId={boardId}
           wipLimit={column.wipLimit}
           onSetWipLimit={onSetWipLimit}
         />
