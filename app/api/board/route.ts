@@ -18,12 +18,17 @@ import {
 //
 // Active-project routing (NOT /api/projects/[key]/board): the app is single-
 // active-project — the /boards and /issues pages both resolve getActiveProject()
-// and there is no project-by-key route tree to mirror. The board id is implicit
-// (the project's one default board); multi-board routing stays a later, non-
-// breaking addition (the service already takes a boardId, surfaced in the
-// projection for the column/move routes to echo back).
+// and there is no project-by-key route tree to mirror. The project + workspace
+// come from the active-project context (NEVER the client).
+//
+// Board SELECTION (Subtask 3.7.5): a `?boardId=` query param picks WHICH of the
+// active project's boards to project; absent → the project's DEFAULT board (the
+// pre-3.7 single-board behaviour, unchanged). The board page (`/boards`) carries
+// its `?board=` selection here as `?boardId=`. The service tenant-gates the id
+// to the active project/workspace (a stale / cross-project id → 404), so the
+// param is safe to take from the client.
 
-export async function GET(): Promise<Response> {
+export async function GET(req: Request): Promise<Response> {
   const session = await getSession();
   if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
 
@@ -35,11 +40,14 @@ export async function GET(): Promise<Response> {
     );
   }
 
+  const boardId = new URL(req.url).searchParams.get('boardId')?.trim() || undefined;
+
   try {
-    const board = await boardsService.getBoard(ctx.projectId, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
+    const board = await boardsService.getBoard(
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      boardId,
+    );
     return NextResponse.json(board);
   } catch (err) {
     if (err instanceof BoardNotFoundError) {

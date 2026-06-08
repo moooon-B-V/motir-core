@@ -96,7 +96,16 @@ async function makeBoardTenant(label: string): Promise<BoardTenantFixture> {
   const status2Id = await makeStatus({ workspaceId, projectId, key: 'done' });
 
   const board = await db.board.create({
-    data: { workspaceId, projectId, name: 'Board', type: 'kanban', position: 'a0' },
+    // isDefault mirrors the real auto-seed (3.1.2): a project's sole board is its
+    // default, which is what findDefaultForProject now resolves on (3.7.5).
+    data: {
+      workspaceId,
+      projectId,
+      name: 'Board',
+      type: 'kanban',
+      position: 'a0',
+      isDefault: true,
+    },
   });
   const column1 = await db.boardColumn.create({
     data: { workspaceId, projectId, boardId: board.id, name: 'To Do', position: nextPosition() },

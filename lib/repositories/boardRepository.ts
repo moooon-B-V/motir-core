@@ -58,11 +58,17 @@ export const boardRepository = {
   },
 
   /**
-   * The project's default board for the v1 single-board case, or null. Returns
-   * the oldest board (`createdAt asc`) — the one `createProject` seeds — so a
-   * future multi-board project still resolves the original default
-   * deterministically. `findFirst` (not a unique lookup) because `projectId`
-   * is deliberately non-unique and the `workspaceId` filter is part of the gate.
+   * The project's DEFAULT board (`isDefault = true`), or null. Post-Story-3.7
+   * the default is a first-class FLAG, not "the oldest board": `setDefaultBoard`
+   * (3.7.3) can promote any board, and the 3.7.2 migration backfilled the
+   * auto-seeded board to `isDefault = true`, with the partial unique index
+   * `board_one_default_per_project` (`WHERE is_default`) guaranteeing AT MOST
+   * one match per project. This is the board `/boards` opens when no `?board=`
+   * is given (Subtask 3.7.5). `findFirst` (not a unique lookup) because
+   * `projectId` is non-unique and the `workspaceId` filter is part of the tenant
+   * gate (finding #26); `createdAt asc` stays only as a deterministic tiebreaker
+   * (normally exactly one row matches). Null when the project has no board at
+   * all — the existence probe `backfillDefaultBoard` relies on.
    */
   async findDefaultForProject(
     projectId: string,
@@ -71,7 +77,7 @@ export const boardRepository = {
   ): Promise<Board | null> {
     const client = tx ?? db;
     return client.board.findFirst({
-      where: { projectId, workspaceId },
+      where: { projectId, workspaceId, isDefault: true },
       orderBy: { createdAt: 'asc' },
     });
   },

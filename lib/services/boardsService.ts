@@ -177,13 +177,32 @@ export const boardsService = {
    * dropped). Read-only: no transaction; the explicit `workspaceId` gate
    * (finding #26) is carried into every repo read.
    *
-   * Throws `BoardNotFoundError` (404) when the project has no board yet (a
-   * project predating the 3.1.2 seed/backfill — the 3.2 UI shows its no-board
-   * state).
+   * Board SELECTION (Subtask 3.7.5): `boardId` picks WHICH of the project's
+   * boards to project. Absent → the project's DEFAULT board (`isDefault`, the
+   * board `/boards` opens with no `?board=`). Present → that board, but ONLY if
+   * it belongs to the active project AND workspace — `findById` scopes by
+   * `workspaceId` (a cross-WORKSPACE id returns null), and we additionally
+   * reject a cross-PROJECT id (right workspace, wrong project). Either miss is a
+   * `BoardNotFoundError` (404), so a stale / forged `?board=` is tenant-safe,
+   * never a cross-project leak.
+   *
+   * Throws `BoardNotFoundError` (404) when the project has no default board yet
+   * (a project predating the 3.1.2 seed/backfill — the 3.2 UI shows its no-board
+   * state) or when a named `boardId` is not a board of the active project.
    */
-  async getBoard(projectId: string, ctx: ServiceContext): Promise<BoardProjectionDto> {
-    const board = await boardRepository.findDefaultForProject(projectId, ctx.workspaceId);
-    if (!board) throw new BoardNotFoundError(`default board for project ${projectId}`);
+  async getBoard(
+    projectId: string,
+    ctx: ServiceContext,
+    boardId?: string,
+  ): Promise<BoardProjectionDto> {
+    const board = boardId
+      ? await boardRepository.findById(boardId, ctx.workspaceId)
+      : await boardRepository.findDefaultForProject(projectId, ctx.workspaceId);
+    // A selected board must live in the active project (the workspace gate is
+    // already in the repo read); the default lookup is project-scoped by query.
+    if (!board || board.projectId !== projectId) {
+      throw new BoardNotFoundError(boardId ?? `default board for project ${projectId}`);
+    }
 
     const [columns, mappings, statuses] = await Promise.all([
       boardColumnRepository.findByBoard(board.id, ctx.workspaceId),
