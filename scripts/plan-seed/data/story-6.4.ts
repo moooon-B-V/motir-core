@@ -82,7 +82,7 @@ export const story_6_4: PlanStory = {
       id: '6.4.1',
       title:
         'Design — project Access settings + Members admin + the no-access state (extends design/projects/)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 45,
