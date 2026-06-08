@@ -3,7 +3,6 @@
 import { useTranslations } from 'next-intl';
 import { ChevronDown } from 'lucide-react';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
-import { Spinner } from '@/components/ui/Spinner';
 import { useCollapsedLanes } from '@/lib/hooks/useCollapsedLanes';
 import {
   BOARD_SWIMLANE_NO_VALUE,
@@ -16,24 +15,30 @@ import { ColumnActionsMenu } from './ColumnActionsMenu';
 import { ColumnWipBadge } from './ColumnWipBadge';
 import { LaneCell } from './LaneCell';
 import { bucketLanes } from './boardSwimlanes';
-import { columnHasMore } from './boardPaging';
 
-// SwimlaneBoard (Subtask 3.3.5) — the board re-laid into a grid of
-// `(column × lane)` cells per `design/boards/swimlanes-wip.mock.html`, mounted by
+// SwimlaneBoard (Subtask 3.3.5; load model corrected by 3.8.5) — the board
+// re-laid into a grid of `(column × lane)` cells per
+// `design/boards/swimlanes-wip.mock.html` + `board-scale.mock.html`, mounted by
 // BoardContainer when `swimlaneGroupBy !== 'none'` (group-by `none` stays the
 // flat 3.2 board). Structure mirrors the mock's `.swimboard`: a PINNED column-
 // header row (`.colrow`) over one `.lane` per projection swimlane — a sticky-left
 // `.lane-head` (label/kind + aggregate count + collapse chevron) above its
-// `.lane-cols` row of `LaneCell`s — then a per-column "Load more" footer.
+// `.lane-cols` row of `LaneCell`s.
+//
+// Load model (3.8.5, mistake #33): the board loads the WHOLE bounded set (the
+// 3.8.2 projection — bounded by `BOARD_ISSUE_CAP`, with the over-cap banner in
+// BoardContainer when `truncated`), so there is NO per-column "Load more" footer
+// — the mirror product (Jira) never pages a board. Each `(lane, column)` cell
+// renders its full bucket, virtualized per cell via `useRowWindow` (LaneCell,
+// kept) so the DOM stays bounded on a tall cell.
 //
 // Lanes come from the projection's `swimlanes` (already ordered: assignee alpha
 // / priority rank / epic position, catch-all LAST) and cards are bucketed by
 // `swimlaneKey` (`bucketLanes`); per-lane aggregate counts + lane order are the
-// projection's, the cards are the loaded page (a column's "load more" pages the
-// rest, which re-buckets). Collapse is per-lane and persists client-side
-// (localStorage keyed by board + lane). Columns align across the header row and
-// every lane because all share the same cell width + gutter + gap. Colour via
-// `--el-*`, shape via element tokens.
+// projection's. Collapse is per-lane and persists client-side (localStorage
+// keyed by board + lane). Columns align across the header row and every lane
+// because all share the same cell width + gutter + gap. Colour via `--el-*`,
+// shape via element tokens.
 //
 // The pinned column header reuses the SAME 3.3.6 WIP affordances as the flat
 // board — `ColumnWipBadge` (the `n/limit` chip + SOFT over-limit warning) and
@@ -47,9 +52,7 @@ export function SwimlaneBoard({
   swimlanes,
   assigneeNameById,
   onOpenQuickView,
-  onLoadMore,
   onSetWipLimit,
-  paging,
   activeCardId,
   overLaneKey,
 }: {
@@ -58,19 +61,16 @@ export function SwimlaneBoard({
   swimlanes: BoardSwimlaneDto[];
   assigneeNameById: Map<string, string>;
   onOpenQuickView: (identifier: string) => void;
-  onLoadMore: (columnId: string) => void;
   onSetWipLimit: (columnId: string, limit: number | null) => void;
-  paging: Record<string, 'loading' | 'error'>;
   activeCardId: string | null;
   overLaneKey: string | null;
 }) {
   const t = useTranslations('boards');
   const { collapsed, toggle } = useCollapsedLanes(boardId);
   const lanes = bucketLanes(columns, swimlanes);
-  const anyMore = columns.some((c) => columnHasMore(c));
 
-  // Shared track classes so the pinned header row, every lane's cell row, and the
-  // load-more footer line up column-for-column (same 288px cells + 14px gutter).
+  // Shared track classes so the pinned header row and every lane's cell row line
+  // up column-for-column (same 288px cells + 14px gutter).
   const track = 'flex min-w-max gap-3.5 px-6';
 
   return (
@@ -184,47 +184,6 @@ export function SwimlaneBoard({
           </div>
         );
       })}
-
-      {/* Per-column "Load more" footer (finding #57 — cards page per column, then
-          re-bucket into lanes; no all-cards fetch). Mirrors the header track so
-          each control sits under its column. */}
-      {anyMore ? (
-        <div className={`${track} pt-2`}>
-          {columns.map((column) => {
-            const more = columnHasMore(column);
-            const state = paging[column.id];
-            return (
-              <div key={column.id} className="w-72 shrink-0">
-                {more ? (
-                  <button
-                    type="button"
-                    onClick={() => onLoadMore(column.id)}
-                    disabled={state === 'loading'}
-                    data-testid={`board-load-more-${column.id}`}
-                    className="flex h-(--height-control) w-full items-center justify-center gap-1.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-page-bg) text-[13px] font-medium text-(--el-text-secondary) hover:border-(--el-border-strong) disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {state === 'loading' ? (
-                      <>
-                        <Spinner size="sm" aria-label={t('loadingMore')} />
-                        {t('loadingMore')}
-                      </>
-                    ) : state === 'error' ? (
-                      t('loadMoreRetry')
-                    ) : (
-                      t('loadMore')
-                    )}
-                  </button>
-                ) : null}
-                {state === 'error' ? (
-                  <p className="pt-1 text-center text-xs text-(--el-danger)">
-                    {t('loadMoreError')}
-                  </p>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-      ) : null}
     </div>
   );
 }

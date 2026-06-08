@@ -12,11 +12,13 @@ import {
   type BoardSwimlaneDto,
 } from '@/lib/dto/boards';
 
-// SwimlaneBoard (Subtask 3.3.5): the board re-laid into a (column × lane) grid.
-// Rendered with the real `en` catalog inside a DndContext (LaneCell registers a
-// dnd-kit droppable, BoardCard a sortable). Under happy-dom windowing degrades
-// to render-all. Covers lane rendering + ordering (catch-all last), bucketing by
-// swimlaneKey, the per-lane aggregate count, and collapse persistence.
+// SwimlaneBoard (Subtask 3.3.5; load model corrected by 3.8.5): the board
+// re-laid into a (column × lane) grid. Rendered with the real `en` catalog inside
+// a DndContext (LaneCell registers a dnd-kit droppable, BoardCard a sortable).
+// Under happy-dom windowing degrades to render-all. Covers lane rendering +
+// ordering (catch-all last), bucketing by swimlaneKey, the per-lane aggregate
+// count, collapse persistence, and — post-3.8.5 — that NO per-column "Load more"
+// footer renders (the board loads the whole bounded set; mistake #33).
 
 function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardCardDto {
   return {
@@ -89,9 +91,7 @@ function renderBoard(boardId: string) {
           ])
         }
         onOpenQuickView={noop}
-        onLoadMore={noop}
         onSetWipLimit={noop}
-        paging={{}}
         activeCardId={null}
         overLaneKey={null}
       />
@@ -166,5 +166,16 @@ describe('SwimlaneBoard', () => {
     expect(screen.queryByTestId('lane-cell-c1-u1')).toBeNull();
     const stored = window.localStorage.getItem(COLLAPSED_LANES_STORAGE_PREFIX + 'b-toggle');
     expect(JSON.parse(stored ?? '[]')).toContain('u1');
+  });
+
+  // Subtask 3.8.5 (mistake #33): the board loads the whole bounded set, so the
+  // per-column "Load more" footer is gone — Jira never pages a board. The cells
+  // bucket every loaded card directly (the lane/bucket assertions above prove the
+  // full set still renders); there is no load-more affordance to fire.
+  it('renders no per-column "Load more" footer (the bounded set loads whole)', () => {
+    renderBoard('b-no-load-more');
+    expect(screen.queryAllByTestId(/^board-load-more-/)).toHaveLength(0);
+    expect(screen.queryByTestId('board-load-more-c1')).toBeNull();
+    expect(screen.queryByTestId('board-load-more-c2')).toBeNull();
   });
 });
