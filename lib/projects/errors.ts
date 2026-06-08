@@ -32,3 +32,72 @@ export class ProjectWorkspaceMismatchError extends Error {
     this.name = 'ProjectWorkspaceMismatchError';
   }
 }
+
+// ── Project membership + access errors (Story 6.4 · Subtask 6.4.4) ──────────
+// The management surface (add/remove member, set role, set access level) is
+// gated to project admins (or the workspace owner/admin, who always pass). The
+// route maps these to: NotProjectAdminError → 403, TargetNotWorkspaceMemberError
+// / InvalidProjectRoleError / InvalidAccessLevelError → 400, ProjectNotFoundError
+// / NotAProjectMemberError → 404, AlreadyProjectMemberError / LastProjectAdminError
+// → 409.
+
+export class NotProjectAdminError extends Error {
+  readonly code = 'NOT_PROJECT_ADMIN' as const;
+  constructor(projectId: string) {
+    super(`You must be a project admin (or workspace owner/admin) to manage project ${projectId}.`);
+    this.name = 'NotProjectAdminError';
+  }
+}
+
+export class TargetNotWorkspaceMemberError extends Error {
+  readonly code = 'TARGET_NOT_WORKSPACE_MEMBER' as const;
+  constructor(userId: string, workspaceId: string) {
+    super(
+      `User ${userId} is not a member of workspace ${workspaceId}, so they cannot be added to a project in it.`,
+    );
+    this.name = 'TargetNotWorkspaceMemberError';
+  }
+}
+
+export class AlreadyProjectMemberError extends Error {
+  readonly code = 'ALREADY_PROJECT_MEMBER' as const;
+  constructor(userId: string, projectId: string) {
+    super(`User ${userId} is already a member of project ${projectId}.`);
+    this.name = 'AlreadyProjectMemberError';
+  }
+}
+
+export class NotAProjectMemberError extends Error {
+  readonly code = 'NOT_A_PROJECT_MEMBER' as const;
+  constructor(userId: string, projectId: string) {
+    super(`User ${userId} is not a member of project ${projectId}.`);
+    this.name = 'NotAProjectMemberError';
+  }
+}
+
+export class LastProjectAdminError extends Error {
+  readonly code = 'LAST_PROJECT_ADMIN' as const;
+  constructor(projectId: string) {
+    super(
+      `Cannot remove or demote the last admin of project ${projectId}: ` +
+        `promote another member to admin first.`,
+    );
+    this.name = 'LastProjectAdminError';
+  }
+}
+
+export class InvalidProjectRoleError extends Error {
+  readonly code = 'INVALID_PROJECT_ROLE' as const;
+  constructor(role: string) {
+    super(`"${role}" is not an assignable project role (use admin, member, or viewer).`);
+    this.name = 'InvalidProjectRoleError';
+  }
+}
+
+export class InvalidAccessLevelError extends Error {
+  readonly code = 'INVALID_ACCESS_LEVEL' as const;
+  constructor(level: string) {
+    super(`"${level}" is not a valid project access level (use open, limited, or private).`);
+    this.name = 'InvalidAccessLevelError';
+  }
+}
