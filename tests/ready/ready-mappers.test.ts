@@ -31,6 +31,8 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     dueDate: null,
     estimateMinutes: null,
     position: 'a0',
+    sprintId: null,
+    backlogRank: null,
     archivedAt: null,
     createdAt: FIXED_DATE,
     updatedAt: FIXED_DATE,
