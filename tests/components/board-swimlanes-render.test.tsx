@@ -203,7 +203,10 @@ describe('SwimlaneBoard', () => {
       const head = screen.getByTestId(`swimlane-head-${key}`);
       expect(head.className).not.toMatch(/(^|\s)sticky(\s|$)/);
       // Inner sticky element carries the chevron + label + count.
-      const inner = screen.getByTestId(`swimlane-head-content-${key}`);
+      // (Testid deliberately drops the hyphen between "head" and "content" so
+      // the inner doesn't collide with `^swimlane-head-` queries used by other
+      // tests in this file to enumerate lane heads 1:1.)
+      const inner = screen.getByTestId(`swimlane-headcontent-${key}`);
       expect(inner.className).toContain('sticky');
       expect(inner.className).toMatch(/(^|\s)left-6(\s|$)/);
       // The count chip lives inside the sticky inner element (so the chip

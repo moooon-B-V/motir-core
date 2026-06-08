@@ -160,7 +160,7 @@ export function SwimlaneBoard({
             >
               <div
                 className="sticky left-6 z-[2] inline-flex items-center gap-2.5"
-                data-testid={`swimlane-head-content-${lane.key}`}
+                data-testid={`swimlane-headcontent-${lane.key}`}
               >
                 <ChevronDown
                   className={`h-4 w-4 shrink-0 text-(--el-text-muted) transition-transform ${
