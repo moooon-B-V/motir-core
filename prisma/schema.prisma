@@ -79,6 +79,11 @@ model User {
   // revisions (changedBy — Restrict on the FK: a user with audit history on
   // record cannot be hard-deleted, mirroring the reporter pattern).
   authoredWorkItemRevisions WorkItemRevision[]    @relation("WorkItemRevisionAuthor")
+  // Back-relation for Attachment (Subtask 2.3.7). A user uploads many
+  // attachments (uploader — Cascade on the FK: deleting a user removes their
+  // uploaded blobs' audit rows). Modelled to keep the schema graph in sync
+  // with the migration-built FK (bug-attachment-fk-migration-drift).
+  uploadedAttachments       Attachment[]
 
   @@map("user")
 }
@@ -828,8 +833,11 @@ enum JobRunStatus {
 /// REUSES this table + the upload service/route (finding #52). RLS = pure
 /// workspace gate (mirrors workflow_status — non-null workspaceId, written
 /// inside an active workspace context); policy is in the migration SQL.
-/// `uploaderUserId` is a scalar (its FK lives in the migration) so this model
-/// doesn't have to add a back-relation to the User table.
+/// `uploaderUserId`'s FK (cascade) is created in the 2.3.7 migration; this
+/// model MODELS it as the `uploader` relation (with `User.uploadedAttachments`
+/// as the back-relation) so the schema graph matches the migration-built DB.
+/// Modelling it is required: a hand-managed FK with no `@relation` makes every
+/// `prisma migrate dev` re-propose dropping it (bug-attachment-fk-migration-drift).
 model Attachment {
   id               String   @id @default(cuid())
   workspaceId      String   @map("workspace_id")
@@ -841,6 +849,7 @@ model Attachment {
   createdAt        DateTime @default(now()) @map("created_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploader  User      @relation(fields: [uploaderUserId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, createdAt(sort: Desc)])
   @@map("attachment")
