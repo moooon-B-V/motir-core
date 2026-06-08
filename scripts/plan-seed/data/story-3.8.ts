@@ -182,7 +182,7 @@ export const story_3_8: PlanStory = {
     {
       id: '3.8.4',
       title: 'Over-cap warning banner — "board too large, refine the filter" (flat + swimlane)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 16,
