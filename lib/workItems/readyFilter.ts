@@ -4,13 +4,16 @@
 // one opaque cursor format, so the page and the BYOK agent always agree on
 // what "ready" means and how to page through it.
 //
-// The sort the cursor encodes is the deterministic `(priority desc, key asc)`
-// (Story 7.0): NOT random, NOT created-at, NOT updated-at — those leak
-// dispatch decisions to scheduling artifacts the planner can't audit. Encoding
-// the (priority, key) TUPLE (not a row offset) is what makes paging stable
-// across a `db:seed` reseed — an offset over a live set breaks the moment a
-// row is inserted/removed, but the (priority, key) seek-after position is
-// reproducible.
+// The sort the cursor encodes is the deterministic `(priority desc, type asc,
+// key asc)` (Story 7.0 + Subtask 7.0.11): NOT random, NOT created-at, NOT
+// updated-at — those leak dispatch decisions to scheduling artifacts the
+// planner can't audit. **Priority stays primary** (highest first); **type is
+// the tiebreaker** in the fixed dispatch order `subtask < bug < task < story <
+// epic` (the leaf-most, most-granular unit first — coherent with 7.0.10's
+// leaf-only ready set); `key` breaks the final tie. Encoding the (priority,
+// kind, key) TUPLE (not a row offset) is what makes paging stable across a
+// `db:seed` reseed — an offset over a live set breaks the moment a row is
+// inserted/removed, but the seek-after position is reproducible.
 
 import { WorkItemKind, WorkItemPriority } from '@prisma/client';
 
@@ -27,7 +30,7 @@ export interface ReadyListFilter {
   /** `null` = unassigned only; `undefined` = any assignee. */
   assigneeId?: string | null;
   priority?: WorkItemPriority[];
-  /** Opaque `base64url([priority, key])` seek-after token. */
+  /** Opaque `base64url([priority, kind, key])` seek-after token. */
   cursor?: string;
   /** Page size; defaults to 50, hard-capped at 200. */
   limit?: number;
@@ -51,21 +54,25 @@ export const READY_COUNT_CAP = 99;
 export const READY_COUNT_MAX_PAGES = 10;
 
 /**
- * The (priority, key) seek-after position a ready cursor decodes to — the last
- * candidate of the previous page under the `(priority desc, key asc)` sort.
- * `key` is the per-project numeric `work_item.key` (monotonic, stable across
- * reseed), NOT the `PROD-<n>` identifier string.
+ * The (priority, kind, key) seek-after position a ready cursor decodes to — the
+ * last candidate of the previous page under the `(priority desc, type asc, key
+ * asc)` sort. `kind` is the issue type, ranked by {@link READY_KIND_RANK}
+ * (`subtask` first … `epic` last). `key` is the per-project numeric
+ * `work_item.key` (monotonic, stable across reseed), NOT the `PROD-<n>`
+ * identifier string.
  */
 export interface ReadyCursor {
   priority: WorkItemPriority;
+  kind: WorkItemKind;
   key: number;
 }
 
 /**
  * A caller passed a `cursor` that isn't a well-formed `base64url([priority,
- * key])` token (bad base64, bad JSON, unknown priority, or a non-integer key).
- * The route layer (7.0.4) maps this to a 400. Distinct from a VALID cursor
- * that simply points past the tail — that returns an empty page, not an error.
+ * kind, key])` token (bad base64, bad JSON, unknown priority, unknown kind, or
+ * a non-integer key). The route layer (7.0.4) maps this to a 400. Distinct from
+ * a VALID cursor that simply points past the tail — that returns an empty page,
+ * not an error.
  */
 export class InvalidReadyCursorError extends Error {
   readonly code = 'INVALID_READY_CURSOR' as const;
@@ -88,15 +95,36 @@ export const READY_PRIORITY_ASC: readonly WorkItemPriority[] = [
 
 const PRIORITY_VALUES = new Set<string>(Object.values(WorkItemPriority));
 
-/** Encode a (priority, key) position into the opaque page cursor. */
+/**
+ * The issue-type dispatch ranking — the SECONDARY sort key (after priority). The
+ * ready set surfaces the most granular, leaf-most work first (`subtask`),
+ * coarsening to the container kinds last (`epic`), so a coding agent reaching
+ * for `next` gets a runnable unit before a planning container. This is the
+ * single source of the order; the repository builds its `ORDER BY` CASE rank
+ * from these same values. (A childed epic/story is excluded entirely by
+ * 7.0.10's leaf-only predicate; this orders what remains.)
+ */
+export const READY_KIND_RANK: Record<WorkItemKind, number> = {
+  [WorkItemKind.subtask]: 0,
+  [WorkItemKind.bug]: 1,
+  [WorkItemKind.task]: 2,
+  [WorkItemKind.story]: 3,
+  [WorkItemKind.epic]: 4,
+};
+
+const KIND_VALUES = new Set<string>(Object.values(WorkItemKind));
+
+/** Encode a (priority, kind, key) position into the opaque page cursor. */
 export function encodeReadyCursor(cursor: ReadyCursor): string {
-  return Buffer.from(JSON.stringify([cursor.priority, cursor.key]), 'utf8').toString('base64url');
+  return Buffer.from(JSON.stringify([cursor.priority, cursor.kind, cursor.key]), 'utf8').toString(
+    'base64url',
+  );
 }
 
 /**
- * Decode the opaque page cursor back to its (priority, key) position. Throws
- * {@link InvalidReadyCursorError} on any malformed token so the route returns
- * 400 rather than silently treating garbage as "start from the top".
+ * Decode the opaque page cursor back to its (priority, kind, key) position.
+ * Throws {@link InvalidReadyCursorError} on any malformed token so the route
+ * returns 400 rather than silently treating garbage as "start from the top".
  */
 export function decodeReadyCursor(raw: string): ReadyCursor {
   let parsed: unknown;
@@ -107,15 +135,21 @@ export function decodeReadyCursor(raw: string): ReadyCursor {
   }
   if (
     !Array.isArray(parsed) ||
-    parsed.length !== 2 ||
+    parsed.length !== 3 ||
     typeof parsed[0] !== 'string' ||
     !PRIORITY_VALUES.has(parsed[0]) ||
-    typeof parsed[1] !== 'number' ||
-    !Number.isInteger(parsed[1])
+    typeof parsed[1] !== 'string' ||
+    !KIND_VALUES.has(parsed[1]) ||
+    typeof parsed[2] !== 'number' ||
+    !Number.isInteger(parsed[2])
   ) {
     throw new InvalidReadyCursorError();
   }
-  return { priority: parsed[0] as WorkItemPriority, key: parsed[1] };
+  return {
+    priority: parsed[0] as WorkItemPriority,
+    kind: parsed[1] as WorkItemKind,
+    key: parsed[2],
+  };
 }
 
 /**
