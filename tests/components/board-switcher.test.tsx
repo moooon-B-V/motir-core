@@ -104,6 +104,19 @@ describe('BoardSwitcher (3.7.4) — render + select', () => {
     expect(screen.queryByTestId('board-switcher-default-b2')).toBeNull();
   });
 
+  it('the menu content is overflow-visible so the manage flyout is not clipped', async () => {
+    // Regression guard: the per-board manage [⋯] menu is absolutely positioned
+    // INSIDE Popover.Content, whose primitive base is overflow-hidden — that
+    // clipped the flyout ("3-dots menu cut off"). We override to overflow-visible
+    // (twMerge wins), so assert the resolved class never reverts to hidden.
+    stubFetch(TWO_BOARDS);
+    render(<BoardSwitcher />);
+    fireEvent.click(await screen.findByTestId('board-switcher-trigger'));
+    const menu = await screen.findByTestId('board-switcher-menu');
+    expect(menu.className).toContain('overflow-visible');
+    expect(menu.className).not.toContain('overflow-hidden');
+  });
+
   it('picking a board writes ?board=<id> (preserving other params)', async () => {
     searchParamsValue = new URLSearchParams('peek=PROD-7');
     stubFetch(TWO_BOARDS);
