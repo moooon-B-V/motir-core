@@ -158,7 +158,7 @@ export const story_3_8: PlanStory = {
     {
       id: '3.8.3',
       title: 'Flat board UI — drop "Load more"; render the whole bounded set, virtualized',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
