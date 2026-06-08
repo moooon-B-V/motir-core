@@ -17,8 +17,10 @@ import {
 // a DndContext (LaneCell registers a dnd-kit droppable, BoardCard a sortable).
 // Under happy-dom windowing degrades to render-all. Covers lane rendering +
 // ordering (catch-all last), bucketing by swimlaneKey, the per-lane aggregate
-// count, collapse persistence, and — post-3.8.5 — that NO per-column "Load more"
-// footer renders (the board loads the whole bounded set; mistake #33).
+// count, collapse persistence, that NO per-column "Load more" footer renders
+// post-3.8.5 (the board loads the whole bounded set; mistake #33), and the
+// lane-wrapper-grows-to-track regression for the
+// `bug-swimlane-lane-header-not-spanning-scrolled-columns` Epic-3 bug.
 
 function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardCardDto {
   return {
@@ -177,5 +179,37 @@ describe('SwimlaneBoard', () => {
     expect(screen.queryAllByTestId(/^board-load-more-/)).toHaveLength(0);
     expect(screen.queryByTestId('board-load-more-c1')).toBeNull();
     expect(screen.queryByTestId('board-load-more-c2')).toBeNull();
+  });
+
+  // Regression: `bug-swimlane-lane-header-not-spanning-scrolled-columns`
+  // (epics.ts, Epic 3). The lane wrapper MUST carry `min-w-max` so the lane
+  // grows to the column-track width; otherwise the lane-header band collapses
+  // to the scroller's clientWidth and stops at the viewport edge, leaving
+  // scrolled-into-view columns (e.g. Cancelled) un-banded. The sticky-left
+  // behaviour must live on the INNER chevron/label/count wrapper, NOT on the
+  // band — sticky on the band itself re-introduces the bug because a
+  // `sticky left-0 w-full` child of an overflow-x scroller pins to the
+  // scroller's clientWidth, not its scrollWidth. We assert the structural
+  // shape here because happy-dom does not compute layout
+  // (`getBoundingClientRect()` returns zeros), so a width-measurement check
+  // is a no-op in this test environment.
+  it('the lane wrapper grows to the column track so the band spans all columns', () => {
+    renderBoard('b-band-spans');
+    for (const key of ['u1', 'u2', BOARD_SWIMLANE_NO_VALUE]) {
+      const lane = screen.getByTestId(`swimlane-${key}`);
+      expect(lane.className).toContain('min-w-max');
+      // The band (lane head) itself must NOT be sticky — pinning the band
+      // collapses it to clientWidth. Only its inner content sticks.
+      const head = screen.getByTestId(`swimlane-head-${key}`);
+      expect(head.className).not.toMatch(/(^|\s)sticky(\s|$)/);
+      // Inner sticky element carries the chevron + label + count.
+      const inner = screen.getByTestId(`swimlane-head-content-${key}`);
+      expect(inner.className).toContain('sticky');
+      expect(inner.className).toMatch(/(^|\s)left-6(\s|$)/);
+      // The count chip lives inside the sticky inner element (so the chip
+      // travels with the label as the user scrolls horizontally).
+      const count = within(inner).getByTestId(`swimlane-count-${key}`);
+      expect(count).toBeTruthy();
+    }
   });
 });
