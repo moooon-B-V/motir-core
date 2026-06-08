@@ -207,7 +207,7 @@ export const story_3_8: PlanStory = {
     {
       id: '3.8.5',
       title: 'Swimlane UI — drop the per-column "Load more" footer; bucket the whole bounded set',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 16,
