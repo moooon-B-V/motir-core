@@ -409,7 +409,7 @@ export const story_3_3: PlanStory = {
       id: '3.3.7',
       title:
         'Story tests — swimlane grouping + WIP soft-warning + cross-lane reassign (component + focused E2E)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 22,
