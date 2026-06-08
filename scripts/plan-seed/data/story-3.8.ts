@@ -36,7 +36,7 @@ export const story_3_8: PlanStory = {
   id: '3.8',
   title:
     'Board load model — filtered-set + virtualize + over-cap warning (replaces per-column "Load more")',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'Replace the board’s per-column cursor pagination + "Load more" with the **mirror-faithful ' +
     'load model**: the board loads its issue set **bounded by a hard cap + a Done-age window**, ' +
@@ -232,7 +232,7 @@ export const story_3_8: PlanStory = {
       id: '3.8.6',
       title:
         'Tests — board load model (no "Load more", over-cap banner, Done-age window, virtualization)',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 22,
