@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import type { MemberRole } from '@prisma/client';
 import { db } from '@/lib/db';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { currentLocale } from '@/lib/i18n/serverLocale';
@@ -48,7 +49,7 @@ const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 interface InvitePayload {
   workspaceId: string;
   email: string;
-  role: string;
+  role: MemberRole;
   inviterUserId: string;
 }
 
