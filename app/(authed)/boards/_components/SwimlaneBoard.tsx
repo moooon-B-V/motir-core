@@ -123,7 +123,11 @@ export function SwimlaneBoard({
             // it, the lane-header band collapses to the scroller's clientWidth and
             // stops at the viewport edge, leaving scrolled-into-view columns (e.g.
             // Cancelled) un-banded (epics.ts bug
-            // `bug-swimlane-lane-header-not-spanning-scrolled-columns`).
+            // `bug-swimlane-lane-header-not-spanning-scrolled-columns`). The
+            // `max-content` `min-w-max` resolves against is supplied by the
+            // width-establishing spacer track below — NOT by the `!isCollapsed`
+            // cell-row, which disappears on collapse and would re-break the band
+            // (epics.ts bug `bug-swimlane-collapsed-lane-header-not-full-width`).
             className="min-w-max border-b border-(--el-border) last:border-b-0"
           >
             {/*
@@ -176,6 +180,27 @@ export function SwimlaneBoard({
                   {lane.count}
                 </span>
               </div>
+            </div>
+
+            {/*
+             * Width-establishing spacer track — rendered in BOTH states (OUTSIDE
+             * the `!isCollapsed` ternary on purpose). It pins the lane wrapper's
+             * `max-content` to the full column track (same `w-72` cells + `track`
+             * gutter as the real cell-row), so the `min-w-max` band spans every
+             * column even when collapsed pulls the real cell-row out of layout.
+             * Zero-height + `invisible` + `aria-hidden` so it paints nothing,
+             * takes no vertical space, and is invisible to AT / hit-testing — its
+             * ONLY job is to contribute intrinsic width
+             * (`bug-swimlane-collapsed-lane-header-not-full-width`).
+             */}
+            <div
+              className={`${track} invisible h-0 overflow-hidden`}
+              data-testid={`swimlane-track-${lane.key}`}
+              aria-hidden
+            >
+              {columns.map((column) => (
+                <div key={column.id} className="w-72 shrink-0" />
+              ))}
             </div>
 
             {!isCollapsed ? (

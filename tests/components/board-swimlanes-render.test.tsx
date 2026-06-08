@@ -215,4 +215,43 @@ describe('SwimlaneBoard', () => {
       expect(count).toBeTruthy();
     }
   });
+
+  // Regression: `bug-swimlane-collapsed-lane-header-not-full-width` (epics.ts,
+  // Epic 3) — the SECOND occurrence of the prior bug's shape. The prior fix put
+  // `min-w-max` on the lane wrapper, but its `max-content` was established by the
+  // `!isCollapsed` cell-row; collapsing pulled that row out of layout, so the
+  // wrapper (and its band) shrank to the header-only / scroller width and the
+  // rightmost columns sat OUTSIDE the band. The fix renders a width-establishing
+  // spacer track (one `w-72 shrink-0` cell per column, same `track` gutter)
+  // OUTSIDE the ternary, so the wrapper keeps the full column-track `max-content`
+  // in BOTH states. We assert that structural invariant here: the spacer track is
+  // present with a cell per column whether the lane is collapsed or expanded.
+  // (happy-dom doesn't compute layout — `getBoundingClientRect()` returns zeros —
+  // so the real "band offsetWidth === track width" measurement is verified in a
+  // real browser, not here; same posture as the prior sibling-bug test above.)
+  it('renders the width-establishing spacer track in BOTH collapsed and expanded states', () => {
+    // u1 starts collapsed (persisted); u2 stays expanded.
+    window.localStorage.setItem(
+      COLLAPSED_LANES_STORAGE_PREFIX + 'b-collapsed-band',
+      JSON.stringify(['u1']),
+    );
+    renderBoard('b-collapsed-band');
+
+    // Collapsed lane: real cell-row is gone, but the spacer track remains and
+    // carries one spacer cell per column — this is what keeps the band full-width.
+    expect(screen.queryByTestId('lane-cell-c1-u1')).toBeNull();
+    const collapsedTrack = screen.getByTestId('swimlane-track-u1');
+    expect(collapsedTrack.className).toContain('min-w-max');
+    expect(collapsedTrack.children).toHaveLength(COLUMNS.length);
+    // It must contribute width WITHOUT painting or taking vertical space.
+    expect(collapsedTrack.className).toContain('invisible');
+    expect(collapsedTrack.className).toMatch(/(^|\s)h-0(\s|$)/);
+
+    // Expanded lane: the spacer track is present too (same width source in both
+    // states → collapse/expand never changes the band's rendered width).
+    expect(screen.getByTestId('lane-cell-c1-u2')).toBeTruthy();
+    const expandedTrack = screen.getByTestId('swimlane-track-u2');
+    expect(expandedTrack.className).toContain('min-w-max');
+    expect(expandedTrack.children).toHaveLength(COLUMNS.length);
+  });
 });
