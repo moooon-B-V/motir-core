@@ -37,6 +37,7 @@ import { BoardColumn } from './BoardColumn';
 import { BoardColumnPager, useActiveColumnIndex } from './BoardColumnPager';
 import { BoardEmptyState } from './BoardEmptyState';
 import { BoardSkeleton } from './BoardSkeleton';
+import { OverCapBanner } from './OverCapBanner';
 import { SwimlaneBoard } from './SwimlaneBoard';
 import { UnmappedStatusesTray } from './UnmappedStatusesTray';
 import {
@@ -221,8 +222,14 @@ export function BoardContainer({
   const hasUnmapped = board.unmappedStatuses.length > 0;
   const isEmpty = !hasUnmapped && board.columns.every((c) => c.totalCount === 0);
 
+  // The over-cap banner (Subtask 3.8.4) is a board-level signal, so it sits
+  // ABOVE both layouts in the container (like the unmapped tray) and shows for
+  // the flat AND swimlane board — rendered exactly when the 3.8.2 projection's
+  // bounded load hit the cap (`truncated`). An over-cap board always has cards,
+  // so this never coincides with the empty state.
   return (
     <div className="flex min-w-0 flex-col gap-3">
+      {board.truncated ? <OverCapBanner cap={board.cap} /> : null}
       {hasUnmapped ? <UnmappedStatusesTray statuses={board.unmappedStatuses} /> : null}
       {isEmpty ? (
         <BoardEmptyState />
