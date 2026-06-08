@@ -29,7 +29,7 @@ import type { PlanStory } from '../types';
 export const story_3_3: PlanStory = {
   id: '3.3',
   title: 'Swimlanes + WIP limits',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'Two board flow-management features that turn the 3.2 Kanban surface from "columns of cards" ' +
     'into a tool a team manages flow with: **swimlanes** (group the board into horizontal rows by ' +
@@ -456,7 +456,7 @@ export const story_3_3: PlanStory = {
       kind: 'bug',
       title:
         'Fix LaneCell windowing loop — a cross-lane drag crashes the swimlane board with "Maximum update depth exceeded"',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 25,
