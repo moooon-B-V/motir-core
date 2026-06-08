@@ -41,8 +41,10 @@
         • Start-sprint entry point     → flow is Story 4.4 (4.2 mounts the seam)
 
       Covers (multi-panel — review EACH):
-        (0) PAGE LAYOUT + NAV — the app shell with the new Backlog nav item;
-            sprint-planning containers (top) over the ranked backlog (bottom)
+        (0) PAGE LAYOUT + NAV — the app shell with the new Backlog nav item +
+            the "View all issues" toolbar link (Jira's "View in Issue
+            Navigator" → the Story-2.5 /issues navigator); sprint-planning
+            containers (top) over the ranked backlog (bottom)
         (1) SPRINT-PLANNING CONTAINER — anatomy (name·state·dates·count·points
             SEAM·velocity SEAM·Start-sprint·inline create) + empty sprint +
             Create-sprint affordance
@@ -366,6 +368,7 @@
         font-size: 14px;
         color: var(--el-text);
         cursor: pointer;
+        text-decoration: none;
       }
       .tb-btn .ic {
         width: 16px;
@@ -1451,6 +1454,18 @@
         >
           <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
         </g>
+        <g
+          id="i-external"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </g>
       </defs>
     </svg>
 
@@ -1497,6 +1512,12 @@
                 <p class="sub">prodect · plan & groom — rank, sprint, estimate</p>
               </div>
               <div class="toolbar">
+                <a class="tb-btn" href="#" title="View all issues in the issue navigator (/issues)">
+                  <span class="ic"
+                    ><svg viewBox="0 0 24 24"><use href="#i-external" /></svg
+                  ></span>
+                  View all issues
+                </a>
                 <button class="tb-btn is-disabled" title="Filter — Epic 6">
                   <span class="ic"
                     ><svg viewBox="0 0 24 24"><use href="#i-filter" /></svg
@@ -1790,7 +1811,11 @@
         <b>Two stacked regions.</b> Top: zero-or-more sprint-planning containers (Active / Planned),
         each a collapsible panel. Bottom: the Backlog container — the ranked unassigned issues. Both
         regions hold the SAME issue row, so a row drags between them. The Backlog nav item sits
-        between Board and Reports with a <b>layout-list</b> glyph. The committed-points
+        between Board and Reports with a <b>layout-list</b> glyph. The header toolbar carries
+        <b>View all issues</b> — the Jira "View in Issue Navigator" affordance: it deep-links to the
+        project's issue navigator (the Story-2.5 <code>/issues</code> List/Tree — every issue across
+        the backlog AND all sprints, sortable/filterable/paginated), the way Jira links the backlog
+        out to the navigator rather than flattening into the planning page. The committed-points
         <span class="seam-tag">→ 4.3</span>, velocity <span class="seam-tag">→ 4.6</span>, row
         estimate <span class="seam-tag">→ 4.3</span>, and Start-sprint
         <span class="seam-tag">flow → 4.4</span>

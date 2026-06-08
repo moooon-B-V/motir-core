@@ -91,6 +91,30 @@ a value). No other nav change. The page stacks two regions:
 Both regions hold the SAME issue-row component (one global `backlog_rank`), so a
 row drags between them.
 
+## "View all issues" — the issue-navigator affordance (mirror rung 1)
+
+The page-head **toolbar** (right side, beside the disabled `[Filter]` seam +
+`[+ New issue]`) carries a **View all issues** link (external-link glyph).
+
+**Mirror product = Jira's "View in Issue Navigator"** (decision-ladder rung 1;
+VERIFIED June 2026, Atlassian support/community — checked, not asserted, per
+`notes.html` mistake #33): the Jira backlog/board does NOT flatten the grouped
+planning view into an "all issues" list on the same page — it provides a link
+that opens the **issue navigator** (the all-issues search/list view) with the
+board's filter applied, so you can see every issue across the backlog AND all
+sprints in one sortable/filterable list. Prodect already ships that navigator —
+the **Story-2.5 `/issues` List/Tree view** (every project issue, sortable +
+filterable + server-paged) — so the backlog does NOT rebuild a flat list; it
+**deep-links out to it**. (This is exactly why "see all issues from the
+backlog/sprint" is the existing `/issues` navigator reached from `/backlog`, not
+a new flat panel — building one here would be "complexity for nothing" against
+the mirror.) The affordance is project-scoped; when Epic-6 board/saved filters
+land, the link can carry the active filter query (the Jira behaviour), the same
+way the disabled `[Filter]` seam reserves that surface.
+
+**Code:** 4.2.3 wires the toolbar link to `/issues` (the active project's
+navigator). A plain `<a>`, no new view — the navigator is Story 2.5.
+
 ## Sprint-planning container anatomy (panel 1)
 
 A collapsible `<section aria-label="{name}, {state}, {n} issues">`:
