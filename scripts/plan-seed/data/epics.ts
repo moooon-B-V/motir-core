@@ -403,6 +403,104 @@ export const EPICS: EpicMeta[] = [
           'the structural posture of the `bug-tree-header-misalignment` fix (measure rendered ' +
           'width, not CSS rules)',
       },
+      {
+        id: 'bug-swimlane-collapsed-lane-header-not-full-width',
+        kind: 'bug',
+        title:
+          'Swimlane lane-header band is NOT full track width when the lane is COLLAPSED — same shape as the prior `bug-swimlane-lane-header-not-spanning-scrolled-columns`, but only the expanded state was covered',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 3 · **Surfaces:** swimlane board (Subtask 3.3.5 — ' +
+          '`SwimlaneBoard.tsx`) · **Status:** open · **Reported by:** Yue · **Sibling of:** ' +
+          '`bug-swimlane-lane-header-not-spanning-scrolled-columns` (this is the SECOND occurrence ' +
+          'of the same shape — collapsed-state was not covered by the prior fix).\n\n' +
+          'On the `/boards` swimlane view (group-by Assignee / Priority / Epic), when a lane is ' +
+          '**collapsed** (chevron pointing right, body hidden) the lane-header band does NOT span ' +
+          'the full column track — it shrinks to roughly the width of the inline header content ' +
+          '(chevron + label + count badge), leaving the rightmost columns visually outside the ' +
+          'band. The same lane in its **expanded** state paints the band across the full track ' +
+          'correctly (that case was fixed by the prior bug). Asymmetry between expanded and ' +
+          'collapsed visual shape is the giveaway.\n\n' +
+          '**Repro:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz`, open the `moooon` / `prodect` ' +
+          'project → `/boards`, switch group-by to anything other than `none` (Epic recommended — ' +
+          'matches the original repro screenshot). Click a lane header to collapse it. Observe ' +
+          "that the collapsed lane's gray band stops well short of the rightmost column (in the " +
+          'default workflow, the band visibly ends around `In Review` or earlier — `Done` and ' +
+          '`Cancelled` sit OUTSIDE the band). Expand the same lane and the band paints full-width ' +
+          'as intended.\n\n' +
+          '**Root cause (hypothesis to verify in the fix Subtask).** In ' +
+          '`app/(authed)/boards/_components/SwimlaneBoard.tsx`, the prior fix landed `min-w-max` ' +
+          'on the **lane-row wrapper** (the outer `<div data-testid={swimlane-${lane.key}}>`), so ' +
+          'the wrapper grows to its `max-content` width. That `max-content` is established by the ' +
+          'child cell-row (`${track}` flex row of `w-72` `LaneCell`s over `columns.map(...)`) — ' +
+          'but the cell-row only renders inside the `!isCollapsed` ternary branch. Collapsing ' +
+          "removes the width-establishing child, so the wrapper's `max-content` drops to the " +
+          'header-only inline width (chevron + label + count), and `min-w-max` resolves against ' +
+          'that smaller value. Net: the band paints behind a narrower wrapper, columns sit ' +
+          "outside it. The prior fix's comment at SwimlaneBoard.tsx:122-126 named this exact " +
+          'risk for the EXPANDED case ("the lane-header band collapses to the scroller\'s ' +
+          'clientWidth and stops at the viewport edge") but did not notice that collapsing pulls ' +
+          'out the width source.\n\n' +
+          '**Fix shapes (decide at fix time — NOT prescriptive; trade-offs to weigh):**\n' +
+          '1. **Render an invisible width-establishing track row OUTSIDE the `!isCollapsed` ' +
+          'ternary** — e.g. a zero-height `${track} h-0 pointer-events-none invisible` row of ' +
+          "`w-72 shrink-0` spacer cells. Keeps the wrapper's `max-content` at full track width " +
+          'regardless of collapsed state. Lowest disruption to the existing sticky-stacking + ' +
+          'click semantics; cost is one extra DOM row per lane.\n' +
+          '2. **Move `min-w-max` off the wrapper and onto an explicit-width band element**, ' +
+          'driven from the `columns` array (`width: columns.length * 288 + (columns.length - 1) ' +
+          '* 14 + 48` — the same shape the `track` class encodes). Removes the dependency on a ' +
+          'width-establishing child entirely; cost is keeping the explicit-width formula in sync ' +
+          "with the `track` class's `w-72 gap-3.5 px-6`.\n" +
+          '3. **Always render the cell-row track, hide it with `visibility: hidden h-0` when ' +
+          'collapsed** — simplest diff. (NOT `display: none`, which would remove the element from ' +
+          'layout entirely and collapse back to the original bug.) Functionally equivalent to ' +
+          'option 1.\n' +
+          'Each option leaves the sticky-pinned label content (`sticky left-6 z-[2]`) ' +
+          "untouched — only the band's width source changes.\n\n" +
+          '**Test gap that let it ship.** The existing swimlane render tests ' +
+          '(`tests/components/board-swimlanes-render.test.tsx`, `board-swimlanes.test.ts`) ' +
+          'likely assert the band-spans-track shape only in the default (expanded) state. The ' +
+          'fix MUST add a collapsed-state assertion: toggle collapse on a lane, measure the ' +
+          "header band's `offsetWidth` (or computed style), and assert it equals the " +
+          "column-track's intrinsic width — not the viewport width, not the header-content " +
+          'width. Same measurement posture as the `bug-tree-header-misalignment` and prior ' +
+          '`bug-swimlane-lane-header-not-spanning-scrolled-columns` fixes (measure rendered ' +
+          'width via `getBoundingClientRect`, not CSS rules).\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- On a swimlane-grouped board, the lane-header band paints across the **full column ' +
+          'track** when the lane is **collapsed** (chevron right) — including columns beyond ' +
+          'the viewport edge.\n' +
+          '- The same lane, **expanded** (chevron down), continues to paint the band full-width ' +
+          '(guard against regression of the prior fix).\n' +
+          "- Collapsing / expanding a lane does NOT change the band's rendered width — only the " +
+          'cell-row visibility.\n' +
+          '- The sticky-pinned label + chevron + count behaviour is unchanged (label still ' +
+          'sticks to the left edge as the user scrolls horizontally).\n' +
+          '- The catch-all lane (`bg-(--el-muted)`) and named lanes (`bg-(--el-surface-soft)`) ' +
+          'both render the band full-width in BOTH collapsed and expanded states.\n' +
+          '- A render-test regression in `tests/components/board-swimlanes-render.test.tsx` ' +
+          'asserts the collapsed-lane band width equals the column-track width (measure ' +
+          "`offsetWidth`/`getBoundingClientRect`, not CSS rules) — mirrors the prior fix's test " +
+          'posture.\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/boards/_components/SwimlaneBoard.tsx` lines ~119-188 — the lane-row ' +
+          'wrapper, the `min-w-max` comment naming the prior bug, the header `<div role="button">`, ' +
+          'and the `!isCollapsed` ternary that hides the width-establishing cell-row\n' +
+          '- `bug-swimlane-lane-header-not-spanning-scrolled-columns` (sibling Epic-3 bug, same ' +
+          'shape, expanded-state-only) — the precedent fix this one extends\n' +
+          '- `PRODECT_FINDINGS.md` #61 — the planner-side finding entry that surfaced this bug\n' +
+          '- `tests/components/board-swimlanes-render.test.tsx` — where the missing collapsed-' +
+          'state assertion belongs\n' +
+          '- `prodect-core/CLAUDE.md` — colour via `--el-*`, shape via element-shape tokens ' +
+          '(applies to whatever new wrapper the fix introduces)\n\n' +
+          '**Refactor signal (rule of three):** this is the SECOND occurrence of `min-w-max` ' +
+          'open-coded on a swimlane row producing a width-establishment bug. If a third ' +
+          'occurrence surfaces, extract a shared `TrackRow` (or `useTrackWidth`) primitive ' +
+          'rather than open-coding `min-w-max` per row. Not yet — fix this one in place, but ' +
+          'note the pattern for the next time.',
+      },
     ],
   },
   {
