@@ -193,7 +193,7 @@ export const story_3_5: PlanStory = {
       id: '3.5.2',
       title:
         'At-scale load-model E2E — bounded load, virtualization, over-cap banner, Done-age window',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 22,
