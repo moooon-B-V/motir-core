@@ -156,7 +156,7 @@ export const story_7_0: PlanStory = {
     {
       id: '7.0.1',
       title: 'Design — `/ready` page + per-row dispatch affordance + sidebar entry',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 35,
