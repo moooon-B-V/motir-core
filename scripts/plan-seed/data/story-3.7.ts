@@ -249,7 +249,7 @@ export const story_3_7: PlanStory = {
       id: '3.7.7',
       title:
         'Design — per-board settings entry + board-scoped settings page (extends design/boards/)',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 30,
