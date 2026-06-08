@@ -266,7 +266,7 @@ export const EPICS: EpicMeta[] = [
         id: 'bug-attachment-fk-migration-drift',
         kind: 'bug',
         title: 'Every `prisma migrate dev` re-proposes dropping the hand-managed attachment FK',
-        status: 'planned',
+        status: 'in_progress',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 3 · **Discovered in:** Subtask 3.3.2 (board ' +
