@@ -194,7 +194,7 @@ export const story_4_1: PlanStory = {
       id: '4.1.2',
       title:
         '`sprintRepository` + `work_item` sprint/rank repo methods (single-op; writes require `tx`)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 18,
