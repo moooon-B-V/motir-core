@@ -22,7 +22,9 @@ import { Button } from '@/components/ui/Button';
 // The menu also carries (Subtask 3.6.3) a **"Board settings →"** link to
 // `settings/project/board` — the board-configuration admin (column manager +
 // status mapping). The 3.2.1 mock drew this column `[⋯]` entry as a seam; 3.6.3
-// wires it now that the admin surface exists.
+// wires it now that the admin surface exists. As of Subtask 3.7.8 (multiple
+// boards per project) the link carries `?board=<id>` so it opens the settings
+// for the board BEING VIEWED, not the project default.
 //
 // Shape via element tokens (`--radius-control`/`-input`, `--height-control`,
 // `--spacing-control-x`); colour strictly `--el-*`. Reuses the shipped `Popover`
@@ -32,10 +34,14 @@ const VALID_LIMIT = /^\d+$/; // non-negative integer (no sign, no decimal, no ex
 
 export function ColumnActionsMenu({
   columnId,
+  boardId,
   wipLimit,
   onSetWipLimit,
 }: {
   columnId: string;
+  /** The board currently being viewed — threaded into the Board-settings link so
+   *  it deep-links to THIS board's config (Subtask 3.7.8). */
+  boardId: string;
   wipLimit: number | null;
   onSetWipLimit: (columnId: string, limit: number | null) => void;
 }) {
@@ -107,7 +113,7 @@ export function ColumnActionsMenu({
           </button>
 
           <Link
-            href="/settings/project/board"
+            href={`/settings/project/board?board=${encodeURIComponent(boardId)}`}
             data-testid={`board-column-settings-link-${columnId}`}
             className="flex h-(--height-control) w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) text-left text-sm text-(--el-text) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >

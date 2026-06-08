@@ -157,7 +157,9 @@ test.describe('board-config @smoke', () => {
     await expect(tray).toContainText('QA Review');
     const trayLink = page.getByTestId('board-unmapped-link');
     await expect(trayLink).toContainText('Map columns');
-    await expect(trayLink).toHaveAttribute('href', '/settings/project/board');
+    // 3.7.8: the CTA carries the viewed board (`?board=<id>`) so it opens THIS
+    // board's settings, not the project default.
+    await expect(trayLink).toHaveAttribute('href', /^\/settings\/project\/board\?board=/);
 
     // 3. Follow the CTA into Board settings — the status sits in the unmapped rail.
     await trayLink.click();

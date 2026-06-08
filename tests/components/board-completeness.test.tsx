@@ -230,8 +230,9 @@ describe('board completeness (3.2.6)', () => {
     expect(screen.getByText('On Hold')).toBeTruthy();
     const link = screen.getByTestId('board-unmapped-link');
     // Repointed in 3.6.3: from the interim "Manage statuses →" (workflow editor)
-    // to "Map columns →" → the real board-config admin.
-    expect(link.getAttribute('href')).toBe('/settings/project/board');
+    // to "Map columns →" → the real board-config admin. Carries the viewed board
+    // (`?board=`) as of 3.7.8 so it opens THIS board's settings, not the default.
+    expect(link.getAttribute('href')).toBe('/settings/project/board?board=b1');
     expect(link.textContent).toContain('Map columns');
   });
 

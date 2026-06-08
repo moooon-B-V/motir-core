@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
@@ -12,6 +13,7 @@ import {
   Pencil,
   Plus,
   Rows3,
+  SlidersHorizontal,
   Star,
   Trash2,
 } from 'lucide-react';
@@ -73,10 +75,24 @@ export function BoardSwitcher({
   // TODO(6.4): wire to the project-admin role (matching 2.2.5 / 3.3 / 3.6). Today
   // board CRUD is membership-gated — any project member manages boards.
   canManage = true,
+  // `variant` (Subtask 3.7.8) — `'board'` (default, on `/boards`): the full
+  // switcher with New / manage [⋯] (rename / set-default / Board settings /
+  // delete). `'settings'` (on `/settings/project/board`): a SWITCH-ONLY switcher
+  // that re-targets WHICH board you're configuring — picking a row pushes
+  // `?board=<id>` on the settings route (the same selectBoard logic, since it
+  // preserves the pathname), so the server page re-resolves that board's config.
+  // It hides New + the per-board manage menu (creating / renaming / deleting a
+  // board stays the `/boards` switcher's job, per the 3.7.7 design notes).
+  variant = 'board',
 }: {
   canManage?: boolean;
+  variant?: 'board' | 'settings';
 }) {
   const t = useTranslations('boards');
+  // In the settings variant the switcher only SWITCHES which board is configured
+  // — no New, no per-row manage menu (those live on `/boards`).
+  const isSettings = variant === 'settings';
+  const showManage = canManage && !isSettings;
   const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
@@ -288,7 +304,7 @@ export function BoardSwitcher({
         }}
       >
         <Popover.Trigger
-          aria-label={t('switcherTriggerAria')}
+          aria-label={isSettings ? t('configureBoardTriggerAria') : t('switcherTriggerAria')}
           aria-haspopup="menu"
           data-testid="board-switcher-trigger"
           className="inline-flex h-(--height-control) max-w-[260px] items-center gap-2 rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) font-sans text-sm font-semibold text-(--el-text-strong) hover:border-(--el-border-strong) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none data-[state=open]:border-(--el-border-strong) data-[state=open]:shadow-(--shadow-subtle)"
@@ -307,7 +323,7 @@ export function BoardSwitcher({
           align="start"
           width={300}
           role="menu"
-          aria-label={t('switcherMenuAria')}
+          aria-label={isSettings ? t('configureBoardMenuAria') : t('switcherMenuAria')}
           data-testid="board-switcher-menu"
           // overflow-visible (twMerge overrides the primitive's base overflow-hidden)
           // so the per-board manage `[⋯]` flyout — absolutely positioned inside this
@@ -351,7 +367,7 @@ export function BoardSwitcher({
                     ) : null}
                   </button>
 
-                  {canManage ? (
+                  {showManage ? (
                     <button
                       type="button"
                       aria-label={t('manageBoardAria', { name: board.name })}
@@ -389,6 +405,20 @@ export function BoardSwitcher({
                         disabled={board.isDefault}
                         onClick={() => void setDefaultBoard(board)}
                       />
+                      {/* Board settings (Subtask 3.7.8) — the Jira-faithful
+                          reached-FROM-the-board path: deep-links to that board's
+                          config (`?board=<id>`). A Link, not a button, so the whole
+                          row is one navigation target (no nested button). */}
+                      <ManageItem
+                        icon={<SlidersHorizontal className="h-4 w-4" aria-hidden />}
+                        label={t('boardSettings')}
+                        testId={`board-switcher-settings-${board.id}`}
+                        href={`/settings/project/board?board=${encodeURIComponent(board.id)}`}
+                        onClick={() => {
+                          setManageId(null);
+                          setMenuOpen(false);
+                        }}
+                      />
                       <div className="mx-0.5 my-1 h-px bg-(--el-border)" />
                       <ManageItem
                         icon={<Trash2 className="h-4 w-4" aria-hidden />}
@@ -416,7 +446,7 @@ export function BoardSwitcher({
               );
             })}
 
-            {canManage ? (
+            {showManage ? (
               <>
                 <div className="mx-0.5 my-1 h-px bg-(--el-border)" />
                 <button
@@ -489,6 +519,7 @@ function ManageItem({
   onClick,
   disabled,
   danger,
+  href,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -496,7 +527,36 @@ function ManageItem({
   onClick: () => void;
   disabled?: boolean;
   danger?: boolean;
+  /** When set, the item is a navigation Link (e.g. Board settings) rather than a
+   *  button — the whole row is one accessible target, no nested button. */
+  href?: string;
 }) {
+  const className = `flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left text-[13.5px] focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 ${
+    danger
+      ? 'text-(--el-danger) hover:bg-(--el-tint-rose)'
+      : 'text-(--el-text) hover:bg-(--el-muted)'
+  }`;
+  const body = (
+    <>
+      <span className={`shrink-0 ${danger ? 'text-(--el-danger)' : 'text-(--el-text-muted)'}`}>
+        {icon}
+      </span>
+      <span className="flex-1 truncate">{label}</span>
+    </>
+  );
+  if (href) {
+    return (
+      <Link
+        href={href}
+        role="menuitem"
+        data-testid={testId}
+        onClick={onClick}
+        className={className}
+      >
+        {body}
+      </Link>
+    );
+  }
   return (
     <button
       type="button"
@@ -505,16 +565,9 @@ function ManageItem({
       disabled={disabled}
       aria-disabled={disabled || undefined}
       onClick={onClick}
-      className={`flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left text-[13.5px] focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 ${
-        danger
-          ? 'text-(--el-danger) hover:bg-(--el-tint-rose)'
-          : 'text-(--el-text) hover:bg-(--el-muted)'
-      }`}
+      className={className}
     >
-      <span className={`shrink-0 ${danger ? 'text-(--el-danger)' : 'text-(--el-text-muted)'}`}>
-        {icon}
-      </span>
-      <span className="flex-1 truncate">{label}</span>
+      {body}
     </button>
   );
 }

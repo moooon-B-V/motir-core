@@ -58,6 +58,7 @@ function renderColumn(
   return render(
     <BoardColumn
       column={col}
+      boardId="b1"
       assigneeNameById={new Map()}
       onOpenQuickView={extra.onOpenQuickView ?? noop}
       activeCardId={extra.activeCardId ?? null}
@@ -94,6 +95,7 @@ describe('BoardColumn', () => {
           totalCount: 1,
           cards: [card({ id: 'w1', key: 1, assigneeId: 'u1' })],
         })}
+        boardId="b1"
         assigneeNameById={new Map([['u1', 'Bea Lin']])}
         onOpenQuickView={noop}
         activeCardId={null}
