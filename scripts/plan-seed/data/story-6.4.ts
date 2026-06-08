@@ -110,7 +110,7 @@ export const story_6_4: PlanStory = {
     {
       id: '6.4.2',
       title: 'Schema — role enum + `ProjectMembership` + `project.accessLevel` (migration-aware)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
