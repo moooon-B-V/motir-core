@@ -108,7 +108,7 @@ export const story_3_7: PlanStory = {
       id: '3.7.2',
       title:
         'Schema — default-board flag + switcher ordering (N boards per project; migration-aware)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 16,
