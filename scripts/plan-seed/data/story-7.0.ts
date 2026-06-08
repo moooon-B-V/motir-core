@@ -99,10 +99,14 @@ export const story_7_0: PlanStory = {
     'a sidebar nav entry with a count badge, a per-row "Copy `prodect run PROD-<n>`" affordance ' +
     'for the BYOK CLI flow, the design mockup that defines all of the above, and the tests + ' +
     'verification recipe.\n\n' +
-    '**Sort.** Deterministic: `(priority desc, key asc)`. Cursor encodes `(priority, key)` so a ' +
-    'BYOK agent walking `next` via `excludeIds` traverses the set predictably and reseeds give ' +
-    'the same order every time. NOT random; NOT created-at; NOT updated-at — those leak ' +
-    "dispatch decisions to scheduling artifacts the planner can't audit.\n\n" +
+    '**Sort.** Deterministic: `(priority desc, type asc, key asc)` (type tiebreaker added by ' +
+    '7.0.11). Priority is primary (highest first); **issue type breaks the priority tie** in the ' +
+    'fixed dispatch order `subtask < bug < task < story < epic` (the leaf-most, most-granular ' +
+    'unit first — coherent with the leaf-only ready set of 7.0.10); `key` breaks the final tie. ' +
+    'Cursor encodes `(priority, kind, key)` so a BYOK agent walking `next` via `excludeIds` ' +
+    'traverses the set predictably and reseeds give the same order every time. NOT random; NOT ' +
+    'created-at; NOT updated-at — those leak dispatch decisions to scheduling artifacts the ' +
+    "planner can't audit.\n\n" +
     '**Pagination.** Cursor (NOT offset) from day one — the planning-time scale check ' +
     '(finding #57, "how does the mirror product handle 10k of these?"). A real ready set in a ' +
     'mature project will have hundreds of items; the agent loop will walk via cursor; the page ' +
@@ -128,7 +132,7 @@ export const story_7_0: PlanStory = {
     '- Pull the Story branch, `pnpm install`, `pnpm prisma generate`, `pnpm db:seed`, `pnpm dev`.\n' +
     '- `pnpm test` — vitest covers: `listReady` predicate (every is_blocked_by terminal across ' +
     "its own project's workflow), `kinds` / `assigneeId` / `priority` filter axes, " +
-    '`(priority desc, key asc)` sort stability across pagination, cursor round-trip ' +
+    '`(priority desc, type asc, key asc)` sort stability across pagination, cursor round-trip ' +
     '(decoding/encoding) and idempotence over reseed, the workspace-membership gate on both ' +
     'endpoints, the 404-not-403 not-found contract on a cross-tenant `projectKey`, the ' +
     '`excludeIds` honor on `/next`, and the `ReadyItemDispatchDto` carrying `descriptionMd` + ' +
@@ -677,6 +681,55 @@ export const story_7_0: PlanStory = {
         '- `prodect-core/lib/issues/parentRules.ts` — the kind-parent matrix (which kinds can have ' +
         'children).\n' +
         '- Story 7.0 subtasks 7.0.2 (service) + 7.0.6 (page + badge).',
+    },
+    {
+      id: '7.0.11',
+      title: 'Order the ready set by priority, then type, then key',
+      status: 'in_progress',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 30,
+      dependsOn: ['7.0.10'],
+      descriptionMd:
+        '**Type:** code · **Parent:** Story 7.0 · **Requested by:** Yue.\n\n' +
+        'The ready list (`/ready`), the dispatch endpoint (`POST /api/ready/next`), and the ' +
+        'sidebar count badge sort `(priority desc, key asc)`. Add **issue type as the ' +
+        'tiebreaker between priority and key**, in the fixed dispatch order `subtask < bug < ' +
+        'task < story < epic` — the leaf-most, most-granular unit first, so a coding agent ' +
+        'reaching for `next` gets a runnable unit before a coarser one. New sort: `(priority ' +
+        'desc, type asc, key asc)`.\n\n' +
+        '**Decision (confirmed with Yue, decision-ladder rung 0 — direct owner instruction).** ' +
+        '**Priority stays PRIMARY**; type is the secondary key; `key` is the final tiebreaker. ' +
+        '(Considered + rejected: type-primary, and type-only dropping priority — the owner chose ' +
+        'priority-primary so urgency still leads, with type ordering within a priority bucket.) ' +
+        'This composes with 7.0.10: a childed epic/story is already EXCLUDED from the set; 7.0.11 ' +
+        'orders what remains.\n\n' +
+        '**Implementation.** Single source of the type order = `READY_KIND_RANK` in ' +
+        '`lib/workItems/readyFilter.ts` (`subtask`=0 … `epic`=4). The opaque cursor now encodes ' +
+        '`(priority, kind, key)` (was `(priority, key)`) and `decodeReadyCursor` validates the ' +
+        'kind. `workItemRepository.findReadyCandidates` builds a `CASE` rank from ' +
+        '`READY_KIND_RANK` and uses it in BOTH the `ORDER BY` (`priority DESC, <rank> ASC, key ' +
+        'ASC`) and the 3-tuple seek-after predicate, so the two can never drift. ' +
+        '`listReady` / `getNextReady` / `countReady` all flow through the one query → the page, ' +
+        'the dispatch endpoint, and the badge stay in agreement; cursor paging stays ' +
+        'reseed-stable (tuple, not offset).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- Ready set sorts `(priority desc, type asc, key asc)` with type order `subtask < bug ' +
+        '< task < story < epic`.\n' +
+        '- Priority remains primary — a higher-priority item of a later type still precedes a ' +
+        'lower-priority item of an earlier type.\n' +
+        '- The cursor carries the type rank; paging across a kind boundary at equal priority is ' +
+        'deterministic and reseed-stable.\n' +
+        '- `listReady`, `getNextReady`, and `countReady` agree (one underlying query).\n' +
+        '- Vitest covers the type tiebreaker, priority-still-primary, subtask-first, and cursor ' +
+        'paging across types (extends the 7.0.7 service suite).\n\n' +
+        '## Context refs\n\n' +
+        '- `prodect-core/lib/workItems/readyFilter.ts` — the cursor codec + `READY_KIND_RANK`.\n' +
+        '- `prodect-core/lib/repositories/workItemRepository.ts` — `findReadyCandidates` ' +
+        '(ORDER BY + seek-after).\n' +
+        '- `prodect-core/lib/services/workItemsService.ts` — `pageReadyCandidates` (cursor ' +
+        'construction).\n' +
+        '- `prodect-core/prisma/schema.prisma` — `WorkItemKind` / `WorkItemPriority` enums.',
     },
   ],
 };
