@@ -1,0 +1,932 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Backlog at scale — bounded · virtualized · lazy-load (Story 4.2 · 4.2.1)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the BACKLOG at SCALE — Story 4.2 · 4.2.1.
+      The companion to backlog.mock.html: the large-backlog shape (finding #57).
+      A real backlog is thousands of issues, so the list is NEVER load-all — it
+      binds to 4.1.4's cursor-paginated getBacklog (a bounded count header),
+      renders a VIRTUALIZED window (only the visible rows in the DOM via the
+      shipped useRowWindow, 3.2.5), and LAZY-LOADS the next page on scroll via
+      the cursor. A backlog UI that fetched every row to render the list, or
+      summed every loaded card, would be prototype-thinking — this asset draws
+      the bounded shape the build targets (gates 4.2.3's scale AC + 4.2.6 E2E).
+
+      Built FROM the real design system: the token block is copied 1:1 from
+      app/globals.css; the row is the SAME work-items row as backlog.mock.html.
+
+      The dashed .virt-note boxes are REVIEW-ONLY annotations (like
+      board.mock.html / tree-scale.mock.html) — they document the windowing;
+      NOTHING in them ships (a virtualized row is visually identical to a
+      non-virtualized one).
+
+      Covers:
+        (0) Bounded virtualized backlog — bounded count header + windowed rows
+            + the lazy-load-on-scroll sentinel
+        (1) Count + lazy-load states — first page · loading next page · all loaded
+      Toggle dark mode to confirm token parity. See design-notes.md.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied 1:1 from app/globals.css ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-mint: #1a2f25;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 980px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 720px;
+      }
+      .toggle {
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel {
+        max-width: 980px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 40px auto 10px;
+        max-width: 980px;
+        padding-left: 2px;
+      }
+      .stage {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        padding: 22px 24px;
+      }
+      .legend {
+        max-width: 980px;
+        margin: 10px auto 0;
+        font-size: 12px;
+        color: var(--el-text-faint);
+        padding-left: 2px;
+        line-height: 1.55;
+      }
+      .legend b {
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Region + row (same vocabulary as backlog.mock.html) ────────────── */
+      .region {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .region-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 14px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .chev {
+        width: 18px;
+        height: 18px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .region-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .count-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 20px;
+        padding: 0 9px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .region-head .spacer {
+        flex: 1;
+      }
+      .rows {
+        display: flex;
+        flex-direction: column;
+      }
+      .brow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 14px;
+        background: var(--el-page-bg);
+      }
+      .brow + .brow {
+        border-top: 1px solid var(--el-border);
+      }
+      .grip {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-faint);
+        flex: none;
+        opacity: 0;
+      }
+      .brow:hover .grip {
+        opacity: 1;
+      }
+      .row-check {
+        width: 16px;
+        height: 16px;
+        border-radius: var(--radius-control);
+        border: 1.5px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        flex: none;
+        padding: 0;
+      }
+      .type-icon {
+        width: 15px;
+        height: 15px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+      .brow-id {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .brow-title {
+        font-size: 13.5px;
+        color: var(--el-text);
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .epic-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        flex: none;
+      }
+      .epic-chip .ec-ic {
+        width: 11px;
+        height: 11px;
+        color: var(--el-type-epic);
+        flex: none;
+      }
+      .epic-chip .ec-key {
+        font-family: var(--font-mono);
+      }
+      .seam {
+        display: inline-flex;
+        align-items: center;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-faint);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-badge);
+        padding: 1px 7px;
+        background: var(--el-surface-soft);
+        flex: none;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+        flex: none;
+      }
+      .pill .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 9999px;
+        flex: none;
+      }
+      .pill--todo {
+        background: var(--el-tint-lavender);
+      }
+      .pill--todo .dot {
+        background: var(--el-text-faint);
+      }
+      .pill--prog {
+        background: var(--el-tint-sky);
+      }
+      .pill--prog .dot {
+        background: var(--el-info);
+      }
+      .avatar {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .avatar.unassigned {
+        background: var(--el-muted);
+        color: var(--el-text-faint);
+        border: 1px dashed var(--el-border-strong);
+      }
+      .icon-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-muted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .icon-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* ── Virtualization window + the review-only annotation ─────────────── */
+      .vp {
+        position: relative;
+        max-height: 392px;
+        overflow: hidden;
+      }
+      .vp::after {
+        /* a soft fade at the window edge to signal more rows below */
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 40px;
+        background: linear-gradient(to bottom, transparent, var(--el-page-bg));
+        pointer-events: none;
+      }
+      .virt-note {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        padding: 7px 14px;
+        border: 1px dashed var(--el-accent);
+        background: var(--el-surface-soft);
+        color: var(--el-accent);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .virt-note .tag {
+        font-size: 9px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        border: 1px dashed var(--el-accent);
+        border-radius: var(--radius-badge);
+        padding: 1px 6px;
+        flex: none;
+      }
+      /* lazy-load sentinel at the bottom of the scroll area */
+      .load-spin {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        padding: 12px;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        border-top: 1px solid var(--el-border);
+      }
+      .spinner {
+        width: 15px;
+        height: 15px;
+        border: 2px solid var(--el-border-strong);
+        border-top-color: var(--el-accent);
+        border-radius: 9999px;
+        animation: spin 0.7s linear infinite;
+        flex: none;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .all-loaded {
+        text-align: center;
+        padding: 12px;
+        font-size: 12px;
+        color: var(--el-text-faint);
+        border-top: 1px solid var(--el-border);
+      }
+      .two {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        align-items: start;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Backlog at scale — bounded · virtualized · lazy-load</h1>
+        <p>
+          Story 4.2 · 4.2.1 — the companion to backlog.mock.html (finding #57). The list binds to
+          4.1.4's cursor-paginated <code>getBacklog</code>: a bounded count header, a virtualized
+          window, lazy-load on scroll. NEVER load-all. The dotted-accent
+          <span style="font-family: var(--font-mono); font-size: 10px; color: var(--el-accent)"
+            >virt notes</span
+          >
+          are review-only.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <g
+          id="i-subtask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-grip"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="9" cy="6" r="1" />
+          <circle cx="9" cy="12" r="1" />
+          <circle cx="9" cy="18" r="1" />
+          <circle cx="15" cy="6" r="1" />
+          <circle cx="15" cy="12" r="1" />
+          <circle cx="15" cy="18" r="1" />
+        </g>
+        <g
+          id="i-more"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="5" cy="12" r="1" />
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-layers"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"
+          />
+          <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65" />
+          <path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════════ PANEL 0 — bounded virtualized backlog ════════════════ -->
+    <div class="panel-label">
+      0 · Bounded virtualized backlog — count header · windowed rows · lazy-load sentinel
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <section class="region" aria-label="Backlog, 1,284 issues">
+          <div class="region-head">
+            <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            <span class="region-title">Backlog</span>
+            <span class="count-badge">1,284 issues</span>
+            <span class="spacer"></span>
+          </div>
+
+          <!-- review-only: rows above the window are NOT in the DOM -->
+          <div class="virt-note">
+            <span class="tag">virt</span>
+            <svg style="width: 13px; height: 13px" viewBox="0 0 24 24">
+              <use href="#i-layers" />
+            </svg>
+            rows 1–214 above the window are not mounted (useRowWindow, 3.2.5) — a spacer holds
+            scroll height
+          </div>
+
+          <div class="vp">
+            <div class="rows">
+              <div class="brow" role="row">
+                <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                <button class="row-check" aria-label="Select PROD-431"></button>
+                <span class="type-icon t-story"
+                  ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                ></span>
+                <span class="brow-id">PROD-431</span>
+                <span class="brow-title"
+                  >Cursor-paginate the backlog read with a stable sort key</span
+                >
+                <span class="epic-chip"
+                  ><svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg
+                  ><span class="ec-key">PROD-31</span></span
+                >
+                <span class="seam">—</span>
+                <span class="avatar" title="Yue Zhu">YZ</span>
+                <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                <button class="icon-btn" aria-label="Row actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="brow" role="row">
+                <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                <button class="row-check" aria-label="Select PROD-432"></button>
+                <span class="type-icon t-task"
+                  ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                ></span>
+                <span class="brow-id">PROD-432</span>
+                <span class="brow-title"
+                  >Keep the dragged node attached when it scrolls out of the window</span
+                >
+                <span class="epic-chip"
+                  ><svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg
+                  ><span class="ec-key">PROD-31</span></span
+                >
+                <span class="seam">—</span>
+                <span class="avatar unassigned" title="Unassigned">–</span>
+                <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                <button class="icon-btn" aria-label="Row actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="brow" role="row">
+                <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                <button class="row-check" aria-label="Select PROD-433"></button>
+                <span class="type-icon t-bug"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                ></span>
+                <span class="brow-id">PROD-433</span>
+                <span class="brow-title">Bounded count header diverges from loaded-row tally</span>
+                <span class="epic-chip"
+                  ><svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg
+                  ><span class="ec-key">PROD-9</span></span
+                >
+                <span class="seam">—</span>
+                <span class="avatar" title="Ana Ruiz">AR</span>
+                <span class="pill pill--prog"><span class="dot"></span>In progress</span>
+                <button class="icon-btn" aria-label="Row actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="brow" role="row">
+                <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                <button class="row-check" aria-label="Select PROD-434"></button>
+                <span class="type-icon t-subtask"
+                  ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg
+                ></span>
+                <span class="brow-id">PROD-434</span>
+                <span class="brow-title"
+                  >Append-to-end resolves a drop into a not-yet-loaded region</span
+                >
+                <span class="epic-chip"
+                  ><svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg
+                  ><span class="ec-key">PROD-31</span></span
+                >
+                <span class="seam">—</span>
+                <span class="avatar" title="Mo Park">MP</span>
+                <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                <button class="icon-btn" aria-label="Row actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="brow" role="row">
+                <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                <button class="row-check" aria-label="Select PROD-435"></button>
+                <span class="type-icon t-story"
+                  ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                ></span>
+                <span class="brow-id">PROD-435</span>
+                <span class="brow-title">Fractional-index rank write stays O(1) at depth</span>
+                <span class="epic-chip"
+                  ><svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg
+                  ><span class="ec-key">PROD-31</span></span
+                >
+                <span class="seam">—</span>
+                <span class="avatar" title="Bo Philips">BP</span>
+                <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                <button class="icon-btn" aria-label="Row actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="brow" role="row">
+                <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                <button class="row-check" aria-label="Select PROD-436"></button>
+                <span class="type-icon t-task"
+                  ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                ></span>
+                <span class="brow-id">PROD-436</span>
+                <span class="brow-title"
+                  >Lazy-load the next page on the scroll sentinel via the cursor</span
+                >
+                <span class="epic-chip"
+                  ><svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg
+                  ><span class="ec-key">PROD-31</span></span
+                >
+                <span class="seam">—</span>
+                <span class="avatar unassigned" title="Unassigned">–</span>
+                <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                <button class="icon-btn" aria-label="Row actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- lazy-load sentinel: the next page fetches on scroll -->
+          <div class="load-spin">
+            <span class="spinner"></span>
+            Loading more…
+          </div>
+        </section>
+      </div>
+      <p class="legend">
+        <b>Bounded, never load-all (finding #57).</b> The header count (<b>1,284 issues</b>) is the
+        aggregate from <code>getBacklog</code>, not a loaded-row tally. Only the rows in (or near)
+        the viewport are mounted — the <code>useRowWindow</code> window (3.2.5) keeps the DOM
+        bounded; a spacer preserves scroll height. Scrolling to the bottom trips the sentinel, which
+        fetches the next cursor page and appends. <b>Drag composes with the window:</b> the dragged
+        node stays attached when it scrolls out, and a drop into a not-yet-loaded region resolves to
+        a rank-append (O(1)) — no load-all forced.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 1 — lazy-load states ════════════════ -->
+    <div class="panel-label">1 · Lazy-load states — loading next page vs. all loaded</div>
+    <div class="panel">
+      <div class="two">
+        <div>
+          <div
+            style="
+              font-family: var(--font-mono);
+              font-size: 10.5px;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.06em;
+              color: var(--el-text-faint);
+              padding: 0 0 6px 2px;
+            "
+          >
+            Fetching the next page
+          </div>
+          <div class="stage" style="padding: 0">
+            <div class="region" style="border: 0">
+              <div class="region-head">
+                <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                <span class="region-title">Backlog</span>
+                <span class="count-badge">1,284 issues</span>
+                <span class="spacer"></span>
+              </div>
+              <div class="rows">
+                <div class="brow" role="row">
+                  <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                  <button class="row-check" aria-label="Select"></button>
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                  ></span>
+                  <span class="brow-id">PROD-480</span>
+                  <span class="brow-title">Page 50–100 streams in below</span>
+                  <span class="seam">—</span>
+                  <span class="avatar" title="Yue Zhu">YZ</span>
+                  <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                  <button class="icon-btn" aria-label="Row actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="load-spin"><span class="spinner"></span>Loading more…</div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div
+            style="
+              font-family: var(--font-mono);
+              font-size: 10.5px;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.06em;
+              color: var(--el-text-faint);
+              padding: 0 0 6px 2px;
+            "
+          >
+            Whole backlog loaded
+          </div>
+          <div class="stage" style="padding: 0">
+            <div class="region" style="border: 0">
+              <div class="region-head">
+                <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                <span class="region-title">Backlog</span>
+                <span class="count-badge">38 issues</span>
+                <span class="spacer"></span>
+              </div>
+              <div class="rows">
+                <div class="brow" role="row">
+                  <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                  <button class="row-check" aria-label="Select"></button>
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                  ></span>
+                  <span class="brow-id">PROD-512</span>
+                  <span class="brow-title">Last row — no sentinel, count == loaded</span>
+                  <span class="seam">—</span>
+                  <span class="avatar unassigned" title="Unassigned">–</span>
+                  <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                  <button class="icon-btn" aria-label="Row actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="all-loaded">All 38 issues loaded</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        While a page is in flight the in-flow <b>spinner + "Loading more…"</b> shows at the bottom;
+        a failed page leaves a focusable inline retry (recoverable without a reload). When the
+        cursor is exhausted the sentinel is replaced by a quiet <b>"All N issues loaded"</b> end-cap
+        — no infinite spinner. The same shape applies to a sprint container bound to
+        <code>getSprintIssues</code>.
+      </p>
+    </div>
+  </body>
+</html>
