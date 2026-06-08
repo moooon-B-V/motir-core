@@ -511,7 +511,7 @@ export const story_7_0: PlanStory = {
     {
       id: '7.0.7',
       title: 'Vitest — service + endpoint + readiness predicate behavior',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 35,
