@@ -9,21 +9,10 @@ import type { PlanStory } from '../types';
  */
 export const STUB_STORIES: PlanStory[] = [
   // ── Epic 3: Boards ─────────────────────────────────────────────────────────
-  // 3.1, 3.2, 3.3, 3.6 are fully expanded → data/story-3.1.ts … data/story-3.6.ts
-  // (assembled in index.ts). The Scrum board (formerly Story 3.4) moved to
-  // Epic 4 as Story 4.5 per `notes.html` mistake #32 — see `data/story-4.5.ts`.
-  {
-    id: '3.5',
-    title: 'Tests — board projection, drag transitions, WIP',
-    status: 'planned',
-    descriptionMd:
-      'Vitest over the projection + transition validation; Playwright over drag-drop happy path + ' +
-      'illegal-move snapback + WIP warning. The cross-cutting AT-SCALE journey that 3.2.7 / 3.3.7 ' +
-      'defer here MUST reflect the Story-3.8 load model — NO per-column "Load more"; the board loads ' +
-      'the filtered set + virtualizes + shows the over-cap "refine filter" warning + the Done-age ' +
-      'window (not the retired cursor paging).',
-    items: [],
-  },
+  // Epic 3 is fully expanded — every story is a data/story-3.*.ts module
+  // (3.1, 3.2, 3.3, 3.5, 3.6, 3.7, 3.8), assembled in index.ts; no Epic-3 stubs
+  // remain. The Scrum board (formerly Story 3.4) moved to Epic 4 as Story 4.5
+  // per `notes.html` mistake #32 — see `data/story-4.5.ts`.
 
   // ── Epic 4: Agile planning ────────────────────────────────────────────────
   {
