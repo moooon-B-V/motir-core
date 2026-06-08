@@ -4,6 +4,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { boardsService } from '@/lib/services/boardsService';
 import { truncateAuthTables } from '../helpers/db';
 import type { ProjectContext } from '@/lib/projects';
 import type { BoardProjectionDto } from '@/lib/dto/boards';
@@ -75,6 +76,13 @@ function moveReq(body: unknown) {
   );
 }
 
+// GET /api/board now reads a `?boardId=` selection (Subtask 3.7.5), so the
+// handler needs a real Request. `query` lets a test target a specific board;
+// omitted → the project's default board (the pre-3.7 behaviour).
+function boardGetReq(query = '') {
+  return boardGET(new Request(`${BASE}/api/board${query}`));
+}
+
 function boardPatchReq(body: unknown) {
   return boardPATCH(
     new Request(`${BASE}/api/board`, {
@@ -99,13 +107,13 @@ function columnPatchReq(columnId: string, body: unknown) {
 describe('board API routes', () => {
   it('GET /api/board → 401 without a session', async () => {
     session.current = null;
-    const res = await boardGET();
+    const res = await boardGetReq();
     expect(res.status).toBe(401);
   });
 
   it('GET /api/board → the projection for the active project', async () => {
     await makeFixture();
-    const res = await boardGET();
+    const res = await boardGetReq();
     expect(res.status).toBe(200);
     const board = (await res.json()) as BoardProjectionDto;
     expect(board.columns.map((c) => c.statusKeys[0])).toEqual([
@@ -118,13 +126,38 @@ describe('board API routes', () => {
     ]);
   });
 
+  it('GET /api/board?boardId= → the SELECTED board (Subtask 3.7.5)', async () => {
+    const fx = await makeFixture();
+    const triage = await boardsService.createBoard(
+      fx.projectId,
+      { name: 'Triage' },
+      {
+        userId: fx.userId,
+        workspaceId: fx.workspaceId,
+      },
+    );
+
+    const res = await boardGetReq(`?boardId=${triage.id}`);
+    expect(res.status).toBe(200);
+    const board = (await res.json()) as BoardProjectionDto;
+    expect(board.boardId).toBe(triage.id);
+    expect(board.name).toBe('Triage');
+  });
+
+  it('GET /api/board?boardId= → 404 for a board outside the active project/workspace', async () => {
+    await makeFixture();
+    const res = await boardGetReq('?boardId=brd_not_a_real_board');
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { code: string }).code).toBe('BOARD_NOT_FOUND');
+  });
+
   it('POST /api/board/move → 200 for a legal cross-column move (status persists)', async () => {
     const fx = await makeFixture();
     const card = await workItemsService.createWorkItem(
       { projectId: fx.projectId, kind: 'task', title: 'movable' },
       { userId: fx.userId, workspaceId: fx.workspaceId },
     );
-    const board = (await (await boardGET()).json()) as BoardProjectionDto;
+    const board = (await (await boardGetReq()).json()) as BoardProjectionDto;
     const inProgress = board.columns.find((c) => c.statusKeys[0] === 'in_progress')!;
 
     const res = await moveReq({
@@ -142,7 +175,7 @@ describe('board API routes', () => {
       { projectId: fx.projectId, kind: 'task', title: 'cannot reach done' },
       { userId: fx.userId, workspaceId: fx.workspaceId },
     );
-    const board = (await (await boardGET()).json()) as BoardProjectionDto;
+    const board = (await (await boardGetReq()).json()) as BoardProjectionDto;
     const done = board.columns.find((c) => c.statusKeys[0] === 'done')!;
 
     // todo → done is NOT a legal transition in the default restricted workflow.
@@ -171,7 +204,7 @@ describe('board config API routes (Subtask 3.3.3)', () => {
   }
 
   async function boardId(): Promise<string> {
-    return ((await (await boardGET()).json()) as BoardProjectionDto).boardId;
+    return ((await (await boardGetReq()).json()) as BoardProjectionDto).boardId;
   }
 
   it('PATCH /api/board → 401 without a session', async () => {

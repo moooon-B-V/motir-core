@@ -101,11 +101,19 @@ type BoardStatus = 'loading' | 'ready' | 'error' | 'no-board';
 export function BoardContainer({
   members = [],
   activeProjectId,
+  selectedBoardId,
 }: {
   members?: WorkspaceMemberDTO[];
   activeProjectId?: string;
+  selectedBoardId?: string;
 }) {
   const t = useTranslations('boards');
+  // The selected board (Subtask 3.7.5) — the page's `?board=<id>` selection. It
+  // rides the projection fetch as `?boardId=` so the board the user picked (not
+  // just the default) is what loads; absent → the server resolves the project's
+  // default board. Threaded into the mount fetch AND the group-by re-lay refetch
+  // so a re-lay stays on the SAME selected board.
+  const boardQuery = selectedBoardId ? `?boardId=${encodeURIComponent(selectedBoardId)}` : '';
   const { toast } = useToast();
   const [board, setBoard] = useState<BoardProjectionDto | null>(null);
   const [status, setStatus] = useState<BoardStatus>('loading');
@@ -129,7 +137,7 @@ export function BoardContainer({
 
   useEffect(() => {
     let active = true;
-    fetch('/api/board', { headers: { accept: 'application/json' } })
+    fetch(`/api/board${boardQuery}`, { headers: { accept: 'application/json' } })
       .then(async (res) => {
         if (res.ok) {
           const data = (await res.json()) as BoardProjectionDto;
@@ -157,7 +165,9 @@ export function BoardContainer({
     // `activeProjectId` is in the deps so switching project/workspace (→ a new
     // active project + router.refresh()) re-runs the fetch for the new project's
     // board instead of leaving the previous project's board on screen.
-  }, [reloadKey, issuesChangedAt, activeProjectId]);
+    // `boardQuery` is in the deps so changing the `?board=` selection (the 3.7.4
+    // switcher) refetches the newly-selected board's projection.
+  }, [reloadKey, issuesChangedAt, activeProjectId, boardQuery]);
 
   const retry = useCallback(() => {
     setStatus('loading');
@@ -179,7 +189,9 @@ export function BoardContainer({
           body: JSON.stringify({ boardId: board.boardId, swimlaneGroupBy: next }),
         });
         if (!patch.ok) throw new Error(`group-by ${patch.status}`);
-        const res = await fetch('/api/board', { headers: { accept: 'application/json' } });
+        const res = await fetch(`/api/board${boardQuery}`, {
+          headers: { accept: 'application/json' },
+        });
         if (!res.ok) throw new Error(`reload ${res.status}`);
         setBoard((await res.json()) as BoardProjectionDto);
       } catch {
@@ -192,7 +204,7 @@ export function BoardContainer({
         setRelaying(false);
       }
     },
-    [board, t, toast],
+    [board, boardQuery, t, toast],
   );
 
   const assigneeNameById = useMemo(
