@@ -378,7 +378,7 @@ export const story_7_0: PlanStory = {
     {
       id: '7.0.4',
       title: '`GET /api/ready` — list endpoint (the page + browse consumer)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
