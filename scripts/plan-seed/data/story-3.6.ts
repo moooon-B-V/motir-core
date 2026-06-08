@@ -41,7 +41,7 @@ import type { PlanStory } from '../types';
 export const story_3_6: PlanStory = {
   id: '3.6',
   title: 'Board configuration — columns + status→column mapping',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The **board administration** surface: a project admin manages the default board’s ' +
     '**columns** (add / rename / reorder / delete) and the **column ↔ status mapping**, and ' +
@@ -236,7 +236,7 @@ export const story_3_6: PlanStory = {
     {
       id: '3.6.4',
       title: 'Story tests — column config service + the unmapped→mapped resolution E2E',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 18,
