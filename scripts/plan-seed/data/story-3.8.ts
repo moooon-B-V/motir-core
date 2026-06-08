@@ -120,7 +120,7 @@ export const story_3_8: PlanStory = {
       id: '3.8.2',
       title:
         'Projection load model — bounded whole-set load + Done-age window + `truncated`/`cap` signal (retire the per-column cursor)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
