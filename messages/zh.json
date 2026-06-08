@@ -220,6 +220,7 @@
     "nav": {
       "dashboard": "工作台",
       "issues": "工作项",
+      "ready": "就绪",
       "boards": "面板",
       "reports": "报表",
       "settings": "设置",
@@ -816,5 +817,33 @@
     "boardRenameErrorDescription": "无法重命名看板，更改已撤销。",
     "boardSetDefaultErrorDescription": "无法设置默认看板，更改已撤销。",
     "boardDeleteErrorDescription": "无法删除看板，更改已撤销。"
+  },
+  "ready": {
+    "heading": "可开始",
+    "count": "{count} 项就绪",
+    "countCapped": "{count}+ 项就绪",
+    "subtitle": "{project} · {key}",
+    "whatIsThis": "这是什么？",
+    "listAria": "就绪工作项",
+    "loadingMore": "加载更多…",
+    "unassigned": "未分配",
+    "copyAria": "复制 {key} 的运行命令",
+    "copyTooltip": "复制 <cmd>{command}</cmd>",
+    "noProjectTitle": "暂无项目",
+    "noProjectDescription": "创建或选择一个项目，查看可以开始的工作。",
+    "popover": {
+      "title": "什么是「就绪」？",
+      "body1": "当阻塞某个工作项的所有工作项都已完成时，它即为<strong>就绪</strong>——它没有未完成的阻塞项，现在就可以开始。",
+      "body2": "点击任意行的 <code>复制</code>，即可将其 <code>prodect run PROD-…</code> 命令复制到剪贴板，然后粘贴到你自己的编码代理中来派发工作。"
+    },
+    "empty": {
+      "title": "暂无可开始的工作项",
+      "body": "当阻塞某个工作项的所有工作项都已完成后，它就会出现在这里。目前没有完全解除阻塞的工作项——前往「工作项」查看仍在进行中的工作及其等待的内容。",
+      "action": "查看全部工作项"
+    },
+    "toast": {
+      "title": "已复制",
+      "body": "请将 {command} 粘贴到终端。"
+    }
   }
 }

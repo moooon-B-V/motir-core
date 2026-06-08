@@ -37,6 +37,20 @@ export const READY_DEFAULT_LIMIT = 50;
 export const READY_MAX_LIMIT = 200;
 
 /**
+ * Bounds for the sidebar READY-COUNT badge (Subtask 7.0.6). Readiness is a
+ * COMPUTED predicate (per-blocker, finding #21 — not a stored column), so an
+ * exact count means examining every candidate. The badge renders on EVERY
+ * authed route, so the count scan is doubly bounded: it stops once it has
+ * counted `READY_COUNT_CAP` ready items (the badge then shows "{cap}+", the
+ * universal nav-badge cap) AND after at most `READY_COUNT_MAX_PAGES` candidate
+ * pages. Either bound short-circuiting sets `hasMore` so the cap is VISIBLE,
+ * never a silent truncation. (A future materialized readiness flag would make
+ * this O(1); logged as a finding.)
+ */
+export const READY_COUNT_CAP = 99;
+export const READY_COUNT_MAX_PAGES = 10;
+
+/**
  * The (priority, key) seek-after position a ready cursor decodes to — the last
  * candidate of the previous page under the `(priority desc, key asc)` sort.
  * `key` is the per-project numeric `work_item.key` (monotonic, stable across

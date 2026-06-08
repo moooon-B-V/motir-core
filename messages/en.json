@@ -220,6 +220,7 @@
     "nav": {
       "dashboard": "Dashboard",
       "issues": "Work Items",
+      "ready": "Ready",
       "boards": "Boards",
       "reports": "Reports",
       "settings": "Settings",
@@ -816,5 +817,33 @@
     "boardRenameErrorDescription": "The board couldn’t be renamed. The change was reverted.",
     "boardSetDefaultErrorDescription": "Couldn’t set the default board. The change was reverted.",
     "boardDeleteErrorDescription": "The board couldn’t be deleted. The change was reverted."
+  },
+  "ready": {
+    "heading": "Ready to start",
+    "count": "{count} ready",
+    "countCapped": "{count}+ ready",
+    "subtitle": "{project} · {key}",
+    "whatIsThis": "What is this?",
+    "listAria": "Ready work items",
+    "loadingMore": "Loading more…",
+    "unassigned": "Unassigned",
+    "copyAria": "Copy run command for {key}",
+    "copyTooltip": "Copy <cmd>{command}</cmd>",
+    "noProjectTitle": "No project yet",
+    "noProjectDescription": "Create or select a project to see what’s ready to start.",
+    "popover": {
+      "title": "What is \"ready\"?",
+      "body1": "A work item is <strong>ready</strong> when every issue blocking it has been completed — so it has no unfinished blockers and can be started right now.",
+      "body2": "Click <code>Copy</code> on any row to put its <code>prodect run PROD-…</code> command on your clipboard, then paste it into your own coding agent to dispatch the work."
+    },
+    "empty": {
+      "title": "Nothing's ready right now",
+      "body": "A work item appears here once every issue blocking it is done. Right now nothing is fully unblocked — head to Issues to see what's still in progress and what it's waiting on.",
+      "action": "View all issues"
+    },
+    "toast": {
+      "title": "Copied",
+      "body": "Paste {command} into your terminal."
+    }
   }
 }

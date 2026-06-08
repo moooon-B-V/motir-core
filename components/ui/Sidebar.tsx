@@ -54,6 +54,13 @@ export interface SidebarItem {
   href: string;
   /** Optional keyboard hint shown right-aligned in the expanded row. */
   kbd?: string;
+  /**
+   * Optional trailing count badge shown right-aligned in the EXPANDED row
+   * (hidden when collapsed, like `kbd`). The caller supplies the fully-styled
+   * node so the primitive stays presentation-agnostic — e.g. the "Ready" entry's
+   * neutral readiness count (Subtask 7.0.6).
+   */
+  badge?: ReactNode;
   /** Marks the current route — gets `aria-current="page"` + active styling. */
   active?: boolean;
 }
@@ -140,6 +147,7 @@ function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boo
         {item.icon}
       </span>
       <span className="flex-1 truncate">{item.label}</span>
+      {item.badge ? <span className="shrink-0">{item.badge}</span> : null}
       {item.kbd ? (
         <kbd className="rounded-(--radius-kbd) border border-(--el-sidebar-border) bg-(--el-page-bg) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[10px] text-(--el-text-muted)">
           {item.kbd}
