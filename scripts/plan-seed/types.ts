@@ -11,8 +11,18 @@
  * subtask → {story, task, bug}. Leaf depth is therefore 3 (≤ the 4-level cap).
  */
 
-/** Plan-level status — the three states a plan card carries. */
-export type PlanStatus = 'planned' | 'in_progress' | 'done';
+/**
+ * Plan-level status — the four states a plan card carries.
+ *
+ * `blocked` is set at expansion time when a freshly-planned subtask has at
+ * least one `dependsOn` entry whose own status is NOT yet `done` (the
+ * dependency is unmerged or still being planned). It maps onto the runtime
+ * `workflow_status.key = 'blocked'` row from `lib/workflows/defaultWorkflow.ts`
+ * (category `'todo'`, with allowed transitions `todo ↔ blocked` and
+ * `in_progress ↔ blocked`). When every blocker reaches `done`, flip the
+ * status to `planned` so the subtask enters the ready set.
+ */
+export type PlanStatus = 'planned' | 'blocked' | 'in_progress' | 'done';
 
 /** Work-item kind a plan LEAF maps to (epics/stories get their kind implicitly). */
 export type PlanLeafKind = 'subtask' | 'bug' | 'task';
@@ -75,6 +85,7 @@ export type EpicMeta = Omit<PlanEpic, 'stories'>;
 /** Plan status → the project's default workflow_status key (lib/workflows/defaultWorkflow.ts). */
 export const PLAN_STATUS_MAP: Record<PlanStatus, string> = {
   planned: 'todo',
+  blocked: 'blocked',
   in_progress: 'in_progress',
   done: 'done',
 };
