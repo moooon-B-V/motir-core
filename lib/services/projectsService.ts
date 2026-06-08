@@ -1,7 +1,7 @@
 import { Prisma, type Project } from '@prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 import {
   IdentifierCollisionError,
@@ -322,6 +322,41 @@ export const projectsService = {
       throw new ProjectWorkspaceMismatchError(projectId, workspaceId);
     }
     return project;
+  },
+
+  /**
+   * Resolve a project by its `PROD`-style `identifier` ("key") within the
+   * actor's workspace — the lookup the agent-dispatch endpoints (`GET
+   * /api/ready` 7.0.4, `POST /api/ready/next` 7.0.5) use to turn a stable
+   * `?projectKey=PROD` into a `projectId` the work-items service can scope on.
+   *
+   * No existence leak (PRODECT_FINDINGS #26). Scoping the read to
+   * `ctx.workspaceId` makes "no such project" and "a project that exists in
+   * ANOTHER workspace" indistinguishable — both return null here and throw the
+   * SAME `ProjectNotFoundError`, which the route maps to 404 (never a 403 that
+   * would confirm a cross-tenant key exists). This deliberately differs from
+   * `assertProjectInWorkspace`, whose `ProjectWorkspaceMismatchError` is for
+   * INTERNAL callers that already hold a trusted id; `getByKey` takes
+   * caller-supplied input off the wire, so it must not distinguish the cases.
+   *
+   * The `key` is upper-cased before lookup: identifiers are canonical
+   * uppercase (the derivation rule above), so a CLI passing `prod` resolves
+   * the same project as `PROD` — friendlier for the BYOK consumer, and never
+   * ambiguous because two identifiers can't differ only by case under the
+   * unique constraint.
+   *
+   * RLS-aware: the read runs inside `withWorkspaceContext` so the project RLS
+   * policy exposes the row under the non-bypass prodect_app role (the wrapper
+   * binds the workspace GUC the policy keys on); under the dev/CI BYPASSRLS
+   * role the wrapper is a behavioural no-op.
+   */
+  async getByKey(key: string, ctx: WorkspaceContext): Promise<ProjectDTO> {
+    const identifier = key.trim().toUpperCase();
+    const project = await withWorkspaceContext(ctx, (tx) =>
+      projectRepository.findByIdentifier(ctx.workspaceId, identifier, tx),
+    );
+    if (!project) throw new ProjectNotFoundError(key);
+    return toProjectDTO(project);
   },
 
   /**
