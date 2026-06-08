@@ -119,9 +119,23 @@ export function SwimlaneBoard({
           <div
             key={lane.key}
             data-testid={`swimlane-${lane.key}`}
-            className="border-b border-(--el-border) last:border-b-0"
+            // `min-w-max` so the lane row grows to the column-track width — without
+            // it, the lane-header band collapses to the scroller's clientWidth and
+            // stops at the viewport edge, leaving scrolled-into-view columns (e.g.
+            // Cancelled) un-banded (epics.ts bug
+            // `bug-swimlane-lane-header-not-spanning-scrolled-columns`).
+            className="min-w-max border-b border-(--el-border) last:border-b-0"
           >
-            {/* Sticky-left lane header — operable as a button (collapse/expand). */}
+            {/*
+             * Lane header — the BAND fills the full track (parent's `min-w-max`)
+             * so it paints behind every column. The chevron + label + count are
+             * wrapped in a separate `sticky left-6` element so they stay pinned
+             * to the scroll-container's left edge (offset by the `px-6` page
+             * gutter) as the user scrolls right; the BAND itself does not stick
+             * (sticky on the band would have re-broken the bug). The outer div
+             * is still the operable button (click/keys anywhere on the band
+             * toggle collapse), which matches Jira/Linear.
+             */}
             <div
               role="button"
               tabIndex={0}
@@ -138,26 +152,30 @@ export function SwimlaneBoard({
                   toggle(lane.key);
                 }
               }}
-              className={`sticky left-0 z-[2] flex w-full cursor-pointer items-center gap-2.5 px-6 py-2.5 select-none ${
+              className={`cursor-pointer px-6 py-2.5 select-none ${
                 isCatchAll
                   ? 'bg-(--el-muted) hover:bg-(--el-surface)'
                   : 'bg-(--el-surface-soft) hover:bg-(--el-surface)'
               }`}
             >
-              <ChevronDown
-                className={`h-4 w-4 shrink-0 text-(--el-text-muted) transition-transform ${
-                  isCollapsed ? '-rotate-90' : ''
-                }`}
-                aria-hidden
-              />
-              <LaneLabel lane={lane} isCatchAll={isCatchAll} />
-              <span
-                className="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-text-secondary)"
-                data-testid={`swimlane-count-${lane.key}`}
+              <div
+                className="sticky left-6 z-[2] inline-flex items-center gap-2.5"
+                data-testid={`swimlane-headcontent-${lane.key}`}
               >
-                {lane.count}
-              </span>
-              <span className="flex-1" />
+                <ChevronDown
+                  className={`h-4 w-4 shrink-0 text-(--el-text-muted) transition-transform ${
+                    isCollapsed ? '-rotate-90' : ''
+                  }`}
+                  aria-hidden
+                />
+                <LaneLabel lane={lane} isCatchAll={isCatchAll} />
+                <span
+                  className="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-text-secondary)"
+                  data-testid={`swimlane-count-${lane.key}`}
+                >
+                  {lane.count}
+                </span>
+              </div>
             </div>
 
             {!isCollapsed ? (
