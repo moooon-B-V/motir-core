@@ -397,7 +397,7 @@ export const story_3_2: PlanStory = {
     {
       id: '3.2.7',
       title: 'Story tests — board UI components + drag/snap-back + keyboard-DnD E2E',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 20,
