@@ -12,6 +12,7 @@ import { IssueQuickView } from '../issues/_components/IssueQuickView';
 import { IssueQuickViewContent } from '../issues/_components/IssueQuickViewContent';
 import { IssueQuickViewPanel } from '../issues/_components/IssueQuickViewPanel';
 import { BoardContainer } from './_components/BoardContainer';
+import { BoardSwitcher } from './_components/BoardSwitcher';
 
 // The Kanban board surface (Story 3.2 · Subtask 3.2.2) — the surface the sidebar
 // "Boards" link + the Cmd-K "Go to Boards" entry open (Story 1.5; no nav wiring
@@ -82,6 +83,16 @@ export default async function BoardsPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* The board switcher (Subtask 3.7.4) — at the left of the toolbar,
+              before the disabled [Filter] seam + [+ New issue]. It owns its own
+              board-list fetch + the `?board=` selection, so it stays present
+              across the board's loading / error / empty states. */}
+          <BoardSwitcher />
+          {/* Group-by slot — BoardContainer portals its GroupByControl here so the
+              control sits in this header row (beside the switcher) per the
+              multi-board design, while its state stays with the board projection.
+              `display:contents` so the portaled control is a direct flex child. */}
+          <div id="board-toolbar-groupby-slot" className="contents" />
           {/* Filter is a disabled seam here — Epic 6 wires board filtering. */}
           <Button
             variant="secondary"

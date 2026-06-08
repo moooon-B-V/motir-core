@@ -114,6 +114,23 @@ describe('BoardContainer', () => {
     expect(screen.getByTestId('board-skeleton')).toBeTruthy();
   });
 
+  it('portals the group-by control into the header slot rendered in the SAME commit', async () => {
+    // Regression: the group-by control (Subtask 3.7.4 placement) is portaled into
+    // the page-header slot `#board-toolbar-groupby-slot`. On a CLIENT navigation
+    // the slot is rendered in the same commit as BoardContainer, so a render-time
+    // lookup (lazy useState init) misses it → the control vanished. Render the
+    // slot as a SIBLING (same commit) and assert the control still appears.
+    vi.stubGlobal('fetch', mockFetchOk(projection));
+    render(
+      <>
+        <div id="board-toolbar-groupby-slot" className="contents" />
+        <BoardContainer />
+      </>,
+    );
+    await waitFor(() => expect(screen.getByTestId('board')).toBeTruthy());
+    expect(screen.getByRole('group', { name: 'Swimlane group by' })).toBeTruthy();
+  });
+
   it('renders the column scaffold with per-column counts and cards once loaded', async () => {
     vi.stubGlobal('fetch', mockFetchOk(projection));
     render(<BoardContainer />);
