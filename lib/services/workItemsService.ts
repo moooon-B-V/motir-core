@@ -52,6 +52,9 @@ import {
   clampReadyLimit,
   decodeReadyCursor,
   encodeReadyCursor,
+  READY_COUNT_CAP,
+  READY_COUNT_MAX_PAGES,
+  READY_MAX_LIMIT,
 } from '@/lib/workItems/readyFilter';
 import { extractContextRefs } from '@/lib/markdown/contextRefs';
 import type {
@@ -1488,6 +1491,49 @@ export const workItemsService = {
       if (!nextCursor) return null;
       cursor = nextCursor;
     }
+  },
+
+  /**
+   * The READY COUNT for the sidebar badge (Subtask 7.0.6) — how many work items
+   * are currently ready to start in the project, under the SAME predicate
+   * `listReady` uses (so the badge can never disagree with the /ready page).
+   * Reuses the `pageReadyCandidates` machinery: walk candidate pages, sum the
+   * ready rows. Tenant-gated by `pageReadyCandidates` (cross-workspace project →
+   * `ProjectNotFoundError`).
+   *
+   * Bounded by design (see `READY_COUNT_CAP` / `READY_COUNT_MAX_PAGES`): the
+   * badge renders on every authed route and readiness is a computed predicate,
+   * so the scan stops at the cap (badge shows "{cap}+") and after a fixed number
+   * of candidate pages. `hasMore` makes either short-circuit visible — never a
+   * silent truncation (finding #57: don't ship a "load all rows" read; here the
+   * count is the only thing that must examine the set, and it's bounded).
+   */
+  async countReady(
+    projectId: string,
+    filter: Omit<ReadyListFilter, 'limit' | 'cursor'>,
+    ctx: ServiceContext,
+  ): Promise<{ count: number; hasMore: boolean }> {
+    let count = 0;
+    let cursor: string | undefined;
+    for (let page = 0; page < READY_COUNT_MAX_PAGES; page++) {
+      const { rows, nextCursor }: { rows: ReadyCandidateRow[]; nextCursor: string | null } =
+        await pageReadyCandidates(
+          projectId,
+          {
+            kinds: filter.kinds,
+            assigneeId: filter.assigneeId,
+            priority: filter.priority,
+            cursor,
+            limit: READY_MAX_LIMIT,
+          },
+          ctx,
+        );
+      count += rows.length;
+      if (count >= READY_COUNT_CAP) return { count: READY_COUNT_CAP, hasMore: true };
+      if (!nextCursor) return { count, hasMore: false };
+      cursor = nextCursor;
+    }
+    return { count, hasMore: true };
   },
 };
 

@@ -15,7 +15,11 @@ import { cn } from '@/lib/utils/cn';
  * <Button variant="primary" size="md">Save</Button>
  * <Button variant="ghost" leftIcon={<Plus />} loading>Saving…</Button>
  */
-const buttonVariants = cva(
+// Exported so a Next `<Link>` can render AS a styled button (an anchor styled
+// with the button variants — keeps real-link semantics for navigation) without
+// nesting a <button> inside an <a>. Used by the /ready empty state's "View all
+// issues" link (Subtask 7.0.6).
+export const buttonVariants = cva(
   cn(
     // Base layout
     'inline-flex items-center justify-center gap-2',

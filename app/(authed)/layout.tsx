@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
+import { workItemsService } from '@/lib/services/workItemsService';
 import { toWorkspaceSummaryDTO } from '@/lib/mappers/workspaceMappers';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AppLayout } from '@/components/ui/AppLayout';
@@ -49,6 +50,19 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
 
   const activeWorkspaceId = ctx?.workspaceId ?? null;
 
+  // The "Ready" nav badge's readiness count (Subtask 7.0.6) — resolved ONCE
+  // here and threaded into both the rail and the drawer SidebarNav, so the badge
+  // never double-fetches. Bounded count (see workItemsService.countReady); null
+  // when there's no active project (the project-scoped nav is hidden anyway).
+  const readyCount =
+    ctx && activeProject
+      ? await workItemsService.countReady(
+          activeProject.id,
+          {},
+          { userId: ctx.userId, workspaceId: ctx.workspaceId },
+        )
+      : null;
+
   return (
     <ToastProvider>
       {/* CommandPaletteProvider owns the ⌘K palette + `?` cheatsheet open state
@@ -66,7 +80,12 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
               />
             }
             sidebar={
-              <SidebarNav activeProject={activeProject} projects={projects} variant="rail" />
+              <SidebarNav
+                activeProject={activeProject}
+                projects={projects}
+                variant="rail"
+                readyCount={readyCount}
+              />
             }
           >
             <div className="px-4 py-6 sm:px-6 lg:px-8">{children}</div>
@@ -82,7 +101,12 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
               <WorkspaceSwitcher workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} />
             }
           >
-            <SidebarNav activeProject={activeProject} projects={projects} variant="drawer" />
+            <SidebarNav
+              activeProject={activeProject}
+              projects={projects}
+              variant="drawer"
+              readyCount={readyCount}
+            />
           </SidebarDrawer>
 
           {/* The ⌘K palette UI — fed the same workspace/project data the shell
