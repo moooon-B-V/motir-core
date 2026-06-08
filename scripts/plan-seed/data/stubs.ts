@@ -258,7 +258,15 @@ export const STUB_STORIES: PlanStory[] = [
       'batching). (Former Epic 4 §4.0-4.0.7.) Locked contract (finding #42): the unit of dispatch ' +
       'is the ready leaf work item of ANY kind — a bug with no children dispatches directly; ' +
       'decomposition is never forced. "Ready" = all is_blocked_by links done; parent/child edges ' +
-      'are rollup, not blocking.',
+      'are rollup, not blocking.\n\n' +
+      '**Front-half shipped ahead in Story 7.0** (the ready-set page + endpoints — `GET ' +
+      '/api/ready` and `POST /api/ready/next` + the `/ready` sidebar surface — pulled forward ' +
+      "as the AI dispatch contract for BYOK `prodect run`). 7.5's remaining scope: " +
+      '**shared-context retrieval** (the file-content injection into dispatch payloads — the ' +
+      'prompt-quality moat itself) + **the broader planner tool surface** beyond `ready` (the ' +
+      'narrow single-artifact tools an AI planner calls). The split is justified inline in ' +
+      'story-7.0.ts; see also notes.html #32 (epic-ordering-follows-deps) — 7.0 has no ' +
+      'forward-pointing deps, so the early ship is a clean deviation, not a planning bug.',
     items: [],
   },
   {
