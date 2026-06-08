@@ -959,6 +959,171 @@ export const workItemRepository = {
       throw translateWriteError(err, { id });
     }
   },
+
+  // --- Sprint association + backlog rank (Story 4.1 · Subtask 4.1.2) ---------
+  // The `work_item` sprint/rank methods live HERE (the entity owns them — the
+  // repository-name-matches-entity rule), not in a new repo. `sprintId` /
+  // `backlogRank` are camelCase columns on `work_item` (NOT `@map`-ed — within-
+  // table consistency, schema rung-2 decision), so raw SQL double-quotes them
+  // verbatim. The service (4.1.4) computes the rank via `positioning.ts`; these
+  // methods just persist/read it. Bounded reads only — never load-all (finding
+  // #57). Writes require `tx`; reads carry the explicit `workspaceId` gate
+  // (finding #26).
+
+  /**
+   * Associate an issue with a sprint, or move it back to the backlog
+   * (`sprintId = null`). Single write; `tx` REQUIRED. The same-project guard
+   * and the 1.4.6 revision write are the SERVICE's job (4.1.4) — this is the
+   * bare association write.
+   */
+  async setSprint(
+    itemId: string,
+    sprintId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkItem> {
+    try {
+      return await tx.workItem.update({ where: { id: itemId }, data: { sprintId } });
+    } catch (err) {
+      throw translateWriteError(err, { id: itemId });
+    }
+  },
+
+  /**
+   * Write an issue's global `backlogRank` (the opaque base-62 fractional index
+   * the service computes via `positioning.ts` `keyBetween`). Single write; `tx`
+   * REQUIRED. One row changes — there is no N-row renumber (the fractional index
+   * is the whole point).
+   */
+  async setBacklogRank(
+    itemId: string,
+    rank: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkItem> {
+    try {
+      return await tx.workItem.update({ where: { id: itemId }, data: { backlogRank: rank } });
+    } catch (err) {
+      throw translateWriteError(err, { id: itemId });
+    }
+  },
+
+  /**
+   * One bounded page of a project's BACKLOG — non-archived issues with
+   * `sprintId IS NULL`, in `backlogRank` order (the `(projectId, sprintId,
+   * backlogRank)` composite index, 4.1.1). Fetches `take + 1` so the service can
+   * tell whether a next page exists and derive the next cursor (finding #57 —
+   * NEVER load-all). `cursor` is a work-item id; the row at the cursor is skipped
+   * so paging doesn't repeat it. `id` is the orderBy tiebreaker (backlogRank is
+   * unique in practice, but the tiebreaker keeps the cursor walk total).
+   */
+  async findBacklogPage(
+    projectId: string,
+    workspaceId: string,
+    options: { take: number; cursor?: string },
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem[]> {
+    const client = tx ?? db;
+    const { take, cursor } = options;
+    return client.workItem.findMany({
+      where: { projectId, workspaceId, sprintId: null, archivedAt: null },
+      orderBy: [{ backlogRank: 'asc' }, { id: 'asc' }],
+      take: take + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+  },
+
+  /**
+   * Total count of a project's backlog (non-archived, `sprintId IS NULL`) — the
+   * "N issues" header the 4.2 backlog UI shows. Scope matches `findBacklogPage`
+   * exactly. Carries the explicit `workspaceId` gate.
+   */
+  async countBacklog(
+    projectId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const client = tx ?? db;
+    return client.workItem.count({
+      where: { projectId, workspaceId, sprintId: null, archivedAt: null },
+    });
+  },
+
+  /**
+   * A sprint's non-archived issues, in `backlogRank` order (the one global rank
+   * field orders within a sprint too). A sprint is smaller than the backlog, but
+   * the read is still bounded by `take` (paged-capable, not unbounded — finding
+   * #57). `workspaceId` gates the read.
+   */
+  async findSprintIssues(
+    sprintId: string,
+    workspaceId: string,
+    options: { take: number; cursor?: string },
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem[]> {
+    const client = tx ?? db;
+    const { take, cursor } = options;
+    return client.workItem.findMany({
+      where: { sprintId, workspaceId, archivedAt: null },
+      orderBy: [{ backlogRank: 'asc' }, { id: 'asc' }],
+      take: take + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+  },
+
+  /** Count of a sprint's non-archived issues (the committed-issue count). */
+  async countSprintIssues(
+    sprintId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const client = tx ?? db;
+    return client.workItem.count({ where: { sprintId, workspaceId, archivedAt: null } });
+  },
+
+  /**
+   * The `backlogRank` of each requested issue (the neighbour ranks `rankIssue`
+   * needs when the client drops a card between two explicit neighbours). One
+   * Prisma op; `workspaceId` gates the read; an empty id list short-circuits to
+   * `[]` (the empty-input guard the coverage gate requires a direct test for).
+   * Returns the id + rank only — the service picks the prev/next ranks and feeds
+   * them to `positioning.ts` `keyBetween`.
+   */
+  async findBacklogRankByIds(
+    itemIds: string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; backlogRank: string | null }>> {
+    if (itemIds.length === 0) return [];
+    const client = tx ?? db;
+    return client.workItem.findMany({
+      where: { id: { in: itemIds }, workspaceId },
+      select: { id: true, backlogRank: true },
+    });
+  },
+
+  /**
+   * The boundary `backlogRank` of a rank scope — the FIRST (`edge: 'min'`) or
+   * LAST (`edge: 'max'`) non-archived issue's rank in either the backlog
+   * (`sprintId = null`) or a sprint (`sprintId` set). Powers the degenerate
+   * prepend (`min`) / append (`max`) cases of `rankIssue` when there is no
+   * explicit neighbour on one side. One Prisma op (a single ordered row);
+   * `workspaceId` gates the read. Returns `null` when the scope is empty (the
+   * first issue placed — the service seeds an initial key).
+   */
+  async findBoundaryBacklogRank(
+    projectId: string,
+    workspaceId: string,
+    sprintId: string | null,
+    edge: 'min' | 'max',
+    tx?: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const client = tx ?? db;
+    const row = await client.workItem.findFirst({
+      where: { projectId, workspaceId, sprintId, archivedAt: null },
+      orderBy: { backlogRank: edge === 'min' ? 'asc' : 'desc' },
+      select: { backlogRank: true },
+    });
+    return row?.backlogRank ?? null;
+  },
 };
 
 // --- Prisma/Postgres error → typed error translation (repository edge) ------
