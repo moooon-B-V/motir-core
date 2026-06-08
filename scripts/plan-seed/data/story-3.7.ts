@@ -220,7 +220,7 @@ export const story_3_7: PlanStory = {
     {
       id: '3.7.6',
       title: 'Tests — board CRUD + guards + switcher + board-scoped read (component + focused E2E)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 26,
