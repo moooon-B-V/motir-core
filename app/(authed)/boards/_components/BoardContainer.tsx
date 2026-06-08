@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
@@ -115,6 +116,16 @@ export function BoardContainer({
   // projection is the default's — the switcher UI is complete on its own).
   const searchParams = useSearchParams();
   const selectedBoardId = searchParams?.get('board') ?? null;
+  // The group-by control lives in the PAGE HEADER toolbar row (beside the board
+  // switcher), per design/boards/multi-board.mock.html — but its value + change
+  // handler live HERE (in the projection state). page.tsx renders an empty
+  // `display:contents` slot in that row; we portal the GroupByControl into it so
+  // the control sits in the header while its state stays with the board. (In an
+  // isolated unit render with no page header, the slot is absent → the portal
+  // renders nothing, which is fine — the E2E covers the real header.)
+  const [groupBySlot] = useState<HTMLElement | null>(() =>
+    typeof document === 'undefined' ? null : document.getElementById('board-toolbar-groupby-slot'),
+  );
   const [board, setBoard] = useState<BoardProjectionDto | null>(null);
   const [status, setStatus] = useState<BoardStatus>('loading');
   // 'relaying' = a group-by change is fetching the new projection; the toolbar
@@ -243,31 +254,36 @@ export function BoardContainer({
   // so this never coincides with the empty state.
   return (
     <div className="flex min-w-0 flex-col gap-3">
+      {/* The group-by control is portaled into the header toolbar slot (beside the
+          switcher) — the design row, not a separate body row. Shown only for a
+          non-empty board (an empty board has nothing to group); stays visible
+          while a group-by change re-lays (`disabled={relaying}`). */}
+      {!isEmpty && groupBySlot
+        ? createPortal(
+            <GroupByControl
+              value={board.swimlaneGroupBy}
+              onChange={changeGroupBy}
+              disabled={relaying}
+            />,
+            groupBySlot,
+          )
+        : null}
       {board.truncated ? <OverCapBanner cap={board.cap} /> : null}
       {hasUnmapped ? <UnmappedStatusesTray statuses={board.unmappedStatuses} /> : null}
       {isEmpty ? (
         <BoardEmptyState />
+      ) : relaying ? (
+        <BoardSkeleton />
       ) : (
-        <>
-          <GroupByControl
-            value={board.swimlaneGroupBy}
-            onChange={changeGroupBy}
-            disabled={relaying}
-          />
-          {relaying ? (
-            <BoardSkeleton />
-          ) : (
-            // Key by `boardVersion` (re-seed BoardDnd's mount-seeded column state
-            // after a refetch — e.g. a create shows the new card) AND by the
-            // group-by (a group-by change remounts with the fresh lane layout
-            // rather than reconciling across layouts).
-            <BoardDnd
-              key={`${boardVersion}:${board.swimlaneGroupBy}`}
-              board={board}
-              assigneeNameById={assigneeNameById}
-            />
-          )}
-        </>
+        // Key by `boardVersion` (re-seed BoardDnd's mount-seeded column state
+        // after a refetch — e.g. a create shows the new card) AND by the
+        // group-by (a group-by change remounts with the fresh lane layout
+        // rather than reconciling across layouts).
+        <BoardDnd
+          key={`${boardVersion}:${board.swimlaneGroupBy}`}
+          board={board}
+          assigneeNameById={assigneeNameById}
+        />
       )}
     </div>
   );

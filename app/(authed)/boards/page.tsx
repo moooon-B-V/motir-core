@@ -80,6 +80,11 @@ export default async function BoardsPage({
               board-list fetch + the `?board=` selection, so it stays present
               across the board's loading / error / empty states. */}
           <BoardSwitcher />
+          {/* Group-by slot — BoardContainer portals its GroupByControl here so the
+              control sits in this header row (beside the switcher) per the
+              multi-board design, while its state stays with the board projection.
+              `display:contents` so the portaled control is a direct flex child. */}
+          <div id="board-toolbar-groupby-slot" className="contents" />
           {/* Filter is a disabled seam here — Epic 6 wires board filtering. */}
           <Button
             variant="secondary"
