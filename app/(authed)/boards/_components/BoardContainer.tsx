@@ -825,9 +825,7 @@ function BoardDnd({
           swimlanes={board.swimlanes}
           assigneeNameById={assigneeNameById}
           onOpenQuickView={openPeek}
-          onLoadMore={loadMore}
           onSetWipLimit={setColumnWip}
-          paging={paging}
           activeCardId={activeCard?.id ?? null}
           overLaneKey={overLaneKey}
         />
