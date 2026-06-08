@@ -451,5 +451,70 @@ export const story_3_3: PlanStory = {
         '- `tests/helpers/db.ts` — real-Postgres truncation; the dnd-kit testing notes for driving keyboard/pointer DnD (incl. cross-lane drops) in Playwright\n' +
         '- Story 3.5 — the Epic-3 test story this defers the at-scale combined journey to; `prodect-core/CLAUDE.md` — test conventions (real Postgres, no mocks, single `getSession` mock)',
     },
+    {
+      id: '3.3.8',
+      kind: 'bug',
+      title:
+        'Fix LaneCell windowing loop — a cross-lane drag crashes the swimlane board with "Maximum update depth exceeded"',
+      status: 'planned',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 25,
+      dependsOn: ['3.3.5', '3.3.7'],
+      descriptionMd:
+        'A real crash in the shipped 3.3.5 swimlane board, found by the 3.3.7 closing E2E (the ' +
+        'cross-lane reassign journey) and logged as **PRODECT_FINDINGS #61**. Dragging a card from ' +
+        'one swimlane into another **intermittently throws React "Maximum update depth exceeded"** in ' +
+        '`LaneCell` → the 3.2.5 `useRowWindow` windowing primitive, crashing the board mid-drag (so the ' +
+        'reassign never lands). It is a timing race — the drag sometimes settles before the loop trips ' +
+        '— which is exactly the kind of flaky crash a real product cannot ship.\n\n' +
+        '**Root cause.** Unlike `BoardColumn` (the flat board), which hands `useRowWindow` an explicit ' +
+        '`getScrollElement` (its own internally-scrolling body, a STABLE viewport), `LaneCell` calls ' +
+        '`useRowWindow({ count, estimateRowHeight, gap })` with **no `getScrollElement`** — so the hook ' +
+        'falls back to `findScrollParent(container)` and observes whatever ancestor scrolls (the page / ' +
+        'main scroller, or the swimlane board’s `overflow-x-auto` region) via a `ResizeObserver`. During ' +
+        'a drag, `relocateCardToCell` mutates the cell’s cards on every `onDragOver`, re-rendering it; ' +
+        '`recompute`’s "content fits the viewport → render-all, else window" decision then oscillates ' +
+        '(windowing → absolute positioning collapses the cell height → `ResizeObserver` fires → ' +
+        'render-all → height grows → `ResizeObserver` → window …), each flip a synchronous ' +
+        '`setRange`/`setMeasured` that triggers the next, until React’s update-depth guard throws. The ' +
+        'flat board does NOT loop because its viewport height is fixed. The unit tests miss it because ' +
+        '`useRowWindow` degrades to render-all under happy-dom (no layout) — only a real browser surfaces ' +
+        'it, which is why only the E2E caught it.\n\n' +
+        '**The fix (durable shape, decision-ladder rung 2 = match the working flat-board pattern).** Give ' +
+        '`LaneCell` a STABLE, explicit scroll viewport the way `BoardColumn` does — OR, since a single ' +
+        '`(column × lane)` CELL holds only a small slice of a column (a cell rarely overflows its own ' +
+        'slot), **disable windowing in `LaneCell`** by passing a `getScrollElement` that returns `null` ' +
+        '(the hook’s sanctioned render-all degrade): per-cell virtualization buys little and is what ' +
+        'introduces the oscillation. If windowing is kept, the viewport element must be stable AND ' +
+        '`recompute` must not be able to flip windowing on/off in a feedback loop (guard `setRange` ' +
+        'against no-op/oscillating transitions; confirm `measureElement` can’t feed an oscillating height ' +
+        'back in). Either way the board’s per-column virtualization on the FLAT board (`BoardColumn`, ' +
+        '3.8.3) is unchanged — this is a `LaneCell`/`useRowWindow`-only fix. No new dependency (the ' +
+        'finding-#57 "no second virtualization library" rule still holds).\n\n' +
+        '**Un-quarantine the regression test.** The reproducing E2E already exists, shipped by 3.3.7 as ' +
+        '`test.fixme` in `tests/e2e/board-swimlanes.spec.ts` ("a cross-lane drag reassigns the assignee ' +
+        'with no status change; a drop into the catch-all unassigns"), body intact and verified to drive ' +
+        'the path end-to-end. This subtask flips `test.fixme` → `test` and proves it green over the real ' +
+        'stack — that is the acceptance proof the fix worked (hence the `3.3.7` dep: the test file must ' +
+        'be on `main` first).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- A cross-lane drag on the swimlane board (group-by Assignee/Epic/Priority) no longer throws ' +
+        '"Maximum update depth exceeded"; the board never crashes mid-drag, repeated drags are stable.\n' +
+        '- The fix is confined to `LaneCell` / `useRowWindow` (a stable explicit scroll viewport, or ' +
+        'render-all in cells); the FLAT board’s `BoardColumn` virtualization (3.8.3) is unchanged; no new ' +
+        'virtualization dependency is added.\n' +
+        '- `tests/e2e/board-swimlanes.spec.ts`’s cross-lane reassign test is flipped from `test.fixme` ' +
+        'back to `test` and passes green (reassign field changed, status unchanged; catch-all drop ' +
+        'unassigns) over the real stack — alongside the existing group-by / collapse / WIP tests.\n' +
+        '- `pnpm test` (the 3.3.5 component reducer + lane-render suites) still passes; `pnpm typecheck` / ' +
+        'lint clean.\n\n' +
+        '## Context refs\n\n' +
+        '- `PRODECT_FINDINGS.md` #61 — the full root-cause + suggested-fix write-up\n' +
+        '- `app/(authed)/boards/_components/LaneCell.tsx` — the `useRowWindow` call with no `getScrollElement` (the bug); `app/(authed)/boards/_components/BoardColumn.tsx` — the working pattern (passes an explicit `getScrollElement`) to mirror\n' +
+        '- `components/ui/useRowWindow.ts` — `recompute` / `measureElement` / the windowing decision + the render-all degrade path\n' +
+        '- `tests/e2e/board-swimlanes.spec.ts` (3.3.7) — the quarantined `test.fixme` to un-quarantine; `tests/components/board-swimlanes.test.ts` — the reassign reducer coverage that already passes\n' +
+        '- `prodect-core/CLAUDE.md` — finding #57 (no second virtualization lib); the `--el-*` / shape-token rules',
+    },
   ],
 };
