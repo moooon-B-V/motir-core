@@ -29,7 +29,7 @@ import type { PlanStory } from '../types';
 export const story_3_2: PlanStory = {
   id: '3.2',
   title: 'Kanban board UI + drag-drop transitions',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The board surface: a horizontally-scrolling row of **columns**, each a vertical stack of ' +
     '**cards**, with accessible drag-drop that moves a card between columns (a workflow ' +
@@ -397,7 +397,7 @@ export const story_3_2: PlanStory = {
     {
       id: '3.2.7',
       title: 'Story tests — board UI components + drag/snap-back + keyboard-DnD E2E',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 20,
