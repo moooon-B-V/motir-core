@@ -1,4 +1,4 @@
-import { Prisma, BoardSwimlaneGroupBy } from '@prisma/client';
+import { Prisma, BoardSwimlaneGroupBy, BoardType } from '@prisma/client';
 import type { BoardColumn, WorkItem } from '@prisma/client';
 import { db } from '@/lib/db';
 import { boardRepository } from '@/lib/repositories/boardRepository';
@@ -19,9 +19,10 @@ import {
   toBoardColumnConfigDto,
   toBoardColumnStatusDto,
   toBoardDto,
+  toBoardSummaryDto,
 } from '@/lib/mappers/boardMappers';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import { buildDefaultBoard } from '@/lib/boards/defaultBoard';
+import { buildDefaultBoard, DEFAULT_BOARD_NAME } from '@/lib/boards/defaultBoard';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
 import type {
@@ -30,6 +31,7 @@ import type {
   BoardColumnStatusDto,
   BoardDto,
   BoardProjectionDto,
+  BoardSummaryDto,
   BoardSwimlaneDto,
   BoardSwimlaneGroupByDto,
   BoardTypeDto,
@@ -44,10 +46,12 @@ import {
   ColumnNotEmptyError,
   IllegalBoardMoveError,
   InvalidBoardNameError,
+  InvalidBoardTypeError,
   InvalidColumnNameError,
   InvalidColumnPositionError,
   InvalidSwimlaneGroupByError,
   InvalidWipLimitError,
+  LastBoardError,
   LastColumnError,
   NotBoardAdminError,
   StatusMappingConflictError,
@@ -105,47 +109,26 @@ export const boardsService = {
     workspaceId: string,
     tx: Prisma.TransactionClient,
   ): Promise<void> {
-    const statuses = await workflowsRepository.findStatuses(projectId, workspaceId, tx);
-    const statusIdByKey = new Map(statuses.map((s) => [s.key, s.id]));
-    const spec = buildDefaultBoard(statuses.map(toWorkflowStatusDto));
-
     // The seeded board is the project's DEFAULT (Story 3.7.2 — the one
     // `/boards` opens when no `?board=` is given) and takes the first
     // fractional-index position. `keyForAppend(null)` mints the same `a0` the
     // migration backfills onto pre-3.7 boards, so a seeded board and a migrated
     // board carry identical initial state. The partial unique index guarantees
     // this stays the project's only default until 3.7.3's `setDefaultBoard`.
+    // Name/type are the constant default (`DEFAULT_BOARD_NAME` / kanban), so no
+    // status read is needed for the board row itself.
     const board = await boardRepository.create(
       {
         workspaceId,
         projectId,
-        name: spec.name,
-        type: spec.type,
+        name: DEFAULT_BOARD_NAME,
+        type: BoardType.kanban,
         isDefault: true,
         position: keyForAppend(null),
       },
       tx,
     );
-
-    for (const col of spec.columns) {
-      const column = await boardColumnRepository.create(
-        { workspaceId, projectId, boardId: board.id, name: col.name, position: col.position },
-        tx,
-      );
-      for (const key of col.statusKeys) {
-        const statusId = statusIdByKey.get(key);
-        // Unreachable — buildDefaultBoard only emits keys drawn from `statuses`;
-        // the guard turns a future projection bug into a clear failure instead
-        // of a Prisma null-FK error (mirrors seedDefaultWorkflow's guard).
-        if (!statusId) {
-          throw new Error(`defaultBoard: column "${col.name}" maps an unknown status key "${key}"`);
-        }
-        await boardColumnStatusRepository.create(
-          { workspaceId, projectId, boardId: board.id, columnId: column.id, statusId },
-          tx,
-        );
-      }
-    }
+    await seedColumnsForBoard(board.id, projectId, workspaceId, tx);
   },
 
   /**
@@ -781,6 +764,175 @@ export const boardsService = {
     );
     return toBoardDto(row);
   },
+
+  // ── Board LIFECYCLE writes (Subtask 3.7.3) — the multi-board CRUD path:
+  // create (seed columns) / set-default / delete (rename is 3.6.2's
+  // `renameBoard` above, reused as-is). Same admin gate + write convention as
+  // the config writes: resolve + tenant-gate (404) → owner-authorize (403) →
+  // validate (400) → write under `withWorkspaceContext` so the FORCE-RLS WITH
+  // CHECK passes; scalar-FK `Unchecked` writes (finding #33). A board's CRUD is
+  // a project-config write, so it rides the SAME `assertBoardConfigAdmin`
+  // (workspace-OWNER) gate the rest of board admin uses — see the gate's note
+  // on the card-vs-shipped resolution (the 3.7.3 card said "membership-gated",
+  // but the shipped board-config precedent + Jira both gate board admin to
+  // admins, so the consistent build is the owner gate; `// TODO(6.4)` widens it
+  // to the project-admin role). Issues are NEVER touched by any of these — a
+  // card's column is derived from `work_item.status`, and issues belong to the
+  // PROJECT, not a board.
+
+  /**
+   * List a project's boards in switcher order (Subtask 3.7.3) — the `GET
+   * /api/boards` read behind the 3.7.4 switcher. A plain read available to any
+   * workspace member (NOT owner-gated — viewing the board switcher is not a
+   * config write; the explicit `workspaceId` filter is the tenant gate, finding
+   * #26). Returns the boards as switcher DTOs (id / name / type / isDefault /
+   * position), ordered by `position`.
+   */
+  async listBoards(projectId: string, ctx: ServiceContext): Promise<BoardSummaryDto[]> {
+    const boards = await boardRepository.findByProjectByPosition(projectId, ctx.workspaceId);
+    return boards.map(toBoardSummaryDto);
+  },
+
+  /**
+   * Create a new (non-default) board on a project (Subtask 3.7.3) and seed its
+   * default columns off the project workflow (REUSE the 3.1 board-bootstrap, so
+   * a new board is immediately usable). The board appends to the end of the
+   * switcher (`position` after the last board); it is NOT the default (the
+   * project keeps its existing default — set this one default via
+   * `setDefaultBoard`). `type` defaults to `kanban` (the only UI option until
+   * the Scrum board, Story 4.5) but is validated against the SHIPPED `BoardType`
+   * enum (rung 2) so the check stays total. Returns the new board's switcher DTO.
+   *
+   * Throws: `ProjectNotFoundError` (404 — unknown / cross-workspace project),
+   * `NotBoardAdminError` (403), `InvalidBoardNameError` (400),
+   * `InvalidBoardTypeError` (400).
+   */
+  async createBoard(
+    projectId: string,
+    input: { name: string; type?: string },
+    ctx: ServiceContext,
+  ): Promise<BoardSummaryDto> {
+    // Resolve + tenant-gate the project AND owner-authorize in one call (the
+    // gate 404s a foreign projectId before any membership probe).
+    await assertBoardConfigAdmin(ctx.userId, projectId, ctx.workspaceId);
+
+    const name = input.name?.trim();
+    if (!name) throw new InvalidBoardNameError();
+    const type = input.type ?? BoardType.kanban;
+    if (!isBoardType(type)) throw new InvalidBoardTypeError(String(type));
+
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        // Append after the last board by position (the switcher order).
+        const boards = await boardRepository.findByProjectByPosition(
+          projectId,
+          ctx.workspaceId,
+          tx,
+        );
+        const last = boards.length ? boards[boards.length - 1]!.position : null;
+        const board = await boardRepository.create(
+          {
+            workspaceId: ctx.workspaceId,
+            projectId,
+            name,
+            type,
+            isDefault: false,
+            position: keyForAppend(last),
+          },
+          tx,
+        );
+        await seedColumnsForBoard(board.id, projectId, ctx.workspaceId, tx);
+        return board;
+      },
+    );
+    return toBoardSummaryDto(row);
+  },
+
+  /**
+   * Make a board the project's DEFAULT (Subtask 3.7.3) — the board `/boards`
+   * opens when no `?board=` is given. Flips the project's default in ONE
+   * transaction: clear the prior default, then set this board — the order the
+   * partial unique index `board_one_default_per_project` (`WHERE is_default`)
+   * requires (two `is_default = true` rows for a project are rejected, so the
+   * clear must precede the set). A no-op (returns the board unchanged) when it is
+   * already the default. Returns the now-default board's switcher DTO.
+   *
+   * Throws: `BoardNotFoundError` (404), `NotBoardAdminError` (403).
+   */
+  async setDefaultBoard(boardId: string, ctx: ServiceContext): Promise<BoardSummaryDto> {
+    const board = await boardRepository.findById(boardId, ctx.workspaceId);
+    if (!board) throw new BoardNotFoundError(boardId);
+    await assertBoardConfigAdmin(ctx.userId, board.projectId, ctx.workspaceId);
+
+    // Already the default → no write (and the clear-then-set below would be a
+    // wasteful self-flip).
+    if (board.isDefault) return toBoardSummaryDto(board);
+
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        await boardRepository.clearDefaultForProject(board.projectId, ctx.workspaceId, tx);
+        return boardRepository.update(boardId, { isDefault: true }, tx);
+      },
+    );
+    return toBoardSummaryDto(row);
+  },
+
+  /**
+   * Delete a board (Subtask 3.7.3). Removes the board + its column/config rows
+   * (the FK `onDelete: Cascade` tears down `board_column` + `board_column_status`);
+   * the project's ISSUES are untouched (they belong to the project, and still
+   * show on the remaining boards). Two guards, both from the mirror product
+   * (rung 1) + the board analogue of `deleteColumn`'s guards:
+   *   - `LastBoardError` (409) — a project must keep ≥1 board (the last board
+   *     can't be deleted — there'd be no board to open).
+   *   - deleting the **default** PROMOTES the next board by position to default,
+   *     so the project never ends up with no default.
+   * Runs under a project-wide `FOR UPDATE` lock so two concurrent deletes of
+   * different boards serialize (closing the TOCTOU on the ≥1-board invariant —
+   * the board analogue of `deleteColumn`'s board-row lock).
+   *
+   * Throws: `BoardNotFoundError` (404), `NotBoardAdminError` (403),
+   * `LastBoardError` (409).
+   */
+  async deleteBoard(boardId: string, ctx: ServiceContext): Promise<void> {
+    const board = await boardRepository.findById(boardId, ctx.workspaceId);
+    if (!board) throw new BoardNotFoundError(boardId);
+    await assertBoardConfigAdmin(ctx.userId, board.projectId, ctx.workspaceId);
+
+    await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+      // Lock the project's boards so concurrent deletes serialize — without it
+      // two deletes of DIFFERENT boards in a 2-board project each read
+      // `length == 2`, both pass the last-board guard, and the project is
+      // zeroed out (the TOCTOU on the ≥1-board invariant).
+      await boardRepository.lockByProject(board.projectId, ctx.workspaceId, tx);
+
+      // Re-read under the lock, in switcher (position) order. A concurrent
+      // delete of THIS board (resolved before the lock) leaves it absent → 404.
+      const boards = await boardRepository.findByProjectByPosition(
+        board.projectId,
+        ctx.workspaceId,
+        tx,
+      );
+      const target = boards.find((b) => b.id === boardId);
+      if (!target) throw new BoardNotFoundError(boardId);
+      // Last-board guard — a project must keep at least one board.
+      if (boards.length <= 1) throw new LastBoardError();
+
+      // Delete the board first (cascade drops its columns + mappings); doing
+      // it BEFORE promoting keeps the partial unique index satisfied (the
+      // default row is gone, so setting another default can't collide).
+      await boardRepository.delete(boardId, tx);
+
+      // Promote the next board (lowest remaining position) to default if we
+      // just deleted the default — never leave the project without one.
+      if (target.isDefault) {
+        const next = boards.find((b) => b.id !== boardId)!;
+        await boardRepository.update(next.id, { isDefault: true }, tx);
+      }
+    });
+  },
 };
 
 /**
@@ -815,6 +967,54 @@ async function assertBoardConfigAdmin(
   if (!isOwnerRole(membership?.role)) {
     throw new NotBoardAdminError();
   }
+}
+
+/**
+ * Seed a board's default columns off its project's workflow (Subtask 3.1.2 core,
+ * SHARED by 3.7.3's `createBoard`). One column per workflow status in
+ * `status.position` order, each mapped to its single status — the column-from-
+ * workflow projection over the durable many-to-one mapping (3.1.1), NOT a
+ * hardcoded 1:1. Reads the statuses through the SAME `tx` (a brand-new project's
+ * statuses aren't visible outside the createProject tx yet; an existing
+ * project's are stable), then resolves each column's status `key → id`. Rows
+ * carry the SCALAR workspaceId/projectId (finding #33). The board row itself is
+ * created by the caller (with its own default-ness + position); this only writes
+ * the columns + mappings.
+ */
+async function seedColumnsForBoard(
+  boardId: string,
+  projectId: string,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const statuses = await workflowsRepository.findStatuses(projectId, workspaceId, tx);
+  const statusIdByKey = new Map(statuses.map((s) => [s.key, s.id]));
+  const spec = buildDefaultBoard(statuses.map(toWorkflowStatusDto));
+
+  for (const col of spec.columns) {
+    const column = await boardColumnRepository.create(
+      { workspaceId, projectId, boardId, name: col.name, position: col.position },
+      tx,
+    );
+    for (const key of col.statusKeys) {
+      const statusId = statusIdByKey.get(key);
+      // Unreachable — buildDefaultBoard only emits keys drawn from `statuses`;
+      // the guard turns a future projection bug into a clear failure instead of
+      // a Prisma null-FK error (mirrors seedDefaultWorkflow's guard).
+      if (!statusId) {
+        throw new Error(`defaultBoard: column "${col.name}" maps an unknown status key "${key}"`);
+      }
+      await boardColumnStatusRepository.create(
+        { workspaceId, projectId, boardId, columnId: column.id, statusId },
+        tx,
+      );
+    }
+  }
+}
+
+/** True iff `value` is one of the `BoardType` enum values (`kanban` / `scrum`). */
+function isBoardType(value: string): value is BoardType {
+  return (Object.values(BoardType) as string[]).includes(value);
 }
 
 /** True iff `value` is one of the `BoardSwimlaneGroupBy` enum values. */

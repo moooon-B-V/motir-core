@@ -224,3 +224,41 @@ export class StatusMappingConflictError extends Error {
     this.statusId = statusId;
   }
 }
+
+// ── Board LIFECYCLE writes (Subtask 3.7.3) — the multi-board CRUD path:
+// create (seed columns) / rename / set-default / delete. The validation +
+// guard errors the lifecycle write path raises, mapped to status codes by the
+// `/api/boards` routes. `renameBoard` reuses `InvalidBoardNameError` (3.6.2);
+// `createBoard` adds the board-type validation error, `deleteBoard` adds the
+// last-board guard (the board analogue of `LastColumnError`).
+
+/**
+ * `createBoard` was given a `type` that is not a `BoardType` enum value
+ * (`kanban` / `scrum`). The UI is Kanban-only for now (the Scrum board is
+ * Story 4.5), but the service validates against the SHIPPED enum (rung 2) —
+ * `scrum` is accepted at the service tier (it renders as a Kanban board until
+ * 4.5 branches on `type`), so a lookup keyed off the enum stays total. → 400.
+ */
+export class InvalidBoardTypeError extends Error {
+  readonly code = 'INVALID_BOARD_TYPE' as const;
+  readonly value: string;
+  constructor(value: string) {
+    super(`"${value}" is not a valid board type.`);
+    this.name = 'InvalidBoardTypeError';
+    this.value = value;
+  }
+}
+
+/**
+ * `deleteBoard` was asked to remove a project's ONLY remaining board. A project
+ * must keep at least one board (the board analogue of `LastColumnError`, and
+ * Jira's own invariant — a project always has a board to open). The admin
+ * creates another board first, or renames this one instead. → 409.
+ */
+export class LastBoardError extends Error {
+  readonly code = 'LAST_BOARD' as const;
+  constructor(message = 'A project must keep at least one board.') {
+    super(message);
+    this.name = 'LastBoardError';
+  }
+}
