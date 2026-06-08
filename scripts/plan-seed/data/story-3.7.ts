@@ -38,7 +38,7 @@ import type { PlanStory } from '../types';
 export const story_3_7: PlanStory = {
   id: '3.7',
   title: 'Multiple boards per project (board CRUD + switcher)',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'Turn the project’s single auto-seeded board into **many boards per project** — create / ' +
     'rename / delete, a **default** board, a **switcher** on `/boards`, and per-board config ' +
@@ -220,7 +220,7 @@ export const story_3_7: PlanStory = {
     {
       id: '3.7.6',
       title: 'Tests — board CRUD + guards + switcher + board-scoped read (component + focused E2E)',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 26,
