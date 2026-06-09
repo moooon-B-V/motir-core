@@ -1534,7 +1534,7 @@ export const workItemsService = {
    * Tenant gate first (cross-workspace / missing project → `ProjectNotFoundError`
    * → 404, no existence leak). Then ONE candidate read narrows by the cheap SQL
    * facets (kind / assignee / priority / todo-status) under the
-   * `(priority desc, key asc)` sort + the cursor seek-after, fetching `limit + 1`
+   * `(type asc, priority desc, key asc)` sort + the cursor seek-after, fetching `limit + 1`
    * to detect a next page; readiness is applied over that bounded window. **A page
    * may be SHORTER than `limit`** when blocked candidates fall inside the window —
    * the cursor still advances past the whole window, so the agent walks the FULL
@@ -1553,7 +1553,7 @@ export const workItemsService = {
   /**
    * Dispatch ONE ready item (Subtask 7.0.2) — the BYOK `prodect run` /
    * coding-agent consumer of `POST /api/ready/next`. Returns the FIRST ready
-   * item under the `(priority desc, key asc)` sort that is NOT in `excludeIds`,
+   * item under the `(type asc, priority desc, key asc)` sort that is NOT in `excludeIds`,
    * as the full `ReadyItemDispatchDto` (body + parsed context refs + resolved
    * blocker keys + parent key + run command), or `null` when the filtered ready
    * set is exhausted.
@@ -1679,7 +1679,7 @@ async function pageReadyCandidates(
   const last = windowRows.at(-1);
   const nextCursor =
     hasMore && last
-      ? encodeReadyCursor({ priority: last.priority, kind: last.kind, key: last.key })
+      ? encodeReadyCursor({ kind: last.kind, priority: last.priority, key: last.key })
       : null;
   return { rows, nextCursor };
 }

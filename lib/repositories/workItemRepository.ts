@@ -242,7 +242,7 @@ export const workItemRepository = {
    * `workflow_status.category = 'todo'`; a "ready" item is one to START, so
    * `in_progress` and `done` are both excluded),
    * narrowed by the optional kind / assignee / priority facets and the cursor
-   * seek-after, sorted `(priority DESC, key ASC)` and capped at `limit`. ONE
+   * seek-after, sorted `(type ASC, priority DESC, key ASC)` and capped at `limit`. ONE
    * `$queryRaw` returning the full `work_item` row (`w.*`) PLUS the joined status
    * `category` + assignee name/email/avatar — so the service feeds the 7.0.3
    * mapper (`WorkItem` + resolved context) without any extra read (no N+1).
@@ -252,18 +252,19 @@ export const workItemRepository = {
    * over this candidate set (finding #21). So this returns CANDIDATES; the
    * service filters to ready ones, which may shorten a page.
    *
-   * **Sort + cursor (Subtask 7.0.11).** `(priority DESC, type ASC, key ASC)`:
+   * **Sort + cursor (Subtask 7.0.12, reversing 7.0.11's precedence).**
+   * `(type ASC, priority DESC, key ASC)`: **type is primary** via a CASE rank
+   * built from `READY_KIND_RANK` (`subtask` first … `epic` last — the leaf-most
+   * dispatchable unit before a container); **priority breaks the type tie** —
    * the `priority` enum sorts by its declaration order (`lowest < … < highest`)
-   * so `DESC` puts `highest` first; **type breaks the priority tie** via a CASE
-   * rank built from `READY_KIND_RANK` (`subtask` first … `epic` last — the
-   * leaf-most dispatchable unit before a container); `key ASC` breaks the final
-   * tie (stable, monotonic, reseed-safe). The cursor is the (priority, kind,
-   * key) of the previous page's last candidate; the 3-tuple seek-after predicate
-   * (`priority < cp OR (priority = cp AND kindRank > ckr) OR (priority = cp AND
-   * kindRank = ckr AND key > ck)`) resumes strictly after it. `priority` is cast
-   * text→enum so the bound param compares against the column; the same
-   * `READY_KIND_RANK`-derived CASE feeds the ORDER BY and the seek-after so they
-   * can never disagree.
+   * so `DESC` puts `highest` first within a type bucket; `key ASC` breaks the
+   * final tie (stable, monotonic, reseed-safe). The cursor is the (kind,
+   * priority, key) of the previous page's last candidate; the 3-tuple seek-after
+   * predicate (`kindRank > ckr OR (kindRank = ckr AND priority < cp) OR
+   * (kindRank = ckr AND priority = cp AND key > ck)`) resumes strictly after it.
+   * `priority` is cast text→enum so the bound param compares against the column;
+   * the same `READY_KIND_RANK`-derived CASE feeds the ORDER BY and the seek-after
+   * so they can never disagree.
    *
    * **Todo-only via INNER JOIN.** The `JOIN workflow_status` (not LEFT) plus
    * `ws.category = 'todo'` is the not-yet-started filter AND the category source
@@ -325,13 +326,13 @@ export const workItemRepository = {
       const cp = filter.cursor.priority;
       const ckr = READY_KIND_RANK[filter.cursor.kind];
       const ck = filter.cursor.key;
-      // Seek-after under `(priority DESC, kindRank ASC, key ASC)`: strictly
+      // Seek-after under `(kindRank ASC, priority DESC, key ASC)`: strictly
       // after the previous page's last candidate.
       preds.push(
         Prisma.sql`(
-          w."priority" < ${cp}::"work_item_priority"
-          OR (w."priority" = ${cp}::"work_item_priority" AND ${kindRankSql} > ${ckr})
-          OR (w."priority" = ${cp}::"work_item_priority" AND ${kindRankSql} = ${ckr} AND w."key" > ${ck})
+          ${kindRankSql} > ${ckr}
+          OR (${kindRankSql} = ${ckr} AND w."priority" < ${cp}::"work_item_priority")
+          OR (${kindRankSql} = ${ckr} AND w."priority" = ${cp}::"work_item_priority" AND w."key" > ${ck})
         )`,
       );
     }
@@ -357,7 +358,7 @@ export const workItemRepository = {
                AND c."archivedAt" IS NULL
           )
           AND (${where})
-        ORDER BY w."priority" DESC, ${kindRankSql} ASC, w."key" ASC
+        ORDER BY ${kindRankSql} ASC, w."priority" DESC, w."key" ASC
         LIMIT ${filter.limit}`;
   },
 

@@ -9,7 +9,7 @@ import type { ReadyItemDto } from '@/lib/dto/ready';
 // each subsequent cursor page on demand as the virtualized list nears its end,
 // so both the initial payload AND the DOM stay bounded (finding #57 — never a
 // "load all rows" read). It reuses `workItemsService.listReady` — the SAME
-// predicate + `(priority desc, key asc)` sort the page and `POST /api/ready/next`
+// predicate + `(type asc, priority desc, key asc)` sort the page and `POST /api/ready/next`
 // use — so every page agrees on what's ready and in what order.
 //
 // Transport-only (CLAUDE.md: a Server Action is a route-layer equivalent): it
