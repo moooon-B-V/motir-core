@@ -32,6 +32,7 @@ import { NewIssueButton } from '@/app/(authed)/issues/_components/NewIssueButton
 import { CreateIssueButton } from '@/app/(authed)/_components/CreateIssueButton';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
+import { ContentSectionCard } from '@/app/(authed)/issues/[key]/_components/ContentSectionCard';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 
 function withAccess(ui: ReactElement, canEdit: boolean) {
@@ -93,6 +94,28 @@ describe('CreateIssueButton role affordance (6.4.6)', () => {
     expect(screen.queryByRole('button', { name: 'Create work item' })).toBeNull();
     const affordance = screen.getByLabelText('Create work item');
     expect(affordance.getAttribute('aria-disabled')).toBe('true');
+  });
+});
+
+describe('Edit affordance is HIDDEN for read-only (6.4.6)', () => {
+  // The read-only path passes `editHref={undefined}` (the issue-detail page
+  // computes this from canEdit), so the section's "Edit" link is not rendered —
+  // the PM-directed "hide the edit button" treatment, distinct from the
+  // disabled-with-tooltip create button.
+  it('renders the section "Edit" link only when an editHref is provided', () => {
+    const { rerender } = renderWithIntl(
+      <ContentSectionCard title="Description" editHref="/issues/PROD-7/edit">
+        <p>body</p>
+      </ContentSectionCard>,
+    );
+    expect(screen.getByRole('link', { name: /Edit/ })).toBeTruthy();
+
+    rerender(
+      <ContentSectionCard title="Description" editHref={undefined}>
+        <p>body</p>
+      </ContentSectionCard>,
+    );
+    expect(screen.queryByRole('link', { name: /Edit/ })).toBeNull();
   });
 });
 

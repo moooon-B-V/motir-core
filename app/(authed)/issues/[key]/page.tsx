@@ -4,8 +4,10 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
+import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -53,11 +55,24 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
       workspaceId: ctx.workspaceId,
     });
   } catch (err) {
-    if (err instanceof WorkItemNotFoundError) notFound();
+    // A browse denial (6.4.3) means the project is hidden from this actor — it
+    // must be indistinguishable from a missing issue (404, no existence leak).
+    if (err instanceof WorkItemNotFoundError || err instanceof ProjectAccessDeniedError) {
+      notFound();
+    }
     throw err;
   }
 
   const { item } = detail;
+
+  // The actor's EDIT capability (6.4.6) — a read-only actor (viewer / member on
+  // a limited project) sees NO edit affordances: the "Edit" link to the form is
+  // hidden and the edit route itself is blocked (see edit/page.tsx). Inline field
+  // controls render disabled (CoreFieldsPanel, via ProjectAccessProvider).
+  const { canEdit } = await projectAccessService.getCapabilities(ctx.projectId, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
 
   // Members back the inline assignee picker + reporter display (getIssueDetail
   // carries ids only); the workflow (already in the detail bundle) backs the
@@ -80,12 +95,14 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
           <span className="text-(--el-text-muted) font-mono text-sm">{item.identifier}</span>
           <ParentBreadcrumb ancestors={detail.ancestors} />
           <Pill tone="neutral">{item.status}</Pill>
-          <Link
-            href={`/issues/${item.identifier}/edit`}
-            className="border-(--el-border) text-(--el-text) hover:bg-(--el-surface) ml-auto rounded-md border px-3 py-1.5 font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-          >
-            {t('edit')}
-          </Link>
+          {canEdit ? (
+            <Link
+              href={`/issues/${item.identifier}/edit`}
+              className="border-(--el-border) text-(--el-text) hover:bg-(--el-surface) ml-auto rounded-md border px-3 py-1.5 font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            >
+              {t('edit')}
+            </Link>
+          ) : null}
         </div>
         <h1 className="text-(--el-text) font-serif text-2xl font-semibold">{item.title}</h1>
       </header>
@@ -96,7 +113,7 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
           <ContentSectionCard
             title={t('description')}
             subtitle={t('descriptionGloss')}
-            editHref={`/issues/${item.identifier}/edit`}
+            editHref={canEdit ? `/issues/${item.identifier}/edit` : undefined}
           >
             {item.descriptionMd ? (
               <MarkdownView value={item.descriptionMd} aria-label={t('issueDescriptionAria')} />
@@ -109,7 +126,7 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
           <IssueExplanation
             explanationMd={item.explanationMd}
             explanationSource={item.explanationSource}
-            editHref={`/issues/${item.identifier}/edit`}
+            editHref={canEdit ? `/issues/${item.identifier}/edit` : undefined}
           />
           {/* 2.4.5: the relationships section + ready/blocked banner — a left-
               column section card (per the approved mockup), after Explanation.
@@ -123,7 +140,7 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
             readiness={detail.readiness}
             currentStatus={item.status}
             workflow={detail.workflow}
-            editable
+            editable={canEdit}
             currentItemId={item.id}
             identifier={item.identifier}
           />

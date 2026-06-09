@@ -16,8 +16,12 @@ import { ContentSectionCard } from './ContentSectionCard';
 export interface IssueExplanationProps {
   explanationMd: string | null;
   explanationSource: WorkItemExplanationSourceDto;
-  /** The issue's edit route, for the section's "Edit" link. */
-  editHref: string;
+  /**
+   * The issue's edit route, for the section's "Edit" link. Optional: omitted
+   * (undefined) for a read-only actor (Story 6.4.6), so the section hides its
+   * "Edit" link entirely rather than showing one that bounces off the gate.
+   */
+  editHref?: string;
 }
 
 export function IssueExplanation({
