@@ -41,6 +41,31 @@ export class ProjectWorkspaceMismatchError extends Error {
 // / NotAProjectMemberError → 404, AlreadyProjectMemberError / LastProjectAdminError
 // → 409.
 
+// The browse/edit access gate (Story 6.4 · Subtask 6.4.3). One typed error
+// covers both denials; `kind` decides the HTTP mapping the route applies:
+//   * `kind: 'browse'` → 404. A project the actor can't browse is HIDDEN — it
+//     must be indistinguishable from a non-existent one (no existence leak,
+//     same shape as ProjectNotFoundError / finding #26 / Jira private projects).
+//   * `kind: 'edit'`   → 403. The actor CAN see the project (browse passed) but
+//     is read-only on it (a viewer, or a plain member on a limited project), so
+//     the project's existence is already known — a 403 "forbidden" is correct.
+// Either way the stable `code` lets the UI (6.4.6) render the no-access / no-edit
+// state instead of a crash.
+export class ProjectAccessDeniedError extends Error {
+  readonly code = 'PROJECT_ACCESS_DENIED' as const;
+  constructor(
+    projectId: string,
+    readonly kind: 'browse' | 'edit',
+  ) {
+    super(
+      kind === 'browse'
+        ? `You do not have access to project ${projectId}.`
+        : `You have read-only access to project ${projectId} and cannot make this change.`,
+    );
+    this.name = 'ProjectAccessDeniedError';
+  }
+}
+
 export class NotProjectAdminError extends Error {
   readonly code = 'NOT_PROJECT_ADMIN' as const;
   constructor(projectId: string) {

@@ -6,7 +6,7 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
-import { BoardNotFoundError } from '@/lib/boards/errors';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
@@ -240,9 +240,12 @@ describe('boardsService.getBoard — projection', () => {
     const b = await makeFixture('proj-ws-b@example.com');
     await cardInStatus(a, 'todo', 'A-only');
 
-    // B's context cannot read A's board (the board lookup is workspace-scoped).
+    // B's context cannot read A's board. The project access gate (6.4.3) now
+    // fronts getBoard, so a cross-workspace projectId is rejected as
+    // ProjectNotFoundError (still a 404, still no existence leak — same family
+    // as getProjectTree's cross-tenant read) BEFORE the board lookup.
     await expect(boardsService.getBoard(a.projectId, b.ctx)).rejects.toBeInstanceOf(
-      BoardNotFoundError,
+      ProjectNotFoundError,
     );
 
     // B's own board sees none of A's cards.

@@ -11,6 +11,7 @@ import {
 import { toProjectDTO } from '@/lib/mappers/projectMappers';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { boardsService } from '@/lib/services/boardsService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { ProjectDTO } from '@/lib/dto/projects';
 
 // Projects service — business logic for the Project entity. Owns all
@@ -352,10 +353,16 @@ export const projectsService = {
    */
   async getByKey(key: string, ctx: WorkspaceContext): Promise<ProjectDTO> {
     const identifier = key.trim().toUpperCase();
-    const project = await withWorkspaceContext(ctx, (tx) =>
-      projectRepository.findByIdentifier(ctx.workspaceId, identifier, tx),
-    );
-    if (!project) throw new ProjectNotFoundError(key);
+    const project = await withWorkspaceContext(ctx, async (tx) => {
+      const found = await projectRepository.findByIdentifier(ctx.workspaceId, identifier, tx);
+      if (!found) throw new ProjectNotFoundError(key);
+      // Project access gate (6.4.3): a non-browser (a non-member of a private
+      // project) gets ProjectAccessDeniedError('browse') → 404, indistinguishable
+      // from a missing project (no existence leak, same as the not-found above).
+      // Gated inside the tx so the membership reads share the RLS workspace GUC.
+      await projectAccessService.assertCanBrowse(found.id, ctx, tx);
+      return found;
+    });
     return toProjectDTO(project);
   },
 
