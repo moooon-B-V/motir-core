@@ -61,6 +61,7 @@
       "reporter": "Reporter",
       "due": "Due",
       "estimate": "Est.",
+      "points": "Points",
       "status": "Status",
       "actions": "Actions",
       "unassigned": "Unassigned"
@@ -413,6 +414,7 @@
     "dueDate": "Due date",
     "estimate": "Estimate",
     "estimateMinutes": "Estimate (minutes)",
+    "storyPoints": "Story points",
     "unassigned": "Unassigned",
     "unknown": "Unknown",
     "you": "You",
@@ -973,5 +975,21 @@
     "announcementOver": "{key} is over {region}.",
     "announcementDropped": "Dropped {key} into {region}.",
     "announcementCancelled": "Cancelled moving {key}."
+  },
+  "estimation": {
+    "header": "Story points",
+    "pickerLabel": "Set story points",
+    "numericLabel": "Story points",
+    "valueAria": "Estimate: {value}",
+    "emptyAria": "No estimate",
+    "editAria": "Story points: {value} — edit",
+    "addAria": "Add story points",
+    "chipAria": "{value} story points",
+    "deckFibonacci": "Fibonacci",
+    "deckLinear": "Linear",
+    "deckCustom": "Custom",
+    "clear": "Clear",
+    "cancelHint": "Esc to cancel",
+    "saveError": "Couldn't update the estimate. Please try again."
   }
 }

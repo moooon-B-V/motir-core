@@ -54,6 +54,7 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     assigneeId: null,
     dueDate: null,
     estimateMinutes: null,
+    storyPoints: null,
     position: 'a0',
     ready: true,
     ...over,

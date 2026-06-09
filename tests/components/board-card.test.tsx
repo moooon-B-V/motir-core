@@ -22,6 +22,7 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     assigneeId: null,
     dueDate: null,
     estimateMinutes: null,
+    storyPoints: null,
     position: 'a0',
     ready: true,
     ...over,
@@ -31,7 +32,7 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
 afterEach(cleanup);
 
 describe('BoardCard', () => {
-  it('renders the identifier, title, priority chip and estimate', () => {
+  it('renders the identifier, title, priority chip and the story-point estimate', () => {
     render(
       <BoardCard
         card={card({
@@ -39,7 +40,7 @@ describe('BoardCard', () => {
           key: 7,
           title: 'Wire OAuth',
           priority: 'high',
-          estimateMinutes: 90,
+          storyPoints: 8,
         })}
         assigneeName="Yue Zhu"
         onOpenQuickView={() => {}}
@@ -49,11 +50,13 @@ describe('BoardCard', () => {
     expect(screen.getByText('Wire OAuth')).toBeTruthy();
     // Priority chip uses the shared PRIORITY_META label (labels.priority.high).
     expect(screen.getByText('High')).toBeTruthy();
-    // Estimate chip is the shared formatDurationMinutes output.
-    expect(screen.getByText('1h 30m')).toBeTruthy();
+    // The `.pts` chip (Subtask 4.3.4) now renders the configured statistic —
+    // story points by default (no provider → the default config), not the raw
+    // time estimate.
+    expect(screen.getByText('8')).toBeTruthy();
   });
 
-  it('omits the estimate chip when the card has no estimate', () => {
+  it('shows the muted em-dash when the card has no story-point estimate', () => {
     render(
       <BoardCard
         card={card({ id: 'w1', key: 1 })}
@@ -61,10 +64,10 @@ describe('BoardCard', () => {
         onOpenQuickView={() => {}}
       />,
     );
-    // The medium-priority chip shows, but the estimate chip (titled "Estimate …")
-    // is absent.
+    // The medium-priority chip shows; the estimate badge degrades to the muted
+    // em-dash placeholder (never 0 / NaN), labelled "No estimate".
     expect(screen.getByText('Medium')).toBeTruthy();
-    expect(screen.queryByTitle(/^Estimate/)).toBeNull();
+    expect(screen.getByLabelText('No estimate')).toBeTruthy();
   });
 
   it('shows the assignee initial avatar when assigned', () => {

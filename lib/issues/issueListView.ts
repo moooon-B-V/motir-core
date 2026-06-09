@@ -28,6 +28,7 @@ export type IssueSortColumn =
   | 'reporter'
   | 'due'
   | 'estimate'
+  | 'points'
   | 'status';
 
 export type SortDirection = 'asc' | 'desc';
@@ -46,6 +47,7 @@ export const ISSUE_SORT_COLUMNS: readonly IssueSortColumn[] = [
   'reporter',
   'due',
   'estimate',
+  'points',
   'status',
 ];
 

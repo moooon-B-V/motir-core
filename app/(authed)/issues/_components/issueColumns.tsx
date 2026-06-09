@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { EstimateBadge } from '@/components/issues/EstimateBadge';
 import type { IssueSortColumn } from '@/lib/issues/issueListView';
 import { Avatar } from './issueCellPrimitives';
 import {
@@ -119,6 +120,27 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
       // Inline-editable inside an IssueInlineEditProvider (2.5.5); read-only value
       // otherwise.
       cell: (r) => <InlineEstimateCell row={r} />,
+    },
+    {
+      // Story points (Subtask 4.3.4) — the agile estimate, a SEPARATE column
+      // from the TIME Est. (both coexist, like the detail rail). The inline
+      // `EstimateBadge` owns its own picker + write; `forceStoryPoints` keeps it
+      // a points column regardless of the project's display statistic. Editable
+      // when the EstimationConfigProvider reports canEdit.
+      key: 'points',
+      header: t('issues.columns.points'),
+      width: 80,
+      align: 'end',
+      sortColumn: 'points',
+      cell: (r) => (
+        <EstimateBadge
+          itemId={r.id}
+          storyPoints={r.storyPoints}
+          estimateMinutes={r.estimateMinutes}
+          forceStoryPoints
+          className="w-full justify-end"
+        />
+      ),
     },
     {
       key: 'status',

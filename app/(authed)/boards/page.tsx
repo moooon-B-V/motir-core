@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
+import { estimationService } from '@/lib/services/estimationService';
+import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { NewIssueButton } from '../issues/_components/NewIssueButton';
 import { IssueQuickView } from '../issues/_components/IssueQuickView';
@@ -106,6 +108,15 @@ export default async function BoardsPage({
     ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
   });
 
+  // The estimation config (Subtask 4.3.4) — the board card `.pts` chip renders
+  // the configured statistic via the shared EstimateBadge. (Editing the estimate
+  // inline on a card awaits the card → stretched-overlay refactor — see
+  // PRODECT_FINDINGS; the card shows the statistic read-only for now.)
+  const estimationConfig = await estimationService.getEstimationConfig(ctx.projectId, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -139,12 +150,14 @@ export default async function BoardsPage({
         </div>
       </header>
 
-      <BoardContainer
-        members={members}
-        activeProjectId={ctx.projectId}
-        selectedBoardId={selectedBoardId}
-        canEdit={caps.canEdit}
-      />
+      <EstimationConfigProvider config={estimationConfig} canEdit={caps.canEdit}>
+        <BoardContainer
+          members={members}
+          activeProjectId={ctx.projectId}
+          selectedBoardId={selectedBoardId}
+          canEdit={caps.canEdit}
+        />
+      </EstimationConfigProvider>
 
       {/* Quick-view peek — the modal frame mounts when `?peek` is present; the
           item's fields stream behind a <Suspense> whose fallback is the loading

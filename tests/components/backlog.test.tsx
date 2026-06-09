@@ -88,6 +88,8 @@ function item(over: Partial<WorkItemSummaryDto> & { id: string; key: number }): 
     priority: 'medium',
     assigneeId: null,
     position: 'a0',
+    estimateMinutes: null,
+    storyPoints: null,
     archivedAt: null,
     ...over,
   };
