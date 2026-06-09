@@ -556,7 +556,7 @@ export const story_7_0: PlanStory = {
     {
       id: '7.0.8',
       title: 'Playwright E2E — /ready page, copy affordance, live badge updates',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
