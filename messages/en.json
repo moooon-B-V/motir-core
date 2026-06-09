@@ -965,6 +965,13 @@
     "createSprint": "Create sprint",
     "creatingSprint": "Creating…",
     "createSprintErrorTitle": "Couldn't create the sprint",
-    "createSprintErrorDescription": "Something went wrong creating the sprint. Please try again."
+    "createSprintErrorDescription": "Something went wrong creating the sprint. Please try again.",
+    "moveRejectedTitle": "Couldn't move the issue",
+    "moveErrorDescription": "{key} couldn't be moved. It's back where it was — please try again.",
+    "dndInstructions": "Press Space to pick up an issue, the arrow keys to move it between sprints and the backlog, Space again to drop, or Escape to cancel.",
+    "announcementPickedUp": "Picked up {key}.",
+    "announcementOver": "{key} is over {region}.",
+    "announcementDropped": "Dropped {key} into {region}.",
+    "announcementCancelled": "Cancelled moving {key}."
   }
 }

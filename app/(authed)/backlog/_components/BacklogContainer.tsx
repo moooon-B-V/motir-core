@@ -11,9 +11,11 @@ import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { NewIssueButton } from '../../issues/_components/NewIssueButton';
 import { BacklogRows, useRankedIssues } from './BacklogList';
+import { BacklogDndProvider } from './BacklogDndProvider';
 import { BacklogSkeleton } from './BacklogSkeleton';
 import { CreateIssueRow } from './CreateIssueRow';
 import { SprintContainer } from './SprintContainer';
+import { BACKLOG_REGION_ID } from './backlogDnd';
 import {
   buildAssigneeNameById,
   buildStatusByKey,
@@ -81,6 +83,17 @@ export function BacklogContainer({
     setReloadKey((k) => k + 1);
   }, []);
 
+  // Keep a sprint header's issue-count badge in sync with an optimistic
+  // cross-region drag (Subtask 4.2.4) — the badge reads `sprint.issueCount`, so a
+  // row dragged into / out of a sprint adjusts it here; a rejected move reverts it.
+  const adjustSprintCount = useCallback((sprintId: string, delta: number) => {
+    setSprints((prev) =>
+      prev.map((s) =>
+        s.id === sprintId ? { ...s, issueCount: Math.max(0, s.issueCount + delta) } : s,
+      ),
+    );
+  }, []);
+
   if (status === 'loading') return <BacklogSkeleton />;
   if (status === 'error') {
     return (
@@ -98,20 +111,28 @@ export function BacklogContainer({
   const planning = planningSprints(sprints);
 
   return (
-    <div className="flex flex-col gap-4">
-      {planning.map((sprint) => (
-        <SprintContainer
-          key={sprint.id}
-          sprint={sprint}
-          statusByKey={statusByKey}
-          assigneeNameById={assigneeNameById}
-        />
-      ))}
+    // One DndContext over the whole stack (Subtask 4.2.4) so a row drags between
+    // the sprint containers and the backlog on the single global `backlogRank`.
+    <BacklogDndProvider
+      statusByKey={statusByKey}
+      assigneeNameById={assigneeNameById}
+      adjustSprintCount={adjustSprintCount}
+    >
+      <div className="flex flex-col gap-4">
+        {planning.map((sprint) => (
+          <SprintContainer
+            key={sprint.id}
+            sprint={sprint}
+            statusByKey={statusByKey}
+            assigneeNameById={assigneeNameById}
+          />
+        ))}
 
-      <CreateSprintButton onCreated={refetchSprints} />
+        <CreateSprintButton onCreated={refetchSprints} />
 
-      <BacklogRegion statusByKey={statusByKey} assigneeNameById={assigneeNameById} />
-    </div>
+        <BacklogRegion statusByKey={statusByKey} assigneeNameById={assigneeNameById} />
+      </div>
+    </BacklogDndProvider>
   );
 }
 
@@ -164,6 +185,9 @@ function BacklogRegion({
             statusByKey={statusByKey}
             assigneeNameById={assigneeNameById}
             ariaLabel={t('backlogListLabel')}
+            regionId={BACKLOG_REGION_ID}
+            regionKind="backlog"
+            regionLabel={t('backlogTitle')}
             createRow={<CreateIssueRow />}
             emptyState={
               <EmptyState

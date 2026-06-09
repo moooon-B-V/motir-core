@@ -7,6 +7,7 @@ import { Pill } from '@/components/ui/Pill';
 import type { SprintDto } from '@/lib/dto/sprints';
 import { BacklogRows, useRankedIssues } from './BacklogList';
 import { CreateIssueRow } from './CreateIssueRow';
+import { sprintRegionId } from './backlogDnd';
 import { SPRINT_STATE_TONE, type StatusByKey } from './backlogShared';
 
 // A sprint-planning container (Story 4.2 · Subtask 4.2.3, read render). A
@@ -135,6 +136,10 @@ export function SprintContainer({
             assigneeNameById={assigneeNameById}
             ariaLabel={t('sprintIssuesLabel', { name: sprint.name })}
             maxHeightClass="max-h-[50vh]"
+            regionId={sprintRegionId(sprint.id)}
+            regionKind="sprint"
+            regionLabel={sprint.name}
+            sprintId={sprint.id}
             createRow={<CreateIssueRow />}
             createRowOnEmpty
             emptyState={

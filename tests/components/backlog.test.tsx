@@ -225,4 +225,22 @@ describe('BacklogContainer (4.2.3 read render)', () => {
     // Synchronous first paint: the fetch hasn't resolved yet.
     expect(screen.getByTestId('backlog-skeleton')).toBeTruthy();
   });
+
+  it('renders backlog rows as draggable sortable items (Subtask 4.2.4)', async () => {
+    mockFetch({
+      sprints: [],
+      backlog: { items: [item({ id: 'b1', key: 150 })], nextCursor: null, totalCount: 1 },
+      sprintIssues: { items: [], nextCursor: null, totalCount: 0 },
+    });
+
+    render(<BacklogContainer workflow={workflow} members={members} />);
+
+    const row = await screen.findByTestId('backlog-row-PROD-150');
+    // `useSortable` marks the row a draggable item (aria-roledescription) inside
+    // the backlog's single DndContext, and the whole row is the grab handle — the
+    // 4.2.4 drag wiring — while the design's row semantics (role="row") survive.
+    expect(row.getAttribute('aria-roledescription')).toBe('sortable');
+    expect(row.getAttribute('role')).toBe('row');
+    expect(row.className).toContain('cursor-grab');
+  });
 });
