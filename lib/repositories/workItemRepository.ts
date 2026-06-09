@@ -1271,6 +1271,29 @@ export const workItemRepository = {
   },
 
   /**
+   * Sum of `storyPoints` over a sprint's non-archived issues — the committed-
+   * points baseline `startSprint` snapshots at activation (Story 4.4.2). NULL-
+   * estimate issues contribute nothing, and a wholly-unestimated sprint sums to
+   * `null` (Prisma's `_sum` of all-NULLs) — the service maps that to a null
+   * committed baseline (graceful "—", finding #57: the data layer stays total).
+   * One aggregate Prisma op; the `workspaceId` filter is the tenant gate
+   * (finding #26). Reusable by Story 4.3/4.6 roll-ups; defined here on the entity
+   * that owns `storyPoints`.
+   */
+  async sumStoryPointsForSprint(
+    sprintId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Prisma.Decimal | null> {
+    const client = tx ?? db;
+    const result = await client.workItem.aggregate({
+      where: { sprintId, workspaceId, archivedAt: null },
+      _sum: { storyPoints: true },
+    });
+    return result._sum.storyPoints;
+  },
+
+  /**
    * The `backlogRank` of each requested issue (the neighbour ranks `rankIssue`
    * needs when the client drops a card between two explicit neighbours). One
    * Prisma op; `workspaceId` gates the read; an empty id list short-circuits to

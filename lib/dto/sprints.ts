@@ -22,6 +22,15 @@ export interface SprintDto {
   completedAt: string | null;
   sequence: number;
   issueCount: number;
+  /**
+   * The immutable scope-lock baseline captured by `startSprint` (Story 4.4.2):
+   * `committedIssueCount` = the issue count at activation, `committedPoints` =
+   * the `SUM(storyPoints)` at activation (a number, fractional-safe). Both are
+   * `null` on a sprint that has not been started yet, and `committedPoints` is
+   * `null` when the started sprint was wholly unestimated (the UI renders "—").
+   */
+  committedPoints: number | null;
+  committedIssueCount: number | null;
 }
 
 /**
@@ -33,6 +42,20 @@ export interface SprintDto {
 export interface CreateSprintInput {
   name?: string;
   goal?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+/**
+ * Input to `sprintsService.startSprint` (Story 4.4.2). `startDate` defaults to
+ * "now" when omitted/null; `endDate` is the planned end of the sprint window
+ * (validated `≥ startDate`); `name` optionally renames the sprint on start (the
+ * Jira start-sprint dialog lets you confirm the name). Dates are ISO-8601
+ * strings (the route forwards the JSON body verbatim; the service parses +
+ * validates them).
+ */
+export interface StartSprintInput {
+  name?: string;
   startDate?: string | null;
   endDate?: string | null;
 }

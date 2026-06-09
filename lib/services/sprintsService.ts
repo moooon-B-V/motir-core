@@ -3,19 +3,27 @@ import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { boardsService } from '@/lib/services/boardsService';
 import { isOwnerRole } from '@/lib/workspaces/roles';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { toSprintDto } from '@/lib/mappers/sprintMappers';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { CreateSprintInput, SprintDto, UpdateSprintInput } from '@/lib/dto/sprints';
+import type {
+  CreateSprintInput,
+  SprintDto,
+  StartSprintInput,
+  UpdateSprintInput,
+} from '@/lib/dto/sprints';
 import {
   CannotDeleteActiveSprintError,
   CannotModifyCompletedSprintError,
   InvalidSprintNameError,
   InvalidSprintTransitionError,
   NotSprintAdminError,
+  SprintAlreadyActiveError,
   SprintNotFoundError,
+  SprintNotStartableError,
   SprintWindowInvalidError,
 } from '@/lib/sprints/errors';
 
@@ -184,6 +192,109 @@ export const sprintsService = {
         toSprintDto(row, await workItemRepository.countSprintIssues(row.id, ctx.workspaceId)),
       ),
     );
+  },
+
+  /**
+   * START a planned sprint (Story 4.4 · Subtask 4.4.2) — the head of the sprint
+   * lifecycle. Composes Story 4.1's pure `assertSprintTransition` + the
+   * one-active-per-project guard, stamps the window + the immutable scope-lock
+   * baseline (the "Committed" line — issue count + `SUM(storyPoints)` at
+   * activation), makes "the board open" by ensuring the project has a `scrum`
+   * board, and flips the sprint to `active`. The complete flow + report are
+   * Subtasks 4.4.3 / 4.4.4 and are NOT here.
+   *
+   * `startDate` defaults to now; `endDate` (optional) is validated `≥ startDate`;
+   * an optional `name` renames the sprint on start (the Jira start dialog). The
+   * baseline is computed from the sprint's CURRENT issues and never mutated.
+   *
+   * Concurrency: the friendly `findActiveByProject` pre-check 409s early (before
+   * a board is provisioned, so the common already-running case leaves no orphan
+   * board); the AUTHORITATIVE guard is the `FOR UPDATE` lock on the project's
+   * active sprint INSIDE the activation transaction (TOCTOU close), with the
+   * `sprint_one_active_per_project` partial-unique index as the DB backstop.
+   *
+   * Throws: `SprintNotFoundError` (404), `NotSprintAdminError` (403),
+   * `SprintNotStartableError` (422 — not `planned`), `InvalidSprintNameError`
+   * (400), `SprintWindowInvalidError` (422), `SprintAlreadyActiveError` (409).
+   */
+  async startSprint(id: string, input: StartSprintInput, ctx: ServiceContext): Promise<SprintDto> {
+    const existing = await sprintRepository.findById(id, ctx.workspaceId);
+    if (!existing) throw new SprintNotFoundError(id);
+    await assertSprintAdmin(ctx.userId, existing.projectId, ctx.workspaceId);
+
+    // Only a PLANNED sprint is startable — the friendly surface over the pure
+    // one-way `assertSprintTransition(planned → active)` rule, which is still
+    // composed below as the single source of the transition law.
+    if (existing.state !== 'planned') throw new SprintNotStartableError(id, existing.state);
+    assertSprintTransition(existing.state, 'active');
+
+    const name = input.name !== undefined ? validateName(input.name) : undefined;
+    const startDate = parseNullableDate(input.startDate) ?? new Date();
+    const endDate = parseNullableDate(input.endDate) ?? null;
+    assertWindow(startDate, endDate);
+
+    // Friendly pre-check: 409 BEFORE provisioning a board, so the common
+    // "another sprint is already running" case never leaves an orphan board.
+    const alreadyActive = await sprintRepository.findActiveByProject(
+      existing.projectId,
+      ctx.workspaceId,
+    );
+    if (alreadyActive) throw new SprintAlreadyActiveError(existing.projectId, alreadyActive.id);
+
+    // "Board opens" — ensure the project has a scrum board to view the sprint.
+    // Idempotent (only create when none exists). A service calling a service is
+    // allowed; `createBoard` owns its own transaction + seeds default columns
+    // (3.7.3). Intentionally NOT inside the activation transaction — board
+    // provisioning is independent + idempotent, not part of the atomic flip.
+    const boards = await boardsService.listBoards(existing.projectId, ctx);
+    if (!boards.some((b) => b.type === 'scrum')) {
+      await boardsService.createBoard(
+        existing.projectId,
+        { name: 'Sprint board', type: 'scrum' },
+        ctx,
+      );
+    }
+
+    const result = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        // Authoritative one-active guard: lock the project's active sprint row
+        // FOR UPDATE so two concurrent starts serialize; a winner that committed
+        // between the pre-check and here is caught (the partial-unique index is
+        // the final backstop).
+        const locked = await sprintRepository.findActiveByProjectForUpdate(
+          existing.projectId,
+          ctx.workspaceId,
+          tx,
+        );
+        if (locked) throw new SprintAlreadyActiveError(existing.projectId, locked.id);
+
+        // Scope-lock baseline from the sprint's CURRENT issues (immutable after).
+        const committedIssueCount = await workItemRepository.countSprintIssues(
+          id,
+          ctx.workspaceId,
+          tx,
+        );
+        const committedPoints = await workItemRepository.sumStoryPointsForSprint(
+          id,
+          ctx.workspaceId,
+          tx,
+        );
+
+        const data: Prisma.SprintUncheckedUpdateInput = {
+          state: 'active',
+          startDate,
+          endDate,
+          committedIssueCount,
+          committedPoints,
+        };
+        if (name !== undefined) data.name = name;
+
+        const row = await sprintRepository.update(id, data, tx);
+        return { row, committedIssueCount };
+      },
+    );
+    return toSprintDto(result.row, result.committedIssueCount);
   },
 
   /** Re-exported for callers that import the service object. See the free
