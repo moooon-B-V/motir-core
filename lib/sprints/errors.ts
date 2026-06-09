@@ -18,6 +18,8 @@ import type { SprintState } from '@prisma/client';
 //   BulkBatchTooLargeError             → 400 (Subtask 4.2.2)
 //   SprintAlreadyActiveError           → 409 (Subtask 4.4.2)
 //   SprintNotStartableError            → 422 (Subtask 4.4.2)
+//   SprintNotCompletableError          → 422 (Subtask 4.4.3)
+//   InvalidCarryOverTargetError        → 422 (Subtask 4.4.3)
 //
 // A foreign / unknown projectId (the create path) reuses `ProjectNotFoundError`
 // from `lib/projects/errors.ts` (already a 404) rather than inventing a parallel
@@ -181,6 +183,52 @@ export class SprintNotStartableError extends Error {
     this.name = 'SprintNotStartableError';
     this.sprintId = sprintId;
     this.state = state;
+  }
+}
+
+/**
+ * `completeSprint` was called on a sprint that is not in the `active` state — a
+ * `planned` or already-`complete` sprint cannot be completed (Subtask 4.4.3).
+ * The friendly surface over the pure `assertSprintTransition` rule (the machine
+ * is one-way `planned → active → complete`, so only an `active` sprint is
+ * completable) — the symmetric twin of `SprintNotStartableError`. → 422 (the
+ * entity is well-formed; its state forbids the action).
+ */
+export class SprintNotCompletableError extends Error {
+  readonly code = 'SPRINT_NOT_COMPLETABLE' as const;
+  readonly sprintId: string;
+  readonly state: SprintState;
+  constructor(sprintId: string, state: SprintState) {
+    super(`Sprint ${sprintId} cannot be completed from state "${state}" (only an active sprint).`);
+    this.name = 'SprintNotCompletableError';
+    this.sprintId = sprintId;
+    this.state = state;
+  }
+}
+
+/**
+ * The carry-over destination chosen when completing a sprint is not a valid
+ * target (Subtask 4.4.3). `completeSprint`'s `carryOverTo` is either `'backlog'`
+ * or a `{ sprintId }` naming ANOTHER sprint to roll the unfinished issues into;
+ * that target must be a **planned** sprint in the **SAME project** (and not the
+ * sprint being completed). A target that is unknown, in another project, not in
+ * the `planned` state, or the completing sprint itself is rejected with this
+ * BEFORE any write — the same 422 family as `CrossProjectSprintAssignmentError`
+ * (the entities are well-formed, but pairing them this way is semantically
+ * invalid). → 422.
+ */
+export class InvalidCarryOverTargetError extends Error {
+  readonly code = 'INVALID_CARRY_OVER_TARGET' as const;
+  readonly sprintId: string;
+  readonly targetSprintId: string;
+  constructor(sprintId: string, targetSprintId: string) {
+    super(
+      `Sprint ${targetSprintId} is not a valid carry-over target for sprint ${sprintId} ` +
+        `(it must be a planned sprint in the same project).`,
+    );
+    this.name = 'InvalidCarryOverTargetError';
+    this.sprintId = sprintId;
+    this.targetSprintId = targetSprintId;
   }
 }
 
