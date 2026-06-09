@@ -281,7 +281,7 @@ export const story_4_1: PlanStory = {
       id: '4.1.4',
       title:
         'Issue↔sprint association + backlog rank ordering + bounded backlog/sprint read API (the data layer Story 4.2 binds to)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
