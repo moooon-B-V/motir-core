@@ -228,7 +228,7 @@ export const story_4_4: PlanStory = {
       id: '4.4.1',
       title:
         'Design — sprint lifecycle flows: start-sprint modal, complete-sprint + carry-over modal, sprint report (creates design/sprints/)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 40,
