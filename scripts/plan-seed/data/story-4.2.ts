@@ -412,7 +412,7 @@ export const story_4_2: PlanStory = {
       id: '4.2.5',
       title:
         'Multi-select + atomic bulk move + inline create + row context menu (the grooming actions)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
