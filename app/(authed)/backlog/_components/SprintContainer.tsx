@@ -8,6 +8,7 @@ import type { SprintDto } from '@/lib/dto/sprints';
 import { BacklogRows, useRankedIssues } from './BacklogList';
 import { CreateIssueRow } from './CreateIssueRow';
 import { StartSprintDialog } from './StartSprintDialog';
+import { useSprintPoints } from './useSprintPoints';
 import { sprintRegionId } from './backlogDnd';
 import { SPRINT_STATE_TONE, type StatusByKey } from './backlogShared';
 
@@ -20,12 +21,13 @@ import { SPRINT_STATE_TONE, type StatusByKey } from './backlogShared';
 // create-row.
 //
 // SEAMS (4.2.1 design notes — drawn, not improvised): the committed-points slot
-// is filled by Story 4.3, the velocity slot by Story 4.6. The Start-sprint FLOW
-// is now WIRED (Story 4.4 · Subtask 4.4.5): on a planned sprint with ≥1 issue the
+// is now FILLED (Story 4.4 · Subtask 4.4.9 — finding #69) by the live
+// `rollupForSprint` roll-up via `GET /api/sprints/[id]/points`; the velocity slot
+// stays a labelled `--el-text-faint` placeholder for Story 4.6. The Start-sprint
+// FLOW is WIRED (Story 4.4 · Subtask 4.4.5): on a planned sprint with ≥1 issue the
 // entry-point button opens the `StartSprintDialog`; an empty planned sprint keeps
 // it disabled (the 4.2.1 rule), and a non-planned sprint shows no Start button
-// (its lifecycle action is Complete — Story 4.4.6). The committed-points +
-// velocity slots stay labelled `--el-text-faint` placeholders.
+// (its lifecycle action is Complete — Story 4.4.6).
 
 function formatDateRange(
   startDate: string | null,
@@ -62,6 +64,9 @@ export function SprintContainer({
   const [collapsed, setCollapsed] = useState(false);
   const [startOpen, setStartOpen] = useState(false);
   const state = useRankedIssues(`/api/sprints/${sprint.id}/issues`);
+  // Live committed-points roll-up (Subtask 4.4.9 — finding #69) filling the
+  // Story-4.3 seam: a null read or a wholly-unestimated sprint renders "—".
+  const points = useSprintPoints(sprint.id);
 
   const stateLabel = t(`sprintState.${sprint.state}`);
   const dateRange = formatDateRange(sprint.startDate, sprint.endDate, locale, t('notStarted'));
@@ -107,14 +112,15 @@ export function SprintContainer({
           {sprint.issueCount}
         </span>
         <span className="flex-1" />
-        {/* Committed-points SEAM → Story 4.3 (reserved, not computed). */}
+        {/* Committed-points roll-up (Subtask 4.4.9 — finding #69; fills the
+            Story-4.3 seam): the live `committed` points, "—" when unestimated. */}
         <span
-          className="flex items-center gap-1 text-xs text-(--el-text-faint)"
+          className="flex items-center gap-1 text-xs text-(--el-text-muted)"
           title={t('committedPointsSeam')}
           aria-label={t('committedPointsSeam')}
         >
           <Hash className="h-3.5 w-3.5" aria-hidden />
-          {t('pointsPlaceholder')}
+          {t('committedPoints', { points: points?.committed ?? 0 })}
         </span>
         {/* Velocity SEAM → Story 4.6 (reserved, not computed). */}
         <span

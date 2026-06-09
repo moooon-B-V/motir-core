@@ -14,6 +14,7 @@ import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/utils/datetime';
 import type { Locale } from '@/lib/i18n/locales';
 import type { SprintDto } from '@/lib/dto/sprints';
+import { useSprintPoints } from './useSprintPoints';
 
 // Start-sprint flow (Story 4.4 · Subtask 4.4.5). The modal `design/sprints/
 // sprint-lifecycle.mock.html` (panels 1–3) specifies, WIRED to the Start-sprint
@@ -95,6 +96,11 @@ export function StartSprintDialog({
   const locale = useLocale() as Locale;
   const router = useRouter();
   const { toast } = useToast();
+  // Live committed-points preview (Subtask 4.4.9 — finding #69): the bounded
+  // `rollupForSprint` roll-up, fetched only while the dialog is open. Points are
+  // issue-set-derived (NOT window-derived), so the figure is independent of the
+  // duration/date controls. `null`/wholly-unestimated → the "—" the catalog owns.
+  const points = useSprintPoints(sprint.id, open);
 
   const [name, setName] = useState(sprint.name);
   const [duration, setDuration] = useState<Duration>('2');
@@ -326,7 +332,12 @@ export function StartSprintDialog({
 
           <div className="flex items-center gap-2 text-sm text-(--el-text-secondary)">
             <Target className="h-4 w-4 shrink-0 text-(--el-accent)" aria-hidden />
-            <span>{t('startSprintFlow.committedSummary', { count: sprint.issueCount })}</span>
+            <span>
+              {t('startSprintFlow.committedSummary', {
+                count: sprint.issueCount,
+                points: points?.committed ?? 0,
+              })}
+            </span>
           </div>
         </div>
 

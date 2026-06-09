@@ -72,10 +72,19 @@ function okJson(body: unknown = {}) {
 function errJson(status: number, code: string) {
   return Promise.resolve({ ok: false, status, json: async () => ({ code }) } as Response);
 }
+// The committed-points roll-up (Subtask 4.4.9 — finding #69) the dialog reads on
+// open from GET /api/sprints/[id]/points. Default to an estimated 21-point sprint.
+function pointsJson(committed = 21) {
+  return okJson({ committed, completed: 0, remaining: committed });
+}
 
 let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
-  fetchMock = vi.fn().mockImplementation(() => okJson());
+  fetchMock = vi
+    .fn()
+    .mockImplementation((url: string) =>
+      String(url).endsWith('/points') ? pointsJson() : okJson(),
+    );
   vi.stubGlobal('fetch', fetchMock);
 });
 afterEach(() => {
@@ -85,7 +94,7 @@ afterEach(() => {
 });
 
 describe('StartSprintDialog (4.4.5)', () => {
-  it('renders the start modal — name, the duration deck, the derived window, the committed summary', () => {
+  it('renders the start modal — name, the duration deck, the derived window, the committed summary', async () => {
     renderDialog();
     expect(screen.getByRole('heading', { name: 'Start sprint' })).toBeTruthy();
     // Duration deck (the Jira durations + Custom).
@@ -94,8 +103,18 @@ describe('StartSprintDialog (4.4.5)', () => {
     }
     // Default 2-week window → a 13-day inclusive span (start … start+13).
     expect(screen.getByText(/ends in 13 days/)).toBeTruthy();
-    // Committed baseline preview reads the sprint's issue count.
-    expect(screen.getByText(/8 issues committed at start/)).toBeTruthy();
+    // Committed baseline preview reads the issue count AND the live points
+    // roll-up (Subtask 4.4.9 — finding #69), fetched from /api/sprints/[id]/points.
+    expect(await screen.findByText(/8 issues · 21 points committed at start/)).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/sp7/points'))).toBe(true);
+  });
+
+  it('renders "—" for committed points when the sprint is wholly unestimated (4.4.9)', async () => {
+    fetchMock.mockImplementation((url: string) =>
+      String(url).endsWith('/points') ? pointsJson(0) : okJson(),
+    );
+    renderDialog();
+    expect(await screen.findByText(/8 issues · — committed at start/)).toBeTruthy();
   });
 
   it('derives the window from the chosen duration', () => {
