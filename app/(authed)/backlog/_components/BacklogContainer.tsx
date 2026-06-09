@@ -47,9 +47,13 @@ type SprintsStatus = 'loading' | 'ready' | 'error';
 export function BacklogContainer({
   workflow,
   members,
+  projectName,
 }: {
   workflow: WorkflowDto;
   members: WorkspaceMemberDTO[];
+  /** The active project's name — threaded to the start-sprint dialog's
+   *  friendly one-active-sprint message (Subtask 4.4.5). */
+  projectName: string;
 }) {
   const t = useTranslations('backlog');
   const statusByKey = useMemo(() => buildStatusByKey(workflow.statuses), [workflow.statuses]);
@@ -109,6 +113,9 @@ export function BacklogContainer({
   }
 
   const planning = planningSprints(sprints);
+  // The project's active sprint (if any) — the start dialog names it in the
+  // friendly one-active-sprint error (Subtask 4.4.5).
+  const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
 
   return (
     // One DndContext over the whole stack (Subtask 4.2.4) so a row drags between
@@ -125,6 +132,9 @@ export function BacklogContainer({
             sprint={sprint}
             statusByKey={statusByKey}
             assigneeNameById={assigneeNameById}
+            projectName={projectName}
+            activeSprint={activeSprint}
+            onStarted={refetchSprints}
           />
         ))}
 

@@ -7,6 +7,7 @@ import { Pill } from '@/components/ui/Pill';
 import type { SprintDto } from '@/lib/dto/sprints';
 import { BacklogRows, useRankedIssues } from './BacklogList';
 import { CreateIssueRow } from './CreateIssueRow';
+import { StartSprintDialog } from './StartSprintDialog';
 import { sprintRegionId } from './backlogDnd';
 import { SPRINT_STATE_TONE, type StatusByKey } from './backlogShared';
 
@@ -19,10 +20,12 @@ import { SPRINT_STATE_TONE, type StatusByKey } from './backlogShared';
 // create-row.
 //
 // SEAMS (4.2.1 design notes — drawn, not improvised): the committed-points slot
-// is filled by Story 4.3, the velocity slot by Story 4.6, and the Start-sprint
-// FLOW is Story 4.4 (this renders only the entry point, disabled). All are
-// labelled `--el-text-faint` placeholders so the owning story drops in without a
-// relayout.
+// is filled by Story 4.3, the velocity slot by Story 4.6. The Start-sprint FLOW
+// is now WIRED (Story 4.4 · Subtask 4.4.5): on a planned sprint with ≥1 issue the
+// entry-point button opens the `StartSprintDialog`; an empty planned sprint keeps
+// it disabled (the 4.2.1 rule), and a non-planned sprint shows no Start button
+// (its lifecycle action is Complete — Story 4.4.6). The committed-points +
+// velocity slots stay labelled `--el-text-faint` placeholders.
 
 function formatDateRange(
   startDate: string | null,
@@ -40,18 +43,34 @@ export function SprintContainer({
   sprint,
   statusByKey,
   assigneeNameById,
+  projectName,
+  activeSprint,
+  onStarted,
 }: {
   sprint: SprintDto;
   statusByKey: StatusByKey;
   assigneeNameById: Map<string, string>;
+  /** Project name + the project's active sprint — for the start dialog's
+   *  friendly one-active-sprint message (Subtask 4.4.5). */
+  projectName: string;
+  activeSprint: SprintDto | null;
+  /** Refresh the sprint list after a successful start. */
+  onStarted: () => void | Promise<void>;
 }) {
   const t = useTranslations('backlog');
   const locale = useLocale();
   const [collapsed, setCollapsed] = useState(false);
+  const [startOpen, setStartOpen] = useState(false);
   const state = useRankedIssues(`/api/sprints/${sprint.id}/issues`);
 
   const stateLabel = t(`sprintState.${sprint.state}`);
   const dateRange = formatDateRange(sprint.startDate, sprint.endDate, locale, t('notStarted'));
+
+  // The Start-sprint entry point (4.2.3 seam) is live ONLY for a planned sprint;
+  // enabled once it holds ≥1 issue (the 4.2.1 rule), disabled-with-reason when
+  // empty. A non-planned sprint shows no Start button (Complete is its action).
+  const isPlanned = sprint.state === 'planned';
+  const canStart = isPlanned && sprint.issueCount >= 1;
 
   return (
     <section
@@ -106,16 +125,20 @@ export function SprintContainer({
           <Gauge className="h-3.5 w-3.5" aria-hidden />
           {t('velocityPlaceholder')}
         </span>
-        {/* Start-sprint entry-point SEAM → the flow is Story 4.4. Placed only. */}
-        <button
-          type="button"
-          disabled
-          title={t('startSprintComingSoon')}
-          className="inline-flex items-center gap-1 rounded-(--radius-btn) border border-(--el-border) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) disabled:opacity-50"
-        >
-          <Play className="h-3.5 w-3.5" aria-hidden />
-          {t('startSprint')}
-        </button>
+        {/* Start-sprint entry point (4.2.3 seam) — WIRED to the flow (4.4.5).
+            Rendered only for a planned sprint; disabled until it has ≥1 issue. */}
+        {isPlanned ? (
+          <button
+            type="button"
+            disabled={!canStart}
+            title={canStart ? undefined : t('startSprintEmpty')}
+            onClick={() => setStartOpen(true)}
+            className="inline-flex items-center gap-1 rounded-(--radius-btn) border border-(--el-border) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) hover:border-(--el-accent) hover:text-(--el-accent) disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-(--el-border) disabled:hover:text-(--el-text-secondary)"
+          >
+            <Play className="h-3.5 w-3.5" aria-hidden />
+            {t('startSprint')}
+          </button>
+        ) : null}
         {/* `⋯` sprint menu — PLACED; wired in Subtask 4.2.5. */}
         <button
           type="button"
@@ -150,6 +173,17 @@ export function SprintContainer({
           />
         </div>
       )}
+
+      {isPlanned ? (
+        <StartSprintDialog
+          open={startOpen}
+          onOpenChange={setStartOpen}
+          sprint={sprint}
+          projectName={projectName}
+          activeSprint={activeSprint}
+          onStarted={onStarted}
+        />
+      ) : null}
     </section>
   );
 }
