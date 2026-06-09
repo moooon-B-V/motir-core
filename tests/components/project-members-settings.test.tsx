@@ -102,7 +102,7 @@ describe('ProjectMembersSettings (6.4.5)', () => {
     renderAdmin();
     const removeButtons = screen.getAllByRole('button', { name: 'Remove' });
     // The first Remove belongs to Bo Philips (self has none).
-    fireEvent.click(removeButtons[0]);
+    fireEvent.click(removeButtons[0]!);
     await waitFor(() => expect(screen.queryByText('Bo Philips')).toBeNull());
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/projects/PROD/members/u-bob',
@@ -125,7 +125,7 @@ describe('ProjectMembersSettings (6.4.5)', () => {
   });
 
   it('selecting Private PATCHes access and seeds workspace members locally', async () => {
-    renderAdmin({ accessLevel: 'open', members: [members[0]] });
+    renderAdmin({ accessLevel: 'open', members: [members[0]!] });
     // Only the admin is on the project to start.
     expect(screen.queryByText('Julian')).toBeNull();
 
@@ -152,7 +152,7 @@ describe('ProjectMembersSettings (6.4.5)', () => {
     });
     // A project with two admins so both have a Remove button; reject the call.
     const twoAdmins: ProjectMemberDTO[] = [
-      members[0],
+      members[0]!,
       { userId: 'u-bob', name: 'Bo Philips', email: 'bophilips@prodect.co', role: 'admin' },
     ];
     renderAdmin({ members: twoAdmins });
