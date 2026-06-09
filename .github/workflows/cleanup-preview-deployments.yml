@@ -1,3 +1,13 @@
+# ⚠️ SUPERSEDED by the shared-preview-branch setup (2026-06-09).
+# This workflow existed to cascade-DELETE the per-PR Neon branch when a PR
+# closed. We have since dropped the per-PR Neon branch integration: every
+# preview deploy now points at ONE long-lived shared `preview` branch (static
+# DATABASE_URL on Vercel's Preview env), so there are no per-PR Neon branches
+# left to clean up and this workflow no longer saves any Neon CU-hrs. It still
+# runs harmlessly — deleting the closed PR's Vercel preview *deployments* is
+# mild housekeeping (Vercel otherwise retains them 6 months, at no DB cost).
+# Keep it for that tidiness, or delete the file; either is fine now.
+#
 # Delete Vercel preview deployments when a PR closes (merged or not).
 #
 # Why this workflow exists

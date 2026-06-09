@@ -4,16 +4,19 @@
  * Wired into the `build` script (package.json) in place of a bare
  * `prisma migrate deploy`. Migrations were folded into the Vercel build in
  * 8fc649d (1.1.5) so every deploy migrates its target Neon branch: production
- * Neon for prod, the per-PR Neon branch for previews. The Vercel-Neon
- * Marketplace integration provisions an EMPTY branch per preview but doesn't
- * apply the schema, so the build has to.
+ * Neon for prod, and the SHARED `preview` branch for every preview deploy.
+ * (We dropped the per-PR Neon branch integration to stay under the free-tier
+ * CU-hr budget — all preview deploys now point at one long-lived `preview`
+ * branch via a static DATABASE_URL on Vercel's Preview environment. `migrate
+ * deploy` is idempotent and takes a migration advisory lock, so concurrent
+ * preview builds racing the same branch serialize safely rather than collide.)
  *
- * Why the retry: a preview's freshly-provisioned Neon branch can still have a
- * cold/suspended compute when the build reaches the migrate step. Prisma's
- * direct (unpooled) connection then fails with `P1001: Can't reach database
- * server` after its ~5s connect timeout — even though the compute wakes a
- * couple of seconds later. That cold start is transient, so we retry on P1001
- * (and P1001 only) with a short linear backoff.
+ * Why the retry: the shared `preview` branch (and prod) scale to zero when
+ * idle, so the compute can be cold/suspended when a deploy reaches the migrate
+ * step. Prisma's direct (unpooled) connection then fails with `P1001: Can't
+ * reach database server` after its ~5s connect timeout — even though the
+ * compute wakes a couple of seconds later. That cold start is transient, so we
+ * retry on P1001 (and P1001 only) with a short linear backoff.
  *
  * What we DON'T retry: every other failure — a genuine migration error, a
  * drifted/failed migration (P3009), a syntax error in SQL — fails immediately.
