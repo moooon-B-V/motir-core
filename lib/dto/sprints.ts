@@ -61,6 +61,26 @@ export interface StartSprintInput {
 }
 
 /**
+ * Where a completing sprint's UNFINISHED issues go (Story 4.4.3). Either back to
+ * the project **backlog** (the default — they keep their `backlogRank` and
+ * re-appear in order), or into an existing **planned** sprint in the same
+ * project (`{ sprintId }` — they are appended to that sprint's rank tail). A
+ * carry-over into a NEW sprint = create it first (`createSprint`) then pass its
+ * id here; there is deliberately no inline sprint-create in the complete flow.
+ */
+export type CarryOverDestination = 'backlog' | { sprintId: string };
+
+/**
+ * Input to `sprintsService.completeSprint` (Story 4.4.3). `carryOverTo` defaults
+ * to `'backlog'` when omitted. The done-category issues always STAY on the
+ * completed sprint (the historical record); only the unfinished ones move to
+ * the chosen destination.
+ */
+export interface CompleteSprintInput {
+  carryOverTo?: CarryOverDestination;
+}
+
+/**
  * Input to `sprintsService.updateSprint` (rename / edit goal / adjust the
  * planned window). A `key: undefined` field is left unchanged; an explicit
  * `null` clears `goal` / a date. Dates are ISO-8601 strings.

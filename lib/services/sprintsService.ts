@@ -4,12 +4,17 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { boardsService } from '@/lib/services/boardsService';
+import { workflowsService } from '@/lib/services/workflowsService';
+import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { isOwnerRole } from '@/lib/workspaces/roles';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { keyForAppend } from '@/lib/workItems/positioning';
 import { toSprintDto } from '@/lib/mappers/sprintMappers';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type {
+  CarryOverDestination,
+  CompleteSprintInput,
   CreateSprintInput,
   SprintDto,
   StartSprintInput,
@@ -18,10 +23,12 @@ import type {
 import {
   CannotDeleteActiveSprintError,
   CannotModifyCompletedSprintError,
+  InvalidCarryOverTargetError,
   InvalidSprintNameError,
   InvalidSprintTransitionError,
   NotSprintAdminError,
   SprintAlreadyActiveError,
+  SprintNotCompletableError,
   SprintNotFoundError,
   SprintNotStartableError,
   SprintWindowInvalidError,
@@ -295,6 +302,163 @@ export const sprintsService = {
       },
     );
     return toSprintDto(result.row, result.committedIssueCount);
+  },
+
+  /**
+   * COMPLETE an active sprint (Story 4.4 · Subtask 4.4.3) — the close half of
+   * the lifecycle. Composes Story 4.1's pure `assertSprintTransition(active →
+   * complete)`, carries the sprint's UNFINISHED issues to a destination (the
+   * backlog or another planned sprint), leaves the DONE issues on the completed
+   * sprint as its historical record, stamps `completedAt`, and flips the state
+   * to `complete` — freeing the project's one-active slot so the next sprint can
+   * start. The whole carry-over + close is ONE transaction (a mid-batch failure
+   * rolls back everything — never a half-moved set; the 4.2.2 bulk shape).
+   *
+   * "Unfinished" = an issue whose workflow `status` is NOT in the project's
+   * `done`-category terminal set (`workflowsService.getTerminalStatusKeys`,
+   * Epic 3) — so "done" generalizes to every `category = done` status, not a
+   * hardcoded key. Carry-over destinations (`carryOverTo`, default `'backlog'`):
+   *   • `'backlog'` — each unfinished issue's `sprintId` is cleared; it keeps
+   *     its `backlogRank` and re-appears in the backlog in order.
+   *   • `{ sprintId }` — the unfinished issues are appended to the TARGET
+   *     PLANNED sprint's rank tail, in their existing order (same-project
+   *     guarded; the target must be a different, planned sprint in the same
+   *     project, else `InvalidCarryOverTargetError`).
+   * A sprint with NO unfinished issues completes with a no-op carry-over.
+   *
+   * Concurrency: the project's active sprint row is locked `FOR UPDATE` inside
+   * the transaction (the same lost-update guard `startSprint` uses); a sprint
+   * that is no longer the project's active one (a concurrent complete won) is
+   * rejected as not-completable.
+   *
+   * Throws: `SprintNotFoundError` (404), `NotSprintAdminError` (403),
+   * `SprintNotCompletableError` (422 — not `active`),
+   * `InvalidCarryOverTargetError` (422 — target not a same-project planned
+   * sprint).
+   */
+  async completeSprint(
+    id: string,
+    input: CompleteSprintInput,
+    ctx: ServiceContext,
+  ): Promise<SprintDto> {
+    const existing = await sprintRepository.findById(id, ctx.workspaceId);
+    if (!existing) throw new SprintNotFoundError(id);
+    await assertSprintAdmin(ctx.userId, existing.projectId, ctx.workspaceId);
+
+    // Only an ACTIVE sprint is completable — the friendly surface over the pure
+    // one-way `assertSprintTransition(active → complete)` rule, composed below
+    // as the single source of the transition law.
+    if (existing.state !== 'active') throw new SprintNotCompletableError(id, existing.state);
+    assertSprintTransition(existing.state, 'complete');
+
+    const carryOverTo: CarryOverDestination = input.carryOverTo ?? 'backlog';
+
+    // Validate a sprint carry-over target BEFORE any write: it must be a
+    // DIFFERENT, PLANNED sprint in the SAME project (the backlog destination
+    // needs no validation). An unknown / cross-workspace / cross-project /
+    // non-planned / self target is rejected with InvalidCarryOverTargetError.
+    if (carryOverTo !== 'backlog') {
+      const targetId = carryOverTo.sprintId;
+      const target = await sprintRepository.findById(targetId, ctx.workspaceId);
+      if (
+        !target ||
+        target.id === existing.id ||
+        target.projectId !== existing.projectId ||
+        target.state !== 'planned'
+      ) {
+        throw new InvalidCarryOverTargetError(id, targetId);
+      }
+    }
+
+    // The project's done-category status keys define "finished"; everything else
+    // in the sprint is carried over. Reference read of workflow config — no tx.
+    const doneStatusKeys = [
+      ...(await workflowsService.getTerminalStatusKeys(existing.projectId, ctx.workspaceId)),
+    ];
+
+    const result = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        // Lost-update guard: lock the project's active sprint row. If it is no
+        // longer THIS sprint (a concurrent complete won), it is not completable.
+        const locked = await sprintRepository.findActiveByProjectForUpdate(
+          existing.projectId,
+          ctx.workspaceId,
+          tx,
+        );
+        if (!locked || locked.id !== id) {
+          throw new SprintNotCompletableError(id, existing.state);
+        }
+
+        // The WHOLE unfinished set, moved atomically (bounded by the sprint's
+        // own scope — a team sprint, not the unbounded backlog; finding #57).
+        const unfinished = await workItemRepository.findSprintIssuesExcludingStatuses(
+          id,
+          ctx.workspaceId,
+          doneStatusKeys,
+          tx,
+        );
+
+        if (carryOverTo === 'backlog') {
+          // Clear the sprint association; the issue keeps its backlogRank and
+          // re-appears in the backlog in order (a 1.4.6 revision per move).
+          for (const item of unfinished) {
+            await workItemRepository.setSprint(item.id, null, tx);
+            await workItemRevisionsService.recordRevision(
+              {
+                workItemId: item.id,
+                changedById: ctx.userId,
+                changeKind: 'updated',
+                diff: { sprintId: { from: item.sprintId, to: null } },
+              },
+              tx,
+            );
+          }
+        } else {
+          // Append the carried-over issues to the target sprint's rank tail in
+          // their existing order — read the boundary rank ONCE, then chain
+          // `keyForAppend` (bounded single-row writes, never an N-row renumber).
+          const targetId = carryOverTo.sprintId;
+          let prevRank = await workItemRepository.findBoundaryBacklogRank(
+            existing.projectId,
+            ctx.workspaceId,
+            targetId,
+            'max',
+            tx,
+          );
+          for (const item of unfinished) {
+            const newRank = keyForAppend(prevRank);
+            prevRank = newRank;
+            await workItemRepository.setSprint(item.id, targetId, tx);
+            await workItemRepository.setBacklogRank(item.id, newRank, tx);
+            await workItemRevisionsService.recordRevision(
+              {
+                workItemId: item.id,
+                changedById: ctx.userId,
+                changeKind: 'updated',
+                diff: {
+                  sprintId: { from: item.sprintId, to: targetId },
+                  backlogRank: { from: item.backlogRank, to: newRank },
+                },
+              },
+              tx,
+            );
+          }
+        }
+
+        // Close: stamp completedAt + flip to complete (frees the one-active slot
+        // so a new sprint can start).
+        const row = await sprintRepository.update(
+          id,
+          { state: 'complete', completedAt: new Date() },
+          tx,
+        );
+        // The DONE issues that stayed are the completed sprint's remaining count.
+        const issueCount = await workItemRepository.countSprintIssues(id, ctx.workspaceId, tx);
+        return { row, issueCount };
+      },
+    );
+    return toSprintDto(result.row, result.issueCount);
   },
 
   /** Re-exported for callers that import the service object. See the free

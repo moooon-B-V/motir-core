@@ -1277,6 +1277,37 @@ export const workItemRepository = {
   },
 
   /**
+   * A sprint's non-archived issues whose `status` is NOT one of
+   * `excludeStatusKeys`, in `backlogRank` order (Story 4.4.3). With the
+   * project's `done`-category status keys passed as the exclusion set, this is
+   * the sprint's **unfinished** set — the issues `completeSprint` carries over
+   * (the done issues stay on the completed sprint). An empty `excludeStatusKeys`
+   * applies no status filter (every issue is "unfinished"). NOT `take`-bounded:
+   * carry-over must move the WHOLE unfinished set atomically, so the caller
+   * reads it inside the completion transaction; the set is bounded by the
+   * sprint's own scope (a team sprint, not the unbounded backlog). `workspaceId`
+   * gates the read (finding #26). The `backlogRank` order is what makes the
+   * carried-over issues re-appear in the backlog in their existing order.
+   */
+  async findSprintIssuesExcludingStatuses(
+    sprintId: string,
+    workspaceId: string,
+    excludeStatusKeys: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem[]> {
+    const client = tx ?? db;
+    return client.workItem.findMany({
+      where: {
+        sprintId,
+        workspaceId,
+        archivedAt: null,
+        ...(excludeStatusKeys.length > 0 ? { status: { notIn: excludeStatusKeys } } : {}),
+      },
+      orderBy: [{ backlogRank: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /**
    * Sum of `storyPoints` over a sprint's non-archived issues — the committed-
    * points baseline `startSprint` snapshots at activation (Story 4.4.2). NULL-
    * estimate issues contribute nothing, and a wholly-unestimated sprint sums to
