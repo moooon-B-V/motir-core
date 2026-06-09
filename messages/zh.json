@@ -668,6 +668,38 @@
       "errorTitle": "无法加载面板设置",
       "errorDescription": "加载该面板的配置时出了点问题，请重试。"
     },
+    "estimation": {
+      "title": "估算",
+      "cardDescription": "设置该项目的估算度量与点数刻度。",
+      "pageDescription": "该项目如何衡量工作量——待办列表、面板与汇总所显示的规划预估。",
+      "empty": {
+        "description": "创建一个项目以配置其估算设置。"
+      },
+      "cardTitle": "估算",
+      "cardSubtitle": "适用于该项目中的每个面板和冲刺。",
+      "statisticLabel": "估算度量",
+      "statisticHint": "作为汇总到冲刺和篇章的预估所采用的度量。",
+      "statisticStoryPoints": "故事点",
+      "statisticTime": "时间估算",
+      "statisticIssueCount": "工作项数量",
+      "scaleLabel": "点数刻度",
+      "scaleHint": "预估选择器提供的建议数值。任何数字仍可输入——该刻度仅作建议。",
+      "scaleFibonacci": "斐波那契",
+      "scaleLinear": "线性",
+      "scaleCustom": "自定义",
+      "deckLabel": "数值：",
+      "customHint": "选择器提供的数值。必须为正数。",
+      "customEmpty": "请至少添加一个数值。",
+      "customInvalid": "请输入一个正数。",
+      "addValueAria": "添加一个自定义刻度数值",
+      "removeValueAria": "移除 {value}",
+      "save": "保存更改",
+      "savedTitle": "估算设置已保存",
+      "savedDesc": "更改将应用于每个面板和冲刺。",
+      "errorTitle": "无法保存",
+      "saveError": "估算设置未能保存，请重试。",
+      "readOnlyBanner": "只有项目管理员才能更改估算设置。"
+    },
     "access": {
       "title": "访问与成员",
       "cardDescription": "谁可以找到、查看和编辑此项目，以及项目中的成员。",
