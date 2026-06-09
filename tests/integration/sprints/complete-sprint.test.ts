@@ -111,7 +111,11 @@ describe('sprintsService.completeSprint', () => {
     await markDone(c!);
     await sprintsService.startSprint(active.id, {}, fx.ctx);
 
-    await sprintsService.completeSprint(active.id, { carryOverTo: { sprintId: target.id } }, fx.ctx);
+    await sprintsService.completeSprint(
+      active.id,
+      { carryOverTo: { sprintId: target.id } },
+      fx.ctx,
+    );
 
     // a + b moved into the target sprint; c (done) stayed on the completed one.
     expect((await db.workItem.findUnique({ where: { id: a! } }))!.sprintId).toBe(target.id);
@@ -197,7 +201,11 @@ describe('sprintsService.completeSprint', () => {
     await sprintsService.startSprint(active.id, {}, fx.ctx);
 
     await expect(
-      sprintsService.completeSprint(active.id, { carryOverTo: { sprintId: foreignTarget.id } }, fx.ctx),
+      sprintsService.completeSprint(
+        active.id,
+        { carryOverTo: { sprintId: foreignTarget.id } },
+        fx.ctx,
+      ),
     ).rejects.toBeInstanceOf(InvalidCarryOverTargetError);
   });
 
@@ -216,7 +224,11 @@ describe('sprintsService.completeSprint', () => {
     const active = await sprintsService.createSprint(fx.projectId, {}, fx.ctx);
     await sprintsService.startSprint(active.id, {}, fx.ctx);
     await expect(
-      sprintsService.completeSprint(active.id, { carryOverTo: { sprintId: 'nonexistent' } }, fx.ctx),
+      sprintsService.completeSprint(
+        active.id,
+        { carryOverTo: { sprintId: 'nonexistent' } },
+        fx.ctx,
+      ),
     ).rejects.toBeInstanceOf(InvalidCarryOverTargetError);
   });
 
