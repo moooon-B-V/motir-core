@@ -109,7 +109,7 @@ describe('SprintReport (4.4.6)', () => {
     // Bounded — each section deep-links to the /issues navigator filtered to the sprint.
     const viewAll = screen.getAllByRole('link', { name: /View all in Issues/ });
     expect(viewAll.length).toBe(2);
-    expect(viewAll[0].getAttribute('href')).toBe('/issues?sprint=sp6');
+    expect(viewAll[0]!.getAttribute('href')).toBe('/issues?sprint=sp6');
     // The Story-4.6 burndown chart SEAM (no chart here).
     expect(screen.getByText('Burndown')).toBeTruthy();
     expect(screen.getByText('Story 4.6')).toBeTruthy();
