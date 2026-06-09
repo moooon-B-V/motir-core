@@ -263,7 +263,7 @@ export const story_6_4: PlanStory = {
     {
       id: '6.4.8',
       title: 'Tests — project access gating (browse/edit per level × role) + focused E2E',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 24,
