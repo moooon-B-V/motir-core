@@ -657,6 +657,57 @@
       "errorTitle": "无法加载面板设置",
       "errorDescription": "加载该面板的配置时出了点问题，请重试。"
     },
+    "access": {
+      "title": "访问与成员",
+      "cardDescription": "谁可以找到、查看和编辑此项目，以及项目中的成员。",
+      "subtitle": "控制谁可以查看和编辑 <strong>{projectName}</strong>。工作区所有者和管理员始终拥有访问权限。",
+      "accessHeading": "项目访问权限",
+      "accessSubheading": "{workspaceName} 工作区中谁可以访问此项目。",
+      "levelGroupLabel": "项目访问级别",
+      "level": {
+        "open": "开放",
+        "limited": "受限",
+        "private": "私有"
+      },
+      "levelDesc": {
+        "open": "{workspaceName} 工作区的任何成员都可以查看和编辑此项目。",
+        "limited": "任何工作区成员都可以查看和评论，但只有项目成员才能编辑。",
+        "private": "只有下方添加到项目中的人才能找到或打开它，对其他人隐藏。"
+      },
+      "goPrivateNote": "当前可以访问 <strong>{projectName}</strong> 的 {count} 人将被添加为项目成员，因此没有人会失去访问权限。你可以在成员列表中调整其角色或将其移除。",
+      "levelChangedToast": "项目访问权限已设为{level}",
+      "changeAccessErrorTitle": "无法更改访问权限",
+      "membersHeading": "成员",
+      "memberCountLabel": "{count} 名成员",
+      "addMember": "添加成员…",
+      "addMemberLabel": "添加项目成员",
+      "addMemberSearch": "搜索工作区…",
+      "addMemberEmpty": "没有可添加的工作区成员了。",
+      "addMemberHint": "已在项目中的成员会被隐藏。",
+      "remove": "移除",
+      "youSuffix": "（你）",
+      "roleSelectLabel": "{name} 的角色",
+      "role": {
+        "admin": "管理员",
+        "member": "成员",
+        "viewer": "查看者"
+      },
+      "roleDesc": {
+        "admin": "管理成员和访问权限",
+        "member": "查看和编辑工作项",
+        "viewer": "仅查看，无法编辑"
+      },
+      "readOnly": "只读",
+      "readOnlyNote": "只有项目管理员才能添加成员或更改访问权限。",
+      "memberAddedToast": "已添加 {name}",
+      "memberRemovedToast": "已移除 {name}",
+      "roleChangedToast": "已更新 {name} 的角色",
+      "addMemberErrorTitle": "无法添加成员",
+      "removeMemberErrorTitle": "无法移除成员",
+      "changeRoleErrorTitle": "无法更改角色",
+      "errorLastAdmin": "这是唯一的项目管理员——请先指定另一名管理员。",
+      "errorGeneric": "出了点问题，请重试。"
+    },
     "jobs": {
       "title": "任务运行",
       "subtitle": "该工作区的后台任务——邀请和密码重置邮件的投递，以及各类计划任务。失败的任务会进入死信队列，所有者可在那里重放它们。",

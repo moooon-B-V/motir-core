@@ -657,6 +657,57 @@
       "errorTitle": "Couldn’t load board settings",
       "errorDescription": "Something went wrong loading this board’s configuration. Try again."
     },
+    "access": {
+      "title": "Access & members",
+      "cardDescription": "Who can find, view, and edit this project, and the people on it.",
+      "subtitle": "Control who can see and edit <strong>{projectName}</strong>. Workspace owners and admins always have access.",
+      "accessHeading": "Project access",
+      "accessSubheading": "Who in the {workspaceName} workspace can reach this project.",
+      "levelGroupLabel": "Project access level",
+      "level": {
+        "open": "Open",
+        "limited": "Limited",
+        "private": "Private"
+      },
+      "levelDesc": {
+        "open": "Any member of the {workspaceName} workspace can view and edit this project.",
+        "limited": "Any workspace member can view and comment, but only project members can edit.",
+        "private": "Only people added to the project below can find or open it. Hidden from everyone else."
+      },
+      "goPrivateNote": "The {count, plural, one {# person} other {# people}} who can currently access <strong>{projectName}</strong> will be added as project members so no one loses access. You can adjust roles or remove them in the Members list.",
+      "levelChangedToast": "Project access set to {level}",
+      "changeAccessErrorTitle": "Could not change access",
+      "membersHeading": "Members",
+      "memberCountLabel": "{count, plural, one {# member} other {# members}}",
+      "addMember": "Add a member…",
+      "addMemberLabel": "Add a project member",
+      "addMemberSearch": "Search workspace…",
+      "addMemberEmpty": "No workspace members left to add.",
+      "addMemberHint": "Members already on the project are hidden.",
+      "remove": "Remove",
+      "youSuffix": " (you)",
+      "roleSelectLabel": "Role for {name}",
+      "role": {
+        "admin": "Admin",
+        "member": "Member",
+        "viewer": "Viewer"
+      },
+      "roleDesc": {
+        "admin": "Manage members + access",
+        "member": "View + edit issues",
+        "viewer": "View only, cannot edit"
+      },
+      "readOnly": "Read-only",
+      "readOnlyNote": "Only project admins can add members or change access.",
+      "memberAddedToast": "Added {name}",
+      "memberRemovedToast": "Removed {name}",
+      "roleChangedToast": "Updated {name}’s role",
+      "addMemberErrorTitle": "Could not add member",
+      "removeMemberErrorTitle": "Could not remove member",
+      "changeRoleErrorTitle": "Could not change role",
+      "errorLastAdmin": "This is the only project admin — assign another admin first.",
+      "errorGeneric": "Something went wrong. Please try again."
+    },
     "jobs": {
       "title": "Job runs",
       "subtitle": "Background jobs for this workspace — delivery of invites & password resets, and any scheduled work. Failed jobs land in the dead-letter queue, where an owner can replay them.",

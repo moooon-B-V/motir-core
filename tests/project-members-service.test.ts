@@ -410,6 +410,41 @@ describe('setAccessLevel', () => {
   });
 });
 
+describe('getAccess', () => {
+  it('reads the project default access level (open)', async () => {
+    const { key, owner, ownerCtx } = await makeFixture('get-access-default');
+    const access = await projectMembersService.getAccess({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+    });
+    expect(access).toEqual({ key, accessLevel: 'open' });
+  });
+
+  it('reflects a level set via setAccessLevel', async () => {
+    const { key, owner, ownerCtx } = await makeFixture('get-access-private');
+    await projectMembersService.setAccessLevel({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      level: 'private',
+    });
+    const access = await projectMembersService.getAccess({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+    });
+    expect(access.accessLevel).toBe('private');
+  });
+
+  it('404s on an unknown project key (no existence leak)', async () => {
+    const { owner, ownerCtx } = await makeFixture('get-access-missing');
+    await expect(
+      projectMembersService.getAccess({ key: 'NOPE', actorUserId: owner.id, ctx: ownerCtx }),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
+  });
+});
+
 describe('listMembers', () => {
   it('lists members ordered by createdAt asc', async () => {
     const { workspace, key, owner, ownerCtx } = await makeFixture('list');

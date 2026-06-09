@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ArchiveProjectCard } from './_components/ArchiveProjectCard';
 import { WorkflowSettingsCard } from './_components/WorkflowSettingsCard';
 import { BoardSettingsCard } from './_components/BoardSettingsCard';
+import { MembersSettingsCard } from './_components/MembersSettingsCard';
 
 // Project settings — server component. Reads the active project context
 // and renders the cards. Only the archive card lands in 1.3.4; rename
@@ -40,6 +41,8 @@ export default async function ProjectSettingsPage() {
       <WorkflowSettingsCard />
 
       <BoardSettingsCard />
+
+      <MembersSettingsCard />
 
       <ArchiveProjectCard
         projectId={project.projectId}

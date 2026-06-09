@@ -111,6 +111,21 @@ export const projectMembersService = {
   },
 
   /**
+   * Read the project's current browse-access level (open / limited / private).
+   * Available to any workspace member who can resolve the project key (the
+   * Settings → Access control in 6.4.5 renders this; it's read-only for
+   * non-admins). A pure read — no gate, no transaction-spanning write — so it
+   * mirrors `listMembers`: resolve the project under withWorkspaceContext and
+   * map to the DTO. The write counterpart is `setAccessLevel`.
+   */
+  async getAccess(input: ActorScopedInput): Promise<ProjectAccessDTO> {
+    return withWorkspaceContext(input.ctx, async (tx) => {
+      const project = await resolveProjectInTx(input.key, input.ctx, tx);
+      return toProjectAccessDTO(project);
+    });
+  },
+
+  /**
    * Add a workspace member to the project with a project role. The target must
    * already be a member of the workspace (TargetNotWorkspaceMemberError → 400);
    * a duplicate add throws AlreadyProjectMemberError (409). Project-admin gated.
