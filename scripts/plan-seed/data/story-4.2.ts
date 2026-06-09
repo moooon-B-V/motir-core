@@ -364,7 +364,7 @@ export const story_4_2: PlanStory = {
       id: '4.2.4',
       title:
         'Drag — reorder (rank) + drag-into-sprint + drag-between-sprints over the virtualized list, reusing the Story-3.2 dnd-kit move contract (optimistic + snap-back)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
