@@ -15,18 +15,9 @@ export const STUB_STORIES: PlanStory[] = [
   // per `notes.html` mistake #32 — see `data/story-4.5.ts`.
 
   // ── Epic 4: Agile planning ────────────────────────────────────────────────
-  // 4.1 (Sprint + backlog data model), 4.2 (Backlog UI), and 4.3 (Story-point
-  // estimation) are fully expanded — data/story-4.1.ts, data/story-4.2.ts,
-  // data/story-4.3.ts.
-  {
-    id: '4.4',
-    title: 'Sprint lifecycle (start / complete)',
-    status: 'planned',
-    descriptionMd:
-      'Start a sprint (scope lock, board opens); complete a sprint (carry-over handling); guard ' +
-      'rails (one active sprint per board). Sprint report on completion.',
-    items: [],
-  },
+  // 4.1 (Sprint + backlog data model), 4.2 (Backlog UI), 4.3 (Story-point
+  // estimation), and 4.4 (Sprint lifecycle — start/complete) are fully expanded
+  // — data/story-4.1.ts, data/story-4.2.ts, data/story-4.3.ts, data/story-4.4.ts.
   // 4.5 is the Scrum board (formerly Story 3.4) — fully expanded as
   // data/story-4.5.ts. Moved here from Epic 3 per `notes.html` mistake #32.
   {
