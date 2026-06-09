@@ -2,12 +2,21 @@
 
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { Calendar, ChevronDown, Gauge, Hash, MoreHorizontal, Play } from 'lucide-react';
+import {
+  Calendar,
+  CheckCircle2,
+  ChevronDown,
+  Gauge,
+  Hash,
+  MoreHorizontal,
+  Play,
+} from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 import type { SprintDto } from '@/lib/dto/sprints';
 import { BacklogRows, useRankedIssues } from './BacklogList';
 import { CreateIssueRow } from './CreateIssueRow';
 import { StartSprintDialog } from './StartSprintDialog';
+import { CompleteSprintDialog } from './CompleteSprintDialog';
 import { useSprintPoints } from './useSprintPoints';
 import { sprintRegionId } from './backlogDnd';
 import { SPRINT_STATE_TONE, type StatusByKey } from './backlogShared';
@@ -26,8 +35,10 @@ import { SPRINT_STATE_TONE, type StatusByKey } from './backlogShared';
 // stays a labelled `--el-text-faint` placeholder for Story 4.6. The Start-sprint
 // FLOW is WIRED (Story 4.4 · Subtask 4.4.5): on a planned sprint with ≥1 issue the
 // entry-point button opens the `StartSprintDialog`; an empty planned sprint keeps
-// it disabled (the 4.2.1 rule), and a non-planned sprint shows no Start button
-// (its lifecycle action is Complete — Story 4.4.6).
+// it disabled (the 4.2.1 rule). An ACTIVE sprint shows a **Complete sprint**
+// entry point instead — self-mounted here (Story 4.4.6) and wired to the
+// `CompleteSprintDialog` (carry-over chooser + sprint report); Story 4.5.3 mounts
+// the SAME flow in the scrum header (4.5 → 4.4, one-way).
 
 function formatDateRange(
   startDate: string | null,
@@ -48,7 +59,9 @@ export function SprintContainer({
   assigneeNameById,
   projectName,
   activeSprint,
+  plannedSprints,
   onStarted,
+  onCompleted,
 }: {
   sprint: SprintDto;
   /** Top-to-bottom stack position (sprints precede the backlog) — shift-range order (4.2.5). */
@@ -59,13 +72,20 @@ export function SprintContainer({
    *  friendly one-active-sprint message (Subtask 4.4.5). */
   projectName: string;
   activeSprint: SprintDto | null;
+  /** The project's PLANNED sprints — the complete dialog's carry-over targets
+   *  (Subtask 4.4.6); used only when this container is the active sprint. */
+  plannedSprints: SprintDto[];
   /** Refresh the sprint list after a successful start. */
   onStarted: () => void | Promise<void>;
+  /** Refresh the sprint list after a sprint is completed (it drops out of the
+   *  planning view). Fires on the complete dialog's close (Subtask 4.4.6). */
+  onCompleted: () => void | Promise<void>;
 }) {
   const t = useTranslations('backlog');
   const locale = useLocale();
   const [collapsed, setCollapsed] = useState(false);
   const [startOpen, setStartOpen] = useState(false);
+  const [completeOpen, setCompleteOpen] = useState(false);
   const state = useRankedIssues(`/api/sprints/${sprint.id}/issues`);
   // Live committed-points roll-up (Subtask 4.4.9 — finding #69) filling the
   // Story-4.3 seam: a null read or a wholly-unestimated sprint renders "—".
@@ -76,8 +96,9 @@ export function SprintContainer({
 
   // The Start-sprint entry point (4.2.3 seam) is live ONLY for a planned sprint;
   // enabled once it holds ≥1 issue (the 4.2.1 rule), disabled-with-reason when
-  // empty. A non-planned sprint shows no Start button (Complete is its action).
+  // empty. An ACTIVE sprint shows the Complete-sprint entry point instead (4.4.6).
   const isPlanned = sprint.state === 'planned';
+  const isActive = sprint.state === 'active';
   const canStart = isPlanned && sprint.issueCount >= 1;
 
   return (
@@ -148,6 +169,19 @@ export function SprintContainer({
             {t('startSprint')}
           </button>
         ) : null}
+        {/* Complete-sprint entry point (self-mounted, Subtask 4.4.6) — the active
+            sprint's lifecycle action; opens the carry-over chooser + report. */}
+        {isActive ? (
+          <button
+            type="button"
+            onClick={() => setCompleteOpen(true)}
+            data-testid={`complete-sprint-${sprint.id}`}
+            className="inline-flex items-center gap-1 rounded-(--radius-btn) border border-(--el-border) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) hover:border-(--el-accent) hover:text-(--el-accent)"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+            {t('completeSprint')}
+          </button>
+        ) : null}
         {/* `⋯` sprint menu — PLACED; wired in Subtask 4.2.5. */}
         <button
           type="button"
@@ -192,6 +226,18 @@ export function SprintContainer({
           projectName={projectName}
           activeSprint={activeSprint}
           onStarted={onStarted}
+        />
+      ) : null}
+
+      {isActive ? (
+        <CompleteSprintDialog
+          open={completeOpen}
+          onOpenChange={setCompleteOpen}
+          sprint={sprint}
+          projectName={projectName}
+          plannedSprints={plannedSprints}
+          statusByKey={statusByKey}
+          onCompleted={onCompleted}
         />
       ) : null}
     </section>
