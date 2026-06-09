@@ -216,7 +216,7 @@ export const story_6_4: PlanStory = {
       id: '6.4.6',
       title:
         'UI gating — hide inaccessible projects, no-access state, assignable-users scoping, role affordances',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
