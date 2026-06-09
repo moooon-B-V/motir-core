@@ -6,7 +6,7 @@ import { CircleDot } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { workspacesService } from '@/lib/services/workspacesService';
+import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import { buttonVariants } from '@/components/ui/Button';
@@ -61,7 +61,13 @@ export default async function ReadyPage({
   ]);
   // Members resolve assignee/reporter ids → names inside the peek; only the peek
   // needs them, so skip the read unless a row is being peeked.
-  const members = peek ? await workspacesService.listMembers(ctx.workspaceId, ctx.userId) : [];
+  const members = peek
+    ? await assignableMembersService.list({
+        projectId: ctx.projectId,
+        accessLevel: ctx.project.accessLevel,
+        ctx: svcCtx,
+      })
+    : [];
 
   const isEmpty = ready.items.length === 0;
   const countLabel = count.hasMore

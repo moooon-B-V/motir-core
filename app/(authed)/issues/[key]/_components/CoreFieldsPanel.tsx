@@ -19,6 +19,7 @@ import { useToast } from '@/components/ui/Toast';
 import { StatusPicker } from '@/components/issues/StatusPicker';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
 import { PriorityPicker } from '@/components/issues/PriorityPicker';
+import { useProjectAccess } from '../../../_components/ProjectAccessProvider';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { TypePicker } from '@/components/issues/TypePicker';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -132,6 +133,12 @@ export function CoreFieldsPanel({
   const locale = useLocale() as Locale;
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+  // Story 6.4.6 — a read-only actor (viewer, or member on a limited project)
+  // sees every field control disabled. The server (6.4.3) rejects the write
+  // regardless; disabling here makes the affordance honest rather than letting
+  // a viewer edit then bounce off a 403.
+  const { canEdit } = useProjectAccess();
+  const readOnly = !canEdit;
   const [editing, setEditing] = useState<EditableKey | null>(null);
   const [updatedAt, setUpdatedAt] = useState(item.updatedAt);
   const [dueDate, setDueDate] = useState(item.dueDate ? item.dueDate.slice(0, 10) : '');
@@ -210,7 +217,7 @@ export function CoreFieldsPanel({
             policyMode={workflow.policyMode}
             value={item.status}
             onChange={changeStatus}
-            disabled={isPending}
+            disabled={isPending || readOnly}
           />
         ) : statusMeta ? (
           <Pill status={STATUS_TONE[statusMeta.category]}>{statusMeta.label}</Pill>
@@ -224,7 +231,7 @@ export function CoreFieldsPanel({
           <TypePicker
             value={item.kind as IssueType}
             onChange={(kind) => patch({ kind: kind as WorkItemKindDto })}
-            disabled={isPending}
+            disabled={isPending || readOnly}
           />
         ) : (
           <span className="flex items-center gap-1.5">
@@ -243,7 +250,7 @@ export function CoreFieldsPanel({
           <PriorityPicker
             value={item.priority}
             onChange={(priority) => patch({ priority })}
-            disabled={isPending}
+            disabled={isPending || readOnly}
           />
         ) : (
           <Pill {...priorityPill.pill}>
@@ -263,7 +270,7 @@ export function CoreFieldsPanel({
             members={members}
             value={item.assigneeId}
             onChange={(userId) => patch({ assigneeId: userId })}
-            disabled={isPending}
+            disabled={isPending || readOnly}
           />
         ) : assignee ? (
           <span className="flex items-center gap-2">
@@ -297,7 +304,7 @@ export function CoreFieldsPanel({
             childType={item.kind as IssueType}
             value={item.parentId}
             onChange={(parentId) => patch({ parentId })}
-            disabled={isPending}
+            disabled={isPending || readOnly}
           />
         ) : parent ? (
           <Link
@@ -324,7 +331,7 @@ export function CoreFieldsPanel({
             aria-label={t('dueDate')}
             value={dueDate || null}
             onChange={commitDue}
-            disabled={isPending}
+            disabled={isPending || readOnly}
             autoOpen
           />
         ) : item.dueDate ? (
@@ -350,7 +357,7 @@ export function CoreFieldsPanel({
             value={estimate}
             onChange={(e) => setEstimate(e.target.value)}
             onBlur={commitEstimate}
-            disabled={isPending}
+            disabled={isPending || readOnly}
             autoFocus
           />
         ) : item.estimateMinutes != null ? (

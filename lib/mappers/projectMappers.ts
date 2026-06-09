@@ -12,5 +12,6 @@ export function toProjectDTO(project: Project): ProjectDTO {
     slug: project.slug,
     identifier: project.identifier,
     archivedAt: project.archivedAt ? project.archivedAt.toISOString() : null,
+    accessLevel: project.accessLevel,
   };
 }

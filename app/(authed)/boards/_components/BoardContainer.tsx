@@ -101,10 +101,17 @@ export function BoardContainer({
   members = [],
   activeProjectId,
   selectedBoardId,
+  canEdit = true,
 }: {
   members?: WorkspaceMemberDTO[];
   activeProjectId?: string;
   selectedBoardId?: string;
+  /**
+   * Whether the actor may edit this board (Story 6.4.6). `false` for a viewer /
+   * a member on a `limited` project: the board renders read-only — drag is
+   * disabled and a banner explains why (the server rejects the move regardless).
+   */
+  canEdit?: boolean;
 }) {
   const t = useTranslations('boards');
   // The selected board (Subtask 3.7.5) — the page's `?board=<id>` selection. It
@@ -272,6 +279,14 @@ export function BoardContainer({
             groupBySlot,
           )
         : null}
+      {!canEdit ? (
+        <div
+          role="status"
+          className="rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-(--spacing-card-padding) py-(--spacing-control-y) text-sm text-(--el-text-secondary)"
+        >
+          {t('readOnlyBoardBanner')}
+        </div>
+      ) : null}
       {board.truncated ? <OverCapBanner cap={board.cap} /> : null}
       {hasUnmapped ? (
         <UnmappedStatusesTray statuses={board.unmappedStatuses} boardId={board.boardId} />
@@ -289,6 +304,7 @@ export function BoardContainer({
           key={`${boardVersion}:${board.swimlaneGroupBy}`}
           board={board}
           assigneeNameById={assigneeNameById}
+          canEdit={canEdit}
         />
       )}
     </div>
@@ -347,9 +363,11 @@ function GroupByControl({
 function BoardDnd({
   board,
   assigneeNameById,
+  canEdit,
 }: {
   board: BoardProjectionDto;
   assigneeNameById: Map<string, string>;
+  canEdit: boolean;
 }) {
   const t = useTranslations('boards');
   const { toast } = useToast();
@@ -820,9 +838,13 @@ function BoardDnd({
     };
   }, [swimlaned, colName, laneLabel, t]);
 
+  // Read-only: hand DndContext an EMPTY sensor list so no pointer/keyboard drag
+  // can ever activate (the cards stay rendered + peekable, just not movable).
+  const activeSensors = canEdit ? sensors : [];
+
   return (
     <DndContext
-      sensors={sensors}
+      sensors={activeSensors}
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}

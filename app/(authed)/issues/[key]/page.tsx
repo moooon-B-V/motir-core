@@ -4,7 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { workspacesService } from '@/lib/services/workspacesService';
+import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -62,7 +62,12 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
   // Members back the inline assignee picker + reporter display (getIssueDetail
   // carries ids only); the workflow (already in the detail bundle) backs the
   // inline status picker's legal-transition set.
-  const members = await workspacesService.listMembers(ctx.workspaceId, ctx.userId);
+  // Assignable users scoped by access level (6.4.6): private → project members.
+  const members = await assignableMembersService.list({
+    projectId: ctx.projectId,
+    accessLevel: ctx.project.accessLevel,
+    ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
+  });
 
   return (
     <div className="flex flex-col gap-6">

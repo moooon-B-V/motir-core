@@ -7,6 +7,13 @@
     "save": "保存",
     "loading": "加载中…"
   },
+  "projectAccess": {
+    "noAccessTitle": "你无权访问此项目",
+    "noAccessDescription": "此项目为私有。请联系项目管理员将你加入，或切换到你有权限访问的项目。",
+    "backToProjects": "返回项目",
+    "readOnlyHint": "你对此项目仅有只读访问权限",
+    "readOnlyBoardBanner": "只读访问——你可以查看此看板，但无法移动或编辑卡片。"
+  },
   "localeToggle": {
     "label": "语言",
     "activate": "点击切换。"

@@ -3,7 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { workspacesService } from '@/lib/services/workspacesService';
+import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { EditIssueForm } from './_components/EditIssueForm';
@@ -46,7 +46,11 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
     throw err;
   }
 
-  const members = await workspacesService.listMembers(ctx.workspaceId, ctx.userId);
+  const members = await assignableMembersService.list({
+    projectId: ctx.projectId,
+    accessLevel: ctx.project.accessLevel,
+    ctx: serviceCtx,
+  });
 
   return (
     <div className="flex flex-col gap-6">

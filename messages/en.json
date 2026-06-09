@@ -7,6 +7,13 @@
     "save": "Save",
     "loading": "Loading…"
   },
+  "projectAccess": {
+    "noAccessTitle": "You don’t have access to this project",
+    "noAccessDescription": "This project is private. Ask a project admin to add you, or switch to a project you can access.",
+    "backToProjects": "Back to projects",
+    "readOnlyHint": "You have read-only access to this project",
+    "readOnlyBoardBanner": "Read-only access — you can view this board but can’t move or edit cards."
+  },
   "localeToggle": {
     "label": "Language",
     "activate": "Activate to change."
