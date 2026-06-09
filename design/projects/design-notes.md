@@ -212,3 +212,129 @@ When a string in this doc disagrees with shipped 1.3.4 code, the code wins —
 file a fix here so the mockup stays the source of truth. The `.pen` is the
 layout-confirmation artifact; it is not generated from code and may drift
 from pixel-exact production once the React lands.
+
+---
+
+# Roles & permissions (Story 6.4) — Subtask 6.4.1 output
+
+Story 6.4 makes access **project-level** (not just workspace-level). This
+section is the canonical reference for the code subtasks it gates —
+**6.4.5** (project-settings Members + Access UI) and **6.4.6** (UI gating:
+hidden projects, no-access state, scoped pickers, role affordances), both of
+which carry **6.4.1** in `dependsOn`.
+
+Unlike the rest of `design/projects/` (drafted in Pencil), this surface is an
+**HTML mockup** — `access-members.mock.html`, built FROM the real design
+system (the `app/globals.css` token block copied 1:1 + the shipped
+`components/ui/*` primitives), with `access-members.png` as the light-mode
+board render. The HTML is the source of truth; toggle `data-theme="dark"` in
+it to confirm token parity. A coding agent should prefer it — there is no
+Pencil→code translation gap.
+
+## Files
+
+| HTML source (truth)        | PNG export           |
+| -------------------------- | -------------------- |
+| `access-members.mock.html` | `access-members.png` |
+
+The mockup is a five-panel board (review EACH): **(0)** the populated
+project-admin settings view (Access + Members); **(1)** the add-member
+Combobox open + a per-row role select open; **(2)** the Access control with
+Private selected + the go-private note; **(3)** the no-access state;
+**(4)** the role affordances (viewer disabled-with-tooltip + non-admin
+read-only).
+
+## Mirror product (rung 1, VERIFIED June 2026 — Atlassian docs, not asserted)
+
+Jira team-managed projects gate by an **Access level**:
+
+- **Open** — any site (workspace) member can view **and edit**.
+- **Limited** — any workspace member can view **and comment**, but only
+  project members can edit.
+- **Private** — only people explicitly added to the project (via a project
+  role) can find or open it; hidden from everyone else.
+
+Setting a project **private keeps the people who currently have access**
+(Jira seeds them as members) rather than emptying it and locking the owner
+out. Assignable users on a private project are scoped to **project members**.
+We mirror this three-level team-managed model (the simpler, more direct fit
+for Prodect's workspace→project shape).
+
+**Migration defaults (no lockout):** existing projects default to **open** so
+every current workspace member keeps access on deploy; **workspace
+owner/admin always have access** regardless of project membership.
+
+## Composing primitives (no new primitive required)
+
+Every surface composes primitives already in `components/ui/` — nothing new:
+
+- **`Card`** — the Access card and the Members card (header slot + body); the
+  no-access panel is the `ErrorState`/`EmptyState` family (`Card` + lucide
+  icon + serif headline + muted description + action `Button`s).
+- **`Combobox`** — the **add-member** picker (trigger `+ Add a member…`,
+  search field, option rows showing avatar + name + email, footer note
+  "Members already on the project are hidden") **and** the per-row **role
+  select** (`Admin` / `Member` / `Viewer`, each with a one-line description,
+  selected row shows the `--el-accent` check). Both are the shipped Combobox
+  trigger (`--height-control`, `--radius-input`, `ChevronsUpDown`) + elevated
+  menu (`--shadow-elevated`, `--radius-card`).
+- **`Pill`** — the role chip on the owner row + the read-only views
+  (`Admin` → `--el-tint-lavender`, `Member` → `--el-tint-sky`, `Viewer` →
+  `--el-tint-mint`, all with `--el-text-strong` text — AA-safe per finding
+  #35), the member-count chip + the `Read-only` chip (`tone="neutral"`), and
+  the access-level summary chip.
+- **`Button`** — `primary` (Back to projects / disabled New issue),
+  `secondary` (Request access), `ghost` (Remove).
+- **`Tooltip`** — the disabled-affordance explainer (`--el-text` ink bg,
+  `--el-text-inverted` text); a viewer's create/edit controls stay **visible
+  but disabled** with this tooltip, never absent-and-confusing.
+- The **Members row** extends the shipped workspace
+  `MembersCard.tsx`: same avatar (ink `--el-text` circle + inverted initial,
+  matching the shipped component — guaranteed AA) + name/email + trailing
+  role chip grammar, with the per-project **role select** + **Remove** added.
+  The owner row shows an `Admin` Pill + a disabled `Owner` affordance (the
+  owner's role is not editable).
+
+## The Access-level control
+
+Three stacked radio cards (`open` / `limited` / `private`), each a tinted
+icon tile + title + one-line explanation + a radio. Icons take their meaning's
+hue via a pastel tint (`--el-tint-mint` globe = open, `--el-tint-sky` eye =
+limited, `--el-tint-lavender` lock = private) with `--el-text-strong` glyphs.
+The selected card carries the `--el-accent` border + filled radio. Selecting
+**Private** reveals the **go-private note** (an `--el-tint-sky` info callout):
+"the N people who can currently access this project will be added as members
+so no one loses access" — the visible counterpart of 6.4.4's seeding.
+
+## Gating affordances (6.4.6)
+
+- **Hidden projects** — the switcher/nav omits projects the user can't browse
+  (a private project they're not on is absent, not shown-then-denied).
+- **No-access state** — a direct link to an inaccessible project's
+  board/issues renders the ErrorState-family panel ("You don't have access to
+  this project", lock icon, `Request access` + `Back to projects`), driven off
+  the 6.4.3 `ProjectAccessDeniedError` — never a crash.
+- **Scoped pickers** — assignee/reporter pickers list only **project members**
+  on a private project (workspace members on open/limited).
+- **Role affordances** — a viewer (or a member on a `limited` project) sees
+  create / move / assign / edit controls **disabled with a tooltip**, not
+  missing; a non-admin sees Members + Access **read-only** (a `Read-only` chip
+  - an info line "Only project admins can add members or change access").
+
+## Tokens & a11y
+
+Colour is `--el-*` only (no Tier-0 `--color-*`); shape is the element-semantic
+tokens (`--radius-card/-input/-badge/-control/-btn`, `--spacing-card-padding`
+/ `-control-*` / `-chip-*` / `-btn-x`, `--height-control/-btn-*`,
+`--shadow-card/-elevated`) so the `data-display-style` swap reshapes it.
+Coloured chips/tiles carry the hue in the **tint background** with
+`--el-text-strong` text (AA-safe, finding #35); avatars are the ink circle
+from the shipped `MembersCard`. `rounded-full` is used only for the avatar
+and the radio dot.
+
+## Source of truth
+
+When a string here disagrees with shipped 6.4.5 / 6.4.6 code, the code wins —
+file a fix so the mockup stays the reference. `access-members.mock.html` is
+the layout-confirmation artifact; it may drift from pixel-exact production
+once the React lands.
