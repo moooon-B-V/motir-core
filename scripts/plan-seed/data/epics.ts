@@ -667,6 +667,158 @@ export const EPICS: EpicMeta[] = [
           'bug filed in the same session); `bug-tree-header-misalignment` (Epic-2 — the precedent ' +
           'for filing list-surface bugs against the issue list).',
       },
+      {
+        id: 'bug-backlog-zh-sprint-translated-as-chongci',
+        kind: 'bug',
+        title:
+          'Backlog (zh): "Sprint" is inconsistently translated to "冲刺" in a handful of keys — should stay Latin "Sprint" everywhere',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 4 (current epic — discovered during Epic 4 work) · ' +
+          '**Code surface owned by:** Story 4.2 (Backlog UI) — the affected keys live in the ' +
+          '`backlog.*` + `sprintSettings.*` namespaces · **Status:** open · **Reported by:** Yue.\n\n' +
+          'On the `/backlog` page in Chinese, **"Sprint" is rendered inconsistently**: most of the ' +
+          'surface keeps the English word `Sprint` (matching the dominant convention across the app — ' +
+          '`"纳入 Sprint"`, `"无法加载 Sprint"`, `"开始 Sprint"`, `"Sprint 名称"`, the `sprintState` ' +
+          'pill labels), but a small set of keys translate it to the Chinese loan **`冲刺`** ' +
+          '(literally "sprint/dash"). The same product term appears as both `Sprint` and `冲刺` on the ' +
+          'SAME screen — the "Move to sprint ▸" button on the selection bar reads **"移动到冲刺"** ' +
+          'while the page subtitle right above it reads **"…纳入 Sprint、估算"**. The user surfaced ' +
+          'this in the backlog screenshot.\n\n' +
+          '**Decision (rung 1 / project convention).** Keep `Sprint` in Latin in zh.json — that is ' +
+          'what `messages/zh.json` already does for every other place the word appears (`"纳入 ' +
+          'Sprint"`, `"加载 Sprint"`, `"开始 Sprint"`, `"Sprint 名称"`, etc.). The handful of ' +
+          '`冲刺` strings are the drift; normalize them to `Sprint`. (Mirror products: Jira-CN, ' +
+          'Linear-CN, Asana-CN all keep `Sprint` as a Latin proper noun rather than translating to ' +
+          '`冲刺` / `迭代` — the term is product vocabulary, not a verb.)\n\n' +
+          '**Concrete strings to fix in `messages/zh.json`:**\n' +
+          '- `backlog.moveToSprint` — currently `"移动到冲刺"` → `"移动到 Sprint"`\n' +
+          '- `backlog.sprintsErrorDescription` — currently mentions `冲刺` → use `Sprint`\n' +
+          '- `backlog.noSprintsToMove` — currently `"没有可移动到的冲刺，请先创建一个。"` → ' +
+          '`"没有可移动到的 Sprint，请先创建一个。"`\n' +
+          '- `sprintSettings.cardSubtitle` / `sprintSettings.statisticHint` / ' +
+          '`sprintSettings.savedDesc` — all currently use `冲刺` → `Sprint` ' +
+          '(spot-check the whole `sprintSettings.*` namespace).\n' +
+          '- Sweep the whole `messages/zh.json` for `冲刺` and convert every occurrence; the goal is ' +
+          '**zero** `冲刺` characters in the file after the fix (the term should appear ONLY as the ' +
+          'Latin word `Sprint`, with the standard surrounding spacing — `纳入 Sprint`, `开始 ' +
+          'Sprint`, `Sprint 名称`).\n\n' +
+          '**Repro:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz`, switch the UI to Chinese (the ' +
+          'locale toggle in the app shell), open the `moooon` / `prodect` project → `/backlog`, ' +
+          'select ≥1 backlog row to reveal the selection bar. The bar reads ' +
+          '`→ 移动到冲刺 ›` while the page subtitle directly above reads `… 纳入 Sprint、估算`. ' +
+          'Also visit `/settings/project/workflow` and the sprint-settings card — `冲刺` appears in ' +
+          'the descriptions there too.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- `messages/zh.json` contains **zero** occurrences of `冲刺`; every reference to a Sprint ' +
+          'uses the Latin word `Sprint` (with the standard surrounding spacing convention the rest ' +
+          'of the file already uses — `纳入 Sprint`, `开始 Sprint`, `Sprint 名称`).\n' +
+          '- `messages/en.json` is unchanged.\n' +
+          '- On `/backlog` in Chinese, the selection-bar button reads `移动到 Sprint`, the page ' +
+          'subtitle still reads `… 纳入 Sprint、估算`, and the two are consistent.\n' +
+          '- The sprint-settings card and `noSprintsToMove` empty-state use `Sprint`.\n' +
+          '- A grep-based regression assertion (in an existing i18n test or a new tiny one) fails ' +
+          'if `messages/zh.json` ever reintroduces `冲刺`.\n\n' +
+          '## Context refs\n\n' +
+          '- `messages/zh.json` — the file with the drift (search `冲刺`); `messages/en.json` — ' +
+          'reference (do not touch)\n' +
+          "- `app/(authed)/backlog/_components/SelectionBar.tsx` — the `t('moveToSprint')` consumer " +
+          'where the bug is most visible\n' +
+          '- The dominant convention this normalizes to: `"纳入 Sprint"` (`backlog.subtitle`), ' +
+          '`"无法加载 Sprint"` (`backlog.sprintsErrorTitle`), `"开始 Sprint"` ' +
+          '(`backlog.startSprint`), `"Sprint 名称"` (`backlog.startSprintFlow.nameLabel`), the ' +
+          '`backlog.sprintState.*` pill labels — all already Latin\n' +
+          '- Mirror: Jira-CN / Linear-CN / Asana-CN keep `Sprint` in Latin',
+      },
+      {
+        id: 'bug-backlog-selection-bar-move-to-backlog-always-shown',
+        kind: 'bug',
+        title:
+          'Backlog selection bar: "Move to backlog" button is shown even when every selected item is already in the backlog (should hide / disable)',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 4 (current epic — discovered during Epic 4 work) · ' +
+          '**Code surface owned by:** Story 4.2 (Backlog UI), Subtask 4.2.5 — the selection bar + ' +
+          'its bulk-action buttons · **Status:** open · **Reported by:** Yue.\n\n' +
+          'On the `/backlog` page, selecting one or more rows reveals the **selection bar** with ' +
+          'two bulk-move buttons: **Move to sprint ▸** and **Move to backlog**. The "Move to ' +
+          'backlog" button is rendered **unconditionally** whenever `selectedIds.size > 0` — ' +
+          'INCLUDING when every selected row is already in the backlog (`sprint_id IS NULL`). In ' +
+          'that case the button is a no-op (moving backlog items "to the backlog" is meaningless), ' +
+          "but it sits as an active-looking control on the bar. The Jira backlog (rung 1) doesn't " +
+          'do this: its bulk-action set is contextual to where the selected items currently live. ' +
+          'The user surfaced this in the backlog screenshot (four rows selected, all of them ' +
+          'backlog items, and "移动到待办列表" still appears next to "移动到 Sprint").\n\n' +
+          '**Repro:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz`, open the `moooon` / `prodect` ' +
+          'project → `/backlog`. The page mounts with several backlog rows below the sprint ' +
+          'containers. Click one (or shift-click a range) of the BACKLOG rows — the selection bar ' +
+          'appears at the top of the stack with `N selected` + `Move to sprint ▸` + ' +
+          '`Move to backlog` + Clear. Observe that `Move to backlog` is enabled even though every ' +
+          'selected row is already in the backlog. Clicking it dispatches a no-op bulk write ' +
+          '(`bulkMoveToBacklog` with rows that already have `sprint_id IS NULL` — the service ' +
+          'currently treats it as a guarded no-op, but the UI affordance still suggests an action ' +
+          'is available).\n\n' +
+          '**Root cause.** `app/(authed)/backlog/_components/SelectionBar.tsx` lines 61–68 render ' +
+          'the `Move to backlog` button unconditionally — there is no check against the selected ' +
+          "items' current sprint membership. The `useBacklogDnd()` hook (the coordinator that " +
+          'owns `selectedIds`) does have the per-item sprint membership available (it has to, ' +
+          'because that is what `bulkAssignToSprint` / `bulkMoveToBacklog` operate on). The bar ' +
+          'just does not consult it.\n\n' +
+          '**Fix shape (decide at fix time — both are defensible).**\n' +
+          '1. **HIDE the button when every selected item is already in the backlog.** Most Jira-' +
+          'faithful (Jira hides irrelevant bulk actions); cleanest visually. Symmetric counterpart ' +
+          ': hide `Move to sprint ▸` when every selected item is already in the SAME sprint ' +
+          '(can the same selection span multiple sprints? today yes, since the bar shows over a ' +
+          'mixed selection; preserve that case).\n' +
+          '2. **DISABLE the button** (greyed + `aria-disabled`) when every selected item is ' +
+          'already in the backlog, with a tooltip explaining why. Slightly more discoverable than ' +
+          'hiding, but adds a tooltip primitive call.\n' +
+          'Either way, the gate reads the same: `someSelectedItemIsInASprint = ids.some(id => ' +
+          'itemSprintIdById.get(id) != null)`. Plumb a `getSprintIdFor(id)` (or the existing ' +
+          'item-by-id map) out of `useBacklogDnd()` to `SelectionBar`, derive the booleans, gate ' +
+          'each button. No service / API change — purely a UI gate on existing state.\n\n' +
+          '**Symmetric gap (in scope for the same fix).** Apply the mirror rule to `Move to sprint ' +
+          '▸` too: if every selected item is already in the SAME sprint, hide/disable that button ' +
+          '(submenu would only re-pick the same sprint, a no-op). The two gates are the same shape ' +
+          'and ship together — leaving one untreated would be the same finding-#33 / mirror-product ' +
+          'shortfall on the symmetric branch.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- When the selection bar is open and **every** selected item has `sprint_id IS NULL` ' +
+          '(already in the backlog), the `Move to backlog` button is **hidden** (preferred) or ' +
+          'visibly **disabled** with an explanatory tooltip.\n' +
+          '- When the selection contains at least one item with `sprint_id IS NOT NULL` (i.e. ' +
+          'currently in a sprint), the `Move to backlog` button remains visible + enabled and ' +
+          'still moves that subset to the backlog (mixed selections behave as today).\n' +
+          '- Symmetric: when **every** selected item is in the SAME sprint, the `Move to sprint ▸` ' +
+          'button is hidden/disabled (re-picking the same sprint is a no-op).\n' +
+          '- `Clear` and the `N selected` count are unaffected; the selection model and the ' +
+          'multi-select drag path are unchanged.\n' +
+          '- A component test asserts BOTH branches: (a) all-backlog selection → no `Move to ' +
+          'backlog` button rendered; (b) mixed selection (≥1 sprint item + ≥1 backlog item) → both ' +
+          'buttons rendered. Symmetric branch tested too: all-same-sprint selection → no `Move to ' +
+          'sprint ▸` button.\n' +
+          '- AA contrast / keyboard nav / focus return preserved; no change to ' +
+          '`bulkAssignToSprint` / `bulkMoveToBacklog` service signatures.\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/backlog/_components/SelectionBar.tsx` lines 61–68 — the unconditional ' +
+          'render site (the fix site)\n' +
+          '- `app/(authed)/backlog/_components/BacklogDndProvider.tsx` — the `useBacklogDnd` ' +
+          'coordinator that owns `selectedIds` + the per-item sprint membership the gate needs; ' +
+          'plumb a `getSprintIdFor(id)` (or expose the item-by-id map) for the gate to read\n' +
+          '- Story 4.2.5 (multi-select + atomic bulk move) — the subtask that shipped the bar ' +
+          'without the gate; AC said `selection bar shows "N selected" + Move to sprint ▸ + Move ' +
+          'to backlog` but did not specify contextual gating (the AC undershot — flag it as the ' +
+          'plan gap that lets the bug exist)\n' +
+          '- `design/backlog/backlog.mock.html` panel 4 — the multi-select bar spec; verify ' +
+          'whether the mockup specifies the contextual gate (if not, this is also a design-notes ' +
+          'addendum, not a design rework — the gate is a behaviour spec, not a layout change)\n' +
+          '- Mirror: Jira backlog selection bar — actions are contextual to the selection origin ' +
+          '(rung 1)\n' +
+          '- Related: `bug-backlog-zh-sprint-translated-as-chongci` (sibling Epic-4 bug filed in ' +
+          'the same session — same surface, different shape)',
+      },
     ],
   },
   {
