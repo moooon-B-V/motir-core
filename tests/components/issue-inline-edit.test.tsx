@@ -214,6 +214,16 @@ describe('Inline row edits (Subtask 2.5.5)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit Due date' }));
     expect(screen.getByRole('dialog')).toBeTruthy();
     expect(pushSpy).not.toHaveBeenCalled();
+
+    // The inline DatePicker must render at the shared CONTROL height, not the
+    // taller default input height: the Tree view's rows are 40px (TreeTable
+    // ROW_PX) < the 44px --height-input, so a 44px field overflows and the
+    // card's overflow:hidden clips the last row
+    // (bug-inline-edit-clipped-when-table-short). The anchor is the trigger
+    // button's parent box.
+    const anchor = screen.getByRole('button', { name: 'Due date' }).closest('div');
+    expect(anchor?.className).toContain('h-(--height-control)');
+    expect(anchor?.className).not.toContain('h-(--height-input)');
   });
 
   it('opening a control reveals the picker rather than navigating the row', () => {
