@@ -1,8 +1,36 @@
 'use client';
 
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
+
+// Run layout effects on the client, fall back to useEffect during SSR (the menu
+// only mounts client-side anyway — see the `mounted` gate below).
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
+// `false` during SSR / first hydration render, `true` on the client thereafter —
+// gates the createPortal call so document.body is guaranteed present. Hydration-
+// safe (matches the server's `false`) and avoids setState-in-effect.
+const subscribeNoop = () => () => {};
+function useMounted() {
+  return useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false,
+  );
+}
 
 /**
  * Combobox — an accessible select/combobox primitive (Subtask 2.3.4). A trigger
@@ -84,6 +112,14 @@ export function Combobox<T extends string>({
   const [open, setOpen] = useState(autoOpen);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
+  // The menu is portaled to <body> (so it escapes the table's overflow:hidden,
+  // bug-inline-edit-clipped-when-table-short); only render it once mounted, since
+  // createPortal needs document.body.
+  const mounted = useMounted();
+  // Viewport-anchored position for the portaled menu + the listbox's available
+  // height, recomputed from the trigger rect on open / scroll / resize.
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
+  const [listMaxHeight, setListMaxHeight] = useState(256);
   const baseId = useId();
   const listId = `${baseId}-listbox`;
   const optionId = (i: number) => `${baseId}-opt-${i}`;
@@ -92,6 +128,7 @@ export function Combobox<T extends string>({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
     if (!searchable || query.trim() === '') return options;
@@ -110,22 +147,64 @@ export function Combobox<T extends string>({
   // an effect, so a shrinking filter never needs a setState-in-effect.
   const active = filtered.length > 0 ? Math.min(activeIndex, filtered.length - 1) : 0;
 
+  // Anchor the portaled menu to the trigger in VIEWPORT coordinates (position:
+  // fixed), flipping above the trigger when there's more room there, and capping
+  // the listbox height to the available space so it never runs off-screen.
+  const updatePosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const gap = 4; // matches the old mt-1
+    const viewportH = window.innerHeight;
+    const spaceBelow = viewportH - rect.bottom - gap;
+    const spaceAbove = rect.top - gap;
+    const placeBelow = spaceBelow >= spaceAbove;
+    const avail = Math.max(120, placeBelow ? spaceBelow : spaceAbove);
+    // Reserve room for the optional search input + container padding.
+    setListMaxHeight(Math.max(80, Math.min(256, avail - (searchable ? 52 : 12))));
+    const style: CSSProperties = {
+      position: 'fixed',
+      left: Math.round(rect.left),
+      minWidth: Math.round(rect.width),
+    };
+    if (placeBelow) style.top = Math.round(rect.bottom + gap);
+    else style.bottom = Math.round(viewportH - rect.top + gap);
+    setMenuStyle(style);
+  }, [searchable]);
+
   // On open: focus the right control (the only side effect — query/active reset
   // happens in openMenu so this effect never calls setState).
   useEffect(() => {
-    if (!open) return;
+    if (!(open && mounted)) return;
     const t = setTimeout(() => {
       if (searchable) inputRef.current?.focus();
       else listRef.current?.focus();
     }, 0);
     return () => clearTimeout(t);
-  }, [open, searchable]);
+  }, [open, mounted, searchable]);
 
-  // Click-outside closes, restoring focus to the trigger.
+  // Position the menu before paint, and keep it glued to the trigger while open
+  // (ancestor scroll uses capture so a scrolling table re-anchors the menu).
+  useIsomorphicLayoutEffect(() => {
+    if (!(open && mounted)) return;
+    updatePosition();
+    const onReflow = () => updatePosition();
+    window.addEventListener('scroll', onReflow, true);
+    window.addEventListener('resize', onReflow);
+    return () => {
+      window.removeEventListener('scroll', onReflow, true);
+      window.removeEventListener('resize', onReflow);
+    };
+  }, [open, mounted, updatePosition, filtered.length]);
+
+  // Click-outside closes, restoring focus to the trigger. The menu is portaled
+  // out of containerRef, so a click on it must also count as "inside".
   useEffect(() => {
     if (!open) return;
     function onDocMouseDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) closeMenu();
+      const target = e.target as Node;
+      if (containerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      closeMenu();
     }
     document.addEventListener('mousedown', onDocMouseDown);
     return () => document.removeEventListener('mousedown', onDocMouseDown);
@@ -230,81 +309,91 @@ export function Combobox<T extends string>({
         <ChevronsUpDown className="text-(--el-text-muted) ml-auto h-4 w-4 shrink-0" aria-hidden />
       </button>
 
-      {open ? (
-        <div
-          className={cn(
-            // Size to the widest option (so a narrow inline-edit cell's dropdown
-            // isn't cramped), but never narrower than the trigger and capped so a
-            // long label can't run off-screen.
-            'absolute left-0 top-full z-50 mt-1 w-max min-w-full max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-1',
-            'shadow-(--shadow-elevated) border border-(--el-border)',
-          )}
-        >
-          {searchable ? (
-            <input
-              ref={inputRef}
-              type="text"
-              role="combobox"
-              aria-expanded
-              aria-controls={listId}
-              aria-activedescendant={activeId}
-              aria-label={searchPlaceholder}
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setActiveIndex(0);
-              }}
-              onKeyDown={onListKeyDown}
-              placeholder={searchPlaceholder}
-              className="border-(--el-border) bg-(--el-page-bg) mb-1 w-full rounded-(--radius-input) border px-(--spacing-control-x) py-(--spacing-control-y) text-sm focus-visible:outline-none"
-            />
-          ) : null}
-          <div
-            ref={listRef}
-            id={listId}
-            role="listbox"
-            aria-label={label}
-            tabIndex={searchable ? -1 : 0}
-            aria-activedescendant={searchable ? undefined : activeId}
-            onKeyDown={searchable ? undefined : onListKeyDown}
-            className="max-h-64 overflow-y-auto focus:outline-none"
-          >
-            {loading ? (
-              <p className="text-(--el-text-muted) px-2.5 py-2 text-sm">{loadingText}</p>
-            ) : filtered.length === 0 ? (
-              <p className="text-(--el-text-muted) px-2.5 py-2 text-sm">{emptyText}</p>
-            ) : (
-              filtered.map((opt, i) => {
-                const isSelected = opt.value === value;
-                const isActive = i === active;
-                return (
-                  <div
-                    key={opt.value}
-                    id={optionId(i)}
-                    role="option"
-                    aria-selected={isSelected}
-                    onMouseEnter={() => setActiveIndex(i)}
-                    onClick={() => commit(i)}
-                    className={cn(
-                      'flex cursor-pointer items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm',
-                      isActive ? 'bg-(--el-surface) text-(--el-text)' : 'text-(--el-text)',
-                    )}
-                  >
-                    {opt.icon ? <span aria-hidden>{opt.icon}</span> : null}
-                    <span className="truncate">{opt.label}</span>
-                    {opt.secondary ? (
-                      <span className="text-(--el-text-muted) ml-auto truncate text-xs">
-                        {opt.secondary}
-                      </span>
-                    ) : null}
-                    {isSelected ? <Check className="ml-1 h-4 w-4 shrink-0" aria-hidden /> : null}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      ) : null}
+      {open && mounted
+        ? createPortal(
+            <div
+              ref={menuRef}
+              // Portaled to <body> with viewport-anchored fixed positioning so a
+              // short table's overflow:hidden can't clip it
+              // (bug-inline-edit-clipped-when-table-short). Width sizes to the
+              // widest option but never narrower than the trigger (minWidth, set in
+              // updatePosition) and is capped so a long label can't run off-screen.
+              style={menuStyle ?? { position: 'fixed', visibility: 'hidden' }}
+              className={cn(
+                'z-50 w-max max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-1',
+                'shadow-(--shadow-elevated) border border-(--el-border)',
+              )}
+            >
+              {searchable ? (
+                <input
+                  ref={inputRef}
+                  type="text"
+                  role="combobox"
+                  aria-expanded
+                  aria-controls={listId}
+                  aria-activedescendant={activeId}
+                  aria-label={searchPlaceholder}
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setActiveIndex(0);
+                  }}
+                  onKeyDown={onListKeyDown}
+                  placeholder={searchPlaceholder}
+                  className="border-(--el-border) bg-(--el-page-bg) mb-1 w-full rounded-(--radius-input) border px-(--spacing-control-x) py-(--spacing-control-y) text-sm focus-visible:outline-none"
+                />
+              ) : null}
+              <div
+                ref={listRef}
+                id={listId}
+                role="listbox"
+                aria-label={label}
+                tabIndex={searchable ? -1 : 0}
+                aria-activedescendant={searchable ? undefined : activeId}
+                onKeyDown={searchable ? undefined : onListKeyDown}
+                style={{ maxHeight: listMaxHeight }}
+                className="overflow-y-auto focus:outline-none"
+              >
+                {loading ? (
+                  <p className="text-(--el-text-muted) px-2.5 py-2 text-sm">{loadingText}</p>
+                ) : filtered.length === 0 ? (
+                  <p className="text-(--el-text-muted) px-2.5 py-2 text-sm">{emptyText}</p>
+                ) : (
+                  filtered.map((opt, i) => {
+                    const isSelected = opt.value === value;
+                    const isActive = i === active;
+                    return (
+                      <div
+                        key={opt.value}
+                        id={optionId(i)}
+                        role="option"
+                        aria-selected={isSelected}
+                        onMouseEnter={() => setActiveIndex(i)}
+                        onClick={() => commit(i)}
+                        className={cn(
+                          'flex cursor-pointer items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm',
+                          isActive ? 'bg-(--el-surface) text-(--el-text)' : 'text-(--el-text)',
+                        )}
+                      >
+                        {opt.icon ? <span aria-hidden>{opt.icon}</span> : null}
+                        <span className="truncate">{opt.label}</span>
+                        {opt.secondary ? (
+                          <span className="text-(--el-text-muted) ml-auto truncate text-xs">
+                            {opt.secondary}
+                          </span>
+                        ) : null}
+                        {isSelected ? (
+                          <Check className="ml-1 h-4 w-4 shrink-0" aria-hidden />
+                        ) : null}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
