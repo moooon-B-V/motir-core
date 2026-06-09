@@ -7,13 +7,14 @@ import type { SprintState } from '@prisma/client';
 // convention the boards / workflows / projects domains established.
 //
 // Status-code map (the route layer owns the translation):
-//   SprintNotFoundError              → 404
-//   NotSprintAdminError              → 403
-//   InvalidSprintNameError           → 400
-//   SprintWindowInvalidError         → 422
-//   InvalidSprintTransitionError     → 409
-//   CannotModifyCompletedSprintError → 409
-//   CannotDeleteActiveSprintError    → 409
+//   SprintNotFoundError                → 404
+//   NotSprintAdminError                → 403
+//   InvalidSprintNameError             → 400
+//   SprintWindowInvalidError           → 422
+//   InvalidSprintTransitionError       → 409
+//   CannotModifyCompletedSprintError   → 409
+//   CannotDeleteActiveSprintError      → 409
+//   CrossProjectSprintAssignmentError  → 422 (Subtask 4.1.4)
 //
 // A foreign / unknown projectId (the create path) reuses `ProjectNotFoundError`
 // from `lib/projects/errors.ts` (already a 404) rather than inventing a parallel
@@ -110,6 +111,27 @@ export class CannotDeleteActiveSprintError extends Error {
   constructor(sprintId: string) {
     super(`Sprint ${sprintId} is active and cannot be deleted; complete it instead.`);
     this.name = 'CannotDeleteActiveSprintError';
+    this.sprintId = sprintId;
+  }
+}
+
+/**
+ * An issue was assigned to a sprint that belongs to a DIFFERENT project
+ * (Subtask 4.1.4). A sprint is project-scoped (`sprint.projectId`; see the
+ * story-4.1 module header), so the backlog/sprint association only ever moves
+ * an issue between sprints WITHIN its own project. The same-project guard in
+ * `backlogService.assignToSprint` throws this BEFORE the write — the structural
+ * analogue of `CrossProjectParentError` (also a 422: the entities are
+ * well-formed, but pairing them across projects is semantically invalid). → 422.
+ */
+export class CrossProjectSprintAssignmentError extends Error {
+  readonly code = 'CROSS_PROJECT_SPRINT_ASSIGNMENT' as const;
+  readonly itemId: string;
+  readonly sprintId: string;
+  constructor(itemId: string, sprintId: string) {
+    super(`Issue ${itemId} cannot be assigned to sprint ${sprintId} in another project.`);
+    this.name = 'CrossProjectSprintAssignmentError';
+    this.itemId = itemId;
     this.sprintId = sprintId;
   }
 }

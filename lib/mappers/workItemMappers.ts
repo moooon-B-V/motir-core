@@ -42,6 +42,8 @@ export function toWorkItemDto(row: WorkItem): WorkItemDto {
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
     estimateMinutes: row.estimateMinutes,
     position: row.position,
+    sprintId: row.sprintId,
+    backlogRank: row.backlogRank,
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
