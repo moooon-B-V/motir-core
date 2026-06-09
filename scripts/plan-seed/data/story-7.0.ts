@@ -99,14 +99,14 @@ export const story_7_0: PlanStory = {
     'a sidebar nav entry with a count badge, a per-row "Copy `prodect run PROD-<n>`" affordance ' +
     'for the BYOK CLI flow, the design mockup that defines all of the above, and the tests + ' +
     'verification recipe.\n\n' +
-    '**Sort.** Deterministic: `(priority desc, type asc, key asc)` (type tiebreaker added by ' +
-    '7.0.11). Priority is primary (highest first); **issue type breaks the priority tie** in the ' +
-    'fixed dispatch order `subtask < bug < task < story < epic` (the leaf-most, most-granular ' +
-    'unit first — coherent with the leaf-only ready set of 7.0.10); `key` breaks the final tie. ' +
-    'Cursor encodes `(priority, kind, key)` so a BYOK agent walking `next` via `excludeIds` ' +
-    'traverses the set predictably and reseeds give the same order every time. NOT random; NOT ' +
-    'created-at; NOT updated-at — those leak dispatch decisions to scheduling artifacts the ' +
-    "planner can't audit.\n\n" +
+    '**Sort.** Deterministic: `(type asc, priority desc, key asc)` (type-primary precedence set ' +
+    'by 7.0.12, reversing 7.0.11). **Issue type is primary**, in the fixed dispatch order ' +
+    '`subtask < bug < task < story < epic` (the leaf-most, most-granular unit first — coherent ' +
+    'with the leaf-only ready set of 7.0.10); **priority breaks the type tie** (highest first, ' +
+    'within a type bucket); `key` breaks the final tie. Cursor encodes `(kind, priority, key)` ' +
+    'so a BYOK agent walking `next` via `excludeIds` traverses the set predictably and reseeds ' +
+    'give the same order every time. NOT random; NOT created-at; NOT updated-at — those leak ' +
+    "dispatch decisions to scheduling artifacts the planner can't audit.\n\n" +
     '**Pagination.** Cursor (NOT offset) from day one — the planning-time scale check ' +
     '(finding #57, "how does the mirror product handle 10k of these?"). A real ready set in a ' +
     'mature project will have hundreds of items; the agent loop will walk via cursor; the page ' +
@@ -734,7 +734,7 @@ export const story_7_0: PlanStory = {
     {
       id: '7.0.12',
       title: 'Re-order the ready set: type first, then priority, then key',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 25,
