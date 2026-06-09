@@ -140,7 +140,7 @@ describe('EstimateBadge — write', () => {
     fireEvent.click(await screen.findByRole('button', { name: '8 story points' }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
-    const [url, init] = fetchSpy.mock.calls[0];
+    const [url, init] = fetchSpy.mock.calls[0]!;
     expect(url).toBe('/api/work-items/wi_1/estimate');
     expect(init.method).toBe('PATCH');
     expect(JSON.parse(init.body)).toEqual({ points: 8 });
@@ -154,7 +154,7 @@ describe('EstimateBadge — write', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Clear' }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
-    expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toEqual({ points: null });
+    expect(JSON.parse(fetchSpy.mock.calls[0]![1].body)).toEqual({ points: null });
   });
 
   it('commits a free-numeric (decimal) entry on Enter', async () => {
@@ -165,7 +165,7 @@ describe('EstimateBadge — write', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
-    expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toEqual({ points: 0.5 });
+    expect(JSON.parse(fetchSpy.mock.calls[0]![1].body)).toEqual({ points: 0.5 });
   });
 
   it('snaps back and toasts an error when the write fails', async () => {
