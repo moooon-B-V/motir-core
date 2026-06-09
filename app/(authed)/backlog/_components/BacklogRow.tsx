@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { EstimateBadge } from '@/components/issues/EstimateBadge';
 import { Avatar, StatusValue } from '../../issues/_components/issueCellPrimitives';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
@@ -97,13 +98,15 @@ function BacklogRowBody({
       <IssueTypeIcon type={item.kind as IssueType} className="h-4 w-4 shrink-0" />
       <span className="shrink-0 font-mono text-xs text-(--el-text-muted)">{item.identifier}</span>
       <span className="min-w-0 flex-1 truncate text-sm text-(--el-text)">{item.title}</span>
-      {/* Reserved estimate seam (→ Story 4.3) — labelled, not a number yet. */}
-      <span
-        className="shrink-0 text-xs text-(--el-text-faint)"
-        title={t('estimateSeam')}
-        aria-label={t('estimateSeam')}
-      >
-        {EM_DASH}
+      {/* The estimate seam the 4.2 row reserved is now FILLED (Subtask 4.3.4) by
+          the inline `EstimateBadge` — same fixed slot, no relayout. A flex
+          sibling of the avatar / status / ⋯ controls, never nested in them. */}
+      <span className="shrink-0">
+        <EstimateBadge
+          itemId={item.id}
+          storyPoints={item.storyPoints}
+          estimateMinutes={item.estimateMinutes}
+        />
       </span>
       {assigneeName ? (
         <span className="shrink-0" title={assigneeName}>

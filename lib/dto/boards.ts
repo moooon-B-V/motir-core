@@ -151,6 +151,9 @@ export interface BoardCardDto {
   assigneeId: string | null;
   dueDate: string | null;
   estimateMinutes: number | null;
+  /** The agile STORY-POINT estimate (Story 4.3.4) — the card `.pts` chip renders
+   *  this (or the time estimate / nothing) per the project's `estimationStatistic`. */
+  storyPoints: number | null;
   position: string;
   /** False iff an `is_blocked_by` blocker remains in a non-terminal status (finding #21). */
   ready: boolean;

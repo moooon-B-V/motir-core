@@ -8,6 +8,9 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { estimationService } from '@/lib/services/estimationService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
+import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
 import { NewIssueButton } from '../issues/_components/NewIssueButton';
 import { BacklogContainer } from './_components/BacklogContainer';
 
@@ -46,9 +49,14 @@ export default async function BacklogPage() {
     );
   }
 
-  const [workflow, members] = await Promise.all([
+  const accessCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  const [workflow, members, estimationConfig, caps] = await Promise.all([
     workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
     workspacesService.listMembers(ctx.workspaceId, ctx.userId),
+    // The estimation config (Subtask 4.3.4) + edit capability, read once here so
+    // every inline EstimateBadge on the backlog shares them (no per-row fetch).
+    estimationService.getEstimationConfig(ctx.projectId, accessCtx),
+    projectAccessService.getCapabilities(ctx.projectId, accessCtx),
   ]);
 
   return (
@@ -84,7 +92,9 @@ export default async function BacklogPage() {
         </div>
       </header>
 
-      <BacklogContainer workflow={workflow} members={members} />
+      <EstimationConfigProvider config={estimationConfig} canEdit={caps.canEdit}>
+        <BacklogContainer workflow={workflow} members={members} />
+      </EstimationConfigProvider>
     </div>
   );
 }

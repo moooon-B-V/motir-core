@@ -72,6 +72,7 @@ export interface WorkItemForestRow {
   reporterId: string;
   dueDate: Date | null;
   estimateMinutes: number | null;
+  storyPoints: Prisma.Decimal | null;
   updatedAt: Date;
   depth: number;
   matched: boolean;
@@ -95,6 +96,7 @@ export interface WorkItemListRow {
   reporterId: string;
   dueDate: Date | null;
   estimateMinutes: number | null;
+  storyPoints: Prisma.Decimal | null;
   updatedAt: Date;
 }
 
@@ -151,6 +153,7 @@ const ISSUE_SORT_SQL: Record<IssueSortColumn, Prisma.Sql> = {
   reporter: Prisma.sql`ru."name"`,
   due: Prisma.sql`w."dueDate"`,
   estimate: Prisma.sql`w."estimateMinutes"`,
+  points: Prisma.sql`w."storyPoints"`,
   status: Prisma.sql`ws."position"`,
 };
 
@@ -622,7 +625,7 @@ export const workItemRepository = {
       WITH RECURSIVE forest AS (
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
                w."title", w."status", w."priority", w."assigneeId", w."reporterId",
-               w."dueDate", w."estimateMinutes", w."updatedAt", 1 AS depth
+               w."dueDate", w."estimateMinutes", w."storyPoints", w."updatedAt", 1 AS depth
           FROM "work_item" w
           WHERE w."projectId" = ${projectId}
             AND w."workspaceId" = ${workspaceId}
@@ -631,7 +634,7 @@ export const workItemRepository = {
         UNION ALL
         SELECT c."id", c."parentId", c."kind", c."key", c."identifier",
                c."title", c."status", c."priority", c."assigneeId", c."reporterId",
-               c."dueDate", c."estimateMinutes", c."updatedAt", p.depth + 1
+               c."dueDate", c."estimateMinutes", c."storyPoints", c."updatedAt", p.depth + 1
           FROM "work_item" c
           JOIN forest p ON c."parentId" = p."id"
           WHERE c."projectId" = ${projectId}
@@ -650,6 +653,7 @@ export const workItemRepository = {
              f."reporterId",
              f."dueDate",
              f."estimateMinutes",
+             f."storyPoints",
              f."updatedAt",
              f.depth::int         AS "depth",
              (${matched})         AS "matched"
@@ -703,6 +707,7 @@ export const workItemRepository = {
              w."reporterId",
              w."dueDate",
              w."estimateMinutes",
+             w."storyPoints",
              w."updatedAt"
         FROM "work_item" w
         LEFT JOIN "user" au ON au."id" = w."assigneeId"
@@ -835,6 +840,7 @@ export const workItemRepository = {
              w."reporterId",
              w."dueDate",
              w."estimateMinutes",
+             w."storyPoints",
              w."updatedAt",
              EXISTS (
                SELECT 1 FROM "work_item" ch

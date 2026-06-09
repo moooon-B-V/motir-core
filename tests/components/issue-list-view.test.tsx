@@ -63,7 +63,9 @@ function row(over: Partial<IssueRowData> & { identifier: string }): IssueRowData
     dueDate: null,
     dueLabel: null,
     estimateMinutes: null,
+    storyPoints: null,
     estimateLabel: null,
+    storyPointsLabel: null,
     ...over,
   };
 }

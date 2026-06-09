@@ -81,6 +81,15 @@ export interface WorkItemSummaryDto {
   priority: WorkItemPriorityDto;
   assigneeId: string | null;
   position: string;
+  /**
+   * The TIME estimate in whole minutes (Story 2.3.6) + the agile STORY-POINT
+   * estimate (Story 4.3.4) — both nullable, both carried on the summary so the
+   * inline `EstimateBadge` can render whichever the project's
+   * `estimationStatistic` selects on a backlog / sprint row without a re-fetch.
+   * (The backlog reads full work-item rows, so adding these is free.)
+   */
+  estimateMinutes: number | null;
+  storyPoints: number | null;
   archivedAt: string | null;
 }
 
@@ -221,6 +230,9 @@ export interface WorkItemTreeNodeDto {
   reporterId: string;
   dueDate: string | null;
   estimateMinutes: number | null;
+  /** The agile STORY-POINT estimate (Story 4.3.4) — the inline `EstimateBadge`
+   *  renders it (or the time estimate / nothing) per the project statistic. */
+  storyPoints: number | null;
   /** ISO-8601 last-modified stamp — the `expectedUpdatedAt` an inline edit
    *  (Subtask 2.5.5) submits for optimistic concurrency on `updateIssueAction`. */
   updatedAt: string;
@@ -251,6 +263,9 @@ export interface WorkItemListItemDto {
   reporterId: string;
   dueDate: string | null;
   estimateMinutes: number | null;
+  /** The agile STORY-POINT estimate (Story 4.3.4) — rendered by the inline
+   *  `EstimateBadge` in the List view's Points column. */
+  storyPoints: number | null;
   /** ISO-8601 last-modified stamp — the `expectedUpdatedAt` an inline edit
    *  (Subtask 2.5.5) submits for optimistic concurrency on `updateIssueAction`.
    *  `WorkItemTreeRowDto` inherits it for the lazy Tree's inline edits. */

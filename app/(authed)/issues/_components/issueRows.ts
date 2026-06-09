@@ -9,6 +9,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { TreeTableRow } from '@/components/ui/TreeTable';
 import { formatDate } from '@/lib/utils/datetime';
 import { formatDurationMinutes } from '@/lib/utils/duration';
+import { formatStoryPoints } from '@/lib/estimation/scales';
 import { defaultLocale, type Locale } from '@/lib/i18n/locales';
 
 // Pure view-shaping for the /issues list route (Subtask 2.5.3): turn the
@@ -60,6 +61,10 @@ export interface IssueRowData {
   estimateMinutes: number | null;
   /** Pre-formatted estimate ("2h 30m"), or null when unestimated. */
   estimateLabel: string | null;
+  /** Raw story-point estimate or null — what the inline `EstimateBadge` edits (4.3.4). */
+  storyPoints: number | null;
+  /** Pre-formatted story points ("5", "0.5"), or null when unestimated. */
+  storyPointsLabel: string | null;
 }
 
 /**
@@ -113,6 +118,8 @@ function shapeRowData(
     estimateMinutes: item.estimateMinutes,
     estimateLabel:
       item.estimateMinutes != null ? formatDurationMinutes(item.estimateMinutes) : null,
+    storyPoints: item.storyPoints,
+    storyPointsLabel: item.storyPoints != null ? formatStoryPoints(item.storyPoints) : null,
   };
 }
 

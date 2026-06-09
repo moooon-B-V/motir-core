@@ -69,6 +69,8 @@ export function toWorkItemSummaryDto(row: WorkItem): WorkItemSummaryDto {
     priority: row.priority,
     assigneeId: row.assigneeId,
     position: row.position,
+    estimateMinutes: row.estimateMinutes,
+    storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
   };
 }
@@ -122,6 +124,7 @@ export function toWorkItemTreeNodeDto(
     reporterId: row.reporterId,
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
     estimateMinutes: row.estimateMinutes,
+    storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),
     updatedAt: row.updatedAt.toISOString(),
     depth: row.depth,
     hasChildren: children.length > 0,
@@ -150,6 +153,7 @@ export function toWorkItemListItemDto(row: WorkItemListRow): WorkItemListItemDto
     reporterId: row.reporterId,
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
     estimateMinutes: row.estimateMinutes,
+    storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),
     updatedAt: row.updatedAt.toISOString(),
   };
 }

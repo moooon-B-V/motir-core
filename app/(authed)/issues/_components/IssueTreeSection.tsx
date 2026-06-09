@@ -1,7 +1,11 @@
+import type { ReactNode } from 'react';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { Locale } from '@/lib/i18n/locales';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { estimationService } from '@/lib/services/estimationService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
+import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
 import { type IssueListView, type IssueSort, serializeSort } from '@/lib/issues/issueListView';
 import {
   toProjectTreeFilter,
@@ -60,6 +64,18 @@ export async function IssueTreeSection({
   const t = await getTranslations('issueViews');
   const locale = (await getLocale()) as Locale;
 
+  // The estimation config (Subtask 4.3.4) + edit capability for the inline
+  // EstimateBadge in the Points column — read once, shared across every row.
+  const [estimationConfig, caps] = await Promise.all([
+    estimationService.getEstimationConfig(projectId, ctx),
+    projectAccessService.getCapabilities(projectId, ctx),
+  ]);
+  const withEstimation = (node: ReactNode) => (
+    <EstimationConfigProvider config={estimationConfig} canEdit={caps.canEdit}>
+      {node}
+    </EstimationConfigProvider>
+  );
+
   // A filter that matches nothing is distinct from an empty project: don't tell
   // the user to "create your first issue" when they've simply over-narrowed.
   const empty = filtered ? (
@@ -84,7 +100,7 @@ export async function IssueTreeSection({
       ctx,
     );
     if (items.length === 0) return empty;
-    return (
+    return withEstimation(
       <IssueListTable
         rows={toIssueListRows(items, workflow, members, locale)}
         sort={sort}
@@ -92,7 +108,7 @@ export async function IssueTreeSection({
         pagination={{ total, page: clampedPage, pageSize }}
         workflow={workflow}
         members={members}
-      />
+      />,
     );
   }
 
@@ -102,12 +118,12 @@ export async function IssueTreeSection({
   if (filtered) {
     const tree = await workItemsService.getProjectTree(projectId, repoFilter, ctx);
     if (tree.length === 0) return empty;
-    return (
+    return withEstimation(
       <IssueTreeStaticTable
         rows={toIssueRows(tree, workflow, members, locale)}
         workflow={workflow}
         members={members}
-      />
+      />,
     );
   }
 
@@ -116,7 +132,7 @@ export async function IssueTreeSection({
   // the tree against freshly-sorted roots.
   const initialLevel = await workItemsService.listRootIssues(projectId, { sort }, ctx);
   if (initialLevel.total === 0) return empty;
-  return (
+  return withEstimation(
     <IssueTreeTable
       key={serializeSort(sort)}
       initialLevel={initialLevel}
@@ -124,6 +140,6 @@ export async function IssueTreeSection({
       filter={filter}
       workflow={workflow}
       members={members}
-    />
+    />,
   );
 }

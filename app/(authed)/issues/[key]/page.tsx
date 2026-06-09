@@ -6,6 +6,8 @@ import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
+import { estimationService } from '@/lib/services/estimationService';
+import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import type { IssueType } from '@/lib/issues/parentRules';
@@ -84,6 +86,13 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
     ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
   });
 
+  // The project estimation config (Subtask 4.3.4) — the rail's inline
+  // story-points EstimateBadge reads the scale deck from it via context.
+  const estimationConfig = await estimationService.getEstimationConfig(ctx.projectId, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+
   return (
     <div className="flex flex-col gap-6">
       {/* Header — type icon · identifier · parent breadcrumb · status · title +
@@ -150,13 +159,15 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
         </main>
 
         <aside className="flex flex-col gap-4">
-          <CoreFieldsPanel
-            item={item}
-            members={members}
-            workflow={detail.workflow}
-            parent={detail.parent}
-            reporterIsSelf={item.reporterId === ctx.userId}
-          />
+          <EstimationConfigProvider config={estimationConfig} canEdit={canEdit}>
+            <CoreFieldsPanel
+              item={item}
+              members={members}
+              workflow={detail.workflow}
+              parent={detail.parent}
+              reporterIsSelf={item.reporterId === ctx.userId}
+            />
+          </EstimationConfigProvider>
           {/* The 2.4.3 parent breadcrumb lives in the header (per detail.png),
               not here. Epic 5: custom fields · attachments. */}
         </aside>

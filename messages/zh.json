@@ -61,6 +61,7 @@
       "reporter": "创建人",
       "due": "截止",
       "estimate": "预估",
+      "points": "故事点",
       "status": "状态",
       "actions": "操作",
       "unassigned": "未分配"
@@ -413,6 +414,7 @@
     "dueDate": "截止日期",
     "estimate": "预估工时",
     "estimateMinutes": "预估工时（分钟）",
+    "storyPoints": "故事点",
     "unassigned": "未分配",
     "unknown": "未知",
     "you": "你",
@@ -973,5 +975,21 @@
     "announcementOver": "{key} 正位于{region}上方。",
     "announcementDropped": "已将 {key} 放入{region}。",
     "announcementCancelled": "已取消移动 {key}。"
+  },
+  "estimation": {
+    "header": "故事点",
+    "pickerLabel": "设置故事点",
+    "numericLabel": "故事点",
+    "valueAria": "估算：{value}",
+    "emptyAria": "未估算",
+    "editAria": "故事点：{value} — 编辑",
+    "addAria": "设置故事点",
+    "chipAria": "{value} 个故事点",
+    "deckFibonacci": "斐波那契",
+    "deckLinear": "线性",
+    "deckCustom": "自定义",
+    "clear": "清除",
+    "cancelHint": "按 Esc 取消",
+    "saveError": "无法更新估算，请重试。"
   }
 }

@@ -98,6 +98,7 @@ export function toBoardCardDto(
     assigneeId: row.assigneeId,
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
     estimateMinutes: row.estimateMinutes,
+    storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),
     position: row.position,
     ready: opts.ready,
   };

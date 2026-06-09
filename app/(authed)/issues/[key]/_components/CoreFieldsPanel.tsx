@@ -23,6 +23,7 @@ import { useProjectAccess } from '../../../_components/ProjectAccessProvider';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { TypePicker } from '@/components/issues/TypePicker';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { EstimateBadge } from '@/components/issues/EstimateBadge';
 import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
 import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import { formatDateTime, formatDate } from '@/lib/utils/datetime';
@@ -342,6 +343,20 @@ export function CoreFieldsPanel({
         ) : (
           muted(t('noDueDate'))
         )}
+      </FieldCard>
+
+      {/* Story points (Subtask 4.3.4) — the agile estimate, DISTINCT from the
+          TIME Estimate below (design panel 2). The badge owns its own
+          click-to-edit picker, so this card has no chevron (editable={false});
+          `forceStoryPoints` keeps it a story-points field regardless of the
+          project's display statistic. */}
+      <FieldCard label={t('storyPoints')} editable={false}>
+        <EstimateBadge
+          itemId={item.id}
+          storyPoints={item.storyPoints}
+          estimateMinutes={item.estimateMinutes}
+          forceStoryPoints
+        />
       </FieldCard>
 
       <FieldCard

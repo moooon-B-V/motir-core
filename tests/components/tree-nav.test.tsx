@@ -27,6 +27,8 @@ function summary(overrides: Partial<WorkItemSummaryDto> = {}): WorkItemSummaryDt
     priority: 'medium',
     assigneeId: null,
     position: 'a0',
+    estimateMinutes: null,
+    storyPoints: null,
     archivedAt: null,
     ...overrides,
   };

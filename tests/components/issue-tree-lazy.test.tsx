@@ -85,6 +85,7 @@ function node(over: Partial<WorkItemTreeRowDto> & { id: string; key: number }): 
     reporterId: 'u1',
     dueDate: null,
     estimateMinutes: null,
+    storyPoints: null,
     updatedAt: '2026-06-01T00:00:00.000Z',
     hasChildren: false,
     ...over,
