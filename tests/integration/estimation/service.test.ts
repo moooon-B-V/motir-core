@@ -62,6 +62,17 @@ describe('estimationService.setEstimate', () => {
     expect(reread?.storyPoints?.toString()).toBe('5');
   });
 
+  it('records the prior value as the revision `from` (re-read under the FOR UPDATE lock)', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Diff' });
+    const item = await createTask(fx, 'A');
+    await estimationService.setEstimate(item.id, 5, fx.ctx);
+    await estimationService.setEstimate(item.id, 8, fx.ctx);
+
+    const revs = await db.workItemRevision.findMany({ where: { workItemId: item.id } });
+    const diffs = revs.map((r) => r.diff);
+    expect(diffs).toContainEqual(expect.objectContaining({ storyPoints: { from: 5, to: 8 } }));
+  });
+
   it('accepts a decimal (Jira-faithful 0.5 increments)', async () => {
     const fx = await makeWorkItemFixture({ name: 'Half' });
     const item = await createTask(fx, 'A');

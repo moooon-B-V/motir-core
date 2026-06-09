@@ -65,16 +65,30 @@ export const estimationService = {
     points: number | null,
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    const item = await workItemRepository.findById(itemId);
-    if (!item || item.workspaceId !== ctx.workspaceId) {
+    // Tenant gate up front (finding #26): a missing / cross-workspace item is a
+    // 404 before we open a transaction. This explicit `workspaceId` check is the
+    // PRIMARY gate — it holds even under the dev/CI BYPASSRLS role, where the
+    // in-tx re-read below would see the row regardless of workspace.
+    const existing = await workItemRepository.findById(itemId);
+    if (!existing || existing.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(itemId);
     }
     const value = validateEstimate(points);
-    const from = item.storyPoints === null ? null : Number(item.storyPoints);
 
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
+        // Lock the row + RE-READ under the lock before writing (the lost-update
+        // guard `workItemsService.updateWorkItem` uses): two concurrent estimate
+        // writes serialize on the `FOR UPDATE` lock, and the revision `from` is
+        // the authoritative committed value — not a pre-transaction snapshot
+        // that a racing writer could already have invalidated.
+        const locked = await workItemRepository.lockById(itemId, tx);
+        if (!locked) throw new WorkItemNotFoundError(itemId);
+        const current = await workItemRepository.findById(itemId, tx);
+        if (!current) throw new WorkItemNotFoundError(itemId);
+        const from = current.storyPoints === null ? null : Number(current.storyPoints);
+
         const row = await workItemRepository.setStoryPoints(itemId, value, tx);
         await workItemRevisionsService.recordRevision(
           {
