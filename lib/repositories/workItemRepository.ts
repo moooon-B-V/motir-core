@@ -1332,6 +1332,67 @@ export const workItemRepository = {
   },
 
   /**
+   * One bounded, cursor-paginated page of a sprint's non-archived issues split
+   * by done-category MEMBERSHIP (Story 4.4.4 — the sprint report's completed vs.
+   * incomplete lists). With the project's `done`-category status keys as
+   * `statusKeys`:
+   *   • `include: true`  → issues whose `status` IS one of them — the COMPLETED
+   *     list. An EMPTY `statusKeys` means the project has no done-category status,
+   *     so NOTHING is complete: `status IN ()` matches no row (the empty-input
+   *     guard the coverage gate requires a direct test for).
+   *   • `include: false` → issues whose `status` is NOT one of them — the
+   *     INCOMPLETE list. An EMPTY `statusKeys` applies no status filter, so EVERY
+   *     issue is incomplete (mirrors `findSprintIssuesExcludingStatuses`).
+   * In `backlogRank` order with the `id` tiebreak (the deterministic cursor
+   * ordering `findSprintIssues` uses); takes `take + 1` so the service can detect
+   * a next page. `workspaceId` gates the read (finding #26).
+   */
+  async findSprintIssuesByDoneMembership(
+    sprintId: string,
+    workspaceId: string,
+    params: { statusKeys: string[]; include: boolean; take: number; cursor?: string },
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem[]> {
+    const client = tx ?? db;
+    const { take, cursor } = params;
+    return client.workItem.findMany({
+      where: {
+        sprintId,
+        workspaceId,
+        archivedAt: null,
+        ...doneMembershipFilter(params.statusKeys, params.include),
+      },
+      orderBy: [{ backlogRank: 'asc' }, { id: 'asc' }],
+      take: take + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+  },
+
+  /**
+   * Count of a sprint's non-archived issues split by done-category membership
+   * (Story 4.4.4) — the grouped aggregate behind the report's completed /
+   * incomplete COUNTS (never a loaded-page sum). Same `statusKeys` + `include`
+   * semantics (and the same empty-`statusKeys` edge cases) as
+   * `findSprintIssuesByDoneMembership`. One Prisma `count`; `workspaceId` gates it.
+   */
+  async countSprintIssuesByDoneMembership(
+    sprintId: string,
+    workspaceId: string,
+    params: { statusKeys: string[]; include: boolean },
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const client = tx ?? db;
+    return client.workItem.count({
+      where: {
+        sprintId,
+        workspaceId,
+        archivedAt: null,
+        ...doneMembershipFilter(params.statusKeys, params.include),
+      },
+    });
+  },
+
+  /**
    * The `backlogRank` of each requested issue (the neighbour ranks `rankIssue`
    * needs when the client drops a card between two explicit neighbours). One
    * Prisma op; `workspaceId` gates the read; an empty id list short-circuits to
@@ -1377,6 +1438,20 @@ export const workItemRepository = {
     return row?.backlogRank ?? null;
   },
 };
+
+/**
+ * The `status` `where` fragment for a done-category MEMBERSHIP split (Story
+ * 4.4.4). `include` selects the COMPLETED side (`status IN keys`), `!include`
+ * the INCOMPLETE side (`status NOT IN keys`). The empty-`statusKeys` edges are
+ * deliberate and asymmetric: an `include` over `[]` yields `status: { in: [] }`
+ * (matches nothing — when a project has no done-category status, nothing is
+ * complete), while an exclude over `[]` returns `{}` (no filter — every issue is
+ * incomplete), mirroring `findSprintIssuesExcludingStatuses`.
+ */
+function doneMembershipFilter(statusKeys: string[], include: boolean): Prisma.WorkItemWhereInput {
+  if (include) return { status: { in: statusKeys } };
+  return statusKeys.length > 0 ? { status: { notIn: statusKeys } } : {};
+}
 
 // --- Prisma/Postgres error → typed error translation (repository edge) ------
 
