@@ -41,6 +41,9 @@ export function toWorkItemDto(row: WorkItem): WorkItemDto {
     reporterId: row.reporterId,
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
     estimateMinutes: row.estimateMinutes,
+    // The `Decimal(6, 2)` story-point estimate (Story 4.3) → a wire-safe number
+    // (or null when unestimated); Decimals don't survive JSON otherwise.
+    storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),
     position: row.position,
     sprintId: row.sprintId,
     backlogRank: row.backlogRank,

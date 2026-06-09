@@ -1,4 +1,10 @@
-import { Prisma, type WorkItem, type WorkItemKind, type WorkItemPriority } from '@prisma/client';
+import {
+  Prisma,
+  type EstimationStatistic,
+  type WorkItem,
+  type WorkItemKind,
+  type WorkItemPriority,
+} from '@prisma/client';
 import { db } from '@/lib/db';
 import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
 import { READY_KIND_RANK, type ReadyCursor } from '@/lib/workItems/readyFilter';
@@ -147,6 +153,35 @@ const ISSUE_SORT_SQL: Record<IssueSortColumn, Prisma.Sql> = {
   estimate: Prisma.sql`w."estimateMinutes"`,
   status: Prisma.sql`ws."position"`,
 };
+
+/**
+ * The roll-up aggregate expression for an estimation `statistic` (Subtask
+ * 4.3.3), parameterising the bounded sprint/epic roll-ups so adding the
+ * statistic switch is ONE parameter, not three query paths (the durable shape).
+ * The `statistic` is a validated Prisma enum (never raw user input), so the
+ * branch is a whitelist — the same pattern as `ISSUE_SORT_SQL`. `colOwner` is
+ * the alias the points/time column hangs off (`w` for the flat sprint scan, `s`
+ * for the recursive subtree CTE). `doneFilter`, when true, scopes the SUM to
+ * issues in a `category = 'done'` workflow status via an aggregate `FILTER`
+ * (the `ws` join must be present) — used for a sprint's `completed` points.
+ * Sums `COALESCE`-to-0 so an all-NULL/empty group returns 0, never NULL.
+ */
+function pointsAggExpr(
+  statistic: EstimationStatistic,
+  colOwner: 'w' | 's',
+  doneFilter: boolean,
+): Prisma.Sql {
+  const filter = doneFilter ? Prisma.sql` FILTER (WHERE ws."category" = 'done')` : Prisma.empty;
+  if (statistic === 'issue_count') {
+    return Prisma.sql`COUNT(*)${filter}`;
+  }
+  const owner = Prisma.raw(colOwner); // 'w' | 's' — an internal literal, never user input
+  const col =
+    statistic === 'story_points'
+      ? Prisma.sql`${owner}."storyPoints"`
+      : Prisma.sql`${owner}."estimateMinutes"`;
+  return Prisma.sql`COALESCE(SUM(${col})${filter}, 0)`;
+}
 
 export const workItemRepository = {
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<WorkItem | null> {
@@ -1045,6 +1080,103 @@ export const workItemRepository = {
     } catch (err) {
       throw translateWriteError(err, { id: itemId });
     }
+  },
+
+  // --- Story points + estimation roll-ups (Story 4.3 · Subtask 4.3.3) --------
+  // The agile `storyPoints` estimate lives on `work_item` (the entity owns it —
+  // the repository-name-matches-entity rule), SEPARATE from `estimateMinutes`
+  // (the TIME estimate, 2.3.6). `storyPoints` is a camelCase column (NOT
+  // `@map`-ed — within-table consistency, schema rung-2), so raw SQL
+  // double-quotes it verbatim. The roll-ups are BOUNDED aggregates (finding
+  // #57) — one grouped/recursive query, NEVER a load-all + client sum. The
+  // write requires `tx`; the aggregate reads carry the explicit `workspaceId`
+  // gate (finding #26) and take an optional `tx`.
+
+  /**
+   * Set or clear (`points = null`) an issue's `storyPoints`. Single write; `tx`
+   * REQUIRED. The value validation + the 1.4.6 revision are the SERVICE's job
+   * (estimationService) — this is the bare column write. `Prisma.Decimal`
+   * accepts a JS `number`, so the service passes the validated number through.
+   */
+  async setStoryPoints(
+    itemId: string,
+    points: number | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkItem> {
+    try {
+      return await tx.workItem.update({ where: { id: itemId }, data: { storyPoints: points } });
+    } catch (err) {
+      throw translateWriteError(err, { id: itemId });
+    }
+  },
+
+  /**
+   * The BOUNDED sprint points roll-up (finding #57): the configured `statistic`
+   * summed over a sprint's non-archived issues, in ONE grouped aggregate.
+   * `committed` is the total; `completed` is the same sum scoped — via an
+   * aggregate `FILTER` over the LEFT-joined `workflow_status` — to issues whose
+   * status maps to a `category = 'done'` workflow status (the finding-#21
+   * terminal predicate). The `workspaceId` gate keeps the aggregate
+   * tenant-scoped. NULL/empty sums `COALESCE` to 0, so an empty / wholly
+   * unestimated sprint returns `{ committed: 0, completed: 0 }` (the single
+   * aggregate row always exists). NEVER loads the rows.
+   */
+  async sumPointsForSprint(
+    sprintId: string,
+    workspaceId: string,
+    statistic: EstimationStatistic,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ committed: number; completed: number }> {
+    const client = tx ?? db;
+    const committed = pointsAggExpr(statistic, 'w', false);
+    const completed = pointsAggExpr(statistic, 'w', true);
+    const rows = await client.$queryRaw<Array<{ committed: number; completed: number }>>`
+      SELECT ${committed}::float8 AS "committed",
+             ${completed}::float8 AS "completed"
+        FROM "work_item" w
+        LEFT JOIN "workflow_status" ws
+               ON ws."project_id" = w."projectId" AND ws."key" = w."status"
+       WHERE w."sprintId" = ${sprintId}
+         AND w."workspaceId" = ${workspaceId}
+         AND w."archivedAt" IS NULL`;
+    return rows[0] ?? { committed: 0, completed: 0 };
+  },
+
+  /**
+   * The BOUNDED epic/parent subtree roll-up (finding #57): the configured
+   * `statistic` summed over the parent's DESCENDANTS at any depth, via a
+   * recursive CTE walking DOWN the `parentId` edge — in ONE query, never a
+   * load-the-subtree-and-sum. The anchor is the parent's DIRECT children (the
+   * parent's own estimate is excluded — a roll-up of descendants), and the
+   * recursion + the `workspaceId` gate on both the anchor and the recursive
+   * step keep it tenant-scoped (finding #26). An empty subtree → `{ total: 0 }`
+   * (the COALESCE/COUNT over zero rows). The walk is naturally bounded (the tree
+   * depth is capped at 4, Story 1.4).
+   */
+  async sumPointsForParent(
+    parentId: string,
+    workspaceId: string,
+    statistic: EstimationStatistic,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ total: number }> {
+    const client = tx ?? db;
+    const total = pointsAggExpr(statistic, 's', false);
+    const rows = await client.$queryRaw<Array<{ total: number }>>`
+      WITH RECURSIVE subtree AS (
+        SELECT w."id", w."storyPoints", w."estimateMinutes"
+          FROM "work_item" w
+          WHERE w."parentId" = ${parentId}
+            AND w."workspaceId" = ${workspaceId}
+            AND w."archivedAt" IS NULL
+        UNION ALL
+        SELECT c."id", c."storyPoints", c."estimateMinutes"
+          FROM "work_item" c
+          JOIN subtree p ON c."parentId" = p."id"
+          WHERE c."workspaceId" = ${workspaceId}
+            AND c."archivedAt" IS NULL
+      )
+      SELECT ${total}::float8 AS "total" FROM subtree s`;
+    return rows[0] ?? { total: 0 };
   },
 
   /**
