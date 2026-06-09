@@ -272,7 +272,7 @@ export const story_4_3: PlanStory = {
       id: '4.3.2',
       title:
         'Schema + migration — `work_item.storyPoints` + `project` estimation config (`estimationStatistic` / `pointScale` / `customScaleValues`) + the two enums, drift-free',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
