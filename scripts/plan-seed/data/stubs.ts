@@ -20,29 +20,16 @@ export const STUB_STORIES: PlanStory[] = [
   // — data/story-4.1.ts, data/story-4.2.ts, data/story-4.3.ts, data/story-4.4.ts.
   // 4.5 is the Scrum board (formerly Story 3.4) — fully expanded as
   // data/story-4.5.ts. Moved here from Epic 3 per `notes.html` mistake #32.
-  {
-    id: '4.6',
-    title: 'Velocity + burndown charts',
-    status: 'planned',
-    descriptionMd:
-      'Velocity (completed points/sprint history) and in-sprint burndown (remaining points vs. ' +
-      'days). Reads the sprint + points data; no new write model. Wires the in-sprint burndown ' +
-      "into the Story 4.5 sprint header's documented chart seam (Story 4.5 shows numeric " +
-      'remaining only and leaves the chart slot for this story).',
-    items: [],
-  },
-  {
-    id: '4.7',
-    title: 'Tests — sprint lifecycle, estimation roll-ups, charts, at-scale Scrum journey',
-    status: 'planned',
-    descriptionMd:
-      'Vitest over the sprint state machine + point roll-ups + carry-over; Playwright over plan → ' +
-      'start → move cards → complete. Also owns the **at-scale combined Scrum journey** Story 4.5 ' +
-      'defers (the Scrum analogue of Story 3.5 for Kanban): drag + WIP + swimlanes + sprint-scope ' +
-      'on a large-active-sprint board with virtualization, exercising the bounded projection ' +
-      '(finding #57) end-to-end.',
-    items: [],
-  },
+  // 4.6 (Velocity + burndown charts) is fully expanded as data/story-4.6.ts —
+  // read-only over the 4.1 sprint / 4.3 points / 1.4.6 revision data (no new
+  // write model); fills the chart seams Story 4.5 (scrum header) + Story 4.4.6
+  // (sprint report) reserved, and introduces the reusable SVG chart primitive
+  // Story 6.3 reuses.
+  // 4.7 is the Epic-4 cross-cutting AT-SCALE test story (the Scrum analogue of
+  // Story 3.5) — fully expanded as data/story-4.7.ts. Re-scoped on deepening to
+  // its non-duplicative remainder (the per-story siblings 4.1.5/4.2.6/4.3.7/
+  // 4.4.7/4.5.4 each own their surface in isolation): the combined Scrum journey
+  // at scale on a large active sprint. See data/story-4.7.ts.
 
   // ── Epic 5: Collaboration & fields ────────────────────────────────────────
   {
