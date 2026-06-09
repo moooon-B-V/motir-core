@@ -595,7 +595,7 @@ export const story_7_0: PlanStory = {
     {
       id: '7.0.9',
       title: 'BYOK doc — `prodect run` against `/api/ready/next` (the agent contract surfaced)',
-      status: 'in_progress',
+      status: 'done',
       type: 'content',
       executor: 'coding_agent',
       estimateMinutes: 15,
