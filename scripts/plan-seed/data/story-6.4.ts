@@ -193,7 +193,7 @@ export const story_6_4: PlanStory = {
     {
       id: '6.4.5',
       title: 'UI — project settings → Members + Access',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 26,
