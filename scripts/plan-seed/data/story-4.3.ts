@@ -323,7 +323,7 @@ export const story_4_3: PlanStory = {
       id: '4.3.3',
       title:
         '`estimationService` — story-point write + project estimation config CRUD + bounded sprint/epic roll-up reads (reusable `rollupForSprint`/`rollupForParent`); repo single-ops + DTOs/errors',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
