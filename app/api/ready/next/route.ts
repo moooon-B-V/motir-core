@@ -8,7 +8,7 @@ import type { ReadyListFilter } from '@/lib/workItems/readyFilter';
 
 // POST /api/ready/next (Subtask 7.0.5) — the DISPATCH half of the agent-dispatch
 // surface (Story 7.0). Give me ONE thing to run next: returns the first ready
-// work item under the deterministic `(priority desc, key asc)` sort that is NOT
+// work item under the deterministic `(type asc, priority desc, key asc)` sort that is NOT
 // in `excludeIds`, as the full `ReadyItemDispatchDto` (body + contextRefs +
 // resolved blocker keys + parentKey + runCommand — the payload a coding agent
 // stuffs into its prompt), or `204 No Content` when the filtered ready set is

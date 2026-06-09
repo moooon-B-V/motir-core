@@ -4,10 +4,12 @@
 // and the per-row "Copy `prodect run`" affordance the BYOK CLI flow depends on:
 //
 //   - the sidebar "Ready" entry (between Issues and Boards) + its live count badge;
-//   - the flat dispatch list, ordered `(priority desc, type asc, key asc)` — the
-//     first row carries the HIGHEST priority (sort correctness from a user's seat;
-//     7.0.10 leaf-only + 7.0.11 type-tiebreak already shipped, so a childed
-//     container never appears and priority leads);
+//   - the flat dispatch list, ordered `(type asc, priority desc, key asc)` —
+//     type leads, priority orders within a type bucket (7.0.12). The seeded
+//     ready items are all the same type (`task`), so the first row carries the
+//     HIGHEST priority within that bucket (sort correctness from a user's seat;
+//     7.0.10 leaf-only + 7.0.11/7.0.12 type-primary already shipped, so a childed
+//     container never appears);
 //   - the per-row copy affordance → the exact `prodect run PROD-<n>` command on the
 //     clipboard + the "Copied" toast;
 //   - the row → peek interaction (the shipped IssueQuickView, NOT a full-page nav);
@@ -133,7 +135,8 @@ test('@smoke /ready: badge · highest-first sort · copy command · peek · live
   await expect(readyLink).toContainText('3');
 
   // (3) Open /ready; the list renders the 3 ready items and the FIRST row is the
-  // highest-priority one (priority leads the sort).
+  // highest-priority one (all 3 are the same type, so priority orders within the
+  // single type bucket under the 7.0.12 `(type asc, priority desc, key asc)` sort).
   await readyLink.click();
   await expect(page).toHaveURL(/\/ready(\?|$)/);
   const list = page.getByRole('list', { name: 'Ready work items' });
@@ -190,8 +193,9 @@ test('@smoke /ready is a workspace-member surface, not PM-only', async ({ page, 
   await signIn(page, member.email, TEST_PASSWORD);
 
   // The member — NOT the project manager — sees the same ready surface: the
-  // sidebar badge (3) and the list with the highest-priority row first. /ready is
-  // gated on workspace membership, not on being the PM.
+  // sidebar badge (3) and the list with the highest-priority row first (all
+  // same type → priority orders within the bucket). /ready is gated on workspace
+  // membership, not on being the PM.
   const readyLink = page
     .getByRole('navigation', { name: 'Primary' })
     .getByRole('link', { name: 'Ready' });

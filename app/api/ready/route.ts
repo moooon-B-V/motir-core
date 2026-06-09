@@ -13,7 +13,7 @@ import { InvalidReadyCursorError, type ReadyListFilter } from '@/lib/workItems/r
 // this; the DISPATCH-one-item consumer reads `POST /api/ready/next` (7.0.5).
 //
 // Thin HTTP layer over `workItemsService.listReady` (the readiness predicate +
-// `(priority desc, key asc)` sort + cursor live there). The route only: reads
+// `(type asc, priority desc, key asc)` sort + cursor live there). The route only: reads
 // the workspace context (session), parses + hand-validates the query, resolves
 // `?projectKey` → a project, calls ONE service method, and maps typed errors to
 // status codes. No `db` / no `$transaction` here (CLAUDE.md 4-layer rule).

@@ -158,11 +158,12 @@ describe('listReady — readiness predicate', () => {
 });
 
 describe('listReady — sort, filters, pagination', () => {
-  it('sorts priority desc, then key asc within an equal priority + type', async () => {
+  it('sorts priority desc, then key asc within an equal type', async () => {
     const fx = await makeWorkItemFixture();
-    // All the same kind (task) → the type tiebreaker is inert here; priority
-    // orders them and key breaks the highest/highest tie. (Type ordering is
-    // covered by the dedicated 7.0.11 tiebreaker suite below.)
+    // All the same kind (task) → the primary type key is inert here; priority
+    // orders them within the single type bucket and key breaks the
+    // highest/highest tie. (Type-primary ordering is covered by the dedicated
+    // 7.0.12 type-primary suite below.)
     const low = await make(fx, { title: 'low', priority: 'low' });
     const hi1 = await make(fx, { title: 'hi1', priority: 'highest' });
     const hi2 = await make(fx, { title: 'hi2', priority: 'highest' });
@@ -245,9 +246,9 @@ describe('listReady — sort, filters, pagination', () => {
   it('a valid cursor past the tail returns an empty page', async () => {
     const fx = await makeWorkItemFixture();
     await make(fx, { title: 'only', priority: 'high' });
-    // Past the tail under (priority DESC, type ASC, key ASC): lowest priority,
-    // the last type rank (epic), and a huge key — nothing sorts after it.
-    const pastEnd = encodeReadyCursor({ priority: 'lowest', kind: 'epic', key: 9_999_999 });
+    // Past the tail under (type ASC, priority DESC, key ASC): the last type rank
+    // (epic), lowest priority, and a huge key — nothing sorts after it.
+    const pastEnd = encodeReadyCursor({ kind: 'epic', priority: 'lowest', key: 9_999_999 });
     const { items, nextCursor } = await workItemsService.listReady(
       fx.projectId,
       { cursor: pastEnd },
@@ -285,10 +286,11 @@ describe('listReady — sort, filters, pagination', () => {
   });
 });
 
-describe('listReady — type tiebreaker (priority → type → key, Subtask 7.0.11)', () => {
-  // Sort is (priority DESC, type ASC, key ASC). Priority stays primary; type
-  // breaks the tie in dispatch order subtask < bug < task < story < epic; key
-  // is the final tiebreaker. (Containers are already excluded by 7.0.10.)
+describe('listReady — type-primary sort (type → priority → key, Subtask 7.0.12)', () => {
+  // Sort is (type ASC, priority DESC, key ASC). Type is PRIMARY in dispatch
+  // order subtask < bug < task < story < epic; priority breaks the type tie
+  // (highest first, within a type bucket); key is the final tiebreaker.
+  // (Containers are already excluded by 7.0.10.)
   const mk = (
     fx: WorkItemFixture,
     kind: 'epic' | 'story' | 'task' | 'bug' | 'subtask',
@@ -300,7 +302,7 @@ describe('listReady — type tiebreaker (priority → type → key, Subtask 7.0.
       fx.ctx,
     );
 
-  it('type breaks a priority tie in dispatch order: bug < task < story < epic', async () => {
+  it('type leads in dispatch order: bug < task < story < epic', async () => {
     const fx = await makeWorkItemFixture();
     // Same (default medium) priority, all childless roots → only type orders them.
     // Insert out of rank order to prove the sort, not creation order, decides.
@@ -329,19 +331,45 @@ describe('listReady — type tiebreaker (priority → type → key, Subtask 7.0.
     expect(keys(items)).toEqual([sub.identifier, bug.identifier]);
   });
 
-  it('priority still outranks type: a highest epic precedes a lowest subtask', async () => {
+  it('type now outranks priority: a lowest subtask precedes a highest epic', async () => {
     const fx = await makeWorkItemFixture();
     const epic = await mk(fx, 'epic', 'Epic', { priority: 'highest' }); // root leaf
     const container = await mk(fx, 'task', 'Container'); // excluded
     const sub = await mk(fx, 'subtask', 'Sub', { parentId: container.id, priority: 'lowest' });
 
     const { items } = await workItemsService.listReady(fx.projectId, {}, fx.ctx);
-    // Priority is primary: the highest-priority epic wins over the lowest subtask
-    // even though subtask outranks epic on TYPE.
-    expect(keys(items)).toEqual([epic.identifier, sub.identifier]);
+    // Type is primary (7.0.12, reversing 7.0.11): the subtask (rank 0) precedes
+    // the epic (rank 4) even though the epic is the higher priority.
+    expect(keys(items)).toEqual([sub.identifier, epic.identifier]);
   });
 
-  it('the cursor pages across types deterministically (3-tuple seek-after)', async () => {
+  it('priority orders within a type bucket (highest first)', async () => {
+    const fx = await makeWorkItemFixture();
+    // All the same type (bug) → priority is the active discriminant; highest
+    // first, key breaks the highest/highest tie. Insert out of priority order.
+    const low = await mk(fx, 'bug', 'low', { priority: 'low' });
+    const top1 = await mk(fx, 'bug', 'top1', { priority: 'highest' });
+    const mid = await mk(fx, 'bug', 'mid', { priority: 'medium' });
+    const top2 = await mk(fx, 'bug', 'top2', { priority: 'highest' });
+
+    const { items } = await workItemsService.listReady(fx.projectId, {}, fx.ctx);
+    expect(keys(items)).toEqual([top1.identifier, top2.identifier, mid.identifier, low.identifier]);
+  });
+
+  it('subtask-first holds across priorities: a lowest subtask precedes a highest task', async () => {
+    const fx = await makeWorkItemFixture();
+    const container = await mk(fx, 'task', 'Container'); // excluded (gains a child)
+    const sub = await mk(fx, 'subtask', 'Sub', { parentId: container.id, priority: 'lowest' });
+    const task = await mk(fx, 'task', 'Task', { priority: 'highest' }); // standalone leaf
+
+    const { items } = await workItemsService.listReady(fx.projectId, {}, fx.ctx);
+    // Type bucket wins outright: every subtask precedes every task regardless of
+    // priority. (Within each bucket priority would order — but the buckets don't
+    // interleave.)
+    expect(keys(items)).toEqual([sub.identifier, task.identifier]);
+  });
+
+  it('the cursor pages across a type boundary deterministically (3-tuple seek-after)', async () => {
     const fx = await makeWorkItemFixture();
     // Same priority, mixed kinds → the type rank is the discriminator the cursor
     // must carry to page correctly across the kind boundary.
@@ -350,6 +378,30 @@ describe('listReady — type tiebreaker (priority → type → key, Subtask 7.0.
     const bug = await mk(fx, 'bug', 'B');
     const task = await mk(fx, 'task', 'T');
     const expected = [bug.identifier, task.identifier, story.identifier, epic.identifier];
+
+    const single = await workItemsService.listReady(fx.projectId, {}, fx.ctx);
+    expect(keys(single.items)).toEqual(expected);
+
+    const walked: string[] = [];
+    let cursor: string | undefined;
+    for (;;) {
+      const page = await workItemsService.listReady(fx.projectId, { limit: 2, cursor }, fx.ctx);
+      walked.push(...keys(page.items));
+      if (!page.nextCursor) break;
+      cursor = page.nextCursor;
+    }
+    expect(walked).toEqual(expected);
+  });
+
+  it('the cursor pages across a priority boundary within a type deterministically', async () => {
+    const fx = await makeWorkItemFixture();
+    // One type (task), four priorities → the cursor must carry priority to page
+    // across the priority boundary within the single type bucket.
+    const top = await mk(fx, 'task', 'top', { priority: 'highest' });
+    const high = await mk(fx, 'task', 'high', { priority: 'high' });
+    const mid = await mk(fx, 'task', 'mid', { priority: 'medium' });
+    const low = await mk(fx, 'task', 'low', { priority: 'low' });
+    const expected = [top.identifier, high.identifier, mid.identifier, low.identifier];
 
     const single = await workItemsService.listReady(fx.projectId, {}, fx.ctx);
     expect(keys(single.items)).toEqual(expected);
