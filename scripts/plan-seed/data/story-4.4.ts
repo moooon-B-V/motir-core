@@ -390,7 +390,7 @@ export const story_4_4: PlanStory = {
       id: '4.4.4',
       title:
         'Backend — `getSprintReport` (completed/incomplete lists + points via 4.3 roll-up + scope-change, bounded)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
