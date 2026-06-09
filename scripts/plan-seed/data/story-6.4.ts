@@ -138,7 +138,7 @@ export const story_6_4: PlanStory = {
       id: '6.4.3',
       title:
         'Service enforcement — `projectAccess` browse/edit gate threaded into project/board/issue reads',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 34,
