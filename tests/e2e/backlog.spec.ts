@@ -115,8 +115,8 @@ test.describe('backlog — grooming session (4.2.6)', () => {
     await expect(page.getByTestId(`sprint-count-${seed.sprintId}`)).toHaveText('1');
     await expect(page.getByTestId('backlog-count')).toContainText('5');
     // The seeded sprint issue + a backlog issue both render.
-    await expect(row(page, seed.sprintIssues[0].identifier)).toBeVisible();
-    await expect(row(page, seed.backlogIssues[0].identifier)).toBeVisible();
+    await expect(row(page, seed.sprintIssues[0]!.identifier)).toBeVisible();
+    await expect(row(page, seed.backlogIssues[0]!.identifier)).toBeVisible();
     // The "View all issues" toolbar link deep-links to the issue navigator
     // (Jira "View in Issue Navigator") — NOT a flat list rebuilt here.
     await expect(page.getByRole('link', { name: 'View all issues' })).toHaveAttribute(
@@ -130,8 +130,8 @@ test.describe('backlog — grooming session (4.2.6)', () => {
   }) => {
     await openBacklog(page, seed);
 
-    const first = seed.backlogIssues[0].identifier; // "Backlog one" (top)
-    const third = seed.backlogIssues[2].identifier; // "Backlog three"
+    const first = seed.backlogIssues[0]!.identifier; // "Backlog one" (top)
+    const third = seed.backlogIssues[2]!.identifier; // "Backlog three"
 
     const before = await backlogOrder(page);
     expect(before[0]).toBe(first);
@@ -158,8 +158,8 @@ test.describe('backlog — grooming session (4.2.6)', () => {
   }) => {
     await openBacklog(page, seed);
 
-    const moving = seed.backlogIssues[1].identifier; // "Backlog two"
-    const sprintTarget = seed.sprintIssues[0].identifier; // the seeded sprint row
+    const moving = seed.backlogIssues[1]!.identifier; // "Backlog two"
+    const sprintTarget = seed.sprintIssues[0]!.identifier; // the seeded sprint row
 
     await expect(page.getByTestId(`sprint-count-${seed.sprintId}`)).toHaveText('1');
 
@@ -197,8 +197,8 @@ test.describe('backlog — grooming session (4.2.6)', () => {
   }) => {
     await openBacklog(page, seed);
 
-    const a = seed.backlogIssues[2].identifier; // "Backlog three"
-    const b = seed.backlogIssues[3].identifier; // "Backlog four"
+    const a = seed.backlogIssues[2]!.identifier; // "Backlog three"
+    const b = seed.backlogIssues[3]!.identifier; // "Backlog four"
 
     await expect(page.getByTestId(`sprint-count-${seed.sprintId}`)).toHaveText('1');
 
@@ -222,7 +222,7 @@ test.describe('backlog — grooming session (4.2.6)', () => {
     await expect(page.getByTestId('backlog-count')).toContainText('3'); // 5 → 3
     // Both DB rows now carry the sprint id (atomic, server-confirmed).
     const movedSprintIds = await db.workItem.findMany({
-      where: { id: { in: [seed.backlogIssues[2].id, seed.backlogIssues[3].id] } },
+      where: { id: { in: [seed.backlogIssues[2]!.id, seed.backlogIssues[3]!.id] } },
       select: { sprintId: true },
     });
     expect(movedSprintIds.every((w) => w.sprintId === seed.sprintId)).toBe(true);
@@ -305,8 +305,8 @@ test.describe('backlog — at scale (finding #57, 4.2.6)', () => {
   test('drag still reorders out of the virtualized list and persists', async ({ page }) => {
     await openBacklog(page, seed);
 
-    const first = seed.backlogIssues[0].identifier; // "Scale issue 001"
-    const third = seed.backlogIssues[2].identifier; // "Scale issue 003"
+    const first = seed.backlogIssues[0]!.identifier; // "Scale issue 001"
+    const third = seed.backlogIssues[2]!.identifier; // "Scale issue 003"
 
     const before = await backlogOrder(page);
     expect(before[0]).toBe(first);
