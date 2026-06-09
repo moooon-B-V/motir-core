@@ -5,8 +5,8 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { CircleAlert, GripVertical } from 'lucide-react';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
-import { EstimateBadge } from '@/components/issues/EstimateBadge';
 import { Pill } from '@/components/ui/Pill';
+import { formatDurationMinutes } from '@/lib/utils/duration';
 import type { BoardCardDto } from '@/lib/dto/boards';
 import { Avatar, PriorityValue } from '../../issues/_components/issueCellPrimitives';
 
@@ -52,6 +52,8 @@ export function BoardCardView({
   assigneeName: string | null;
 }) {
   const t = useTranslations('boards');
+  const estimate =
+    card.estimateMinutes != null ? formatDurationMinutes(card.estimateMinutes) : null;
 
   return (
     <>
@@ -83,16 +85,14 @@ export function BoardCardView({
             {t('blocked')}
           </Pill>
         )}
-        {/* The `.pts` chip (Subtask 4.3.4) — generalised from the raw time
-            estimate to the project's configured estimation statistic (story
-            points by default), editable via the inline picker. A sibling of the
-            card's other controls (never nested in the card button). */}
-        <EstimateBadge
-          itemId={card.id}
-          storyPoints={card.storyPoints}
-          estimateMinutes={card.estimateMinutes}
-          readOnly
-        />
+        {estimate ? (
+          <span
+            className="font-mono text-xs font-semibold text-(--el-text-secondary)"
+            title={t('estimateLabel', { value: estimate })}
+          >
+            {estimate}
+          </span>
+        ) : null}
         <span className="flex-1" />
         {assigneeName ? (
           <span title={t('assignedTo', { name: assigneeName })}>
