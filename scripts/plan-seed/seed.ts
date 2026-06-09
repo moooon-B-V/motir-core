@@ -10,9 +10,13 @@
  * (see SEED_USERS). Every work item gets a **reporter + assignee drawn from the
  * team** and a **varied priority** — deterministically (a hash of the plan id),
  * so reseeds are stable and the board/list show real people + a spread of
- * priorities rather than one owner + all-medium. Access is **workspace-level**
- * (there is no separate project membership), so adding the team to the workspace
- * is what gates the project too.
+ * priorities rather than one owner + all-medium. The team is also enrolled in the
+ * `prodect` **project** (Story 6.4 added project-level access gating): every seed
+ * user gets a `ProjectMembership` — **zhuyue@prodect.co is the project `admin`**
+ * (manages members + access), **everyone else is a `member`** (can edit, can't
+ * manage) — and the project's `accessLevel` is set explicitly to **`open`** so the
+ * demo tenant stays browsable by every workspace member (flip to `private` here to
+ * showcase gating instead). Before 6.4 access was workspace-level only.
  *
  * Re-running is IDEMPOTENT — it clears ONLY the `moooon` workspace(s) owned by a
  * seed user (old or new) and reseeds; it never touches any other workspace's
@@ -36,6 +40,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { PLAN } from './data';
@@ -159,10 +164,37 @@ async function main() {
     actorUserId: ownerId,
   });
   // Point every member's active project at `prodect` so they all land on it
-  // (access is workspace-level; this is just the convenience default).
+  // (this is just the convenience default for where they land on sign-in).
   await db.workspaceMembership.updateMany({
     where: { workspaceId: workspace.id },
     data: { activeProjectId: project.id },
+  });
+
+  // ── Project membership: enroll the team in `prodect` (Story 6.4.7) ──────────
+  // Project-level access gating landed in Story 6.4; now that ProjectMembership
+  // exists, enroll the team in the project itself — the project half of the
+  // original "add the team to the workspace AND the project" ask (the workspace
+  // half is the addMember loop above). zhuyue@prodect.co is the project `admin`
+  // (manages members + access); everyone else is a `member` (can edit, can't
+  // manage). The project keeps accessLevel `open` (set explicitly here, though it
+  // is also the schema default) so the demo tenant stays browsable by every
+  // workspace member — gating is exercised by the 6.4 tests, not forced on the
+  // showcase tenant; flip `'open'` to `'private'` below to demo gating instead.
+  // The clear pass above deletes the project (cascading its memberships), so a
+  // plain create is idempotent across reseeds.
+  await db.$transaction(async (tx: Prisma.TransactionClient) => {
+    for (const u of SEED_USERS) {
+      await projectMembershipRepository.create(
+        {
+          workspaceId: workspace.id,
+          projectId: project.id,
+          userId: userIdByEmail.get(u.email)!,
+          role: u.email === OWNER_EMAIL ? 'admin' : 'member',
+        },
+        tx,
+      );
+    }
+    await projectRepository.setAccessLevel(project.id, 'open', tx);
   });
 
   // ── Tree pass: create every epic → story → leaf through the shipped path ──
@@ -305,6 +337,7 @@ async function main() {
   );
   console.log(`  Workspace: ${SEED_WORKSPACE_NAME}`);
   console.log(`  Project:   ${SEED_PROJECT_NAME} (${project.identifier})`);
+  console.log(`  Project:   access=open · ${OWNER_EMAIL}=admin, rest=member (Story 6.4)`);
   console.log('  Open the project to browse the plan as an issue tree.');
   console.log('────────────────────────────────────────────────────────');
 }
