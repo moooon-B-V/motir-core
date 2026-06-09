@@ -20,16 +20,15 @@ import type { SprintDto } from '@/lib/dto/sprints';
 // entry-point button Story 4.2.3 mounts in the backlog sprint container (the seam
 // pattern: 4.2 mounts the button, 4.4 wires the flow). Self-contained — it takes a
 // planned sprint + the project's active sprint (for the friendly one-active error)
-// and binds to the shipped backend (4.4.2):
+// and binds to the shipped backend (4.4.2, goal added in 4.4.8):
 //
-//   • POST /api/sprints/[id]/start  { name, startDate, endDate } → startSprint
-//   • PATCH /api/sprints/[id]        { goal }                    → updateSprint
+//   • POST /api/sprints/[id]/start  { name, goal, startDate, endDate } → startSprint
 //
-// The start endpoint (4.4.2 `StartSprintInput`) takes name + the window only, not
-// the goal — so an edited goal is persisted via the shipped `updateSprint` PATCH
-// just before starting (the sprint is still `planned`, so the edit is allowed).
-// See PRODECT_FINDINGS #68: a future `startSprint` could accept `goal` to make
-// this a single atomic write (the Jira start dialog edits the goal inline).
+// Start is ONE atomic write: `startSprint` (4.4.8 / finding #68) takes the goal
+// and stamps it inside the same activation transaction as the window + scope-lock
+// baseline, so the dialog no longer issues a separate pre-start `updateSprint`
+// PATCH (the Jira start dialog edits the goal inline). An empty goal sends `null`
+// to clear it.
 //
 // "Board opens": on success the flow navigates to /boards — the scrum board
 // renders the active sprint once Story 4.5 lands; until then it renders as Kanban
@@ -153,22 +152,20 @@ export function StartSprintDialog({
     setServerWindowError(false);
     setSubmitting(true);
     try {
-      // The start endpoint doesn't accept `goal` (4.4.2); persist an edited goal
-      // through the shipped updateSprint PATCH first (the sprint is still planned).
+      // Start is ONE atomic write (4.4.8 / finding #68): the goal rides along in
+      // the /start body and `startSprint` stamps it inside the activation
+      // transaction — no separate pre-start PATCH. An empty goal sends `null` to
+      // clear it.
       const trimmedGoal = goal.trim();
-      if (trimmedGoal !== (sprint.goal ?? '')) {
-        const patch = await fetch(`/api/sprints/${sprint.id}`, {
-          method: 'PATCH',
-          headers: { 'content-type': 'application/json', accept: 'application/json' },
-          body: JSON.stringify({ goal: trimmedGoal.length > 0 ? trimmedGoal : null }),
-        });
-        if (!patch.ok) throw new Error(`patch goal ${patch.status}`);
-      }
-
       const res = await fetch(`/api/sprints/${sprint.id}/start`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ name: name.trim(), startDate, endDate }),
+        body: JSON.stringify({
+          name: name.trim(),
+          goal: trimmedGoal.length > 0 ? trimmedGoal : null,
+          startDate,
+          endDate,
+        }),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { code?: string };

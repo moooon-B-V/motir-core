@@ -211,8 +211,12 @@ export const sprintsService = {
    * Subtasks 4.4.3 / 4.4.4 and are NOT here.
    *
    * `startDate` defaults to now; `endDate` (optional) is validated `≥ startDate`;
-   * an optional `name` renames the sprint on start (the Jira start dialog). The
-   * baseline is computed from the sprint's CURRENT issues and never mutated.
+   * an optional `name` renames the sprint on start (the Jira start dialog), and
+   * an optional `goal` edits the sprint goal IN THE SAME activation transaction
+   * (Story 4.4.8 / finding #68 — so Start is one atomic write, never a separate
+   * pre-start PATCH; `undefined` leaves it unchanged, an explicit `null` clears
+   * it). The baseline is computed from the sprint's CURRENT issues and never
+   * mutated.
    *
    * Concurrency: the friendly `findActiveByProject` pre-check 409s early (before
    * a board is provisioned, so the common already-running case leaves no orphan
@@ -296,6 +300,10 @@ export const sprintsService = {
           committedPoints,
         };
         if (name !== undefined) data.name = name;
+        // Stamp the goal in-transaction when supplied (finding #68): the start
+        // dialog edits it inline, so it is part of the atomic activation, not a
+        // separate PATCH. `undefined` leaves it unchanged; `null` clears it.
+        if (input.goal !== undefined) data.goal = input.goal;
 
         const row = await sprintRepository.update(id, data, tx);
         return { row, committedIssueCount };

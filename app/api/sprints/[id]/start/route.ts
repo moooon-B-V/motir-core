@@ -12,8 +12,10 @@ import {
   SprintWindowInvalidError,
 } from '@/lib/sprints/errors';
 
-// POST /api/sprints/[id]/start (Subtask 4.4.2) — start a planned sprint:
-//   { name?, startDate?, endDate? } → startSprint
+// POST /api/sprints/[id]/start (Subtask 4.4.2; goal added in 4.4.8) — start a
+// planned sprint: { name?, goal?, startDate?, endDate? } → startSprint.
+// `goal` is forwarded into the activation transaction (finding #68) so the
+// start dialog's inline goal edit is one atomic write, not a pre-start PATCH.
 // Thin HTTP layer over sprintsService; session-required; workspace from the
 // active-project context (NEVER the client). The sprint id is the path param;
 // the service tenant-gates it by workspace (a sprint outside the active
@@ -58,10 +60,17 @@ export async function POST(
     }
   }
 
-  const { name, startDate, endDate } = (body ?? {}) as Record<string, unknown>;
+  const { name, goal, startDate, endDate } = (body ?? {}) as Record<string, unknown>;
   if (name !== undefined && typeof name !== 'string') {
     return NextResponse.json(
       { code: 'BAD_REQUEST', error: '`name` must be a string.' },
+      { status: 400 },
+    );
+  }
+  // `goal` is string (set/edit) or null (clear); undefined leaves it unchanged.
+  if (goal !== undefined && goal !== null && typeof goal !== 'string') {
+    return NextResponse.json(
+      { code: 'BAD_REQUEST', error: '`goal` must be a string or null.' },
       { status: 400 },
     );
   }
@@ -81,7 +90,7 @@ export async function POST(
   try {
     const sprint = await sprintsService.startSprint(
       id,
-      { name, startDate, endDate },
+      { name, goal, startDate, endDate },
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
     );
     return NextResponse.json(sprint);

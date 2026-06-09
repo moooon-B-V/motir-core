@@ -50,12 +50,17 @@ export interface CreateSprintInput {
  * Input to `sprintsService.startSprint` (Story 4.4.2). `startDate` defaults to
  * "now" when omitted/null; `endDate` is the planned end of the sprint window
  * (validated `≥ startDate`); `name` optionally renames the sprint on start (the
- * Jira start-sprint dialog lets you confirm the name). Dates are ISO-8601
+ * Jira start-sprint dialog lets you confirm the name); `goal` optionally edits
+ * the sprint goal as part of Start (Story 4.4.8 / finding #68 — the Jira start
+ * dialog edits the goal inline, so it is stamped INSIDE the activation
+ * transaction rather than via a separate pre-start PATCH). A `goal: undefined`
+ * leaves the goal unchanged; an explicit `null` clears it. Dates are ISO-8601
  * strings (the route forwards the JSON body verbatim; the service parses +
  * validates them).
  */
 export interface StartSprintInput {
   name?: string;
+  goal?: string | null;
   startDate?: string | null;
   endDate?: string | null;
 }

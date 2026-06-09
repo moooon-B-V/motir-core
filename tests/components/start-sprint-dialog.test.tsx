@@ -116,35 +116,53 @@ describe('StartSprintDialog (4.4.5)', () => {
     const { onStarted } = renderDialog();
     fireEvent.click(getStartButton());
     await waitFor(() => expect(push).toHaveBeenCalledWith('/boards'));
-    // Goal unchanged → only the start POST fires (no goal PATCH).
+    // Start is one atomic call: the window + name + goal all ride in the /start
+    // POST (finding #68 — no separate pre-start goal PATCH).
     const startCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/start'));
     expect(startCall).toBeTruthy();
     const [, init] = startCall!;
     expect(init.method).toBe('POST');
     const body = JSON.parse(init.body as string);
     expect(body.name).toBe('Sprint 7');
+    // Goal untouched → the existing goal rides along in the same POST.
+    expect(body.goal).toBe('Ship the sprint lifecycle.');
     expect(body.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(body.endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(body.endDate >= body.startDate).toBe(true);
     expect(onStarted).toHaveBeenCalled();
-    // No goal PATCH was issued (goal text untouched).
+    // Exactly one request, and it is never a PATCH (the pre-start goal PATCH is gone).
+    expect(fetchMock.mock.calls).toHaveLength(1);
     expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit)?.method === 'PATCH')).toBe(
       false,
     );
   });
 
-  it('persists an edited goal via PATCH before starting', async () => {
+  it('sends an edited goal in the single /start POST — never a pre-start PATCH (finding #68)', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Sprint goal'), {
       target: { value: 'A brand new goal' },
     });
     fireEvent.click(getStartButton());
     await waitFor(() => expect(push).toHaveBeenCalledWith('/boards'));
-    const patchCall = fetchMock.mock.calls.find(
-      ([, init]) => (init as RequestInit)?.method === 'PATCH',
+    // The edited goal is carried by the ONE /start POST (atomic), not a PATCH.
+    const startCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/start'));
+    expect(startCall).toBeTruthy();
+    expect((startCall![1] as RequestInit).method).toBe('POST');
+    expect(JSON.parse((startCall![1] as RequestInit).body as string).goal).toBe('A brand new goal');
+    // Zero PATCH calls, and exactly one request total.
+    expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit)?.method === 'PATCH')).toBe(
+      false,
     );
-    expect(patchCall).toBeTruthy();
-    expect(JSON.parse((patchCall![1] as RequestInit).body as string).goal).toBe('A brand new goal');
+    expect(fetchMock.mock.calls).toHaveLength(1);
+  });
+
+  it('clears the goal by sending null in the /start POST when emptied', async () => {
+    renderDialog();
+    fireEvent.change(screen.getByLabelText('Sprint goal'), { target: { value: '   ' } });
+    fireEvent.click(getStartButton());
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/boards'));
+    const startCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/start'));
+    expect(JSON.parse((startCall![1] as RequestInit).body as string).goal).toBeNull();
   });
 
   it('proactively blocks + names the active sprint when the project already has one', () => {
