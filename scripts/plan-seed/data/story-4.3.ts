@@ -393,7 +393,7 @@ export const story_4_3: PlanStory = {
       id: '4.3.4',
       title:
         'Inline-editable estimate badge (display + scale-deck picker) wired across backlog row, board/scrum card, issue detail rail + list — fills the Story-4.2 estimate seam',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
