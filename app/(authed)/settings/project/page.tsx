@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ArchiveProjectCard } from './_components/ArchiveProjectCard';
 import { WorkflowSettingsCard } from './_components/WorkflowSettingsCard';
 import { BoardSettingsCard } from './_components/BoardSettingsCard';
+import { EstimationSettingsCard } from './_components/EstimationSettingsCard';
 import { MembersSettingsCard } from './_components/MembersSettingsCard';
 
 // Project settings — server component. Reads the active project context
@@ -41,6 +42,8 @@ export default async function ProjectSettingsPage() {
       <WorkflowSettingsCard />
 
       <BoardSettingsCard />
+
+      <EstimationSettingsCard />
 
       <MembersSettingsCard />
 

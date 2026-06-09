@@ -666,6 +666,38 @@
       "errorTitle": "Couldn’t load board settings",
       "errorDescription": "Something went wrong loading this board’s configuration. Try again."
     },
+    "estimation": {
+      "title": "Estimation",
+      "cardDescription": "Set the estimation statistic and point scale for this project.",
+      "pageDescription": "How this project sizes work — the planning estimate the backlog, board, and roll-ups display.",
+      "empty": {
+        "description": "Create a project to configure its estimation settings."
+      },
+      "cardTitle": "Estimation",
+      "cardSubtitle": "Applies to every board and sprint in this project.",
+      "statisticLabel": "Estimation statistic",
+      "statisticHint": "Which measure is THE estimate that rolls up to sprints and epics.",
+      "statisticStoryPoints": "Story points",
+      "statisticTime": "Time estimate",
+      "statisticIssueCount": "Issue count",
+      "scaleLabel": "Point scale",
+      "scaleHint": "The suggested deck the estimate picker offers. Any number is still allowed — the deck only suggests.",
+      "scaleFibonacci": "Fibonacci",
+      "scaleLinear": "Linear",
+      "scaleCustom": "Custom",
+      "deckLabel": "Deck:",
+      "customHint": "The deck the picker offers. Values must be positive numbers.",
+      "customEmpty": "Add at least one value.",
+      "customInvalid": "Enter a positive number.",
+      "addValueAria": "Add a custom scale value",
+      "removeValueAria": "Remove {value}",
+      "save": "Save changes",
+      "savedTitle": "Estimation settings saved",
+      "savedDesc": "Your changes apply to every board and sprint.",
+      "errorTitle": "Couldn't save",
+      "saveError": "Your estimation settings weren't saved. Please try again.",
+      "readOnlyBanner": "Only project admins can change estimation settings."
+    },
     "access": {
       "title": "Access & members",
       "cardDescription": "Who can find, view, and edit this project, and the people on it.",
