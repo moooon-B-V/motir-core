@@ -38,6 +38,19 @@ export interface WorkItemDto {
   dueDate: string | null;
   estimateMinutes: number | null;
   position: string;
+  /**
+   * The sprint this issue is committed to, or null when it sits in the backlog
+   * (Subtask 4.1.4). Lets an association mutation's result describe the new
+   * placement without a re-fetch.
+   */
+  sprintId: string | null;
+  /**
+   * The global backlog/sprint rank — the opaque fractional-index ordering
+   * within the backlog AND a sprint (Subtask 4.1.4). Orthogonal to `position`
+   * (which orders the issue TREE). Null only on a row predating the 4.1.1
+   * backfill (none in practice).
+   */
+  backlogRank: string | null;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;

@@ -44,16 +44,18 @@ export default defineConfig({
     // the Story-2.2 workflow layer (`workflowsService` + `workflowsRepository`)
     // to the gate, closing coverage-gap #4: that layer shipped ungated, and
     // `workItemsService` grew across Stories 2.3–2.5 (detail / tree / list /
-    // pagination) after the 1.4.7 numbers were measured. We scope `include` to
-    // exactly these six files so the report (and the per-file thresholds below)
-    // stays focused on the surface this Epic is responsible for, rather than
-    // diluting the signal across the whole tree. Other modules carry their own
-    // coverage stories in their own Subtasks. v8 is the provider (matches
-    // @vitest/coverage-v8).
+    // pagination) after the 1.4.7 numbers were measured. 4.1.4 adds
+    // `backlogService` (issue↔sprint association + backlog rank + the bounded
+    // reads). We scope `include` to exactly these files so the report (and the
+    // per-file thresholds below) stays focused on the surface this Epic is
+    // responsible for, rather than diluting the signal across the whole tree.
+    // Other modules carry their own coverage stories in their own Subtasks. v8
+    // is the provider (matches @vitest/coverage-v8).
     coverage: {
       provider: 'v8',
       include: [
         'lib/services/workItemsService.ts',
+        'lib/services/backlogService.ts',
         'lib/repositories/workItemRepository.ts',
         'lib/repositories/workItemLinkRepository.ts',
         'lib/repositories/workItemRevisionRepository.ts',
@@ -66,6 +68,7 @@ export default defineConfig({
       // blended average hiding a weak module).
       thresholds: {
         'lib/services/workItemsService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/backlogService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workItemRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workItemLinkRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workItemRevisionRepository.ts': {

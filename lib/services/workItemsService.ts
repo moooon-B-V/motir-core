@@ -359,6 +359,22 @@ export const workItemsService = {
       const lastPosition = siblings.length ? siblings[siblings.length - 1]!.position : null;
       const position = keyForAppend(lastPosition);
 
+      // Global backlog rank (Subtask 4.1.4): a new issue is born in the backlog
+      // (`sprintId` null) and appended after the project's current last backlog
+      // rank, so the 4.1.1 backfill stays total going forward and a fresh issue
+      // is never rank-less when the 4.2 backlog binds to it. SEPARATE ordering
+      // from `position` (which orders the issue TREE under its parent) — this is
+      // the one global "Rank" the backlog + a sprint share. Bounded boundary
+      // read, never a full scan.
+      const lastBacklogRank = await workItemRepository.findBoundaryBacklogRank(
+        input.projectId,
+        workspaceId,
+        null,
+        'max',
+        tx,
+      );
+      const backlogRank = keyForAppend(lastBacklogRank);
+
       const data: Prisma.WorkItemUncheckedCreateInput = {
         workspaceId,
         projectId: input.projectId,
@@ -377,6 +393,7 @@ export const workItemsService = {
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         estimateMinutes: input.estimateMinutes ?? null,
         position,
+        backlogRank,
       };
 
       const row = await workItemRepository.create(data, tx);
