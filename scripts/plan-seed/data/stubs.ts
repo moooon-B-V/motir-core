@@ -15,17 +15,9 @@ export const STUB_STORIES: PlanStory[] = [
   // per `notes.html` mistake #32 — see `data/story-4.5.ts`.
 
   // ── Epic 4: Agile planning ────────────────────────────────────────────────
-  // 4.1 (Sprint + backlog data model) and 4.2 (Backlog UI) are fully expanded —
-  // data/story-4.1.ts, data/story-4.2.ts.
-  {
-    id: '4.3',
-    title: 'Story-point estimation',
-    status: 'planned',
-    descriptionMd:
-      'Points field on issues; estimation UI (scale configurable per project); roll-ups to sprint ' +
-      '+ epic level.',
-    items: [],
-  },
+  // 4.1 (Sprint + backlog data model), 4.2 (Backlog UI), and 4.3 (Story-point
+  // estimation) are fully expanded — data/story-4.1.ts, data/story-4.2.ts,
+  // data/story-4.3.ts.
   {
     id: '4.4',
     title: 'Sprint lifecycle (start / complete)',
