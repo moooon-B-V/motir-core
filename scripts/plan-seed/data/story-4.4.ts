@@ -633,7 +633,7 @@ export const story_4_4: PlanStory = {
       kind: 'bug',
       title:
         'Bug — start-sprint committed summary shows the issue count only, not "· N points" (no pre-start points source) (finding #69)',
-      status: 'in_progress',
+      status: 'done',
       type: 'bug',
       executor: 'coding_agent',
       estimateMinutes: 20,
