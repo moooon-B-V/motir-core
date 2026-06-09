@@ -82,7 +82,7 @@ import type { PlanStory } from '../types';
 export const story_7_0: PlanStory = {
   id: '7.0',
   title: 'Ready set — page + endpoint (the AI dispatch surface)',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'Ship the **agent dispatch surface**: a dedicated `/ready` page that lists every ready-to-' +
     'start work item in the active project, AND the two HTTP endpoints that back it — `GET ' +
@@ -556,7 +556,7 @@ export const story_7_0: PlanStory = {
     {
       id: '7.0.8',
       title: 'Playwright E2E — /ready page, copy affordance, live badge updates',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
