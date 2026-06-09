@@ -30,6 +30,7 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     reporterId: 'user_reporter',
     dueDate: null,
     estimateMinutes: null,
+    storyPoints: null,
     position: 'a0',
     sprintId: null,
     backlogRank: null,
