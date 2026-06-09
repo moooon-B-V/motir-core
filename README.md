@@ -90,6 +90,23 @@ public/       Static assets
   workflows/  CI definitions (see Testing below)
 ```
 
+## Agent dispatch (BYOK)
+
+Prodect exposes a stable agent contract so you can drive your own coding agent
+(Claude Code / Cursor / Aider / your own script) against the project's ready
+set — the work items whose blockers have all landed, so they're safe to start:
+
+- `GET /api/ready?projectKey=PROD` — list every ready work item.
+- `POST /api/ready/next` with body `{ "projectKey": "PROD", "kinds": ["subtask"] }` —
+  get ONE item to run next, including its full description + context-file
+  references. Pass `"excludeIds": [...]` across calls to walk the set.
+
+The session cookie is the auth surface; use the same login flow your browser
+does.
+
+The `/ready` page is the human mirror of `/api/ready` — anything an agent
+sees, a planner can see.
+
 ## Testing
 
 CI runs on every PR and push to `main` via [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
