@@ -579,7 +579,7 @@ export const story_4_4: PlanStory = {
       kind: 'bug',
       title:
         "Bug — start-sprint isn't atomic: the dialog PATCHes the goal then starts (two writes) because `startSprint` takes no `goal` (finding #68)",
-      status: 'in_progress',
+      status: 'done',
       type: 'bug',
       executor: 'coding_agent',
       estimateMinutes: 14,
