@@ -481,7 +481,7 @@ export const story_4_4: PlanStory = {
       id: '4.4.6',
       title:
         'UI — complete-sprint flow: complete modal (carry-over chooser) + sprint report view; self-mount in backlog active-sprint container',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
