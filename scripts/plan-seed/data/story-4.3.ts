@@ -197,7 +197,7 @@ export const story_4_3: PlanStory = {
       id: '4.3.1',
       title:
         'Design — estimation surfaces: inline-editable estimate badge + scale picker, epic roll-up badge, sprint committed-points roll-up (backlog header), project Estimation settings panel (NEW design/estimation/)',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 46,
