@@ -94,6 +94,52 @@ describe('sprintsService.startSprint', () => {
     expect(stampedAt).toBeLessThanOrEqual(after);
   });
 
+  it('stamps an edited goal in the activation transaction (finding #68), and persists it', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(
+      fx.projectId,
+      { name: 'Sprint 1', goal: 'Old goal' },
+      fx.ctx,
+    );
+
+    const started = await sprintsService.startSprint(
+      sprint.id,
+      { goal: 'Ship the lifecycle' },
+      fx.ctx,
+    );
+
+    // The DTO the service returns comes from the row written INSIDE the tx.
+    expect(started.state).toBe('active');
+    expect(started.goal).toBe('Ship the lifecycle');
+    // …and it is durably persisted (re-read through the service).
+    const all = await sprintsService.listByProject(fx.projectId, fx.ctx);
+    const reloaded = all.find((s) => s.id === sprint.id);
+    expect(reloaded?.goal).toBe('Ship the lifecycle');
+  });
+
+  it('clears the goal on start when given null', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(
+      fx.projectId,
+      { name: 'A', goal: 'A goal' },
+      fx.ctx,
+    );
+    const started = await sprintsService.startSprint(sprint.id, { goal: null }, fx.ctx);
+    expect(started.goal).toBeNull();
+  });
+
+  it('leaves the planned goal unchanged when goal is omitted on start', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(
+      fx.projectId,
+      { name: 'B', goal: 'Keep me' },
+      fx.ctx,
+    );
+    // Omitting goal is `undefined`, NOT a clear — the planned goal survives.
+    const started = await sprintsService.startSprint(sprint.id, { name: 'B2' }, fx.ctx);
+    expect(started.goal).toBe('Keep me');
+  });
+
   it('records a null committed-points baseline for a wholly unestimated sprint', async () => {
     const fx = await makeWorkItemFixture();
     const sprint = await sprintsService.createSprint(fx.projectId, {}, fx.ctx);
