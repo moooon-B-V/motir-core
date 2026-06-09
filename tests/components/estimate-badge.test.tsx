@@ -61,7 +61,7 @@ describe('EstimateBadge — display', () => {
 
   it('renders the muted em-dash (never NaN) when unestimated', () => {
     renderBadge(<EstimateBadge itemId="wi_1" storyPoints={null} />);
-    const btn = screen.getByRole('button', { name: 'Add story points' });
+    const btn = screen.getByRole('button', { name: 'Set story points' });
     expect(btn.textContent).toContain('—');
   });
 
@@ -124,7 +124,7 @@ describe('EstimateBadge — picker', () => {
         customScaleValues: [4, 2, 7],
       },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add story points' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Set story points' }));
     // Sorted ascending + de-duplicated.
     expect(await screen.findByRole('button', { name: '2 story points' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '4 story points' })).toBeTruthy();
@@ -159,7 +159,7 @@ describe('EstimateBadge — write', () => {
 
   it('commits a free-numeric (decimal) entry on Enter', async () => {
     renderBadge(<EstimateBadge itemId="wi_1" storyPoints={null} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Add story points' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Set story points' }));
     const input = await screen.findByLabelText('Story points');
     fireEvent.change(input, { target: { value: '0.5' } });
     fireEvent.keyDown(input, { key: 'Enter' });

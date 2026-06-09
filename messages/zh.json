@@ -983,7 +983,7 @@
     "valueAria": "估算：{value}",
     "emptyAria": "未估算",
     "editAria": "故事点：{value} — 编辑",
-    "addAria": "添加故事点",
+    "addAria": "设置故事点",
     "chipAria": "{value} 个故事点",
     "deckFibonacci": "斐波那契",
     "deckLinear": "线性",

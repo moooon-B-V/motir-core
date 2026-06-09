@@ -983,7 +983,7 @@
     "valueAria": "Estimate: {value}",
     "emptyAria": "No estimate",
     "editAria": "Story points: {value} — edit",
-    "addAria": "Add story points",
+    "addAria": "Set story points",
     "chipAria": "{value} story points",
     "deckFibonacci": "Fibonacci",
     "deckLinear": "Linear",
