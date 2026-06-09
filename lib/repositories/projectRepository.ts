@@ -1,5 +1,7 @@
 import {
   Prisma,
+  type EstimationStatistic,
+  type PointScale,
   type Project,
   type ProjectAccessLevel,
   type WorkflowPolicyMode,
@@ -109,6 +111,51 @@ export const projectRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<Project> {
     return tx.project.update({ where: { id }, data: { accessLevel } });
+  },
+
+  // --- Estimation config (Story 4.3 · Subtask 4.3.3) ------------------------
+  // The project-scoped estimation settings (`estimationStatistic` / `pointScale`
+  // / `customScaleValues`; see the story-4.3 module header for the
+  // project-scoped justified deviation). Single Prisma ops; the read is a
+  // projection (the roll-up only needs the statistic) used by the read-only
+  // roll-up paths, so it takes no `tx`; the update REQUIRES `tx`.
+
+  /**
+   * Read just a project's estimation config columns (the projection the roll-up
+   * statistic resolution + the settings read need). Returns null when the
+   * project doesn't exist — the caller (estimationService) owns the tenant gate
+   * + the not-found error. Read-only path → `db` singleton.
+   */
+  async findEstimationConfig(
+    id: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{
+    estimationStatistic: EstimationStatistic;
+    pointScale: PointScale;
+    customScaleValues: number[];
+  } | null> {
+    const client = tx ?? db;
+    return client.project.findUnique({
+      where: { id },
+      select: { estimationStatistic: true, pointScale: true, customScaleValues: true },
+    });
+  },
+
+  /**
+   * Update a project's estimation config (any subset of the three fields). `tx`
+   * REQUIRED; the caller (estimationService) has already tenant-gated +
+   * admin-gated the project, so this is a plain id-keyed update.
+   */
+  async updateEstimationConfig(
+    id: string,
+    data: {
+      estimationStatistic?: EstimationStatistic;
+      pointScale?: PointScale;
+      customScaleValues?: number[];
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<Project> {
+    return tx.project.update({ where: { id }, data });
   },
 
   /**

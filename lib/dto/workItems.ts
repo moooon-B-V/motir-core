@@ -37,6 +37,14 @@ export interface WorkItemDto {
   reporterId: string;
   dueDate: string | null;
   estimateMinutes: number | null;
+  /**
+   * The agile STORY-POINT estimate (Story 4.3 · Subtask 4.3.3) — a separate
+   * numeric estimate from `estimateMinutes` (TIME). Null = unestimated. The
+   * project's `estimationStatistic` config picks which of the two the planning
+   * surfaces display + the roll-ups sum. The `Decimal(6, 2)` column is mapped
+   * to a wire-safe `number` here.
+   */
+  storyPoints: number | null;
   position: string;
   /**
    * The sprint this issue is committed to, or null when it sits in the backlog
