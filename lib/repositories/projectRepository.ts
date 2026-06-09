@@ -1,4 +1,9 @@
-import { Prisma, type Project, type WorkflowPolicyMode } from '@prisma/client';
+import {
+  Prisma,
+  type Project,
+  type ProjectAccessLevel,
+  type WorkflowPolicyMode,
+} from '@prisma/client';
 import { db } from '@/lib/db';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 
@@ -95,6 +100,15 @@ export const projectRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<Project> {
     return tx.project.update({ where: { id }, data: { workflowPolicyMode: mode } });
+  },
+
+  /** Set the project's browse-access level (Story 6.4 · Subtask 6.4.4). */
+  async setAccessLevel(
+    id: string,
+    accessLevel: ProjectAccessLevel,
+    tx: Prisma.TransactionClient,
+  ): Promise<Project> {
+    return tx.project.update({ where: { id }, data: { accessLevel } });
   },
 
   /**
