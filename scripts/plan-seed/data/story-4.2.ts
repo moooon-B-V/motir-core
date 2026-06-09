@@ -298,7 +298,7 @@ export const story_4_2: PlanStory = {
       id: '4.2.3',
       title:
         'Backlog page + nav — ranked virtualized/paginated backlog list + sprint-planning containers (read render) + empty/loading/error/scale states + points/velocity seams',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 34,
