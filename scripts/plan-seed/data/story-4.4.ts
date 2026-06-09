@@ -390,7 +390,7 @@ export const story_4_4: PlanStory = {
       id: '4.4.4',
       title:
         'Backend — `getSprintReport` (completed/incomplete lists + points via 4.3 roll-up + scope-change, bounded)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
@@ -481,7 +481,7 @@ export const story_4_4: PlanStory = {
       id: '4.4.6',
       title:
         'UI — complete-sprint flow: complete modal (carry-over chooser) + sprint report view; self-mount in backlog active-sprint container',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
