@@ -167,6 +167,7 @@ export function BacklogRows({
   regionId,
   regionKind,
   regionLabel,
+  regionOrder,
   sprintId,
 }: {
   state: RankedIssuesState;
@@ -174,7 +175,7 @@ export function BacklogRows({
   assigneeNameById: Map<string, string>;
   /** Body shown when the read returns zero rows (EmptyState / dashed placeholder). */
   emptyState: ReactNode;
-  /** The PLACED `+ Create issue` row (disabled; wired in Subtask 4.2.5). */
+  /** The `+ Create issue` row (wired in Subtask 4.2.5 — creates into this region). */
   createRow?: ReactNode;
   /** Whether the create-row also shows in the empty case (sprints: yes). */
   createRowOnEmpty?: boolean;
@@ -185,6 +186,8 @@ export function BacklogRows({
   regionKind: RegionKind;
   /** Human-readable region name for aria-live drag announcements. */
   regionLabel: string;
+  /** Top-to-bottom position in the stack (sprints first, backlog last) — shift-range order (4.2.5). */
+  regionOrder: number;
   /** The sprint id for a sprint region (so a cross-region move knows the target). */
   sprintId?: string;
 }) {
@@ -200,6 +203,7 @@ export function BacklogRows({
     kind: regionKind,
     sprintId,
     label: regionLabel,
+    order: regionOrder,
     itemsRef: state.itemsRef,
     setItems: state.setItems,
     setTotalCount: state.setTotalCount,
@@ -316,6 +320,8 @@ export function BacklogRows({
                     item={item}
                     statusByKey={statusByKey}
                     assigneeNameById={assigneeNameById}
+                    regionKind={regionKind}
+                    sprintId={sprintId}
                   />
                 </div>
               );
