@@ -93,7 +93,7 @@ export default async function BacklogPage() {
       </header>
 
       <EstimationConfigProvider config={estimationConfig} canEdit={caps.canEdit}>
-        <BacklogContainer workflow={workflow} members={members} />
+        <BacklogContainer workflow={workflow} members={members} projectName={ctx.project.name} />
       </EstimationConfigProvider>
     </div>
   );
