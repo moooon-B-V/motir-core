@@ -1,0 +1,1466 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Sprint lifecycle — start / complete / report (Story 4.4 · 4.4.1)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the SPRINT LIFECYCLE FLOWS (Story 4.4).
+
+      The start/complete ENTRY POINTS are already designed elsewhere — the
+      Start-sprint button in the backlog sprint container (design/backlog/ 4.2.1)
+      and the Complete-sprint button in the scrum header (design/boards/ 4.5.1) —
+      both of which explicitly state "the flow is Story 4.4". This asset draws the
+      FLOWS those buttons open, which were unspecified == NO design:
+
+        • the START-SPRINT modal (name / duration deck / derived dates / custom-date
+          reveal / goal / committed summary) + its error states (already-active,
+          invalid window)               → gates 4.4.5
+        • the COMPLETE-SPRINT modal (completed/incomplete summary + carry-over
+          chooser: Backlog / a planned sprint / no-incomplete collapse)
+                                          → gates 4.4.6
+        • the SPRINT REPORT (completed vs not-completed issue lists with "view all"
+          links + committed/completed/not-completed points + "—" unestimated +
+          scope-change line + the Story-4.6 burndown chart SEAM)   → gates 4.4.6
+
+      Built FROM the real design system: tokens copied 1:1 from app/globals.css;
+      the modal / field / button / issue-row / pill / type-icon class grammar +
+      lucide glyphs are reused verbatim from create.mock.html + backlog.mock.html
+      (no Pencil→code gap). Issue ROWS reuse the work-items list-row vocabulary
+      (IssueTypeIcon in its --el-type-* hue · mono key · summary · status Pill) —
+      referenced, not re-spec'd. Toggle dark for token parity.
+
+      Mirror product: Jira start-sprint / complete-sprint dialogs + Sprint Report
+      (decision-ladder rung 1). See design-notes.md.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+        --focus-ring-color: var(--color-primary);
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-info: #58a6ff;
+        --color-success: #3fb950;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 12px 40px rgba(15, 15, 15, 0.15);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 120px;
+      }
+      .review-head {
+        max-width: 1320px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-row {
+        max-width: 1320px;
+        margin: 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 40px;
+        align-items: flex-start;
+        justify-content: center;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding-left: 2px;
+        max-width: 480px;
+      }
+
+      /* ── Modal (components/ui/Modal.tsx) chrome ─────────────────────────── */
+      .modal {
+        position: relative;
+        width: 480px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .modal.wide {
+        width: 660px;
+      }
+      .modal-title {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0 0 4px;
+      }
+      .modal-sub {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin: 0 0 var(--spacing-md);
+      }
+      .modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: transparent;
+        color: var(--el-text-muted);
+        border-radius: var(--radius-control);
+        cursor: pointer;
+      }
+      .modal-close:hover {
+        color: var(--el-text);
+      }
+      .modal-body {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-md);
+      }
+      .modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: var(--spacing-md);
+        padding-top: var(--spacing-md);
+        border-top: 1px solid var(--el-border);
+      }
+
+      /* ── Field row: label + control grammar (create.mock.html) ──────────── */
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field > label {
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .control {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .control.textarea {
+        height: auto;
+        min-height: 64px;
+        align-items: flex-start;
+        padding: 10px var(--spacing-input-x);
+        color: var(--el-text-muted);
+      }
+      .control .chev {
+        margin-left: auto;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Segmented duration deck (Combobox-equivalent radio group) ──────── */
+      .seg {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .seg button {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        height: var(--height-control);
+        padding: 0 14px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .seg button.is-active {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+
+      /* ── Date trigger — copied from datepicker/create.mock.html ─────────── */
+      .two-up {
+        display: flex;
+        gap: 12px;
+      }
+      .two-up .field {
+        flex: 1;
+      }
+      .trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-size: 14px;
+        text-align: left;
+      }
+      .trigger.is-invalid {
+        border-color: var(--el-danger);
+      }
+      .trigger .cal-glyph {
+        color: var(--el-text-muted);
+        display: inline-flex;
+        flex: none;
+      }
+      .trigger .value {
+        flex: 1;
+      }
+      .derived {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+      .field-error {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        color: var(--el-danger);
+      }
+      .field-error svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+
+      /* ── Committed summary line (read from the sprint) ──────────────────── */
+      .summary-line {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border-soft);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .summary-line svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-accent);
+        flex: none;
+      }
+      .summary-line strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+
+      /* ── Inline alert (already-active / blocked) ────────────────────────── */
+      .alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-peach);
+        border: 1px solid var(--el-border-soft);
+        font-size: 13px;
+        color: var(--el-text-strong);
+        line-height: 1.45;
+      }
+      .alert svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-warning);
+        flex: none;
+        margin-top: 1px;
+      }
+      .alert a {
+        color: var(--el-link);
+        font-weight: 500;
+      }
+
+      /* ── Complete-sprint: completed/incomplete split summary ────────────── */
+      .split {
+        display: flex;
+        gap: 12px;
+      }
+      .split .stat {
+        flex: 1;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .split .stat .n {
+        font-size: 22px;
+        font-weight: 700;
+        font-family: var(--font-serif);
+        color: var(--el-text-strong);
+        line-height: 1.1;
+      }
+      .split .stat .lbl {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        margin-top: 4px;
+      }
+      .split .stat .lbl svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+      .split .stat.done .lbl svg {
+        color: var(--el-success);
+      }
+      .split .stat .pts {
+        color: var(--el-text-muted);
+        font-size: 11.5px;
+        margin-top: 2px;
+      }
+
+      /* ── Carry-over chooser (radio group) ───────────────────────────────── */
+      .chooser-label {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .radio {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 14px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        cursor: pointer;
+      }
+      .radio + .radio {
+        margin-top: 8px;
+      }
+      .radio.is-selected {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+      }
+      .radio .dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 9999px;
+        border: 2px solid var(--el-border-strong);
+        flex: none;
+        position: relative;
+      }
+      .radio.is-selected .dot {
+        border-color: var(--el-accent);
+      }
+      .radio.is-selected .dot::after {
+        content: '';
+        position: absolute;
+        inset: 3px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+      }
+      .radio .rtext {
+        font-size: 13.5px;
+        color: var(--el-text);
+      }
+      .radio .rtext .rsub {
+        display: block;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 1px;
+      }
+      .radio .rselect {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 30px;
+        padding: 0 10px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .all-done {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-mint);
+        border: 1px solid var(--el-border-soft);
+        font-size: 13.5px;
+        color: var(--el-text-strong);
+      }
+      .all-done svg {
+        width: 18px;
+        height: 18px;
+        color: var(--el-success);
+        flex: none;
+      }
+
+      /* ── Report: section + issue rows (reuse work-items row vocab) ──────── */
+      .rep-meta {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        margin: 0 0 var(--spacing-md);
+      }
+      .points {
+        display: flex;
+        gap: 12px;
+        margin-bottom: var(--spacing-md);
+      }
+      .points .pstat {
+        flex: 1;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .points .pstat .n {
+        font-size: 24px;
+        font-weight: 700;
+        font-family: var(--font-serif);
+        color: var(--el-text-strong);
+        line-height: 1;
+      }
+      .points .pstat.done .n {
+        color: var(--el-success);
+      }
+      .points .pstat .lbl {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-top: 5px;
+      }
+      .scope-line {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        margin-bottom: var(--spacing-md);
+      }
+      .scope-line svg {
+        width: 14px;
+        height: 14px;
+        color: var(--el-warning);
+        flex: none;
+      }
+      .rep-section {
+        margin-bottom: var(--spacing-md);
+      }
+      .rep-section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+      }
+      .rep-section-head .h {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .rep-section-head .h .cnt {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-muted);
+        background: var(--el-muted);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+      }
+      .rep-section-head .h svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+      }
+      .rep-section-head .h.done svg {
+        color: var(--el-success);
+      }
+      .rep-list {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .brow {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 14px;
+        background: var(--el-page-bg);
+      }
+      .brow + .brow {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .type-icon {
+        width: 15px;
+        height: 15px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .brow-id {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .brow-title {
+        font-size: 13.5px;
+        color: var(--el-text);
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .brow-dest {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .brow-dest svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+        flex: none;
+      }
+      .pill .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 9999px;
+        flex: none;
+      }
+      .pill--todo {
+        background: var(--el-tint-lavender);
+      }
+      .pill--todo .dot {
+        background: var(--el-text-faint);
+      }
+      .pill--prog {
+        background: var(--el-tint-sky);
+      }
+      .pill--prog .dot {
+        background: var(--el-info);
+      }
+      .pill--done {
+        background: var(--el-tint-mint);
+      }
+      .pill--done .dot {
+        background: var(--el-success);
+      }
+      .brow-pts {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        flex: none;
+        min-width: 34px;
+        text-align: right;
+      }
+      .view-all {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-link);
+      }
+      .view-all svg {
+        width: 13px;
+        height: 13px;
+      }
+
+      /* ── Burndown chart SEAM (Story 4.6 — empty slot) ───────────────────── */
+      .chart-seam {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: 132px;
+        border: 1.5px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        color: var(--el-text-faint);
+        background: var(--el-surface-soft);
+      }
+      .chart-seam svg {
+        width: 22px;
+        height: 22px;
+      }
+      .chart-seam .cs-t {
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-text-muted);
+      }
+      .chart-seam .cs-s {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        letter-spacing: 0.04em;
+        color: var(--el-text-faint);
+      }
+
+      /* ── Button (components/ui/Button.tsx) ──────────────────────────────── */
+      .btn {
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid transparent;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Sprint lifecycle — start / complete / report</h1>
+        <p>
+          Story 4.4 · subtask 4.4.1 — the FLOWS behind the (already-designed) Start-sprint (4.2.1)
+          and Complete-sprint (4.5.1) entry points. Mirror: Jira sprint dialogs + Sprint Report.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18M6 6l12 12" />
+        </g>
+        <g
+          id="i-chevD"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-calendar"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M8 2v4M16 2v4M3 10h18" />
+          <rect x="3" y="4" width="18" height="18" rx="2" />
+        </g>
+        <g
+          id="i-flag"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+          <path d="M4 22v-7" />
+        </g>
+        <g
+          id="i-target"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <circle cx="12" cy="12" r="6" />
+          <circle cx="12" cy="12" r="2" />
+        </g>
+        <g
+          id="i-check-circle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-circle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4M12 17h.01" />
+        </g>
+        <g
+          id="i-arrow-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14M12 5l7 7-7 7" />
+        </g>
+        <g
+          id="i-trending"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 7h6v6" />
+          <path d="m22 7-8.5 8.5-5-5L2 17" />
+        </g>
+        <g
+          id="i-story"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+      </defs>
+    </svg>
+
+    <div class="panel-row">
+      <!-- ═══════════ PANEL 1 — Start-sprint modal (default) ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">1 · Start-sprint modal — default (gates 4.4.5)</div>
+        <div class="modal" role="dialog" aria-label="Start sprint">
+          <button class="modal-close" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <h2 class="modal-title">Start sprint</h2>
+          <p class="modal-sub">Sprint 7 · prodect</p>
+          <div class="modal-body">
+            <div class="field">
+              <label for="sp-name">Sprint name</label>
+              <div class="control"><span>Sprint 7</span></div>
+            </div>
+            <div class="field">
+              <label>Duration</label>
+              <div class="seg" role="radiogroup" aria-label="Duration">
+                <button type="button" role="radio" aria-checked="false">1 week</button>
+                <button type="button" role="radio" aria-checked="true" class="is-active">
+                  2 weeks
+                </button>
+                <button type="button" role="radio" aria-checked="false">3 weeks</button>
+                <button type="button" role="radio" aria-checked="false">4 weeks</button>
+                <button type="button" role="radio" aria-checked="false">Custom</button>
+              </div>
+              <span class="derived">Jun 9 → Jun 22, 2026 · ends in 13 days</span>
+            </div>
+            <div class="field">
+              <label for="sp-goal"
+                >Sprint goal
+                <span style="color: var(--el-text-faint); font-weight: 400">(optional)</span></label
+              >
+              <div class="control textarea">
+                Ship the sprint lifecycle: start, complete, and report.
+              </div>
+            </div>
+            <div class="summary-line">
+              <svg viewBox="0 0 24 24"><use href="#i-target" /></svg>
+              <span><strong>8 issues</strong> · <strong>21 points</strong> committed at start</span>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">
+              <svg viewBox="0 0 24 24"><use href="#i-flag" /></svg>Start sprint
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════ PANEL 2 — Start-sprint Custom + invalid window ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">2 · Custom duration + invalid-window error</div>
+        <div class="modal" role="dialog" aria-label="Start sprint">
+          <button class="modal-close" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <h2 class="modal-title">Start sprint</h2>
+          <p class="modal-sub">Sprint 7 · prodect</p>
+          <div class="modal-body">
+            <div class="field">
+              <label>Sprint name</label>
+              <div class="control"><span>Sprint 7</span></div>
+            </div>
+            <div class="field">
+              <label>Duration</label>
+              <div class="seg" role="radiogroup" aria-label="Duration">
+                <button type="button" role="radio" aria-checked="false">1 week</button>
+                <button type="button" role="radio" aria-checked="false">2 weeks</button>
+                <button type="button" role="radio" aria-checked="false">3 weeks</button>
+                <button type="button" role="radio" aria-checked="false">4 weeks</button>
+                <button type="button" role="radio" aria-checked="true" class="is-active">
+                  Custom
+                </button>
+              </div>
+            </div>
+            <div class="two-up">
+              <div class="field">
+                <label>Start date</label>
+                <div class="trigger">
+                  <span class="cal-glyph"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-calendar" /></svg
+                  ></span>
+                  <span class="value">Jun 22, 2026</span>
+                </div>
+              </div>
+              <div class="field">
+                <label>End date</label>
+                <div class="trigger is-invalid" aria-invalid="true">
+                  <span class="cal-glyph"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-calendar" /></svg
+                  ></span>
+                  <span class="value">Jun 9, 2026</span>
+                </div>
+                <span class="field-error">
+                  <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>End date must be after the
+                  start date
+                </span>
+              </div>
+            </div>
+            <div class="field">
+              <label
+                >Sprint goal
+                <span style="color: var(--el-text-faint); font-weight: 400">(optional)</span></label
+              >
+              <div class="control textarea">
+                Ship the sprint lifecycle: start, complete, and report.
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary" disabled>
+              <svg viewBox="0 0 24 24"><use href="#i-flag" /></svg>Start sprint
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════ PANEL 3 — Start blocked: already active ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">3 · Start blocked — project already has an active sprint</div>
+        <div class="modal" role="dialog" aria-label="Start sprint">
+          <button class="modal-close" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <h2 class="modal-title">Start sprint</h2>
+          <p class="modal-sub">Sprint 7 · prodect</p>
+          <div class="modal-body">
+            <div class="alert" role="alert">
+              <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+              <span>
+                <strong>prodect</strong> already has an active sprint (<strong>Sprint 6</strong>).
+                Complete it first — a project can run one active sprint at a time.
+                <a href="#">View Sprint 6</a>
+              </span>
+            </div>
+            <div class="field">
+              <label>Sprint name</label>
+              <div class="control"><span>Sprint 7</span></div>
+            </div>
+            <div class="field">
+              <label>Duration</label>
+              <div class="seg" role="radiogroup" aria-label="Duration">
+                <button type="button" role="radio" aria-checked="true" class="is-active">
+                  2 weeks
+                </button>
+                <button type="button" role="radio" aria-checked="false">Custom</button>
+              </div>
+              <span class="derived">Jun 9 → Jun 22, 2026</span>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary" disabled>
+              <svg viewBox="0 0 24 24"><use href="#i-flag" /></svg>Start sprint
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════ PANEL 4 — Complete-sprint modal (carry-over) ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">4 · Complete-sprint modal — carry-over chooser (gates 4.4.6)</div>
+        <div class="modal" role="dialog" aria-label="Complete sprint">
+          <button class="modal-close" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <h2 class="modal-title">Complete sprint</h2>
+          <p class="modal-sub">Sprint 6 · prodect</p>
+          <div class="modal-body">
+            <div class="split">
+              <div class="stat done">
+                <div class="n">12</div>
+                <div class="lbl">
+                  <svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>Completed
+                </div>
+                <div class="pts">29 of 42 points</div>
+              </div>
+              <div class="stat">
+                <div class="n">6</div>
+                <div class="lbl">
+                  <svg viewBox="0 0 24 24"><use href="#i-circle" /></svg>Incomplete
+                </div>
+                <div class="pts">13 points carry over</div>
+              </div>
+            </div>
+            <div>
+              <div class="chooser-label" id="carry-lbl">Move the 6 incomplete issues to</div>
+              <div role="radiogroup" aria-labelledby="carry-lbl" style="margin-top: 8px">
+                <div class="radio is-selected" role="radio" aria-checked="true">
+                  <span class="dot"></span>
+                  <span class="rtext"
+                    >Backlog<span class="rsub"
+                      >Unfinished issues return to the backlog in rank order</span
+                    ></span
+                  >
+                </div>
+                <div class="radio" role="radio" aria-checked="false">
+                  <span class="dot"></span>
+                  <span class="rtext"
+                    >A future sprint<span class="rsub"
+                      >Roll the unfinished issues into a planned sprint</span
+                    ></span
+                  >
+                  <span class="rselect"
+                    >Sprint 7<svg width="14" height="14" viewBox="0 0 24 24">
+                      <use href="#i-chevD" /></svg
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">
+              <svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>Complete sprint
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════ PANEL 5 — Complete-sprint: all complete ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">
+          5 · Complete-sprint — no incomplete issues (chooser collapses)
+        </div>
+        <div class="modal" role="dialog" aria-label="Complete sprint">
+          <button class="modal-close" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <h2 class="modal-title">Complete sprint</h2>
+          <p class="modal-sub">Sprint 6 · prodect</p>
+          <div class="modal-body">
+            <div class="split">
+              <div class="stat done">
+                <div class="n">18</div>
+                <div class="lbl">
+                  <svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>Completed
+                </div>
+                <div class="pts">42 of 42 points</div>
+              </div>
+              <div class="stat">
+                <div class="n">0</div>
+                <div class="lbl">
+                  <svg viewBox="0 0 24 24"><use href="#i-circle" /></svg>Incomplete
+                </div>
+                <div class="pts">nothing to carry over</div>
+              </div>
+            </div>
+            <div class="all-done">
+              <svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>
+              All issues are complete — nothing to carry over.
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">
+              <svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>Complete sprint
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════ PANEL 6 — Sprint report ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">
+          6 · Sprint report — success state + standalone view (gates 4.4.6)
+        </div>
+        <div class="modal wide" role="dialog" aria-label="Sprint 6 report">
+          <button class="modal-close" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <h2 class="modal-title">Sprint 6 report</h2>
+          <p class="rep-meta">
+            Jun 9 → Jun 22, 2026 · completed Jun 22 · Goal: Ship the sprint lifecycle
+          </p>
+
+          <div class="points">
+            <div class="pstat">
+              <div class="n">42</div>
+              <div class="lbl">Committed</div>
+            </div>
+            <div class="pstat done">
+              <div class="n">29</div>
+              <div class="lbl">Completed</div>
+            </div>
+            <div class="pstat">
+              <div class="n">13</div>
+              <div class="lbl">Not completed</div>
+            </div>
+          </div>
+          <div class="scope-line">
+            <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+            <span
+              ><strong style="color: var(--el-text-strong)">2 issues</strong> added after the sprint
+              started (scope change)</span
+            >
+          </div>
+
+          <div class="rep-section">
+            <div class="rep-section-head">
+              <span class="h done"
+                ><svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>Completed<span
+                  class="cnt"
+                  >12</span
+                ></span
+              >
+              <a class="view-all" href="#"
+                >View all in Issues<svg viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg
+              ></a>
+            </div>
+            <div class="rep-list">
+              <div class="brow">
+                <span class="type-icon t-story"
+                  ><svg viewBox="0 0 24 24"><use href="#i-story" /></svg
+                ></span>
+                <span class="brow-id">PROD-241</span>
+                <span class="brow-title">Sprint start flow — activate + scope-lock baseline</span>
+                <span class="pill pill--done"><span class="dot"></span>Done</span>
+                <span class="brow-pts">5</span>
+              </div>
+              <div class="brow">
+                <span class="type-icon t-task"
+                  ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                ></span>
+                <span class="brow-id">PROD-242</span>
+                <span class="brow-title">POST /api/sprints/[id]/start route</span>
+                <span class="pill pill--done"><span class="dot"></span>Done</span>
+                <span class="brow-pts">3</span>
+              </div>
+              <div class="brow">
+                <span class="type-icon t-bug"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                ></span>
+                <span class="brow-id">PROD-238</span>
+                <span class="brow-title">Backlog rank lost after reseed</span>
+                <span class="pill pill--done"><span class="dot"></span>Done</span>
+                <span class="brow-pts">2</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="rep-section">
+            <div class="rep-section-head">
+              <span class="h"
+                ><svg viewBox="0 0 24 24" style="color: var(--el-text-muted)">
+                  <use href="#i-circle" /></svg
+                >Not completed<span class="cnt">6</span></span
+              >
+              <a class="view-all" href="#"
+                >View all in Issues<svg viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg
+              ></a>
+            </div>
+            <div class="rep-list">
+              <div class="brow">
+                <span class="type-icon t-story"
+                  ><svg viewBox="0 0 24 24"><use href="#i-story" /></svg
+                ></span>
+                <span class="brow-id">PROD-244</span>
+                <span class="brow-title">Sprint report data — getSprintReport</span>
+                <span class="pill pill--prog"><span class="dot"></span>In progress</span>
+                <span class="brow-dest"
+                  ><svg viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>Backlog</span
+                >
+              </div>
+              <div class="brow">
+                <span class="type-icon t-task"
+                  ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                ></span>
+                <span class="brow-id">PROD-247</span>
+                <span class="brow-title">Velocity chart spike</span>
+                <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                <span class="brow-dest"
+                  ><svg viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>Backlog</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="rep-section">
+            <div class="rep-section-head">
+              <span class="h"
+                ><svg viewBox="0 0 24 24" style="color: var(--el-warning)">
+                  <use href="#i-trending" /></svg
+                >Burndown</span
+              >
+            </div>
+            <div class="chart-seam" aria-label="Burndown chart placeholder">
+              <svg viewBox="0 0 24 24"><use href="#i-trending" /></svg>
+              <span class="cs-t">Burndown chart</span>
+              <span class="cs-s">SEAM · STORY 4.6</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════ PANEL 7 — Report points unestimated ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">7 · Report points — unestimated sprint shows "—" (never NaN)</div>
+        <div class="modal" role="dialog" aria-label="Sprint 5 report (unestimated)">
+          <h2 class="modal-title">Sprint 5 report</h2>
+          <p class="rep-meta">
+            Apr 28 → May 11, 2026 · completed May 11 · no story points estimated
+          </p>
+          <div class="points">
+            <div class="pstat">
+              <div class="n">—</div>
+              <div class="lbl">Committed</div>
+            </div>
+            <div class="pstat done">
+              <div class="n">—</div>
+              <div class="lbl">Completed</div>
+            </div>
+            <div class="pstat">
+              <div class="n">—</div>
+              <div class="lbl">Not completed</div>
+            </div>
+          </div>
+          <div class="scope-line">
+            <svg viewBox="0 0 24 24"><use href="#i-circle" /></svg>
+            <span>No scope change during this sprint</span>
+          </div>
+          <div class="rep-section">
+            <div class="rep-section-head">
+              <span class="h done"
+                ><svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>Completed<span
+                  class="cnt"
+                  >9</span
+                ></span
+              >
+              <a class="view-all" href="#"
+                >View all in Issues<svg viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg
+              ></a>
+            </div>
+            <div class="rep-list">
+              <div class="brow">
+                <span class="type-icon t-story"
+                  ><svg viewBox="0 0 24 24"><use href="#i-story" /></svg
+                ></span>
+                <span class="brow-id">PROD-201</span>
+                <span class="brow-title">Backlog drag-to-rank</span>
+                <span class="pill pill--done"><span class="dot"></span>Done</span>
+                <span class="brow-pts">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
