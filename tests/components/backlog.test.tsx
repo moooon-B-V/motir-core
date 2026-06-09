@@ -159,7 +159,7 @@ describe('BacklogContainer (4.2.3 read render)', () => {
     expect(screen.getByTestId('backlog-count')).toBeTruthy();
   });
 
-  it('fills the committed-points seam from the live roll-up (Subtask 4.4.9 — finding #69)', async () => {
+  it('fills the committed-points seam with committed · done · left from the live roll-up (Subtask 4.3.5; 4.4.9 seam)', async () => {
     mockFetch({
       sprints: [sprint({ id: 'active1', name: 'Sprint 24', state: 'active', issueCount: 5 })],
       backlog: { items: [], nextCursor: null, totalCount: 0 },
@@ -169,12 +169,15 @@ describe('BacklogContainer (4.2.3 read render)', () => {
 
     render(<BacklogContainer workflow={workflow} members={members} projectName="prodect" />);
 
-    // The committed-points slot shows the live `committed` figure, no longer the
-    // reserved "— pts" placeholder.
-    expect(await screen.findByText('21 pts')).toBeTruthy();
+    // The committed-points slot shows the live committed · done · left figure
+    // (Subtask 4.3.5 upgraded the 4.4.9 committed-only fill to the full design),
+    // no longer the reserved placeholder.
+    expect(
+      await screen.findByLabelText('Points: 21 committed, 8 completed, 13 remaining'),
+    ).toBeTruthy();
   });
 
-  it('renders "— pts" in the committed-points seam for a wholly unestimated sprint (4.4.9)', async () => {
+  it('renders a muted em-dash in the committed-points seam for a wholly unestimated sprint (4.3.5)', async () => {
     mockFetch({
       sprints: [sprint({ id: 'active1', name: 'Sprint 24', state: 'active', issueCount: 5 })],
       backlog: { items: [], nextCursor: null, totalCount: 0 },
@@ -185,7 +188,7 @@ describe('BacklogContainer (4.2.3 read render)', () => {
     render(<BacklogContainer workflow={workflow} members={members} projectName="prodect" />);
 
     expect(await screen.findByText('Sprint 24')).toBeTruthy();
-    expect(await screen.findByText('— pts')).toBeTruthy();
+    expect(await screen.findByLabelText('Sprint has no estimated points')).toBeTruthy();
   });
 
   it('shows the BOUNDED count header from the aggregate total, not the loaded-row tally', async () => {
