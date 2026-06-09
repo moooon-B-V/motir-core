@@ -3,20 +3,24 @@ import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { boardsService } from '@/lib/services/boardsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
+import { estimationService } from '@/lib/services/estimationService';
 import { isOwnerRole } from '@/lib/workspaces/roles';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { keyForAppend } from '@/lib/workItems/positioning';
-import { toSprintDto } from '@/lib/mappers/sprintMappers';
+import { toSprintDto, toSprintReportDto, toSprintReportPage } from '@/lib/mappers/sprintMappers';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type {
   CarryOverDestination,
   CompleteSprintInput,
   CreateSprintInput,
+  GetSprintReportOptions,
   SprintDto,
+  SprintReportDto,
   StartSprintInput,
   UpdateSprintInput,
 } from '@/lib/dto/sprints';
@@ -461,10 +465,127 @@ export const sprintsService = {
     return toSprintDto(result.row, result.issueCount);
   },
 
+  /**
+   * The SPRINT REPORT (Story 4.4 · Subtask 4.4.4) — what got done vs. what did
+   * not, built to real-product SCALE (finding #57: bounded aggregates +
+   * cursor-paginated lists, never a load-all). Powers the complete modal's
+   * success state (4.4.6) and the standalone closed-sprint report. A READ — open
+   * to any workspace member (like `rollupForSprint` / `listByProject`), NOT
+   * owner-gated; the owner gate guards sprint MANAGEMENT writes, not reads. No
+   * transaction (a read path; the repos use the `db` singleton).
+   *
+   * Works for a `complete` sprint (the report) AND an `active` one (a live
+   * preview the complete modal shows before confirming). The split is the LIVE
+   * view over the sprint's CURRENT membership, which makes the two states read
+   * naturally: on an ACTIVE sprint it is the FULL completed/incomplete preview
+   * (nothing has moved yet — what the modal shows before you confirm); on a
+   * COMPLETED sprint, 4.4.3 has already carried the unfinished issues OUT, so the
+   * report shows what SHIPPED and stayed, while the IMMUTABLE `committed` baseline
+   * preserves the original scope (committed − completed = how much went
+   * unfinished) and the carry-over already routed those issues. The "view all"
+   * deep-link + the scope-change count are likewise membership-based, so the whole
+   * report is internally consistent. Composes:
+   *   • the project's `done`-category status keys (`getTerminalStatusKeys`,
+   *     Epic 3) — the completed/incomplete split, so "done" generalizes to every
+   *     `category = done` status, not a hardcoded key;
+   *   • the points summary — `committed` = the IMMUTABLE `committedPoints`
+   *     baseline `startSprint` locked (4.4.2; `null` when started unestimated),
+   *     `completed` / `notCompleted` = the live done / not-done point sums REUSED
+   *     from Story 4.3.3 `rollupForSprint` (the bounded grouped aggregate — never
+   *     a re-sum);
+   *   • the completed/incomplete COUNTS — grouped aggregates over the sprint
+   *     (`countSprintIssuesByDoneMembership`), NOT page sums;
+   *   • the completed/incomplete LISTS — one bounded cursor page each (the UI
+   *     shows the page + a "view all" deep-link to `/issues` filtered to the
+   *     sprint, built from `sprintId`);
+   *   • `addedAfterStart` — the issues associated with the sprint after
+   *     `startDate`, from the 1.4.6 revision trail (0 when the sprint has no
+   *     `startDate`, e.g. never started).
+   *
+   * Tenant-gated by `workspaceId` (finding #26): a sprint outside the active
+   * workspace is an indistinguishable 404.
+   *
+   * Throws: `SprintNotFoundError` (404 — unknown / cross-workspace sprint).
+   */
+  async getSprintReport(
+    id: string,
+    options: GetSprintReportOptions,
+    ctx: ServiceContext,
+  ): Promise<SprintReportDto> {
+    const sprint = await sprintRepository.findById(id, ctx.workspaceId);
+    if (!sprint) throw new SprintNotFoundError(id);
+
+    const take = clampReportLimit(options.limit);
+    const doneStatusKeys = [
+      ...(await workflowsService.getTerminalStatusKeys(sprint.projectId, ctx.workspaceId)),
+    ];
+
+    // Points: the live done/not-done sums REUSE the 4.3.3 bounded roll-up; the
+    // committed figure is the immutable baseline snapshot, NOT the live roll-up's
+    // `committed` (which moves with scope) — that contrast is the report's point.
+    const rollup = await estimationService.rollupForSprint(id, ctx);
+    const committed = sprint.committedPoints === null ? null : sprint.committedPoints.toNumber();
+
+    // Grouped aggregate counts (not page sums) + one bounded page of each list.
+    const [completedCount, incompleteCount, completedRows, incompleteRows] = await Promise.all([
+      workItemRepository.countSprintIssuesByDoneMembership(id, ctx.workspaceId, {
+        statusKeys: doneStatusKeys,
+        include: true,
+      }),
+      workItemRepository.countSprintIssuesByDoneMembership(id, ctx.workspaceId, {
+        statusKeys: doneStatusKeys,
+        include: false,
+      }),
+      workItemRepository.findSprintIssuesByDoneMembership(id, ctx.workspaceId, {
+        statusKeys: doneStatusKeys,
+        include: true,
+        take,
+        cursor: options.completedCursor,
+      }),
+      workItemRepository.findSprintIssuesByDoneMembership(id, ctx.workspaceId, {
+        statusKeys: doneStatusKeys,
+        include: false,
+        take,
+        cursor: options.incompleteCursor,
+      }),
+    ]);
+
+    // Scope change: issues added to the sprint after it started (the Jira "added
+    // during sprint" figure). A sprint with no startDate (never started) has no
+    // anchor — 0.
+    const addedAfterStart = sprint.startDate
+      ? await workItemRevisionRepository.countItemsAddedToSprintAfter(
+          id,
+          ctx.workspaceId,
+          sprint.startDate,
+        )
+      : 0;
+
+    return toSprintReportDto({
+      sprintId: sprint.id,
+      state: sprint.state as SprintDto['state'],
+      points: { committed, completed: rollup.completed, notCompleted: rollup.remaining },
+      completed: toSprintReportPage(completedRows, take, completedCount),
+      incomplete: toSprintReportPage(incompleteRows, take, incompleteCount),
+      addedAfterStart,
+    });
+  },
+
   /** Re-exported for callers that import the service object. See the free
    *  function below — it is the canonical export Story 4.4 consumes. */
   assertSprintTransition,
 };
+
+/** The sprint report's default + max issue-list page size (Story 4.4.4) —
+ *  mirrors `backlogService`'s `BACKLOG_PAGE_SIZE` / `MAX_BACKLOG_PAGE_SIZE`. */
+const SPRINT_REPORT_PAGE_SIZE = 50;
+const MAX_SPRINT_REPORT_PAGE_SIZE = 100;
+
+/** Clamp a requested report page `limit` to `[1, 100]`; NaN / absent → 50. */
+function clampReportLimit(limit: number | undefined): number {
+  if (limit === undefined || Number.isNaN(limit)) return SPRINT_REPORT_PAGE_SIZE;
+  return Math.min(Math.max(Math.trunc(limit), 1), MAX_SPRINT_REPORT_PAGE_SIZE);
+}
 
 /**
  * The PURE sprint state-machine guard (Story 4.1 · Subtask 4.1.3). The lifecycle

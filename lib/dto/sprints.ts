@@ -3,6 +3,8 @@
 // strings, the Prisma `SprintState` enum becomes a string union). The 4.2
 // backlog / sprint-planning UI binds to these.
 
+import type { RankedIssuePageDto } from '@/lib/dto/backlog';
+
 /** Wire form of the Prisma `SprintState` enum. */
 export type SprintStateDto = 'planned' | 'active' | 'complete';
 
@@ -90,4 +92,63 @@ export interface UpdateSprintInput {
   goal?: string | null;
   startDate?: string | null;
   endDate?: string | null;
+}
+
+/**
+ * The sprint report's points summary (Story 4.4.4) — the three figures Jira's
+ * sprint report shows. `committed` is the IMMUTABLE scope-lock baseline
+ * `startSprint` snapshotted at activation (`sprint.committedPoints`, 4.4.2) —
+ * NOT the live roll-up, so the report can contrast what was committed against
+ * what changed; it is `null` when the sprint was started wholly unestimated (the
+ * UI renders "—"). `completed` is the `SUM(storyPoints)` over the sprint's
+ * done-category issues NOW, and `notCompleted` the remainder — both REUSE Story
+ * 4.3.3 `rollupForSprint` (the bounded grouped aggregate), never a re-sum. The
+ * DTO stays TOTAL: it returns the numbers (0 when unestimated), and the UI owns
+ * the "—" rendering (the 4.5.2 pattern).
+ */
+export interface SprintReportPointsDto {
+  committed: number | null;
+  completed: number;
+  notCompleted: number;
+}
+
+/**
+ * The sprint report (Story 4.4.4) — what got done vs. what did not, for a
+ * `complete` sprint (the report) OR an `active` one (a live preview the complete
+ * modal shows before confirming). Built to real-product SCALE (finding #57):
+ * the counts + point figures are BOUNDED grouped aggregates, and the two issue
+ * lists are CURSOR-PAGINATED (`RankedIssuePageDto` — the first bounded page +
+ * `nextCursor` + the full `totalCount`), never a load-every-issue dump. The
+ * "view all" deep-link the UI renders (`/issues` filtered to the sprint, Story
+ * 2.5) is built from `sprintId` — no extra field needed.
+ *
+ *   • `points` — the committed (baseline) / completed / not-completed summary.
+ *   • `completed` — the done-category issues that shipped (paginated).
+ *   • `incomplete` — the non-done-category issues that did not (paginated; the
+ *     carry-over set 4.4.3 moved / will move).
+ *   • `addedAfterStart` — the Jira "issues added during the sprint" figure: the
+ *     count of issues associated with the sprint AFTER `startDate`, derived from
+ *     the 1.4.6 revision trail (the immutable `committedIssueCount` baseline
+ *     anchors it). Bounded (an aggregate over the sprint's own additions).
+ */
+export interface SprintReportDto {
+  sprintId: string;
+  state: SprintStateDto;
+  points: SprintReportPointsDto;
+  completed: RankedIssuePageDto;
+  incomplete: RankedIssuePageDto;
+  addedAfterStart: number;
+}
+
+/**
+ * Options for `sprintsService.getSprintReport` (Story 4.4.4). The two issue
+ * lists paginate INDEPENDENTLY — `completedCursor` / `incompleteCursor` are the
+ * last-seen id of each (omit for page 1); `limit` (1..100, default 50) bounds
+ * both. The cursors are separate so the UI can page one list without disturbing
+ * the other.
+ */
+export interface GetSprintReportOptions {
+  completedCursor?: string;
+  incompleteCursor?: string;
+  limit?: number;
 }

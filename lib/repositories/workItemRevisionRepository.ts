@@ -59,4 +59,35 @@ export const workItemRevisionRepository = {
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
   },
+
+  /**
+   * How many DISTINCT issues were associated with `sprintId` AFTER `after` — the
+   * Jira "issues added during the sprint" figure the sprint report shows (Story
+   * 4.4.4). An association write records a `{ sprintId: { from, to } }` diff
+   * (`assignToSprint` / `setSprint`, Story 4.1.4), so an issue "added after
+   * start" is one with an `updated` revision whose `diff.sprintId.to` equals this
+   * sprint and whose `changedAt` is past the sprint's `startDate`. The relation
+   * filter scopes to issues CURRENTLY in the sprint (non-archived) so a
+   * removed-then-not-readded issue doesn't inflate the count, and `workspaceId`
+   * gates the read (finding #26). `distinct` collapses an issue with several such
+   * revisions to one — the result is bounded by the sprint's own additions (an
+   * aggregate, not a load-all; finding #57). Read-only path → `db` singleton.
+   */
+  async countItemsAddedToSprintAfter(
+    sprintId: string,
+    workspaceId: string,
+    after: Date,
+  ): Promise<number> {
+    const rows = await db.workItemRevision.findMany({
+      where: {
+        changeKind: 'updated',
+        changedAt: { gt: after },
+        diff: { path: ['sprintId', 'to'], equals: sprintId },
+        workItem: { sprintId, workspaceId, archivedAt: null },
+      },
+      distinct: ['workItemId'],
+      select: { workItemId: true },
+    });
+    return rows.length;
+  },
 };
