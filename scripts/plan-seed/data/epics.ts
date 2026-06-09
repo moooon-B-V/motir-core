@@ -251,7 +251,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Issue list: inline cell-edit pickers are clipped / unusable when the table is short',
-        status: 'in_progress',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 2 · **Surfaces:** issue list (Story 2.5 — List + Tree ' +
@@ -304,7 +304,27 @@ export const EPICS: EpicMeta[] = [
           'the `overflow-hidden` table cards that clip the menu\n' +
           '- `components/ui/DatePicker.tsx` / `components/ui/Popover.tsx` — the portal pattern ' +
           'this fix mirrors\n' +
-          '- `tests/components/combobox-portal.test.tsx` — the regression test',
+          '- `tests/components/combobox-portal.test.tsx` — the regression test\n\n' +
+          '**Resolution (PR #444 feature, #445 plan, both merged).** TWO root causes on the inline ' +
+          'editors, fixed together: (1) **Combobox menu (status / assignee / priority)** was ' +
+          '`position:absolute` inside the trigger, so the List/Tree table cards’ `overflow:hidden` ' +
+          'clipped it on a short table — now portaled to `document.body` with viewport-anchored ' +
+          '`position:fixed` + flip, EXCEPT when inside a focus-trapping `[role="dialog"]` (the ' +
+          'create-issue modal), where it renders inline (a portaled menu fought the dialog’s focus ' +
+          'trap — caught by E2E and fixed). (2) **Due field (`DatePicker`)** — its calendar was ' +
+          'already a portaled Popover (never clipped), but its anchor input defaulted to ' +
+          '`--height-input` (44px), taller than the Tree view’s 40px rows (`TreeTable` ROW_PX), so ' +
+          'on the last row it overflowed and was clipped; now rendered at `--height-control` (36px), ' +
+          'matching the sibling inline editors and fitting both row heights. Regression tests: ' +
+          '`tests/components/combobox-portal.test.tsx` (portaled-out + inline-in-dialog) and the ' +
+          'inline Due assertion in `tests/components/issue-inline-edit.test.tsx`. Verified in a real ' +
+          'browser; full CI (incl. Playwright E2E) green.\n\n' +
+          '**Note:** this card consolidates a duplicate filing of the same bug that a parallel ' +
+          'session had added under Epic 4 (`status: planned`) — the Epic-4 duplicate is removed in ' +
+          'this same PR. List-surface bugs are parented to Epic 2 here, matching the ' +
+          '`bug-tree-header-misalignment` / `bug-ready-banner-no-deps` precedent. The Epic-4 ' +
+          'filing’s unique repro (single-row `TEST-3`, Priority picker clipped below the table) is ' +
+          'the same defect captured above.',
       },
     ],
   },
@@ -577,71 +597,6 @@ export const EPICS: EpicMeta[] = [
       'the Scrum view sitting on the same board substrate Epic 3 already shipped.',
     items: [
       {
-        id: 'bug-inline-edit-clipped-when-table-short',
-        kind: 'bug',
-        title:
-          'Issue list: inline cell-edit pickers are clipped / unusable when the table is shorter than the picker',
-        status: 'planned',
-        type: 'bug',
-        descriptionMd:
-          '**Type:** bug · **Parent:** Epic 4 (current epic — discovered during Epic 4 work) · ' +
-          '**Code surface owned by:** Story 2.5 (issue list — inline status/assignee/priority ' +
-          'editing, subtask 2.5.5) · **Status:** open · **Reported by:** Yue.\n\n' +
-          'On the project issue list (e.g. `/issues` in the seeded `moooon` / `prodect` tenant, or ' +
-          'the screenshot repro on a `test` project with one row `TEST-3`), clicking an **inline ' +
-          'editable cell** (status / assignee / priority) opens its picker popover, but **the ' +
-          'picker is clipped by the table container when the table is not tall enough to hold it**. ' +
-          'The screenshot shows the Priority picker (Highest / High / Medium ✓ / Low / Lowest) opened ' +
-          "on `TEST-3`, the only row in the list — the popover spills below the table's rendered " +
-          'box and is cut off / unscrollable / unclickable past the visible area. The same surface ' +
-          "works fine when the table is tall (many rows push the table's rendered height past the " +
-          "picker's height, so the popover has room to land).\n\n" +
-          '**Repro:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz`, create a small workspace+project ' +
-          'with **one** work item (or open any project that today renders a single-row list). On ' +
-          "`/issues` open the picker on the row's status / assignee / priority cell. Observe the " +
-          "picker visibly cuts off at the table's bottom edge — options below the cut are not " +
-          "clickable. Add more rows until the table grows past the picker's height; the picker " +
-          'now renders fully and the bug disappears.\n\n' +
-          '**Root cause (hypothesis to verify in the fix Subtask).** The list / tree table wrapper ' +
-          'almost certainly carries an `overflow-hidden` (or `overflow-auto` / `overflow-x-auto`) ' +
-          "on a container that establishes the picker popover's containing block — `Popover` / " +
-          "`Combobox` / picker primitives that don't render into a portal are clipped by any " +
-          'ancestor with `overflow != visible`. The fix is either (a) **portal the picker** out of ' +
-          'the table (the standard Radix / shadcn pattern — render into `document.body` via a ' +
-          "portal so the popover escapes the table's clip region), or (b) **drop the clip on the " +
-          "table container** if portal isn't available. Either way it's a contained component-" +
-          'layer fix; no service or DTO change. Verify the picker is also keyboard-accessible after ' +
-          "the fix (Esc dismisses, arrow keys traverse) and that the table's own " +
-          "overflow-x scroll for wide column tracks isn't regressed.\n\n" +
-          '## Acceptance criteria\n\n' +
-          '- On the issue list (`/issues`) with a **single-row** (or otherwise short) table, ' +
-          'opening any inline picker — status, assignee, **priority** (the repro), or any other ' +
-          'inline-editable cell — renders the picker **fully visible** and **fully interactive**: ' +
-          "every option is clickable; the bottom of the picker is not clipped by the table's box.\n" +
-          '- Same behaviour holds on the Tree view AND the List view (and any other view variants ' +
-          '2.5 ships).\n' +
-          '- Existing wide-column horizontal scroll on the table is unchanged (guard against ' +
-          'regression: opening a picker on a row off-screen to the right still positions over the ' +
-          "cell, not under the scroll container's clip).\n" +
-          '- Keyboard navigation works post-fix: Esc dismisses, arrow keys move between options, ' +
-          'Enter commits.\n' +
-          '- A Playwright regression in `tests/e2e/issue-list-flow.spec.ts` (or a sibling) opens ' +
-          "an inline picker on a **single-row** project list and asserts the picker's rendered " +
-          'bounding box is fully inside the viewport AND that every option is clickable (mirror the ' +
-          'measurement posture of `bug-tree-header-misalignment` and the swimlane bugs — measure ' +
-          'rendered geometry, not CSS rules).\n\n' +
-          '## Context refs\n\n' +
-          '- `app/(authed)/issues/_components/IssueListPage.tsx` (or wherever 2.5.3 / 2.5.8 mount ' +
-          'the list + tree views) — the table container that establishes the clipping region\n' +
-          '- The 2.5.5 inline-edit cell components (status / assignee pickers) AND the priority ' +
-          "picker that 2.5's extension subtasks added — the popover render sites\n" +
-          '- `components/ui/Popover` / `components/ui/Combobox` (or whichever popover primitive the ' +
-          'inline pickers compose from) — if portal support exists, the fix is flipping it on; if ' +
-          'not, the primitive needs a `portalled` prop\n' +
-          '- `bug-tree-header-misalignment` (Epic-2 sibling on the same Story 2.5 surface — ' +
-          'measurement-based regression test posture to mirror)',
-      },
-      {
         id: 'bug-issue-list-not-refreshed-after-create',
         kind: 'bug',
         title: 'Issue list / tree does not update after creating a new work item via the modal',
@@ -708,7 +663,7 @@ export const EPICS: EpicMeta[] = [
           'list" — same shape the create path needs to mirror\n' +
           '- 2.5.1 `getProjectTree` — the projection the list view reads; the cache it sits behind ' +
           'is what must be invalidated\n' +
-          '- `bug-inline-edit-clipped-when-table-short` (Epic-4 sibling — the other list-surface ' +
+          '- `bug-inline-edit-clipped-when-table-short` (Epic-2 — the other list-surface ' +
           'bug filed in the same session); `bug-tree-header-misalignment` (Epic-2 — the precedent ' +
           'for filing list-surface bugs against the issue list).',
       },
