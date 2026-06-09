@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Project Estimation settings (Story 4.3 · 4.3.1)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the PROJECT ESTIMATION SETTINGS panel —
+      Story 4.3 (companion to estimation.mock.html). The settings surface is
+      unspecified: design/ has no Estimation panel and the settings hub has no
+      Estimation nav card. Whole elements unspecified == NO design under the
+      gate, so the 4.3.1 design gate produces this. Layout source of truth for
+      the 4.3.5 settings-UI subtask.
+
+      Built FROM the real design system + the SHIPPED project-settings chrome
+      (app/(authed)/settings/project — the Card primitive, the nav-card pattern
+      from WorkflowSettingsCard.tsx, the Segmented control components/ui/
+      Segmented.tsx, FormField, Button). Colour via --el-* only; shape via the
+      element shape tokens; AA-safe. Mirror: Jira board Estimation settings
+      (statistic + scale) — here PROJECT-scoped (the justified deviation, see
+      story-4.3.ts: a board is a per-project read projection, sprints are
+      project-scoped, so estimation config hangs off the project).
+
+      Covers (multi-panel — review EACH):
+        (0) ESTIMATION SETTINGS panel (settings/project/estimation) — the
+            statistic selector + point-scale selector + helper copy + Save
+        (1) CUSTOM SCALE — the custom-value editor (shown only when scale =
+            custom): editable numeric chips + add + remove
+        (2) SETTINGS HUB — the Estimation nav card (sibling of Board + Workflow)
+        (3) STATES — non-admin (read-only) · time-statistic variant (scale hidden)
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied 1:1 from app/globals.css ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-mint: #1a2f25;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        font-size: 13px;
+        color: var(--el-text-muted);
+        max-width: 90ch;
+      }
+      .grid {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+      .panel {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .panel-cap {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .panel-cap .n {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--el-accent);
+      }
+      .panel-cap .t {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .panel-cap .d {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .note {
+        max-width: 1180px;
+        margin: 4px auto 0;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        line-height: 1.6;
+      }
+      .note code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+
+      /* ── Settings shell (mirrors app/(authed)/settings/project) ──────────── */
+      .page {
+        padding: 28px 28px 32px;
+        max-width: 720px;
+      }
+      .crumb {
+        display: block;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-bottom: 10px;
+      }
+      .page > h2 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .page > .sub {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        margin-top: 4px;
+        max-width: 60ch;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        margin-top: 22px;
+      }
+
+      /* ── Card primitive (components/ui/Card) ─────────────────────────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .card-head {
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head h3 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .card-head .hsub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 3px;
+      }
+      .card-body {
+        padding: 18px var(--spacing-card-padding) 6px;
+      }
+      .card-foot {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 14px var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+
+      /* ── FormField (components/ui/FormField) ─────────────────────────────── */
+      .field {
+        margin-bottom: 18px;
+      }
+      .field > label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+        margin-bottom: 3px;
+      }
+      .field > .hint {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-bottom: 9px;
+        max-width: 56ch;
+      }
+
+      /* ── Segmented (components/ui/Segmented) ─────────────────────────────── */
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        padding: 2px;
+        gap: 2px;
+      }
+      .seg button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 30px;
+        padding: 0 14px;
+        border: 0;
+        background: none;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .seg button .ic {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-faint);
+        flex: none;
+      }
+      .seg button[aria-pressed='true'] {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .seg button[aria-pressed='true'] .ic {
+        color: var(--el-accent);
+      }
+      .seg button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      /* ── deck preview (shows the chosen scale's values) ──────────────────── */
+      .deck-preview {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+      .deck-preview .dp-cap {
+        font-size: 11px;
+        color: var(--el-text-faint);
+        margin-right: 2px;
+      }
+      .vchip {
+        min-width: 30px;
+        height: 28px;
+        padding: 0 9px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+      }
+      /* editable custom-scale chip (value + remove) */
+      .vchip.edit {
+        gap: 5px;
+        padding-right: 5px;
+      }
+      .vchip.edit .rm {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        border: 0;
+        background: none;
+        border-radius: var(--radius-control);
+        color: var(--el-text-faint);
+        cursor: pointer;
+      }
+      .vchip.edit .rm:hover {
+        background: var(--el-muted);
+        color: var(--el-danger);
+      }
+      .vchip.edit .rm svg {
+        width: 11px;
+        height: 11px;
+      }
+      .vchip.add {
+        color: var(--el-text-muted);
+        border-style: dashed;
+        cursor: pointer;
+      }
+      .vchip.add svg {
+        width: 13px;
+        height: 13px;
+      }
+
+      /* ── Button (components/ui/Button) ───────────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: var(--height-btn-md);
+        padding: 0 16px;
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        cursor: pointer;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      /* ── Settings-hub nav card (mirrors WorkflowSettingsCard.tsx) ─────────── */
+      .navcard {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: var(--spacing-card-padding);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        cursor: pointer;
+        width: 520px;
+      }
+      .navcard:hover {
+        box-shadow: var(--shadow-elevated);
+      }
+      .navcard .nc-l {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+      }
+      .navcard .nc-ic {
+        width: 36px;
+        height: 36px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .navcard .nc-ic svg {
+        width: 18px;
+        height: 18px;
+      }
+      .navcard .nc-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .navcard .nc-sub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+      .navcard .nc-chev {
+        width: 20px;
+        height: 20px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+
+      .ro-banner {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: 8px 12px;
+        margin-bottom: 16px;
+      }
+      .ro-banner svg {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-faint);
+        flex: none;
+      }
+      .pad {
+        padding: 22px 18px;
+        background: var(--el-surface);
+      }
+      .toggle {
+        position: fixed;
+        top: 14px;
+        right: 16px;
+        z-index: 50;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        padding: 0 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol
+        id="i-hash"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="4" x2="20" y1="9" y2="9" />
+        <line x1="4" x2="20" y1="15" y2="15" />
+        <line x1="10" x2="8" y1="3" y2="21" />
+        <line x1="16" x2="14" y1="3" y2="21" />
+      </symbol>
+      <symbol
+        id="i-clock"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </symbol>
+      <symbol
+        id="i-list"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="8" x2="21" y1="6" y2="6" />
+        <line x1="8" x2="21" y1="12" y2="12" />
+        <line x1="8" x2="21" y1="18" y2="18" />
+        <line x1="3" x2="3.01" y1="6" y2="6" />
+        <line x1="3" x2="3.01" y1="12" y2="12" />
+        <line x1="3" x2="3.01" y1="18" y2="18" />
+      </symbol>
+      <symbol
+        id="i-x"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M18 6 6 18" />
+        <path d="m6 6 12 12" />
+      </symbol>
+      <symbol
+        id="i-plus"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M5 12h14" />
+        <path d="M12 5v14" />
+      </symbol>
+      <symbol
+        id="i-chevron-right"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m9 18 6-6-6-6" />
+      </symbol>
+      <symbol
+        id="i-lock"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </symbol>
+    </svg>
+
+    <button
+      class="toggle"
+      onclick="
+        document.documentElement.dataset.theme =
+          document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+      "
+    >
+      ◐ Toggle theme
+    </button>
+
+    <div class="review-head">
+      <h1>Project Estimation settings — Story 4.3 · 4.3.1</h1>
+      <p>
+        The <code>settings/project/estimation</code> panel — the estimation
+        <em>statistic</em> selector, the point-<em>scale</em> selector, the custom-scale editor, and
+        the settings-hub nav card. Project-scoped (the justified deviation from Jira's board-scoped
+        Estimation). Built from the shipped project-settings Card + Segmented + FormField + Button
+        chrome.
+      </p>
+    </div>
+
+    <div class="grid">
+      <!-- ══════════════ PANEL 0 — Estimation settings (default: Story Points / Fibonacci) ══════════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">0</span>
+          <span class="t">Estimation settings — statistic + scale (admin)</span>
+          <span class="d">Story Points (default) · Fibonacci deck · Save</span>
+        </div>
+        <div class="pad">
+          <div
+            class="page"
+            style="
+              background: var(--el-page-bg);
+              border: 1px solid var(--el-border);
+              border-radius: var(--radius-card);
+            "
+          >
+            <span class="crumb">Project settings · prodect</span>
+            <h2>Estimation</h2>
+            <p class="sub">
+              How this project sizes work — the planning estimate the backlog, board, and roll-ups
+              display.
+            </p>
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <h3>Estimation</h3>
+                  <p class="hsub">Applies to every board and sprint in this project.</p>
+                </div>
+                <div class="card-body">
+                  <div class="field">
+                    <label>Estimation statistic</label>
+                    <p class="hint">
+                      Which measure is THE estimate that rolls up to sprints and epics.
+                    </p>
+                    <div class="seg" role="group" aria-label="Estimation statistic">
+                      <button aria-pressed="true">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-hash" /></svg>Story points
+                      </button>
+                      <button aria-pressed="false">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-clock" /></svg>Time
+                        estimate
+                      </button>
+                      <button aria-pressed="false">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-list" /></svg>Issue count
+                      </button>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label>Point scale</label>
+                    <p class="hint">
+                      The suggested deck the estimate picker offers. Any number is still allowed —
+                      the deck only suggests.
+                    </p>
+                    <div class="seg" role="group" aria-label="Point scale">
+                      <button aria-pressed="true">Fibonacci</button>
+                      <button aria-pressed="false">Linear</button>
+                      <button aria-pressed="false">Custom</button>
+                    </div>
+                    <div class="deck-preview">
+                      <span class="dp-cap">Deck:</span>
+                      <span class="vchip">1</span><span class="vchip">2</span
+                      ><span class="vchip">3</span> <span class="vchip">5</span
+                      ><span class="vchip">8</span><span class="vchip">13</span>
+                      <span class="vchip">21</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-foot">
+                  <button class="btn btn-secondary">Cancel</button>
+                  <button class="btn btn-primary">Save changes</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong>Panel 0.</strong> The <code>settings/project/estimation</code> page reuses the
+        shipped project-settings shell (the serif page title, the <code>Card</code> with head / body
+        / footer) and the <code>Segmented</code> control (<code>components/ui/Segmented</code>). The
+        <strong>statistic</strong>
+        selector mirrors Jira's board Estimation method (Story Points default · Time estimate ·
+        Issue count); the
+        <strong>scale</strong> selector picks the picker's suggested deck. The deck-preview shows
+        the chosen scale's values. Save is a primary <code>Button</code>; Cancel a secondary.
+        Project-scoped per the justified deviation (see <code>story-4.3.ts</code>).
+      </p>
+
+      <!-- ══════════════ PANEL 1 — Custom scale editor ══════════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">1</span>
+          <span class="t">Custom scale — the editable numeric deck</span>
+          <span class="d">shown only when scale = Custom · add / remove values</span>
+        </div>
+        <div class="pad">
+          <div class="card" style="max-width: 560px; margin: 0 auto">
+            <div class="card-head">
+              <h3>Estimation</h3>
+              <p class="hsub">Applies to every board and sprint in this project.</p>
+            </div>
+            <div class="card-body">
+              <div class="field">
+                <label>Estimation statistic</label>
+                <div class="seg" role="group" aria-label="Estimation statistic">
+                  <button aria-pressed="true">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-hash" /></svg>Story points
+                  </button>
+                  <button aria-pressed="false">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-clock" /></svg>Time estimate
+                  </button>
+                  <button aria-pressed="false">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-list" /></svg>Issue count
+                  </button>
+                </div>
+              </div>
+              <div class="field">
+                <label>Point scale</label>
+                <div class="seg" role="group" aria-label="Point scale">
+                  <button aria-pressed="false">Fibonacci</button>
+                  <button aria-pressed="false">Linear</button>
+                  <button aria-pressed="true">Custom</button>
+                </div>
+              </div>
+              <div class="field" style="margin-bottom: 6px">
+                <label>Custom values</label>
+                <p class="hint">
+                  The deck the picker offers. Drag to reorder; values must be positive numbers.
+                </p>
+                <div class="deck-preview">
+                  <span class="vchip edit"
+                    >1<button class="rm" aria-label="Remove 1">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <span class="vchip edit"
+                    >2<button class="rm" aria-label="Remove 2">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <span class="vchip edit"
+                    >4<button class="rm" aria-label="Remove 4">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <span class="vchip edit"
+                    >8<button class="rm" aria-label="Remove 8">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <span class="vchip edit"
+                    >16<button class="rm" aria-label="Remove 16">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <button class="vchip add" aria-label="Add value">
+                    <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="card-foot">
+              <button class="btn btn-secondary">Cancel</button>
+              <button class="btn btn-primary">Save changes</button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong>Panel 1.</strong> When scale = <strong>Custom</strong>, the deck becomes editable:
+        each value is a chip with a remove (<code>×</code>) affordance, plus a dashed
+        <strong>Add</strong> chip. The remove button is a real <code>&lt;button&gt;</code> beside
+        the value (NOT nested inside one). Stored as <code>project.customScaleValues</code> (a
+        numeric list), validated positive. Fibonacci / Linear hide this editor (their decks are
+        fixed).
+      </p>
+
+      <!-- ══════════════ PANEL 2 — Settings-hub nav card ══════════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">2</span>
+          <span class="t">Settings hub — the Estimation nav card</span>
+          <span class="d">sibling of Board + Workflow (mirrors WorkflowSettingsCard)</span>
+        </div>
+        <div
+          class="pad"
+          style="display: flex; flex-direction: column; gap: 12px; align-items: center"
+        >
+          <div class="navcard">
+            <div class="nc-l">
+              <span class="nc-ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-hash" /></svg
+              ></span>
+              <div>
+                <div class="nc-title">Estimation</div>
+                <div class="nc-sub">
+                  Set the estimation statistic and point scale for this project.
+                </div>
+              </div>
+            </div>
+            <svg class="nc-chev" viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+          </div>
+          <div class="navcard" style="opacity: 0.66">
+            <div class="nc-l">
+              <span class="nc-ic" style="background: var(--el-tint-sky)"
+                ><svg viewBox="0 0 24 24"><use href="#i-list" /></svg
+              ></span>
+              <div>
+                <div class="nc-title">Workflow</div>
+                <div class="nc-sub">Statuses and allowed transitions. (existing — sibling)</div>
+              </div>
+            </div>
+            <svg class="nc-chev" viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong>Panel 2.</strong> The settings hub (<code>settings/project</code>) gains an
+        <strong>Estimation</strong> nav card, the exact
+        <code>WorkflowSettingsCard.tsx</code> grammar (a single <code>&lt;Link&gt;</code>-wrapped
+        <code>Card</code>, whole-row target, trailing chevron) — sibling of Board + Workflow. The
+        leading glyph tile uses a lavender tint (AA-safe, hue in the background). The greyed
+        Workflow card is shown only for context (it exists already).
+      </p>
+
+      <!-- ══════════════ PANEL 3 — STATES (non-admin · time statistic) ══════════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">3</span>
+          <span class="t">States — non-admin (read-only) · time statistic (scale hidden)</span>
+          <span class="d">only project admins edit · scale applies to points only</span>
+        </div>
+        <div class="pad" style="display: flex; gap: 22px; flex-wrap: wrap">
+          <div class="card" style="flex: 1; min-width: 340px">
+            <div class="card-head">
+              <h3>Estimation</h3>
+              <p class="hsub">Read-only — non-admin</p>
+            </div>
+            <div class="card-body" style="padding-bottom: 18px">
+              <div class="ro-banner">
+                <svg viewBox="0 0 24 24"><use href="#i-lock" /></svg> Only project admins can change
+                estimation settings.
+              </div>
+              <div class="field">
+                <label>Estimation statistic</label>
+                <div class="seg" role="group" aria-label="Estimation statistic">
+                  <button aria-pressed="true" disabled>
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-hash" /></svg>Story points
+                  </button>
+                  <button aria-pressed="false" disabled>
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-clock" /></svg>Time
+                  </button>
+                  <button aria-pressed="false" disabled>
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-list" /></svg>Count
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="flex: 1; min-width: 340px">
+            <div class="card-head">
+              <h3>Estimation</h3>
+              <p class="hsub">Statistic = Time estimate</p>
+            </div>
+            <div class="card-body" style="padding-bottom: 18px">
+              <div class="field">
+                <label>Estimation statistic</label>
+                <div class="seg" role="group" aria-label="Estimation statistic">
+                  <button aria-pressed="false">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-hash" /></svg>Story points
+                  </button>
+                  <button aria-pressed="true">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-clock" /></svg>Time estimate
+                  </button>
+                  <button aria-pressed="false">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-list" /></svg>Issue count
+                  </button>
+                </div>
+              </div>
+              <div class="field" style="margin-bottom: 4px">
+                <label style="color: var(--el-text-faint)">Point scale</label>
+                <p class="hint">
+                  Hidden — the point scale applies only when the statistic is Story points.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong>Panel 3.</strong> A non-admin sees the panel read-only (the Segmented controls
+        <code>disabled</code>, a lock banner) — same gating pattern as the Story-6.4 project-admin
+        surfaces. When the statistic is <strong>Time estimate</strong> or
+        <strong>Issue count</strong>, the point-scale field is hidden (the scale governs the
+        story-point picker deck only).
+      </p>
+    </div>
+  </body>
+</html>

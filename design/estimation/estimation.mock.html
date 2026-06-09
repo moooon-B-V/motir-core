@@ -1,0 +1,1654 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Estimation surfaces (Story 4.3 · 4.3.1)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the ESTIMATION surfaces — Story 4.3.
+      The estimation UI is unspecified: design/ draws the backlog row estimate
+      slot + the sprint committed-points slot + the board `.pts` chip only as
+      RESERVED dashed seams / a static chip (never the click-to-edit picker),
+      the issue detail draws only the TIME Estimate (not story points), and
+      there is no epic roll-up badge and no project Estimation settings panel.
+      Whole elements unspecified == NO design under the gate, so the
+      planning-time design gate (4.3.1) produces this NEW design/estimation/
+      area. It is the layout source of truth every UI subtask of Story 4.3
+      (4.3.4 / 4.3.5 / 4.3.6) builds against.
+
+      Built FROM the real design system: the token block below is copied 1:1
+      from app/globals.css (Tier-0 --color-* + Tier-3 --el-* + the shape
+      tokens), and the markup mirrors the SHIPPED primitives — Pill, the board
+      `.pts` chip (design/boards/), the backlog row (design/backlog/, 4.2.1),
+      the issue-detail core-fields rail (design/work-items/detail.pen), the
+      Popover/Menu, Button, the IssueTypeIcon (lucide in the --el-type-* hue).
+      Colour via --el-* only (no Tier-0 --color-*); shape via the element shape
+      tokens; AA-safe (the chip is text on a neutral surface, not a tinted
+      page surface). Mirror: the Jira story-point field + board Estimation.
+
+      This surface REUSES existing vocabularies (reference, don't redraw):
+        • the estimate BADGE reuses the chip / board `.pts` vocabulary, dropped
+          into the FIXED backlog-row slot (4.2.1) + the board card + the list
+          row + the issue-detail rail — the SAME component everywhere.
+        • the PICKER reuses the Popover + Button + chip grammar.
+        • the SETTINGS panel (estimation-settings.mock.html) reuses the
+          project-settings card + Segmented + FormField chrome.
+      It draws only the NET-NEW: the click-to-edit picker, the roll-up badges,
+      and the filled estimate slots.
+
+      estimateMinutes (TIME) vs storyPoints (THIS story) are TWO fields — the
+      detail rail shows both (clock-glyph Estimate = time; hash-glyph Story
+      points = agile). The project estimation STATISTIC config (Story Points
+      default · Time · Issue count) picks which one is THE planning estimate
+      the badge + roll-ups display; the badge is one component parameterised by
+      the statistic, not three.
+
+      Covers (multi-panel — review EACH):
+        (0) BADGE — display states: the filled estimate badge across surfaces
+            (backlog row · board card · list row · detail rail) + unestimated —
+        (1) PICKER — the click-to-edit popover (scale deck chips + free numeric
+            + Clear + keyboard), anchored on a backlog row AND in the detail rail
+        (2) ISSUE-DETAIL story-points field — the rail field, distinct from the
+            TIME Estimate, with the inline picker; + the epic roll-up on header
+        (3) EPIC ROLL-UP badge — the subtree total on an epic detail + tree row
+        (4) SPRINT committed-points roll-up — fills the 4.2 sprint-container
+            committed-points slot (committed · completed · remaining)
+        (5) STATES — unestimated issue/sprint/epic (—, never NaN) + read-only
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied 1:1 from app/globals.css ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        font-size: 13px;
+        color: var(--el-text-muted);
+        max-width: 90ch;
+      }
+      .grid {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+      .panel {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .panel-cap {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .panel-cap .n {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--el-accent);
+      }
+      .panel-cap .t {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .panel-cap .d {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .panel-body {
+        padding: 22px 18px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 26px;
+      }
+      .demo {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .demo > .lbl {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-faint);
+      }
+      .note {
+        max-width: 1180px;
+        margin: 4px auto 0;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        line-height: 1.6;
+      }
+      .note code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+
+      /* ════════════════════════════════════════════════════════════════════
+         THE COMPONENTS — every class below is real (--el-* + shape tokens)
+         ════════════════════════════════════════════════════════════════════ */
+
+      /* ── Estimate badge (the chip that fills the points seam) ────────────── */
+      /* Reuses the board `.pts` vocabulary: mono, secondary text, hash glyph.
+         Interactive variant `.est--btn` is a real <button> (click-to-edit). */
+      .est {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .est svg {
+        width: 12px;
+        height: 12px;
+        color: var(--el-text-faint);
+        flex: none;
+      }
+      .est--btn {
+        border: 1px solid transparent;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: none;
+        cursor: pointer;
+        font-family: var(--font-mono);
+      }
+      .est--btn:hover {
+        border-color: var(--el-border);
+        background: var(--el-surface);
+        color: var(--el-text-strong);
+      }
+      .est--btn:focus-visible {
+        outline: none;
+        border-color: var(--el-border);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .est.is-empty {
+        color: var(--el-text-faint);
+      }
+      .est--open {
+        border-color: var(--el-border);
+        background: var(--el-surface);
+        color: var(--el-text-strong);
+      }
+
+      /* ── Estimate picker — the click-to-edit Popover ─────────────────────── */
+      .anchor {
+        position: relative;
+        display: inline-flex;
+      }
+      .picker {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        z-index: 5;
+        width: 244px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 12px;
+      }
+      .picker .pcap {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 10.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        margin-bottom: 9px;
+      }
+      .picker .pcap .deck {
+        text-transform: none;
+        letter-spacing: 0;
+        font-weight: 600;
+        color: var(--el-text-muted);
+      }
+      .deck-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .chip {
+        min-width: 32px;
+        height: 30px;
+        padding: 0 9px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-mono);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        cursor: pointer;
+      }
+      .chip:hover {
+        border-color: var(--el-border-strong);
+        background: var(--el-page-bg);
+      }
+      .chip[aria-pressed='true'] {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .picker .free {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 11px;
+      }
+      .picker .free .input {
+        flex: 1;
+        height: var(--height-control);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        padding: 0 var(--spacing-control-x);
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--el-text);
+        background: var(--el-page-bg);
+        display: inline-flex;
+        align-items: center;
+      }
+      .picker .free .input.focus {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .picker .free .input .ph {
+        color: var(--el-text-faint);
+      }
+      .picker .pfoot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 11px;
+        padding-top: 10px;
+        border-top: 1px solid var(--el-border);
+      }
+      .btn-ghost {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 10px;
+        border: 0;
+        background: none;
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .btn-ghost:hover {
+        background: var(--el-surface);
+        color: var(--el-text-strong);
+      }
+      .btn-ghost svg {
+        width: 13px;
+        height: 13px;
+      }
+      .kbd {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--el-text-faint);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: 1px 6px;
+        background: var(--el-surface-soft);
+      }
+
+      /* ── Backlog row (reused from design/backlog/, 4.2.1) ────────────────── */
+      .brow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        min-width: 560px;
+      }
+      .grip {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-faint);
+        flex: none;
+      }
+      .type-icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .type-icon.t-story {
+        color: var(--el-type-story);
+      }
+      .type-icon.t-task {
+        color: var(--el-type-task);
+      }
+      .type-icon.t-bug {
+        color: var(--el-type-bug);
+      }
+      .type-icon.t-epic {
+        color: var(--el-type-epic);
+      }
+      .type-icon svg {
+        width: 16px;
+        height: 16px;
+      }
+      .brow-id {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .brow-title {
+        font-size: 13px;
+        color: var(--el-text);
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .spacer {
+        flex: 1;
+      }
+      .epic-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        flex: none;
+      }
+      .epic-chip .ec-ic {
+        width: 12px;
+        height: 12px;
+        color: var(--el-type-epic);
+      }
+      .epic-chip .ec-key {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .avatar {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        border-radius: 9999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 600;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+      }
+      .avatar.unassigned {
+        background: var(--el-muted);
+        color: var(--el-text-faint);
+        border: 1px dashed var(--el-border-strong);
+      }
+      .icon-btn {
+        width: 26px;
+        height: 26px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        background: none;
+        border-radius: var(--radius-control);
+        color: var(--el-text-muted);
+        cursor: pointer;
+        flex: none;
+      }
+      .icon-btn:hover {
+        background: var(--el-surface);
+      }
+      .icon-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* ── Pill (status) ───────────────────────────────────────────────────── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 11.5px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        background: currentColor;
+      }
+      .pill--todo {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill--prog {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill--done {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+
+      /* ── Board card (reused from design/boards/) ─────────────────────────── */
+      .bcard {
+        width: 248px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: 12px;
+      }
+      .bcard .bc-top {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 7px;
+      }
+      .bcard .bc-key {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .bcard .bc-title {
+        font-size: 13px;
+        color: var(--el-text);
+        line-height: 1.35;
+        margin-bottom: 11px;
+      }
+      .bcard .bc-foot {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .pts {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        font-family: var(--font-mono);
+      }
+      .pts svg {
+        width: 12px;
+        height: 12px;
+        color: var(--el-text-faint);
+      }
+
+      /* ── List row (reused from design/work-items/list) ───────────────────── */
+      .lrow {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+        min-width: 520px;
+      }
+      .lrow .lr-est {
+        width: 54px;
+        text-align: right;
+        justify-content: flex-end;
+      }
+      .lcol-h {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 7px 12px;
+        font-size: 10.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-faint);
+        min-width: 520px;
+      }
+
+      /* ── Issue-detail core-fields rail (reused from work-items/detail) ───── */
+      .rail {
+        width: 300px;
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 6px 16px 14px;
+      }
+      .frow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .frow:last-child {
+        border-bottom: 0;
+      }
+      .frow .fk {
+        width: 92px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .frow .fk svg {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-faint);
+        flex: none;
+      }
+      .frow .fv {
+        flex: 1;
+        font-size: 13px;
+        color: var(--el-text);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .frow .fv.muted {
+        color: var(--el-text-faint);
+      }
+
+      /* ── Roll-up badge (epic subtree total) ──────────────────────────────── */
+      .rollup {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        padding: 3px 11px;
+        font-size: 12px;
+        font-weight: 500;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .rollup svg {
+        width: 13px;
+        height: 13px;
+      }
+      .rollup .num {
+        font-family: var(--font-mono);
+        font-weight: 600;
+      }
+      .rollup.is-empty {
+        background: var(--el-surface);
+        color: var(--el-text-faint);
+        border: 1px solid var(--el-border);
+      }
+
+      /* ── Epic detail header (where the roll-up sits) ─────────────────────── */
+      .ehead {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 16px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        min-width: 520px;
+      }
+      .ehead .eh-key {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .ehead .eh-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+
+      /* ── Tree parent row (list/tree, roll-up on a parent) ────────────────── */
+      .trow {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 8px 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        min-width: 520px;
+      }
+      .chev {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-faint);
+        flex: none;
+      }
+
+      /* ── Sprint-planning container header (reused from design/backlog/) ──── */
+      .sprint {
+        min-width: 620px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .sprint-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 13px 16px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .sprint-head .sp-ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-type-story);
+        flex: none;
+      }
+      .sprint-head .sp-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .sprint-head .sp-state {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-muted);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        padding: 1px 9px;
+      }
+      .sprint-head .sp-meta {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      /* the committed-points roll-up — fills the 4.2 reserved slot */
+      .committed {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-family: var(--font-mono);
+        color: var(--el-text-secondary);
+      }
+      .committed .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .committed .seg .v {
+        font-weight: 700;
+        color: var(--el-text-strong);
+      }
+      .committed .seg.done .v {
+        color: var(--el-success);
+      }
+      .committed .sep {
+        color: var(--el-text-faint);
+      }
+      .committed .cap {
+        font-family: var(--font-sans);
+        color: var(--el-text-faint);
+      }
+
+      /* read-only treatment */
+      .ro {
+        opacity: 1;
+      }
+      .ro .est--btn {
+        cursor: default;
+      }
+      .ro-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .ro-tag svg {
+        width: 12px;
+        height: 12px;
+        color: var(--el-text-faint);
+      }
+
+      .seam-tag {
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-accent);
+        border: 1px dashed var(--el-accent);
+        border-radius: var(--radius-badge);
+        padding: 1px 6px;
+      }
+      .toggle {
+        position: fixed;
+        top: 14px;
+        right: 16px;
+        z-index: 50;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        padding: 0 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- icon sprite (lucide paths) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol
+        id="i-hash"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="4" x2="20" y1="9" y2="9" />
+        <line x1="4" x2="20" y1="15" y2="15" />
+        <line x1="10" x2="8" y1="3" y2="21" />
+        <line x1="16" x2="14" y1="3" y2="21" />
+      </symbol>
+      <symbol
+        id="i-clock"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </symbol>
+      <symbol
+        id="i-x"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M18 6 6 18" />
+        <path d="m6 6 12 12" />
+      </symbol>
+      <symbol
+        id="i-grip"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="9" cy="6" r="1" />
+        <circle cx="9" cy="12" r="1" />
+        <circle cx="9" cy="18" r="1" />
+        <circle cx="15" cy="6" r="1" />
+        <circle cx="15" cy="12" r="1" />
+        <circle cx="15" cy="18" r="1" />
+      </symbol>
+      <symbol
+        id="i-book"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"
+        />
+      </symbol>
+      <symbol
+        id="i-task"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <path d="m9 12 2 2 4-4" />
+      </symbol>
+      <symbol
+        id="i-bug"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m8 2 1.88 1.88" />
+        <path d="M14.12 3.88 16 2" />
+        <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+        <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+        <path d="M12 20v-9" />
+        <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+        <path d="M6 13H2" />
+        <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+        <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+        <path d="M22 13h-4" />
+        <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+      </symbol>
+      <symbol
+        id="i-zap"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+        />
+      </symbol>
+      <symbol
+        id="i-rocket"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"
+        />
+        <path
+          d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"
+        />
+        <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+        <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+      </symbol>
+      <symbol
+        id="i-more"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="1" />
+        <circle cx="19" cy="12" r="1" />
+        <circle cx="5" cy="12" r="1" />
+      </symbol>
+      <symbol
+        id="i-chevron-right"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m9 18 6-6-6-6" />
+      </symbol>
+      <symbol
+        id="i-chevron-down"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m6 9 6 6 6-6" />
+      </symbol>
+      <symbol
+        id="i-lock"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </symbol>
+    </svg>
+
+    <button
+      class="toggle"
+      onclick="
+        document.documentElement.dataset.theme =
+          document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+      "
+    >
+      ◐ Toggle theme
+    </button>
+
+    <div class="review-head">
+      <h1>Estimation surfaces — Story 4.3 · 4.3.1</h1>
+      <p>
+        The estimate badge + click-to-edit picker, the issue-detail story-points field, the epic
+        roll-up badge, and the sprint committed-points roll-up — the layout source of truth every UI
+        subtask of Story 4.3 builds against. Built from the shipped design system (<code
+          >--el-*</code
+        >
+        + element shape tokens). Project Estimation settings live in
+        <code>estimation-settings.mock.html</code>.
+      </p>
+    </div>
+
+    <div class="grid">
+      <!-- ══════════════ PANEL 0 — BADGE display states across surfaces ══════════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">0</span>
+          <span class="t"
+            >Estimate badge — the SAME component, dropped into every surface's slot</span
+          >
+          <span class="d">backlog row · board card · list row · detail rail · unestimated</span>
+        </div>
+        <div class="panel-body">
+          <div class="demo">
+            <span class="lbl">Backlog row — fills the 4.2 estimate slot (no relayout)</span>
+            <div class="brow" role="row">
+              <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+              <span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+              ></span>
+              <span class="brow-id">PROD-118</span>
+              <span class="brow-title">Org-switcher in the top bar with keyboard nav</span>
+              <span class="epic-chip">
+                <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                <span class="ec-key">PROD-9</span>
+              </span>
+              <button class="est est--btn" aria-label="Story points: 5 — edit">
+                <svg viewBox="0 0 24 24"><use href="#i-hash" /></svg>5
+              </button>
+              <span class="avatar" title="Yue Zhu">YZ</span>
+              <span class="pill pill--prog"><span class="dot"></span>In progress</span>
+              <button class="icon-btn" aria-label="Row actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="demo">
+            <span class="lbl"
+              >Board card `.pts` chip — generalised to the configured statistic</span
+            >
+            <div class="bcard">
+              <div class="bc-top">
+                <span class="type-icon t-task"
+                  ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                ></span>
+                <span class="bc-key">PROD-104</span>
+              </div>
+              <div class="bc-title">Wire the audit-log revision write into the sprint move</div>
+              <div class="bc-foot">
+                <button class="est est--btn pts" aria-label="Story points: 8 — edit">
+                  <svg viewBox="0 0 24 24"><use href="#i-hash" /></svg>8
+                </button>
+                <span class="spacer"></span>
+                <span class="avatar" title="Ana Ruiz">AR</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="demo">
+            <span class="lbl">List / tree row — right-aligned estimate column</span>
+            <div
+              style="
+                border: 1px solid var(--el-border);
+                border-radius: var(--radius-card);
+                overflow: hidden;
+              "
+            >
+              <div class="lcol-h">
+                <span style="flex: 1">Issue</span><span>Assignee</span
+                ><span class="lr-est">Points</span>
+              </div>
+              <div class="lrow">
+                <span class="type-icon t-bug"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                ></span>
+                <span class="brow-id">PROD-121</span>
+                <span class="brow-title">Avatar initials wrong for single-word names</span>
+                <span class="avatar" title="Mo">MO</span>
+                <button class="est est--btn lr-est" aria-label="Story points: 3 — edit">3</button>
+              </div>
+              <div class="lrow" style="border-bottom: 0">
+                <span class="type-icon t-task"
+                  ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                ></span>
+                <span class="brow-id">PROD-130</span>
+                <span class="brow-title">Backlog rank backfill for legacy issues</span>
+                <span class="avatar unassigned" title="Unassigned">–</span>
+                <button class="est est--btn lr-est is-empty" aria-label="No estimate — add">
+                  —
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="demo">
+            <span class="lbl">Unestimated — muted em-dash, never NaN</span>
+            <div style="display: flex; align-items: center; gap: 18px; padding: 6px 0">
+              <button class="est est--btn is-empty" aria-label="No estimate — add">
+                <svg viewBox="0 0 24 24"><use href="#i-hash" /></svg>—
+              </button>
+              <span style="font-size: 12px; color: var(--el-text-muted)">click to estimate</span>
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong>Panel 0.</strong> The estimate badge is ONE component (<code>EstimateBadge</code>)
+        reused across every surface — the board <code>.pts</code> chip generalised to render the
+        project's configured estimation <em>statistic</em> (story points by default). It drops into
+        the FIXED backlog-row slot (<code>design/backlog/</code>, 4.2.1) with no relayout. Mono
+        numerals (the <code>.pts</code> vocabulary), <code>--el-text-secondary</code>, hash glyph in
+        <code>--el-text-faint</code>; unestimated is a muted
+        <code>—</code> (<code>--el-text-faint</code>), never <code>NaN</code>. The interactive
+        variant is a real <code>&lt;button&gt;</code> — NOT nested inside the row's other controls
+        (the row is a flex container, not a button).
+      </p>
+
+      <!-- ══════════════ PANEL 1 — PICKER (click-to-edit popover) ══════════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">1</span>
+          <span class="t">Estimate picker — the click-to-edit Popover</span>
+          <span class="d">scale-deck quick chips · free numeric (decimals) · Clear · keyboard</span>
+        </div>
+        <div class="panel-body">
+          <div class="demo">
+            <span class="lbl">Anchored to the badge on a backlog row</span>
+            <div class="brow" role="row" style="position: relative">
+              <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+              <span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+              ></span>
+              <span class="brow-id">PROD-118</span>
+              <span class="brow-title">Org-switcher in the top bar with keyboard nav</span>
+              <span class="spacer"></span>
+              <span class="anchor">
+                <button
+                  class="est est--btn est--open"
+                  aria-label="Story points: 5 — editing"
+                  aria-expanded="true"
+                >
+                  <svg viewBox="0 0 24 24"><use href="#i-hash" /></svg>5
+                </button>
+                <div class="picker" role="dialog" aria-label="Set story points">
+                  <div class="pcap">
+                    <span>Story points</span><span class="deck">Fibonacci</span>
+                  </div>
+                  <div class="deck-chips">
+                    <button class="chip">1</button>
+                    <button class="chip">2</button>
+                    <button class="chip">3</button>
+                    <button class="chip" aria-pressed="true">5</button>
+                    <button class="chip">8</button>
+                    <button class="chip">13</button>
+                    <button class="chip">21</button>
+                  </div>
+                  <div class="free">
+                    <span class="input focus"
+                      >5<span
+                        style="
+                          width: 1px;
+                          height: 16px;
+                          background: var(--el-accent);
+                          margin-left: 1px;
+                        "
+                      ></span
+                    ></span>
+                    <span class="kbd">↵</span>
+                  </div>
+                  <div class="pfoot">
+                    <button class="btn-ghost">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear
+                    </button>
+                    <span class="kbd">Esc to cancel</span>
+                  </div>
+                </div>
+              </span>
+              <span class="avatar" title="Yue Zhu">YZ</span>
+            </div>
+          </div>
+
+          <div class="demo">
+            <span class="lbl">Free numeric entry (decimals allowed, e.g. 0.5)</span>
+            <div
+              class="picker"
+              role="dialog"
+              aria-label="Set story points"
+              style="position: static"
+            >
+              <div class="pcap"><span>Story points</span><span class="deck">Fibonacci</span></div>
+              <div class="deck-chips">
+                <button class="chip">1</button>
+                <button class="chip">2</button>
+                <button class="chip">3</button>
+                <button class="chip">5</button>
+                <button class="chip">8</button>
+                <button class="chip">13</button>
+                <button class="chip">21</button>
+              </div>
+              <div class="free">
+                <span class="input focus"
+                  >0.5<span
+                    style="width: 1px; height: 16px; background: var(--el-accent); margin-left: 1px"
+                  ></span
+                ></span>
+                <span class="kbd">↵</span>
+              </div>
+              <div class="pfoot">
+                <button class="btn-ghost">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear
+                </button>
+                <span class="kbd">Esc to cancel</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong>Panel 1.</strong> Click the badge → a
+        <code>Popover</code> (<code>components/ui/Popover</code>, <code>--shadow-elevated</code>,
+        <code>--radius-card</code>). The configured <strong>scale deck</strong> renders as
+        quick-pick chips (Fibonacci default — <code>1,2,3,5,8,13,21</code>; the active value is the
+        <code>--el-accent</code> fill); a <strong>free numeric input</strong> accepts any value
+        INCLUDING decimals (story points are free numeric — Jira allows <code>0.5</code> — so the
+        deck suggests, it does not constrain); a <strong>Clear</strong> ghost button nulls the
+        estimate; <code>↵</code> commits, <code>Esc</code> cancels. The chips are real
+        <code>&lt;button&gt;</code>s with <code>aria-pressed</code>; no
+        <code>&lt;button&gt;</code> nests another.
+      </p>
+
+      <!-- ══════════════ PANEL 2 — ISSUE-DETAIL story-points field ══════════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">2</span>
+          <span class="t"
+            >Issue-detail core-fields rail — story points, DISTINCT from the time Estimate</span
+          >
+          <span class="d"
+            >hash glyph (points) vs clock glyph (time) · inline picker · epic roll-up on
+            header</span
+          >
+        </div>
+        <div class="panel-body">
+          <div class="demo">
+            <span class="lbl">Core-fields rail (condensed)</span>
+            <div class="rail">
+              <div class="frow">
+                <span class="fk">Status</span>
+                <span class="fv"
+                  ><span class="pill pill--prog"><span class="dot"></span>In progress</span></span
+                >
+              </div>
+              <div class="frow">
+                <span class="fk">Assignee</span>
+                <span class="fv"><span class="avatar" title="Yue Zhu">YZ</span> Yue Zhu</span>
+              </div>
+              <div class="frow">
+                <span class="fk"
+                  ><svg viewBox="0 0 24 24"><use href="#i-hash" /></svg>Story points</span
+                >
+                <span class="fv"
+                  ><button class="est est--btn" aria-label="Story points: 5 — edit">5</button></span
+                >
+              </div>
+              <div class="frow">
+                <span class="fk"
+                  ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>Estimate</span
+                >
+                <span class="fv">2h 30m</span>
+              </div>
+              <div class="frow">
+                <span class="fk">Due date</span>
+                <span class="fv muted">—</span>
+              </div>
+            </div>
+          </div>
+          <div class="demo">
+            <span class="lbl">Story-points field with the picker open</span>
+            <div class="rail" style="position: relative">
+              <div class="frow">
+                <span class="fk">Status</span>
+                <span class="fv"
+                  ><span class="pill pill--todo"><span class="dot"></span>To do</span></span
+                >
+              </div>
+              <div class="frow" style="position: relative">
+                <span class="fk"
+                  ><svg viewBox="0 0 24 24"><use href="#i-hash" /></svg>Story points</span
+                >
+                <span class="fv">
+                  <span class="anchor">
+                    <button
+                      class="est est--btn est--open"
+                      aria-expanded="true"
+                      aria-label="Story points: 8 — editing"
+                    >
+                      8
+                    </button>
+                    <div class="picker" role="dialog" aria-label="Set story points">
+                      <div class="pcap">
+                        <span>Story points</span><span class="deck">Fibonacci</span>
+                      </div>
+                      <div class="deck-chips">
+                        <button class="chip">1</button>
+                        <button class="chip">2</button>
+                        <button class="chip">3</button>
+                        <button class="chip">5</button>
+                        <button class="chip" aria-pressed="true">8</button>
+                        <button class="chip">13</button>
+                        <button class="chip">21</button>
+                      </div>
+                      <div class="free"><span class="input">8</span><span class="kbd">↵</span></div>
+                      <div class="pfoot">
+                        <button class="btn-ghost">
+                          <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear
+                        </button>
+                        <span class="kbd">Esc</span>
+                      </div>
+                    </div>
+                  </span>
+                </span>
+              </div>
+              <div class="frow">
+                <span class="fk"
+                  ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>Estimate</span
+                >
+                <span class="fv muted">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong>Panel 2.</strong> Story points are a SEPARATE rail field from the existing TIME
+        <strong>Estimate</strong> (the clock-glyph field, Story 2.3.6 —
+        <code>estimateMinutes</code>): a hash-glyph <strong>Story points</strong> row carrying the
+        same <code>EstimateBadge</code> + inline picker. Field placement follows
+        <code>design/work-items/detail.pen</code>'s core-fields rail order (after Assignee, beside
+        the time Estimate). Both fields coexist; the project statistic decides which one the
+        backlog/board/roll-ups SUM, but the detail rail always shows both.
+      </p>
+
+      <!-- ══════════════ PANEL 3 — EPIC ROLL-UP badge ══════════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">3</span>
+          <span class="t"
+            >Epic roll-up badge — the subtree total (distinct from the parent's own estimate)</span
+          >
+          <span class="d"
+            >epic detail header · list/tree parent row · bounded SUM (finding #57)</span
+          >
+        </div>
+        <div class="panel-body">
+          <div class="demo">
+            <span class="lbl">Epic detail header</span>
+            <div class="ehead">
+              <span class="type-icon t-epic"
+                ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+              ></span>
+              <span class="eh-key">PROD-9</span>
+              <span class="eh-title">Multi-workspace onboarding</span>
+              <span class="spacer"></span>
+              <span class="rollup" title="Sum of story points across this epic's subtree">
+                <svg viewBox="0 0 24 24"><use href="#i-hash" /></svg>
+                <span>Story points</span><span class="num">34</span>
+              </span>
+            </div>
+          </div>
+          <div class="demo">
+            <span class="lbl">Tree parent row — roll-up beside the parent</span>
+            <div class="trow">
+              <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              <span class="type-icon t-epic"
+                ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+              ></span>
+              <span class="brow-id">PROD-9</span>
+              <span class="brow-title">Multi-workspace onboarding</span>
+              <span class="spacer"></span>
+              <span class="rollup"><span class="num">34</span> pts</span>
+            </div>
+          </div>
+          <div class="demo">
+            <span class="lbl">No estimated descendants</span>
+            <div class="trow">
+              <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+              <span class="type-icon t-epic"
+                ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+              ></span>
+              <span class="brow-id">PROD-44</span>
+              <span class="brow-title">Reporting & dashboards</span>
+              <span class="spacer"></span>
+              <span class="rollup is-empty"><span class="num">—</span> pts</span>
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong>Panel 3.</strong> The roll-up badge shows the
+        <strong>SUM over the subtree</strong> (a recursive-CTE aggregate — finding #57's bounded
+        shape, never a load-all-then-client-sum), labelled so it is never confused with the parent's
+        OWN estimate. A lavender tint (<code>--el-tint-lavender</code>) with
+        <code>--el-text-strong</code> text (AA-safe — hue in the background, not on a page surface)
+        distinguishes the rolled-up total from a leaf estimate. No estimated descendants → a muted
+        <code>—</code> (never <code>0</code> or <code>NaN</code>).
+      </p>
+
+      <!-- ══════════════ PANEL 4 — SPRINT committed-points roll-up ══════════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">4</span>
+          <span class="t"
+            >Sprint committed-points roll-up — fills the Story-4.2 sprint-container slot</span
+          >
+          <span class="d"
+            >committed · completed · remaining · matches the 4.2.1 slot placement</span
+          >
+        </div>
+        <div class="panel-body">
+          <div class="demo" style="width: 100%">
+            <span class="lbl"
+              >Active sprint header — committed-points slot FILLED
+              <span class="seam-tag">was → 4.3 seam</span></span
+            >
+            <div class="sprint">
+              <div class="sprint-head">
+                <svg class="sp-ic" viewBox="0 0 24 24"><use href="#i-rocket" /></svg>
+                <span class="sp-name">Sprint 14</span>
+                <span class="sp-state">Active</span>
+                <span class="sp-meta">12 issues · Jun 2 – Jun 16</span>
+                <span class="spacer"></span>
+                <span
+                  class="committed"
+                  aria-label="Points: 28 committed, 13 completed, 15 remaining"
+                >
+                  <span class="seg"
+                    ><span class="v">28</span><span class="cap">committed</span></span
+                  >
+                  <span class="sep">·</span>
+                  <span class="seg done"
+                    ><span class="v">13</span><span class="cap">done</span></span
+                  >
+                  <span class="sep">·</span>
+                  <span class="seg"><span class="v">15</span><span class="cap">left</span></span>
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="demo" style="width: 100%">
+            <span class="lbl">Planned sprint (no work done yet) · unestimated sprint</span>
+            <div class="sprint" style="margin-bottom: 12px">
+              <div class="sprint-head">
+                <svg class="sp-ic" viewBox="0 0 24 24"><use href="#i-rocket" /></svg>
+                <span class="sp-name">Sprint 15</span>
+                <span class="sp-state">Planned</span>
+                <span class="sp-meta">6 issues</span>
+                <span class="spacer"></span>
+                <span class="committed"
+                  ><span class="seg"
+                    ><span class="v">13</span><span class="cap">committed</span></span
+                  ></span
+                >
+              </div>
+            </div>
+            <div class="sprint">
+              <div class="sprint-head">
+                <svg class="sp-ic" viewBox="0 0 24 24"><use href="#i-rocket" /></svg>
+                <span class="sp-name">Sprint 16</span>
+                <span class="sp-state">Planned</span>
+                <span class="sp-meta">2 issues</span>
+                <span class="spacer"></span>
+                <span class="committed"
+                  ><span class="seg"
+                    ><span class="v" style="color: var(--el-text-faint)">—</span
+                    ><span class="cap">committed</span></span
+                  ></span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong>Panel 4.</strong> Fills the dashed <strong>committed-points slot</strong> the
+        backlog reserved (<code>design/backlog/design-notes.md</code> — "filled by Story 4.3"), in
+        the SAME slot position so it drops in with no relayout. <strong>Committed</strong> (sum of
+        the sprint's points), <strong>done</strong> (<code>category = 'done'</code> subset,
+        <code>--el-success</code>), and <strong>remaining</strong> — all bounded grouped aggregates
+        (<code>SUM … GROUP BY</code> with a done predicate), never a client sum of the loaded rows.
+        A planned sprint shows committed only; an unestimated sprint shows <code>—</code>. This is
+        the compact backlog-header figure; the fuller scrum sprint-header summary (Story 4.5) reuses
+        the SAME <code>rollupForSprint</code> aggregate (4.5.2 consumes it for
+        <code>SprintSummaryDto.points</code>).
+      </p>
+
+      <!-- ══════════════ PANEL 5 — STATES (degradation + read-only) ══════════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">5</span>
+          <span class="t">Degradation + read-only states</span>
+          <span class="d"
+            >unestimated (— never NaN) · no-permission (read-only, non-interactive)</span
+          >
+        </div>
+        <div class="panel-body">
+          <div class="demo">
+            <span class="lbl"
+              >Read-only (no edit permission) — static chip, no hover/focus affordance</span
+            >
+            <div class="brow ro" role="row">
+              <span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+              ></span>
+              <span class="brow-id">PROD-118</span>
+              <span class="brow-title">Org-switcher in the top bar with keyboard nav</span>
+              <span class="spacer"></span>
+              <span class="est" aria-label="Story points: 5"
+                ><svg viewBox="0 0 24 24"><use href="#i-hash" /></svg>5</span
+              >
+              <span class="avatar" title="Yue Zhu">YZ</span>
+            </div>
+            <span class="ro-tag"
+              ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg> Viewer — estimates are
+              read-only</span
+            >
+          </div>
+          <div class="demo">
+            <span class="lbl">Unestimated everywhere — consistent muted —</span>
+            <div style="display: flex; flex-direction: column; gap: 10px">
+              <span class="est is-empty"
+                ><svg viewBox="0 0 24 24"><use href="#i-hash" /></svg>—</span
+              >
+              <span class="rollup is-empty"><span class="num">—</span> pts</span>
+              <span class="committed"
+                ><span class="seg"
+                  ><span class="v" style="color: var(--el-text-faint)">—</span
+                  ><span class="cap">committed</span></span
+                ></span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong>Panel 5.</strong> A viewer (no edit permission — Story 6.4 access levels) sees the
+        static <code>.est</code> chip (no <code>est--btn</code> button, no hover/focus edit
+        affordance), so the badge degrades to read-only without a layout shift. Every unestimated
+        figure — leaf, epic roll-up, sprint committed — renders the same muted <code>—</code>; never
+        <code>0</code>, <code>null</code>, or <code>NaN</code>.
+      </p>
+    </div>
+  </body>
+</html>
