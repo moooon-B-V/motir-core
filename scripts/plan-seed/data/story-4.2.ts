@@ -458,7 +458,7 @@ export const story_4_2: PlanStory = {
       id: '4.2.6',
       title:
         'Story tests — bulk/create service + selection/drag/create components + at-scale backlog-grooming E2E',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 24,
