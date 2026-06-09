@@ -5,6 +5,7 @@ import { cleanup, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import type { SprintDto } from '@/lib/dto/sprints';
+import type { SprintPointsDto } from '@/lib/dto/estimation';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
@@ -99,6 +100,9 @@ interface MockData {
   sprints: SprintDto[];
   backlog: { items: WorkItemSummaryDto[]; nextCursor: string | null; totalCount: number };
   sprintIssues: { items: WorkItemSummaryDto[]; nextCursor: string | null; totalCount: number };
+  /** The committed-points roll-up each container reads (Subtask 4.4.9 — finding
+   *  #69); defaults to the unestimated `{ 0, 0, 0 }`. */
+  sprintPoints?: SprintPointsDto;
   sprintsOk?: boolean;
 }
 
@@ -107,6 +111,8 @@ function mockFetch(data: MockData) {
     Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
   global.fetch = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
+    if (url.includes('/points'))
+      return ok(data.sprintPoints ?? { committed: 0, completed: 0, remaining: 0 });
     if (url.includes('/issues')) return ok(data.sprintIssues);
     if (url.startsWith('/api/sprints')) {
       if (data.sprintsOk === false) {
@@ -151,6 +157,35 @@ describe('BacklogContainer (4.2.3 read render)', () => {
     expect(screen.getByText('Planned')).toBeTruthy();
     expect(screen.getByTestId('sprint-count-active1').textContent).toBe('5');
     expect(screen.getByTestId('backlog-count')).toBeTruthy();
+  });
+
+  it('fills the committed-points seam from the live roll-up (Subtask 4.4.9 — finding #69)', async () => {
+    mockFetch({
+      sprints: [sprint({ id: 'active1', name: 'Sprint 24', state: 'active', issueCount: 5 })],
+      backlog: { items: [], nextCursor: null, totalCount: 0 },
+      sprintIssues: { items: [], nextCursor: null, totalCount: 0 },
+      sprintPoints: { committed: 21, completed: 8, remaining: 13 },
+    });
+
+    render(<BacklogContainer workflow={workflow} members={members} projectName="prodect" />);
+
+    // The committed-points slot shows the live `committed` figure, no longer the
+    // reserved "— pts" placeholder.
+    expect(await screen.findByText('21 pts')).toBeTruthy();
+  });
+
+  it('renders "— pts" in the committed-points seam for a wholly unestimated sprint (4.4.9)', async () => {
+    mockFetch({
+      sprints: [sprint({ id: 'active1', name: 'Sprint 24', state: 'active', issueCount: 5 })],
+      backlog: { items: [], nextCursor: null, totalCount: 0 },
+      sprintIssues: { items: [], nextCursor: null, totalCount: 0 },
+      sprintPoints: { committed: 0, completed: 0, remaining: 0 },
+    });
+
+    render(<BacklogContainer workflow={workflow} members={members} projectName="prodect" />);
+
+    expect(await screen.findByText('Sprint 24')).toBeTruthy();
+    expect(await screen.findByText('— pts')).toBeTruthy();
   });
 
   it('shows the BOUNDED count header from the aggregate total, not the loaded-row tally', async () => {
