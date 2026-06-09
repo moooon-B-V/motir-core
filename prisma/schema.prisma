@@ -196,12 +196,12 @@ model Workspace {
 /// archive/delete clears a member's `activeProjectId` (onDelete: SetNull)
 /// rather than cascading the membership away.
 model Project {
-  id                 String             @id @default(cuid())
-  workspaceId        String
-  name               String
-  slug               String
-  identifier         String
-  lastWorkItemNumber Int                @default(0)
+  id                  String              @id @default(cuid())
+  workspaceId         String
+  name                String
+  slug                String
+  identifier          String
+  lastWorkItemNumber  Int                 @default(0)
   /// Per-project status-transition enforcement mode (Story 2.2). `restricted`
   /// (default) consults the `workflow_transition` rows — only an explicit
   /// edge is a legal move. `open` ignores them: any status → any status is
@@ -210,7 +210,7 @@ model Project {
   /// flipping to `open` does NOT delete the curated transition rows, so a
   /// flip back to `restricted` restores the graph. Jira and Linear both ship
   /// this same "guarded vs anything-goes" project-level toggle.
-  workflowPolicyMode WorkflowPolicyMode @default(restricted)
+  workflowPolicyMode  WorkflowPolicyMode  @default(restricted)
   /// Browse-access level (Story 6.4), mirroring Jira team-managed projects:
   /// `open` = any workspace member views + edits; `limited` = any member views
   /// + comments (no edit); `private` = only explicit project members (+ the
@@ -218,10 +218,32 @@ model Project {
   /// existing projects backfill to it on migration — a `private` default would
   /// lock every current member out. The browse/edit policy that reads this is
   /// computed at the service layer in Subtask 6.4.3.
-  accessLevel        ProjectAccessLevel @default(open)
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  archivedAt         DateTime?
+  accessLevel         ProjectAccessLevel  @default(open)
+  /// Estimation config (Story 4.3) — the planning estimate is a property of the
+  /// PROJECT's planning, not of a particular board read view. Jira configures
+  /// estimation in BOARD settings, but here a board is a per-project read
+  /// projection (Story 3.1) and sprints are project-scoped (Story 4.1), so the
+  /// config hangs off the project (a justified rung-1 deviation — see
+  /// scripts/plan-seed/data/story-4.3.ts; same shape as `sprint.projectId`).
+  /// `estimationStatistic` picks which value is THE planning estimate the
+  /// backlog/board/scrum surfaces display + the roll-ups sum (Story Points by
+  /// default · Time estimate · Issue count — exactly Jira board Estimation
+  /// settings). Defaults to `story_points` so every existing project backfills
+  /// to the agile default (no lock-out).
+  estimationStatistic EstimationStatistic @default(story_points)
+  /// The suggested-value DECK the estimate picker offers (it does not
+  /// hard-constrain entry — story points stay a free numeric value): `fibonacci`
+  /// (the planning-poker default — 1,2,3,5,8,13,21,…), `linear` (1,2,3,4,5,…),
+  /// or `custom` (the project-defined list in `customScaleValues`).
+  pointScale          PointScale          @default(fibonacci)
+  /// The project-defined deck values, used ONLY when `pointScale = custom`.
+  /// These are UI SUGGESTIONS for the picker — summation uses the `Decimal`
+  /// `work_item.storyPoints`, so a `Float[]` for the suggestion list is fine
+  /// (avoids a Decimal-array column). Backfills to `[]` on migration.
+  customScaleValues   Float[]             @default([])
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  archivedAt          DateTime?
 
   workspace           Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   // Back-relation for WorkspaceMembership.activeProject. Named explicitly
@@ -357,6 +379,33 @@ enum SubtaskPrMergeMode {
   @@map("subtask_pr_merge_mode")
 }
 
+/// Which value is THE planning estimate a project's surfaces display + the
+/// roll-ups sum (`project.estimationStatistic`, Story 4.3) — the three Jira
+/// estimation statistics: `story_points` (the agile `work_item.storyPoints`
+/// field, the default), `time_estimate` (the existing `work_item.estimateMinutes`
+/// field), `issue_count` (a plain `COUNT(*)`). All three values exist now so a
+/// later story adds no enum ALTER. Closed + stable, so a Postgres enum.
+enum EstimationStatistic {
+  story_points
+  time_estimate
+  issue_count
+
+  @@map("estimation_statistic")
+}
+
+/// The suggested-value deck a project's estimate picker offers
+/// (`project.pointScale`, Story 4.3): `fibonacci` (the planning-poker default),
+/// `linear`, or `custom` (the project-defined `project.customScaleValues` list).
+/// The deck does not hard-constrain entry — story points stay a free numeric
+/// value. Closed + stable, so a Postgres enum.
+enum PointScale {
+  fibonacci
+  linear
+  custom
+
+  @@map("point_scale")
+}
+
 /// The unit of tracked work in Prodect's PM core (Story 1.4). Every epic,
 /// story, task, bug, and subtask a team plans is a row here. Self-referencing
 /// tree via `parentId`, with the kind-parent matrix, the 4-level depth limit,
@@ -402,6 +451,16 @@ model WorkItem {
   reporterId        String
   dueDate           DateTime?
   estimateMinutes   Int?
+  // The agile STORY-POINT estimate (Story 4.3) — SEPARATE from the `estimateMinutes`
+  // TIME estimate above; both columns coexist and the project's `estimationStatistic`
+  // config picks which one is THE planning estimate the surfaces display + roll up.
+  // `Decimal`, not `Float`: story points allow 0.5 increments (Jira-faithful) AND
+  // roll up via `SUM`, and `Decimal` avoids floating-point drift in the roll-up sums
+  // (a real-product correctness concern) at the small fixed `(6, 2)` precision.
+  // NULL = unestimated (contributes 0 to a roll-up). camelCase with NO `@map`, matching
+  // this table's existing columns (the same within-table-consistency call recorded for
+  // `sprintId` / `backlogRank` — decision-authority rung 2 > the card's `@map` prose).
+  storyPoints       Decimal?                  @db.Decimal(6, 2)
   position          String                    @db.Text
   // Agile association + backlog rank (Story 4.1). `sprintId` is the issue's
   // sprint (NULL = in the backlog); `onDelete: SetNull` so deleting/clearing a
