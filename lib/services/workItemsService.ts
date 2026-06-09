@@ -22,6 +22,7 @@ import {
 } from '@/lib/workItems/errors';
 import { CrossWorkspaceLinkError, WorkItemLinkNotFoundError } from '@/lib/workItems/linkErrors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import {
   toWorkItemDto,
   toWorkItemSummaryDto,
@@ -317,7 +318,16 @@ export const workItemsService = {
     if (!project) throw new ProjectNotFoundError(input.projectId);
     const workspaceId = project.workspaceId;
 
+    // Workspace gate first (the project gate sits BENEATH it): the reporter
+    // (the actor) must be a workspace member at all.
     await assertReporterMember(ctx.userId, workspaceId);
+
+    // Project access gate (6.4.3): the actor must be allowed to EDIT this
+    // project (open → any workspace member; limited/private → a member/admin
+    // project member; workspace owner/admin always pass). Runs before the
+    // key-allocation transaction — a denied create never burns a work-item key.
+    await projectAccessService.assertCanEdit(input.projectId, ctx);
+
     if (input.assigneeId != null) {
       await assertAssigneeMember(input.assigneeId, workspaceId);
     }
@@ -499,6 +509,9 @@ export const workItemsService = {
     if (!anyFieldProvided) {
       const current = await workItemRepository.findById(id);
       if (!current) throw new WorkItemNotFoundError(id);
+      // Even the empty-patch no-op is an edit entry point — gate it (6.4.3) so a
+      // read-only actor can't probe an item through a write route.
+      await projectAccessService.assertCanEdit(current.projectId, ctx);
       return toWorkItemDto(current);
     }
 
@@ -507,6 +520,11 @@ export const workItemsService = {
       if (!locked) throw new WorkItemNotFoundError(id);
       const current = await workItemRepository.findById(id, tx);
       if (!current) throw new WorkItemNotFoundError(id);
+
+      // Project access gate (6.4.3): the actor must be allowed to edit this
+      // item's project. Inside the tx so the gate reads share the lock's
+      // snapshot + the RLS workspace context.
+      await projectAccessService.assertCanEdit(current.projectId, ctx, tx);
 
       // Optimistic concurrency (2.3.6): the edit form submits the `updatedAt`
       // it read at render; if the row moved since (someone else edited), reject
@@ -694,6 +712,12 @@ export const workItemsService = {
       throw new WorkItemNotFoundError(workItemId);
     }
 
+    // Project access gate (6.4.3): a status move is an edit. Gated here (not just
+    // in updateStatus) so the board move path — boardsService.moveCard, which
+    // calls this inside ITS transaction for a cross-column move — is covered by
+    // the same check. `tx` is the caller's, so the gate shares the snapshot.
+    await projectAccessService.assertCanEdit(current.projectId, ctx, tx);
+
     const fromKey = current.status;
     // No-op move: succeed without writing a revision (idempotent).
     if (fromKey === toStatusKey) return toWorkItemDto(current);
@@ -750,6 +774,13 @@ export const workItemsService = {
    */
   async archiveWorkItem(id: string, ctx: ServiceContext): Promise<WorkItemDto> {
     return db.$transaction(async (tx) => {
+      // Resolve + tenant-gate first so the access gate (6.4.3) has the item's
+      // project, and a cross-workspace id is a 404 (no existence leak) before
+      // the archive write.
+      const current = await workItemRepository.findById(id, tx);
+      if (!current || current.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
+      await projectAccessService.assertCanEdit(current.projectId, ctx, tx);
+
       const row = await workItemRepository.archive(id, tx); // throws WorkItemNotFoundError if absent
       await workItemRevisionsService.recordRevision(
         {
@@ -786,6 +817,9 @@ export const workItemsService = {
       if (!locked) throw new WorkItemNotFoundError(id);
       const current = await workItemRepository.findById(id, tx);
       if (!current) throw new WorkItemNotFoundError(id);
+
+      // Project access gate (6.4.3): re-parent / reorder is an edit.
+      await projectAccessService.assertCanEdit(current.projectId, ctx, tx);
 
       const targetParentId = input.newParentId !== undefined ? input.newParentId : current.parentId;
       const parentChanged = targetParentId !== current.parentId;
@@ -850,8 +884,9 @@ export const workItemsService = {
   async listWorkItems(
     projectId: string,
     filter: ListWorkItemsFilter,
-    _ctx: ServiceContext,
+    ctx: ServiceContext,
   ): Promise<WorkItemSummaryDto[]> {
+    await projectAccessService.assertCanBrowse(projectId, ctx);
     const rows = await workItemRepository.findByProjectFiltered(projectId, {
       ...(filter.kind ? { kind: filter.kind } : {}),
       ...(filter.status ? { status: filter.status } : {}),
@@ -897,6 +932,7 @@ export const workItemsService = {
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
+    await projectAccessService.assertCanBrowse(projectId, ctx);
 
     const repoFilter = buildRepoFilter(filter);
     const rows = await workItemRepository.findProjectForest(
@@ -926,6 +962,7 @@ export const workItemsService = {
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
+    await projectAccessService.assertCanBrowse(projectId, ctx);
 
     const repoFilter = buildRepoFilter(params.filter ?? {});
     const pageSize = ISSUE_LIST_PAGE_SIZE;
@@ -972,6 +1009,7 @@ export const workItemsService = {
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
+    await projectAccessService.assertCanBrowse(projectId, ctx);
     const { take, offset } = clampTreePage(params);
     const [rows, total] = await Promise.all([
       workItemRepository.findProjectTreeLevel(projectId, project.workspaceId, null, params.sort, {
@@ -998,6 +1036,7 @@ export const workItemsService = {
     if (!parent || parent.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(parentId);
     }
+    await projectAccessService.assertCanBrowse(parent.projectId, ctx);
     const { take, offset } = clampTreePage(params);
     const [rows, total] = await Promise.all([
       workItemRepository.findProjectTreeLevel(
@@ -1031,6 +1070,11 @@ export const workItemsService = {
       const toItem = await workItemRepository.findById(input.toId, tx);
       if (!toItem) throw new WorkItemNotFoundError(input.toId);
       if (fromItem.workspaceId !== toItem.workspaceId) throw new CrossWorkspaceLinkError();
+
+      // Project access gate (6.4.3): a link is an edit of the FROM item (the
+      // side that owns the revision). The TO item can be cross-project; the
+      // editor only needs edit rights on the item they're linking FROM.
+      await projectAccessService.assertCanEdit(fromItem.projectId, ctx, tx);
 
       const link = await workItemLinkRepository.create(
         {
@@ -1088,6 +1132,13 @@ export const workItemsService = {
     await db.$transaction(async (tx) => {
       const link = await workItemLinkRepository.findById(linkId);
       if (!link) throw new WorkItemLinkNotFoundError(linkId);
+
+      // Project access gate (6.4.3): removing a link is an edit of the FROM item.
+      const fromItem = await workItemRepository.findById(link.fromId, tx);
+      if (!fromItem || fromItem.workspaceId !== ctx.workspaceId) {
+        throw new WorkItemLinkNotFoundError(linkId);
+      }
+      await projectAccessService.assertCanEdit(fromItem.projectId, ctx, tx);
 
       await workItemLinkRepository.delete(linkId, tx);
 
@@ -1232,6 +1283,7 @@ export const workItemsService = {
   async getWorkItem(id: string, ctx: ServiceContext): Promise<WorkItemDto> {
     const row = await workItemRepository.findById(id);
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
+    await projectAccessService.assertCanBrowse(row.projectId, ctx);
     return toWorkItemDto(row);
   },
 
@@ -1248,6 +1300,7 @@ export const workItemsService = {
   ): Promise<WorkItemDto> {
     const row = await workItemRepository.findByIdentifier(projectId, identifier);
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(identifier);
+    await projectAccessService.assertCanBrowse(row.projectId, ctx);
     return toWorkItemDto(row);
   },
 
@@ -1279,6 +1332,7 @@ export const workItemsService = {
     if (!item || item.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(identifier);
     }
+    await projectAccessService.assertCanBrowse(item.projectId, ctx);
 
     const [
       ancestorRows,

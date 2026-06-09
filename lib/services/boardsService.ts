@@ -24,6 +24,7 @@ import {
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { buildDefaultBoard, DEFAULT_BOARD_NAME } from '@/lib/boards/defaultBoard';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
 import type {
   BoardColumnConfigDto,
@@ -195,6 +196,11 @@ export const boardsService = {
     ctx: ServiceContext,
     boardId?: string,
   ): Promise<BoardProjectionDto> {
+    // Project access gate (6.4.3): the board projection is a read of the
+    // project — a non-browser (a non-member of a private project) gets a 404,
+    // never the board. Runs first so a hidden project never leaks its board.
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+
     const board = boardId
       ? await boardRepository.findById(boardId, ctx.workspaceId)
       : await boardRepository.findDefaultForProject(projectId, ctx.workspaceId);
@@ -338,6 +344,13 @@ export const boardsService = {
         // belong to THIS board (a column id from another board is a 404).
         const board = await boardRepository.findById(boardId, ctx.workspaceId, tx);
         if (!board) throw new BoardNotFoundError(boardId);
+
+        // Project access gate (6.4.3): moving a card is an edit of the board's
+        // project. (The cross-column status change routes through
+        // applyStatusTransition, which gates too; this covers the same-column
+        // re-rank that doesn't.) Inside the tx so it shares the card lock's snapshot.
+        await projectAccessService.assertCanEdit(board.projectId, ctx, tx);
+
         const column = await boardColumnRepository.findById(target.toColumnId, ctx.workspaceId, tx);
         if (!column || column.boardId !== boardId) {
           throw new BoardColumnNotFoundError(target.toColumnId);
