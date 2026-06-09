@@ -341,7 +341,7 @@ export const story_4_4: PlanStory = {
       id: '4.4.3',
       title:
         'Backend — `completeSprint` flow + carry-over (transition + move unfinished to backlog / planned sprint, one tx)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
