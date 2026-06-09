@@ -149,8 +149,14 @@ describe('StartSprintDialog (4.4.5)', () => {
     expect(body.endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(body.endDate >= body.startDate).toBe(true);
     expect(onStarted).toHaveBeenCalled();
-    // Exactly one request, and it is never a PATCH (the pre-start goal PATCH is gone).
-    expect(fetchMock.mock.calls).toHaveLength(1);
+    // The start is ONE atomic POST to /start, and there is never a PATCH (the
+    // pre-start goal PATCH is gone — finding #68). The dialog also issues a
+    // GET /points roll-up on open (4.4.9 / finding #69); that read-only call is
+    // allowed — what the guarantee forbids is a second *mutating* request.
+    const startPosts = fetchMock.mock.calls.filter(
+      ([url, init]) => String(url).endsWith('/start') && (init as RequestInit)?.method === 'POST',
+    );
+    expect(startPosts).toHaveLength(1);
     expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit)?.method === 'PATCH')).toBe(
       false,
     );
@@ -168,11 +174,16 @@ describe('StartSprintDialog (4.4.5)', () => {
     expect(startCall).toBeTruthy();
     expect((startCall![1] as RequestInit).method).toBe('POST');
     expect(JSON.parse((startCall![1] as RequestInit).body as string).goal).toBe('A brand new goal');
-    // Zero PATCH calls, and exactly one request total.
+    // Zero PATCH calls, and exactly one /start POST — the edited goal rides the
+    // single atomic start (the GET /points roll-up on open, 4.4.9, aside).
     expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit)?.method === 'PATCH')).toBe(
       false,
     );
-    expect(fetchMock.mock.calls).toHaveLength(1);
+    expect(
+      fetchMock.mock.calls.filter(
+        ([url, init]) => String(url).endsWith('/start') && (init as RequestInit)?.method === 'POST',
+      ),
+    ).toHaveLength(1);
   });
 
   it('clears the goal by sending null in the /start POST when emptied', async () => {
