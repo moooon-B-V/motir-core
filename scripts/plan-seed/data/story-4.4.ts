@@ -436,7 +436,7 @@ export const story_4_4: PlanStory = {
       id: '4.4.5',
       title:
         'UI — start-sprint flow: wire the start modal to the backlog Start-sprint entry point; "board opens" navigation',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
