@@ -5,9 +5,12 @@ import { cn } from '@/lib/utils/cn';
 /**
  * Pill — compact status or severity label. Pure span, no interaction.
  *
- * Three variant axes (use exactly one):
+ * Variant axes (use exactly one):
  *  - `status`: planned | in-progress | done — Prodect's Subtask lifecycle states.
  *  - `severity`: info | success | warning | danger — semantic UI states.
+ *  - `memberRole`: admin | member | viewer — a project membership role
+ *    (Story 6.4), one hued tint per role. (Named `memberRole`, not `role`, so
+ *    it can't collide with the DOM `role` ARIA attribute on the span.)
  *  - `tone`: neutral — a non-semantic chip (counts, metadata). Dark text on a
  *    neutral surface.
  *
@@ -48,6 +51,14 @@ const pillVariants = cva(
         warning: 'bg-(--el-tint-peach) text-(--el-text-strong) border-transparent',
         danger: 'bg-(--el-tint-rose) text-(--el-text-strong) border-transparent',
       },
+      // Project membership roles (Story 6.4 · design/projects access-members):
+      // admin → lavender, member → sky, viewer → mint — the hue in the tint,
+      // charcoal text (AA-safe, finding #35), same recipe as `status`.
+      memberRole: {
+        admin: 'bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent',
+        member: 'bg-(--el-tint-sky) text-(--el-text-strong) border-transparent',
+        viewer: 'bg-(--el-tint-mint) text-(--el-text-strong) border-transparent',
+      },
       tone: {
         neutral: 'bg-(--el-surface) text-(--el-text-secondary) border-(--el-border)',
       },
@@ -60,11 +71,15 @@ export interface PillProps
   extends HTMLAttributes<HTMLSpanElement>, VariantProps<typeof pillVariants> {}
 
 export const Pill = forwardRef<HTMLSpanElement, PillProps>(function Pill(
-  { status, severity, tone, className, children, ...rest },
+  { status, severity, memberRole, tone, className, children, ...rest },
   ref,
 ) {
   return (
-    <span ref={ref} className={cn(pillVariants({ status, severity, tone }), className)} {...rest}>
+    <span
+      ref={ref}
+      className={cn(pillVariants({ status, severity, memberRole, tone }), className)}
+      {...rest}
+    >
       {children}
     </span>
   );
