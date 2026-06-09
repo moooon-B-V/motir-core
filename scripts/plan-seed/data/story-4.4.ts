@@ -286,7 +286,7 @@ export const story_4_4: PlanStory = {
       id: '4.4.2',
       title:
         'Backend — schema (scope-lock baseline cols) + `startSprint` flow (transition + one-active guard + window + scope-lock + ensure-scrum-board)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
