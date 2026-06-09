@@ -37,6 +37,26 @@ export const projectMembershipRepository = {
   },
 
   /**
+   * The user's memberships across a SET of projects, in one query — backs the
+   * browsable-projects filter (Subtask 6.4.6), which decides `canBrowse` over a
+   * whole workspace's projects without an N+1 per-project round-trip. Optionally
+   * takes `tx` for the same RLS-GUC reason as `findByUserAndProject`. Returns
+   * only the rows that exist (a project the user has no membership in is simply
+   * absent — the caller treats that as `projectRole = null`).
+   */
+  async findByUserAndProjects(
+    userId: string,
+    projectIds: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<ProjectMembership[]> {
+    if (projectIds.length === 0) return [];
+    const client = tx ?? db;
+    return client.projectMembership.findMany({
+      where: { userId, projectId: { in: projectIds } },
+    });
+  },
+
+  /**
    * One membership joined with its user slice, inside the caller's transaction.
    * Used to build the `ProjectMemberDTO` returned by add/set-role without a
    * second round-trip. Same RLS-GUC requirement as findMembersByProject.

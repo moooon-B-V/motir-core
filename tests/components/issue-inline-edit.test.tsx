@@ -32,6 +32,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ toast: toastSpy }) }));
 
 import { IssueListTable } from '@/app/(authed)/issues/_components/IssueListTable';
+import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
 import { EMPTY_FILTER } from '@/lib/issues/issueListFilter';
 
 beforeAll(() => {
@@ -235,5 +236,39 @@ describe('Inline row edits (Subtask 2.5.5)', () => {
     expect(screen.queryByRole('button', { name: 'Edit Assignee' })).toBeNull();
     // The static value is still shown.
     expect(screen.getByText('To Do')).toBeTruthy();
+  });
+});
+
+describe('read-only inline cells (Story 6.4.6)', () => {
+  function renderGated(canEdit: boolean) {
+    return render(
+      <ProjectAccessProvider canEdit={canEdit}>
+        <IssueListTable
+          rows={[row({ identifier: 'PROD-1', id: 'wi_1', status: 'todo', statusLabel: 'To Do' })]}
+          sort={{ column: 'key', direction: 'asc' }}
+          filter={EMPTY_FILTER}
+          pagination={{ total: 1, page: 1, pageSize: 50 }}
+          workflow={workflow}
+          members={members}
+        />
+      </ProjectAccessProvider>,
+    );
+  }
+
+  it('renders every inline cell read-only (no edit triggers) when the actor cannot edit', () => {
+    renderGated(false);
+    expect(screen.queryByRole('button', { name: 'Edit Status' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Edit Assignee' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Edit Priority' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Edit Due date' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Edit Estimate' })).toBeNull();
+    // the read-only status value is still shown.
+    expect(screen.getAllByText('To Do').length).toBeGreaterThan(0);
+  });
+
+  it('stays editable when the actor can edit (the provider default path)', () => {
+    renderGated(true);
+    expect(screen.getByRole('button', { name: 'Edit Status' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Edit Assignee' })).toBeTruthy();
   });
 });

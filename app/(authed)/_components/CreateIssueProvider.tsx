@@ -35,9 +35,20 @@ const CreateIssueContext = createContext<CreateIssueContextValue | null>(null);
 
 export function CreateIssueProvider({
   hasProject,
+  canEdit = true,
   children,
 }: {
   hasProject: boolean;
+  /**
+   * Whether the actor may EDIT the active project (Story 6.4.6). When false (a
+   * viewer / a member on a limited project) the create modal is NOT mounted and
+   * the "C" shortcut is disabled — the server rejects the create anyway, so a
+   * read-only actor must not get a functional create path. The create BUTTONS
+   * still render (disabled, via ProjectAccessProvider) so the affordance is
+   * visible-but-blocked rather than absent. Defaults to true so non-shell /
+   * test mounts keep their prior behaviour.
+   */
+  canEdit?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -45,7 +56,7 @@ export function CreateIssueProvider({
 
   // "C" opens the modal — but only when NOT typing (so a literal "c" in a text
   // field stays a character) and only when there's a project to create into.
-  useShortcut(SHORTCUTS.createIssue.combo, () => setOpen(true), { enabled: hasProject });
+  useShortcut(SHORTCUTS.createIssue.combo, () => setOpen(true), { enabled: hasProject && canEdit });
 
   // The modal calls this on a successful create; bumping the tick lets
   // client-fetched consumers refetch (the modal's own `router.refresh()` only
@@ -66,7 +77,7 @@ export function CreateIssueProvider({
   return (
     <CreateIssueContext.Provider value={value}>
       {children}
-      {hasProject && (
+      {hasProject && canEdit && (
         <CreateIssueModal open={open} onOpenChange={setOpen} onCreated={notifyIssueCreated} />
       )}
     </CreateIssueContext.Provider>

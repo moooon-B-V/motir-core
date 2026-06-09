@@ -6,7 +6,9 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { workspacesService } from '@/lib/services/workspacesService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
+import { assignableMembersService } from '@/lib/services/assignableMembersService';
+import { NoAccessState } from '@/components/projects/NoAccessState';
 import { NewIssueButton } from '../issues/_components/NewIssueButton';
 import { IssueQuickView } from '../issues/_components/IssueQuickView';
 import { IssueQuickViewContent } from '../issues/_components/IssueQuickViewContent';
@@ -53,6 +55,31 @@ export default async function BoardsPage({
     );
   }
 
+  // Story 6.4.6 — the active project may be one the actor can no longer browse
+  // (e.g. it was made private while pinned). Gate the board read on canBrowse and
+  // render the no-access state instead of crashing; canEdit drives the board's
+  // read-only (drag-disabled) mode below.
+  const caps = await projectAccessService.getCapabilities(ctx.projectId, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+  if (!caps.canBrowse) {
+    const ta = await getTranslations('projectAccess');
+    return (
+      <div className="flex flex-col gap-6">
+        <header className="flex flex-col gap-1">
+          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
+        </header>
+        <NoAccessState
+          title={ta('noAccessTitle')}
+          description={ta('noAccessDescription')}
+          backHref="/dashboard"
+          backLabel={ta('backToProjects')}
+        />
+      </div>
+    );
+  }
+
   const sp = await searchParams;
   // The quick-view peek (Subtask 2.5.19, reused) — `?peek=<identifier>` opens the
   // work item in a modal over the board. URL-driven so it's shareable /
@@ -71,7 +98,13 @@ export default async function BoardsPage({
   // cards' assignee avatars (the projection carries only `assigneeId`, Story
   // 3.1.4) AND for the quick-view panel when a peek is open. Resolved once here;
   // the page calls services only (never Prisma) per the 4-layer rule.
-  const members = await workspacesService.listMembers(ctx.workspaceId, ctx.userId);
+  // Assignable users are scoped by access level (6.4.6): a private project lists
+  // only its project members; open/limited list the whole workspace.
+  const members = await assignableMembersService.list({
+    projectId: ctx.projectId,
+    accessLevel: ctx.project.accessLevel,
+    ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -110,6 +143,7 @@ export default async function BoardsPage({
         members={members}
         activeProjectId={ctx.projectId}
         selectedBoardId={selectedBoardId}
+        canEdit={caps.canEdit}
       />
 
       {/* Quick-view peek — the modal frame mounts when `?peek` is present; the

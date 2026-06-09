@@ -2,7 +2,9 @@ import type { Prisma } from '@prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import type { Project } from '@prisma/client';
 import { canBrowse, canEdit, type ProjectAccessInputs } from '@/lib/projects/access';
+import { isWorkspaceManager } from '@/lib/projects/roles';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 
 // projectAccessService — the ENFORCEMENT half of the Story 6.4 access model
@@ -83,6 +85,47 @@ export const projectAccessService = {
   ): Promise<{ canBrowse: boolean; canEdit: boolean }> {
     const inputs = await resolveInputs(projectId, ctx, tx);
     return { canBrowse: canBrowse(inputs), canEdit: canEdit(inputs) };
+  },
+
+  /**
+   * Filter a workspace's projects down to the ones the actor may BROWSE — the
+   * switcher / nav / command-palette list (Subtask 6.4.6) shows only these, so a
+   * private project the actor isn't on is ABSENT (never shown-then-denied). Takes
+   * the already-loaded `Project` rows (each carries `accessLevel`) and resolves
+   * the actor's roles in ONE pass — workspace role once, all project memberships
+   * in a single query — then applies the pure `canBrowse` policy in memory (no
+   * N+1). A workspace owner/admin keeps every project; a non-member gets none.
+   */
+  async filterBrowsable<T extends Pick<Project, 'id' | 'accessLevel'>>(
+    projects: T[],
+    ctx: AccessActorContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<T[]> {
+    if (projects.length === 0) return [];
+    const workspaceMembership = tx
+      ? await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
+          ctx.userId,
+          ctx.workspaceId,
+          tx,
+        )
+      : await workspaceMembershipRepository.findByUserAndWorkspace(ctx.userId, ctx.workspaceId);
+    const workspaceRole = workspaceMembership?.role ?? null;
+    // Owner/admin always browse everything; a non-member never browses any.
+    if (isWorkspaceManager(workspaceRole)) return projects;
+    if (workspaceRole == null) return [];
+    const memberships = await projectMembershipRepository.findByUserAndProjects(
+      ctx.userId,
+      projects.map((p) => p.id),
+      tx,
+    );
+    const projectRoleById = new Map(memberships.map((m) => [m.projectId, m.role]));
+    return projects.filter((p) =>
+      canBrowse({
+        accessLevel: p.accessLevel,
+        workspaceRole,
+        projectRole: projectRoleById.get(p.id) ?? null,
+      }),
+    );
   },
 
   /**

@@ -256,16 +256,29 @@ export const projectsService = {
   },
 
   /**
-   * List the non-archived projects in a workspace as DTOs. Asserts the
-   * actor is a member first — the application-layer tenant gate (RLS is the
-   * structural backstop, landing in 1.3.2).
+   * List the non-archived projects in a workspace the actor may BROWSE, as DTOs.
+   * Asserts the actor is a member first — the application-layer tenant gate (RLS
+   * is the structural backstop, landing in 1.3.2). Then applies the Story 6.4
+   * project-access gate (Subtask 6.4.6): a `private` project the actor isn't a
+   * member of is filtered OUT, so the switcher / nav / command palette only ever
+   * lists projects the actor can actually open (no shown-then-denied). Workspace
+   * owner/admin keep every project; the filter resolves roles in one batch (no
+   * N+1) inside the same workspace transaction.
    */
   async listProjects(workspaceId: string, actorUserId: string): Promise<ProjectDTO[]> {
     await projectsService.assertMembership(actorUserId, workspaceId);
-    const projects = await withWorkspaceContext({ userId: actorUserId, workspaceId }, (tx) =>
-      projectRepository.findByWorkspace(workspaceId, tx),
+    const browsable = await withWorkspaceContext(
+      { userId: actorUserId, workspaceId },
+      async (tx) => {
+        const projects = await projectRepository.findByWorkspace(workspaceId, tx);
+        return projectAccessService.filterBrowsable(
+          projects,
+          { userId: actorUserId, workspaceId },
+          tx,
+        );
+      },
     );
-    return projects.map(toProjectDTO);
+    return browsable.map(toProjectDTO);
   },
 
   /**

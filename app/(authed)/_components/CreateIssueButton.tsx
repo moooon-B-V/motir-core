@@ -3,7 +3,9 @@
 import { useTranslations } from 'next-intl';
 import { Plus } from 'lucide-react';
 import { displayKey } from '@/lib/shortcuts';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { useCreateIssue } from './CreateIssueProvider';
+import { useProjectAccess } from './ProjectAccessProvider';
 
 /**
  * CreateIssueButton — the top-nav "+" affordance that opens the create-issue
@@ -17,8 +19,31 @@ import { useCreateIssue } from './CreateIssueProvider';
  */
 export function CreateIssueButton() {
   const t = useTranslations('shell');
+  const ta = useTranslations('projectAccess');
   const { openCreateIssue, canCreate } = useCreateIssue();
+  const { canEdit } = useProjectAccess();
   if (!canCreate) return null;
+
+  const base =
+    'inline-flex h-9 items-center gap-2 rounded-(--radius-sm) border border-(--el-border) px-2.5 font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)';
+
+  // Read-only (a viewer, or a member on a limited project): keep the affordance
+  // VISIBLE but disabled with an explanatory tooltip, rather than hiding it —
+  // the 6.4.6 role-affordance treatment (design 6.4.1).
+  if (!canEdit) {
+    return (
+      <Tooltip content={ta('readOnlyHint')}>
+        <span
+          aria-disabled
+          aria-label={t('createIssue.title')}
+          className={`${base} text-(--el-text-faint) cursor-not-allowed opacity-60`}
+        >
+          <Plus className="h-4 w-4" aria-hidden />
+          <span className="hidden sm:inline">{t('createIssue.create')}</span>
+        </span>
+      </Tooltip>
+    );
+  }
 
   return (
     <button
@@ -26,7 +51,7 @@ export function CreateIssueButton() {
       onClick={openCreateIssue}
       aria-keyshortcuts="C"
       aria-label={t('createIssue.title')}
-      className="text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) inline-flex h-9 items-center gap-2 rounded-(--radius-sm) border border-(--el-border) px-2.5 font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2"
+      className={`${base} text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text)`}
     >
       <Plus className="h-4 w-4" aria-hidden />
       <span className="hidden sm:inline">{t('createIssue.create')}</span>

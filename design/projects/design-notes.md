@@ -316,10 +316,24 @@ so no one loses access" — the visible counterpart of 6.4.4's seeding.
   the 6.4.3 `ProjectAccessDeniedError` — never a crash.
 - **Scoped pickers** — assignee/reporter pickers list only **project members**
   on a private project (workspace members on open/limited).
-- **Role affordances** — a viewer (or a member on a `limited` project) sees
-  create / move / assign / edit controls **disabled with a tooltip**, not
-  missing; a non-admin sees Members + Access **read-only** (a `Read-only` chip
-  - an info line "Only project admins can add members or change access").
+- **Role affordances** — a viewer (or a member on a `limited` project) is gated
+  by control TYPE (PM directive, 2026-06-09 — supersedes the earlier
+  "everything disabled+tooltip" line; code is the reference per the footer):
+  - **In-place controls stay visible-but-disabled, as a hint** — the **Create**
+    button + the **`C` / ⌘K** shortcut, the **board** (drag disabled + a
+    read-only banner), and the issue-detail **inline field pickers**
+    (status / assignee / priority / …). Disabled, not removed, so the viewer
+    sees _that_ the action exists and _that_ they lack rights.
+  - **Navigation-to-an-edit-surface is HIDDEN, and the surface itself is
+    blocked** — the issue-detail **"Edit"** link (header + per-section
+    Description / Explanation edit links) and the relationships **add / remove**
+    controls are **not rendered** for a read-only actor, and a direct nav to
+    `/issues/[key]/edit` **redirects back to the read-only detail view** (a
+    viewer has no reason to land on an edit form; the server rejects the save
+    regardless). A hidden Edit button + a guarded edit route is the
+    mirror-product (Jira) behaviour.
+  - A non-admin sees Members + Access **read-only** (a `Read-only` chip + an
+    info line "Only project admins can add members or change access").
 
 ## Tokens & a11y
 

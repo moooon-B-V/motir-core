@@ -75,7 +75,14 @@ describe('createProject — happy path', () => {
     // raw Prisma row (no createdAt, no lastWorkItemNumber). archivedAt rides
     // on the DTO so the shell can flag an archived active project (#29.2);
     // a freshly created project is always non-archived (null).
-    expect(Object.keys(project).sort()).toEqual(['archivedAt', 'id', 'identifier', 'name', 'slug']);
+    expect(Object.keys(project).sort()).toEqual([
+      'accessLevel',
+      'archivedAt',
+      'id',
+      'identifier',
+      'name',
+      'slug',
+    ]);
     expect(project.name).toBe('Prodect Core');
     expect(project.slug).toBe('prodect-core');
     expect(project.archivedAt).toBeNull();

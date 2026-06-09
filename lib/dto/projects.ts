@@ -16,4 +16,13 @@ export interface ProjectDTO {
    * to render the "Archived" pill / "this project is archived" empty state.
    */
   archivedAt: string | null;
+  /**
+   * The project's browse-access level (Story 6.4 — open / limited / private).
+   * Surfaced on the DTO so the active-project consumer branches WITHOUT a
+   * second round-trip: the 6.4.6 assignable-users scoping reads this to decide
+   * whether the assignee/reporter pickers list project members (`private`) or
+   * the whole workspace (`open`/`limited`). The browse/edit POLICY itself is
+   * computed server-side (`projectAccessService`); this is only the level.
+   */
+  accessLevel: 'open' | 'limited' | 'private';
 }

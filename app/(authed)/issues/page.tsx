@@ -7,7 +7,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { parsePage, parseSort, parseView, serializeSort } from '@/lib/issues/issueListView';
 import { parseIssueFilter, type IssueFilterParams } from '@/lib/issues/issueListFilter';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { workspacesService } from '@/lib/services/workspacesService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
+import { assignableMembersService } from '@/lib/services/assignableMembersService';
+import { NoAccessState } from '@/components/projects/NoAccessState';
 import { IssueListToolbar } from './_components/IssueListToolbar';
 import { IssueTreeSection } from './_components/IssueTreeSection';
 import { IssueTreeSkeleton } from './_components/IssueTreeSkeleton';
@@ -54,6 +56,29 @@ export default async function IssuesPage({
     );
   }
 
+  // Story 6.4.6 — gate the issue list on canBrowse; a non-browsable active
+  // project renders the no-access state, not the list.
+  const caps = await projectAccessService.getCapabilities(ctx.projectId, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+  if (!caps.canBrowse) {
+    const ta = await getTranslations('projectAccess');
+    return (
+      <div className="flex flex-col gap-6">
+        <header className="flex flex-col gap-1">
+          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
+        </header>
+        <NoAccessState
+          title={ta('noAccessTitle')}
+          description={ta('noAccessDescription')}
+          backHref="/dashboard"
+          backLabel={ta('backToProjects')}
+        />
+      </div>
+    );
+  }
+
   const sp = await searchParams;
   const view = parseView(sp.view);
   const sort = parseSort(sp.sort);
@@ -71,7 +96,12 @@ export default async function IssuesPage({
   // only (never Prisma) per the 4-layer rule.
   const [workflow, members] = await Promise.all([
     workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
-    workspacesService.listMembers(ctx.workspaceId, ctx.userId),
+    // Assignable users scoped by access level (6.4.6): private → project members.
+    assignableMembersService.list({
+      projectId: ctx.projectId,
+      accessLevel: ctx.project.accessLevel,
+      ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    }),
   ]);
 
   return (

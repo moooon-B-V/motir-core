@@ -3,8 +3,10 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { workspacesService } from '@/lib/services/workspacesService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
+import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
+import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { EditIssueForm } from './_components/EditIssueForm';
 import { RelationshipsPanel } from '../_components/RelationshipsPanel';
@@ -42,11 +44,28 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
   try {
     detail = await workItemsService.getIssueDetail(ctx.projectId, key, serviceCtx);
   } catch (err) {
-    if (err instanceof WorkItemNotFoundError) notFound();
+    // A browse denial = the project is hidden from this actor → 404, no leak.
+    if (err instanceof WorkItemNotFoundError || err instanceof ProjectAccessDeniedError) {
+      notFound();
+    }
     throw err;
   }
 
-  const members = await workspacesService.listMembers(ctx.workspaceId, ctx.userId);
+  // Story 6.4.6 — the edit form is an EDIT surface, so a read-only actor (viewer
+  // / a member on a limited project) must not reach it: the detail page hides the
+  // "Edit" link, and a direct nav here bounces back to the read-only detail view
+  // (the server would reject every save anyway). Browse already passed above, so
+  // the detail page is a valid, viewable destination.
+  const { canEdit } = await projectAccessService.getCapabilities(ctx.projectId, serviceCtx);
+  if (!canEdit) {
+    redirect(`/issues/${detail.item.identifier}`);
+  }
+
+  const members = await assignableMembersService.list({
+    projectId: ctx.projectId,
+    accessLevel: ctx.project.accessLevel,
+    ctx: serviceCtx,
+  });
 
   return (
     <div className="flex flex-col gap-6">
