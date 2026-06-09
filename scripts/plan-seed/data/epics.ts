@@ -246,6 +246,66 @@ export const EPICS: EpicMeta[] = [
           '`issue-detail-flow.spec.ts` (E2E) asserts a fresh item reads "Ready to start" before ' +
           'any link is added, then flips to "Blocked".',
       },
+      {
+        id: 'bug-inline-edit-clipped-when-table-short',
+        kind: 'bug',
+        title:
+          'Issue list: inline cell-edit pickers are clipped / unusable when the table is short',
+        status: 'in_progress',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 2 · **Surfaces:** issue list (Story 2.5 — List + Tree ' +
+          'views, inline cell editing from Subtask 2.5.5) · **Status:** in progress · **Reported ' +
+          'by:** Yue.\n\n' +
+          'On the project issue list at `/issues`, clicking a cell to edit it inline (the ' +
+          '**status / assignee / priority** pickers) opens a dropdown that is **clipped and ' +
+          'unusable when the table is shorter than the open picker** — i.e. when the list has only ' +
+          'a few rows. The dropdown opens downward past the bottom of the (short) table card and ' +
+          'is cut off, so only the first option or two are reachable. On a near-empty list the ' +
+          'inline editor is effectively unusable.\n\n' +
+          '**Repro:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz`, open a project whose `/issues` ' +
+          'list has just a few rows (or filter down to a few), switch to List or Tree view, and ' +
+          'click a Status / Assignee / Priority cell to edit it inline. The picker menu is clipped ' +
+          "at the table's bottom edge instead of overlaying the page.\n\n" +
+          '**Root cause.** `components/ui/Combobox.tsx` (the picker primitive) rendered its menu ' +
+          'as `position: absolute` inside the trigger’s `relative` container — **not portaled**. ' +
+          'The List/Tree table cards wrap their rows in `overflow-hidden` to clip the rounded card ' +
+          'corners (`IssueListTable.tsx`, `TreeTable.tsx`). A short list = a short card, so the ' +
+          'downward-opening menu extends past the card’s bottom border and `overflow-hidden` ' +
+          'clips it. (The listbox’s own `max-h-64` is NOT the cause — the clip is the table ' +
+          'card’s overflow, confirmed by a browser repro.) `DatePicker` never had this bug ' +
+          'because it opens through the Radix Popover **portal**.\n\n' +
+          '**Fix.** Render the Combobox menu via `createPortal` to `document.body` with ' +
+          'viewport-anchored `position: fixed` (anchored to the trigger rect, re-computed on open ' +
+          '/ ancestor-scroll / resize), flipping above the trigger when there is more room there ' +
+          'and capping the listbox height to the available viewport space. This escapes **every** ' +
+          'overflow ancestor — fixing the latent clip for all Combobox consumers, not just the ' +
+          'issue list (the same approach `DatePicker` already takes). WAI-ARIA combobox/listbox ' +
+          'semantics, keyboard nav, focus return, and `onClose` are unchanged; click-outside also ' +
+          'treats the portaled menu as "inside" so an option click still commits.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- On a short `/issues` list (few rows), opening a Status / Assignee / Priority inline ' +
+          'picker shows the **full** option menu — no clipping at the table card edge.\n' +
+          '- The picker menu overlays the page (portaled), opening downward by default and ' +
+          'flipping above the trigger when there is insufficient room below; it never runs ' +
+          'off-screen (height capped, scrolls internally if needed).\n' +
+          '- Selecting an option still commits the edit; Escape / click-outside still close and ' +
+          'return focus to the trigger; keyboard navigation and ARIA are unchanged.\n' +
+          '- The fix is in the shared `Combobox` primitive, so every consumer benefits; no ' +
+          'regression in the other Combobox usages (TypePicker / ParentPicker / filter bar / ' +
+          'board column menu / settings).\n' +
+          '- A regression test asserts the open menu is portaled out of an `overflow-hidden` ' +
+          'ancestor (`position: fixed`) and that a click inside the portaled menu still commits.\n\n' +
+          '## Context refs\n\n' +
+          '- `components/ui/Combobox.tsx` — the picker primitive (the fix site)\n' +
+          '- `app/(authed)/issues/_components/IssueInlineEdit.tsx` — the inline-edit cell editors ' +
+          'that mount the pickers `autoOpen`\n' +
+          '- `app/(authed)/issues/_components/IssueListTable.tsx`, `components/ui/TreeTable.tsx` — ' +
+          'the `overflow-hidden` table cards that clip the menu\n' +
+          '- `components/ui/DatePicker.tsx` / `components/ui/Popover.tsx` — the portal pattern ' +
+          'this fix mirrors\n' +
+          '- `tests/components/combobox-portal.test.tsx` — the regression test',
+      },
     ],
   },
   {
