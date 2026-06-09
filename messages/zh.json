@@ -965,6 +965,13 @@
     "createSprint": "创建 Sprint",
     "creatingSprint": "创建中…",
     "createSprintErrorTitle": "无法创建 Sprint",
-    "createSprintErrorDescription": "创建 Sprint 时出现问题。请重试。"
+    "createSprintErrorDescription": "创建 Sprint 时出现问题。请重试。",
+    "moveRejectedTitle": "无法移动事项",
+    "moveErrorDescription": "无法移动 {key}，已恢复到原位置，请重试。",
+    "dndInstructions": "按空格键拿起事项，用方向键在 Sprint 与待办列表之间移动，再次按空格键放下，按 Esc 取消。",
+    "announcementPickedUp": "已拿起 {key}。",
+    "announcementOver": "{key} 正位于{region}上方。",
+    "announcementDropped": "已将 {key} 放入{region}。",
+    "announcementCancelled": "已取消移动 {key}。"
   }
 }
