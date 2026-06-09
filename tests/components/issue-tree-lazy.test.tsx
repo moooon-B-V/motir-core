@@ -24,6 +24,20 @@ vi.mock('@/app/(authed)/issues/[key]/edit/actions', () => ({
   changeStatusAction: vi.fn(),
 }));
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+// The tree subscribes to CreateIssueProvider's `issuesChangedAt` tick to refetch
+// roots after a create (bug-issue-list-not-refreshed-after-create). Mock the hook
+// so the test controls the tick directly — the real provider mounts the create
+// modal (Server Actions + blob upload) which has no place in a client unit test.
+const createIssue = vi.hoisted(() => ({ issuesChangedAt: 0 }));
+vi.mock('@/app/(authed)/_components/CreateIssueProvider', () => ({
+  useCreateIssue: () => ({
+    open: false,
+    setOpen: () => {},
+    openCreateIssue: () => {},
+    canCreate: true,
+    issuesChangedAt: createIssue.issuesChangedAt,
+  }),
+}));
 
 import { IssueTreeTable } from '@/app/(authed)/issues/_components/IssueTreeTable';
 import type { TreeLevelDto, WorkItemTreeRowDto } from '@/lib/dto/workItems';
@@ -34,6 +48,7 @@ import { EMPTY_FILTER } from '@/lib/issues/issueListFilter';
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  createIssue.issuesChangedAt = 0;
 });
 
 const members: WorkspaceMemberDTO[] = [
@@ -182,6 +197,55 @@ describe('IssueTreeTable — lazy + sortable', () => {
       expect.objectContaining({ parentId: 'a', offset: 1 }),
     );
     await waitFor(() => expect(screen.getByTestId('issue-row-PROD-10')).toBeTruthy());
+  });
+
+  it('refetches the roots when a create bumps issuesChangedAt (bug-issue-list-not-refreshed-after-create)', async () => {
+    // The unfiltered lazy tree seeds `levels[ROOTS]` from `initialLevel` in a
+    // mount-only useState initializer, so a create from the /issues toolbar
+    // (which commits through CreateIssueProvider + calls router.refresh()) can't
+    // reach it — router.refresh() re-runs the Server Component but this client
+    // state is stale, so the new row stayed invisible until a full reload. The
+    // fix mirrors BoardContainer: watch the provider's `issuesChangedAt` tick and
+    // refetch the first page of roots, so the new row appears with no reload.
+    listRootIssuesAction.mockResolvedValue({
+      ok: true,
+      level: {
+        rows: [node({ id: 'a', key: 1 }), node({ id: 'b', key: 2 })],
+        hasMore: false,
+        total: 2,
+      },
+    });
+    const initialLevel: TreeLevelDto = {
+      rows: [node({ id: 'a', key: 1 })],
+      hasMore: false,
+      total: 1,
+    };
+    const { rerender } = renderTree(initialLevel);
+
+    // Only the pre-existing root is mounted; no refetch fires on mount.
+    expect(screen.getByTestId('issue-row-PROD-1')).toBeTruthy();
+    expect(screen.queryByTestId('issue-row-PROD-2')).toBeNull();
+    expect(listRootIssuesAction).not.toHaveBeenCalled();
+
+    // A create elsewhere in the shell bumps the tick → the tree refetches roots
+    // (offset 0, same sort) and the newly-created row appears without a remount.
+    await act(async () => {
+      createIssue.issuesChangedAt = 1;
+      rerender(
+        <IssueTreeTable
+          initialLevel={initialLevel}
+          sort={sort}
+          filter={filter}
+          workflow={workflow}
+          members={members}
+        />,
+      );
+    });
+
+    expect(listRootIssuesAction).toHaveBeenCalledWith(
+      expect.objectContaining({ sortParam: 'key:asc', offset: 0 }),
+    );
+    await waitFor(() => expect(screen.getByTestId('issue-row-PROD-2')).toBeTruthy());
   });
 
   it('clicking a column header navigates to the new ?sort=', () => {

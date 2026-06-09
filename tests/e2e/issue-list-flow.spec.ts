@@ -167,6 +167,54 @@ test('@smoke a project with no work items renders the empty state', async ({ pag
   await expect(page.getByText('Create your first work item to start tracking work.')).toBeVisible();
 });
 
+// ───────────── create refreshes the list without a reload (regression) ─────────
+//
+// bug-issue-list-not-refreshed-after-create: the unfiltered lazy Tree
+// (IssueTreeTable) seeds its ROOTS level into client state ONCE on mount, so a
+// create from the "+ New work item" toolbar trigger — which commits through the
+// shell CreateIssueProvider + router.refresh() — re-ran the Server Component but
+// could NOT reach the stale client state, so the new row stayed invisible until a
+// full page reload. The fix watches the provider's `issuesChangedAt` tick and
+// refetches the roots. This drives the REAL repro: create via the toolbar and
+// assert the new row appears with NO page.reload(), in BOTH the Tree and List
+// views. (poll the row link with a tight timeout; never call page.reload()).
+
+test('@smoke a toolbar create appears in the Tree + List without a manual reload', async ({
+  page,
+}) => {
+  const seed = await seedProject(page, 'e2e-issue-list-create-refresh@example.com', 'CRF');
+  const existing = await mk(seed, 'task', 'Pre-existing root');
+
+  // ── Tree view (the default + the lazy surface that had the bug) ─────────────
+  await page.goto('/issues');
+  const grid = page.getByRole('treegrid', { name: 'Work Items', exact: true });
+  await expect(grid).toBeVisible();
+  await expect(page.getByTestId(`issue-row-${existing.identifier}`)).toBeVisible();
+  await expect(page.getByRole('link', { name: /Created in tree/ })).toHaveCount(0);
+
+  // Create through the SAME entry point the bug was reported on.
+  await page.getByRole('button', { name: 'New work item' }).click();
+  await page.getByLabel('Title').fill('Created in tree');
+  await page.getByRole('button', { name: 'Create' }).click();
+
+  // The new ROOT row appears in the tree WITHOUT a reload (the regression assert).
+  await expect(page.getByRole('link', { name: /Created in tree/ })).toBeVisible();
+
+  // ── List view (props-driven; guard it stays fresh too) ──────────────────────
+  await page.getByRole('button', { name: 'View: Tree' }).click();
+  await page.getByRole('menuitemradio', { name: 'List' }).click();
+  await page.waitForURL((url) => url.searchParams.get('view') === 'list');
+  await expect(page.getByRole('table', { name: 'Work Items' })).toBeVisible();
+  // The tree-created item is present in the freshly-read list.
+  await expect(page.getByRole('link', { name: /Created in tree/ })).toBeVisible();
+
+  // A second create from the List toolbar also shows up with no reload.
+  await page.getByRole('button', { name: 'New work item' }).click();
+  await page.getByLabel('Title').fill('Created in list');
+  await page.getByRole('button', { name: 'Create' }).click();
+  await expect(page.getByRole('link', { name: /Created in list/ })).toBeVisible();
+});
+
 // ───────────────────────────── filter ─────────────────────────────────────────
 
 test('@smoke filtering narrows the tree while keeping matched nodes’ ancestors', async ({
