@@ -158,6 +158,34 @@ export const sprintsService = {
     );
   },
 
+  /**
+   * List a project's sprints in `sequence` order, each with its committed
+   * (non-archived) issue count — the read the Story-4.2 sprint-planning view
+   * binds to (the 4.1.4 `getBacklog` / `getSprintIssues` reads cover the rows;
+   * this covers the sprint headers). A pure read: no transaction, the repo
+   * leaves use the `db` singleton (CLAUDE.md). Tenant-gated by `workspaceId`
+   * (finding #26) — `listByProject` filters on it, so a foreign project simply
+   * returns an empty list, never another workspace's sprints.
+   *
+   * Available to any project member (everyday planning), like the backlog
+   * reads — NOT owner-gated (the owner gate guards sprint MANAGEMENT writes,
+   * not reads). The sprint count per project is small + bounded, so the
+   * per-sprint count read is a bounded fan-out, not an unbounded scan.
+   *
+   * NB: this exposes the already-shipped `sprintRepository.listByProject` leaf
+   * (Story 4.1) through the service + a `GET /api/sprints` route — the read
+   * surface the 4.2.3 card directs the backlog UI to consume; 4.1 shipped the
+   * repo read but not its service/HTTP binding.
+   */
+  async listByProject(projectId: string, ctx: ServiceContext): Promise<SprintDto[]> {
+    const rows = await sprintRepository.listByProject(projectId, ctx.workspaceId);
+    return Promise.all(
+      rows.map(async (row) =>
+        toSprintDto(row, await workItemRepository.countSprintIssues(row.id, ctx.workspaceId)),
+      ),
+    );
+  },
+
   /** Re-exported for callers that import the service object. See the free
    *  function below — it is the canonical export Story 4.4 consumes. */
   assertSprintTransition,

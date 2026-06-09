@@ -15,6 +15,31 @@ import {
 // no transaction here (CLAUDE.md). The rich sprint-planning surface (list +
 // backlog) is Story 4.2; this is the minimal CRUD seam.
 
+// GET /api/sprints (Subtask 4.2.3) — the ACTIVE project's sprints in `sequence`
+// order, each with its committed-issue count, for the sprint-planning view. Thin
+// HTTP layer over sprintsService.listByProject; session-required; project +
+// workspace from the active-project context (NEVER the client). Exposes the
+// already-shipped `sprintRepository.listByProject` leaf (Story 4.1) the backlog
+// UI binds to. Available to any project member (a read, not owner-gated).
+export async function GET(): Promise<Response> {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+
+  const ctx = await getActiveProject();
+  if (!ctx) {
+    return NextResponse.json(
+      { code: 'NO_ACTIVE_PROJECT', error: 'No active project.' },
+      { status: 400 },
+    );
+  }
+
+  const sprints = await sprintsService.listByProject(ctx.projectId, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+  return NextResponse.json({ sprints });
+}
+
 // POST /api/sprints — create a PLANNED sprint on the active project. Body:
 // { name?, goal?, startDate?, endDate? } (name defaults to "Sprint N"; dates are
 // ISO-8601 strings). Returns 201 with the new sprint's DTO.

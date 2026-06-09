@@ -9,6 +9,7 @@ import {
   CirclePlay,
   Columns3,
   LayoutDashboard,
+  LayoutList,
   ListChecks,
   Settings,
 } from 'lucide-react';
@@ -119,6 +120,14 @@ export function SidebarNav({
           label: t('nav.boards'),
           href: '/boards',
           active: isActive(pathname, '/boards'),
+        },
+        {
+          // The backlog / sprint-planning surface (Subtask 4.2.3) — between
+          // Boards and Reports, with the layout-list glyph (4.2.1 design notes).
+          icon: <LayoutList />,
+          label: t('nav.backlog'),
+          href: '/backlog',
+          active: isActive(pathname, '/backlog'),
         },
         {
           icon: <BarChart3 />,

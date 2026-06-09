@@ -1,6 +1,7 @@
 import type { Prisma, WorkItem } from '@prisma/client';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
+import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -353,6 +354,13 @@ export const backlogService = {
    * `backlogRank` order, plus the total count (finding #57 — never load-all).
    * `cursor` is the last id from the previous page; `limit` is clamped to
    * [1, 100] (default 50). Returns lighter `WorkItemSummaryDto` rows.
+   *
+   * Issues in a `done`-category status are EXCLUDED from the backlog (list +
+   * count): the backlog is the to-be-planned pile, so a completed unsprinted
+   * issue doesn't belong there (mirror rung 1 — Jira hides the Done column from
+   * the backlog; `todo` AND `in_progress` unsprinted issues stay). Done issues
+   * inside a sprint are unaffected — `getSprintIssues` keeps them (they're part
+   * of the sprint's scope), matching Jira's active-sprint behaviour.
    */
   async getBacklog(
     projectId: string,
@@ -360,12 +368,30 @@ export const backlogService = {
     ctx: ServiceContext,
   ): Promise<RankedIssuePageDto> {
     const take = clampLimit(options.limit);
+    const excludeStatusKeys = await this.backlogExcludedStatusKeys(projectId, ctx.workspaceId);
     const rows = await workItemRepository.findBacklogPage(projectId, ctx.workspaceId, {
       take,
       cursor: options.cursor,
+      excludeStatusKeys,
     });
-    const totalCount = await workItemRepository.countBacklog(projectId, ctx.workspaceId);
+    const totalCount = await workItemRepository.countBacklog(
+      projectId,
+      ctx.workspaceId,
+      excludeStatusKeys,
+    );
     return buildPage(rows, take, totalCount);
+  },
+
+  /**
+   * The status keys hidden from the backlog: a project's `done`-category status
+   * keys (e.g. the default workflow's `done` + `cancelled`). Read straight from
+   * `workflowsRepository` (no DTO needed — keys only); the workspace gate is the
+   * repo's. Empty only for a cross-workspace / status-less project, in which
+   * case the backlog read applies no status filter.
+   */
+  async backlogExcludedStatusKeys(projectId: string, workspaceId: string): Promise<string[]> {
+    const statuses = await workflowsRepository.findStatuses(projectId, workspaceId);
+    return statuses.filter((s) => s.category === 'done').map((s) => s.key);
   },
 
   /**

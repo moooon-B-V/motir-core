@@ -225,7 +225,8 @@
       "reports": "报表",
       "settings": "设置",
       "jobRuns": "任务运行",
-      "docs": "文档"
+      "docs": "文档",
+      "backlog": "待办列表"
     },
     "topNav": {
       "global": "全局"
@@ -326,7 +327,8 @@
       "goToReports": "前往报表",
       "goToSettings": "前往设置",
       "switchTo": "切换到 {name}",
-      "current": "当前"
+      "current": "当前",
+      "goToBacklog": "前往待办列表"
     },
     "shortcuts": {
       "title": "键盘快捷键",
@@ -905,5 +907,57 @@
       "title": "已复制",
       "body": "请将 {command} 粘贴到终端。"
     }
+  },
+  "backlog": {
+    "heading": "待办列表",
+    "subtitle": "{project} · 规划与梳理 — 排序、纳入 Sprint、估算",
+    "noProjectTitle": "未选择项目",
+    "noProjectDescription": "选择或创建一个项目，以规划其待办列表。",
+    "viewAllIssues": "查看全部工作项",
+    "filter": "筛选",
+    "filterComingSoon": "待办筛选即将推出。",
+    "backlogTitle": "待办列表",
+    "backlogRegionLabel": "待办列表，{count, plural, other {# 个工作项}}",
+    "backlogListLabel": "待办工作项",
+    "issueCount": "{count, plural, other {# 个工作项}}",
+    "emptyTitle": "待办列表已清空",
+    "emptyDescription": "所有工作项都已纳入 Sprint。创建一个工作项以加入待办列表。",
+    "errorTitle": "无法加载待办列表",
+    "errorDescription": "获取该项目的待办列表时出现问题。请检查网络连接后重试。",
+    "sprintsErrorTitle": "无法加载 Sprint",
+    "sprintsErrorDescription": "获取该项目的 Sprint 时出现问题。请检查网络连接后重试。",
+    "loadingMore": "加载更多…",
+    "allLoaded": "已加载全部 {count, plural, other {# 个工作项}}",
+    "estimateSeam": "估算",
+    "unassigned": "未分配",
+    "rowActions": "工作项操作",
+    "rowActionsComingSoon": "工作项操作将随梳理功能推出。",
+    "createIssue": "创建工作项",
+    "createIssueComingSoon": "内联创建将随梳理功能推出。",
+    "sprintState": {
+      "planned": "已规划",
+      "active": "进行中",
+      "complete": "已完成"
+    },
+    "notStarted": "未开始",
+    "sprintRegionLabel": "{name}，{state}，{count, plural, other {# 个工作项}}",
+    "sprintIssuesLabel": "{name} 的工作项",
+    "sprintEmpty": "暂无工作项 — 从待办列表拖入，或使用「+ 创建工作项」。",
+    "committedPointsSeam": "承诺点数",
+    "pointsPlaceholder": "— 点",
+    "velocitySeam": "速度",
+    "velocityPlaceholder": "速度",
+    "startSprint": "开始 Sprint",
+    "startSprintComingSoon": "开始 Sprint 功能即将推出。",
+    "sprintActions": "Sprint 操作",
+    "sprintActionsComingSoon": "Sprint 操作将随梳理功能推出。",
+    "collapseSprint": "收起 Sprint",
+    "expandSprint": "展开 Sprint",
+    "collapseBacklog": "收起待办列表",
+    "expandBacklog": "展开待办列表",
+    "createSprint": "创建 Sprint",
+    "creatingSprint": "创建中…",
+    "createSprintErrorTitle": "无法创建 Sprint",
+    "createSprintErrorDescription": "创建 Sprint 时出现问题。请重试。"
   }
 }

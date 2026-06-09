@@ -1059,13 +1059,23 @@ export const workItemRepository = {
   async findBacklogPage(
     projectId: string,
     workspaceId: string,
-    options: { take: number; cursor?: string },
+    options: { take: number; cursor?: string; excludeStatusKeys?: string[] },
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
     const client = tx ?? db;
-    const { take, cursor } = options;
+    const { take, cursor, excludeStatusKeys = [] } = options;
     return client.workItem.findMany({
-      where: { projectId, workspaceId, sprintId: null, archivedAt: null },
+      where: {
+        projectId,
+        workspaceId,
+        sprintId: null,
+        archivedAt: null,
+        // The backlog is the to-be-planned pile, so issues in a `done`-category
+        // status are excluded (mirror rung 1: Jira hides the Done column from the
+        // backlog; in-progress unsprinted issues stay). The service passes the
+        // project's done-category status keys; none → no filter.
+        ...(excludeStatusKeys.length > 0 ? { status: { notIn: excludeStatusKeys } } : {}),
+      },
       orderBy: [{ backlogRank: 'asc' }, { id: 'asc' }],
       take: take + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -1073,18 +1083,26 @@ export const workItemRepository = {
   },
 
   /**
-   * Total count of a project's backlog (non-archived, `sprintId IS NULL`) — the
-   * "N issues" header the 4.2 backlog UI shows. Scope matches `findBacklogPage`
-   * exactly. Carries the explicit `workspaceId` gate.
+   * Total count of a project's backlog (non-archived, `sprintId IS NULL`, not in
+   * a `done`-category status) — the "N issues" header the 4.2 backlog UI shows.
+   * Scope matches `findBacklogPage` exactly (same `excludeStatusKeys`). Carries
+   * the explicit `workspaceId` gate.
    */
   async countBacklog(
     projectId: string,
     workspaceId: string,
+    excludeStatusKeys: string[] = [],
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
     const client = tx ?? db;
     return client.workItem.count({
-      where: { projectId, workspaceId, sprintId: null, archivedAt: null },
+      where: {
+        projectId,
+        workspaceId,
+        sprintId: null,
+        archivedAt: null,
+        ...(excludeStatusKeys.length > 0 ? { status: { notIn: excludeStatusKeys } } : {}),
+      },
     });
   },
 
