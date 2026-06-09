@@ -82,7 +82,7 @@ import type { PlanStory } from '../types';
 export const story_7_0: PlanStory = {
   id: '7.0',
   title: 'Ready set — page + endpoint (the AI dispatch surface)',
-  status: 'done',
+  status: 'in_progress',
   descriptionMd:
     'Ship the **agent dispatch surface**: a dedicated `/ready` page that lists every ready-to-' +
     'start work item in the active project, AND the two HTTP endpoints that back it — `GET ' +
@@ -730,6 +730,64 @@ export const story_7_0: PlanStory = {
         '- `prodect-core/lib/services/workItemsService.ts` — `pageReadyCandidates` (cursor ' +
         'construction).\n' +
         '- `prodect-core/prisma/schema.prisma` — `WorkItemKind` / `WorkItemPriority` enums.',
+    },
+    {
+      id: '7.0.12',
+      title: 'Re-order the ready set: type first, then priority, then key',
+      status: 'planned',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 25,
+      dependsOn: ['7.0.11'],
+      descriptionMd:
+        '**Type:** code · **Parent:** Story 7.0 · **Requested by:** Yue.\n\n' +
+        'Change the ready-set sort precedence so **issue type leads**, priority breaks the type ' +
+        'tie, and the work-item number (`key`) breaks the final tie. New sort: `(type asc, ' +
+        'priority desc, key asc)` — was `(priority desc, type asc, key asc)` from 7.0.11. The ' +
+        'type order itself is unchanged: the fixed dispatch ranking `subtask < bug < task < ' +
+        'story < epic` (`READY_KIND_RANK`), leaf-most first. Priority still orders ' +
+        'highest→lowest, but now WITHIN a type bucket; `key` ascending is the final tiebreaker.\n\n' +
+        '**Decision (decision-ladder rung 0 — direct owner instruction, Yue).** This REVERSES ' +
+        "7.0.11's primary/secondary: 7.0.11 made priority primary with type as the tiebreaker " +
+        '(and explicitly recorded type-primary as considered-and-rejected at the time). Yue has ' +
+        'since asked for type-primary, so type now leads and priority orders within each type ' +
+        'bucket. The owner instruction governs; update the inline rationale in `readyFilter.ts` ' +
+        'and the Story 7.0 `Sort` note to match — no stale "priority stays primary" comment left ' +
+        'behind. Composes with 7.0.10 unchanged — a childed epic/story is still EXCLUDED; this ' +
+        'only re-orders what remains.\n\n' +
+        '**Implementation.** Keep the type order sourced from `READY_KIND_RANK` ' +
+        '(`lib/workItems/readyFilter.ts`) — do NOT duplicate it. ' +
+        '`workItemRepository.findReadyCandidates` swaps the `ORDER BY` precedence to `<kind ' +
+        'rank> ASC, priority DESC, key ASC` AND re-orders the seek-after tuple comparison to the ' +
+        'SAME precedence, so the two can never drift. The opaque cursor keeps carrying all three ' +
+        'fields — re-order the encoded tuple to lead with `kind` for readability and update ' +
+        '`encodeReadyCursor` / `decodeReadyCursor` / `ReadyCursor` to match (decode still ' +
+        'validates every field). `listReady` / `getNextReady` / `countReady` all flow through ' +
+        'the one query → the page, the dispatch endpoint, and the sidebar badge stay in ' +
+        'agreement; cursor paging stays reseed-stable (tuple, not offset).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- Ready set sorts `(type asc, priority desc, key asc)` with type order `subtask < bug ' +
+        '< task < story < epic`.\n' +
+        '- Type is now PRIMARY — a subtask precedes a task even when the task has higher ' +
+        'priority; within one type, higher priority precedes lower; `key` ascending breaks the ' +
+        'final tie.\n' +
+        '- The cursor carries the new precedence; paging across a priority boundary within a ' +
+        'type, and across a type boundary, is deterministic and reseed-stable.\n' +
+        '- `listReady`, `getNextReady`, and `countReady` agree (one underlying query).\n' +
+        '- The inline sort rationale in `readyFilter.ts` and the Story 7.0 `Sort` note no longer ' +
+        'claim priority-primary (no stale comment from 7.0.11).\n' +
+        '- Vitest updates the 7.0.7 sort specs: type-primary ordering, priority-within-type, ' +
+        'subtask-first across priorities, and cursor paging across both a priority boundary and ' +
+        'a type boundary.\n\n' +
+        '## Context refs\n\n' +
+        '- `prodect-core/lib/workItems/readyFilter.ts` — the cursor codec + `READY_KIND_RANK` + ' +
+        'the sort rationale comment.\n' +
+        '- `prodect-core/lib/repositories/workItemRepository.ts` — `findReadyCandidates` ' +
+        '(ORDER BY + seek-after precedence).\n' +
+        '- `prodect-core/lib/services/workItemsService.ts` — `pageReadyCandidates` (cursor ' +
+        'construction).\n' +
+        '- `prodect-core/scripts/plan-seed/data/story-7.0.ts` — the Story `Sort` note to update.\n' +
+        '- 7.0.11 (the prior sort change this supersedes).',
     },
   ],
 };
