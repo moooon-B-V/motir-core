@@ -54,7 +54,7 @@ import type { PlanStory } from '../types';
 export const story_4_1: PlanStory = {
   id: '4.1',
   title: 'Sprint + backlog data model',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The **data model + service core** the whole of Epic 4 (Agile planning) rides on. Three things ship ' +
     'here, all backend: (1) the **`Sprint` entity** — `name`, `goal`, `startDate`, `endDate`, `state` ' +
@@ -332,7 +332,7 @@ export const story_4_1: PlanStory = {
       id: '4.1.5',
       title:
         'Tests — sprint state machine, one-active guard, association + same-project guard, rank ordering, bounded backlog at scale',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 22,
