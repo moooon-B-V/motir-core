@@ -28,6 +28,7 @@ import {
   DueValue,
   EstimateValue,
 } from './issueCellPrimitives';
+import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 import type { IssueRowData } from './issueRows';
 
 // Inline editing for the /issues row cells (Subtask 2.5.5) — STATUS · ASSIGNEE ·
@@ -62,7 +63,16 @@ export function IssueInlineEditProvider({
   members: WorkspaceMemberDTO[];
   children: ReactNode;
 }) {
-  const value = useMemo(() => ({ workflow, members }), [workflow, members]);
+  // Story 6.4.6 — a read-only actor (viewer / member on a limited project) gets
+  // a NULL context, so every cell falls through to its read-only value (the
+  // `if (!ctx) return <…Value/>` branch below). The whole inline-edit surface
+  // goes read-only without touching the three mount sites. Defaults to editable
+  // when there's no ProjectAccessProvider (non-shell / test mounts).
+  const { canEdit } = useProjectAccess();
+  const value = useMemo(
+    () => (canEdit ? { workflow, members } : null),
+    [canEdit, workflow, members],
+  );
   return (
     <IssueInlineEditContext.Provider value={value}>{children}</IssueInlineEditContext.Provider>
   );
