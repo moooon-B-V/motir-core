@@ -25,5 +25,10 @@ export function toSprintDto(row: Sprint, issueCount: number): SprintDto {
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
     sequence: row.sequence,
     issueCount,
+    // The scope-lock baseline (Story 4.4.2): null until the sprint is started.
+    // `committedPoints` is a Prisma `Decimal` on the row — narrow to a JS number
+    // for the wire (fractional-safe; bounded by Decimal(8,2)).
+    committedPoints: row.committedPoints === null ? null : row.committedPoints.toNumber(),
+    committedIssueCount: row.committedIssueCount,
   };
 }

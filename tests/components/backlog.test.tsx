@@ -72,6 +72,8 @@ function sprint(over: Partial<SprintDto> & { id: string; name: string }): Sprint
     completedAt: null,
     sequence: 1,
     issueCount: 0,
+    committedPoints: null,
+    committedIssueCount: null,
     ...over,
   };
 }

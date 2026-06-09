@@ -925,6 +925,14 @@ model Sprint {
   startDate   DateTime?   @map("start_date")
   endDate     DateTime?   @map("end_date")
   completedAt DateTime?   @map("completed_at")
+  // Scope-lock baseline (Story 4.4.2) — the immutable "Committed" snapshot taken
+  // once by `startSprint` and never mutated thereafter (the Jira "Committed"
+  // line). `committedPoints` is Decimal (NOT the card's `Int?`): the snapshot is
+  // a SUM over `work_item.storyPoints`, itself `Decimal(6,2)` (rung 2 — the
+  // shipped column wins over the card's prose), so an Int would truncate
+  // fractional estimates; widened to (8,2) for the multi-issue sum's headroom.
+  committedPoints     Decimal? @db.Decimal(8, 2) @map("committed_points")
+  committedIssueCount Int?     @map("committed_issue_count")
   sequence    Int
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")

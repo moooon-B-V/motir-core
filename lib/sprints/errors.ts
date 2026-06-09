@@ -16,6 +16,8 @@ import type { SprintState } from '@prisma/client';
 //   CannotDeleteActiveSprintError      → 409
 //   CrossProjectSprintAssignmentError  → 422 (Subtask 4.1.4)
 //   BulkBatchTooLargeError             → 400 (Subtask 4.2.2)
+//   SprintAlreadyActiveError           → 409 (Subtask 4.4.2)
+//   SprintNotStartableError            → 422 (Subtask 4.4.2)
 //
 // A foreign / unknown projectId (the create path) reuses `ProjectNotFoundError`
 // from `lib/projects/errors.ts` (already a 404) rather than inventing a parallel
@@ -134,6 +136,51 @@ export class CrossProjectSprintAssignmentError extends Error {
     this.name = 'CrossProjectSprintAssignmentError';
     this.itemId = itemId;
     this.sprintId = sprintId;
+  }
+}
+
+/**
+ * Starting a sprint when the project already has an `active` one (Subtask
+ * 4.4.2). The lifecycle allows AT MOST one active sprint per project (the
+ * `sprint_one_active_per_project` partial-unique index, 4.1.1). `startSprint`
+ * throws this BEFORE the write — both as a friendly pre-check and again under
+ * the `FOR UPDATE` lock inside the activation transaction — so the UI gets an
+ * explainable 409 ("complete the running sprint first") rather than a raw
+ * unique-constraint violation leaking through. The DB index stays the
+ * defence-in-depth backstop. → 409.
+ */
+export class SprintAlreadyActiveError extends Error {
+  readonly code = 'SPRINT_ALREADY_ACTIVE' as const;
+  readonly projectId: string;
+  readonly activeSprintId: string;
+  constructor(projectId: string, activeSprintId: string) {
+    super(
+      `Project ${projectId} already has an active sprint (${activeSprintId}); complete it before starting another.`,
+    );
+    this.name = 'SprintAlreadyActiveError';
+    this.projectId = projectId;
+    this.activeSprintId = activeSprintId;
+  }
+}
+
+/**
+ * `startSprint` was called on a sprint that is not in the `planned` state — an
+ * already-`active` or `complete` sprint cannot be (re)started (Subtask 4.4.2).
+ * Distinct from `SprintAlreadyActiveError` (which is about ANOTHER sprint in the
+ * project being active): this is about THIS sprint's own state. It is the
+ * friendly surface over the pure `assertSprintTransition` rule — the machine is
+ * one-way `planned → active → complete`, so only a `planned` sprint is
+ * startable. → 422 (the entity is well-formed; its state forbids the action).
+ */
+export class SprintNotStartableError extends Error {
+  readonly code = 'SPRINT_NOT_STARTABLE' as const;
+  readonly sprintId: string;
+  readonly state: SprintState;
+  constructor(sprintId: string, state: SprintState) {
+    super(`Sprint ${sprintId} cannot be started from state "${state}" (only a planned sprint).`);
+    this.name = 'SprintNotStartableError';
+    this.sprintId = sprintId;
+    this.state = state;
   }
 }
 
