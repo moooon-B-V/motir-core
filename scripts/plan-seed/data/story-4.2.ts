@@ -246,7 +246,7 @@ export const story_4_2: PlanStory = {
       id: '4.2.2',
       title:
         'Backend — atomic bulk sprint-assign / move-to-backlog + create-into-sprint (composes the 4.1.4 single-issue primitives; bounded batch, one transaction)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
