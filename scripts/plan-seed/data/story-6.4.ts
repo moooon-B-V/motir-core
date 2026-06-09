@@ -241,7 +241,7 @@ export const story_6_4: PlanStory = {
       id: '6.4.7',
       title:
         'Seed — enroll the moooon team in the `prodect` project (close the project-gating loop)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 12,
