@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { assertValidParent, allowedParentKinds, type IssueType } from '@/lib/issues/parentRules';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -22,6 +23,7 @@ import {
 } from '@/lib/workItems/errors';
 import { CrossWorkspaceLinkError, WorkItemLinkNotFoundError } from '@/lib/workItems/linkErrors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import {
   toWorkItemDto,
@@ -173,6 +175,11 @@ function buildCreatedDiff(row: WorkItem): Record<string, DiffCell> {
   set('reporterId', row.reporterId);
   set('dueDate', row.dueDate ? row.dueDate.toISOString() : null);
   set('estimateMinutes', row.estimateMinutes);
+  // sprintId is null for a backlog create (the `set` helper skips nulls, so the
+  // diff is unchanged from pre-4.2.2 for the common case); it is captured only
+  // when the issue is born directly in a sprint (Subtask 4.2.2 create-into-
+  // sprint), so the created revision records that assignment.
+  set('sprintId', row.sprintId);
   set('position', row.position);
   return diff;
 }
@@ -344,6 +351,23 @@ export const workItemsService = {
       assertValidParent(null, input.kind);
     }
 
+    // Sprint pre-flight (Subtask 4.2.2 — create-into-sprint): when the caller
+    // targets a sprint, it must exist in this workspace and belong to the SAME
+    // project as the new issue — the same-project guard
+    // `backlogService.assignToSprint` enforces, pulled to create time so a
+    // quick-create into a sprint container is atomic (the issue is born already
+    // assigned, in the one create transaction, never created-then-orphaned by a
+    // failed follow-up assign). A foreign/unknown sprint → 404; a cross-project
+    // sprint → 422. Checked before the key-allocation transaction so a denied
+    // create never burns a work-item key.
+    if (input.sprintId != null) {
+      const sprint = await sprintRepository.findById(input.sprintId, workspaceId);
+      if (!sprint) throw new SprintNotFoundError(input.sprintId);
+      if (sprint.projectId !== input.projectId) {
+        throw new CrossProjectSprintAssignmentError('new', input.sprintId);
+      }
+    }
+
     // Initial status (Subtask 2.2.4): a new item lands in the project's
     // workflow initial status — there's no "from" status to validate against
     // on a brand-new row, so this bypasses transition validation. The pre-2.2.4
@@ -369,17 +393,19 @@ export const workItemsService = {
       const lastPosition = siblings.length ? siblings[siblings.length - 1]!.position : null;
       const position = keyForAppend(lastPosition);
 
-      // Global backlog rank (Subtask 4.1.4): a new issue is born in the backlog
-      // (`sprintId` null) and appended after the project's current last backlog
-      // rank, so the 4.1.1 backfill stays total going forward and a fresh issue
-      // is never rank-less when the 4.2 backlog binds to it. SEPARATE ordering
-      // from `position` (which orders the issue TREE under its parent) — this is
-      // the one global "Rank" the backlog + a sprint share. Bounded boundary
-      // read, never a full scan.
+      // Global backlog rank (Subtask 4.1.4): a new issue is appended after the
+      // current last rank of its STARTING scope, so the 4.1.1 backfill stays
+      // total going forward and a fresh issue is never rank-less when the 4.2
+      // backlog binds to it. SEPARATE ordering from `position` (which orders the
+      // issue TREE under its parent) — this is the one global "Rank" the backlog
+      // and a sprint share. The scope is the target sprint when creating
+      // into one (Subtask 4.2.2), else the backlog (`sprintId IS NULL`); either
+      // way a bounded boundary read, never a full scan.
+      const targetSprintId = input.sprintId ?? null;
       const lastBacklogRank = await workItemRepository.findBoundaryBacklogRank(
         input.projectId,
         workspaceId,
-        null,
+        targetSprintId,
         'max',
         tx,
       );
@@ -402,6 +428,7 @@ export const workItemsService = {
         reporterId: ctx.userId,
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         estimateMinutes: input.estimateMinutes ?? null,
+        sprintId: targetSprintId,
         position,
         backlogRank,
       };
