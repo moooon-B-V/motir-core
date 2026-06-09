@@ -348,6 +348,13 @@ function InlineDueEditor({ row }: { row: IssueRowData }) {
           disabled={pending}
           autoOpen
           onClose={() => setEditing(false)}
+          // Match the other inline editors' control height: the DatePicker's
+          // default --height-input (44px) is TALLER than the Tree view's 40px
+          // rows (TreeTable ROW_PX), so on the last row it overflows and the
+          // card's overflow:hidden clips its bottom
+          // (bug-inline-edit-clipped-when-table-short). --height-control (36px)
+          // fits both the 40px tree row and the 44px list row.
+          className="h-(--height-control)"
         />
       </EditSurface>
     );
