@@ -574,5 +574,115 @@ export const story_4_4: PlanStory = {
         '- `tests/e2e/backlog.spec.ts` (4.2.6) + `tests/e2e/board-scrum.spec.ts` (4.5.4) — the sibling E2Es this composes the lifecycle flow on top of\n' +
         '- `prodect-core-coverage-gate` (≥90% per-file; empty-input guards need a direct test) + `prodect-core-local-postgres` (sandbox PG@5433 + Playwright chromium) + `prodect-core/CLAUDE.md` (real Postgres, no mocks, single `getSession` mock)',
     },
+    {
+      id: '4.4.8',
+      kind: 'bug',
+      title:
+        "Bug — start-sprint isn't atomic: the dialog PATCHes the goal then starts (two writes) because `startSprint` takes no `goal` (finding #68)",
+      status: 'blocked',
+      type: 'bug',
+      executor: 'coding_agent',
+      estimateMinutes: 14,
+      dependsOn: ['4.4.2', '4.4.5'],
+      descriptionMd:
+        '**Type:** bug (tech-debt seam) · **Parent:** Story 4.4 (sprint lifecycle) · **Code surface ' +
+        'owned by:** Story **4.4.2** (`sprintsService.startSprint` + `StartSprintInput`) crossed with ' +
+        'Story **4.4.5** (the `StartSprintDialog` that has to compose around the gap) · **Status:** ' +
+        'open · **Reported by:** the planner during the 4.4.5 build · **Source:** PRODECT_FINDINGS ' +
+        '#68.\n\n' +
+        'The start-sprint modal (4.4.5) draws an **editable Sprint goal** (design panel 1), and the ' +
+        'mirror product (Jira) edits the goal as part of Start. But the shipped `StartSprintInput` ' +
+        '(4.4.2) is `{ name?, startDate?, endDate? }` — **no `goal`** — and `POST /api/sprints/[id]/start` ' +
+        'silently drops any extra body field. So 4.4.5 persists an edited goal with a **separate ' +
+        '`PATCH /api/sprints/[id] { goal }` BEFORE the start POST** (allowed while the sprint is still ' +
+        '`planned`). That is **two writes, not one** — and a small non-atomic window: if the start 409s ' +
+        '(another sprint went active in between) after the goal PATCH already landed, the goal edit ' +
+        'persists on the still-`planned` sprint (harmless + retryable, but untidy). `name` is editable ' +
+        'on start; `goal` should be too.\n\n' +
+        '**Fix.** Add `goal?: string | null` to `StartSprintInput` (`lib/dto/sprints.ts`) and have ' +
+        '`sprintsService.startSprint` stamp it **inside its existing `$transaction`** (the start route ' +
+        'already reads an arbitrary JSON body — extend its parse + forward `goal`, same shape as ' +
+        '`name`). Then the `StartSprintDialog` (4.4.5) **drops the pre-start PATCH** and sends ' +
+        '`{ name, goal, startDate, endDate }` to `/start` in ONE call. One service method = one ' +
+        'transaction (CLAUDE.md); the whole start (window + scope-lock baseline + scrum-board ensure + ' +
+        'name + goal) becomes a single atomic write. Keep the `updateSprint` PATCH for plain ' +
+        'goal/name/window edits on an already-planned sprint (4.1.3) — unchanged.\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- `StartSprintInput` carries `goal?: string | null`; `startSprint` writes it inside the same ' +
+        'transaction that flips the sprint active (no separate update), and `POST /api/sprints/[id]/start` ' +
+        'parses + forwards `goal` (a non-string `goal` is a 400, mirroring the existing `name` guard).\n' +
+        '- The `StartSprintDialog` (4.4.5) sends `goal` in the single `/start` call and **no longer** ' +
+        'issues a pre-start `PATCH` — verified by the existing 4.4.5 component test (the "persists an ' +
+        'edited goal" case is rewritten to assert ONE POST carrying the goal, zero PATCH).\n' +
+        '- The committed `goal` is what the started sprint shows (the sprint detail / report reads it); ' +
+        'an empty goal clears it (sends `null`).\n' +
+        '- `pnpm test:coverage` keeps the changed `sprintsService` file ≥90% branch/fn/line (the ' +
+        'coverage gate); a service test asserts `startSprint` stamps the goal in-transaction.\n\n' +
+        '## Context refs\n\n' +
+        '- `lib/dto/sprints.ts` `StartSprintInput` + `lib/services/sprintsService.ts` `startSprint` ' +
+        '(Story 4.4.2) — where `goal` is added + stamped in-transaction\n' +
+        '- `app/api/sprints/[id]/start/route.ts` (4.4.2) — the body parse to extend (forward `goal` like ' +
+        '`name`)\n' +
+        '- `app/(authed)/backlog/_components/StartSprintDialog.tsx` (4.4.5) — drops the pre-start PATCH; ' +
+        'its component test asserts the single-call shape\n' +
+        '- `lib/services/sprintsService.ts` `updateSprint` (4.1.3) — the plain-edit PATCH, left as-is; ' +
+        'PRODECT_FINDINGS #68; `prodect-core/CLAUDE.md` (one service method = one transaction)',
+    },
+    {
+      id: '4.4.9',
+      kind: 'bug',
+      title:
+        'Bug — start-sprint committed summary shows the issue count only, not "· N points" (no pre-start points source) (finding #69)',
+      status: 'blocked',
+      type: 'bug',
+      executor: 'coding_agent',
+      estimateMinutes: 20,
+      dependsOn: ['4.4.5'],
+      descriptionMd:
+        '**Type:** bug (UI gap) · **Parent:** Story 4.4 (sprint lifecycle) · **Code surface owned by:** ' +
+        'the committed-points SEAM (the `SprintContainer` slot, attributed to Story **4.3**) crossed ' +
+        'with Story **4.4.5** (the `StartSprintDialog` committed summary) · **Status:** open · ' +
+        '**Reported by:** the planner during the 4.4.5 build · **Source:** PRODECT_FINDINGS #69.\n\n' +
+        'The design\'s committed summary reads "**8 issues · 21 points** committed at start" (panel 1). ' +
+        '`SprintDto.issueCount` is available client-side, but `committedPoints` is `null` until ' +
+        '`startSprint` stamps it, and there is **no route** exposing the live pre-start points roll-up — ' +
+        '`estimationService.rollupForSprint` (4.3.3, done) is only consumed internally. The ' +
+        '`SprintContainer` committed-points slot is itself still a labelled SEAM (Story 4.3). So 4.4.5 ' +
+        'renders the committed summary with the **issue count only** ("{n} issues committed at start"), ' +
+        "omitting the live points figure — under-delivering to the mockup's ceiling (mistake #26), but " +
+        "deliberately, to avoid doing another story's work / a cross-surface collision. The " +
+        'authoritative `committedPoints` baseline is still computed + stored server-side at start ' +
+        '(4.4.2) and read back by the 4.4.6 report; only the pre-start PREVIEW figure is missing.\n\n' +
+        '**Fix.** Expose a small bounded read — `GET /api/sprints/[id]/points` (HTTP-only, one service ' +
+        'call) over the shipped `estimationService.rollupForSprint(sprintId)` → `SprintPointsDto` ' +
+        '(`{ committed, completed, remaining }`, already bounded, finding-#57-safe, tenant-gated). Then ' +
+        'wire `committed` into BOTH consumers: the `SprintContainer` committed-points SEAM (replace the ' +
+        '`— pts` placeholder) AND the `StartSprintDialog` committed summary ("{n} issues · {p} points ' +
+        'committed at start"; "—" when wholly unestimated — the 4.5.2 pattern, never `NaN`). This is the ' +
+        'Story-4.3 / estimation-display follow-up the SEAM was reserved for; doing it once serves both ' +
+        'surfaces.\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- `GET /api/sprints/[id]/points` returns the `SprintPointsDto` from `rollupForSprint` ' +
+        '(HTTP-only, one service call; the finding-#26 `workspaceId` gate covers the read); a wholly ' +
+        'unestimated sprint returns `{ 0, 0, 0 }` (the DTO stays total).\n' +
+        '- The `StartSprintDialog` committed summary shows "{n} issues · {p} points committed at start", ' +
+        'rendering "—" for points when the sprint is unestimated (no `NaN`); the figure refreshes if the ' +
+        'duration/dates change but the issue set does not (points are issue-set-derived, not ' +
+        'window-derived).\n' +
+        '- The `SprintContainer` committed-points SEAM renders the live `committed` points (the `— pts` ' +
+        'placeholder + the "reserved, not computed" comment are removed); the velocity SEAM (Story 4.6) ' +
+        'is left untouched.\n' +
+        '- Component tests assert the points render (incl. the unestimated "—"); `pnpm test:coverage` ' +
+        'keeps any changed gated file ≥90% branch/fn/line.\n\n' +
+        '## Context refs\n\n' +
+        '- `lib/services/estimationService.ts` `rollupForSprint` + `lib/dto/estimation.ts` ' +
+        '`SprintPointsDto` (Story 4.3.3) — the bounded aggregate to expose; no re-summing\n' +
+        '- `app/(authed)/backlog/_components/SprintContainer.tsx` (the committed-points SEAM) + ' +
+        '`app/(authed)/backlog/_components/StartSprintDialog.tsx` (4.4.5 committed summary) — the two ' +
+        'display consumers\n' +
+        '- the 4.5.2 sprint-header "—"-when-unestimated pattern (the UI owns the "—", the DTO stays ' +
+        'total); finding #57 (bounded aggregate, not load-all); PRODECT_FINDINGS #69; ' +
+        '`prodect-core/CLAUDE.md` (4-layer: route is HTTP-only; `--el-*` + element-shape tokens)',
+    },
   ],
 };
