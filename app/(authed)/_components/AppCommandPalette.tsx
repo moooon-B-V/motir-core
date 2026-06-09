@@ -9,6 +9,7 @@ import {
   Columns3,
   Folder,
   LayoutDashboard,
+  LayoutList,
   LogOut,
   Plus,
   Settings,
@@ -144,6 +145,12 @@ export function AppCommandPalette({
         label: t('commandPalette.goToBoards'),
         icon: <Columns3 />,
         onSelect: () => go('/boards'),
+      },
+      {
+        id: 'nav-backlog',
+        label: t('commandPalette.goToBacklog'),
+        icon: <LayoutList />,
+        onSelect: () => go('/backlog'),
       },
       {
         id: 'nav-reports',

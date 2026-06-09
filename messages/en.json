@@ -225,7 +225,8 @@
       "reports": "Reports",
       "settings": "Settings",
       "jobRuns": "Job runs",
-      "docs": "Docs"
+      "docs": "Docs",
+      "backlog": "Backlog"
     },
     "topNav": {
       "global": "Global"
@@ -326,7 +327,8 @@
       "goToReports": "Go to Reports",
       "goToSettings": "Go to Settings",
       "switchTo": "Switch to {name}",
-      "current": "Current"
+      "current": "Current",
+      "goToBacklog": "Go to Backlog"
     },
     "shortcuts": {
       "title": "Keyboard shortcuts",
@@ -905,5 +907,57 @@
       "title": "Copied",
       "body": "Paste {command} into your terminal."
     }
+  },
+  "backlog": {
+    "heading": "Backlog",
+    "subtitle": "{project} · plan & groom — rank, sprint, estimate",
+    "noProjectTitle": "No active project",
+    "noProjectDescription": "Select or create a project to plan its backlog.",
+    "viewAllIssues": "View all issues",
+    "filter": "Filter",
+    "filterComingSoon": "Backlog filtering arrives with search.",
+    "backlogTitle": "Backlog",
+    "backlogRegionLabel": "Backlog, {count, plural, one {# issue} other {# issues}}",
+    "backlogListLabel": "Backlog issues",
+    "issueCount": "{count, plural, one {# issue} other {# issues}}",
+    "emptyTitle": "Backlog is clear",
+    "emptyDescription": "Every issue is assigned to a sprint. Create an issue to add to the backlog.",
+    "errorTitle": "Couldn't load the backlog",
+    "errorDescription": "Something went wrong fetching this project's backlog. Check your connection and try again.",
+    "sprintsErrorTitle": "Couldn't load sprints",
+    "sprintsErrorDescription": "Something went wrong fetching this project's sprints. Check your connection and try again.",
+    "loadingMore": "Loading more…",
+    "allLoaded": "All {count, plural, one {# issue} other {# issues}} loaded",
+    "estimateSeam": "Estimate",
+    "unassigned": "Unassigned",
+    "rowActions": "Issue actions",
+    "rowActionsComingSoon": "Row actions arrive with grooming.",
+    "createIssue": "Create issue",
+    "createIssueComingSoon": "Inline create arrives with grooming.",
+    "sprintState": {
+      "planned": "Planned",
+      "active": "Active",
+      "complete": "Completed"
+    },
+    "notStarted": "Not started",
+    "sprintRegionLabel": "{name}, {state}, {count, plural, one {# issue} other {# issues}}",
+    "sprintIssuesLabel": "{name} issues",
+    "sprintEmpty": "No issues — drag from the backlog, or use + Create issue.",
+    "committedPointsSeam": "Committed points",
+    "pointsPlaceholder": "— pts",
+    "velocitySeam": "Velocity",
+    "velocityPlaceholder": "velocity",
+    "startSprint": "Start sprint",
+    "startSprintComingSoon": "Starting a sprint arrives soon.",
+    "sprintActions": "Sprint actions",
+    "sprintActionsComingSoon": "Sprint actions arrive with grooming.",
+    "collapseSprint": "Collapse sprint",
+    "expandSprint": "Expand sprint",
+    "collapseBacklog": "Collapse backlog",
+    "expandBacklog": "Expand backlog",
+    "createSprint": "Create sprint",
+    "creatingSprint": "Creating…",
+    "createSprintErrorTitle": "Couldn't create the sprint",
+    "createSprintErrorDescription": "Something went wrong creating the sprint. Please try again."
   }
 }
