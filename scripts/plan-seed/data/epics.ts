@@ -585,7 +585,7 @@ export const EPICS: EpicMeta[] = [
         id: 'bug-issue-list-not-refreshed-after-create',
         kind: 'bug',
         title: 'Issue list / tree does not update after creating a new work item via the modal',
-        status: 'planned',
+        status: 'in_progress',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 4 (current epic — discovered during Epic 4 work) · ' +
