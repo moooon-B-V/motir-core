@@ -1,9 +1,28 @@
 name: Reseed plan on merge
 
-# When a plan-seed PR merges, `main` changes under scripts/plan-seed/** — the
-# plan data is the source of truth, so regenerate the live `moooon`/`prodect`
-# tenant from it. The seed clears-and-reseeds ONLY that workspace (by name,
-# owned by the fixed seed user); no other tenant is touched.
+# A plan-seed PR merges and `main` changes under scripts/plan-seed/** — but
+# reseeding the live `moooon`/`prodect` tenant is a destructive clear-and-reseed
+# that burns Neon compute, so we DON'T do it for every seed merge. Reseeding is
+# OPT-IN, gated on a `[reseed]` marker in the merge commit message:
+#
+#   • STATUS-FLIP seed PRs (the common `prodect run` / `prodect mark <id> done`
+#     case — flipping a subtask planned→in_progress→done) edit the seed so it
+#     stays the source of truth, but DON'T carry the marker. Yue applies those
+#     status changes by hand in the live tenant (a cheap drag), so this workflow
+#     SKIPS them — that's the Neon compute we're saving.
+#   • PLANNING seed PRs (adding / expanding stories) and BUG-LOGGING seed PRs
+#     (adding a bug item) DO carry `[reseed]` in the PR title — those deltas are
+#     tedious to reproduce by hand, so they get the automated reseed.
+#
+# Put `[reseed]` in the PR TITLE: GitHub folds the PR title into both the squash
+# commit subject AND the default merge-commit body, so it lands in
+# github.event.head_commit.message regardless of merge style.
+#
+# The seed clears-and-reseeds ONLY the `moooon`/`prodect` workspace (by name,
+# owned by the fixed seed user); no other tenant is touched. Because status-flip
+# PRs keep the seed truthful, a later `[reseed]` regenerates the SAME statuses —
+# the user's manual flips are not reverted (invariant: never skip MERGING a
+# status PR, only its reseed).
 #
 # Inert until the SEED_DATABASE_URL secret is set: the guard step below detects
 # the missing secret and SKIPS the reseed (the job stays green with a notice),
@@ -14,8 +33,9 @@ on:
     paths:
       - 'scripts/plan-seed/**'
   # Manual "Run workflow" button — reseed on demand (e.g. the first prod
-  # populate, or after changing the SEED_DATABASE_URL target) without waiting
-  # for a plan-seed merge.
+  # populate, after changing the SEED_DATABASE_URL target, or to apply a planning
+  # merge whose `[reseed]` marker was forgotten) without waiting for a merge.
+  # A manual dispatch ALWAYS reseeds (it bypasses the marker gate).
   workflow_dispatch:
 
 # Never run two reseeds at once (each is a destructive clear-and-reseed of the
@@ -48,19 +68,41 @@ jobs:
       # No git hooks to wire in CI.
       HUSKY: '0'
     steps:
-      # Gate the whole job on the secret being present. `secrets.*` can't be used
-      # in a job/step `if:`, but a step CAN read it into an env var and branch —
-      # so an unconfigured repo skips (green) instead of failing at migrate/seed.
-      - name: Check SEED_DATABASE_URL is configured
+      # Gate the whole job on two conditions: (1) the secret is present, and
+      # (2) this merge OPTED IN to a reseed via a `[reseed]` marker — UNLESS it's
+      # a manual dispatch, which always reseeds. `secrets.*` can't be used in a
+      # job/step `if:`, so a step reads them into env vars and branches — an
+      # unconfigured repo (or a status-only merge) skips (green) instead of
+      # paying for a reseed.
+      - name: Decide whether to reseed
         id: guard
         env:
           SEED_DATABASE_URL: ${{ secrets.SEED_DATABASE_URL }}
+          HEAD_COMMIT_MSG: ${{ github.event.head_commit.message }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
+          # 1) The target DB must be configured.
           if [ -z "$SEED_DATABASE_URL" ]; then
             echo "::notice::SEED_DATABASE_URL is not set — skipping the reseed. Add it under Settings → Secrets and variables → Actions to enable reseed-on-merge."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-          else
+            exit 0
+          fi
+          # 2) A manual "Run workflow" always reseeds on demand (marker bypass).
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "::notice::Manual workflow_dispatch — reseeding the live tenant on demand."
             echo "enabled=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # 3) Otherwise reseed ONLY when the merge opted in with [reseed].
+          #    Planning + bug-logging seed PRs carry it (in the PR title, which
+          #    GitHub folds into head_commit.message); status-flip seed PRs don't,
+          #    so they skip — the user flips those in the live tenant by hand.
+          if printf '%s' "$HEAD_COMMIT_MSG" | grep -qiF '[reseed]'; then
+            echo "::notice::Merge commit carries [reseed] — reseeding the live tenant from the plan seed."
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No [reseed] marker — skipping reseed (status-only change; flip it in the live tenant by hand). Saves Neon compute."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
           fi
       - if: steps.guard.outputs.enabled == 'true'
         uses: actions/checkout@v6
