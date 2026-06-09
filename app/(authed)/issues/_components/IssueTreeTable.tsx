@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useMemo, useState, useTransition, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type ReactNode,
+} from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -22,6 +30,7 @@ import { buildIssueColumns } from './issueColumns';
 import { IssueInlineEditProvider } from './IssueInlineEdit';
 import { makeRowShaper, type IssueRowData } from './issueRows';
 import { listChildIssuesAction, listRootIssuesAction } from '../actions';
+import { useCreateIssue } from '../../_components/CreateIssueProvider';
 
 // The /issues TREE table (Subtask 2.5.3, made LAZY + SORTABLE in 2.5.14 for
 // finding #57). The Server Component (IssueTreeSection) loads the FIRST page of
@@ -128,6 +137,27 @@ export function IssueTreeTable({
     },
     [sortParam],
   );
+
+  // A create elsewhere in the shell — the /issues "+ New work item" toolbar
+  // trigger, the global "C" shortcut, the ⌘K command — commits through the
+  // shell's CreateIssueProvider, which calls router.refresh() AND bumps
+  // `issuesChangedAt`. router.refresh() re-runs the Server Component (which hands
+  // us a fresh `initialLevel`), but our ROOTS level is seeded into client state
+  // ONCE on mount (the lazy-tree model — `useState` initializer), so a refresh
+  // can't reach it and the new row stayed invisible until a full reload
+  // (bug-issue-list-not-refreshed-after-create). Mirror BoardContainer: watch the
+  // tick and refetch the first page of roots, preserving the user's expanded
+  // subtrees. Skip the initial render (no create has happened yet); a sort change
+  // remounts this component (keyed by sort in the parent), so the ref resets too.
+  const { issuesChangedAt } = useCreateIssue();
+  const sawFirstTick = useRef(false);
+  useEffect(() => {
+    if (!sawFirstTick.current) {
+      sawFirstTick.current = true;
+      return;
+    }
+    fetchLevel(ROOTS, 0, false);
+  }, [issuesChangedAt, fetchLevel]);
 
   // Expanding a not-yet-loaded parent kicks its first children fetch.
   const onExpandedChange = useCallback(
