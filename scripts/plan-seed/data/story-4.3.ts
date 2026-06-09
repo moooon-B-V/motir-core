@@ -495,7 +495,7 @@ export const story_4_3: PlanStory = {
       id: '4.3.6',
       title:
         'Project Estimation settings panel (`settings/project/estimation`) — statistic + scale + custom-scale editor + settings nav card (admin-only)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
