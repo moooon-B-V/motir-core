@@ -124,12 +124,14 @@ export function BacklogContainer({
       statusByKey={statusByKey}
       assigneeNameById={assigneeNameById}
       adjustSprintCount={adjustSprintCount}
+      sprints={planning}
     >
       <div className="flex flex-col gap-4">
-        {planning.map((sprint) => (
+        {planning.map((sprint, index) => (
           <SprintContainer
             key={sprint.id}
             sprint={sprint}
+            order={index}
             statusByKey={statusByKey}
             assigneeNameById={assigneeNameById}
             projectName={projectName}
@@ -140,7 +142,13 @@ export function BacklogContainer({
 
         <CreateSprintButton onCreated={refetchSprints} />
 
-        <BacklogRegion statusByKey={statusByKey} assigneeNameById={assigneeNameById} />
+        {/* The backlog sits BELOW every sprint container → the highest stack order
+            (shift-range selection reads regions top-to-bottom). */}
+        <BacklogRegion
+          statusByKey={statusByKey}
+          assigneeNameById={assigneeNameById}
+          regionOrder={planning.length}
+        />
       </div>
     </BacklogDndProvider>
   );
@@ -152,9 +160,11 @@ export function BacklogContainer({
 function BacklogRegion({
   statusByKey,
   assigneeNameById,
+  regionOrder,
 }: {
   statusByKey: ReturnType<typeof buildStatusByKey>;
   assigneeNameById: Map<string, string>;
+  regionOrder: number;
 }) {
   const t = useTranslations('backlog');
   const [collapsed, setCollapsed] = useState(false);
@@ -198,7 +208,8 @@ function BacklogRegion({
             regionId={BACKLOG_REGION_ID}
             regionKind="backlog"
             regionLabel={t('backlogTitle')}
-            createRow={<CreateIssueRow />}
+            regionOrder={regionOrder}
+            createRow={<CreateIssueRow sprintId={null} />}
             emptyState={
               <EmptyState
                 icon={<Inbox className="h-12 w-12" aria-hidden />}

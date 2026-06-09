@@ -41,6 +41,7 @@ function formatDateRange(
 
 export function SprintContainer({
   sprint,
+  order,
   statusByKey,
   assigneeNameById,
   projectName,
@@ -48,6 +49,8 @@ export function SprintContainer({
   onStarted,
 }: {
   sprint: SprintDto;
+  /** Top-to-bottom stack position (sprints precede the backlog) — shift-range order (4.2.5). */
+  order: number;
   statusByKey: StatusByKey;
   assigneeNameById: Map<string, string>;
   /** Project name + the project's active sprint — for the start dialog's
@@ -162,8 +165,9 @@ export function SprintContainer({
             regionId={sprintRegionId(sprint.id)}
             regionKind="sprint"
             regionLabel={sprint.name}
+            regionOrder={order}
             sprintId={sprint.id}
-            createRow={<CreateIssueRow />}
+            createRow={<CreateIssueRow sprintId={sprint.id} />}
             createRowOnEmpty
             emptyState={
               <p className="my-1 rounded-(--radius-card) border border-dashed border-(--el-border) px-(--spacing-control-x) py-4 text-center text-xs text-(--el-text-muted)">
