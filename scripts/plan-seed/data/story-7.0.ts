@@ -685,7 +685,7 @@ export const story_7_0: PlanStory = {
     {
       id: '7.0.11',
       title: 'Order the ready set by priority, then type, then key',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
