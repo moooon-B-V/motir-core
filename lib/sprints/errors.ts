@@ -15,6 +15,7 @@ import type { SprintState } from '@prisma/client';
 //   CannotModifyCompletedSprintError   → 409
 //   CannotDeleteActiveSprintError      → 409
 //   CrossProjectSprintAssignmentError  → 422 (Subtask 4.1.4)
+//   BulkBatchTooLargeError             → 400 (Subtask 4.2.2)
 //
 // A foreign / unknown projectId (the create path) reuses `ProjectNotFoundError`
 // from `lib/projects/errors.ts` (already a 404) rather than inventing a parallel
@@ -133,5 +134,28 @@ export class CrossProjectSprintAssignmentError extends Error {
     this.name = 'CrossProjectSprintAssignmentError';
     this.itemId = itemId;
     this.sprintId = sprintId;
+  }
+}
+
+/**
+ * A bulk backlog operation (Subtask 4.2.2 — `bulkAssignToSprint` /
+ * `bulkMoveToBacklog`) was handed more issue ids than the bounded batch cap.
+ * The multi-select bulk move is one server transaction (atomic at scale), but
+ * a transaction over an unbounded id set is a footgun (lock pressure, a slow
+ * round-trip, a request that never returns) — so the batch is capped and an
+ * oversize request is rejected BEFORE any write rather than silently truncated.
+ * A request-shape constraint on the client's selection size, so it maps to a
+ * 400 (the same family as `InvalidSprintNameError` — malformed input), not the
+ * 422 the semantically-invalid associations use. → 400.
+ */
+export class BulkBatchTooLargeError extends Error {
+  readonly code = 'BULK_BATCH_TOO_LARGE' as const;
+  readonly count: number;
+  readonly max: number;
+  constructor(count: number, max: number) {
+    super(`Cannot move ${count} issues at once; the maximum is ${max} per request.`);
+    this.name = 'BulkBatchTooLargeError';
+    this.count = count;
+    this.max = max;
   }
 }

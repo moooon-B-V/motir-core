@@ -1,14 +1,19 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma, WorkItem } from '@prisma/client';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
+import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { keyBetween, keyForAppend } from '@/lib/workItems/positioning';
 import { toWorkItemDto, toWorkItemSummaryDto } from '@/lib/mappers/workItemMappers';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
-import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
+import {
+  BulkBatchTooLargeError,
+  CrossProjectSprintAssignmentError,
+  SprintNotFoundError,
+} from '@/lib/sprints/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { WorkItemDto } from '@/lib/dto/workItems';
+import type { CreateWorkItemInput, WorkItemDto } from '@/lib/dto/workItems';
 import type { RankedIssuePageDto, RankPlacementInput } from '@/lib/dto/backlog';
 
 // Backlog / sprint-association service (Story 4.1 · Subtask 4.1.4). The part of
@@ -53,6 +58,16 @@ import type { RankedIssuePageDto, RankPlacementInput } from '@/lib/dto/backlog';
 /** Backlog/sprint page size — the bounded read cap (matches ISSUE_LIST_PAGE_SIZE). */
 export const BACKLOG_PAGE_SIZE = 50;
 const MAX_BACKLOG_PAGE_SIZE = 100;
+
+/**
+ * The bounded batch cap for the bulk grooming moves (Subtask 4.2.2). A
+ * multi-select bulk move is ONE server transaction (atomic — the whole
+ * selection moves or none does), but a transaction over an unbounded id set is
+ * a footgun, so the batch is capped and an oversize request is rejected with
+ * `BulkBatchTooLargeError` BEFORE any write. 100 matches `MAX_BACKLOG_PAGE_SIZE`
+ * — a user can never have more than one page selected at once anyway.
+ */
+export const MAX_BULK_BATCH_SIZE = 100;
 
 export const backlogService = {
   /**
@@ -177,6 +192,163 @@ export const backlogService = {
   },
 
   /**
+   * Assign EVERY issue in `itemIds` to a sprint in ONE transaction (Subtask
+   * 4.2.2 — the multi-select "Move to sprint ▸" bulk action). Composes the
+   * single-issue `assignToSprint` semantics over a bounded batch so the whole
+   * selection moves atomically — a mid-batch failure rolls back ALL of it (no
+   * partial move) — rather than N client round-trips. Each issue is appended to
+   * the sprint's rank tail in selection order (the Jira "drops at the bottom"
+   * default) and records a 1.4.6 revision; the same-project guard rejects the
+   * WHOLE batch if ANY member belongs to another project (atomic — checked
+   * before the first write). Duplicate ids collapse to one move. Returns the
+   * moved issues' DTOs in selection order.
+   *
+   * Empty `itemIds` is a guarded NO-OP (returns `[]`, no transaction) — not an
+   * error (`prodect-core-coverage-gate`). Throws: `BulkBatchTooLargeError` (400
+   * — over the cap), `SprintNotFoundError` (404), `WorkItemNotFoundError` (404 —
+   * an unknown / cross-workspace member), `CrossProjectSprintAssignmentError`
+   * (422).
+   */
+  async bulkAssignToSprint(
+    itemIds: string[],
+    sprintId: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemDto[]> {
+    const ids = dedupe(itemIds);
+    if (ids.length === 0) return []; // empty-input guard — no-op, not an error
+    if (ids.length > MAX_BULK_BATCH_SIZE) {
+      throw new BulkBatchTooLargeError(ids.length, MAX_BULK_BATCH_SIZE);
+    }
+
+    const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
+    if (!sprint) throw new SprintNotFoundError(sprintId);
+
+    // Load + validate the WHOLE batch before any write: a missing / foreign
+    // (404) or cross-project (422) member rejects the entire move atomically.
+    const items: WorkItem[] = [];
+    for (const id of ids) {
+      const item = await this.loadItem(id, ctx);
+      if (item.projectId !== sprint.projectId) {
+        throw new CrossProjectSprintAssignmentError(id, sprintId);
+      }
+      items.push(item);
+    }
+
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        // Append the batch to the sprint's tail. Read the boundary rank ONCE,
+        // then chain `keyForAppend` so each issue ranks strictly after the
+        // previous — bounded single-row writes, never an N-row renumber.
+        let prevRank = await workItemRepository.findBoundaryBacklogRank(
+          sprint.projectId,
+          ctx.workspaceId,
+          sprintId,
+          'max',
+          tx,
+        );
+        const out: WorkItemDto[] = [];
+        for (const item of items) {
+          const newRank = keyForAppend(prevRank);
+          prevRank = newRank;
+          await workItemRepository.setSprint(item.id, sprintId, tx);
+          const row = await workItemRepository.setBacklogRank(item.id, newRank, tx);
+          await workItemRevisionsService.recordRevision(
+            {
+              workItemId: item.id,
+              changedById: ctx.userId,
+              changeKind: 'updated',
+              diff: {
+                sprintId: { from: item.sprintId, to: sprintId },
+                backlogRank: { from: item.backlogRank, to: newRank },
+              },
+            },
+            tx,
+          );
+          out.push(toWorkItemDto(row));
+        }
+        return out;
+      },
+    );
+  },
+
+  /**
+   * Move EVERY issue in `itemIds` back to the backlog (`sprintId = null`) in ONE
+   * transaction (Subtask 4.2.2 — the multi-select "Move to backlog" bulk
+   * action). Composes the single-issue `moveToBacklog` semantics over a bounded
+   * batch (atomic — all or none). Each issue keeps its `backlogRank`, so it
+   * re-appears in the backlog in rank order; an issue already in the backlog is
+   * a per-item no-op (no write, no revision), exactly as the single-issue path.
+   * Records a 1.4.6 revision per issue that actually moved. Duplicate ids
+   * collapse. Returns the issues' DTOs in selection order.
+   *
+   * Empty `itemIds` is a guarded NO-OP (returns `[]`). Throws:
+   * `BulkBatchTooLargeError` (400), `WorkItemNotFoundError` (404).
+   */
+  async bulkMoveToBacklog(itemIds: string[], ctx: ServiceContext): Promise<WorkItemDto[]> {
+    const ids = dedupe(itemIds);
+    if (ids.length === 0) return []; // empty-input guard — no-op, not an error
+    if (ids.length > MAX_BULK_BATCH_SIZE) {
+      throw new BulkBatchTooLargeError(ids.length, MAX_BULK_BATCH_SIZE);
+    }
+
+    // Load + workspace-gate the whole batch before any write (a foreign member
+    // is a 404 and aborts the entire move).
+    const items: WorkItem[] = [];
+    for (const id of ids) {
+      items.push(await this.loadItem(id, ctx));
+    }
+
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const out: WorkItemDto[] = [];
+        for (const item of items) {
+          if (item.sprintId === null) {
+            out.push(toWorkItemDto(item)); // already in the backlog — no-op
+            continue;
+          }
+          const row = await workItemRepository.setSprint(item.id, null, tx);
+          await workItemRevisionsService.recordRevision(
+            {
+              workItemId: item.id,
+              changedById: ctx.userId,
+              changeKind: 'updated',
+              diff: { sprintId: { from: item.sprintId, to: null } },
+            },
+            tx,
+          );
+          out.push(toWorkItemDto(row));
+        }
+        return out;
+      },
+    );
+  },
+
+  /**
+   * Create an issue straight into the backlog or a sprint (Subtask 4.2.2 — the
+   * inline "+ Create issue" row). The backlog-domain entry point that the 4.2
+   * UI binds to; it REUSES `workItemsService.createWorkItem` rather than
+   * re-implementing creation, so key allocation, the initial-status seed, the
+   * project-edit gate, the create revision, AND the create-time rank-append all
+   * come for free — and, when `input.sprintId` is set, the issue is born already
+   * assigned to that sprint (same-project guarded), appended to the sprint tail,
+   * in createWorkItem's single transaction (so create + assignment commit or
+   * roll back together). `projectId` is supplied separately (from the active
+   * project) so the caller can't smuggle a foreign project through the body.
+   *
+   * Throws whatever `createWorkItem` throws — incl. `SprintNotFoundError` (404)
+   * / `CrossProjectSprintAssignmentError` (422) for a bad `sprintId`.
+   */
+  async createBacklogIssue(
+    projectId: string,
+    input: Omit<CreateWorkItemInput, 'projectId'>,
+    ctx: ServiceContext,
+  ): Promise<WorkItemDto> {
+    return workItemsService.createWorkItem({ ...input, projectId }, ctx);
+  },
+
+  /**
    * One BOUNDED page of a project's backlog (`sprintId IS NULL`) in
    * `backlogRank` order, plus the total count (finding #57 — never load-all).
    * `cursor` is the last id from the previous page; `limit` is clamped to
@@ -292,6 +464,14 @@ async function resolveRank(
     tx,
   );
   return keyForAppend(maxRank);
+}
+
+/**
+ * Collapse a bulk selection to a deduped id list, preserving first-seen order
+ * (a selection is a SET — the same id twice must not be moved/ranked twice).
+ */
+function dedupe(ids: string[]): string[] {
+  return [...new Set(ids)];
 }
 
 /** Clamp a requested page size to [1, MAX]; default when absent/NaN. */

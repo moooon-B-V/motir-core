@@ -312,6 +312,20 @@ export interface CreateWorkItemInput {
   dueDate?: string | null; // ISO 8601
   estimateMinutes?: number | null;
   /**
+   * Create the issue directly INTO a sprint (Subtask 4.2.2 — the backlog /
+   * sprint-planning "+ Create issue" row that targets a sprint container). When
+   * set, the new issue is born already assigned to this sprint, appended to the
+   * sprint's rank tail, in the SAME create transaction — so a quick-create into
+   * a sprint is atomic (never created-then-orphaned by a failed follow-up
+   * assign). The sprint must exist in the workspace and share the issue's
+   * project (the same-project guard `backlogService.assignToSprint` enforces,
+   * pulled to create time): a foreign/unknown sprint → `SprintNotFoundError`
+   * (404), a cross-project sprint → `CrossProjectSprintAssignmentError` (422).
+   * Omitted/null → the issue is born in the backlog (`sprintId IS NULL`),
+   * unchanged from Story 1.4 / 4.1.4.
+   */
+  sprintId?: string | null;
+  /**
    * Links to create ATOMICALLY with the issue (Subtask 2.4.10 — the create
    * modal's "Linked issues" section). Each entry is the user-facing
    * (relationship, target) pair — NOT a directed storage edge — because at
