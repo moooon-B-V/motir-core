@@ -112,9 +112,15 @@ export function Combobox<T extends string>({
   const [open, setOpen] = useState(autoOpen);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
-  // The menu is portaled to <body> (so it escapes the table's overflow:hidden,
-  // bug-inline-edit-clipped-when-table-short); only render it once mounted, since
-  // createPortal needs document.body.
+  // The menu is portaled to <body> when the picker sits in a normal scroll
+  // context, so it escapes a short table's overflow:hidden
+  // (bug-inline-edit-clipped-when-table-short). Inside a focus-trapping dialog
+  // (Radix Dialog, role="dialog") we render the menu INLINE instead: a portaled
+  // menu would land outside the dialog's focus scope (focus-trap war → unstable)
+  // AND the dialog centers with a CSS transform, which would break a fixed-
+  // positioned child's viewport coordinates. A dialog scrolls rather than short-
+  // clips, so inline is both safe and the original, proven behaviour. Only render
+  // the portal once mounted, since createPortal needs document.body.
   const mounted = useMounted();
   // Viewport-anchored position for the portaled menu + the listbox's available
   // height, recomputed from the trigger rect on open / scroll / resize.
@@ -185,8 +191,10 @@ export function Combobox<T extends string>({
 
   // Position the menu before paint, and keep it glued to the trigger while open
   // (ancestor scroll uses capture so a scrolling table re-anchors the menu).
+  // Skip entirely for the inline (in-dialog) branch — it positions via CSS.
   useIsomorphicLayoutEffect(() => {
     if (!(open && mounted)) return;
+    if (triggerRef.current?.closest('[role="dialog"]')) return;
     updatePosition();
     const onReflow = () => updatePosition();
     window.addEventListener('scroll', onReflow, true);
@@ -272,6 +280,113 @@ export function Combobox<T extends string>({
 
   const activeId = filtered.length > 0 ? optionId(active) : undefined;
 
+  // Portal out to escape a short table's overflow:hidden — UNLESS we're inside a
+  // focus-trapping dialog, where an inline menu is required (see the `mounted`
+  // comment above). Reading the ref in render is safe: by the time `open` flips
+  // true via a click the trigger is mounted; the only ref-null case is autoOpen,
+  // used solely by inline-edit cells (always in a table, never a dialog) → portal.
+  const inDialog = mounted ? !!triggerRef.current?.closest('[role="dialog"]') : false;
+
+  const menuInner = (
+    <>
+      {searchable ? (
+        <input
+          ref={inputRef}
+          type="text"
+          role="combobox"
+          aria-expanded
+          aria-controls={listId}
+          aria-activedescendant={activeId}
+          aria-label={searchPlaceholder}
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setActiveIndex(0);
+          }}
+          onKeyDown={onListKeyDown}
+          placeholder={searchPlaceholder}
+          className="border-(--el-border) bg-(--el-page-bg) mb-1 w-full rounded-(--radius-input) border px-(--spacing-control-x) py-(--spacing-control-y) text-sm focus-visible:outline-none"
+        />
+      ) : null}
+      <div
+        ref={listRef}
+        id={listId}
+        role="listbox"
+        aria-label={label}
+        tabIndex={searchable ? -1 : 0}
+        aria-activedescendant={searchable ? undefined : activeId}
+        onKeyDown={searchable ? undefined : onListKeyDown}
+        // Portaled menu caps its height to the measured viewport space (inline
+        // style wins over max-h-64); the inline (in-dialog) menu keeps max-h-64.
+        style={inDialog ? undefined : { maxHeight: listMaxHeight }}
+        className="max-h-64 overflow-y-auto focus:outline-none"
+      >
+        {loading ? (
+          <p className="text-(--el-text-muted) px-2.5 py-2 text-sm">{loadingText}</p>
+        ) : filtered.length === 0 ? (
+          <p className="text-(--el-text-muted) px-2.5 py-2 text-sm">{emptyText}</p>
+        ) : (
+          filtered.map((opt, i) => {
+            const isSelected = opt.value === value;
+            const isActive = i === active;
+            return (
+              <div
+                key={opt.value}
+                id={optionId(i)}
+                role="option"
+                aria-selected={isSelected}
+                onMouseEnter={() => setActiveIndex(i)}
+                onClick={() => commit(i)}
+                className={cn(
+                  'flex cursor-pointer items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm',
+                  isActive ? 'bg-(--el-surface) text-(--el-text)' : 'text-(--el-text)',
+                )}
+              >
+                {opt.icon ? <span aria-hidden>{opt.icon}</span> : null}
+                <span className="truncate">{opt.label}</span>
+                {opt.secondary ? (
+                  <span className="text-(--el-text-muted) ml-auto truncate text-xs">
+                    {opt.secondary}
+                  </span>
+                ) : null}
+                {isSelected ? <Check className="ml-1 h-4 w-4 shrink-0" aria-hidden /> : null}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </>
+  );
+
+  // The shared menu panel. In a dialog: an inline absolute panel (the original,
+  // proven layout). Otherwise: a body-portaled panel with viewport-anchored
+  // fixed positioning that escapes every overflow ancestor.
+  const menu = inDialog ? (
+    <div
+      ref={menuRef}
+      className={cn(
+        'absolute left-0 top-full z-50 mt-1 w-max min-w-full max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-1',
+        'shadow-(--shadow-elevated) border border-(--el-border)',
+      )}
+    >
+      {menuInner}
+    </div>
+  ) : (
+    <div
+      ref={menuRef}
+      // Width sizes to the widest option but never narrower than the trigger
+      // (minWidth set in updatePosition) and is capped so a long label can't run
+      // off-screen. Hidden until positioned to avoid a first-paint flash at 0,0.
+      style={menuStyle ?? { position: 'fixed', visibility: 'hidden' }}
+      className={cn(
+        'z-50 w-max max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-1',
+        'shadow-(--shadow-elevated) border border-(--el-border)',
+      )}
+    >
+      {menuInner}
+    </div>
+  );
+
   return (
     <div ref={containerRef} className="relative">
       <button
@@ -309,91 +424,7 @@ export function Combobox<T extends string>({
         <ChevronsUpDown className="text-(--el-text-muted) ml-auto h-4 w-4 shrink-0" aria-hidden />
       </button>
 
-      {open && mounted
-        ? createPortal(
-            <div
-              ref={menuRef}
-              // Portaled to <body> with viewport-anchored fixed positioning so a
-              // short table's overflow:hidden can't clip it
-              // (bug-inline-edit-clipped-when-table-short). Width sizes to the
-              // widest option but never narrower than the trigger (minWidth, set in
-              // updatePosition) and is capped so a long label can't run off-screen.
-              style={menuStyle ?? { position: 'fixed', visibility: 'hidden' }}
-              className={cn(
-                'z-50 w-max max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-1',
-                'shadow-(--shadow-elevated) border border-(--el-border)',
-              )}
-            >
-              {searchable ? (
-                <input
-                  ref={inputRef}
-                  type="text"
-                  role="combobox"
-                  aria-expanded
-                  aria-controls={listId}
-                  aria-activedescendant={activeId}
-                  aria-label={searchPlaceholder}
-                  value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    setActiveIndex(0);
-                  }}
-                  onKeyDown={onListKeyDown}
-                  placeholder={searchPlaceholder}
-                  className="border-(--el-border) bg-(--el-page-bg) mb-1 w-full rounded-(--radius-input) border px-(--spacing-control-x) py-(--spacing-control-y) text-sm focus-visible:outline-none"
-                />
-              ) : null}
-              <div
-                ref={listRef}
-                id={listId}
-                role="listbox"
-                aria-label={label}
-                tabIndex={searchable ? -1 : 0}
-                aria-activedescendant={searchable ? undefined : activeId}
-                onKeyDown={searchable ? undefined : onListKeyDown}
-                style={{ maxHeight: listMaxHeight }}
-                className="overflow-y-auto focus:outline-none"
-              >
-                {loading ? (
-                  <p className="text-(--el-text-muted) px-2.5 py-2 text-sm">{loadingText}</p>
-                ) : filtered.length === 0 ? (
-                  <p className="text-(--el-text-muted) px-2.5 py-2 text-sm">{emptyText}</p>
-                ) : (
-                  filtered.map((opt, i) => {
-                    const isSelected = opt.value === value;
-                    const isActive = i === active;
-                    return (
-                      <div
-                        key={opt.value}
-                        id={optionId(i)}
-                        role="option"
-                        aria-selected={isSelected}
-                        onMouseEnter={() => setActiveIndex(i)}
-                        onClick={() => commit(i)}
-                        className={cn(
-                          'flex cursor-pointer items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm',
-                          isActive ? 'bg-(--el-surface) text-(--el-text)' : 'text-(--el-text)',
-                        )}
-                      >
-                        {opt.icon ? <span aria-hidden>{opt.icon}</span> : null}
-                        <span className="truncate">{opt.label}</span>
-                        {opt.secondary ? (
-                          <span className="text-(--el-text-muted) ml-auto truncate text-xs">
-                            {opt.secondary}
-                          </span>
-                        ) : null}
-                        {isSelected ? (
-                          <Check className="ml-1 h-4 w-4 shrink-0" aria-hidden />
-                        ) : null}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
+      {open ? (inDialog ? menu : mounted ? createPortal(menu, document.body) : null) : null}
     </div>
   );
 }

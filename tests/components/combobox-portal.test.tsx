@@ -56,4 +56,33 @@ describe('Combobox — menu portaling (bug-inline-edit-clipped-when-table-short)
     expect(screen.queryByRole('listbox')).toBeNull(); // menu closed after pick
     expect(screen.getByRole('combobox', { name: 'Status' }).textContent).toContain('Done');
   });
+
+  // Regression for the E2E failure on PR #444: inside a focus-trapping dialog the
+  // menu must render INLINE (a body-portaled menu lands outside the dialog's focus
+  // scope → focus-trap war → unstable / un-clickable; and the dialog's centering
+  // transform breaks a fixed child's viewport coords). Pickers in the create-issue
+  // modal must keep working.
+  function DialogHost() {
+    const [value, setValue] = useState<string | null>('todo');
+    return (
+      <div role="dialog">
+        <Combobox label="Status" options={OPTIONS} value={value} onChange={setValue} />
+      </div>
+    );
+  }
+
+  it('renders inline (not portaled) inside a dialog, and still commits', () => {
+    render(<DialogHost />);
+    const dialog = screen.getByRole('dialog');
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Status' }));
+
+    const listbox = screen.getByRole('listbox', { name: 'Status' });
+    // Inline: the menu stays WITHIN the dialog subtree (not portaled to body).
+    expect(dialog.contains(listbox)).toBe(true);
+    expect((listbox.parentElement as HTMLElement).style.position).not.toBe('fixed');
+
+    fireEvent.click(screen.getByRole('option', { name: 'In Progress' }));
+    expect(screen.getByRole('combobox', { name: 'Status' }).textContent).toContain('In Progress');
+  });
 });
