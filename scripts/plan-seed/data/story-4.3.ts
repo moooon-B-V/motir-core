@@ -323,7 +323,7 @@ export const story_4_3: PlanStory = {
       id: '4.3.3',
       title:
         '`estimationService` — story-point write + project estimation config CRUD + bounded sprint/epic roll-up reads (reusable `rollupForSprint`/`rollupForParent`); repo single-ops + DTOs/errors',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -393,7 +393,7 @@ export const story_4_3: PlanStory = {
       id: '4.3.4',
       title:
         'Inline-editable estimate badge (display + scale-deck picker) wired across backlog row, board/scrum card, issue detail rail + list — fills the Story-4.2 estimate seam',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
@@ -448,7 +448,7 @@ export const story_4_3: PlanStory = {
       id: '4.3.5',
       title:
         'Roll-up displays — sprint committed-points (fills the Story-4.2 sprint-header seam) + epic/parent subtree roll-up badge (issue detail + list/tree)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 26,
@@ -495,7 +495,7 @@ export const story_4_3: PlanStory = {
       id: '4.3.6',
       title:
         'Project Estimation settings panel (`settings/project/estimation`) — statistic + scale + custom-scale editor + settings nav card (admin-only)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
