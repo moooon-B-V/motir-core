@@ -332,7 +332,7 @@ export const story_4_1: PlanStory = {
       id: '4.1.5',
       title:
         'Tests — sprint state machine, one-active guard, association + same-project guard, rank ordering, bounded backlog at scale',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 22,
