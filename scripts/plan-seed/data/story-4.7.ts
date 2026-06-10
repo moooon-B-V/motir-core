@@ -79,7 +79,7 @@ export const story_4_7: PlanStory = {
   id: '4.7',
   title:
     'Tests — the cross-cutting Scrum journey at scale (sprint-scoped load · drag · swimlanes · WIP · complete + carry-over)',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The Epic-4 **integration** test story: the COMBINED Scrum journey — bounded sprint-scoped load ' +
     '→ virtualized render → drag-as-transition → swimlanes → WIP → complete-sprint carry-over → ' +
@@ -319,7 +319,7 @@ export const story_4_7: PlanStory = {
       id: '4.7.3',
       title:
         'At-scale Scrum interaction + complete journey E2E — drag-as-transition · snap-back · swimlanes · cross-lane reassign · WIP · complete-sprint carry-over + report',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 25,
