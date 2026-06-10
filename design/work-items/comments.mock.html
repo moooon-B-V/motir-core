@@ -1,0 +1,1996 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Comments + @mentions (Activity section) — Story 5.1 · 5.1.3 → 5.1.4 / 5.1.5
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the issue detail page's COMMENTS surface —
+      Subtask 5.1.3, the design that blocks code Subtasks 5.1.4 (mention editor)
+      and 5.1.5 (comments section). detail.pen draws ONLY the Activity
+      placeholder ("Activity" / "Comments coming in Epic 5"); the thread,
+      composer, mention popup and every comment state are whole elements no
+      design specifies, so the planning-time design gate (notes.html mistake
+      #31) requires this asset first — the same way quick-view.mock.html (2.5.18)
+      and links.mock.html (2.4.8) closed their gates.
+
+      MIRROR: the Jira Cloud issue-view Activity section (threaded comments GA
+      ~April 2025) — single-level replies, oldest-first default + per-user sort
+      toggle, "Edited" tag (latest version only), hard delete, "Show more
+      comments" / "Show more replies" collapse. Verified at plan time in the
+      5.1 story module; the decisions are recorded there, drawn here.
+
+      It composes ONLY shipped primitives — ContentSectionCard (the Activity
+      card the placeholder already owns), the initial-letter Avatar (22px),
+      MarkdownEditor (2.3.5, in a compact comment mode), MarkdownView prose,
+      the Combobox option-row vocabulary (mention popup), Button variants, the
+      RemoveLinkButton confirm-Popover pattern (delete confirm), the
+      BacklogSkeleton pulse grammar, ErrorState — so 5.1.4 / 5.1.5 invent NO
+      new visual primitive. Tokens copied 1:1 from app/globals.css; colour only
+      via Tier-3 --el-*; shape via the element-semantic radius / spacing /
+      height / shadow tokens.
+
+      THE ONE NEW TREATMENT this design introduces (recorded for 5.1.4): the
+      inline MENTION CHIP — accent-family tint background (--el-tint-lavender)
+      with --el-text-strong text (hue in the tint bg, strong text on top —
+      AA-safe, finding #35), --radius-badge shape with the small-chip
+      --spacing-kbd-x/y padding (an existing swap-layer pair; no new token
+      needed). See design-notes.md § Comments + @mentions.
+
+      Panels:
+        0 · Placement — the Activity section card in the detail page's left
+            column (after Relationships + Children, where the placeholder sits
+            today): header (title · count · Comments/History filter seam · sort
+            toggle), "Show more comments" at the older edge, two threads, the
+            collapsed composer.
+        1 · Comment row anatomy — root + one-level reply: avatar / author /
+            relative time (absolute on hover) / "Edited" tag, MarkdownView body
+            with an inline mention chip, the quiet action row, the reply rail,
+            "Show more replies".
+        2 · Role-dependent actions — the same row as seen by the author, by
+            another member, and by a project admin (Edit/Delete presence).
+        3 · Composer states — collapsed (rest) → expanded (toolbar + Comment
+            button) → submitting.
+        4 · Edit-in-place + the reply composer (replied-to author pre-mentioned).
+        5 · Mention popup — caret-anchored member listbox (Combobox option-row
+            vocabulary), filtered as you type; the posted mention chip.
+        6 · Sort + pagination — oldest-first (default) vs newest-first; the
+            "Show more comments (N older)" edge flips with the direction.
+        7 · Loading skeleton · empty state · error state.
+        8 · Delete confirm — root with replies (names the reply count — the
+            hard-delete truth) and the single-comment variant.
+        9 · Viewer (read-only) — thread visible, NO composer, the quiet
+            read-only line.
+
+      Toggle dark for token parity. See design-notes.md § Comments + @mentions.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 32px;
+        --focus-ring-color: var(--color-primary);
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-warning: var(--color-warning);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        /* issue-type hue (by kind) — IssueTypeIcon applies these */
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #3bb3ae;
+        --color-accent-green: #2fc94f;
+        --color-info: #4aa3ff;
+        --color-destructive: #f0656c;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 12px 40px rgba(15, 15, 15, 0.15);
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 120px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 860px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .stack {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 44px;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .row-of {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 32px;
+        align-items: flex-start;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding-left: 2px;
+      }
+      .panel-note {
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 940px;
+        padding-left: 2px;
+      }
+      .panel-note code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+      .mini-label {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin-bottom: 8px;
+      }
+      .variant {
+        flex: 1 1 300px;
+        min-width: 300px;
+        max-width: 480px;
+      }
+
+      /* ── Detail-page placement chrome (panel 0) — same grammar as
+            relationships.mock.html panel 0 ─────────────────────────────────── */
+      .detail-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 280px;
+        gap: 20px;
+        max-width: 1040px;
+      }
+      .col {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-width: 0;
+      }
+      .ghost {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 14px 18px;
+        color: var(--el-text-faint);
+        font-size: 13px;
+        background: var(--el-page-bg);
+      }
+      .rail-box {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 12px 16px;
+        background: var(--el-page-bg);
+      }
+      .rail-label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+      }
+
+      /* ── THE SECTION CARD — the shipped ContentSectionCard grammar ────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: var(--spacing-card-padding);
+        width: 100%;
+        max-width: 720px;
+      }
+      .section-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      .section-head h2 {
+        font-family: var(--font-sans);
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .section-head .gloss {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .head-right {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* Filter seam — Comments (active) · History (Story 5.5, drawn disabled
+         the way 2.5.3 drew the view-switcher seam) */
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        background: var(--el-surface);
+        border-radius: var(--radius-control);
+        padding: 2px;
+      }
+      .seg-btn {
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        background: transparent;
+        border: 0;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        cursor: pointer;
+        line-height: 1;
+      }
+      .seg-btn.is-active {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        box-shadow: var(--shadow-card);
+      }
+      .seg-btn.is-disabled {
+        color: var(--el-text-faint);
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+      .seg-btn:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+
+      /* Sort toggle — the IssueViewSwitcher small-control vocabulary */
+      .sort-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .sort-btn:hover {
+        background: var(--el-surface);
+      }
+      .sort-btn:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .sort-btn svg {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+      }
+
+      /* ── THE THREAD ───────────────────────────────────────────────────────── */
+      .thread {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .c-row {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
+        column-gap: 10px;
+      }
+      .c-avatar {
+        display: inline-flex;
+        width: 22px;
+        height: 22px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px; /* genuinely circular — allowed */
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+        flex: none;
+        margin-top: 1px;
+      }
+      .c-main {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .c-head {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .c-author {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .c-time {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .c-edited {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      /* body — MarkdownView prose (components/ui/markdown-editor.css) */
+      .c-body {
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text);
+      }
+      .c-body p {
+        margin: 0;
+      }
+      .c-body p + p {
+        margin-top: 0.6em;
+      }
+      .c-body code {
+        font-family: var(--font-mono);
+        font-size: 0.85em;
+        background: var(--el-surface);
+        padding: 0.1em 0.35em;
+        border-radius: 4px;
+      }
+      /* the quiet action row */
+      .c-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 2px;
+      }
+      .c-act {
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-muted);
+        background: transparent;
+        border: 0;
+        border-radius: var(--radius-control);
+        padding: 2px var(--spacing-kbd-x);
+        cursor: pointer;
+        line-height: 1.4;
+      }
+      .c-act:hover {
+        color: var(--el-text);
+        background: var(--el-surface);
+      }
+      .c-act.is-danger:hover {
+        color: var(--el-danger);
+        background: var(--el-tint-rose);
+      }
+      .c-act:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .c-dot {
+        color: var(--el-text-faint);
+        font-size: 12px;
+      }
+      /* replies — one level, indented under the root with a thread rail */
+      .c-replies {
+        margin-top: 12px;
+        padding-left: 14px;
+        border-left: 2px solid var(--el-border-soft);
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .show-replies {
+        align-self: flex-start;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        background: transparent;
+        border: 0;
+        border-radius: var(--radius-control);
+        padding: 2px var(--spacing-kbd-x);
+        cursor: pointer;
+      }
+      .show-replies:hover {
+        color: var(--el-text);
+        background: var(--el-surface);
+      }
+
+      /* "Show more comments (N older)" — the older-edge pager */
+      .show-more {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: var(--height-control);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .show-more:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .show-more:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+
+      /* ── THE MENTION CHIP (the one new treatment — recorded for 5.1.4) ───── */
+      .mention {
+        display: inline-flex;
+        align-items: center;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        font-size: 0.92em;
+        font-weight: 500;
+        line-height: 1.3;
+        white-space: nowrap;
+      }
+
+      /* ── THE COMPOSER — MarkdownEditor (2.3.5) in compact comment mode ───── */
+      .composer {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
+        column-gap: 10px;
+        margin-top: 18px;
+      }
+      .composer.is-bare {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      /* collapsed (rest) — a one-line invitation that expands on focus */
+      .composer-rest {
+        display: flex;
+        align-items: center;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-surface);
+        color: var(--el-text-muted);
+        font-size: 13px;
+        cursor: text;
+        width: 100%;
+        text-align: left;
+        font-family: var(--font-sans);
+      }
+      .composer-rest:hover {
+        border-color: var(--el-border-strong);
+      }
+      .composer-rest:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      /* expanded — the shipped editor chrome */
+      .editor {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-surface);
+        min-width: 0;
+      }
+      .editor.is-focused {
+        border-color: var(--el-highlight);
+      }
+      .editor-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+        border-bottom: 1px solid var(--el-border);
+        padding: 4px 6px;
+      }
+      .tb-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .tb-icon:hover {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+      }
+      .tb-icon:focus-visible {
+        outline: var(--focus-ring-width) solid var(--el-highlight);
+        outline-offset: 1px;
+      }
+      .tb-icon svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+      .editor-area {
+        padding: 8px 12px;
+        min-height: 72px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text);
+        position: relative;
+      }
+      .editor-area .ph {
+        color: var(--el-text-muted);
+      }
+      .editor-area p {
+        margin: 0;
+      }
+      .caret {
+        display: inline-block;
+        width: 1px;
+        height: 1.15em;
+        background: var(--el-text);
+        vertical-align: text-bottom;
+        margin-left: 1px;
+      }
+      .editor-foot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      /* ── Buttons — the shipped Button variants (size sm) ─────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1;
+        border: 0;
+        cursor: pointer;
+      }
+      .btn:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 2px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-primary:hover {
+        opacity: 0.9;
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border: 1px solid var(--el-border-strong);
+      }
+      .btn-secondary:hover {
+        background: var(--el-surface);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn-ghost:hover {
+        background: var(--el-surface);
+      }
+      .btn-danger {
+        background: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      .btn-danger:hover {
+        opacity: 0.9;
+      }
+      .btn[disabled],
+      .btn.is-disabled {
+        pointer-events: none;
+        opacity: 0.5;
+      }
+      .spin {
+        width: 14px;
+        height: 14px;
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* ── Mention popup — the Combobox listbox + option-row vocabulary ────── */
+      .pop {
+        width: max-content;
+        max-width: 18rem;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+        z-index: 50;
+      }
+      .pop-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+        min-width: 220px;
+      }
+      .pop-row.is-active {
+        background: var(--el-surface);
+      }
+      .pop-row .p-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .pop-row .p-mail {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--el-text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .anchor-wrap {
+        position: relative;
+      }
+      .anchor-wrap .pop {
+        /* anchored at the CARET — just under the "@bo" token, not the editor edge */
+        position: absolute;
+        top: calc(1.6em + 12px);
+        left: 188px;
+      }
+
+      /* ── Confirm popover — the RemoveLinkButton pattern ──────────────────── */
+      .confirm {
+        width: 300px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .confirm p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--el-text);
+      }
+      .confirm .c-btns {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      /* ── Loading / empty / error ─────────────────────────────────────────── */
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+      .skel {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
+        column-gap: 10px;
+      }
+      .skel .s-av {
+        width: 22px;
+        height: 22px;
+        border-radius: 9999px;
+        background: var(--el-muted);
+        animation: pulse 2s ease-in-out infinite;
+      }
+      .skel .s-lines {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding-top: 2px;
+      }
+      .skel .s-bar {
+        height: 10px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+        animation: pulse 2s ease-in-out infinite;
+      }
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 28px 0;
+        text-align: center;
+      }
+      .empty svg {
+        width: 22px;
+        height: 22px;
+        color: var(--el-text-muted);
+      }
+      .empty .e-title {
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .error-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 20px 0;
+        text-align: center;
+      }
+      .error-state svg {
+        width: 32px;
+        height: 32px;
+        color: var(--el-danger);
+      }
+      .error-state .er-title {
+        font-family: var(--font-serif);
+        font-size: 17px;
+        color: var(--el-text);
+      }
+      .error-state .er-sub {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        max-width: 34ch;
+      }
+
+      /* ── Viewer read-only line — the 6.4 read-only grammar ───────────────── */
+      .ro-note {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 18px;
+        padding: var(--spacing-tooltip-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        color: var(--el-text-muted);
+        font-size: 12px;
+      }
+      .ro-note svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Comments + @mentions — the Activity section</h1>
+        <p>
+          Story 5.1 · design Subtask <strong>5.1.3</strong> → blocks 5.1.4 (mention editor) and
+          5.1.5 (comments section). Fills the <code>detail.pen</code> Activity placeholder
+          ("Comments coming in Epic 5"). Jira-mirror decisions drawn here: single-level threading,
+          oldest-first default + per-user sort toggle, "Edited" tag, hard delete, "Show more
+          comments / replies". Built from the real <code>--el-*</code> + element-shape tokens; no
+          new primitive.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-msg"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"
+          />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-sort-asc"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 16 4 4 4-4" />
+          <path d="M7 20V4" />
+          <path d="M11 4h4" />
+          <path d="M11 8h7" />
+          <path d="M11 12h10" />
+        </g>
+        <g
+          id="i-sort-desc"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 8 4-4 4 4" />
+          <path d="M7 4v16" />
+          <path d="M11 12h4" />
+          <path d="M11 16h7" />
+          <path d="M11 20h10" />
+        </g>
+        <g
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-spin"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </g>
+        <g
+          id="i-bold"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8" />
+        </g>
+        <g
+          id="i-italic"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="19" x2="10" y1="4" y2="4" />
+          <line x1="14" x2="5" y1="20" y2="20" />
+          <line x1="15" x2="9" y1="4" y2="20" />
+        </g>
+        <g
+          id="i-strike"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 4H9a3 3 0 0 0-2.83 4" />
+          <path d="M14 12a4 4 0 0 1 0 8H6" />
+          <line x1="4" x2="20" y1="12" y2="12" />
+        </g>
+        <g
+          id="i-code"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m16 18 6-6-6-6" />
+          <path d="m8 6-6 6 6 6" />
+        </g>
+        <g
+          id="i-link"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </g>
+        <g
+          id="i-list"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 5h.01" />
+          <path d="M3 12h.01" />
+          <path d="M3 19h.01" />
+          <path d="M8 5h13" />
+          <path d="M8 12h13" />
+          <path d="M8 19h13" />
+        </g>
+        <g
+          id="i-list-ol"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M11 5h10" />
+          <path d="M11 12h10" />
+          <path d="M11 19h10" />
+          <path d="M4 4h1v5" />
+          <path d="M4 9h2" />
+          <path d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02" />
+        </g>
+      </defs>
+    </svg>
+
+    <div class="stack">
+      <!-- ════════════════ PANEL 0 — placement in the detail page ════════════════ -->
+      <div class="panel-label">
+        0 · Placement — the comments stream INSIDE the Activity section card (detail left column,
+        where the placeholder sits today)
+      </div>
+      <div class="panel">
+        <div class="detail-grid">
+          <div class="col">
+            <div class="ghost">
+              <strong>Description</strong> — what to do
+              <span style="float: right">(2.4.1/2.4.2)</span>
+            </div>
+            <div class="ghost">
+              <strong>Relationships</strong> — dependencies &amp; links
+              <span style="float: right">(2.4.5)</span>
+            </div>
+            <div class="ghost">
+              <strong>Children</strong> — direct child issues
+              <span style="float: right">(2.4.3)</span>
+            </div>
+
+            <!-- THE NEW ELEMENT — the Activity card, placeholder replaced -->
+            <section class="card" aria-label="Activity">
+              <div class="section-head">
+                <h2>Activity</h2>
+                <span class="gloss">— 12 comments</span>
+                <div class="head-right">
+                  <div class="seg" role="tablist" aria-label="Activity filter">
+                    <button class="seg-btn is-active" role="tab" aria-selected="true">
+                      Comments
+                    </button>
+                    <button
+                      class="seg-btn is-disabled"
+                      role="tab"
+                      aria-selected="false"
+                      aria-disabled="true"
+                      title="History — field-change activity lands with Story 5.5"
+                    >
+                      History
+                    </button>
+                  </div>
+                  <button class="sort-btn" aria-label="Sort comments, oldest first">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sort-asc" /></svg>
+                    Oldest first
+                  </button>
+                </div>
+              </div>
+
+              <div class="thread">
+                <!-- the OLDER EDGE pager — top, because oldest-first shows the
+                     newest page and the hidden older comments are above -->
+                <button class="show-more">Show more comments (8 older)</button>
+
+                <!-- thread 1 — root + one reply -->
+                <div class="c-row">
+                  <span class="c-avatar" aria-hidden="true">B</span>
+                  <div class="c-main">
+                    <div class="c-head">
+                      <span class="c-author">Bo Philips</span>
+                      <span class="c-time" title="8 Jun 2026, 14:02">2 days ago</span>
+                    </div>
+                    <div class="c-body">
+                      <p>
+                        The swimlane collapse state resets when you switch boards.
+                        <span class="mention">@Zhu Yue</span> is this scoped to the per-user
+                        preference read, or do we persist it per board?
+                      </p>
+                    </div>
+                    <div class="c-actions">
+                      <button class="c-act">Reply</button>
+                    </div>
+
+                    <div class="c-replies">
+                      <div class="c-row">
+                        <span class="c-avatar" aria-hidden="true">Z</span>
+                        <div class="c-main">
+                          <div class="c-head">
+                            <span class="c-author">Zhu Yue</span>
+                            <span class="c-time" title="8 Jun 2026, 16:40">2 days ago</span>
+                            <span class="c-edited" title="Edited 8 Jun 2026, 17:05">· Edited</span>
+                          </div>
+                          <div class="c-body">
+                            <p>
+                              Per board <em>and</em> per user — it rides the same
+                              <code>board_preference</code> row the WIP toggle uses.
+                            </p>
+                          </div>
+                          <div class="c-actions">
+                            <button class="c-act">Reply</button>
+                            <span class="c-dot">·</span>
+                            <button class="c-act">Edit</button>
+                            <span class="c-dot">·</span>
+                            <button class="c-act is-danger">Delete</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- thread 2 — a plain root -->
+                <div class="c-row">
+                  <span class="c-avatar" aria-hidden="true">O</span>
+                  <div class="c-main">
+                    <div class="c-head">
+                      <span class="c-author">Odie</span>
+                      <span class="c-time" title="9 Jun 2026, 09:12">yesterday</span>
+                    </div>
+                    <div class="c-body">
+                      <p>Repro: collapse "Done", drag any card, the lane re-expands.</p>
+                    </div>
+                    <div class="c-actions">
+                      <button class="c-act">Reply</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- the collapsed composer -->
+              <div class="composer">
+                <span class="c-avatar" aria-hidden="true">Z</span>
+                <button class="composer-rest">Add a comment…</button>
+              </div>
+            </section>
+          </div>
+          <div class="col">
+            <div class="rail-box"><div class="rail-label">Status</div></div>
+            <div class="rail-box"><div class="rail-label">Assignee</div></div>
+            <div class="rail-box"><div class="rail-label">Parent</div></div>
+            <div class="ghost" style="text-align: center">core-fields rail (2.4.2)</div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The comments stream replaces the <code>detail.pen</code> Activity placeholder inside the
+          SAME <code>ContentSectionCard</code> — left column, after Relationships and Children. The
+          header carries the total count, the <strong>Comments / History</strong> filter seam
+          (History drawn disabled — Story 5.5's slot, the 2.5.3 seam treatment) and the per-user
+          <strong>sort toggle</strong> (oldest-first default — the Jira shape). The thread shows the
+          newest cursor page (20); older comments stay behind
+          <em>Show more comments (N older)</em> at the older edge.
+        </p>
+      </div>
+
+      <!-- ════════════════ PANEL 1 — comment row anatomy ════════════════ -->
+      <div class="panel-label">
+        1 · Comment row anatomy — root + one-level reply · "Edited" tag · mention chip · "Show more
+        replies"
+      </div>
+      <div class="panel">
+        <section class="card" aria-label="Comment row anatomy">
+          <div class="thread">
+            <div class="c-row">
+              <span class="c-avatar" aria-hidden="true">M</span>
+              <div class="c-main">
+                <div class="c-head">
+                  <span class="c-author">Mo</span>
+                  <span class="c-time" title="7 Jun 2026, 11:30">3 days ago</span>
+                  <span class="c-edited" title="Edited 7 Jun 2026, 12:02">· Edited</span>
+                </div>
+                <div class="c-body">
+                  <p>
+                    <span class="mention">@Julian</span> the collapse write fires before the drag
+                    settles — see <code>useSwimlanePrefs</code>. Replies attach here, one level
+                    only; replying to a reply lands in this same thread.
+                  </p>
+                </div>
+                <div class="c-actions">
+                  <button class="c-act">Reply</button>
+                  <span class="c-dot">·</span>
+                  <button class="c-act">Edit</button>
+                  <span class="c-dot">·</span>
+                  <button class="c-act is-danger">Delete</button>
+                </div>
+
+                <div class="c-replies">
+                  <button class="show-replies">Show 4 more replies</button>
+                  <div class="c-row">
+                    <span class="c-avatar" aria-hidden="true">J</span>
+                    <div class="c-main">
+                      <div class="c-head">
+                        <span class="c-author">Julian</span>
+                        <span class="c-time" title="7 Jun 2026, 15:21">3 days ago</span>
+                      </div>
+                      <div class="c-body">
+                        <p>Confirmed — moving the persist into the drag-end handler.</p>
+                      </div>
+                      <div class="c-actions">
+                        <button class="c-act">Reply</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <p class="panel-note">
+          Row = 22px initial-letter <code>Avatar</code> · author (13px semibold) · relative time
+          (12px muted; absolute timestamp on hover via <code>title</code>) · the
+          <strong>"· Edited"</strong> tag (muted, only when <code>editedAt</code> is set — latest
+          version only, no history). Body renders through <code>MarkdownView</code> prose (14px /
+          1.6) with inline mention chips. Actions are quiet 12px text buttons — Reply only on ROOTS
+          (single-level threading); a reply's Reply re-targets the same thread and pre-mentions that
+          reply's author (panel 4). Long threads collapse their middle behind
+          <strong>Show more replies</strong>; replies indent once behind a soft 2px rail.
+        </p>
+      </div>
+
+      <!-- ════════════════ PANEL 2 — role-dependent actions ════════════════ -->
+      <div class="panel-label">
+        2 · Role-dependent actions — the same row by role (the Jira permission split on the 6.4
+        model)
+      </div>
+      <div class="panel">
+        <div class="row-of">
+          <div class="variant">
+            <div class="mini-label">Your own comment — any commenting role</div>
+            <section class="card" style="max-width: none">
+              <div class="c-row">
+                <span class="c-avatar" aria-hidden="true">Z</span>
+                <div class="c-main">
+                  <div class="c-head">
+                    <span class="c-author">Zhu Yue</span>
+                    <span class="c-time" title="9 Jun 2026, 18:44">yesterday</span>
+                  </div>
+                  <div class="c-body"><p>Author sees the full set.</p></div>
+                  <div class="c-actions">
+                    <button class="c-act">Reply</button>
+                    <span class="c-dot">·</span>
+                    <button class="c-act">Edit</button>
+                    <span class="c-dot">·</span>
+                    <button class="c-act is-danger">Delete</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Someone else's — project member</div>
+            <section class="card" style="max-width: none">
+              <div class="c-row">
+                <span class="c-avatar" aria-hidden="true">E</span>
+                <div class="c-main">
+                  <div class="c-head">
+                    <span class="c-author">Eikooc</span>
+                    <span class="c-time" title="9 Jun 2026, 18:50">yesterday</span>
+                  </div>
+                  <div class="c-body"><p>A member can only reply to others.</p></div>
+                  <div class="c-actions">
+                    <button class="c-act">Reply</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Someone else's — project admin / workspace owner</div>
+            <section class="card" style="max-width: none">
+              <div class="c-row">
+                <span class="c-avatar" aria-hidden="true">E</span>
+                <div class="c-main">
+                  <div class="c-head">
+                    <span class="c-author">Eikooc</span>
+                    <span class="c-time" title="9 Jun 2026, 18:50">yesterday</span>
+                  </div>
+                  <div class="c-body"><p>An admin moderates: edit/delete all.</p></div>
+                  <div class="c-actions">
+                    <button class="c-act">Reply</button>
+                    <span class="c-dot">·</span>
+                    <button class="c-act">Edit</button>
+                    <span class="c-dot">·</span>
+                    <button class="c-act is-danger">Delete</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+        <p class="panel-note">
+          Jira's five comment permissions mapped onto the shipped 6.4 roles: project
+          <code>admin</code>/<code>member</code> add; the author edits/deletes their OWN; project
+          <code>admin</code> + workspace admin/owner edit/delete ALL; the read-only
+          <code>viewer</code> cannot comment at all (panel 9). Affordances are drawn present/absent
+          — never disabled-but-visible — matching how the detail page hides Edit for non-editors.
+        </p>
+      </div>
+
+      <!-- ════════════════ PANEL 3 — composer states ════════════════ -->
+      <div class="panel-label">3 · Composer — collapsed (rest) → expanded → submitting</div>
+      <div class="panel">
+        <div class="row-of">
+          <div class="variant">
+            <div class="mini-label">Rest — collapsed one-liner, expands on focus</div>
+            <section class="card" style="max-width: none">
+              <div class="composer" style="margin-top: 0">
+                <span class="c-avatar" aria-hidden="true">Z</span>
+                <button class="composer-rest">Add a comment…</button>
+              </div>
+            </section>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Expanded — MarkdownEditor compact mode, focused</div>
+            <section class="card" style="max-width: none">
+              <div class="composer" style="margin-top: 0">
+                <span class="c-avatar" aria-hidden="true">Z</span>
+                <div style="min-width: 0">
+                  <div class="editor is-focused">
+                    <div class="editor-toolbar" role="toolbar" aria-label="Formatting">
+                      <button class="tb-icon" aria-label="Bold">
+                        <svg viewBox="0 0 24 24"><use href="#i-bold" /></svg>
+                      </button>
+                      <button class="tb-icon" aria-label="Italic">
+                        <svg viewBox="0 0 24 24"><use href="#i-italic" /></svg>
+                      </button>
+                      <button class="tb-icon" aria-label="Strikethrough">
+                        <svg viewBox="0 0 24 24"><use href="#i-strike" /></svg>
+                      </button>
+                      <button class="tb-icon" aria-label="Inline code">
+                        <svg viewBox="0 0 24 24"><use href="#i-code" /></svg>
+                      </button>
+                      <button class="tb-icon" aria-label="Link">
+                        <svg viewBox="0 0 24 24"><use href="#i-link" /></svg>
+                      </button>
+                      <button class="tb-icon" aria-label="Bullet list">
+                        <svg viewBox="0 0 24 24"><use href="#i-list" /></svg>
+                      </button>
+                      <button class="tb-icon" aria-label="Ordered list">
+                        <svg viewBox="0 0 24 24"><use href="#i-list-ol" /></svg>
+                      </button>
+                    </div>
+                    <div class="editor-area">
+                      <p>
+                        The fix also needs a regression test for the drag path<span
+                          class="caret"
+                        ></span>
+                      </p>
+                    </div>
+                  </div>
+                  <div class="editor-foot">
+                    <button class="btn btn-primary">Comment</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Submitting — button busy, editor disabled</div>
+            <section class="card" style="max-width: none">
+              <div class="composer" style="margin-top: 0">
+                <span class="c-avatar" aria-hidden="true">Z</span>
+                <div style="min-width: 0">
+                  <div class="editor" style="opacity: 0.7">
+                    <div class="editor-toolbar" role="toolbar" aria-label="Formatting">
+                      <button class="tb-icon" aria-label="Bold" disabled>
+                        <svg viewBox="0 0 24 24"><use href="#i-bold" /></svg>
+                      </button>
+                      <button class="tb-icon" aria-label="Italic" disabled>
+                        <svg viewBox="0 0 24 24"><use href="#i-italic" /></svg>
+                      </button>
+                      <button class="tb-icon" aria-label="Inline code" disabled>
+                        <svg viewBox="0 0 24 24"><use href="#i-code" /></svg>
+                      </button>
+                    </div>
+                    <div class="editor-area">
+                      <p>The fix also needs a regression test for the drag path</p>
+                    </div>
+                  </div>
+                  <div class="editor-foot">
+                    <button class="btn btn-primary is-disabled" disabled>
+                      <svg class="spin" viewBox="0 0 24 24"><use href="#i-spin" /></svg>
+                      Comment
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+        <p class="panel-note">
+          The composer is the shipped <code>MarkdownEditor</code> (2.3.5) in a
+          <strong>compact comment mode</strong>: at rest a one-line "Add a comment…" invitation (so
+          a long thread isn't dominated by an empty editor — the Jira shape); on focus it expands to
+          the editor chrome — toolbar, ~72px min-height area, <code>--el-highlight</code> focus
+          border — with a right-aligned primary <strong>Comment</strong> button (disabled while
+          empty or submitting; spinner while posting). <kbd>Esc</kbd> with an empty body collapses
+          back to rest.
+        </p>
+      </div>
+
+      <!-- ════════════════ PANEL 4 — edit-in-place + reply composer ════════════════ -->
+      <div class="panel-label">4 · Edit-in-place + the reply composer (pre-mentioned author)</div>
+      <div class="panel">
+        <div class="row-of">
+          <div class="variant" style="max-width: 560px; flex-basis: 460px">
+            <div class="mini-label">Edit-in-place — the composer replaces the row body</div>
+            <section class="card" style="max-width: none">
+              <div class="c-row">
+                <span class="c-avatar" aria-hidden="true">Z</span>
+                <div class="c-main">
+                  <div class="c-head">
+                    <span class="c-author">Zhu Yue</span>
+                    <span class="c-time" title="8 Jun 2026, 16:40">2 days ago</span>
+                  </div>
+                  <div class="editor is-focused">
+                    <div class="editor-toolbar" role="toolbar" aria-label="Formatting">
+                      <button class="tb-icon" aria-label="Bold">
+                        <svg viewBox="0 0 24 24"><use href="#i-bold" /></svg>
+                      </button>
+                      <button class="tb-icon" aria-label="Italic">
+                        <svg viewBox="0 0 24 24"><use href="#i-italic" /></svg>
+                      </button>
+                      <button class="tb-icon" aria-label="Inline code">
+                        <svg viewBox="0 0 24 24"><use href="#i-code" /></svg>
+                      </button>
+                      <button class="tb-icon" aria-label="Link">
+                        <svg viewBox="0 0 24 24"><use href="#i-link" /></svg>
+                      </button>
+                    </div>
+                    <div class="editor-area">
+                      <p>
+                        Per board <em>and</em> per user — it rides the same
+                        <code>board_preference</code> row<span class="caret"></span>
+                      </p>
+                    </div>
+                  </div>
+                  <div class="editor-foot">
+                    <button class="btn btn-ghost">Cancel</button>
+                    <button class="btn btn-primary">Save</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div class="variant" style="max-width: 560px; flex-basis: 460px">
+            <div class="mini-label">Reply — indented composer, replied-to author pre-mentioned</div>
+            <section class="card" style="max-width: none">
+              <div class="c-row">
+                <span class="c-avatar" aria-hidden="true">B</span>
+                <div class="c-main">
+                  <div class="c-head">
+                    <span class="c-author">Bo Philips</span>
+                    <span class="c-time" title="8 Jun 2026, 14:02">2 days ago</span>
+                  </div>
+                  <div class="c-body">
+                    <p>The swimlane collapse state resets when you switch boards.</p>
+                  </div>
+                  <div class="c-replies">
+                    <div class="composer is-bare" style="margin-top: 0">
+                      <div style="min-width: 0">
+                        <div class="editor is-focused">
+                          <div class="editor-toolbar" role="toolbar" aria-label="Formatting">
+                            <button class="tb-icon" aria-label="Bold">
+                              <svg viewBox="0 0 24 24"><use href="#i-bold" /></svg>
+                            </button>
+                            <button class="tb-icon" aria-label="Italic">
+                              <svg viewBox="0 0 24 24"><use href="#i-italic" /></svg>
+                            </button>
+                            <button class="tb-icon" aria-label="Inline code">
+                              <svg viewBox="0 0 24 24"><use href="#i-code" /></svg>
+                            </button>
+                          </div>
+                          <div class="editor-area">
+                            <p>
+                              <span class="mention">@Bo Philips</span> <span class="caret"></span>
+                            </p>
+                          </div>
+                        </div>
+                        <div class="editor-foot">
+                          <button class="btn btn-ghost">Cancel</button>
+                          <button class="btn btn-primary">Reply</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+        <p class="panel-note">
+          <strong>Edit</strong> swaps the row's rendered body for the editor pre-loaded with the
+          Markdown source (mentions round-trip intact — 5.1.4), with <strong>Save / Cancel</strong>.
+          <strong>Reply</strong> opens an indented composer inside the thread rail with the
+          replied-to author pre-mentioned as a chip (Jira's auto-tag — also what "reply to a reply"
+          produces, attaching to the same root). Both close on Cancel / <kbd>Esc</kbd> and return
+          focus to the row's action that opened them.
+        </p>
+      </div>
+
+      <!-- ════════════════ PANEL 5 — mention popup + posted chip ════════════════ -->
+      <div class="panel-label">
+        5 · Mention popup — caret-anchored member listbox (Combobox option-row vocabulary) + the
+        posted chip
+      </div>
+      <div class="panel">
+        <div class="row-of">
+          <div class="variant" style="max-width: 560px; flex-basis: 460px">
+            <div class="mini-label">Typing "@bo" — filtered, keyboard-navigable</div>
+            <section class="card" style="max-width: none; padding-bottom: 120px">
+              <div class="composer" style="margin-top: 0">
+                <span class="c-avatar" aria-hidden="true">Z</span>
+                <div style="min-width: 0">
+                  <div class="editor is-focused">
+                    <div class="editor-toolbar" role="toolbar" aria-label="Formatting">
+                      <button class="tb-icon" aria-label="Bold">
+                        <svg viewBox="0 0 24 24"><use href="#i-bold" /></svg>
+                      </button>
+                      <button class="tb-icon" aria-label="Italic">
+                        <svg viewBox="0 0 24 24"><use href="#i-italic" /></svg>
+                      </button>
+                      <button class="tb-icon" aria-label="Inline code">
+                        <svg viewBox="0 0 24 24"><use href="#i-code" /></svg>
+                      </button>
+                    </div>
+                    <div class="editor-area anchor-wrap">
+                      <p>Handing the drag fix to @bo<span class="caret"></span></p>
+                      <div class="pop" role="listbox" aria-label="Mention a member">
+                        <div class="pop-row is-active" role="option" aria-selected="true">
+                          <span class="c-avatar" aria-hidden="true">B</span>
+                          <span class="p-name">Bo Philips</span>
+                          <span class="p-mail">bophilips@prodect.co</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="editor-foot">
+                    <button class="btn btn-primary is-disabled" disabled>Comment</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div class="variant" style="max-width: 560px; flex-basis: 460px">
+            <div class="mini-label">Unfiltered "@" — the issue's viewable members</div>
+            <section class="card" style="max-width: none">
+              <div
+                class="pop"
+                role="listbox"
+                aria-label="Mention a member"
+                style="position: static"
+              >
+                <div class="pop-row is-active" role="option" aria-selected="true">
+                  <span class="c-avatar" aria-hidden="true">B</span>
+                  <span class="p-name">Bo Philips</span>
+                  <span class="p-mail">bophilips@prodect.co</span>
+                </div>
+                <div class="pop-row" role="option" aria-selected="false">
+                  <span class="c-avatar" aria-hidden="true">E</span>
+                  <span class="p-name">Eikooc</span>
+                  <span class="p-mail">eikooc@prodect.co</span>
+                </div>
+                <div class="pop-row" role="option" aria-selected="false">
+                  <span class="c-avatar" aria-hidden="true">J</span>
+                  <span class="p-name">Julian</span>
+                  <span class="p-mail">julian@prodect.co</span>
+                </div>
+                <div class="pop-row" role="option" aria-selected="false">
+                  <span class="c-avatar" aria-hidden="true">M</span>
+                  <span class="p-name">Mo</span>
+                  <span class="p-mail">mo@prodect.co</span>
+                </div>
+                <div class="pop-row" role="option" aria-selected="false">
+                  <span class="c-avatar" aria-hidden="true">O</span>
+                  <span class="p-name">Odie</span>
+                  <span class="p-mail">odie@prodect.co</span>
+                </div>
+              </div>
+              <div style="margin-top: 16px">
+                <div class="mini-label">The posted chip — in a rendered body</div>
+                <div class="c-body">
+                  <p>
+                    Handing the drag fix to <span class="mention">@Bo Philips</span> — repro steps
+                    above.
+                  </p>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+        <p class="panel-note">
+          Typing <code>@</code> anchors the listbox at the caret — the shipped
+          <code>Combobox</code> menu + option-row vocabulary verbatim (22px Avatar · name ·
+          secondary email · <code>--radius-card</code> container, <code>--shadow-elevated</code>,
+          active row <code>--el-surface</code>): filter-as-you-type, ↑/↓/Enter/Esc,
+          <code>aria-activedescendant</code>. Candidates = the members who can VIEW the issue (the
+          6.4 <code>assignableMembersService</code> scoping, supplied by the host surface — 5.1.4's
+          <code>mentionCandidates</code> prop). The inserted mention serializes to
+          <code>[@Name](mention:&lt;userId&gt;)</code> and renders as the chip:
+          <code>--el-tint-lavender</code> bg + <code>--el-text-strong</code> text (hue in the tint,
+          AA-safe — finding #35), <code>--radius-badge</code> + <code>--spacing-kbd-x/y</code>. A
+          stale/unknown user id degrades to plain text.
+        </p>
+      </div>
+
+      <!-- ════════════════ PANEL 6 — sort + pagination ════════════════ -->
+      <div class="panel-label">
+        6 · Sort + pagination — the "Show more comments" edge flips with the direction
+      </div>
+      <div class="panel">
+        <div class="row-of">
+          <div class="variant" style="max-width: 520px; flex-basis: 420px">
+            <div class="mini-label">Oldest first (default) — older comments hidden ABOVE</div>
+            <section class="card" style="max-width: none">
+              <div class="section-head">
+                <h2>Activity</h2>
+                <span class="gloss">— 12 comments</span>
+                <div class="head-right">
+                  <button class="sort-btn" aria-label="Sort comments, oldest first">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sort-asc" /></svg>
+                    Oldest first
+                  </button>
+                </div>
+              </div>
+              <div class="thread">
+                <button class="show-more">Show more comments (8 older)</button>
+                <div class="c-row">
+                  <span class="c-avatar" aria-hidden="true">O</span>
+                  <div class="c-main">
+                    <div class="c-head">
+                      <span class="c-author">Odie</span>
+                      <span class="c-time" title="9 Jun 2026, 09:12">yesterday</span>
+                    </div>
+                    <div class="c-body"><p>…older of the visible page…</p></div>
+                  </div>
+                </div>
+                <div class="c-row">
+                  <span class="c-avatar" aria-hidden="true">B</span>
+                  <div class="c-main">
+                    <div class="c-head">
+                      <span class="c-author">Bo Philips</span>
+                      <span class="c-time" title="10 Jun 2026, 08:30">2 hours ago</span>
+                    </div>
+                    <div class="c-body"><p>…newest, at the bottom.</p></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div class="variant" style="max-width: 520px; flex-basis: 420px">
+            <div class="mini-label">Newest first (toggled) — older comments hidden BELOW</div>
+            <section class="card" style="max-width: none">
+              <div class="section-head">
+                <h2>Activity</h2>
+                <span class="gloss">— 12 comments</span>
+                <div class="head-right">
+                  <button class="sort-btn" aria-label="Sort comments, newest first">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sort-desc" /></svg>
+                    Newest first
+                  </button>
+                </div>
+              </div>
+              <div class="thread">
+                <div class="c-row">
+                  <span class="c-avatar" aria-hidden="true">B</span>
+                  <div class="c-main">
+                    <div class="c-head">
+                      <span class="c-author">Bo Philips</span>
+                      <span class="c-time" title="10 Jun 2026, 08:30">2 hours ago</span>
+                    </div>
+                    <div class="c-body"><p>Newest, at the top…</p></div>
+                  </div>
+                </div>
+                <div class="c-row">
+                  <span class="c-avatar" aria-hidden="true">O</span>
+                  <div class="c-main">
+                    <div class="c-head">
+                      <span class="c-author">Odie</span>
+                      <span class="c-time" title="9 Jun 2026, 09:12">yesterday</span>
+                    </div>
+                    <div class="c-body"><p>…older of the visible page…</p></div>
+                  </div>
+                </div>
+                <button class="show-more">Show more comments (8 older)</button>
+              </div>
+            </section>
+          </div>
+        </div>
+        <p class="panel-note">
+          The read is cursor-paged from the most recent (20/page, finding #57 — never load-all); the
+          sort toggle re-orders the loaded page and flips which EDGE hides the older remainder, so
+          <em>Show more comments (N older)</em> always sits at the older edge. Replies load whole
+          with their thread (bounded by single-level threading); the toggle is per-user (Jira's
+          "Reverse sort direction"), persisted like the 5.5 History filter will be. Clicking
+          <em>Show more</em> extends the page backward and keeps scroll position.
+        </p>
+      </div>
+
+      <!-- ════════════════ PANEL 7 — loading · empty · error ════════════════ -->
+      <div class="panel-label">7 · Loading skeleton · empty state · error state</div>
+      <div class="panel">
+        <div class="row-of">
+          <div class="variant">
+            <div class="mini-label">Loading — pulse rows hold the layout</div>
+            <section class="card" style="max-width: none" aria-busy="true">
+              <div class="section-head">
+                <h2>Activity</h2>
+              </div>
+              <div class="thread">
+                <div class="skel">
+                  <span class="s-av"></span>
+                  <div class="s-lines">
+                    <span class="s-bar" style="width: 38%"></span>
+                    <span class="s-bar" style="width: 86%"></span>
+                    <span class="s-bar" style="width: 64%"></span>
+                  </div>
+                </div>
+                <div class="skel">
+                  <span class="s-av"></span>
+                  <div class="s-lines">
+                    <span class="s-bar" style="width: 30%"></span>
+                    <span class="s-bar" style="width: 72%"></span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Empty — inviting, never blank; composer live</div>
+            <section class="card" style="max-width: none">
+              <div class="section-head">
+                <h2>Activity</h2>
+                <span class="gloss">— 0 comments</span>
+              </div>
+              <div class="empty">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-msg" /></svg>
+                <span class="e-title">No comments yet — start the conversation</span>
+              </div>
+              <div class="composer" style="margin-top: 0">
+                <span class="c-avatar" aria-hidden="true">Z</span>
+                <button class="composer-rest">Add a comment…</button>
+              </div>
+            </section>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Error — ErrorState grammar + retry</div>
+            <section class="card" style="max-width: none">
+              <div class="section-head">
+                <h2>Activity</h2>
+              </div>
+              <div class="error-state" role="alert">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
+                <span class="er-title">Couldn't load comments</span>
+                <span class="er-sub">Something went wrong fetching the conversation.</span>
+                <button class="btn btn-secondary">Retry</button>
+              </div>
+            </section>
+          </div>
+        </div>
+        <p class="panel-note">
+          Loading reuses the <code>BacklogSkeleton</code> pulse grammar (<code>--el-muted</code>
+          bars, <code>aria-busy</code>) shaped like comment rows so the section doesn't jump when
+          data lands. The empty state mirrors the placeholder's centered
+          <code>message-square</code> + muted line — but inviting, with the composer live below.
+          Errors use the <code>ErrorState</code> grammar (danger <code>triangle-alert</code>, serif
+          title, secondary Retry) inside the section card.
+        </p>
+      </div>
+
+      <!-- ════════════════ PANEL 8 — delete confirm ════════════════ -->
+      <div class="panel-label">
+        8 · Delete confirm — the Popover pattern; a root names its reply count (hard delete)
+      </div>
+      <div class="panel">
+        <div class="row-of">
+          <div class="variant" style="flex-basis: 340px">
+            <div class="mini-label">Root with replies</div>
+            <div class="confirm" role="dialog" aria-label="Delete comment">
+              <p>
+                Delete this comment? <strong>Also deletes 3 replies</strong> — comments can't be
+                restored.
+              </p>
+              <div class="c-btns">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-danger">Delete</button>
+              </div>
+            </div>
+          </div>
+          <div class="variant" style="flex-basis: 340px">
+            <div class="mini-label">Single comment / reply</div>
+            <div class="confirm" role="dialog" aria-label="Delete comment">
+              <p>Delete this comment? Comments can't be restored.</p>
+              <div class="c-btns">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-danger">Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The <code>RemoveLinkButton</code> confirm-Popover pattern verbatim (300px,
+          <code>--radius-card</code> + <code>--shadow-elevated</code>, ghost Cancel + danger
+          confirm), anchored to the row's Delete action. Delete is a HARD delete — no tombstone — so
+          the copy says it plainly, and a root's confirm names the reply count its cascade takes
+          with it (the deliberate decision recorded in 5.1.2; the revision trail records that a
+          comment was deleted and by whom — rendered by Story 5.5).
+        </p>
+      </div>
+
+      <!-- ════════════════ PANEL 9 — viewer (read-only) ════════════════ -->
+      <div class="panel-label">9 · Viewer (read-only) — thread visible, no composer</div>
+      <div class="panel">
+        <section class="card" aria-label="Activity, read-only">
+          <div class="section-head">
+            <h2>Activity</h2>
+            <span class="gloss">— 12 comments</span>
+            <div class="head-right">
+              <button class="sort-btn" aria-label="Sort comments, oldest first">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sort-asc" /></svg>
+                Oldest first
+              </button>
+            </div>
+          </div>
+          <div class="thread">
+            <div class="c-row">
+              <span class="c-avatar" aria-hidden="true">B</span>
+              <div class="c-main">
+                <div class="c-head">
+                  <span class="c-author">Bo Philips</span>
+                  <span class="c-time" title="8 Jun 2026, 14:02">2 days ago</span>
+                </div>
+                <div class="c-body">
+                  <p>The swimlane collapse state resets when you switch boards.</p>
+                </div>
+              </div>
+            </div>
+            <div class="c-row">
+              <span class="c-avatar" aria-hidden="true">O</span>
+              <div class="c-main">
+                <div class="c-head">
+                  <span class="c-author">Odie</span>
+                  <span class="c-time" title="9 Jun 2026, 09:12">yesterday</span>
+                </div>
+                <div class="c-body">
+                  <p>Repro: collapse "Done", drag any card, the lane re-expands.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ro-note">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye" /></svg>
+            Read-only access — you can view comments but can't add them.
+          </div>
+        </section>
+        <p class="panel-note">
+          A project <code>viewer</code> sees the whole thread but no composer, no Reply/Edit/Delete
+          actions — affordances absent, not disabled (the 6.4 read-only grammar; copy mirrors the
+          shipped <code>readOnlyBoardBanner</code> phrasing). The quiet line sits where the composer
+          would, so the surface explains itself.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

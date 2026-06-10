@@ -3,19 +3,20 @@
 Design reference for the `work-items` UI area. Each surface names the design
 asset it lives in, the primitives it composes from, copy strings, and placement.
 
-| Surface                                          | Asset                                       | Notes                                                                                                                                                                                                                                                                                       |
-| ------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Issue detail page                                | `detail.pen` (Pencil) + `detail.png`        | header eyebrow + Description / Explanation / Activity (left) · core-fields rail (right). Built across 2.4.1–2.4.4.                                                                                                                                                                          |
-| Create issue modal                               | `create.pen` + `create.png`                 | type/parent/title/description/priority + optional Explanation (panel 3).                                                                                                                                                                                                                    |
-| Tree view (issue list, nested)                   | `tree.pen` + `tree.png`                     | issue tree rows + the `[Filter]`·`[Tree ▾]`·`[+ New issue]` toolbar.                                                                                                                                                                                                                        |
-| **Tree view at scale (sort · lazy · virtual)**   | **`tree-scale.mock.html`** (HTML mockup)    | The scale shape `tree.png` leaves unspecified (it loads the whole forest, no sort headers) — sortable treegrid headers + lazy-expand + virtualization. Finding #57. Gates 2.5.13 + 2.5.14. See below.                                                                                       |
-| **Flat sortable List view + view switcher**      | **`list.mock.html`** (HTML mockup)          | The List mode `tree.png` leaves unspecified (it draws only Tree + a disabled switcher seam). Gates 2.5.8. See below.                                                                                                                                                                        |
-| **Filter bar (kind · status · assignee · text)** | **`filter.mock.html`** (HTML mockup)        | The open `[Filter]` popover `tree.png` leaves unspecified (it draws only a disabled `[Filter]` seam). Gates 2.5.4. See below.                                                                                                                                                               |
-| **Relationships panel + ready/blocked badge**    | **`relationships.mock.html`** (HTML mockup) | The element `detail.pen` does NOT specify. See below.                                                                                                                                                                                                                                       |
-| **Link management (add / remove links)**         | **`links.mock.html`** (HTML mockup)         | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                                                                                                                                                                                          |
-| **DatePicker calendar (Due-date field)**         | **`datepicker.mock.html`** (HTML mockup)    | The design-system replacement for the native `<input type="date">` popup; consumed by the Due-date fields (2.4.11 → 2.4.12). See below.                                                                                                                                                     |
-| **Create modal — Due date field**                | **`create.mock.html`** (HTML mockup)        | Extends `create.pen` with a Due-date row (`DatePicker`, after Priority) — finding #56 / "mirror Jira" (2.3.11 → 2.3.12). See below.                                                                                                                                                         |
-| **Work-item quick view (peek)**                  | **`quick-view.mock.html`** (HTML mockup)    | The peek modal + row trigger neither `tree.png` nor the 2.4 detail design specifies — a large two-column in-list preview (full description + core-fields rail) with "Open full page →", plus the **ready/blocked readiness banner** in the peek (2.5.20). Gates 2.5.19 + 2.5.21. See below. |
+| Surface                                          | Asset                                       | Notes                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Issue detail page                                | `detail.pen` (Pencil) + `detail.png`        | header eyebrow + Description / Explanation / Activity (left) · core-fields rail (right). Built across 2.4.1–2.4.4.                                                                                                                                                                               |
+| Create issue modal                               | `create.pen` + `create.png`                 | type/parent/title/description/priority + optional Explanation (panel 3).                                                                                                                                                                                                                         |
+| Tree view (issue list, nested)                   | `tree.pen` + `tree.png`                     | issue tree rows + the `[Filter]`·`[Tree ▾]`·`[+ New issue]` toolbar.                                                                                                                                                                                                                             |
+| **Tree view at scale (sort · lazy · virtual)**   | **`tree-scale.mock.html`** (HTML mockup)    | The scale shape `tree.png` leaves unspecified (it loads the whole forest, no sort headers) — sortable treegrid headers + lazy-expand + virtualization. Finding #57. Gates 2.5.13 + 2.5.14. See below.                                                                                            |
+| **Flat sortable List view + view switcher**      | **`list.mock.html`** (HTML mockup)          | The List mode `tree.png` leaves unspecified (it draws only Tree + a disabled switcher seam). Gates 2.5.8. See below.                                                                                                                                                                             |
+| **Filter bar (kind · status · assignee · text)** | **`filter.mock.html`** (HTML mockup)        | The open `[Filter]` popover `tree.png` leaves unspecified (it draws only a disabled `[Filter]` seam). Gates 2.5.4. See below.                                                                                                                                                                    |
+| **Relationships panel + ready/blocked badge**    | **`relationships.mock.html`** (HTML mockup) | The element `detail.pen` does NOT specify. See below.                                                                                                                                                                                                                                            |
+| **Link management (add / remove links)**         | **`links.mock.html`** (HTML mockup)         | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                                                                                                                                                                                               |
+| **DatePicker calendar (Due-date field)**         | **`datepicker.mock.html`** (HTML mockup)    | The design-system replacement for the native `<input type="date">` popup; consumed by the Due-date fields (2.4.11 → 2.4.12). See below.                                                                                                                                                          |
+| **Create modal — Due date field**                | **`create.mock.html`** (HTML mockup)        | Extends `create.pen` with a Due-date row (`DatePicker`, after Priority) — finding #56 / "mirror Jira" (2.3.11 → 2.3.12). See below.                                                                                                                                                              |
+| **Work-item quick view (peek)**                  | **`quick-view.mock.html`** (HTML mockup)    | The peek modal + row trigger neither `tree.png` nor the 2.4 detail design specifies — a large two-column in-list preview (full description + core-fields rail) with "Open full page →", plus the **ready/blocked readiness banner** in the peek (2.5.20). Gates 2.5.19 + 2.5.21. See below.      |
+| **Comments + @mentions (Activity section)**      | **`comments.mock.html`** (HTML mockup)      | The comment thread, composer, mention popup and every comment state — `detail.pen` draws ONLY the Activity placeholder ("Comments coming in Epic 5"). Single-level threading, oldest-first + sort toggle, "Edited" tag, hard-delete confirm, "Show more" paging. Gates 5.1.4 + 5.1.5. See below. |
 
 ---
 
@@ -907,3 +908,179 @@ the detail page to edit). Prev/next navigation _between_ peeked issues, comments
 and the hovercard-on-hover variant stay out; the modal-on-click peek is the
 scope. Keyboard-shortcut opening (e.g. a row's `Space`/`O`) is a nice-to-have for
 2.5.19, not required by this design.
+
+## Comments + @mentions — the Activity section (Story 5.1 · 5.1.3 → 5.1.4 / 5.1.5)
+
+`comments.mock.html` is the design for the issue detail page's **comments
+surface** — the thread, the composer, the mention popup, and every comment
+state. `detail.pen` draws ONLY the Activity placeholder ("Activity" /
+"Comments coming in Epic 5"); everything inside it is a whole element no
+design specified, so the design gate (`notes.html` mistake #31) requires this
+asset before code Subtasks **5.1.4** (mention capability in `MarkdownEditor` /
+`MarkdownView`) and **5.1.5** (the comments section UI). Mirror: the Jira
+Cloud issue-view Activity section (threaded comments GA ~2025) — the
+Jira-verified decisions (single-level threading, oldest-first default +
+per-user toggle, "Edited" tag, hard delete, "Show more" collapse) are recorded
+in the 5.1 story module and drawn here. A `comments.png` export accompanies
+the HTML for the board view; the HTML is the source of truth.
+
+### Placement
+
+The comments stream replaces the placeholder INSIDE the existing Activity
+`ContentSectionCard` — detail left column, after Relationships and Children,
+exactly where `detail.pen` puts the placeholder card (panel 0). The section
+header keeps the `ContentSectionCard` grammar (16px sans semibold title +
+`--el-text-secondary` gloss) and carries:
+
+- the **total count** in the gloss (`— 12 comments`);
+- the **Comments / History filter seam** — a two-button segmented control;
+  Comments active, **History drawn disabled** (`opacity: 0.6`,
+  `cursor: not-allowed`, title "History — field-change activity lands with
+  Story 5.5") — the 2.5.3 view-switcher seam treatment. Story 5.5's slot.
+- the **sort toggle** — a small bordered control (`--height-control`,
+  `--radius-btn`, `--spacing-control-x`) with `arrow-down-narrow-wide` /
+  `arrow-up-narrow-wide` (14px, `--el-text-muted`) + the label
+  **Oldest first / Newest first**. Per-user, oldest-first default (Jira's
+  `asc` + "Reverse sort direction").
+
+### Comment row anatomy (panel 1)
+
+Row = 22px initial-letter **Avatar** (the shipped `issueCellPrimitives`
+treatment, verbatim) · **author** (13px semibold `--el-text`) · **relative
+time** (12px `--el-text-muted`; absolute timestamp on hover via `title`) ·
+the **"· Edited" tag** (12px muted; only when `editedAt` is set — latest
+version only, no history; its `title` carries the edit timestamp). The body
+renders through **`MarkdownView`** prose (14px / 1.6) with inline mention
+chips. Below, the **quiet action row**: 12px text buttons (`--el-text-muted`,
+hover `--el-text` on `--el-surface`; Delete hovers `--el-danger` on
+`--el-tint-rose` — the `RemoveLinkButton` trigger grammar), separated by faint
+`·` dots.
+
+- **Reply** appears on ROOT comments only (single-level threading). On a
+  reply, Reply re-targets the same thread and pre-mentions that reply's
+  author (the Jira auto-tag — panel 4).
+- **Replies** indent once behind a soft thread rail (2px
+  `--el-border-soft` left border, 14px padding). Long threads collapse their
+  middle behind **"Show N more replies"** (quiet 12px text button).
+- **Role-dependent actions** (panel 2) are drawn present/absent — never
+  disabled-but-visible: author → Reply · Edit · Delete; another member →
+  Reply only; project admin / workspace admin/owner → Reply · Edit · Delete
+  on anyone's.
+
+### Composer (panels 3–4)
+
+The shipped **`MarkdownEditor`** (2.3.5) in a **compact comment mode**, led
+by the viewer's own 22px avatar:
+
+- **Rest** — a collapsed one-line "Add a comment…" invitation
+  (`--height-control`, `--radius-input`, `--el-surface` bg, muted text);
+  focusing expands it. Keeps long threads from being dominated by an empty
+  editor (the Jira shape).
+- **Expanded** — the editor chrome verbatim: `--radius-input` container on
+  `--el-surface`, `--el-highlight` focus border, the icon toolbar (16px lucide
+  glyphs in `--spacing-icon-btn` buttons), ~72px min-height area; a
+  right-aligned primary **Comment** `Button` (size sm) below, disabled while
+  empty. <kbd>Esc</kbd> with an empty body collapses back to rest.
+- **Submitting** — editor dimmed + disabled, the Comment button busy with the
+  `loader-circle` spinner.
+- **Edit-in-place** — Edit swaps the row's rendered body for the editor
+  pre-loaded with the Markdown source (mentions round-trip intact — 5.1.4),
+  with ghost **Cancel** + primary **Save**.
+- **Reply composer** — opens indented inside the thread rail with the
+  replied-to author pre-mentioned as a chip; ghost **Cancel** + primary
+  **Reply**. Both restore focus to the action that opened them.
+
+### Mention popup + chip (panel 5)
+
+Typing `@` anchors a member listbox **at the caret** — the shipped
+**`Combobox`** menu + option-row vocabulary verbatim: `--radius-card`
+container, `--el-border`, `--shadow-elevated`, 4px inner padding; rows =
+22px Avatar · name (13px) · secondary email (11px muted, right-aligned),
+`--radius-control` / `--spacing-control-x/y`, active row `--el-surface`;
+filter-as-you-type, ↑/↓/Enter/Esc, `aria-activedescendant`. Candidates = the
+members who can VIEW the issue (the 6.4 `assignableMembersService` scoping),
+supplied via 5.1.4's `mentionCandidates` prop.
+
+**The mention chip** (the one new treatment this design introduces — for
+5.1.4 to build): inline in the rendered body, `--el-tint-lavender` background
+
+- `--el-text-strong` text (hue in the tint bg, AA-safe — finding #35),
+  `--radius-badge` shape with the small-chip `--spacing-kbd-x/y` padding (an
+  existing swap-layer pair — **no new `--el-*` or shape token is needed**),
+  0.92em / 500 weight. Serializes as `[@Display Name](mention:<userId>)`; a
+  stale/unknown id degrades to plain text, never a broken link.
+
+### Pagination + sort (panel 6)
+
+The read is cursor-paged from the most recent (20/page — finding #57, never
+load-all) with a total count. **"Show more comments (N older)"** — a
+full-width quiet control (`--height-control`, dashed `--el-border-strong`
+border, `--radius-control`, `--el-surface-soft`) — always sits at the OLDER
+edge, so it flips top/bottom with the sort direction (top in oldest-first,
+bottom in newest-first). Clicking extends the page backward and keeps scroll
+position. Replies load whole with their thread (bounded by single-level
+threading).
+
+### States (panels 7–9)
+
+- **Loading** — comment-row-shaped pulse skeletons (`--el-muted` bars +
+  avatar circle, `aria-busy`) — the `BacklogSkeleton` grammar — so the
+  section doesn't jump when data lands.
+- **Empty** — centered `message-square` (22px muted) + **"No comments yet —
+  start the conversation"**; the composer stays live below. Mirrors the
+  placeholder's grammar but inviting, never blank.
+- **Error** — the `ErrorState` grammar inside the card: danger
+  `triangle-alert`, serif title **"Couldn't load comments"**, muted line,
+  secondary **Retry**.
+- **Delete confirm** — the `RemoveLinkButton` confirm-**Popover** pattern
+  verbatim (300px, `--radius-card` + `--shadow-elevated`, ghost Cancel +
+  danger **Delete**), anchored to the row's Delete action. A root with
+  replies names its cascade: **"Delete this comment? Also deletes N replies —
+  comments can't be restored."**; a single comment/reply: **"Delete this
+  comment? Comments can't be restored."** (hard delete — the deliberate
+  decision recorded in 5.1.2; the revision trail records that a comment was
+  deleted and by whom, rendered by Story 5.5).
+- **Viewer (read-only)** — thread visible, NO composer and no
+  Reply/Edit/Delete; a quiet line where the composer would sit (`eye` 14px +
+  **"Read-only access — you can view comments but can't add them."** on
+  `--el-surface-soft`, `--radius-control`) — the 6.4 read-only grammar,
+  phrasing mirroring the shipped `readOnlyBoardBanner`.
+
+### Copy strings
+
+"Add a comment…" · "Comment" · "Save" · "Cancel" · "Reply" · "Edit" ·
+"Delete" · "· Edited" · "Show more comments (N older)" · "Show N more
+replies" · "Oldest first" / "Newest first" · "No comments yet — start the
+conversation" · "Couldn't load comments" / "Something went wrong fetching the
+conversation." / "Retry" · "Delete this comment? Also deletes N replies —
+comments can't be restored." / "Delete this comment? Comments can't be
+restored." · "Read-only access — you can view comments but can't add them." ·
+History seam title: "History — field-change activity lands with Story 5.5".
+
+### Tokens / a11y
+
+Colour only through `--el-*` (chips put hue in the tint background with
+`--el-text-strong` text — finding #35; the danger affordances use
+`--el-danger` / `--el-tint-rose`); shape through the element-semantic tokens
+(`--radius-card/input/control/btn/badge`, `--spacing-card-padding`,
+`--spacing-control-x/y`, `--spacing-icon-btn`, `--spacing-kbd-x/y`,
+`--height-control`, `--height-btn-sm`, `--shadow-card/elevated`) — no Tier-0
+utilities, no raw `rounded-*`. The composer is labelled; the toolbar is
+`role="toolbar"`; the mention popup is a `role="listbox"` with
+`aria-activedescendant` (the Combobox a11y bar); timestamps and the Edited
+tag are conveyed as text (`title` for absolute time); the skeleton sets
+`aria-busy`; the confirm is a dialog with an explicit accessible name; focus
+returns to the opening action after post/edit/delete. Light + dark parity via
+the same tokens.
+
+### Out of scope (documented extension slots)
+
+**Per-comment visibility restriction** (Jira's padlock) is a deliberate
+non-feature: it needs the company-managed role/group substrate, and Jira's
+team-managed projects — the small-team shape Prodect mirrors — do not support
+it; documented as an Epic-6 admin extension slot. **Realtime** live-updating
+comments: no realtime substrate exists in the codebase; comments refresh on
+navigation/action — a product-wide decision, not story-local. The **History
+filter** is Story 5.5's slot (the disabled seam). **In-app notifications**
+are Story 5.7; **watchers** are Story 5.4. Comment **reactions/emoji** and
+edit **history** are not planned features of 5.1.
