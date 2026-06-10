@@ -171,7 +171,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.1',
       title:
         'Schema — `attachment.workItemId` link + `source` + indexes (SetNull lifecycle, relations both sides) + repo methods',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 18,
@@ -217,7 +217,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.2',
       title:
         '`attachmentsService` management surface — attach-to-issue, paged list, permission-gated delete w/ blob cleanup + revision trail, routes',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -497,7 +497,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.7',
       title:
         'Orphan-GC job — scheduled sweep of unlinked attachment rows past the safety window (blob + row), the blob-failure backstop',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
