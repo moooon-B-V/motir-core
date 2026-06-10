@@ -187,7 +187,7 @@ export const story_4_6: PlanStory = {
       id: '4.6.1',
       title:
         'Design — chart visual language + burndown + velocity (creates design/reports/; specs the 4.5 scrum-header + 4.4.6 sprint-report seam placements)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 40,
