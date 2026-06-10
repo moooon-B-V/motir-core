@@ -7,6 +7,10 @@ import {
   workspaceInviteEmail,
   type WorkspaceInviteEmailProps,
 } from '@/lib/emailTemplates/workspaceInvite';
+import {
+  mentionNotificationEmail,
+  type MentionNotificationEmailProps,
+} from '@/lib/emailTemplates/mentionNotification';
 
 // The execution-side email service (Story 1.6 · Subtask 1.6.3). This is the
 // ONE place a transactional email is rendered and handed to the provider:
@@ -32,7 +36,8 @@ import {
  */
 export type TransactionalEmail =
   | { to: string; template: 'password-reset'; data: PasswordResetEmailProps }
-  | { to: string; template: 'workspace-invite'; data: WorkspaceInviteEmailProps };
+  | { to: string; template: 'workspace-invite'; data: WorkspaceInviteEmailProps }
+  | { to: string; template: 'mention-notification'; data: MentionNotificationEmailProps };
 
 /** Every template discriminant — handy for exhaustiveness + tests. */
 export type EmailTemplate = TransactionalEmail['template'];
@@ -56,6 +61,8 @@ async function renderTemplate(message: TransactionalEmail) {
       return passwordResetEmail(message.data);
     case 'workspace-invite':
       return workspaceInviteEmail(message.data);
+    case 'mention-notification':
+      return mentionNotificationEmail(message.data);
     default: {
       // Exhaustiveness guard: a new template arm without a case here is a
       // compile error, not a silent fall-through.

@@ -9,6 +9,9 @@ import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionR
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { assignableMembersService } from '@/lib/services/assignableMembersService';
+import { parseMentionIds } from '@/lib/mentions/parse';
+import { sendEvent } from '@/lib/jobs/sendEvent';
 import { keyForAppend, keyBetween } from '@/lib/workItems/positioning';
 import { relationshipToLink } from '@/lib/workItems/linkRelationships';
 import {
@@ -310,6 +313,26 @@ function buildTreeLevel(rows: WorkItemTreeRow[], take: number, total: number): T
   return { rows: page.map(toWorkItemTreeRowDto), hasMore, total };
 }
 
+/**
+ * The user ids a DESCRIPTION may validly mention — the members who can VIEW
+ * the issue, exactly the commentsService scoping (the 6.4
+ * `assignableMembersService` read, reused not duplicated). Reference data:
+ * resolved OUTSIDE the write transaction (the member service binds its own
+ * workspace context). Description mentions are notification-only (Subtask
+ * 5.1.6) — no stored mention rows; the validated ids ride the post-commit
+ * `work-item/mentioned` event and that's the whole substrate (recorded scope
+ * line: the queryable substrate stays comment-scoped until a use case earns
+ * more).
+ */
+async function resolveDescriptionMentionable(
+  projectId: string,
+  accessLevel: 'open' | 'limited' | 'private',
+  ctx: ServiceContext,
+): Promise<Set<string>> {
+  const members = await assignableMembersService.list({ projectId, accessLevel, ctx });
+  return new Set(members.map((m) => m.userId));
+}
+
 export const workItemsService = {
   /**
    * Create a work item: allocate the per-project key + insert the row + emit
@@ -378,7 +401,22 @@ export const workItemsService = {
     const statusKey = await workflowsService.getInitialStatusKey(input.projectId, workspaceId);
     if (statusKey == null) throw new NoInitialStatusError(input.projectId);
 
-    return db.$transaction(async (tx) => {
+    // Description mentions (Subtask 5.1.6): parse + view-validate BEFORE the
+    // transaction (reference data, the commentsService pattern); invalid /
+    // non-viewable ids are silently dropped (the Jira rule). The validated set
+    // rides the post-commit `work-item/mentioned` event.
+    const descTokenIds = parseMentionIds(input.descriptionMd ?? '');
+    let descMentionIds: string[] = [];
+    if (descTokenIds.length > 0) {
+      const mentionable = await resolveDescriptionMentionable(
+        input.projectId,
+        project.accessLevel,
+        ctx,
+      );
+      descMentionIds = descTokenIds.filter((id) => mentionable.has(id));
+    }
+
+    const { dto, revisionId } = await db.$transaction(async (tx) => {
       const key = await projectRepository.allocateWorkItemNumber(input.projectId, tx);
       const identifier = `${project.identifier}-${key}`;
 
@@ -437,7 +475,8 @@ export const workItemsService = {
 
       // Initial revision: the created-row state as a { from: null, to: value }
       // diff (1.4.6 finalized the shape 1.4.4 deferred — see buildCreatedDiff).
-      await workItemRevisionsService.recordRevision(
+      // Its id is the idempotency scope of any description-mention event below.
+      const revisionId = await workItemRevisionsService.recordRevision(
         {
           workItemId: row.id,
           changedById: ctx.userId,
@@ -501,8 +540,24 @@ export const workItemsService = {
         }
       }
 
-      return toWorkItemDto(row);
+      return { dto: toWorkItemDto(row), revisionId };
     });
+
+    // Post-commit, never inside the tx — a rollback must not have notified
+    // (the commentsService rule). Only fires when the description validly
+    // mentioned someone; the mentionNotify job skips the author + re-validates
+    // view access at send time.
+    if (descMentionIds.length > 0) {
+      await sendEvent('work-item/mentioned', {
+        workspaceId,
+        workItemId: dto.id,
+        revisionId,
+        authorId: ctx.userId,
+        mentionedUserIds: descMentionIds,
+      });
+    }
+
+    return dto;
   },
 
   /**
@@ -542,7 +597,29 @@ export const workItemsService = {
       return toWorkItemDto(current);
     }
 
-    return db.$transaction(async (tx) => {
+    // Description mentions (Subtask 5.1.6): when the patch carries a body with
+    // mention tokens, resolve the viewable-member set BEFORE the transaction
+    // (reference data, the commentsService pattern). The added-mention DIFF is
+    // computed INSIDE the tx against the locked current row — only ids the
+    // previous body didn't already mention notify (the Jira edit rule).
+    const patchDescTokenIds =
+      typeof patch.descriptionMd === 'string' ? parseMentionIds(patch.descriptionMd) : [];
+    let descMentionable: Set<string> | null = null;
+    if (patchDescTokenIds.length > 0) {
+      const pre = await workItemRepository.findById(id);
+      if (pre) {
+        const project = await projectRepository.findById(pre.projectId);
+        if (project) {
+          descMentionable = await resolveDescriptionMentionable(
+            project.id,
+            project.accessLevel,
+            ctx,
+          );
+        }
+      }
+    }
+
+    const result = await db.$transaction(async (tx) => {
       const locked = await workItemRepository.lockById(id, tx);
       if (!locked) throw new WorkItemNotFoundError(id);
       const current = await workItemRepository.findById(id, tx);
@@ -573,9 +650,17 @@ export const workItemsService = {
         update.title = patch.title;
         diff.title = { from: current.title, to: patch.title };
       }
+      let addedDescMentionIds: string[] = [];
       if (patch.descriptionMd !== undefined && patch.descriptionMd !== current.descriptionMd) {
         update.descriptionMd = patch.descriptionMd;
         diff.descriptionMd = { from: current.descriptionMd, to: patch.descriptionMd };
+        if (patchDescTokenIds.length > 0 && descMentionable !== null) {
+          const mentionable = descMentionable;
+          const prevIds = new Set(parseMentionIds(current.descriptionMd ?? ''));
+          addedDescMentionIds = patchDescTokenIds.filter(
+            (tokenId) => !prevIds.has(tokenId) && mentionable.has(tokenId),
+          );
+        }
       }
       if (patch.explanationMd !== undefined && patch.explanationMd !== current.explanationMd) {
         update.explanationMd = patch.explanationMd;
@@ -674,16 +759,31 @@ export const workItemsService = {
       }
 
       if (Object.keys(diff).length === 0) {
-        return toWorkItemDto(current);
+        return { dto: toWorkItemDto(current), revisionId: null, addedDescMentionIds: [] };
       }
 
       const row = await workItemRepository.update(id, update, tx);
-      await workItemRevisionsService.recordRevision(
+      const revisionId = await workItemRevisionsService.recordRevision(
         { workItemId: id, changedById: ctx.userId, changeKind: 'updated', diff },
         tx,
       );
-      return toWorkItemDto(row);
+      return { dto: toWorkItemDto(row), revisionId, addedDescMentionIds };
     });
+
+    // Post-commit description-mention event (5.1.6) — same shape and rules as
+    // the create path: only newly-added, view-validated ids; never inside the
+    // tx; the job skips the author + re-validates view access at send time.
+    if (result.revisionId !== null && result.addedDescMentionIds.length > 0) {
+      await sendEvent('work-item/mentioned', {
+        workspaceId: ctx.workspaceId,
+        workItemId: result.dto.id,
+        revisionId: result.revisionId,
+        authorId: ctx.userId,
+        mentionedUserIds: result.addedDescMentionIds,
+      });
+    }
+
+    return result.dto;
   },
 
   /**

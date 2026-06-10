@@ -151,6 +151,15 @@
       "reset": "Reset your password",
       "fallback": "Or copy this link into your browser:",
       "expires": "This link expires in 1 hour. If you didn't request this, you can ignore this email."
+    },
+    "mentionNotification": {
+      "subject": "{author} mentioned you on {identifier}: {title}",
+      "preview": "{author} mentioned you on {identifier}",
+      "greeting": "Hi {name},",
+      "ledeComment": "{author} mentioned you in a comment on {identifier}: {title}.",
+      "ledeDescription": "{author} mentioned you in the description of {identifier}: {title}.",
+      "view": "View work item",
+      "fallback": "Or copy this link into your browser:"
     }
   },
   "auth": {

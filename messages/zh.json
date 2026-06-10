@@ -151,6 +151,15 @@
       "reset": "重置密码",
       "fallback": "或将此链接复制到浏览器中打开：",
       "expires": "此链接将在1小时后过期。如果这不是你本人的操作，可以忽略此邮件。"
+    },
+    "mentionNotification": {
+      "subject": "{author}在{identifier}中提到了你：{title}",
+      "preview": "{author}在{identifier}中提到了你",
+      "greeting": "你好，{name}：",
+      "ledeComment": "{author}在{identifier}（{title}）的评论中提到了你。",
+      "ledeDescription": "{author}在{identifier}（{title}）的描述中提到了你。",
+      "view": "查看工作项",
+      "fallback": "或将此链接复制到浏览器中打开："
     }
   },
   "auth": {
