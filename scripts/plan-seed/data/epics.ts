@@ -331,7 +331,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           "Issue list: inline status edit — the first item's status sometimes reverts after editing a second item",
-        status: 'in_progress',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 2 · **Surface:** issue list inline cell editing ' +
