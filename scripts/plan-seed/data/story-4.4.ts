@@ -100,7 +100,7 @@ import type { PlanStory } from '../types';
 export const story_4_4: PlanStory = {
   id: '4.4',
   title: 'Sprint lifecycle (start / complete)',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The **sprint lifecycle flows** — the verbs that take a sprint from *planned* to *active* to ' +
     '*complete* — built on the entity + rules Story 4.1 shipped. Three things: **start a sprint** ' +
@@ -531,7 +531,7 @@ export const story_4_4: PlanStory = {
       id: '4.4.7',
       title:
         'Story tests — sprint lifecycle state machine (start/complete/carry-over/provisioning/report) + focused E2E (plan → start → move → complete → report)',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 24,
