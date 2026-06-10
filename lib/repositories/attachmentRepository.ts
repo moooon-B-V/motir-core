@@ -108,9 +108,20 @@ export const attachmentRepository = {
     return result.count;
   },
 
-  /** Hard-delete one row (5.2.2 panel delete; 5.2.7 GC sweep). No tombstone. */
+  /** Hard-delete one row (5.2.7 GC sweep). No tombstone. */
   async delete(id: string, tx: Prisma.TransactionClient): Promise<Attachment> {
     return tx.attachment.delete({ where: { id } });
+  },
+
+  /**
+   * Idempotent hard-delete (5.2.2's post-blob row removal) — `deleteMany` by
+   * id so an already-gone row (a concurrent GC pass took it while it was
+   * briefly unlinked) is a 0-count success, not a P2025 throw. Returns the
+   * deleted count.
+   */
+  async deleteIfExists(id: string, tx: Prisma.TransactionClient): Promise<number> {
+    const result = await tx.attachment.deleteMany({ where: { id } });
+    return result.count;
   },
 
   /**

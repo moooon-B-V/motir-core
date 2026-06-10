@@ -180,16 +180,11 @@ export const attachmentsService = {
         // Re-resolve inside the tx — the pre-gate read is stale by now; a
         // throw here strands the just-written row unlinked (GC-eligible).
         await resolveGatedWorkItem(workItemId, ctx, tx);
-        const [created] = await attachmentRepository.findManyByBlobUrls(
-          ctx.workspaceId,
-          [uploaded.url],
-          tx,
-        );
-        if (!created) {
-          // Invariant: uploadAttachment just inserted this row in THIS
-          // workspace, and addRandomSuffix makes the URL unique.
-          throw new Error(`Attachment row for ${uploaded.url} missing after upload.`);
-        }
+        // Present by construction: uploadAttachment just inserted this row in
+        // THIS workspace, and addRandomSuffix makes the URL unique.
+        const created = (
+          await attachmentRepository.findManyByBlobUrls(ctx.workspaceId, [uploaded.url], tx)
+        )[0]!;
         const linked: Attachment = { ...created, workItemId, source: 'panel' };
         await attachmentRepository.linkToWorkItem([created.id], workItemId, 'panel', tx);
         await workItemRevisionsService.recordRevision(
@@ -217,7 +212,7 @@ export const attachmentsService = {
    */
   async listForWorkItem(
     workItemId: string,
-    options: { cursor?: string } = {},
+    options: { cursor?: string },
     ctx: ServiceContext,
   ): Promise<AttachmentsPageDTO> {
     await resolveGatedWorkItem(workItemId, ctx);
@@ -239,7 +234,8 @@ export const attachmentsService = {
     return {
       attachments: rows.map((r) => toAttachmentDto(r, uploadersById)),
       totalCount,
-      nextCursor: hasMore ? (rows[rows.length - 1]?.id ?? null) : null,
+      // hasMore ⇒ the window overflowed ⇒ the page is full — its last row exists.
+      nextCursor: hasMore ? rows[ATTACHMENT_PAGE_SIZE - 1]!.id : null,
     };
   },
 
@@ -302,17 +298,12 @@ export const attachmentsService = {
       return;
     }
 
-    // Blob gone → complete the hard delete. A concurrent GC pass may have
-    // taken the row already (it was briefly an orphan); converging on
-    // "already gone" is success, not an error.
-    try {
-      await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
-        attachmentRepository.delete(row.id, tx),
-      );
-    } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') return;
-      throw err;
-    }
+    // Blob gone → complete the hard delete. The idempotent form converges
+    // with a concurrent GC pass (the row was briefly an orphan): "already
+    // gone" is success, not an error.
+    await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
+      attachmentRepository.deleteIfExists(row.id, tx),
+    );
   },
 
   /**
