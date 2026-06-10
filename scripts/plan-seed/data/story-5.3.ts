@@ -156,7 +156,7 @@ export const story_5_3: PlanStory = {
       id: '5.3.1',
       title:
         'Schema — `custom_field_definition` + `custom_field_option` + typed-EAV `custom_field_value` (+ the documented Epic-6 predicate contract)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 20,
@@ -218,7 +218,7 @@ export const story_5_3: PlanStory = {
       id: '5.3.2',
       title:
         '`customFieldsService` (definitions) — CRUD + option rename/reorder/archive/delete-when-unused + the 50/55 caps, admin-gated, routes',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -270,7 +270,7 @@ export const story_5_3: PlanStory = {
       id: '5.3.3',
       title:
         '`customFieldsService` (values) — per-type validated set/clear + revision-trail diffs + the bounded detail-read join',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
