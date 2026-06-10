@@ -316,10 +316,11 @@ export const STUB_STORIES: PlanStory[] = [
       'find-replace — touches prodect-core (UI copy, package names, app/SEO metadata, email ' +
       'templates/chrome), prodect-ai, prodect-meta (PRODECT.md → MOTIR.md), the plan seed ' +
       '(@prodect.co users → the Motir domain, tenant naming), domain/Vercel/email config, and ' +
-      'README + license headers. Open decision: the `PROD` issue key — keep PROD-N or switch ' +
-      'to MOT-N (switching rewrites every key; lean keep-PROD unless taking the clean break ' +
-      'now while there is no real data). Run-early, NOT gated on other Epic-8 work — cheapest ' +
-      'before launch/traction.',
+      'README + license headers. The `PROD` issue key: RESOLVED — keep PROD-N (rung-1 ' +
+      'verified: editing a project key is a reversible Jira-standard setting, and story 6.8 ' +
+      'ships exactly that capability with old-key redirects, so a later switch to MOT-N is a ' +
+      'setting change, not a migration — no reason to churn dogfood keys now). Run-early, NOT ' +
+      'gated on other Epic-8 work — cheapest before launch/traction.',
     items: [],
   },
 ];
