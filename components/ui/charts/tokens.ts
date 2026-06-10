@@ -26,6 +26,8 @@ export const chartColor = {
   completed: 'var(--el-chart-completed)',
   /** Velocity average reference line (dashed). */
   average: 'var(--el-chart-average)',
+  /** Axis-toned reference rule (the burndown's "today" vertical marker). */
+  axis: 'var(--el-chart-axis)',
 } as const;
 
 export type ChartColor = (typeof chartColor)[keyof typeof chartColor];

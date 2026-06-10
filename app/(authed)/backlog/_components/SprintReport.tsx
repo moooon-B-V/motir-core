@@ -14,10 +14,11 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { SprintDto, SprintReportDto } from '@/lib/dto/sprints';
 import type { RankedIssuePageDto } from '@/lib/dto/backlog';
-import type { VelocityDto } from '@/lib/dto/reports';
+import type { BurndownSeriesDto, VelocityDto } from '@/lib/dto/reports';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import { StatusValue } from '../../issues/_components/issueCellPrimitives';
 import type { StatusByKey } from './backlogShared';
+import { ReportBurndownSection } from './ReportBurndownSection';
 import { VelocityChart } from './VelocityChart';
 
 // The sprint report (Story 4.4 · Subtask 4.4.6) — what got done vs. what did not,
@@ -28,7 +29,10 @@ import { VelocityChart } from './VelocityChart';
 // the title + chrome (the Modal / the page header); this renders the body — the
 // points rollup, the scope-change line, the completed / not-completed issue lists
 // (bounded page + a "View all in Issues" deep-link, finding #57 — never a full
-// dump), and the Story-4.6 burndown chart SEAM.
+// dump), and the report's analytics: the completed-sprint BURNDOWN (Subtask
+// 4.6.5 — the `ReportBurndownSection` slot, server-fed on the page,
+// self-fetching in the modal) beside the velocity chart (4.6.6) in the
+// Story-4.6 chart seam.
 //
 // Issue rows reuse the work-items list-row vocabulary (the `IssueTypeIcon` in its
 // `--el-type-*` hue, the mono key, the truncating summary, the status `Pill` via
@@ -71,6 +75,13 @@ export interface SprintReportProps {
    * success state (the 4.4.1 modal design draws only the burndown section).
    */
   velocity?: VelocityDto;
+  /**
+   * The completed-sprint burndown read (4.6.3 `getBurndownSeries`) — present on
+   * the standalone report page, which fetches it server-side. When absent (the
+   * complete-modal success state), the burndown slot fetches it client-side for
+   * the just-completed sprint (see `ReportBurndownSection`).
+   */
+  burndown?: BurndownSeriesDto;
 }
 
 export function SprintReport({
@@ -79,6 +90,7 @@ export function SprintReport({
   statusByKey,
   carryOverLabel,
   velocity,
+  burndown,
 }: SprintReportProps) {
   const t = useTranslations('backlog');
   const locale = useLocale();
@@ -160,25 +172,17 @@ export function SprintReport({
       />
 
       {/* The report's analytics — the Story-4.6 charts, side by side per
-          design/reports/charts.mock.html panel 5. The burndown slot is still the
-          reserved SEAM (4.6.5 fills it); the velocity chart (4.6.6) renders when
-          the host passes the 4.6.4 read (the standalone report page). */}
+          design/reports/charts.mock.html panel 5. The burndown slot (4.6.5)
+          fills the seam 4.4.6 reserved — server-fed on the standalone page,
+          self-fetching in the complete-modal success state; the velocity chart
+          (4.6.6) renders when the host passes the 4.6.4 read (the page). */}
       <div className="flex flex-wrap gap-4">
         <section className="flex min-w-0 flex-1 basis-[300px] flex-col gap-2">
           <span className="flex items-center gap-1.5 text-sm font-semibold text-(--el-text-strong)">
             <TrendingUp className="h-4 w-4 shrink-0 text-(--el-warning)" aria-hidden />
             {t('sprintReport.burndown')}
           </span>
-          <div
-            aria-label={t('sprintReport.burndownSeam')}
-            className="flex flex-col items-center justify-center gap-1 rounded-(--radius-card) border border-dashed border-(--el-border-strong) px-(--spacing-card-padding) py-6 text-center"
-          >
-            <TrendingUp className="h-6 w-6 text-(--el-text-faint)" aria-hidden />
-            <span className="text-sm text-(--el-text-muted)">{t('sprintReport.burndownSeam')}</span>
-            <span className="text-xs text-(--el-text-faint)">
-              {t('sprintReport.burndownSeamNote')}
-            </span>
-          </div>
+          <ReportBurndownSection sprintId={report.sprintId} burndown={burndown} />
         </section>
 
         {velocity ? (

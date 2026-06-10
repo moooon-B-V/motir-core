@@ -7,7 +7,7 @@ import { getActiveProject } from '@/lib/projects';
 import { reportsService } from '@/lib/services/reportsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { SprintNotFoundError } from '@/lib/sprints/errors';
+import { SprintNotFoundError, SprintNotStartedError } from '@/lib/sprints/errors';
 import { buildStatusByKey } from '@/app/(authed)/backlog/_components/backlogShared';
 import { SprintReport } from '@/app/(authed)/backlog/_components/SprintReport';
 
@@ -44,16 +44,23 @@ export default async function SprintReportPage({ params }: { params: Promise<{ i
   const sprint = sprints.find((s) => s.id === id);
   if (!sprint) notFound();
 
-  // The velocity read (4.6.4) for the report's analytics row — the cross-sprint
-  // chart the Story-4.6 seam mounts beside the burndown (Subtask 4.6.6). A
-  // bounded last-7 read; loading/error ride the page scaffold (Server Component).
-  const [report, workflow, velocity] = await Promise.all([
+  // The report's analytics reads, fetched server-side (loading/error ride the
+  // page scaffold — Server Component): the velocity (4.6.4) and the
+  // completed-sprint burndown (4.6.3) the Story-4.6 seam presents together
+  // (Subtasks 4.6.5 + 4.6.6). Both are bounded reads. A never-started sprint
+  // has no burndown window (`SprintNotStartedError`) — the slot then falls back
+  // to its client fetch and shows the chart error state.
+  const [report, workflow, velocity, burndown] = await Promise.all([
     sprintsService.getSprintReport(id, {}, accessCtx).catch((err) => {
       if (err instanceof SprintNotFoundError) return null;
       throw err;
     }),
     workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
     reportsService.getVelocity({ projectId: ctx.projectId }, accessCtx),
+    reportsService.getBurndownSeries(id, accessCtx).catch((err) => {
+      if (err instanceof SprintNotStartedError) return undefined;
+      throw err;
+    }),
   ]);
   if (!report) notFound();
 
@@ -74,7 +81,13 @@ export default async function SprintReportPage({ params }: { params: Promise<{ i
         </h1>
       </div>
 
-      <SprintReport report={report} sprint={sprint} statusByKey={statusByKey} velocity={velocity} />
+      <SprintReport
+        report={report}
+        sprint={sprint}
+        statusByKey={statusByKey}
+        velocity={velocity}
+        burndown={burndown}
+      />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { CompleteSprintDialog } from '@/app/(authed)/backlog/_components/CompleteSprintDialog';
 import type { StatusByKey } from '@/app/(authed)/backlog/_components/backlogShared';
 import type { SprintDto, SprintReportDto } from '@/lib/dto/sprints';
+import type { BurndownSeriesDto } from '@/lib/dto/reports';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { RankedIssuePageDto } from '@/lib/dto/backlog';
 
@@ -107,8 +108,27 @@ function okJson(body: unknown = {}) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as Response);
 }
 
+// A minimal completed-sprint burndown — the success state's burndown slot
+// (Subtask 4.6.5) client-fetches GET …/burndown for the just-completed sprint.
+function burndown(): BurndownSeriesDto {
+  return {
+    sprintId: 'sp6',
+    state: 'complete',
+    statistic: 'story_points',
+    committed: 42,
+    startDate: '2026-06-09T00:00:00.000Z',
+    endDate: '2026-06-22T00:00:00.000Z',
+    days: [
+      { date: '2026-06-09', guideline: 42, remaining: 42 },
+      { date: '2026-06-22', guideline: 0, remaining: 13 },
+    ],
+    scopeChanges: [],
+  };
+}
+
 // The default fetch stub: GET …/report → the report fixture; POST …/complete → the
-// completed sprint. Override per-test for the unestimated / all-complete cases.
+// completed sprint; GET …/burndown → the burndown fixture (the 4.6.5 success-state
+// slot). Override per-test for the unestimated / all-complete cases.
 let fetchMock: ReturnType<typeof vi.fn>;
 let reportBody: SprintReportDto;
 
@@ -118,6 +138,7 @@ function install(reportFixture: SprintReportDto = report()) {
     const u = String(url);
     if (u.endsWith('/report')) return okJson(reportBody);
     if (u.endsWith('/complete')) return okJson(sprint({ state: 'complete' }));
+    if (u.endsWith('/burndown')) return okJson(burndown());
     return okJson({});
   });
   vi.stubGlobal('fetch', fetchMock);
@@ -223,7 +244,9 @@ describe('CompleteSprintDialog (4.4.6)', () => {
     expect(screen.getByTestId('report-row-PROD-241')).toBeTruthy();
     // The carried-over incomplete row shows its "→ Backlog" destination.
     expect(screen.getByTestId('report-row-PROD-244')).toBeTruthy();
-    expect(screen.getByText('Story 4.6')).toBeTruthy();
+    // The burndown slot (4.6.5) client-fetches the just-completed sprint's
+    // series and renders the chart in the success state.
+    expect(await screen.findByText('42 committed')).toBeTruthy();
     // The standalone closed-sprint report is reachable from the success state.
     const link = screen.getByRole('link', { name: /Open full report/ });
     expect(link.getAttribute('href')).toBe('/sprints/sp6/report');
