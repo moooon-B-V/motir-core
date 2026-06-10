@@ -244,7 +244,7 @@ export const story_5_1: PlanStory = {
       id: '5.1.2',
       title:
         '`commentsService` — add/edit/delete/list with 6.4-role permissions, server-side mention parsing + `comment_mention` rows, paged reads, job events',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
@@ -398,7 +398,7 @@ export const story_5_1: PlanStory = {
       id: '5.1.4',
       title:
         'Mention capability in `MarkdownEditor` + mention-chip rendering in `MarkdownView` (tiptap Mention + `mention:` token round-trip)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -509,7 +509,7 @@ export const story_5_1: PlanStory = {
       id: '5.1.6',
       title:
         'Mention → email notification job (`work-item/comment.created` + description-mention parity) via the 1.6 pipeline + `mentionNotification` template',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
