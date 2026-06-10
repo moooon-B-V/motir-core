@@ -82,6 +82,9 @@ export default defineConfig({
         // leaves ship gated from day one; the services join in 5.4.2–5.4.4.
         'lib/repositories/labelRepository.ts',
         'lib/repositories/workItemLabelRepository.ts',
+        // 5.4.2 — the folksonomy service layer.
+        'lib/services/labelsService.ts',
+        'lib/mappers/labelMappers.ts',
         'lib/repositories/componentRepository.ts',
         'lib/repositories/workItemComponentRepository.ts',
         'lib/repositories/watcherRepository.ts',
@@ -137,6 +140,9 @@ export default defineConfig({
         // from day one (Subtask 5.4.1); the 5.4.2–5.4.4 services join next.
         'lib/repositories/labelRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workItemLabelRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        // 5.4.2 — the folksonomy service layer gates with its tests.
+        'lib/services/labelsService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mappers/labelMappers.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/componentRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workItemComponentRepository.ts': {
           branches: 90,

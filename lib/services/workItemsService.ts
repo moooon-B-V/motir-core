@@ -5,6 +5,7 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { labelRepository } from '@/lib/repositories/labelRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
@@ -37,6 +38,7 @@ import {
   toWorkItemTreeRowDto,
 } from '@/lib/mappers/workItemMappers';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
+import { toLabelDto } from '@/lib/mappers/labelMappers';
 import { toWorkItemRevisionDto } from '@/lib/mappers/workItemRevisionMappers';
 import type {
   WorkItemForestRow,
@@ -1470,6 +1472,7 @@ export const workItemsService = {
       duplicatesLinks,
       clonesLinks,
       workflow,
+      labelRows,
     ] = await Promise.all([
       // The breadcrumb chain (root→self, item excluded) — one CTE, workspace-
       // scoped. The immediate parent is `ancestors`' last element; we surface it
@@ -1482,6 +1485,9 @@ export const workItemsService = {
       workItemLinkRepository.findByFromItem(item.id, 'duplicates'),
       workItemLinkRepository.findByFromItem(item.id, 'clones'),
       workflowsService.getWorkflow(projectId, ctx.workspaceId),
+      // The issue's labels (5.4.2) — one bounded query riding the same
+      // fan-out (no extra round-trip; capped per-issue by labelsService).
+      labelRepository.listByWorkItem(item.id),
     ]);
 
     const [blockerRows, blockingRows, relatesRows, duplicatesRows, clonesRows, readiness] =
@@ -1512,6 +1518,7 @@ export const workItemsService = {
       clones: toRelationshipLinks(clonesLinks, clonesRows, 'toId'),
       readiness: { ready: readiness.ready, openBlockers },
       workflow,
+      labels: labelRows.map(toLabelDto),
     };
   },
 
