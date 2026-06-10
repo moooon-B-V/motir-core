@@ -326,6 +326,64 @@ export const EPICS: EpicMeta[] = [
           'filing’s unique repro (single-row `TEST-3`, Priority picker clipped below the table) is ' +
           'the same defect captured above.',
       },
+      {
+        id: 'bug-inline-status-revert-on-second-edit',
+        kind: 'bug',
+        title:
+          "Issue list: inline status edit — the first item's status sometimes reverts after editing a second item",
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 2 · **Surface:** issue list inline cell editing ' +
+          '(Story 2.5, Subtask 2.5.5 — the status / assignee / priority editors) · **Reported ' +
+          'by:** Yue, 2026-06-10.\n\n' +
+          'Change the **status** of work item A inline on `/issues`, then change the status of a ' +
+          "second work item B — **intermittently, A's status flips back to its previous value** " +
+          'after the second edit. "Sometimes": it does not reproduce on every attempt; editing ' +
+          'the two items in quick succession appears to raise the hit rate, which smells like a ' +
+          'timing race rather than a deterministic logic error.\n\n' +
+          '**Repro (intermittent):** sign in as `zhuyue@prodect.co` / `!QAZ1qaz`, open `/issues` ' +
+          "in List view, inline-edit item A's Status cell (e.g. To do → In progress), then " +
+          "promptly inline-edit item B's Status cell. Watch A's cell after B's edit settles — " +
+          'on a hit, A renders its OLD status again.\n\n' +
+          '**⚠️ NOT diagnosed — failing repro test FIRST (the reproduce-before-diagnosing rule; ' +
+          'the filter check-mark lesson).** This card records the SYMPTOM; no root cause has ' +
+          'been verified, and the fix MUST begin with a red repro test — not a code-reading ' +
+          "theory. The FIRST question that test must answer: is A's status reverted **in the " +
+          'database** (a lost/overwritten write — data corruption, severity up) or **only in ' +
+          'the rendered list** (a stale-display race)? Assert the DB row, not just the cell.\n\n' +
+          '**Investigation surface (hypotheses to test, NOT conclusions).** Each inline cell ' +
+          'editor in `IssueInlineEdit.tsx` keeps a local optimistic `override` and calls ' +
+          '`router.refresh()` after its PATCH resolves. Two rapid edits put two PATCHes + two ' +
+          "refreshes in flight: candidate mechanisms include (a) B's refresh payload being " +
+          "read/snapshotted before A's write is visible and re-rendering A from stale server " +
+          "props after A's `override` is gone, (b) refresh responses resolving out of order, " +
+          '(c) the `override` being cleared by ANY refresh completion rather than its own. A ' +
+          'deterministic repro can interleave these orderings — component/integration test with ' +
+          'controlled response ordering, or Playwright with route interception delaying the ' +
+          'first PATCH/refresh. Also check whether the detail-page status control and the board ' +
+          'column-menu transition share the pattern (fix once in the shared mechanic if so).\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- A repro test exists that is RED on the pre-fix code (two rapid inline status edits ' +
+          'with adversarial response ordering → first item reverts) and green after; it asserts ' +
+          'BOTH the rendered cell AND the persisted DB status of item A.\n' +
+          "- After the fix, A keeps its new status across B's edit and every refresh ordering; " +
+          "neither write is lost (both revision rows exist, A's latest wins for A).\n" +
+          '- The fix covers all three inline editors sharing the mechanic (status / assignee / ' +
+          'priority) — asserted for at least status + assignee — and any other surface found to ' +
+          'share it during investigation.\n' +
+          '- Single-edit behavior unchanged: the existing inline-edit tests stay green.\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/issues/_components/IssueInlineEdit.tsx` — the per-cell `override` + ' +
+          '`router.refresh()` mechanic (lines ~95-200)\n' +
+          '- `app/(authed)/issues/_components/issueColumns.tsx`, `IssueListTable.tsx` — how ' +
+          'server props flow back into the cells\n' +
+          '- `lib/services/workItemsService.ts` (`updateStatus`) — the persisted-state side the ' +
+          'repro test must assert\n' +
+          '- `tests/components/issue-inline-edit.test.tsx` — the existing suite the repro ' +
+          'extends\n' +
+          '- notes.html (reproduce-before-diagnosing; the twice-wrong filter check-mark bug)',
+      },
     ],
   },
   {
