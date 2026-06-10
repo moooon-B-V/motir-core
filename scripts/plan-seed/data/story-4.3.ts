@@ -448,7 +448,7 @@ export const story_4_3: PlanStory = {
       id: '4.3.5',
       title:
         'Roll-up displays — sprint committed-points (fills the Story-4.2 sprint-header seam) + epic/parent subtree roll-up badge (issue detail + list/tree)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 26,
@@ -543,7 +543,7 @@ export const story_4_3: PlanStory = {
       id: '4.3.7',
       title:
         'Story tests — estimate write + config + bounded sprint/epic roll-ups (incl. statistic switch + at-scale) + badge/settings components + estimate-a-story E2E',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 24,

@@ -70,7 +70,7 @@ import type { PlanStory } from '../types';
 export const story_4_2: PlanStory = {
   id: '4.2',
   title: 'Backlog UI (groom + rank + assign to sprint)',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     "The **Backlog / sprint-planning** screen — Prodect's clone of the Jira backlog. A new nav " +
     "destination (`/backlog`, project-scoped) showing the project's **ranked backlog** (issues with " +
@@ -458,7 +458,7 @@ export const story_4_2: PlanStory = {
       id: '4.2.6',
       title:
         'Story tests — bulk/create service + selection/drag/create components + at-scale backlog-grooming E2E',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 24,

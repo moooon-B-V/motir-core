@@ -2,16 +2,9 @@
 
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import {
-  Calendar,
-  CheckCircle2,
-  ChevronDown,
-  Gauge,
-  Hash,
-  MoreHorizontal,
-  Play,
-} from 'lucide-react';
+import { Calendar, CheckCircle2, ChevronDown, Gauge, MoreHorizontal, Play } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
+import { SprintPointsBadge } from '@/components/issues/SprintPointsBadge';
 import type { SprintDto } from '@/lib/dto/sprints';
 import { BacklogRows, useRankedIssues } from './BacklogList';
 import { CreateIssueRow } from './CreateIssueRow';
@@ -136,16 +129,10 @@ export function SprintContainer({
           {sprint.issueCount}
         </span>
         <span className="flex-1" />
-        {/* Committed-points roll-up (Subtask 4.4.9 — finding #69; fills the
-            Story-4.3 seam): the live `committed` points, "—" when unestimated. */}
-        <span
-          className="flex items-center gap-1 text-xs text-(--el-text-muted)"
-          title={t('committedPointsSeam')}
-          aria-label={t('committedPointsSeam')}
-        >
-          <Hash className="h-3.5 w-3.5" aria-hidden />
-          {t('committedPoints', { points: points?.committed ?? 0 })}
-        </span>
+        {/* Committed-points roll-up (Subtask 4.3.5; fills the Story-4.2 seam 4.4.9
+            stopgapped): the full committed · done · left figure per the design,
+            from the shared `useSprintPoints` read. "—" when unestimated. */}
+        <SprintPointsBadge points={points} state={sprint.state} />
         {/* Velocity SEAM → Story 4.6 (reserved, not computed). */}
         <span
           className="flex items-center gap-1 text-xs text-(--el-text-faint)"

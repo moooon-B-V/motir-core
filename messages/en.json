@@ -1116,6 +1116,22 @@
     "deckCustom": "Custom",
     "clear": "Clear",
     "cancelHint": "Esc to cancel",
-    "saveError": "Couldn't update the estimate. Please try again."
+    "saveError": "Couldn't update the estimate. Please try again.",
+    "rollup": {
+      "labelStoryPoints": "Story points",
+      "labelTime": "Time estimate",
+      "labelIssues": "Issues",
+      "pts": "pts",
+      "filledAria": "Rolled-up {label}: {value}",
+      "emptyAria": "No estimated descendants"
+    },
+    "sprintPoints": {
+      "committed": "committed",
+      "done": "done",
+      "left": "left",
+      "filledAria": "Points: {committed} committed, {completed} completed, {remaining} remaining",
+      "committedAria": "Points: {committed} committed",
+      "emptyAria": "Sprint has no estimated points"
+    }
   }
 }

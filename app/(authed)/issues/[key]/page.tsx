@@ -8,6 +8,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { estimationService } from '@/lib/services/estimationService';
 import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
+import { ParentRollupBadge } from '@/components/issues/ParentRollupBadge';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import type { IssueType } from '@/lib/issues/parentRules';
@@ -93,73 +94,96 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
     workspaceId: ctx.workspaceId,
   });
 
+  // Epic/parent subtree roll-up (Subtask 4.3.5) — the SUM of the configured
+  // statistic across this item's descendants, computed server-side (one bounded
+  // recursive-CTE aggregate — finding #57) ONLY when the item has children, so
+  // the header badge renders with no client fetch / flash. A leaf shows none.
+  const parentRollup =
+    detail.children.length > 0
+      ? await estimationService.rollupForParent(item.id, {
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        })
+      : null;
+
   return (
-    <div className="flex flex-col gap-6">
-      {/* Header — type icon · identifier · parent breadcrumb · status · title +
+    <EstimationConfigProvider config={estimationConfig} canEdit={canEdit}>
+      <div className="flex flex-col gap-6">
+        {/* Header — type icon · identifier · parent breadcrumb · status · title +
           Edit link. The breadcrumb (2.4.3) renders the ancestor chain right
           after the identifier, per the detail.png eyebrow. */}
-      <header className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <IssueTypeIcon type={item.kind as IssueType} className="h-5 w-5 shrink-0" />
-          <span className="text-(--el-text-muted) font-mono text-sm">{item.identifier}</span>
-          <ParentBreadcrumb ancestors={detail.ancestors} />
-          <Pill tone="neutral">{item.status}</Pill>
-          {canEdit ? (
-            <Link
-              href={`/issues/${item.identifier}/edit`}
-              className="border-(--el-border) text-(--el-text) hover:bg-(--el-surface) ml-auto rounded-md border px-3 py-1.5 font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-            >
-              {t('edit')}
-            </Link>
-          ) : null}
-        </div>
-        <h1 className="text-(--el-text) font-serif text-2xl font-semibold">{item.title}</h1>
-      </header>
+        <header className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <IssueTypeIcon type={item.kind as IssueType} className="h-5 w-5 shrink-0" />
+            <span className="text-(--el-text-muted) font-mono text-sm">{item.identifier}</span>
+            <ParentBreadcrumb ancestors={detail.ancestors} />
+            <Pill tone="neutral">{item.status}</Pill>
+            <div className="ml-auto flex items-center gap-3">
+              {/* Epic/parent subtree roll-up (4.3.5) — labelled so it never reads
+                as the parent's OWN estimate; shown only when it has descendants. */}
+              {parentRollup ? (
+                <ParentRollupBadge
+                  itemId={item.id}
+                  initialTotal={parentRollup.total}
+                  variant="header"
+                />
+              ) : null}
+              {canEdit ? (
+                <Link
+                  href={`/issues/${item.identifier}/edit`}
+                  className="border-(--el-border) text-(--el-text) hover:bg-(--el-surface) rounded-md border px-3 py-1.5 font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                >
+                  {t('edit')}
+                </Link>
+              ) : null}
+            </div>
+          </div>
+          <h1 className="text-(--el-text) font-serif text-2xl font-semibold">{item.title}</h1>
+        </header>
 
-      {/* Body — two columns; later subtasks fill the regions. */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_18rem]">
-        <main className="flex flex-col gap-6">
-          <ContentSectionCard
-            title={t('description')}
-            subtitle={t('descriptionGloss')}
-            editHref={canEdit ? `/issues/${item.identifier}/edit` : undefined}
-          >
-            {item.descriptionMd ? (
-              <MarkdownView value={item.descriptionMd} aria-label={t('issueDescriptionAria')} />
-            ) : (
-              <p className="font-sans text-sm text-(--el-text-secondary) italic">
-                {t('noDescription')}
-              </p>
-            )}
-          </ContentSectionCard>
-          <IssueExplanation
-            explanationMd={item.explanationMd}
-            explanationSource={item.explanationSource}
-            editHref={canEdit ? `/issues/${item.identifier}/edit` : undefined}
-          />
-          {/* 2.4.5: the relationships section + ready/blocked banner — a left-
+        {/* Body — two columns; later subtasks fill the regions. */}
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_18rem]">
+          <main className="flex flex-col gap-6">
+            <ContentSectionCard
+              title={t('description')}
+              subtitle={t('descriptionGloss')}
+              editHref={canEdit ? `/issues/${item.identifier}/edit` : undefined}
+            >
+              {item.descriptionMd ? (
+                <MarkdownView value={item.descriptionMd} aria-label={t('issueDescriptionAria')} />
+              ) : (
+                <p className="font-sans text-sm text-(--el-text-secondary) italic">
+                  {t('noDescription')}
+                </p>
+              )}
+            </ContentSectionCard>
+            <IssueExplanation
+              explanationMd={item.explanationMd}
+              explanationSource={item.explanationSource}
+              editHref={canEdit ? `/issues/${item.identifier}/edit` : undefined}
+            />
+            {/* 2.4.5: the relationships section + ready/blocked banner — a left-
               column section card (per the approved mockup), after Explanation.
               2.4.9: editable here (add control + per-row remove). */}
-          <RelationshipsPanel
-            blockedBy={detail.blockedBy}
-            blocks={detail.blocks}
-            relatesTo={detail.relatesTo}
-            duplicates={detail.duplicates}
-            clones={detail.clones}
-            readiness={detail.readiness}
-            currentStatus={item.status}
-            workflow={detail.workflow}
-            editable={canEdit}
-            currentItemId={item.id}
-            identifier={item.identifier}
-          />
-          {/* 2.4.3: direct children (a leaf renders nothing). Epic 5 extension
+            <RelationshipsPanel
+              blockedBy={detail.blockedBy}
+              blocks={detail.blocks}
+              relatesTo={detail.relatesTo}
+              duplicates={detail.duplicates}
+              clones={detail.clones}
+              readiness={detail.readiness}
+              currentStatus={item.status}
+              workflow={detail.workflow}
+              editable={canEdit}
+              currentItemId={item.id}
+              identifier={item.identifier}
+            />
+            {/* 2.4.3: direct children (a leaf renders nothing). Epic 5 extension
               slots: comments · activity. */}
-          <ChildList items={detail.children} workflow={detail.workflow} members={members} />
-        </main>
+            <ChildList items={detail.children} workflow={detail.workflow} members={members} />
+          </main>
 
-        <aside className="flex flex-col gap-4">
-          <EstimationConfigProvider config={estimationConfig} canEdit={canEdit}>
+          <aside className="flex flex-col gap-4">
             <CoreFieldsPanel
               item={item}
               members={members}
@@ -167,11 +191,11 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
               parent={detail.parent}
               reporterIsSelf={item.reporterId === ctx.userId}
             />
-          </EstimationConfigProvider>
-          {/* The 2.4.3 parent breadcrumb lives in the header (per detail.png),
+            {/* The 2.4.3 parent breadcrumb lives in the header (per detail.png),
               not here. Epic 5: custom fields · attachments. */}
-        </aside>
+          </aside>
+        </div>
       </div>
-    </div>
+    </EstimationConfigProvider>
   );
 }
