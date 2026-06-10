@@ -130,4 +130,41 @@ export const commentRepository = {
     const client = tx ?? db;
     return client.comment.count({ where: { workItemId, parentCommentId: null } });
   },
+
+  /**
+   * A ROOT comment's replies, oldest first (Subtask 5.2.3) — the delete path
+   * reads the thread's bodies BEFORE the cascade takes them, so the
+   * link-on-write sync can unlink the attachment rows those bodies
+   * referenced. Bounded by the single-level-threading rule (replies of one
+   * root, never a tree walk). Takes `tx` when read inside the delete
+   * transaction.
+   */
+  async listReplies(parentCommentId: string, tx?: Prisma.TransactionClient): Promise<Comment[]> {
+    const client = tx ?? db;
+    return client.comment.findMany({
+      where: { parentCommentId },
+      orderBy: { createdAt: 'asc' },
+    });
+  },
+
+  /**
+   * Whether ANY comment on the work item still references `text` (Subtask
+   * 5.2.3) — the still-referenced-elsewhere guard the unlink path runs per
+   * de-referenced blob URL before letting a row go GC-eligible. A bounded
+   * existence probe (`findFirst` on the indexed work_item_id, substring match
+   * on the candidate bodies), never a table scan; runs inside the write tx so
+   * it sees the body state the current write produced.
+   */
+  async someBodyReferences(
+    workItemId: string,
+    text: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const client = tx ?? db;
+    const row = await client.comment.findFirst({
+      where: { workItemId, bodyMd: { contains: text } },
+      select: { id: true },
+    });
+    return row !== null;
+  },
 };

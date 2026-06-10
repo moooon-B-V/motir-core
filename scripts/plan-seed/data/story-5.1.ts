@@ -571,7 +571,7 @@ export const story_5_1: PlanStory = {
       id: '5.1.7',
       title:
         'Story tests — Vitest service matrix + Playwright E2E (comment→mention→email, reply/edit/delete, show-more at scale) + strict a11y sweep',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,

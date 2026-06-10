@@ -326,6 +326,72 @@ export const EPICS: EpicMeta[] = [
           'filing’s unique repro (single-row `TEST-3`, Priority picker clipped below the table) is ' +
           'the same defect captured above.',
       },
+      {
+        id: 'bug-inline-status-revert-on-second-edit',
+        kind: 'bug',
+        title:
+          "Issue list: inline status edit — the first item's status sometimes reverts after editing a second item",
+        status: 'in_progress',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 2 · **Surface:** issue list inline cell editing ' +
+          '(Story 2.5, Subtask 2.5.5 — the status / assignee / priority editors) · **Reported ' +
+          'by:** Yue, 2026-06-10.\n\n' +
+          'Change the **status** of work item A inline on `/issues`, then change the status of a ' +
+          "second work item B — **intermittently, A's status flips back to its previous value** " +
+          'after the second edit. "Sometimes": it does not reproduce on every attempt; editing ' +
+          'the two items in quick succession appears to raise the hit rate, which smells like a ' +
+          'timing race rather than a deterministic logic error.\n\n' +
+          '**Repro (intermittent):** sign in as `zhuyue@prodect.co` / `!QAZ1qaz`, open `/issues` ' +
+          "in List view, inline-edit item A's Status cell (e.g. To do → In progress), then " +
+          "promptly inline-edit item B's Status cell. Watch A's cell after B's edit settles — " +
+          'on a hit, A renders its OLD status again.\n\n' +
+          '**Scoped to DISPLAY-ONLY (Yue, 2026-06-10): the backend is correct.** Yue verified ' +
+          "the API persists the update — A's row holds the NEW status in the database while the " +
+          'list renders the OLD one. So this is a client-side stale-display race in the list ' +
+          'UI, not a lost write: no data corruption, but trust-breaking (the user is shown ' +
+          'state the system knows is wrong, until the next reload).\n\n' +
+          '**⚠️ Client mechanism NOT diagnosed — failing repro test FIRST (the ' +
+          'reproduce-before-diagnosing rule; the filter check-mark lesson).** This card records ' +
+          'the SYMPTOM plus the backend-correct scoping above; WHICH client interleaving causes ' +
+          'the stale render has not been verified, and the fix MUST begin with a red repro ' +
+          'test — not a code-reading theory. The test still asserts the DB row alongside the ' +
+          'cell (locking in the backend-correct fact and catching any regression to a lost ' +
+          'write), but the red assertion is the rendered cell.\n\n' +
+          '**Investigation surface (hypotheses to test, NOT conclusions).** Each inline cell ' +
+          'editor in `IssueInlineEdit.tsx` keeps a local optimistic `override` and calls ' +
+          '`router.refresh()` after its PATCH resolves. Two rapid edits put two PATCHes + two ' +
+          "refreshes in flight: candidate mechanisms include (a) B's refresh payload being " +
+          "read/snapshotted before A's write is visible and re-rendering A from stale server " +
+          "props after A's `override` is gone, (b) refresh responses resolving out of order, " +
+          '(c) the `override` being cleared by ANY refresh completion rather than its own. A ' +
+          'deterministic repro can interleave these orderings — component/integration test with ' +
+          'controlled response ordering, or Playwright with route interception delaying the ' +
+          'first PATCH/refresh. Also check whether the detail-page status control and the board ' +
+          'column-menu transition share the pattern (fix once in the shared mechanic if so).\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- A repro test exists that is RED on the pre-fix code (two rapid inline status edits ' +
+          'with adversarial response ordering → the first cell renders the old status) and ' +
+          'green after; it asserts the rendered cell, and confirms the DB row holds the new ' +
+          'status throughout (the backend-correct fact, locked in against regression).\n' +
+          "- After the fix, A's cell shows its new status across B's edit and every refresh " +
+          'ordering — the rendered list converges to the persisted state without a manual ' +
+          'reload.\n' +
+          '- The fix covers all three inline editors sharing the mechanic (status / assignee / ' +
+          'priority) — asserted for at least status + assignee — and any other surface found to ' +
+          'share it during investigation.\n' +
+          '- Single-edit behavior unchanged: the existing inline-edit tests stay green.\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/issues/_components/IssueInlineEdit.tsx` — the per-cell `override` + ' +
+          '`router.refresh()` mechanic (lines ~95-200)\n' +
+          '- `app/(authed)/issues/_components/issueColumns.tsx`, `IssueListTable.tsx` — how ' +
+          'server props flow back into the cells\n' +
+          '- `lib/services/workItemsService.ts` (`updateStatus`) — the persisted-state side the ' +
+          'repro test must assert\n' +
+          '- `tests/components/issue-inline-edit.test.tsx` — the existing suite the repro ' +
+          'extends\n' +
+          '- notes.html (reproduce-before-diagnosing; the twice-wrong filter check-mark bug)',
+      },
     ],
   },
   {
@@ -844,7 +910,7 @@ export const EPICS: EpicMeta[] = [
     status: 'planned',
     descriptionMd:
       'Everything between "feature complete" and "live, paid users." Stripe billing, marketing ' +
-      'site + the nifer brand mark, go-to-market strategy, the one-time Prodect → nifer rebrand ' +
+      'site + the Motir brand mark, go-to-market strategy, the one-time Prodect → Motir rebrand ' +
       'cutover, ToS + privacy policy, transactional email, basic analytics, production deploy, ' +
       'domain + SSL, onboarding, and day-1 admin tools. Most of this is human subtasks ' +
       "running through Prodect's own queue. (Formerly Epic 5.)",

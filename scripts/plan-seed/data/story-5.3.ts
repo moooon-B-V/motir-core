@@ -218,7 +218,7 @@ export const story_5_3: PlanStory = {
       id: '5.3.2',
       title:
         '`customFieldsService` (definitions) — CRUD + option rename/reorder/archive/delete-when-unused + the 50/55 caps, admin-gated, routes',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -270,7 +270,7 @@ export const story_5_3: PlanStory = {
       id: '5.3.3',
       title:
         '`customFieldsService` (values) — per-type validated set/clear + revision-trail diffs + the bounded detail-read join',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,

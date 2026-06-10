@@ -12,6 +12,8 @@ import { workItemRevisionsService } from '@/lib/services/workItemRevisionsServic
 import { workflowsService } from '@/lib/services/workflowsService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { parseMentionIds } from '@/lib/mentions/parse';
+import { attachmentsService } from '@/lib/services/attachmentsService';
+import { extractReferencedBlobUrlsFromBodies } from '@/lib/blob/referencedUrls';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { keyForAppend, keyBetween } from '@/lib/workItems/positioning';
 import { relationshipToLink } from '@/lib/workItems/linkRelationships';
@@ -488,6 +490,24 @@ export const workItemsService = {
         tx,
       );
 
+      // Link-on-write (Subtask 5.2.3): editor uploads referenced by the
+      // birth bodies link to the new issue in the SAME transaction (they were
+      // written unlinked — the upload happened before the issue existed; a
+      // cancelled modal leaves them unlinked for the 5.2.7 GC). No separate
+      // revision: like the create-modal links above, attachments arriving
+      // with the issue are part of creation, not a later edit — the
+      // 'created' anchor is the History record.
+      const birthUrls = extractReferencedBlobUrlsFromBodies(
+        [row.descriptionMd, row.explanationMd],
+        workspaceId,
+      );
+      if (birthUrls.length > 0) {
+        await attachmentsService.syncEditorLinks(
+          { workItem: row, previousUrls: [], nextUrls: birthUrls },
+          tx,
+        );
+      }
+
       // Links collected in the create modal (Subtask 2.4.10), written in the
       // SAME transaction as the item — so the issue + its links commit or roll
       // back together (a bad link aborts the whole create; the item is never
@@ -765,8 +785,40 @@ export const workItemsService = {
       }
 
       const row = await workItemRepository.update(id, update, tx);
+
+      // Link-on-write (Subtask 5.2.3): a body edit re-resolves the
+      // embeds-are-attachments linkage — newly-referenced editor uploads
+      // link, de-referenced editor-sourced rows unlink (panel rows and rows
+      // on other issues are never touched; a URL still referenced by the
+      // other body or a comment stays linked). The diff rides the SAME
+      // 'updated' revision as the body edit — one write, one History entry,
+      // the uniform trail that fills Jira's documented editor-add changelog
+      // gap. Runs against the POST-write row so the still-referenced guard
+      // sees what this transaction commits. An unchanged body never reaches
+      // here (the field-diff gate above), so a no-op re-save stays a no-op.
+      const bodyChanged =
+        diff['descriptionMd'] !== undefined || diff['explanationMd'] !== undefined;
+      const attachmentsCell = bodyChanged
+        ? await attachmentsService.syncEditorLinks(
+            {
+              workItem: row,
+              previousUrls: extractReferencedBlobUrlsFromBodies(
+                [current.descriptionMd, current.explanationMd],
+                current.workspaceId,
+              ),
+              nextUrls: extractReferencedBlobUrlsFromBodies(
+                [row.descriptionMd, row.explanationMd],
+                current.workspaceId,
+              ),
+            },
+            tx,
+          )
+        : null;
+      const revisionDiff: Record<string, unknown> = diff;
+      if (attachmentsCell) revisionDiff['attachments'] = attachmentsCell;
+
       const revisionId = await workItemRevisionsService.recordRevision(
-        { workItemId: id, changedById: ctx.userId, changeKind: 'updated', diff },
+        { workItemId: id, changedById: ctx.userId, changeKind: 'updated', diff: revisionDiff },
         tx,
       );
       return { dto: toWorkItemDto(row), revisionId, addedDescMentionIds };

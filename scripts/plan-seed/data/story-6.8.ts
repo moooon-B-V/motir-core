@@ -132,7 +132,7 @@ export const story_6_8: PlanStory = {
     'component default-assignees (5.4) cover the default-assignee use case); avatar image ' +
     'upload (above); changing the issue-key NUMBERING (Jira reserves numbers too — out ' +
     'entirely); a workspace-level "release on delete" admin view (deletion already cascades ' +
-    'the aliases). This story is the capability **8.7 (Prodect → nifer rebrand)** consumes. ' +
+    'the aliases). This story is the capability **8.7 (Prodect → Motir rebrand)** consumes. ' +
     'Relationship to 6.5: the backend (6.8.1/6.8.2) is independent; the UI grows the 6.5.3 ' +
     'Details landing and its design extends the 6.5.1 area asset (backward same-epic deps).',
   verificationRecipeMd:
