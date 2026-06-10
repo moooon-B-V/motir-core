@@ -73,6 +73,8 @@ export default defineConfig({
         'components/ui/charts/ChartFrame.tsx',
         'components/ui/charts/ChartLegend.tsx',
         'components/ui/charts/ChartDataTable.tsx',
+        'lib/repositories/commentRepository.ts',
+        'lib/repositories/commentMentionRepository.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -99,6 +101,14 @@ export default defineConfig({
         'components/ui/charts/ChartFrame.tsx': { branches: 90, functions: 90, lines: 90 },
         'components/ui/charts/ChartLegend.tsx': { branches: 90, functions: 90, lines: 90 },
         'components/ui/charts/ChartDataTable.tsx': { branches: 90, functions: 90, lines: 90 },
+        // Story 5.1 (comments): the repo leaves land gated from day one
+        // (Subtask 5.1.1); commentsService joins the list with 5.1.2.
+        'lib/repositories/commentRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/commentMentionRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
       },
     },
   },
