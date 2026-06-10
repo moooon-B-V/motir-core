@@ -32,15 +32,11 @@ export const STUB_STORIES: PlanStory[] = [
   // at scale on a large active sprint. See data/story-4.7.ts.
 
   // ── Epic 5: Collaboration & fields ────────────────────────────────────────
-  {
-    id: '5.1',
-    title: 'Comments + @mentions',
-    status: 'planned',
-    descriptionMd:
-      'Comment model + rich-text composer + mention autocomplete over workspace members. Mention ' +
-      '→ notification hook (via Story 1.6 jobs).',
-    items: [],
-  },
+  // 5.1 (Comments + @mentions) is fully expanded — data/story-5.1.ts. Its
+  // expansion also ADDED the 5.7 stub below (in-app notification center): Jira
+  // notifies mentions in-app as well as by email, and no story owned that
+  // surface (a no-V1-tier ownership gap, fixed at plan time); 5.1.6's job
+  // events are channel-agnostic so 5.7 fans in off the same events.
   {
     id: '5.2',
     title: 'Attachments',
@@ -89,6 +85,23 @@ export const STUB_STORIES: PlanStory[] = [
     descriptionMd:
       'Vitest over comment/field/activity services; Playwright over comment+mention, attach a ' +
       'file, set a custom field, read the activity feed.',
+    items: [],
+  },
+  {
+    id: '5.7',
+    title: 'In-app notifications (bell + unread feed)',
+    status: 'planned',
+    descriptionMd:
+      'The in-app half of the notification surface (5.1.6 ships the email half): a bell in the ' +
+      'shell header with an unread count, a notification feed (mentions first; watcher / ' +
+      'assignment / transition events as Stories 5.4 + 6.6 land), mark-read / mark-all-read, ' +
+      'deep links into issues, and per-user notification preferences (email vs in-app — the ' +
+      'Jira personal-notification-settings shape). Consumes the SAME channel-agnostic job ' +
+      'events 5.1.6 / 5.4 emit (`work-item/comment.created`, `work-item/mentioned`, …) — a ' +
+      'notification persistence model fed by a job, never a second emit path. Added during the ' +
+      '5.1 expansion: Jira notifies mentions in-app as well as by email, and no story owned ' +
+      'that surface (the no-V1-tier rule: an unowned capability is a planning bug, not a scope ' +
+      'cut).',
     items: [],
   },
 
