@@ -91,6 +91,17 @@ export const STUB_STORIES: PlanStory[] = [
   // feed BOTH the List and the ancestor-retaining Tree; versioned ?filter=v1:
   // URL serialization (the substrate 6.2 saved filters persist); Epic-5
   // predicates via the 5.3.1/5.4.1 documented join contracts.
+  // 6.7 (Tests) is fully expanded — data/story-6.7.ts. Re-scoped on deepening
+  // (the 3.5/4.7/5.6 precedent) to the non-duplicative remainder — 6.1.6 owns
+  // filter compilation + injection, 6.4.8 (done) owns the level × role
+  // matrix, and the 6.2/6.3/6.5/6.6/6.8 expansions below each carry their own
+  // closing test subtask (their cards must point the epic-wide journey at
+  // 6.7, the 6.1.6 note as template). 6.7's remainder: the combined Epic-6
+  // journey (build a filter → save it → back a widget → gate a viewer → fire
+  // a rule, plus the unwind) + the reporting-shaped 10k time-spread corpus
+  // with indexed-search / SQL-aggregation / exactly-once-rule-storm at-scale
+  // specs + the combined admin-hub a11y sweep. Deps use story-level ids for
+  // the unexpanded siblings (the 2.6.x precedent; retargetable on expansion).
   {
     id: '6.2',
     title: 'Saved filters',
@@ -126,16 +137,6 @@ export const STUB_STORIES: PlanStory[] = [
       'When/then rule engine scoped per project, triggered by transition/activity events (Epics ' +
       '2+5), executed via Story 1.6 jobs. A small built-in action set for v1 (set field, add ' +
       'watcher, transition).',
-    items: [],
-  },
-  {
-    id: '6.7',
-    title: 'Tests — filter compilation, permissions, automation firing',
-    status: 'planned',
-    descriptionMd:
-      'Vitest over filter→query compilation (incl. injection safety), permission checks, ' +
-      'automation trigger/action; Playwright over build-a-filter, save it, gate a viewer, fire a ' +
-      'rule.',
     items: [],
   },
   {
