@@ -487,27 +487,31 @@ model WorkItem {
   createdAt         DateTime                  @default(now())
   updatedAt         DateTime                  @updatedAt
 
-  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project   Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent    WorkItem?          @relation("WorkItemParent", fields: [parentId], references: [id], onDelete: NoAction)
-  children  WorkItem[]         @relation("WorkItemParent")
-  assignee  User?              @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  reporter  User               @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent      WorkItem?          @relation("WorkItemParent", fields: [parentId], references: [id], onDelete: NoAction)
+  children    WorkItem[]         @relation("WorkItemParent")
+  assignee    User?              @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter    User               @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
   // The sprint side of the association. Modelled on BOTH sides (Sprint.workItems
   // back-relation) with the SetNull action the migration uses, so `migrate dev`
   // reports "No difference detected" — the FK-drift rule (bug-attachment-fk-migration-drift).
-  sprint    Sprint?            @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  sprint      Sprint?            @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   // Back-relations for WorkItemLink (Subtask 1.4.3). Two named relations
   // because there are two distinct WorkItem↔WorkItemLink edges (from/to).
   // Cascading delete on both sides: removing an issue removes its links.
-  linksFrom WorkItemLink[]     @relation("LinksFrom")
-  linksTo   WorkItemLink[]     @relation("LinksTo")
+  linksFrom   WorkItemLink[]     @relation("LinksFrom")
+  linksTo     WorkItemLink[]     @relation("LinksTo")
   // Audit trail (Subtask 1.4.6). A work item accrues many revision rows; the
   // FK cascades so hard-deleting an issue removes its history with it.
-  revisions WorkItemRevision[]
+  revisions   WorkItemRevision[]
   // Comment thread (Subtask 5.1.1). Comments die with the issue (Cascade) —
   // the rare hard-delete path; issues are soft-archived in practice.
-  comments  Comment[]
+  comments    Comment[]
+  // Issue attachments (Subtask 5.2.1). SetNull — NOT cascade: hard-deleting an
+  // issue must leave the attachment rows behind (unlinked) so the orphan-GC
+  // (5.2.7) can remove their blobs too; a cascade would strand the blobs.
+  attachments Attachment[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -928,26 +932,26 @@ enum BoardSwimlaneGroupBy {
 /// per-project monotonic ordinal that produces the default name ("Sprint N")
 /// and a stable listing.
 model Sprint {
-  id          String      @id @default(cuid())
-  workspaceId String      @map("workspace_id")
-  projectId   String      @map("project_id")
-  name        String
-  goal        String?     @db.Text
-  state       SprintState @default(planned)
-  startDate   DateTime?   @map("start_date")
-  endDate     DateTime?   @map("end_date")
-  completedAt DateTime?   @map("completed_at")
+  id                  String      @id @default(cuid())
+  workspaceId         String      @map("workspace_id")
+  projectId           String      @map("project_id")
+  name                String
+  goal                String?     @db.Text
+  state               SprintState @default(planned)
+  startDate           DateTime?   @map("start_date")
+  endDate             DateTime?   @map("end_date")
+  completedAt         DateTime?   @map("completed_at")
   // Scope-lock baseline (Story 4.4.2) — the immutable "Committed" snapshot taken
   // once by `startSprint` and never mutated thereafter (the Jira "Committed"
   // line). `committedPoints` is Decimal (NOT the card's `Int?`): the snapshot is
   // a SUM over `work_item.storyPoints`, itself `Decimal(6,2)` (rung 2 — the
   // shipped column wins over the card's prose), so an Int would truncate
   // fractional estimates; widened to (8,2) for the multi-issue sum's headroom.
-  committedPoints     Decimal? @db.Decimal(8, 2) @map("committed_points")
-  committedIssueCount Int?     @map("committed_issue_count")
-  sequence    Int
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
+  committedPoints     Decimal?    @map("committed_points") @db.Decimal(8, 2)
+  committedIssueCount Int?        @map("committed_issue_count")
+  sequence            Int
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
 
   workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1070,32 +1074,63 @@ enum JobRunStatus {
   @@map("job_run_status")
 }
 
+/// Where an attachment row entered the system (Subtask 5.2.1). `editor` =
+/// uploaded through the Markdown editor (description / explanation / comment
+/// body) and linked to its issue by the link-on-write parse (5.2.3); `panel` =
+/// uploaded through the attachments panel (5.2.2). The panel BLOCKS deleting
+/// editor-sourced rows (it points the user at the source field instead) — the
+/// Jira-verified rule that prevents the broken-embed hole, and the ONLY reason
+/// this column exists (no `commentId`: jump-to-exact-comment is a documented
+/// extension, "no complexity for nothing").
+enum AttachmentSource {
+  editor
+  panel
+
+  @@map("attachment_source")
+}
+
 /// An uploaded blob (Subtask 2.3.7) — a description image/file persisted to
-/// Vercel Blob. v1 is a billing/audit trail: it records WHO uploaded WHAT,
-/// not which work_item references it (the Markdown body just holds the URL).
-/// Epic 5's attachments panel adds the `workItemId` link + management UI and
-/// REUSES this table + the upload service/route (finding #52). RLS = pure
-/// workspace gate (mirrors workflow_status — non-null workspaceId, written
-/// inside an active workspace context); policy is in the migration SQL.
+/// Vercel Blob. 2.3.7 shipped it as a billing/audit trail: it records WHO
+/// uploaded WHAT. Story 5.2 adds the `workItemId` link + `source` (Subtask
+/// 5.2.1) so the attachments panel can manage files per issue, REUSING this
+/// table + the upload service/route (finding #52). `workItemId` is NULLABLE —
+/// rows are born unlinked (an editor upload at create-modal time happens
+/// before the issue exists); the link-on-write parse (5.2.3) or the panel
+/// upload (5.2.2) sets it, and the orphan-GC (5.2.7) sweeps rows that never
+/// get linked. RLS = workspace gate + the `app.system_admin` hatch (added in
+/// the 5.2.1 migration — the GC is a context-less background reader/writer,
+/// the same criterion that earned job_run its hatch); policy is in the
+/// migration SQL.
 /// `uploaderUserId`'s FK (cascade) is created in the 2.3.7 migration; this
 /// model MODELS it as the `uploader` relation (with `User.uploadedAttachments`
 /// as the back-relation) so the schema graph matches the migration-built DB.
 /// Modelling it is required: a hand-managed FK with no `@relation` makes every
 /// `prisma migrate dev` re-propose dropping it (bug-attachment-fk-migration-drift).
 model Attachment {
-  id               String   @id @default(cuid())
-  workspaceId      String   @map("workspace_id")
-  uploaderUserId   String   @map("uploader_user_id")
-  blobUrl          String   @map("blob_url")
-  mimeType         String   @map("mime_type")
-  sizeBytes        Int      @map("size_bytes")
-  originalFilename String   @map("original_filename")
-  createdAt        DateTime @default(now()) @map("created_at")
+  id               String           @id @default(cuid())
+  workspaceId      String           @map("workspace_id")
+  uploaderUserId   String           @map("uploader_user_id")
+  // The issue this file is attached to (Subtask 5.2.1). `onDelete: SetNull`,
+  // NOT Cascade — hard-deleting an issue must leave the row behind (unlinked)
+  // so the orphan-GC (5.2.7) can also remove the BLOB; a cascade would
+  // vaporise the rows and strand their blobs invisibly.
+  workItemId       String?          @map("work_item_id")
+  // Default `editor`: every pre-5.2 row came through the editor upload path,
+  // so the migration's ADD COLUMN backfills existing rows correctly.
+  source           AttachmentSource @default(editor)
+  blobUrl          String           @map("blob_url")
+  mimeType         String           @map("mime_type")
+  sizeBytes        Int              @map("size_bytes")
+  originalFilename String           @map("original_filename")
+  createdAt        DateTime         @default(now()) @map("created_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   uploader  User      @relation(fields: [uploaderUserId], references: [id], onDelete: Cascade)
+  workItem  WorkItem? @relation(fields: [workItemId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt(sort: Desc)])
+  // The paged panel read (5.2.2): an issue's attachments, newest first.
+  @@index([workItemId, createdAt(sort: Desc)])
   @@map("attachment")
 }
 
