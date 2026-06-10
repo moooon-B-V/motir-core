@@ -212,6 +212,15 @@ none does; optimistic with snap-back; counts update; selection clears on success
 Selection is keyed by issue id, so it survives lazy-load + virtualized scroll.
 The bulk bar uses the `--el-accent` surface with white-surface controls (AA-safe).
 
+**Bulk actions are CONTEXTUAL to the selection's current origin** (behaviour spec,
+not a layout change — `bug-backlog-selection-bar-move-to-backlog-always-shown`;
+Jira rung 1 scopes bulk actions to where the selection lives). **Move to backlog**
+is hidden when every selected item is already in the backlog; **Move to sprint ▸**
+is hidden when every selected item is already in the SAME sprint — each move would
+otherwise be a no-op. A mixed selection (spanning the backlog and/or ≥2 sprints)
+shows both. This mirrors the `⋯` context menu (panel 5), which already only offers
+**Move to backlog** for a row that lives in a sprint.
+
 ## Context menu (`⋯`, panel 5)
 
 The shipped dropdown `Menu` primitive (no nested buttons, no hand-rolled
