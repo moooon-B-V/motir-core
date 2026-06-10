@@ -1,0 +1,1914 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Labels · Components · Watchers (issue view) — Story 5.4 · 5.4.6 → 5.4.8 / 5.4.9
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the issue-view surfaces Story 5.4 adds —
+      Subtask 5.4.6, the design that blocks code Subtasks 5.4.8 (MultiSelectPicker
+      + the Labels / Components rail cards) and 5.4.9 (watch control + watchers
+      popover). detail.pen predates all three features (its source contains no
+      label / component / watcher element — verified), and the codebase has NO
+      multi-select input primitive (Combobox is single-select; the only
+      multi-select vocabulary is the filter bar's OptionRow rows), so the
+      planning-time design gate (notes.html mistake #31) requires this asset
+      first — the same way comments.mock.html (5.1.3) and quick-view.mock.html
+      (2.5.18) closed their gates.
+
+      MIRROR (verified at plan time in the 5.4 story module): the Jira issue-view
+      Labels / Components fields and the eye-icon watch control. Labels are a
+      type-to-create folksonomy (create-row in the picker, no spaces — hyphens).
+      ⚠️ JUSTIFIED DEVIATION (product owner, 2026-06-10): label chips are
+      COLOURED, unlike Jira's colourless labels — Prodect is deliberately less
+      enterprise / more colourful. The tint is AUTO-ASSIGNED deterministically
+      from the label name (FNV-1a over nameLower, mod 6 — the seed-loader hash
+      family) into the existing --el-tint-{peach,rose,mint,lavender,sky,yellow}
+      pastels with --el-text-strong text (finding #35: hue in the background,
+      AA-strong text on top). No schema column, no picker, no admin — the same
+      label renders the same colour everywhere (rail, board, Epic-6 filters);
+      user-PICKED colours are the documented extension. Components
+      are an admin-managed taxonomy (no create-row in the issue field; options
+      come from Project settings → Components). Watching is the eye + count at
+      the header's right; anyone who can view may watch THEMSELVES (a viewer
+      included — watching is not editing); only project/workspace admins manage
+      others; the no-view-access add is rejected with an INLINE error (Jira
+      silently drops — a documented trap we fix).
+
+      THE ONE NEW PRIMITIVE this design introduces (recorded for 5.4.8):
+      components/ui/MultiSelectPicker — a chip-input combobox designed ONCE,
+      generically (labels, components, and future Epic-6 facets all compose
+      it). Anatomy: value CHIPS (label · remove ×) inside an input-shaped box
+      (--radius-input, focus-ring on focus-within) + a type-to-filter text
+      input; an anchored listbox (the Combobox menu panel grammar:
+      --radius-card, --shadow-elevated, 4px padding) of OptionRow rows
+      (22px glyph slot · label · trailing Check in --el-accent,
+      aria-multiselectable="true"); keyboard-complete (type to filter, ↑↓ moves
+      the active row, Enter toggles, Backspace removes the last chip, Esc
+      closes). Chips are --radius-badge; the DEFAULT chip is neutral (bg
+      --el-surface, border --el-border, --el-text-secondary text — the Pill
+      neutral tone, what Components uses), and the primitive accepts an
+      optional per-value tint (the label colours above; hue-in-background +
+      --el-text-strong, AA-safe per finding #35). Everything else composes
+      shipped vocabulary: the FieldCard
+      rail-card grammar (CoreFieldsPanel), the OptionRow + Combobox menu panel,
+      the sort-btn small-header-control grammar (comments.mock.html), the
+      22px initial-letter avatar, Pill neutral, the kbd chip, the 2.4.9 inline
+      error grammar. Tokens copied 1:1 from app/globals.css; colour only via
+      Tier-3 --el-*; shape via the element-semantic radius / spacing / height /
+      shadow tokens.
+
+      Panels:
+        0 · Placement — the detail page: the header's ml-auto cluster gains the
+            WATCH control (eye + count, beside Edit); the metadata rail gains
+            the LABELS and COMPONENTS field cards between Parent and Due date
+            (display mode — chips only).
+        1 · MultiSelectPicker — the generic primitive's anatomy: rest (chips +
+            filter input), open listbox (aria-multiselectable OptionRows +
+            trailing Check), typing/filtered, and the keyboard model.
+        2 · Labels rail card — edit mode with the CREATE-ROW ("Create
+            'perf-q3'"), the no-spaces inline error, the per-issue cap (20),
+            empty placeholder, and the read-only (viewer) chip-only state.
+        3 · Components rail card — the same picker WITHOUT a create-row
+            (admin-managed options, component glyph in rows and chips), the
+            empty-project state with the quiet admin link, read-only.
+        4 · Watch control — not-watching vs watching (outline vs filled eye +
+            count), hover and focus-visible, and the tooltip with the W
+            shortcut hint.
+        5 · Watchers popover — the admin variant (add-watcher row on the
+            member-picker vocabulary, per-row remove, the inline no-view-access
+            error) and the non-admin variant (list only); paged "Show more".
+        6 · States — loading skeletons for both rail cards; the optimistic
+            count bump.
+
+      Toggle dark for token parity. See design-notes.md § Labels · Components ·
+      Watchers.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 32px;
+        --focus-ring-color: var(--color-primary);
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-warning: var(--color-warning);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        /* issue-type hue (by kind) — IssueTypeIcon applies these */
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #3bb3ae;
+        --color-accent-green: #2fc94f;
+        --color-info: #4aa3ff;
+        --color-destructive: #f0656c;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 12px 40px rgba(15, 15, 15, 0.15);
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 120px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 860px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .stack {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 44px;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .row-of {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 32px;
+        align-items: flex-start;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding-left: 2px;
+      }
+      .panel-note {
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 940px;
+        padding-left: 2px;
+      }
+      .panel-note code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+      .mini-label {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin-bottom: 8px;
+      }
+      .variant {
+        flex: 0 1 300px;
+        min-width: 280px;
+        max-width: 340px;
+      }
+      svg {
+        flex: none;
+      }
+
+      /* ── Detail-page placement chrome (panel 0) — the relationships.mock /
+            comments.mock panel-0 grammar ─────────────────────────────────── */
+      .detail-frame {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 24px;
+        max-width: 1040px;
+      }
+      .detail-head {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        column-gap: 12px;
+        row-gap: 8px;
+        margin-bottom: 8px;
+      }
+      .detail-head .type-ic {
+        width: 20px;
+        height: 20px;
+        color: var(--el-type-task);
+      }
+      .detail-head .ident {
+        font-family: var(--font-mono);
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+      }
+      .head-cluster {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .edit-btn {
+        display: inline-flex;
+        align-items: center;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .detail-title {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0 0 20px;
+        color: var(--el-text);
+      }
+      .detail-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 288px;
+        gap: 24px;
+      }
+      .col {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-width: 0;
+      }
+      .rail {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .ghost {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 14px 18px;
+        color: var(--el-text-faint);
+        font-size: 13px;
+        background: var(--el-page-bg);
+      }
+      .ghost.small {
+        padding: 10px 14px;
+        font-size: 12px;
+      }
+
+      /* ── FIELD CARD — the shipped CoreFieldsPanel FieldCard grammar ──────── */
+      .fcard {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 10px 14px;
+        width: 100%;
+      }
+      .variant .fcard {
+        max-width: 288px;
+      }
+      .fcard-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .fcard-label {
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .fcard-chev {
+        margin-top: -2px;
+        padding: 2px;
+        border: 0;
+        background: transparent;
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        line-height: 0;
+      }
+      .fcard-chev:hover {
+        color: var(--el-text);
+      }
+      .fcard-chev:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+      }
+      .fcard-chev svg {
+        width: 16px;
+        height: 16px;
+      }
+      .fcard-chev.is-open svg {
+        transform: rotate(180deg);
+      }
+      .fcard-value {
+        margin-top: 6px;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .fcard-value .muted {
+        color: var(--el-text-secondary);
+        font-style: italic;
+      }
+
+      /* ── CHIPS — --radius-badge; neutral default (Pill neutral tone), with
+            the coloured label variants below ─────────────────────────────── */
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+        max-width: 100%;
+      }
+      .chip .glyph {
+        width: 12px;
+        height: 12px;
+        color: var(--el-text-muted);
+      }
+      .chip .txt {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .chip-x {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: -4px;
+        padding: 1px;
+        border: 0;
+        background: transparent;
+        border-radius: var(--radius-badge);
+        color: var(--el-text-muted);
+        cursor: pointer;
+        line-height: 0;
+      }
+      .chip-x:hover {
+        color: var(--el-text);
+        background: var(--el-muted);
+      }
+      .chip-x:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+      }
+      .chip-x svg {
+        width: 12px;
+        height: 12px;
+      }
+
+      /* LABEL chips — coloured (the recorded deviation from Jira's colourless
+         labels: Prodect is deliberately less enterprise / more colourful).
+         Hue in the tint BACKGROUND + --el-text-strong text (finding #35 AA);
+         tint auto-assigned deterministically from the label name (FNV-1a mod 6
+         — the seed-loader hash family), so no schema column, no picker, the
+         same label is the same colour everywhere. Components chips stay
+         neutral + glyph: the two facets read differently at a glance. */
+      .chip.t-peach,
+      .chip.t-rose,
+      .chip.t-mint,
+      .chip.t-lavender,
+      .chip.t-sky,
+      .chip.t-yellow {
+        color: var(--el-text-strong);
+        border-color: transparent;
+      }
+      .chip.t-peach {
+        background: var(--el-tint-peach);
+      }
+      .chip.t-rose {
+        background: var(--el-tint-rose);
+      }
+      .chip.t-mint {
+        background: var(--el-tint-mint);
+      }
+      .chip.t-lavender {
+        background: var(--el-tint-lavender);
+      }
+      .chip.t-sky {
+        background: var(--el-tint-sky);
+      }
+      .chip.t-yellow {
+        background: var(--el-tint-yellow);
+      }
+      .chip[class*='t-'] .chip-x {
+        color: var(--el-text-strong);
+        opacity: 0.65;
+      }
+      .chip[class*='t-'] .chip-x:hover {
+        opacity: 1;
+        background: rgba(0, 0, 0, 0.08);
+      }
+      [data-theme='dark'] .chip[class*='t-'] .chip-x:hover {
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      /* The label-tint swatch dot (option rows) — the filter-bar swatch
+         vocabulary (2.5.9) */
+      .swatch {
+        width: 10px;
+        height: 10px;
+        border-radius: 9999px; /* genuinely circular — allowed */
+        border: 1px solid var(--el-border);
+      }
+
+      /* ── MULTISELECTPICKER — the ONE new primitive (5.4.8) ───────────────── */
+      .msp {
+        position: relative;
+      }
+      .msp-box {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        min-height: var(--height-input);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        cursor: text;
+      }
+      .msp-box.is-focused {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .msp-box.is-disabled {
+        background: var(--el-surface-soft);
+        cursor: not-allowed;
+      }
+      .msp-input {
+        flex: 1 1 60px;
+        min-width: 60px;
+        border: 0;
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        outline: none;
+        padding: 2px 0;
+      }
+      .msp-input::placeholder {
+        color: var(--el-text-muted);
+      }
+      .caret {
+        display: inline-block;
+        width: 1px;
+        height: 16px;
+        background: var(--el-text);
+        vertical-align: text-bottom;
+      }
+
+      /* The anchored listbox — the Combobox menu panel grammar */
+      .menu {
+        margin-top: 4px;
+        width: max-content;
+        min-width: 240px;
+        max-width: 288px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .menu.anchored {
+        position: absolute;
+        left: 0;
+        top: 100%;
+        z-index: 5;
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        border: 0;
+        background: transparent;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        text-align: left;
+        cursor: pointer;
+      }
+      .opt:hover,
+      .opt.is-active {
+        background: var(--el-surface);
+      }
+      .opt:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: -2px;
+      }
+      .opt .glyph-slot {
+        display: flex;
+        width: 22px;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-muted);
+      }
+      .opt .glyph-slot svg {
+        width: 14px;
+        height: 14px;
+      }
+      .opt .o-label {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .opt .o-check {
+        width: 16px;
+        height: 16px;
+        color: var(--el-accent);
+        opacity: 0;
+      }
+      .opt[aria-selected='true'] .o-check {
+        opacity: 1;
+      }
+      .opt.create-row .glyph-slot {
+        color: var(--el-accent);
+      }
+      .menu-empty {
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+
+      /* Inline field error — the 2.4.9 inline-error grammar (AA-safe) */
+      .field-err {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        margin-top: 6px;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-danger);
+      }
+      .field-err svg {
+        width: 14px;
+        height: 14px;
+        margin-top: 1px;
+      }
+      .field-hint {
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+
+      /* kbd chip */
+      .kbd {
+        display: inline-flex;
+        align-items: center;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        border-radius: var(--radius-kbd);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+      }
+      .kbd-legend {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .kbd-legend .k-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .kbd-legend .k-keys {
+        display: inline-flex;
+        gap: 4px;
+        min-width: 110px;
+      }
+
+      /* ── WATCH CONTROL — the sort-btn small-header-control grammar ───────── */
+      .watch-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .watch-btn svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+      .watch-btn .cnt {
+        color: var(--el-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+      .watch-btn:hover {
+        background: var(--el-surface);
+      }
+      .watch-btn:focus-visible,
+      .watch-btn.is-focus {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .watch-btn.is-hover {
+        background: var(--el-surface);
+      }
+      .watch-btn.is-on {
+        border-color: var(--el-accent);
+      }
+      .watch-btn.is-on svg {
+        color: var(--el-accent);
+      }
+      .watch-btn.is-on svg .eye-outer {
+        fill: var(--el-accent);
+      }
+      .watch-btn.is-on svg .eye-pupil {
+        fill: var(--el-page-bg);
+        stroke: none;
+      }
+      .watch-btn.is-on .cnt {
+        color: var(--el-accent);
+        font-weight: 600;
+      }
+
+      /* Tooltip — ink surface, --spacing-tooltip-x/y */
+      .tip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        border-radius: var(--radius-control);
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        font-size: 11px;
+        font-weight: 500;
+        width: max-content;
+      }
+      .tip .kbd {
+        border-color: transparent;
+        background: rgba(255, 255, 255, 0.18);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        padding: 0 4px;
+      }
+      [data-theme='dark'] .tip .kbd {
+        background: rgba(0, 0, 0, 0.3);
+      }
+
+      /* ── WATCHERS POPOVER ─────────────────────────────────────────────────── */
+      .pop {
+        width: 288px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .pop-head {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .pop-search {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 4px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        color: var(--el-text-muted);
+        font-size: 14px;
+      }
+      .pop-search svg {
+        width: 14px;
+        height: 14px;
+      }
+      .pop-search .ph {
+        color: var(--el-text-muted);
+      }
+      .w-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+      }
+      .w-row:hover {
+        background: var(--el-surface);
+      }
+      .w-avatar {
+        display: inline-flex;
+        width: 22px;
+        height: 22px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px; /* genuinely circular — allowed */
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+        flex: none;
+      }
+      .w-name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .w-remove {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        background: transparent;
+        border-radius: var(--radius-control);
+        color: var(--el-text-muted);
+        cursor: pointer;
+        line-height: 0;
+      }
+      .w-remove:hover {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      .w-remove:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+      }
+      .w-remove svg {
+        width: 14px;
+        height: 14px;
+      }
+      .pop-more {
+        display: block;
+        width: 100%;
+        border: 0;
+        background: transparent;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        text-align: left;
+        cursor: pointer;
+      }
+      .pop-more:hover {
+        background: var(--el-surface);
+      }
+      .pop-err {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        margin: 2px 0 4px;
+        padding: 0 var(--spacing-control-x);
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-danger);
+      }
+      .pop-err svg {
+        width: 14px;
+        height: 14px;
+        margin-top: 1px;
+        flex: none;
+      }
+
+      /* Quiet admin link (empty components state) */
+      .quiet-link {
+        color: var(--el-link);
+        font-size: 12px;
+        text-decoration: none;
+      }
+      .quiet-link:hover {
+        text-decoration: underline;
+      }
+
+      /* ── Skeletons — the BacklogSkeleton pulse grammar ───────────────────── */
+      .sk {
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+        animation: pulse 1.6s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.55;
+        }
+      }
+      .arrow {
+        align-self: center;
+        color: var(--el-text-faint);
+        font-size: 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Labels · Components · Watchers — the issue-view additions</h1>
+        <p>
+          Story 5.4 · design Subtask <strong>5.4.6</strong> → blocks 5.4.8 (MultiSelectPicker +
+          Labels/Components rail cards) and 5.4.9 (watch control + watchers popover).
+          <code>detail.pen</code> predates all three surfaces. The ONE new primitive designed here:
+          a generic chip-input <code>MultiSelectPicker</code> on the OptionRow vocabulary. Jira
+          mirrors: type-to-create folksonomy, admin-managed components, the eye + count watch
+          control. Deliberate deviation: label chips are COLOURED (auto-tinted by name hash into the
+          six <code>--el-tint-*</code> pastels) — less enterprise than Jira's colourless labels.
+          Built from the real <code>--el-*</code> + element-shape tokens.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-tag"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"
+          />
+          <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g
+          id="i-component"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M15.536 11.293a1 1 0 0 0 0 1.414l2.376 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z"
+          />
+          <path
+            d="M2.297 11.293a1 1 0 0 0 0 1.414l2.377 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414L6.088 8.916a1 1 0 0 0-1.414 0z"
+          />
+          <path
+            d="M8.916 17.912a1 1 0 0 0 0 1.415l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.415l-2.377-2.376a1 1 0 0 0-1.414 0z"
+          />
+          <path
+            d="M8.916 4.674a1 1 0 0 0 0 1.414l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z"
+          />
+        </g>
+        <g
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            class="eye-outer"
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle class="eye-pupil" cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-chev"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.34-4.34" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <!-- the shipped task-kind glyph (IssueTypeIcon · task = circle-check) -->
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+      </defs>
+    </svg>
+
+    <div class="stack">
+      <!-- ════════════════ PANEL 0 · PLACEMENT ════════════════ -->
+      <div class="panel">
+        <div class="panel-label">
+          0 · Placement — header watch control (ml-auto cluster) + Labels / Components rail cards
+        </div>
+        <div class="detail-frame">
+          <div class="detail-head">
+            <svg class="type-ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-task" /></svg>
+            <span class="ident">PROD-145</span>
+            <span class="pill">In progress</span>
+            <div class="head-cluster">
+              <button class="watch-btn is-on" aria-pressed="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye" /></svg>
+                <span class="cnt">3</span>
+              </button>
+              <button class="edit-btn">Edit</button>
+            </div>
+          </div>
+          <h2 class="detail-title">Board filters drop the swimlane grouping on refresh</h2>
+          <div class="detail-grid">
+            <div class="col">
+              <div class="ghost" style="min-height: 96px">Description (shipped)</div>
+              <div class="ghost" style="min-height: 64px">Relationships (shipped, 2.4)</div>
+              <div class="ghost" style="min-height: 64px">Activity — comments (shipped, 5.1)</div>
+            </div>
+            <div class="rail">
+              <div class="ghost small">
+                Status · Type · Priority · Assignee · Reporter (shipped)
+              </div>
+              <div class="ghost small">Parent (shipped)</div>
+              <div class="fcard">
+                <div class="fcard-head">
+                  <div class="fcard-label">Labels</div>
+                  <button class="fcard-chev" aria-expanded="false" aria-label="Edit Labels">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chev" /></svg>
+                  </button>
+                </div>
+                <div class="fcard-value">
+                  <div class="chips">
+                    <span class="chip t-sky"><span class="txt">api</span></span>
+                    <span class="chip t-peach"><span class="txt">perf-q3</span></span>
+                    <span class="chip t-lavender"><span class="txt">design-debt</span></span>
+                  </div>
+                </div>
+              </div>
+              <div class="fcard">
+                <div class="fcard-head">
+                  <div class="fcard-label">Components</div>
+                  <button class="fcard-chev" aria-expanded="false" aria-label="Edit Components">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chev" /></svg>
+                  </button>
+                </div>
+                <div class="fcard-value">
+                  <div class="chips">
+                    <span class="chip">
+                      <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-component" />
+                      </svg>
+                      <span class="txt">API</span>
+                    </span>
+                    <span class="chip">
+                      <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-component" />
+                      </svg>
+                      <span class="txt">Web</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div class="ghost small">Due date · Story points · Estimate (shipped)</div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The watch control (eye + count) joins the header's <code>ml-auto</code> cluster
+          <em>before</em> Edit — the shipped slot beside the roll-up badge
+          (<code>issues/[key]/page.tsx</code>). The two new field cards reuse the FieldCard grammar
+          verbatim (11px uppercase label · corner chevron toggles edit mode) and slot
+          <strong>between Parent and Due date</strong>: with the relational fields, ahead of the
+          date/estimate group — the Jira details-panel grouping. Display mode renders chips only;
+          the chevron opens the picker (panels 1–3). Label chips are COLOURED — auto-tinted by name
+          hash into the six <code>--el-tint-*</code> pastels with <code>--el-text-strong</code> text
+          (the recorded less-enterprise deviation; finding #35 AA) — while component chips stay
+          neutral with the lucide <code>component</code> glyph in <code>--el-text-muted</code>, so
+          the two facets read differently at a glance.
+        </p>
+      </div>
+
+      <!-- ════════════════ PANEL 1 · MULTISELECTPICKER ════════════════ -->
+      <div class="panel">
+        <div class="panel-label">
+          1 · MultiSelectPicker — the generic chip-input primitive (the ONE new primitive, 5.4.8)
+        </div>
+        <div class="row-of">
+          <div class="variant">
+            <div class="mini-label">Rest — chips + filter input (focus-within ring)</div>
+            <div class="msp">
+              <div class="msp-box is-focused">
+                <span class="chip t-sky">
+                  <span class="txt">api</span>
+                  <button class="chip-x" aria-label="Remove api">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </span>
+                <span class="chip t-peach">
+                  <span class="txt">perf-q3</span>
+                  <button class="chip-x" aria-label="Remove perf-q3">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </span>
+                <input class="msp-input" placeholder="Add a label…" />
+              </div>
+            </div>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Open — aria-multiselectable listbox, Check on selected</div>
+            <div class="msp">
+              <div class="msp-box is-focused">
+                <span class="chip t-sky">
+                  <span class="txt">api</span>
+                  <button class="chip-x" aria-label="Remove api">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </span>
+                <input class="msp-input" placeholder="Add a label…" />
+              </div>
+              <div class="menu" role="listbox" aria-multiselectable="true" aria-label="Labels">
+                <button class="opt" role="option" aria-selected="true">
+                  <span class="glyph-slot"
+                    ><span class="swatch" style="background: var(--el-tint-sky)"></span
+                  ></span>
+                  <span class="o-label">api</span>
+                  <svg class="o-check" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-check" />
+                  </svg>
+                </button>
+                <button class="opt is-active" role="option" aria-selected="false">
+                  <span class="glyph-slot"
+                    ><span class="swatch" style="background: var(--el-tint-lavender)"></span
+                  ></span>
+                  <span class="o-label">design-debt</span>
+                  <svg class="o-check" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-check" />
+                  </svg>
+                </button>
+                <button class="opt" role="option" aria-selected="false">
+                  <span class="glyph-slot"
+                    ><span class="swatch" style="background: var(--el-tint-rose)"></span
+                  ></span>
+                  <span class="o-label">onboarding</span>
+                  <svg class="o-check" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-check" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Typing — filtered as you type</div>
+            <div class="msp">
+              <div class="msp-box is-focused">
+                <span class="chip t-sky">
+                  <span class="txt">api</span>
+                  <button class="chip-x" aria-label="Remove api">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </span>
+                <span style="font-size: 14px">de<span class="caret"></span></span>
+              </div>
+              <div class="menu" role="listbox" aria-multiselectable="true" aria-label="Labels">
+                <button class="opt is-active" role="option" aria-selected="false">
+                  <span class="glyph-slot"
+                    ><span class="swatch" style="background: var(--el-tint-lavender)"></span
+                  ></span>
+                  <span class="o-label">design-debt</span>
+                  <svg class="o-check" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-check" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Keyboard model (complete)</div>
+            <div class="kbd-legend">
+              <div class="k-row">
+                <span class="k-keys"><span class="kbd">type</span></span> filters the options
+              </div>
+              <div class="k-row">
+                <span class="k-keys"><span class="kbd">↑</span><span class="kbd">↓</span></span>
+                moves the active row
+              </div>
+              <div class="k-row">
+                <span class="k-keys"><span class="kbd">Enter</span></span> toggles the active row
+              </div>
+              <div class="k-row">
+                <span class="k-keys"><span class="kbd">Backspace</span></span> removes the last chip
+                (empty input)
+              </div>
+              <div class="k-row">
+                <span class="k-keys"><span class="kbd">Esc</span></span> closes, focus returns
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          <strong>The generic API surface (5.4.8 + Epic-6 facet reuse):</strong> options in,
+          selection out — no fetching inside; optional <code>onCreate</code> (adds the create-row,
+          panel 2), optional per-value <code>cap</code>, optional per-value <code>tint</code> (a
+          chip + option-swatch colour — labels pass the name-hash tint; components pass none and get
+          the neutral default). The box is input-shaped (<code>--radius-input</code>, min-height
+          <code>--height-input</code>, focus-within ring); chips are <code>--radius-badge</code> —
+          neutral (Pill-neutral colours) by default, or the value's tint background +
+          <code>--el-text-strong</code> (finding #35 AA); a tinted value's option row swaps the
+          glyph slot for the 10px swatch dot (the filter-bar swatch vocabulary); the listbox is the
+          Combobox menu panel (<code>--radius-card</code>, <code>--shadow-elevated</code>) of
+          OptionRow rows — 22px glyph slot · truncating label · trailing 16px Check in
+          <code>--el-accent</code>, <code>aria-selected</code> per row,
+          <code>aria-multiselectable="true"</code> on the listbox. Toggling does NOT close the menu
+          (multi-select); the picker stays open until Esc / outside click — the filter-bar OptionRow
+          behaviour.
+        </p>
+      </div>
+
+      <!-- ════════════════ PANEL 2 · LABELS CARD ════════════════ -->
+      <div class="panel">
+        <div class="panel-label">
+          2 · Labels rail card — create-row · no-spaces error · cap · empty · read-only
+        </div>
+        <div class="row-of">
+          <div class="variant">
+            <div class="mini-label">Edit — the CREATE-ROW (folksonomy)</div>
+            <div class="fcard">
+              <div class="fcard-head">
+                <div class="fcard-label">Labels</div>
+                <button class="fcard-chev is-open" aria-expanded="true" aria-label="Close Labels">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chev" /></svg>
+                </button>
+              </div>
+              <div class="fcard-value">
+                <div class="msp">
+                  <div class="msp-box is-focused">
+                    <span class="chip t-sky">
+                      <span class="txt">api</span>
+                      <button class="chip-x" aria-label="Remove api">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                      </button>
+                    </span>
+                    <span style="font-size: 14px">perf-q3<span class="caret"></span></span>
+                  </div>
+                  <div class="menu" role="listbox" aria-multiselectable="true" aria-label="Labels">
+                    <button class="opt is-active create-row" role="option" aria-selected="false">
+                      <span class="glyph-slot">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus" /></svg>
+                      </span>
+                      <span class="o-label">Create &lsquo;perf-q3&rsquo;</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="variant">
+            <div class="mini-label">No-spaces inline error (typed 422)</div>
+            <div class="fcard">
+              <div class="fcard-head">
+                <div class="fcard-label">Labels</div>
+                <button class="fcard-chev is-open" aria-expanded="true" aria-label="Close Labels">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chev" /></svg>
+                </button>
+              </div>
+              <div class="fcard-value">
+                <div class="msp">
+                  <div class="msp-box is-focused">
+                    <span class="chip t-sky">
+                      <span class="txt">api</span>
+                      <button class="chip-x" aria-label="Remove api">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                      </button>
+                    </span>
+                    <span style="font-size: 14px">perf q3<span class="caret"></span></span>
+                  </div>
+                </div>
+                <div class="field-err" role="alert">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
+                  Labels can&rsquo;t contain spaces — use a hyphen: perf-q3
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Per-issue cap reached (20)</div>
+            <div class="fcard">
+              <div class="fcard-head">
+                <div class="fcard-label">Labels</div>
+                <button class="fcard-chev is-open" aria-expanded="true" aria-label="Close Labels">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chev" /></svg>
+                </button>
+              </div>
+              <div class="fcard-value">
+                <div class="msp">
+                  <div class="msp-box is-disabled">
+                    <span class="chip t-sky">
+                      <span class="txt">api</span>
+                      <button class="chip-x" aria-label="Remove api">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                      </button>
+                    </span>
+                    <span class="chip t-peach">
+                      <span class="txt">perf-q3</span>
+                      <button class="chip-x" aria-label="Remove perf-q3">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                      </button>
+                    </span>
+                    <span class="chip">
+                      <span class="txt">…16 more</span>
+                    </span>
+                    <span class="chip t-mint">
+                      <span class="txt">infra</span>
+                      <button class="chip-x" aria-label="Remove infra">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                      </button>
+                    </span>
+                    <span class="chip t-yellow">
+                      <span class="txt">flaky</span>
+                      <button class="chip-x" aria-label="Remove flaky">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                      </button>
+                    </span>
+                  </div>
+                </div>
+                <div class="field-hint">Label limit reached (20) — remove one to add another.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row-of">
+          <div class="variant">
+            <div class="mini-label">Empty (display mode)</div>
+            <div class="fcard">
+              <div class="fcard-head">
+                <div class="fcard-label">Labels</div>
+                <button class="fcard-chev" aria-expanded="false" aria-label="Edit Labels">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chev" /></svg>
+                </button>
+              </div>
+              <div class="fcard-value"><span class="muted">No labels</span></div>
+            </div>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Read-only (viewer) — chips only, no chevron</div>
+            <div class="fcard">
+              <div class="fcard-head">
+                <div class="fcard-label">Labels</div>
+              </div>
+              <div class="fcard-value">
+                <div class="chips">
+                  <span class="chip t-sky"><span class="txt">api</span></span>
+                  <span class="chip t-peach"><span class="txt">perf-q3</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The Labels card is the picker with <code>onCreate</code> wired: when the typed text
+          matches no existing label, the listbox shows ONLY the create-row —
+          <code>Create &lsquo;perf-q3&rsquo;</code>, plus glyph in <code>--el-accent</code> (the
+          folksonomy affordance; options otherwise come from the bounded
+          <code>searchLabels</code> autocomplete, debounced, take 20). Matching is case-insensitive:
+          typing <code>PERF-Q3</code> offers the existing <code>perf-q3</code> with its original
+          casing, no create-row. The no-spaces 422 surfaces as the inline error grammar (<code
+            >--el-danger</code
+          >
+          text + alert glyph, <code>role="alert"</code>); the input keeps the rejected text for
+          correction. At the cap (20) the input disables with the quiet hint; chips stay removable.
+          Read-only (viewer): chips only and NO chevron — affordances absent, not disabled (the 6.4
+          grammar). Empty display mode shows the muted-italic <code>No labels</code> (the FieldCard
+          <code>muted()</code> convention).
+        </p>
+      </div>
+
+      <!-- ════════════════ PANEL 3 · COMPONENTS CARD ════════════════ -->
+      <div class="panel">
+        <div class="panel-label">
+          3 · Components rail card — no create-row · empty-project · read-only
+        </div>
+        <div class="row-of">
+          <div class="variant">
+            <div class="mini-label">Edit — options from the project taxonomy</div>
+            <div class="fcard">
+              <div class="fcard-head">
+                <div class="fcard-label">Components</div>
+                <button
+                  class="fcard-chev is-open"
+                  aria-expanded="true"
+                  aria-label="Close Components"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chev" /></svg>
+                </button>
+              </div>
+              <div class="fcard-value">
+                <div class="msp">
+                  <div class="msp-box is-focused">
+                    <span class="chip">
+                      <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-component" />
+                      </svg>
+                      <span class="txt">API</span>
+                      <button class="chip-x" aria-label="Remove API">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                      </button>
+                    </span>
+                    <input class="msp-input" placeholder="Add a component…" />
+                  </div>
+                  <div
+                    class="menu"
+                    role="listbox"
+                    aria-multiselectable="true"
+                    aria-label="Components"
+                  >
+                    <button class="opt" role="option" aria-selected="true">
+                      <span class="glyph-slot">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-component" />
+                        </svg>
+                      </span>
+                      <span class="o-label">API</span>
+                      <svg class="o-check" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-check" />
+                      </svg>
+                    </button>
+                    <button class="opt is-active" role="option" aria-selected="false">
+                      <span class="glyph-slot">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-component" />
+                        </svg>
+                      </span>
+                      <span class="o-label">Mobile</span>
+                      <svg class="o-check" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-check" />
+                      </svg>
+                    </button>
+                    <button class="opt" role="option" aria-selected="false">
+                      <span class="glyph-slot">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-component" />
+                        </svg>
+                      </span>
+                      <span class="o-label">Web</span>
+                      <svg class="o-check" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-check" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Empty project — quiet admin link (admins only)</div>
+            <div class="fcard">
+              <div class="fcard-head">
+                <div class="fcard-label">Components</div>
+                <button
+                  class="fcard-chev is-open"
+                  aria-expanded="true"
+                  aria-label="Close Components"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chev" /></svg>
+                </button>
+              </div>
+              <div class="fcard-value">
+                <div class="msp">
+                  <div class="msp-box is-focused">
+                    <input class="msp-input" placeholder="Add a component…" />
+                  </div>
+                  <div class="menu" role="listbox" aria-label="Components">
+                    <div class="menu-empty">No components defined</div>
+                  </div>
+                </div>
+                <div class="field-hint">
+                  <a class="quiet-link" href="#">Manage components in Project settings →</a>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Read-only (viewer)</div>
+            <div class="fcard">
+              <div class="fcard-head">
+                <div class="fcard-label">Components</div>
+              </div>
+              <div class="fcard-value">
+                <div class="chips">
+                  <span class="chip">
+                    <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-component" />
+                    </svg>
+                    <span class="txt">API</span>
+                  </span>
+                  <span class="chip">
+                    <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-component" />
+                    </svg>
+                    <span class="txt">Web</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The SAME picker, <code>onCreate</code> absent — an admin-managed taxonomy never grows from
+          the issue field (the mirror: company-managed Jira). Options =
+          <code>listComponents(projectId)</code>, name-ordered; rows and chips carry the lucide
+          <code>component</code> glyph in <code>--el-text-muted</code> (22px OptionRow glyph slot /
+          12px in-chip). An empty project shows <code>No components defined</code> in the listbox
+          plus the quiet <code>--el-link</code> line to Project settings → Components —
+          <strong>rendered for project admins only</strong> (a member sees just the empty text).
+          Read-only matches the Labels card: chips, no chevron.
+        </p>
+      </div>
+
+      <!-- ════════════════ PANEL 4 · WATCH CONTROL ════════════════ -->
+      <div class="panel">
+        <div class="panel-label">4 · Watch control — eye + count, states, the W shortcut</div>
+        <div class="row-of">
+          <div class="variant">
+            <div class="mini-label">Not watching (outline)</div>
+            <button class="watch-btn" aria-pressed="false" aria-label="Watch — 3 watching">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye" /></svg>
+              <span class="cnt">3</span>
+            </button>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Watching (filled eye, accent)</div>
+            <button
+              class="watch-btn is-on"
+              aria-pressed="true"
+              aria-label="Stop watching — 4 watching"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye" /></svg>
+              <span class="cnt">4</span>
+            </button>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Hover</div>
+            <button class="watch-btn is-hover" aria-pressed="false" aria-label="Watch — 3 watching">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye" /></svg>
+              <span class="cnt">3</span>
+            </button>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Focus-visible</div>
+            <button class="watch-btn is-focus" aria-pressed="false" aria-label="Watch — 3 watching">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye" /></svg>
+              <span class="cnt">3</span>
+            </button>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Tooltip — the shortcut hint</div>
+            <div style="display: flex; flex-direction: column; gap: 6px; align-items: flex-start">
+              <span class="tip">Watch <span class="kbd">W</span></span>
+              <span class="tip">Stop watching <span class="kbd">W</span></span>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The small-header-control grammar (<code>--height-control</code> ·
+          <code>--radius-btn</code> · <code>--spacing-control-x</code>). Not-watching: outline eye
+          in <code>--el-text-muted</code>, count in <code>--el-text-secondary</code>. Watching: the
+          eye FILLS with <code>--el-accent</code> (pupil knocked out in page-bg), accent border +
+          semibold accent count, <code>aria-pressed="true"</code> — state carried by the accessible
+          name ("Watch / Stop watching — N watching"), never colour alone. Click or
+          <code>W</code> toggles self-watch (ignored while typing — the standard guard); the count
+          bumps optimistically (panel 6). A <code>viewer</code> gets this control too — watching is
+          not editing. The tooltip names the action + the <code>W</code> kbd hint.
+        </p>
+      </div>
+
+      <!-- ════════════════ PANEL 5 · WATCHERS POPOVER ════════════════ -->
+      <div class="panel">
+        <div class="panel-label">
+          5 · Watchers popover — admin manage-others · inline error · non-admin
+        </div>
+        <div class="row-of">
+          <div class="variant">
+            <div class="mini-label">Admin — add row + per-row remove</div>
+            <div class="pop" role="dialog" aria-label="Watchers">
+              <div class="pop-head">Watchers · 4</div>
+              <div class="pop-search">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search" /></svg>
+                <span class="ph">Add a watcher…</span>
+              </div>
+              <div class="w-row">
+                <span class="w-avatar" aria-hidden="true">Y</span>
+                <span class="w-name">Yue Zhu</span>
+                <span class="pill">You</span>
+              </div>
+              <div class="w-row">
+                <span class="w-avatar" aria-hidden="true">B</span>
+                <span class="w-name">Bo Philips</span>
+                <button class="w-remove" aria-label="Remove Bo Philips from watchers">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                </button>
+              </div>
+              <div class="w-row">
+                <span class="w-avatar" aria-hidden="true">O</span>
+                <span class="w-name">Odie</span>
+                <button class="w-remove" aria-label="Remove Odie from watchers">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                </button>
+              </div>
+              <div class="w-row">
+                <span class="w-avatar" aria-hidden="true">M</span>
+                <span class="w-name">Mo</span>
+                <button class="w-remove" aria-label="Remove Mo from watchers">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Admin — typing, candidate rows + inline error</div>
+            <div class="pop" role="dialog" aria-label="Watchers">
+              <div class="pop-head">Watchers · 4</div>
+              <div class="pop-search" style="color: var(--el-text)">
+                <svg viewBox="0 0 24 24" aria-hidden="true" style="color: var(--el-text-muted)">
+                  <use href="#i-search" />
+                </svg>
+                ju<span class="caret"></span>
+              </div>
+              <button class="opt is-active" role="option" aria-selected="false">
+                <span class="w-avatar" aria-hidden="true">J</span>
+                <span class="o-label">Julian</span>
+              </button>
+              <div class="pop-err" role="alert">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
+                Julian can&rsquo;t view this issue, so they can&rsquo;t watch it.
+              </div>
+            </div>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Non-admin — list only, paged</div>
+            <div class="pop" role="dialog" aria-label="Watchers">
+              <div class="pop-head">Watchers · 12</div>
+              <div class="w-row">
+                <span class="w-avatar" aria-hidden="true">Y</span>
+                <span class="w-name">Yue Zhu</span>
+                <span class="pill">You</span>
+              </div>
+              <div class="w-row">
+                <span class="w-avatar" aria-hidden="true">B</span>
+                <span class="w-name">Bo Philips</span>
+              </div>
+              <div class="w-row">
+                <span class="w-avatar" aria-hidden="true">O</span>
+                <span class="w-name">Odie</span>
+              </div>
+              <button class="pop-more">Show more (9 more)</button>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          Anchored to the watch control (the Combobox menu panel container:
+          <code>--radius-card</code> · <code>--shadow-elevated</code> · 4px padding · 288px). Rows:
+          22px initial-letter avatar · truncating name · your own row marked with the neutral
+          <code>You</code> pill. <strong>Admins only</strong> (project admin + workspace
+          admin/owner): the <code>Add a watcher…</code> search row at the top (the member-picker
+          vocabulary — typing filters workspace members into option rows) and a per-row remove ×
+          (<code>--spacing-icon-btn</code>, accessible name "Remove &lt;name&gt; from watchers").
+          Adding a user who cannot view the issue surfaces the typed 422 INLINE under the candidate
+          row (<code>role="alert"</code>, <code>--el-danger</code>) — never a silent drop (the Jira
+          trap, fixed). Non-admins and viewers get the list only — no search row, no removes; long
+          lists page with the quiet <code>Show more (N more)</code> row. The popover is a labelled
+          dialog; Esc closes, focus returns to the eye.
+        </p>
+      </div>
+
+      <!-- ════════════════ PANEL 6 · STATES ════════════════ -->
+      <div class="panel">
+        <div class="panel-label">6 · States — loading skeletons · the optimistic count bump</div>
+        <div class="row-of">
+          <div class="variant">
+            <div class="mini-label">Labels card — loading</div>
+            <div class="fcard">
+              <div class="fcard-head">
+                <div class="fcard-label">Labels</div>
+              </div>
+              <div class="fcard-value">
+                <div class="chips">
+                  <span
+                    class="sk"
+                    style="width: 56px; height: 22px; border-radius: var(--radius-badge)"
+                  ></span>
+                  <span
+                    class="sk"
+                    style="width: 74px; height: 22px; border-radius: var(--radius-badge)"
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Components card — loading</div>
+            <div class="fcard">
+              <div class="fcard-head">
+                <div class="fcard-label">Components</div>
+              </div>
+              <div class="fcard-value">
+                <div class="chips">
+                  <span
+                    class="sk"
+                    style="width: 64px; height: 22px; border-radius: var(--radius-badge)"
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="variant" style="max-width: 420px">
+            <div class="mini-label">Optimistic bump — click / W, count updates immediately</div>
+            <div style="display: flex; align-items: center; gap: 14px">
+              <button class="watch-btn" aria-pressed="false" aria-label="Watch — 3 watching">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye" /></svg>
+                <span class="cnt">3</span>
+              </button>
+              <span class="arrow" aria-hidden="true">→</span>
+              <button
+                class="watch-btn is-on"
+                aria-pressed="true"
+                aria-label="Stop watching — 4 watching"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye" /></svg>
+                <span class="cnt">4</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          Skeleton chips ride the pulse grammar at chip size (<code>--radius-badge</code>); the card
+          chrome renders immediately (label, no chevron until data). The watch toggle is optimistic:
+          state + count flip on click, reconciled on
+          <code>router.refresh()</code> — a failure rolls back with the toast grammar. Counts are
+          tabular-nums so the bump doesn't shift the header cluster.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

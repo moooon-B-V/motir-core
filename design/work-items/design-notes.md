@@ -1402,3 +1402,194 @@ remaining mirror types (paragraph / checkbox-multi / labels / multi-person
 / formula — additive on the same EAV substrate). Value-change **History**
 rendering is Story 5.5 (the `customFields.<key>` revision diffs land with
 5.3.3).
+
+## Labels · Components · Watchers — the issue-view additions (Story 5.4 · 5.4.6 → 5.4.8 / 5.4.9)
+
+`labels-components-watch.mock.html` is the design for every issue-view surface
+Story 5.4 adds: the **Labels** and **Components** rail field cards (and the
+generic multi-select chip picker they embed), and the **watch control + watchers
+popover** in the detail header. `detail.pen` predates all three features (its
+source contains no label / component / watcher element — verified), and the
+codebase has no multi-select input primitive (`Combobox` is single-select; the
+only multi-select vocabulary is the filter bar's `OptionRow` rows), so the
+design gate (`notes.html` mistake #31) requires this asset before code Subtasks
+**5.4.8** (MultiSelectPicker + rail cards) and **5.4.9** (watch control +
+popover). Mirrors (verified in the 5.4 story module): the Jira issue-view
+Labels / Components fields and the eye-icon watch control. A
+`labels-components-watch.png` export accompanies the HTML for the board view;
+the HTML is the source of truth.
+
+### Placement (panel 0)
+
+- **Watch control** — the detail header's `ml-auto` cluster
+  (`issues/[key]/page.tsx`), placed BEFORE the Edit button (beside the roll-up
+  badge). The eye + count is a peer of Edit, not a field: watching is
+  social/header state, the Jira placement.
+- **Labels and Components field cards** — the metadata rail, **between Parent
+  and Due date**: they group with the relational fields ahead of the
+  date/estimate block (the Jira details-panel grouping). Labels first, then
+  Components (the 5.4 story's consistent ordering). Both reuse the
+  `CoreFieldsPanel` **FieldCard grammar verbatim** — 11px uppercase
+  `--el-text-secondary` label, corner chevron (`aria-expanded`, rotates open)
+  toggling display ↔ edit, 14px value block at 6px top margin. Display mode
+  renders chips only; empty shows the muted-italic placeholder (`No labels` /
+  `No components`) per the FieldCard `muted()` convention.
+
+### MultiSelectPicker — the ONE new primitive (panel 1; built by 5.4.8 as `components/ui/MultiSelectPicker`)
+
+Designed ONCE, generically — labels, components, and future Epic-6 facet
+editors all compose it. **Generic API surface:** options in, selection out —
+NO fetching inside; `onCreate?` (adds the create-row, the folksonomy
+affordance); `cap?` (per-value limit, disables input at the cap); `tint?`
+per value (a chip + option-swatch colour — Labels passes the name-hash tint
+below, Components passes none); pure + typed-generic, component-tested
+standalone.
+
+- **The box** — input-shaped: `--radius-input`, min-height `--height-input`,
+  `--spacing-control-y/x` padding, `--el-border` on `--el-page-bg`,
+  focus-WITHIN ring (`--focus-ring-color`, 2px, offset 1). Disabled (cap):
+  `--el-surface-soft` fill, `not-allowed` cursor; chips stay removable.
+- **Chips** — `--radius-badge`, `--spacing-chip-y/x` padding, 12px medium.
+  Two treatments via the `tint?` prop: **neutral** (the default —
+  `--el-surface` bg · `--el-border` border · `--el-text-secondary` text, the
+  `Pill` neutral tone; what Components uses) and **tinted** (what Labels
+  passes — the value's `--el-tint-*` background + `--el-text-strong` text,
+  transparent border; hue-in-background AA per finding #35). Trailing
+  **remove ×** (12px lucide `x`; neutral: `--el-text-muted` → `--el-text` +
+  `--el-muted` bg on hover; tinted: `--el-text-strong` at 65% → 100% + a
+  subtle ink overlay; accessible name `Remove <value>`).
+- **The listbox** — the `Combobox` menu panel grammar: `--radius-card`,
+  `--shadow-elevated`, `--el-border`, 4px padding, max-width 288px;
+  `role="listbox"` + **`aria-multiselectable="true"`**; rows are the
+  **`OptionRow` vocabulary reused 1:1** (`IssueFilterBar`): `role="option"` +
+  `aria-selected`, `--radius-control` / `--spacing-control-y/x`, 22px glyph
+  slot (14px icon, `--el-text-muted`), truncating label, **trailing 16px
+  `Check` in `--el-accent`** (opacity 0 ↔ 1). Active row = `--el-surface`.
+  Toggling does NOT close the menu (multi-select); Esc / outside click closes.
+- **Keyboard (complete):** type filters · ↑↓ moves the active row · Enter
+  toggles it · **Backspace on an empty input removes the last chip** · Esc
+  closes and returns focus. `aria-activedescendant` tracking per the shipped
+  `Combobox` a11y bar.
+
+### Labels rail card (panel 2; 5.4.8)
+
+The picker with `onCreate` wired to the 5.4.2 folksonomy:
+
+- **Label colours — the recorded justified deviation (product owner,
+  2026-06-10).** Unlike Jira's colourless labels, Prodect label chips are
+  COLOURED — deliberately less enterprise, more personality. The colour is
+  **auto-assigned deterministically from the label name**: FNV-1a over
+  `nameLower`, mod 6, into the existing pastel family
+  `--el-tint-{peach,rose,mint,lavender,sky,yellow}` with `--el-text-strong`
+  text (finding #35: hue in the tint background, AA-strong text on top —
+  both themes hold via the dark tint variants). NO schema column, NO colour
+  picker, NO admin surface — the folksonomy stays type-to-create, and the
+  same label renders the same colour everywhere it appears (rail card,
+  picker chips, option-row swatches, future board/filter chips). The mock's
+  assignments (api=sky, perf-q3=peach, design-debt=lavender, infra=mint,
+  flaky=yellow, onboarding=rose) are illustrative; the hash is the contract.
+  **User-PICKED colours are the documented extension** (would add a `color`
+  column + picker affordance later without breaking the auto default).
+- **Create-row** — when the typed text matches no existing label the listbox
+  shows `Create 'perf-q3'` with a plus glyph in `--el-accent`; the new label
+  takes its hash tint immediately. Options otherwise come from the bounded
+  `searchLabels` autocomplete (debounced, take 20) — each row's glyph slot
+  carries the label's 10px tint **swatch dot** (the filter-bar swatch
+  vocabulary) instead of an icon. Case-insensitive match surfaces
+  the EXISTING label's original casing (no create-row offered).
+- **No-spaces error** — the typed 422 renders the inline error grammar
+  (12px `--el-danger` + 14px `triangle-alert`, `role="alert"`):
+  `Labels can't contain spaces — use a hyphen: perf-q3`. The rejected text
+  stays in the input for correction.
+- **Cap (20)** — input disabled + the quiet hint
+  `Label limit reached (20) — remove one to add another.`
+- **Read-only (viewer)** — chips only, NO chevron: affordances absent, not
+  disabled (the 6.4 grammar).
+
+### Components rail card (panel 3; 5.4.8)
+
+The SAME picker, `onCreate` absent — an admin-managed taxonomy never grows
+from the issue field (mirror: company-managed Jira). Options =
+`listComponents(projectId)`, name-ordered; rows and chips carry the lucide
+`component` glyph (`--el-text-muted`; 22px row slot / 12px in-chip). Empty
+project: `No components defined` in the listbox + the quiet `--el-link` line
+`Manage components in Project settings →` — **project admins only** (members
+see just the empty text). Read-only matches Labels.
+
+### Watch control (panel 4; 5.4.9)
+
+The small-header-control grammar (`--height-control` · `--radius-btn` ·
+`--spacing-control-x` — the comments-mock sort-btn vocabulary):
+
+- **Not watching** — outline lucide `eye` (16px, `--el-text-muted`) + count
+  (`--el-text-secondary`, tabular-nums), `--el-border`, `aria-pressed="false"`,
+  accessible name `Watch — N watching`.
+- **Watching** — the eye **fills with `--el-accent`** (pupil knocked out in
+  `--el-page-bg`), accent border, semibold accent count,
+  `aria-pressed="true"`, name `Stop watching — N watching`. State is carried
+  by the accessible name + fill, never colour alone.
+- Hover `--el-surface`; focus-visible ring. Click or **`W`** toggles
+  self-watch (ignored while typing in inputs/editors — the standard guard);
+  the tooltip (ink surface, `--spacing-tooltip-y/x`) names the action + the
+  `W` kbd chip. A `viewer` gets the control too — watching is not editing
+  (the verified permission split).
+
+### Watchers popover (panel 5; 5.4.9)
+
+Anchored to the watch control; the menu panel container (`--radius-card` ·
+`--shadow-elevated` · 4px padding · 288px), a labelled dialog (`Watchers`);
+Esc closes, focus returns to the eye.
+
+- **Header** — `Watchers · N` in the mono 11px uppercase faint label.
+- **Rows** — 22px initial-letter avatar · truncating 14px name · your own row
+  marked with the neutral `You` pill. Hover `--el-surface`.
+- **Admin-only manage** (project admin + workspace admin/owner): the
+  `Add a watcher…` search row on top (the member-picker vocabulary — typing
+  filters workspace members into option rows) and a per-row **remove ×**
+  (`--spacing-icon-btn`, name `Remove <name> from watchers`). Non-admins and
+  viewers get the list only.
+- **No-view-access error** — adding a user who can't view the issue surfaces
+  the typed 422 INLINE under the candidate row (`role="alert"`,
+  `--el-danger`): `<Name> can't view this issue, so they can't watch it.` —
+  never a silent drop (the Jira trap, fixed).
+- **Paging** — the quiet `Show more (N more)` row (13px
+  `--el-text-secondary`).
+
+### States (panel 6)
+
+Skeleton chips ride the pulse grammar at chip size (`--radius-badge`,
+`--el-muted`); the card chrome renders immediately. The watch toggle is
+optimistic — state + count flip on click, reconciled on `router.refresh()`,
+rolled back with the toast grammar on failure; tabular-nums keep the header
+cluster from shifting.
+
+### Tokens / a11y
+
+- Colour only via Tier-3 `--el-*`; shape via the element-semantic tokens
+  (`--radius-input/card/control/btn/badge/kbd`, `--spacing-control/chip/kbd/
+tooltip/icon-btn-*`, `--height-input/control`, `--shadow-elevated/card`).
+  **No new token needed** — the design composes existing roles only.
+- **No new primitive beyond MultiSelectPicker** (the gate's ONE earn);
+  everything else reuses FieldCard, OptionRow, the Combobox menu panel, the
+  22px avatar, Pill neutral, the kbd chip, the inline-error grammar, the
+  pulse skeleton.
+- Label chips are **coloured** — the recorded justified deviation from Jira's
+  colourless labels (less enterprise, more personality; product owner,
+  2026-06-10). Tints auto-assigned by name hash from the EXISTING
+  `--el-tint-*` family — still no new token; components chips stay neutral
+  so the two facets read differently.
+- AA holds in both themes: neutral chip text `--el-text-secondary` on
+  `--el-surface`; tinted chip text `--el-text-strong` on the pastel tints
+  (the finding-#35 grammar, dark tint variants included); `--el-danger`
+  error text at 12px on `--el-page-bg`; accent count/border on page bg.
+  Dark parity via the token flip (toggle in the mock).
+
+### Out of scope (documented extension slots)
+
+- User-PICKED label colours (the auto name-hash tint ships now; a `color`
+  column + picker is the additive extension); label rename/merge admin
+  (Jira's own gap — Epic-6 admin territory).
+- The Components ADMIN page (Project settings → Components) — its own design
+  subtask **5.4.7** (`design/projects/components.mock.html`).
+- Per-user autowatch preference + the in-app bell — Story 5.7's seam.
+- Voting (Jira's sibling feature — no use case for a small-team tool).
