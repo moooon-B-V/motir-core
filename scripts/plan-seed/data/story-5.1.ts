@@ -509,7 +509,7 @@ export const story_5_1: PlanStory = {
       id: '5.1.6',
       title:
         'Mention → email notification job (`work-item/comment.created` + description-mention parity) via the 1.6 pipeline + `mentionNotification` template',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
