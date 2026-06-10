@@ -58,15 +58,19 @@ import type { PlanStory } from '../types';
  * authority (adding/expanding stories) stays with the seed. 7.8.8 rewrites
  * the PRODECT.md runbook (status flips via MCP; status-flip seed PRs retire).
  *
- * **Scope (narrowed ruthlessly, axes per prodect plan step 6).** Six tools —
- * three read (`get_work_item`, `list_ready`, `next_ready`), three write
- * (`create_work_item` incl. bug logging, `transition_status`, `add_comment`)
- * — plus `search_work_items` riding the 6.1.1 FilterAST envelope when that
- * codec lands. NOT in scope (each has an owning story already): prompt
- * generation (7.6), GitHub sync (7.7), planner tools / shared-context
- * retrieval (7.5), notifications (5.7). Completeness axis: tool reads are
- * paginated from day one (they wrap services that already paginate — 7.0's
- * cursor contract, 5.1's paged comments); no load-everything tool.
+ * **Scope (narrowed ruthlessly, axes per prodect plan step 6).** Three read
+ * tools (`get_work_item`, `list_ready`, `next_ready`), three work-item write
+ * tools (`create_work_item` incl. bug logging, `transition_status`,
+ * `add_comment`), `search_work_items` riding the 6.1.1 FilterAST envelope
+ * when that codec lands, and the 7.8.10 sprint set (added on Yue's
+ * direction, 2026-06-10: list/create/update/delete sprint, move items
+ * sprint↔backlog, start, complete) — every sprint tool a thin adapter over
+ * the shipped-and-done Epic-4 services. NOT in scope (each has an owning
+ * story already): prompt generation (7.6), GitHub sync (7.7), planner tools /
+ * shared-context retrieval (7.5), notifications (5.7). Completeness axis:
+ * tool reads are paginated from day one (they wrap services that already
+ * paginate — 7.0's cursor contract, 5.1's paged comments); no
+ * load-everything tool.
  */
 export const story_7_8: PlanStory = {
   id: '7.8',
@@ -75,7 +79,8 @@ export const story_7_8: PlanStory = {
   gitBranch: 'story/PROD-7.8-mcp-server',
   descriptionMd:
     'An MCP server exposing the PM core to AI agents: query work items + the ready set, create ' +
-    'work items, log bugs, comment, and transition statuses — per-user API-token auth, every ' +
+    'work items, log bugs, comment, transition statuses, and run the full sprint cadence ' +
+    '(create/scope/start/complete + settings, 7.8.10) — per-user API-token auth, every ' +
     'tool honoring the same workspace/project access checks as the UI (enforced in the service ' +
     'layer, 6.4). The mirror products ship exactly this (the official Atlassian Remote MCP ' +
     'Server — OAuth 2.1, read+write, "access only to data the user already has permission to ' +
@@ -455,10 +460,78 @@ export const story_7_8: PlanStory = {
         '- `docs/jobs.md` (register + structure exemplar)\n' +
         '- `prodect-meta/PRODECT.md` (§ Plan seed Workflow step 4; `prodect run` step 5; ' +
         '`prodect mark <id> done`)\n' +
-        '- 7.8.4/7.8.5/7.8.6 tool registry (the catalog source)\n\n' +
+        '- 7.8.4/7.8.5/7.8.6/7.8.10 tool registry (the catalog source)\n\n' +
         '**Branch.** `subtask/PROD-7.8.8-mcp-docs` (prodect-core); the PRODECT.md edit ships ' +
         "as a plain prodect-meta commit per that repo's convention.",
-      dependsOn: ['7.8.5', '7.8.7'],
+      dependsOn: ['7.8.5', '7.8.7', '7.8.10'],
+    },
+    {
+      id: '7.8.10',
+      title:
+        'Sprint tools — `list_sprints` / `create_sprint` / `update_sprint` / `delete_sprint` / `move_to_sprint` / `move_to_backlog` / `start_sprint` / `complete_sprint`',
+      status: 'blocked',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 50,
+      descriptionMd:
+        "The Scrum half of the tool surface (added on Yue's direction, 2026-06-10): an agent " +
+        'that plans and dispatches work also has to RUN the cadence — create the sprint, scope ' +
+        'it, start it, and close it out. Jira exposes every one of these as a first-class ' +
+        'Agile REST operation (create/update/delete sprint, move issues to sprint/backlog, ' +
+        "start, complete); Prodect's equivalents are ALL shipped and `done` (4.1 sprint " +
+        'entity, 4.2 backlog scoping, 4.4 lifecycle), so — like 7.8.5 — every tool here is a ' +
+        'thin adapter in the 7.8.4 registry over an existing service method, no new business ' +
+        'logic.\n\n' +
+        '- `list_sprints` — by project key, with state (future / active / completed) and ' +
+        'dates/goal: `sprintsService.listByProject`. The read an agent needs before it can ' +
+        'target any other sprint tool.\n' +
+        '- `create_sprint` — project key, name, optional goal + start/end dates: ' +
+        '`sprintsService.createSprint`.\n' +
+        '- `update_sprint` — the "sprint settings" tool: rename, re-goal, re-date a sprint: ' +
+        "`sprintsService.updateSprint` (the service's own state rules decide what is " +
+        'editable per sprint state — surfaced verbatim as typed tool errors).\n' +
+        "- `delete_sprint` — `sprintsService.deleteSprint`; the service's guards (what " +
+        'happens to scoped items, which states are deletable) apply unchanged. Destructive, ' +
+        'so the tool description says exactly what the service will do before an agent ' +
+        'reaches for it.\n' +
+        '- `move_to_sprint` — work-item keys (bulk) + target sprint: the `backlogService` ' +
+        'bulk move (one transaction, the cross-project guard ' +
+        '`CrossProjectSprintAssignmentError` surfaces as a typed tool error). This is the ' +
+        '"add work items to sprint" operation.\n' +
+        '- `move_to_backlog` — the inverse (bulk, `sprintId = null`), same service.\n' +
+        '- `start_sprint` — `sprintsService.startSprint`. Not in the original ask but ' +
+        'completeness requires it: an agent that can create and complete a sprint but not ' +
+        'START one has a hole in the middle of the lifecycle.\n' +
+        '- `complete_sprint` — `sprintsService.completeSprint`, INCLUDING the 4.4 ' +
+        'incomplete-items disposition argument (move remaining items to backlog or to a ' +
+        "named next sprint — the same choice the UI's complete-sprint modal offers; the " +
+        'tool schema makes it required so an agent states the disposition explicitly).\n\n' +
+        "All tools execute as the token's owning user (6.4 permission checks in the " +
+        'services, 404-not-403 cross-tenant), return the dual text + `structuredContent` ' +
+        'shape, and register through `lib/mcp/registry.ts` — which automatically enrolls ' +
+        "them in 7.8.9's registry-loop permission suite.\n\n" +
+        '## Acceptance criteria\n\n' +
+        '- All eight tools appear in `tools/list` with zod-validated inputs; each calls ' +
+        'exactly one existing service method (no inlined logic, no bypassed guards).\n' +
+        '- Full lifecycle through MCP alone (vitest, real PG): create → scope via ' +
+        '`move_to_sprint` (bulk) → start → complete with disposition → the remaining items ' +
+        'land where the disposition said; states/dates/goal match what the UI flow ' +
+        'produces.\n' +
+        '- `update_sprint` on a completed sprint and `move_to_sprint` across projects return ' +
+        "the services' typed errors as tool errors (asserted verbatim).\n" +
+        '- `complete_sprint` requires the disposition argument (schema-level).\n' +
+        '- Non-member token: every sprint tool honors 404-not-403 (the registry-loop suite ' +
+        'covers this by construction once registered).\n\n' +
+        '## Context refs\n\n' +
+        '- `lib/services/sprintsService.ts` (create/update/delete/list/start/complete — the ' +
+        '4.1 + 4.4 seams, all done)\n' +
+        '- `lib/services/backlogService.ts` (single + bulk sprint assignment, ' +
+        'cross-project guard — the 4.2 seam)\n' +
+        '- `app/(authed)/backlog/_components/SprintMenuList.tsx` (the UI flow the tools ' +
+        'mirror)\n' +
+        '- `lib/mcp/registry.ts` (7.8.4 seam)\n\n' +
+        '**Branch.** `subtask/PROD-7.8.10-mcp-sprint-tools`.',
+      dependsOn: ['7.8.4'],
     },
     {
       id: '7.8.9',
@@ -481,7 +554,9 @@ export const story_7_8: PlanStory = {
         'future tool added without scoping FAILS this suite by construction).\n' +
         '- **Tool/UI parity:** `list_ready` ≡ `GET /api/ready` result set; ' +
         '`transition_status` produces a revision row identical in shape to the board drag; ' +
-        '`search_work_items` ≡ the /issues URL filter for the same AST.\n' +
+        '`search_work_items` ≡ the /issues URL filter for the same AST; the 7.8.10 sprint ' +
+        'lifecycle (create → scope → start → complete) lands the same end state as the ' +
+        'backlog/board UI flow.\n' +
         '- **Settings E2E (Playwright):** create token (label + expiry) → shown-once copy → ' +
         'list shows prefix/expiry → revoke → revoked render; plus the credentials-style ' +
         'assertion that the plaintext never re-appears.\n' +
@@ -498,7 +573,7 @@ export const story_7_8: PlanStory = {
         '- `vitest.config.ts` (per-file coverage gate list)\n' +
         "- 7.0's test suite (the ready-contract fixtures to reuse)\n\n" +
         '**Branch.** `subtask/PROD-7.8.9-mcp-story-tests`.',
-      dependsOn: ['7.8.3', '7.8.5', '7.8.6', '7.8.7'],
+      dependsOn: ['7.8.3', '7.8.5', '7.8.6', '7.8.7', '7.8.10'],
     },
   ],
 };

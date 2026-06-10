@@ -237,8 +237,10 @@ export const STUB_STORIES: PlanStory[] = [
   // story). PAT substrate + settings UI (design-gated), /api/mcp streamable-
   // HTTP endpoint on the official SDK, read/dispatch tools wrapping the 7.0
   // /ready contract, write tools (create incl. bug logging / transition /
-  // comment), FilterAST search riding 6.1.1, the reseed-preserves-live-status
-  // loader flip, and the PRODECT.md runbook rewrite.
+  // comment), sprint tools (list/create/update/delete, move sprint↔backlog,
+  // start/complete — over the done Epic-4 services), FilterAST search riding
+  // 6.1.1, the reseed-preserves-live-status loader flip, and the PRODECT.md
+  // runbook rewrite.
 
   // ── Epic 8: Launch readiness ──────────────────────────────────────────────
   {
