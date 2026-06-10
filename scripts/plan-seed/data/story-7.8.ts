@@ -110,6 +110,10 @@ export const story_7_8: PlanStory = {
     "is attributed to the token's owning user.\n" +
     '- Ask the agent to log a bug (`create_work_item kind:bug` under a story) — the bug appears ' +
     'in the issue tree with the reporter set to the token owner (the findings-protocol payoff).\n' +
+    '- Run a sprint entirely from chat (7.8.10): create a sprint with a goal, `move_to_sprint` ' +
+    'a few backlog items (bulk), `start_sprint`, then `complete_sprint` choosing where the ' +
+    'unfinished items go — the backlog/board UIs show the same states the whole way, and the ' +
+    'completed sprint reports the same scope the UI flow would.\n' +
     '- Negative: revoke the token in settings → the next tool call fails with an auth error and ' +
     'the agent surfaces it cleanly; a token for a non-member user cannot see the workspace at ' +
     'all (404-not-403 contract).\n' +
