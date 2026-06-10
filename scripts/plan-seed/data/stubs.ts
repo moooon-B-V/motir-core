@@ -102,15 +102,15 @@ export const STUB_STORIES: PlanStory[] = [
   // with indexed-search / SQL-aggregation / exactly-once-rule-storm at-scale
   // specs + the combined admin-hub a11y sweep. Deps use story-level ids for
   // the unexpanded siblings (the 2.6.x precedent; retargetable on expansion).
-  {
-    id: '6.2',
-    title: 'Saved filters',
-    status: 'planned',
-    descriptionMd:
-      'Persist named filters at project/workspace scope; reuse as data sources for boards, ' +
-      'dashboards, and reports.',
-    items: [],
-  },
+  // 6.2 (Saved filters) is fully expanded — data/story-6.2.ts. A
+  // project-contained `saved_filter` persisting the 6.1.1 versioned FilterAST
+  // envelope (one codec, two carriers), with the Jira-verified Save/Save-as
+  // ownership split, private/project visibility on the 6.4 roles (the
+  // six-scope share model is the recorded deviation), starring + a filters
+  // directory, preset-schedule email subscriptions on the 1.6 cron substrate,
+  // built-in system filters, and the documented resolve-by-id data-source
+  // contract + delete-dependents warning that 6.3 dashboards consume (boards
+  // stay status-mapped — team-managed family, the 3.1/3.6 decision).
   {
     id: '6.3',
     title: 'Dashboards & reports',
