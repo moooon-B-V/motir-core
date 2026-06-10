@@ -85,6 +85,9 @@ export default defineConfig({
         'lib/repositories/componentRepository.ts',
         'lib/repositories/workItemComponentRepository.ts',
         'lib/repositories/watcherRepository.ts',
+        'lib/services/activityService.ts',
+        'lib/activity/renderers.ts',
+        'lib/mappers/activityMappers.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -133,6 +136,12 @@ export default defineConfig({
           lines: 90,
         },
         'lib/repositories/watcherRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 5.5 (activity feed): the read service + the TOTAL renderer
+        // registry (Subtask 5.5.1) gate from day one — the registry's
+        // fallback/suppression branches are the mistake-#29 guarantee.
+        'lib/services/activityService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/activity/renderers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mappers/activityMappers.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },

@@ -34,18 +34,19 @@ export const workItemRevisionRepository = {
   },
 
   /**
-   * The revision history of one work item, newest first (`changedAt DESC`) so
-   * the activity feed renders most-recent-at-top. Read-only path → `db`
-   * singleton. Cursor-paginated like workItemRepository.findByProject:
+   * The revision history of one work item, newest first (`changedAt DESC`) by
+   * default so the activity feed renders most-recent-at-top; `order: 'asc'`
+   * (Subtask 5.5.1 — the Activity section's oldest-first toggle) walks the
+   * SAME (workItemId, changedAt) index in the other direction. Read-only path
+   * → `db` singleton. Cursor-paginated like workItemRepository.findByProject:
    * `cursor` is a revision id, and when present the row AT the cursor is
-   * skipped (`skip: 1`) so paging doesn't repeat it. Backed by the
-   * (workItemId, changedAt) index.
+   * skipped (`skip: 1`) so paging doesn't repeat it.
    */
   async listByWorkItem(
     workItemId: string,
-    options: { take?: number; cursor?: string } = {},
+    options: { take?: number; cursor?: string; order?: 'asc' | 'desc' } = {},
   ): Promise<WorkItemRevision[]> {
-    const { take = 50, cursor } = options;
+    const { take = 50, cursor, order = 'desc' } = options;
     return db.workItemRevision.findMany({
       where: { workItemId },
       // `id` is a required secondary sort: `changedAt` alone is not a total
@@ -54,10 +55,42 @@ export const workItemRevisionRepository = {
       // (cursor:{id}+skip:1) non-deterministic, so a page boundary that lands
       // mid-tie can skip or repeat a row. cuid `id`s are monotonic-ish and
       // unique, giving a stable tiebreaker (PRODECT_FINDINGS #38).
-      orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ changedAt: order }, { id: order }],
       take,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
+  },
+
+  /**
+   * How many of a work item's revisions are DISPLAYABLE in the History feed
+   * (Subtask 5.5.1) — the `totalCount` behind the tab badge / "Show more"
+   * copy. A revision displays unless it is an `updated`-family row whose
+   * EVERY diff key is in `suppressedKeys` (the registry's explicit noise
+   * policy — pure board-reorder writes); `created` / `archived` anchors always
+   * display. One grouped count, never a load-all (finding #57). The predicate
+   * mirrors `isDisplayableRevision` in lib/activity/renderers.ts — both read
+   * the same suppression list, so the count and the page filter can't drift.
+   * `jsonb_typeof` guards the (never-written, but JSON-typed) non-object diff.
+   * Read-only path → `db` singleton.
+   */
+  async countDisplayableByWorkItem(workItemId: string, suppressedKeys: string[]): Promise<number> {
+    const rows = await db.$queryRaw<Array<{ count: bigint }>>`
+      SELECT count(*) AS count
+      FROM "work_item_revision" r
+      WHERE r."workItemId" = ${workItemId}
+        AND (
+          r."changeKind" IN ('created', 'archived')
+          OR (
+            jsonb_typeof(r."diff") = 'object'
+            AND EXISTS (
+              SELECT 1 FROM jsonb_object_keys(r."diff") AS k(key)
+              WHERE NOT (k.key = ANY(${suppressedKeys}))
+            )
+          )
+        )
+    `;
+    // count(*) always yields exactly one row.
+    return Number((rows[0] as { count: bigint }).count);
   },
 
   /**

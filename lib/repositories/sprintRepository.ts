@@ -37,6 +37,18 @@ export const sprintRepository = {
   },
 
   /**
+   * Many sprints by id in ONE query, scoped to the workspace (Subtask 5.5.1
+   * — the activity feed's batched sprint-name resolution; no N+1). Ids that
+   * don't exist (or live in another workspace) are simply absent from the
+   * result — the caller renders its deleted-referent fallback. Empty `ids`
+   * short-circuits to `[]` (no query). Read-only path → `db` singleton.
+   */
+  async findByIds(ids: string[], workspaceId: string): Promise<Sprint[]> {
+    if (ids.length === 0) return [];
+    return db.sprint.findMany({ where: { id: { in: ids }, workspaceId } });
+  },
+
+  /**
    * The project's single `active` sprint, or null. The
    * `sprint_one_active_per_project` partial-unique index guarantees AT MOST one
    * match, so `findFirst` returns the active sprint or null when the project is
