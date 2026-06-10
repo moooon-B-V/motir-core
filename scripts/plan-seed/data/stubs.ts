@@ -120,25 +120,24 @@ export const STUB_STORIES: PlanStory[] = [
       '(created-vs-resolved, status distribution). Charts reuse the viz from Epic 4.',
     items: [],
   },
-  {
-    id: '6.5',
-    title: 'Project admin surface',
-    status: 'planned',
-    descriptionMd:
-      'A settings hub composing workflow editing (Epic 2), custom fields/labels/components (Epic ' +
-      '5), and members/roles (6.4) into one admin area per project.',
-    items: [],
-  },
-  {
-    id: '6.6',
-    title: 'Automation rules',
-    status: 'planned',
-    descriptionMd:
-      'When/then rule engine scoped per project, triggered by transition/activity events (Epics ' +
-      '2+5), executed via Story 1.6 jobs. A small built-in action set for v1 (set field, add ' +
-      'watcher, transition).',
-    items: [],
-  },
+  // 6.5 (Project admin surface) is fully expanded — data/story-6.5.ts. The
+  // unified Jira-shaped settings AREA (verified: a grouped settings nav, not
+  // a card hub; lands on Details, which owns identity + the danger zone): a
+  // TOTAL settings-nav registry re-housing Workflow / Boards / Estimation /
+  // Members / Fields / Components behind one chrome at the existing routes,
+  // `/settings/project` becomes the read-only Details landing (+ re-homed
+  // Archive danger zone) that Story 6.8 grows with editing + the key change;
+  // 6.6 mounts via a reserved Automation slot. Features / Notifications /
+  // Apps deviations recorded with justifications.
+  // 6.6 (Automation rules) is fully expanded — data/story-6.6.ts. The
+  // when/then engine, Jira-verified: trigger → flat 6.1-FilterAST condition
+  // group → ordered actions through the SHIPPED services as the rule owner
+  // (recorded actor deviation), async via the 1.6 pipeline, with the
+  // Jira-default loop prevention (provenance-stamped events never re-fire
+  // rules), the 90-day audit log, 10-consecutive-failure auto-disable +
+  // owner error email, and bounded caps. Mounts in the 6.5 settings area's
+  // reserved Automation slot; adds the `work-item/created` +
+  // `work-item/field.changed` events the 5.7 stub anticipates.
   // 6.8 (Edit project details + change project key) is fully expanded —
   // data/story-6.8.ts. Grows the 6.5.3 read-only Details landing into the
   // editable surface (name, preset-icon+colour avatar, key); the key change
