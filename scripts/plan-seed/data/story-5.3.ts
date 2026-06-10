@@ -327,7 +327,7 @@ export const story_5_3: PlanStory = {
       id: '5.3.4',
       title:
         'Design — Fields admin page (`design/projects/fields.mock.html`: field list + create/edit + options editor + caps/delete states)',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 35,
