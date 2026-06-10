@@ -82,16 +82,15 @@ export const STUB_STORIES: PlanStory[] = [
   },
 
   // ── Epic 6: Search, reporting & admin ─────────────────────────────────────
-  {
-    id: '6.1',
-    title: 'Structured search + filter builder',
-    status: 'planned',
-    descriptionMd:
-      'Filter-builder UI (field/operator/value rows + AND/OR) compiling to a safe parameterized ' +
-      'query over issues, including custom-field values from Epic 5. Free-text match on ' +
-      'title/description. NO query-language parser.',
-    items: [],
-  },
+  // 6.4 (Roles & permissions) shipped early — data/story-6.4.ts, done.
+  // 6.1 (Structured search + filter builder) is fully expanded —
+  // data/story-6.1.ts. A flat Match-all/any builder delivering exactly the
+  // operators Jira's basic search blacklists to JQL (negation, empty,
+  // comparisons, OR) without a query language; a TOTAL per-field-type
+  // operator registry compiling to parameterized-only WHERE fragments that
+  // feed BOTH the List and the ancestor-retaining Tree; versioned ?filter=v1:
+  // URL serialization (the substrate 6.2 saved filters persist); Epic-5
+  // predicates via the 5.3.1/5.4.1 documented join contracts.
   {
     id: '6.2',
     title: 'Saved filters',
