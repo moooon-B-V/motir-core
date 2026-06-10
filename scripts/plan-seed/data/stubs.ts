@@ -50,15 +50,12 @@ export const STUB_STORIES: PlanStory[] = [
   // w/ default-assignee-at-create + move-or-remove delete, watchers w/ the
   // eye control + auto-watch + watcher emails on comment/transition (mention-
   // deduped, actor excluded) riding the 5.1.6 events.
-  {
-    id: '5.5',
-    title: 'Activity history feed',
-    status: 'planned',
-    descriptionMd:
-      "Per-issue append-only activity (field changes, transitions, comments). Reuse Story 1.4's " +
-      'work_item_revision model where it fits; render a chronological feed on the detail view.',
-    items: [],
-  },
+  // 5.5 (Activity history feed) is fully expanded — data/story-5.5.ts. NO new
+  // write model: renders the existing 1.4.6 revision trail (a TOTAL diff-
+  // renderer registry w/ fallback + explicit noise suppression), adds the
+  // Jira-verified All/Comments/History tabs with the one cross-tab sort
+  // toggle, and the bounded two-source All merge. Activates the History seam
+  // 5.1 ships disabled.
   {
     id: '5.6',
     title: 'Tests — comments, mentions, custom-field values, activity',
