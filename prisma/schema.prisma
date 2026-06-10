@@ -88,6 +88,14 @@ model User {
   // membership in many projects (Cascade on the FK: deleting a user removes
   // their project-membership rows, mirroring workspaceMemberships).
   projectMemberships        ProjectMembership[]
+  // Back-relations for Comment + CommentMention (Subtask 5.1.1). A user
+  // authors many comments (author — Restrict on the FK: a user with comments
+  // on record cannot be hard-deleted silently, mirroring the reporter
+  // pattern) and is mentioned in many (Cascade: a mention row is notification
+  // substrate, not audit — it goes with the user, mirroring
+  // projectMemberships).
+  authoredComments          Comment[]             @relation("CommentAuthor")
+  commentMentions           CommentMention[]
 
   @@map("user")
 }
@@ -181,6 +189,7 @@ model Workspace {
   boardColumnStatuses BoardColumnStatus[]
   sprints             Sprint[]
   projectMemberships  ProjectMembership[]
+  comments            Comment[]
 
   @@map("workspace")
 }
@@ -496,6 +505,9 @@ model WorkItem {
   // Audit trail (Subtask 1.4.6). A work item accrues many revision rows; the
   // FK cascades so hard-deleting an issue removes its history with it.
   revisions WorkItemRevision[]
+  // Comment thread (Subtask 5.1.1). Comments die with the issue (Cascade) —
+  // the rare hard-delete path; issues are soft-archived in practice.
+  comments  Comment[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -1085,4 +1097,75 @@ model Attachment {
 
   @@index([workspaceId, createdAt(sort: Desc)])
   @@map("attachment")
+}
+
+/// A comment on a work item (Story 5.1 · Subtask 5.1.1) — the Activity
+/// section's conversation layer. Threaded ONE level deep (the Jira-verified
+/// decision recorded in scripts/plan-seed/data/story-5.1.ts): a root comment
+/// has `parentCommentId = NULL`, a reply points at a root, and depth >1 is
+/// rejected in the SERVICE (5.1.2) — the column is just the self-relation.
+///
+/// `bodyMd` is Markdown source — the same substrate as
+/// `work_item.descriptionMd` (one storage format; mentions serialize into it
+/// as `[@Name](mention:<userId>)` tokens). `editedAt` is set on a BODY edit
+/// and drives the "Edited" tag — deliberately distinct from `updatedAt`,
+/// which any write touches. Delete is a HARD delete (Jira-faithful: no
+/// tombstone) — deleting a root cascades its replies (the `parent`
+/// self-relation) and its mention rows; what survives is the
+/// `work_item_revision` deletion record the service writes (5.1.2).
+///
+/// `workspaceId` is the denormalized tenancy gate every read filters on
+/// (finding #26) and the RLS policy tests (pure workspace gate, mirroring
+/// `attachment` / `sprint` — policy in the add_comments_and_rls migration).
+/// `author` is Restrict, mirroring WorkItem.reporter: a user with comments
+/// on record cannot be hard-deleted silently.
+model Comment {
+  id              String    @id @default(cuid())
+  workspaceId     String    @map("workspace_id")
+  workItemId      String    @map("work_item_id")
+  authorId        String    @map("author_id")
+  parentCommentId String?   @map("parent_comment_id")
+  bodyMd          String    @map("body_md") @db.Text
+  editedAt        DateTime? @map("edited_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem  WorkItem         @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  author    User             @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  parent    Comment?         @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies   Comment[]        @relation("CommentReplies")
+  mentions  CommentMention[]
+
+  // The paged list read (newest-first cursor walk, 5.1.2) + the thread read.
+  @@index([workItemId, createdAt])
+  @@index([parentCommentId])
+  @@index([workspaceId])
+  @@map("comment")
+}
+
+/// One validated @mention inside a comment (Subtask 5.1.1) — the queryable
+/// "comments mentioning me" substrate Epic 6 search filters on and the 5.1.6
+/// notification job fans out from. The SERVICE (5.1.2) is the authority: it
+/// parses `[@Name](mention:<userId>)` tokens out of `bodyMd`, validates each
+/// user can VIEW the issue, dedups, and persists these rows in the same
+/// transaction as the comment write. `@@unique([commentId, mentionedUserId])`
+/// keeps one row per mention regardless of how many times a token repeats.
+/// No `workspaceId` by design (the work_item_revision pattern — denormalizing
+/// tenancy onto a child row would let it lie); the RLS policy joins through
+/// `comment` instead.
+model CommentMention {
+  id              String   @id @default(cuid())
+  commentId       String   @map("comment_id")
+  mentionedUserId String   @map("mentioned_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  comment       Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  mentionedUser User    @relation(fields: [mentionedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, mentionedUserId])
+  // The "mentions me" read path (Epic 6 search; the unique above already
+  // serves the by-comment lookup).
+  @@index([mentionedUserId])
+  @@map("comment_mention")
 }
