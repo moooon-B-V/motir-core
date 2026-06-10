@@ -117,3 +117,49 @@ describe('renderMarkdown', () => {
     expect(html).toContain('hljs-');
   });
 });
+
+// ── Mention rendering (Subtask 5.1.4) ───────────────────────────────────────
+// `[@Display Name](mention:<userId>)` renders as the designed user chip — a
+// non-navigable <span class="mention-chip"> (comments.mock.html panel 5) — via
+// a `mention` entry added to the sanitize schema's href protocols FOR a.href
+// ONLY. The XSS posture is otherwise unchanged, asserted below.
+describe('renderMarkdown — mention tokens', () => {
+  it('renders a well-formed mention token as the chip, never an anchor', () => {
+    const { container } = render(
+      renderMarkdown(`Handing the drag fix to [@Bo Philips](mention:cm9zabc123) — repro above.`),
+    );
+    const chip = container.querySelector('span.mention-chip');
+    expect(chip).toBeTruthy();
+    expect(chip?.textContent).toBe('@Bo Philips');
+    // No navigable anchor wraps it (and no anchor carries the mention href).
+    expect(container.querySelector('a[href^="mention:"]')).toBeNull();
+  });
+
+  it('a malformed/stale token (empty id) degrades to plain text — never a broken link', () => {
+    const { container } = render(renderMarkdown(`ghost [@Ghost](mention:) here`));
+    expect(container.querySelector('.mention-chip')).toBeNull();
+    expect(container.querySelector('a[href^="mention:"]')).toBeNull();
+    expect(container.textContent).toContain('@Ghost');
+  });
+
+  it('javascript: links stay dead (no XSS regression from the schema extension)', () => {
+    const { container } = render(
+      renderMarkdown(`[click](javascript:alert(1)) and <script>alert(2)</script>`),
+    );
+    expect(container.querySelector('a[href^="javascript"]')).toBeNull();
+    expect(container.querySelector('script')).toBeNull();
+  });
+
+  it('other unknown protocols are still stripped (mention is the only addition)', () => {
+    const { container } = render(renderMarkdown(`[x](vbscript:foo) [y](weird:thing)`));
+    expect(container.querySelector('a[href^="vbscript"]')).toBeNull();
+    expect(container.querySelector('a[href^="weird"]')).toBeNull();
+  });
+
+  it('normal links still render as underlined anchors', () => {
+    const { container } = render(renderMarkdown(`[docs](https://example.com)`));
+    const a = container.querySelector('a[href="https://example.com"]') as HTMLAnchorElement;
+    expect(a).toBeTruthy();
+    expect(a.style.textDecorationLine).toBe('underline');
+  });
+});

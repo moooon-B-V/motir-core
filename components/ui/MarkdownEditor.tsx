@@ -25,6 +25,11 @@ import { useOptionalTheme } from '@/lib/contexts/theme-context';
 import { ALLOWED_UPLOAD_TYPES, isImageType } from '@/lib/blob/allowlist';
 import { cn } from '@/lib/utils/cn';
 import { MarkdownView } from './MarkdownView';
+import {
+  buildMentionExtension,
+  type MentionCandidate,
+  type MentionWiring,
+} from './markdownEditorMentions';
 import './markdown-editor.css';
 
 // MarkdownEditor — the WYSIWYG editor over Story 1.4's `descriptionMd` storage
@@ -51,6 +56,8 @@ import './markdown-editor.css';
 // source (or pasted) is treated as plain text, never rendered — there is no
 // HTML/script injection surface through the editor.
 
+export type { MentionCandidate };
+
 type Size = 'min' | 'full';
 
 /**
@@ -61,8 +68,12 @@ type Size = 'min' | 'full';
  * Markdown is the document model: `html: false` keeps raw HTML inert, and
  * `linkify`/`breaks` stay off so serialization matches our stored Markdown
  * conventions rather than markdown-it's permissive defaults.
+ *
+ * `mentions` (Subtask 5.1.4) appends the configured Mention extension — the
+ * `@`-picker plus the `[@Name](mention:<userId>)` token round-trip. Absent, the
+ * schema (and so every existing consumer) is exactly what it was before 5.1.4.
  */
-export function buildEditorExtensions() {
+export function buildEditorExtensions(opts?: { mentions?: MentionWiring }) {
   return [
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
@@ -78,6 +89,7 @@ export function buildEditorExtensions() {
       transformPastedText: true,
       transformCopiedText: true,
     }),
+    ...(opts?.mentions ? [buildMentionExtension(opts.mentions)] : []),
   ];
 }
 
@@ -130,6 +142,16 @@ export interface MarkdownEditorProps {
   onFileUpload?: (file: File) => Promise<string>;
   /** Render read-only — the rendered document with no toolbar or editing. */
   readOnly?: boolean;
+  /**
+   * Members the `@` mention picker offers (Subtask 5.1.4) — the host surface
+   * supplies the issue-scoped VIEWABLE members (the 5.1.2 candidate read); the
+   * editor stays data-source-agnostic. Omit and mention support is off — the
+   * editor behaves exactly as before. Presence is read at mount (the tiptap
+   * schema is fixed per editor instance); the LIST may update freely while
+   * mounted. A picked member inserts a mention node that serializes to
+   * `[@Display Name](mention:<userId>)`.
+   */
+  mentionCandidates?: MentionCandidate[];
 }
 
 export function MarkdownEditor({
@@ -140,6 +162,7 @@ export function MarkdownEditor({
   size = 'full',
   onFileUpload,
   readOnly = false,
+  mentionCandidates,
 }: MarkdownEditorProps) {
   const theme = useOptionalTheme();
   const colorMode = theme?.resolvedPattern ?? 'light';
@@ -162,10 +185,36 @@ export function MarkdownEditor({
     onChangeRef.current = onChange;
   }, [onChange]);
 
+  // Mention wiring (5.1.4). The extension list is fixed at editor creation, so
+  // mention support keys off the prop's presence AT MOUNT; the candidate LIST
+  // itself is read through a ref on every keystroke, so updates (e.g. the host
+  // finishing its members fetch with the prop already `[]`-present) flow into
+  // the open picker without re-creating the editor. The popup mounts into the
+  // editor's bordered wrapper (anchorRef) — absolute positioning inside the
+  // dialog-safe wrapper, never a body portal (the Combobox in-dialog lesson).
+  const mentionCandidatesRef = useRef(mentionCandidates);
+  useEffect(() => {
+    mentionCandidatesRef.current = mentionCandidates;
+  }, [mentionCandidates]);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  // Created ONCE (lazy initializer) so the wiring closures are stable; they
+  // dereference the refs only when the suggestion plugin invokes them (typing
+  // `@`), never during render.
+  const [mentionOpts] = useState<{ mentions: MentionWiring } | undefined>(() =>
+    mentionCandidates !== undefined
+      ? {
+          mentions: {
+            getCandidates: () => mentionCandidatesRef.current ?? [],
+            getAnchor: () => anchorRef.current,
+          },
+        }
+      : undefined,
+  );
+
   const editor = useEditor({
     immediatelyRender: false,
     editable: !readOnly,
-    extensions: buildEditorExtensions(),
+    extensions: buildEditorExtensions(mentionOpts),
     content: value,
     editorProps: {
       attributes: {
@@ -274,7 +323,10 @@ export function MarkdownEditor({
           <MarkdownView value={value} />
         </div>
       ) : (
-        <div className="border-(--el-border) bg-(--el-surface) focus-within:border-(--el-highlight) rounded-(--radius-input) border transition-colors">
+        <div
+          ref={anchorRef}
+          className="border-(--el-border) bg-(--el-surface) focus-within:border-(--el-highlight) relative rounded-(--radius-input) border transition-colors"
+        >
           <Toolbar
             editor={editor}
             size={size}

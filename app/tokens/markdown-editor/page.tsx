@@ -31,9 +31,22 @@ const answer = 42;
 | a     | b     |
 `;
 
+// Mention specimen (Subtask 5.1.4): the @-picker over static candidates + the
+// rendered chip for the durable token format.
+const MENTION_CANDIDATES = [
+  { id: 'specimen_bo', name: 'Bo Philips', email: 'bophilips@prodect.co' },
+  { id: 'specimen_eikooc', name: 'Eikooc', email: 'eikooc@prodect.co' },
+  { id: 'specimen_julian', name: 'Julian', email: 'julian@prodect.co' },
+  { id: 'specimen_mo', name: 'Mo', email: 'mo@prodect.co' },
+];
+
+const MENTION_SAMPLE =
+  'Handing the drag fix to [@Bo Philips](mention:specimen_bo) — repro steps above.';
+
 export default function MarkdownEditorSpecimenPage() {
   const [minValue, setMinValue] = useState('A short description.');
   const [fullValue, setFullValue] = useState(SAMPLE);
+  const [mentionValue, setMentionValue] = useState('Ping [@Eikooc](mention:specimen_eikooc) — ');
 
   // NOTE: arbitrary `max-w-[48rem]`, NOT `max-w-3xl` — this project's Tailwind theme
   // resolves `max-w-{key}` against the --spacing-* scale (--spacing-3xl = 40px), so
@@ -80,6 +93,19 @@ export default function MarkdownEditorSpecimenPage() {
       <section className="mt-8 flex flex-col gap-2">
         <SectionLabel>MarkdownView (render path)</SectionLabel>
         <MarkdownView value={SAMPLE} aria-label="Rendered description" />
+      </section>
+
+      <section className="mt-8 flex flex-col gap-2">
+        <SectionLabel>Mentions (5.1.4) — type @ for the member picker</SectionLabel>
+        <MarkdownEditor
+          label="Comment (mentions enabled)"
+          size="min"
+          value={mentionValue}
+          onChange={setMentionValue}
+          mentionCandidates={MENTION_CANDIDATES}
+        />
+        <SectionLabel>Mention chip (rendered token)</SectionLabel>
+        <MarkdownView value={MENTION_SAMPLE} aria-label="Rendered mention" />
       </section>
     </main>
   );

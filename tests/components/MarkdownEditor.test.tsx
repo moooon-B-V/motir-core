@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useEffect, useRef } from 'react';
 import { Editor } from '@tiptap/core';
+import { EditorContent, useEditor } from '@tiptap/react';
 
 import { MarkdownEditor, buildEditorExtensions } from '@/components/ui/MarkdownEditor';
 
@@ -152,5 +154,175 @@ describe('MarkdownEditor (component)', () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => expect(onFileUpload).toHaveBeenCalledWith(file));
+  });
+});
+
+// ── Mentions (Subtask 5.1.4) ────────────────────────────────────────────────
+// The mention capability is opt-in via `mentionCandidates` / the `mentions`
+// option on buildEditorExtensions. Two storage invariants: (1) the token
+// `[@Display Name](mention:<userId>)` round-trips load → edit → getMarkdown()
+// unchanged; (2) WITHOUT the option the schema is exactly the pre-5.1.4 one,
+// so existing consumers stay byte-identical (the token stays a plain link).
+const MENTION_WIRING = { getCandidates: () => [], getAnchor: () => null };
+
+function roundTripWithMentions(markdown: string): string {
+  const element = document.createElement('div');
+  const editor = new Editor({
+    element,
+    extensions: buildEditorExtensions({ mentions: MENTION_WIRING }),
+    content: markdown,
+  });
+  const storage = (editor.storage as unknown as Record<string, unknown>).markdown as {
+    getMarkdown: () => string;
+  };
+  const out = storage.getMarkdown();
+  editor.destroy();
+  return out.trim();
+}
+
+describe('Mention token round-trip (storage invariant, 5.1.4)', () => {
+  it('preserves a mention token through load → serialize', () => {
+    const doc = 'Ping [@Bo Philips](mention:cm9zabc123) about the fix.';
+    expect(roundTripWithMentions(doc)).toBe(doc);
+  });
+
+  it('is idempotent over a body with multiple mentions', () => {
+    const doc =
+      'Handing to [@Bo Philips](mention:user_bo) — cc [@Zhu Yue](mention:user_yue) for review.';
+    const once = roundTripWithMentions(doc);
+    const twice = roundTripWithMentions(once);
+    expect(once).toBe(doc);
+    expect(twice).toBe(once);
+  });
+
+  it('preserves a mention inside surrounding formatting', () => {
+    const doc = '**bold** then [@Mo](mention:abc-123_X) then `code`';
+    expect(roundTripWithMentions(doc)).toBe(doc);
+  });
+
+  it('a malformed token (empty id) is NOT parsed as a mention — it degrades to plain text', () => {
+    // The mention parseHTML rule rejects the empty id, so the anchor falls to
+    // the Link mark — and tiptap v3's Link strips non-allowlisted protocols
+    // (`mention:` isn't in its scheme allowlist), leaving the display text.
+    // Same degradation the render side applies (never a broken link).
+    const doc = 'ghost [@Ghost](mention:) here';
+    expect(roundTripWithMentions(doc)).toBe('ghost @Ghost here');
+  });
+
+  it('WITHOUT the mentions option the schema is the pre-5.1.4 one (token degrades exactly as before)', () => {
+    // Pre-5.1.4 behaviour, pinned: the v3 Link mark drops the `mention:` href
+    // (protocol allowlist), so a token loaded into a NON-mention-enabled editor
+    // becomes plain text. Mention-bearing surfaces must pass
+    // `mentionCandidates` (5.1.5 wires them) — this assertion documents that
+    // the no-prop schema is byte-identical to today.
+    const doc = 'Ping [@Bo Philips](mention:cm9zabc123) please';
+    expect(roundTrip(doc)).toBe('Ping @Bo Philips please');
+  });
+});
+
+describe('Mention picker (component, 5.1.4)', () => {
+  const CANDIDATES = [
+    { id: 'user_bo', name: 'Bo Philips', email: 'bophilips@prodect.co' },
+    { id: 'user_eikooc', name: 'Eikooc', email: 'eikooc@prodect.co' },
+    { id: 'user_julian', name: 'Julian', email: 'julian@prodect.co' },
+  ];
+
+  // The popup renders through ReactRenderer, which mounts via the editor's
+  // React contentComponent portal — so the picker is exercised over a
+  // React-mounted editor (EditorContent), exactly how the app hosts it. The
+  // harness exposes the editor instance to drive typing programmatically
+  // (ProseMirror ignores synthetic text-input events in happy-dom).
+  function PickerHarness({ onReady }: { onReady: (editor: Editor) => void }) {
+    const anchorRef = useRef<HTMLDivElement>(null);
+    const editor = useEditor({
+      immediatelyRender: false,
+      extensions: buildEditorExtensions({
+        mentions: {
+          getCandidates: () => CANDIDATES,
+          getAnchor: () => anchorRef.current,
+        },
+      }),
+      content: '',
+    });
+    useEffect(() => {
+      if (editor) onReady(editor);
+    }, [editor, onReady]);
+    return (
+      <div ref={anchorRef} data-testid="anchor" className="relative">
+        {editor && <EditorContent editor={editor} />}
+      </div>
+    );
+  }
+
+  async function mountPicker() {
+    let editor: Editor | null = null;
+    render(<PickerHarness onReady={(e) => (editor = e)} />);
+    await waitFor(() => expect(editor).toBeTruthy());
+    const anchor = screen.getByTestId('anchor');
+    return { editor: editor as unknown as Editor, anchor };
+  }
+
+  function markdownOf(editor: Editor): string {
+    const storage = (editor.storage as unknown as Record<string, unknown>).markdown as {
+      getMarkdown: () => string;
+    };
+    return storage.getMarkdown();
+  }
+
+  it('typing @ opens the member listbox; ↓ + Enter inserts the picked mention as a token', async () => {
+    const { editor, anchor } = await mountPicker();
+    editor.commands.focus('end');
+    editor.commands.insertContent('@');
+
+    await waitFor(() => expect(anchor.querySelector('[role="listbox"]')).toBeTruthy());
+    const options = anchor.querySelectorAll('[role="option"]');
+    expect(options.length).toBe(3);
+    expect(options[0]?.textContent).toContain('Bo Philips');
+    expect(options[0]?.textContent).toContain('bophilips@prodect.co');
+    expect(options[0]?.getAttribute('aria-selected')).toBe('true');
+
+    // ↓ moves the active row (aria-activedescendant + aria-selected follow)…
+    fireEvent.keyDown(editor.view.dom, { key: 'ArrowDown' });
+    await waitFor(() =>
+      expect(anchor.querySelector('[role="option"][aria-selected="true"]')?.textContent).toContain(
+        'Eikooc',
+      ),
+    );
+    expect(anchor.querySelector('[role="listbox"]')?.getAttribute('aria-activedescendant')).toBe(
+      'mention-option-1',
+    );
+
+    // …and Enter commits it as the durable Markdown token.
+    fireEvent.keyDown(editor.view.dom, { key: 'Enter' });
+    await waitFor(() => expect(markdownOf(editor)).toContain('[@Eikooc](mention:user_eikooc)'));
+    expect(anchor.querySelector('[role="listbox"]')).toBeNull();
+  });
+
+  it('filters as you type (name OR email substring) and Escape dismisses', async () => {
+    const { editor, anchor } = await mountPicker();
+    editor.commands.focus('end');
+    editor.commands.insertContent('@juli');
+
+    await waitFor(() => {
+      const options = anchor.querySelectorAll('[role="option"]');
+      expect(options.length).toBe(1);
+      expect(options[0]?.textContent).toContain('Julian');
+    });
+
+    fireEvent.keyDown(editor.view.dom, { key: 'Escape' });
+    await waitFor(() => expect(anchor.querySelector('[role="listbox"]')).toBeNull());
+  });
+
+  it('the MarkdownEditor component wires mentionCandidates through (no popup until @)', async () => {
+    const { container } = render(
+      <MarkdownEditor
+        label="Comment"
+        value=""
+        onChange={() => {}}
+        mentionCandidates={CANDIDATES}
+      />,
+    );
+    await waitFor(() => expect(screen.getByLabelText('Comment')).toBeTruthy());
+    expect(container.querySelector('[role="listbox"]')).toBeNull(); // closed until @
   });
 });
