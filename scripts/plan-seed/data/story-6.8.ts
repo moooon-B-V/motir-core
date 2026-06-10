@@ -367,11 +367,11 @@ export const story_6_8: PlanStory = {
         'reload); the Previous-keys rows + release-with-confirm. **Gating:** ' +
         'non-admins get the designed read-only rendering (the 6.4.6 grammar); all ' +
         'strings via next-intl (the threading pattern).\n\n' +
-        '**A11y:** the card is a labelled region; the picker and both modals ' +
+        '**A11y:** the page sections are labelled regions; the picker and both modals ' +
         'keyboard-complete; validation errors announced; extends the settings strict ' +
         'sweep.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- The card matches the design panel-for-panel (card states, picker, modal ' +
+        '- The page matches the design panel-for-panel (edit states, picker, modal ' +
         'states, previous-keys, read-only); the switcher renders the avatar chip in ' +
         'both states and falls back correctly on null.\n' +
         '- The full key-change journey works end-to-end in the browser: validate → ' +
