@@ -467,7 +467,7 @@ export const story_4_6: PlanStory = {
       id: '4.6.5',
       title:
         'UI — mount the in-sprint burndown into the Story-4.5 scrum-header chart seam AND the completed-sprint burndown into the Story-4.4.6 sprint-report chart seam',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
@@ -563,7 +563,7 @@ export const story_4_6: PlanStory = {
       id: '4.6.7',
       title:
         'Story tests — burndown series (revision-trail derivation, scope changes, bounded), velocity (last-N + average + low-history), chart primitive a11y + render; focused E2E',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 26,
