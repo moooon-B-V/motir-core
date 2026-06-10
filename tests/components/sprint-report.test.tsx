@@ -5,6 +5,7 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { SprintReport } from '@/app/(authed)/backlog/_components/SprintReport';
 import type { StatusByKey } from '@/app/(authed)/backlog/_components/backlogShared';
 import type { SprintDto, SprintReportDto } from '@/lib/dto/sprints';
+import type { VelocityDto } from '@/lib/dto/reports';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { RankedIssuePageDto } from '@/lib/dto/backlog';
 
@@ -154,5 +155,80 @@ describe('SprintReport (4.4.6)', () => {
       />,
     );
     expect(screen.getByText('No incomplete issues.')).toBeTruthy();
+  });
+});
+
+// The velocity chart in the report's analytics row (Story 4.6 · Subtask 4.6.6) —
+// the 4.6.2 BarChart bound to the 4.6.4 `getVelocity` read, mounted beside the
+// burndown seam per design/reports/charts.mock.html panels 3 + 5. Series read as
+// text+number (legend, value labels, data table — finding #35); low history
+// (0–1 completed sprints) is the "not enough history yet" state, never an
+// axis-of-one; the modal (no `velocity` prop) shows no velocity section.
+
+function velocity(over: Partial<VelocityDto> = {}): VelocityDto {
+  return {
+    sprints: [
+      { sprintId: 's1', name: 'Sprint 4', committed: 30, completed: 24 },
+      { sprintId: 's2', name: 'Sprint 5', committed: 28, completed: 30 },
+      { sprintId: 's3', name: 'Sprint 6', committed: 42, completed: 29 },
+    ],
+    averageCompleted: 27.666666,
+    statistic: 'story_points',
+    ...over,
+  };
+}
+
+describe('SprintReport velocity (4.6.6)', () => {
+  it('renders the velocity chart — legend, sprint categories, average, and the data-table fallback', () => {
+    render(
+      <SprintReport
+        report={report()}
+        sprint={sprint()}
+        statusByKey={statusByKey}
+        velocity={velocity()}
+      />,
+    );
+
+    // The section heading + the window/average sub-line (read as text).
+    expect(screen.getByText('Velocity')).toBeTruthy();
+    expect(screen.getByText(/Last 3 completed sprints/)).toBeTruthy();
+    expect(screen.getByText(/avg completed 27\.7/)).toBeTruthy();
+    // The TEXT legend distinguishes the bars (finding #35) — committed /
+    // completed / the dashed average reference.
+    expect(screen.getAllByText('Committed').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Average completed')).toBeTruthy();
+    // Sprint categories — the X-axis tick AND the data-table row header.
+    expect(screen.getAllByText('Sprint 4').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Sprint 5').length).toBeGreaterThanOrEqual(2);
+    // The data-table fallback re-expresses every series as numbers.
+    expect(screen.getByText(/committed vs completed story points per sprint/i)).toBeTruthy();
+    const table = screen.getByRole('table');
+    const row = within(table).getByText('Sprint 4').closest('tr')!;
+    expect(within(row).getByText('30')).toBeTruthy();
+    expect(within(row).getByText('24')).toBeTruthy();
+    expect(screen.queryByText('NaN')).toBeNull();
+  });
+
+  it('renders the low-history state (not an axis-of-one) for 0–1 completed sprints', () => {
+    render(
+      <SprintReport
+        report={report()}
+        sprint={sprint()}
+        statusByKey={statusByKey}
+        velocity={velocity({
+          sprints: [{ sprintId: 's1', name: 'Sprint 6', committed: 42, completed: 29 }],
+          averageCompleted: 29,
+        })}
+      />,
+    );
+    expect(screen.getByText('Not enough history yet')).toBeTruthy();
+    expect(screen.queryByRole('table')).toBeNull();
+  });
+
+  it('renders no velocity section when the host passes no velocity (the complete modal)', () => {
+    render(<SprintReport report={report()} sprint={sprint()} statusByKey={statusByKey} />);
+    expect(screen.queryByText('Velocity')).toBeNull();
+    // The burndown seam is still there.
+    expect(screen.getByText('Story 4.6')).toBeTruthy();
   });
 });
