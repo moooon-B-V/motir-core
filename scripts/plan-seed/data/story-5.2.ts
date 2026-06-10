@@ -217,7 +217,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.2',
       title:
         '`attachmentsService` management surface — attach-to-issue, paged list, permission-gated delete w/ blob cleanup + revision trail, routes',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -273,7 +273,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.3',
       title:
         'Link-on-write — parse referenced blob URLs in description/explanation + 5.1 comment bodies; link/unlink attachment rows (`source: editor`)',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 26,
@@ -497,7 +497,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.7',
       title:
         'Orphan-GC job — scheduled sweep of unlinked attachment rows past the safety window (blob + row), the blob-failure backstop',
-      status: 'planned',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,

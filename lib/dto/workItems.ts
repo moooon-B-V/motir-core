@@ -10,6 +10,7 @@
 
 import type { WorkflowDto } from './workflows';
 import type { RelationshipKind } from './workItemLinks';
+import type { LabelDto } from './labels';
 
 export type WorkItemKindDto = 'epic' | 'story' | 'task' | 'bug' | 'subtask';
 export type WorkItemPriorityDto = 'lowest' | 'low' | 'medium' | 'high' | 'highest';
@@ -127,6 +128,12 @@ export interface IssueDetailDto {
   clones: RelationshipLinkDto[];
   readiness: ReadinessVerdictDto;
   workflow: WorkflowDto;
+  /**
+   * The issue's labels, name-ordered (Subtask 5.4.2 — rides the detail
+   * read's parallel fetch, one bounded query; the 5.4.8 rail card renders
+   * these as chips). Bounded in practice by the per-issue cap.
+   */
+  labels: LabelDto[];
 }
 
 /**

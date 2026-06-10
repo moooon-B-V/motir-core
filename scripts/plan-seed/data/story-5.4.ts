@@ -31,7 +31,11 @@ import type { PlanStory } from '../types';
  *     (hyphens — the Jira rule). One fix of a documented mirror wart:
  *     case-INSENSITIVE uniqueness per project ('Performance' vs 'performance'
  *     duplicates are a filed Jira complaint, JRACLOUD-24907) — first-typed
- *     casing is the display form.
+ *     casing is the display form. SECOND justified deviation (product owner,
+ *     2026-06-10): label chips are COLOURED — less enterprise than Jira's
+ *     colourless labels; tint auto-assigned by name hash (FNV-1a mod 6) into
+ *     the existing --el-tint-* pastels, no colour column / picker / admin;
+ *     user-picked colours = the documented extension.
  *   • **Components are company-managed-only in Jira** (team-managed gets
  *     Compass components, a different product seam) — so the mirror for shape
  *     is company-managed: name (required) + description + default assignee,
@@ -102,7 +106,14 @@ export const story_5_4: PlanStory = {
     'the Epic-6 extension). A label exists only while used: removing its last use deletes the row ' +
     '(unused labels disappear, the verified behaviour). One wart-fix: **case-insensitive ' +
     "uniqueness** per project (the filed 'Performance'/'performance' duplicate complaint), " +
-    'first-typed casing displayed.\n\n' +
+    'first-typed casing displayed. **Second justified deviation — label chips are COLOURED** ' +
+    "(product owner, 2026-06-10): Jira's labels are colourless-enterprise; Prodect is " +
+    'deliberately more colourful. The tint is **auto-assigned deterministically from the label ' +
+    'name** (FNV-1a over `nameLower`, mod 6 — the seed-loader hash family) into the existing ' +
+    '`--el-tint-{peach,rose,mint,lavender,sky,yellow}` pastels with `--el-text-strong` text ' +
+    '(finding #35 AA) — NO colour column, NO picker, NO admin: the folksonomy stays ' +
+    'type-to-create and the same label is the same colour on every surface (rail, picker, ' +
+    'Epic-6 filters). User-picked colours = the documented extension.\n\n' +
     '**Components (company-managed Jira is the shape mirror).** Project-scoped, **admin-managed ' +
     'at Project settings → Components** (the 6.4 two-tier gate): `name` (required, ' +
     'case-insensitively unique), `description?`, `defaultAssigneeId?` — the verified Jira ' +
@@ -145,9 +156,9 @@ export const story_5_4: PlanStory = {
     'five-way default-assignee enum (no project-lead concept; the nullable user covers the use ' +
     'case); voting (Jira\'s sibling feature — no use case for a small-team tool, "no complexity ' +
     'for nothing"); per-user notification preferences + the in-app bell (**Story 5.7**); ' +
-    'watcher notifications on every field edit (the full scheme matrix — extension); label ' +
-    'colours (Jira labels are colourless; Linear-style coloured labels would be an improvised ' +
-    'design decision with no mirror backing).',
+    'watcher notifications on every field edit (the full scheme matrix — extension); ' +
+    'user-PICKED label colours (the auto name-hash tint ships in this story — the recorded ' +
+    'less-enterprise deviation; a `color` column + picker is the additive extension).',
   verificationRecipeMd:
     '- Pull the Story branch, `pnpm install`, `pnpm prisma migrate dev` (applies the 5.4.1 ' +
     'label/component/watcher migration cleanly; re-run reports "No difference detected"), ' +
@@ -240,7 +251,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.2',
       title:
         '`labelsService` — type-to-create folksonomy (no-spaces, case-insensitive find-or-create, delete-on-last-use), bounded autocomplete, revision diffs',
-      status: 'planned',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 26,
@@ -446,10 +457,13 @@ export const story_5_4: PlanStory = {
         '(label text · remove ×) + a type-to-filter input; the anchored listbox reuses ' +
         'the OptionRow vocabulary (option rows + trailing Check, ' +
         '`aria-multiselectable`); keyboard-complete (type/↑↓/Enter toggles, Backspace ' +
-        'removes the last chip, Esc closes). Chips are `--radius-badge` neutral-tint ' +
-        '(labels are colourless — the mirror).\n' +
+        'removes the last chip, Esc closes). Chips are `--radius-badge` — neutral by ' +
+        'default (what Components uses), with an optional per-value tint.\n' +
         '- **Labels rail card** — the picker with the **create-row** ("Create ' +
-        "'perf-q3'\" when no match, the folksonomy affordance), the no-spaces inline " +
+        "'perf-q3'\" when no match, the folksonomy affordance), **coloured chips** (the " +
+        'recorded less-enterprise deviation: tint auto-assigned by name hash into the ' +
+        'six `--el-tint-*` pastels, `--el-text-strong` text per finding #35; option ' +
+        'rows carry the tint swatch dot), the no-spaces inline ' +
         'error, the empty placeholder, the per-issue-cap state, and the read-only ' +
         '(viewer) chip-only rendering.\n' +
         '- **Components rail card** — the same picker WITHOUT a create-row (admin-managed ' +
@@ -474,7 +488,8 @@ export const story_5_4: PlanStory = {
         '+ count) and the watchers popover (list, paged, admin add/remove, inline ' +
         'error, non-admin variant).\n' +
         "- `design-notes.md` names the primitive's generic API surface (5.4.8 + Epic-6 " +
-        'reuse), the OptionRow vocabulary reuse, the colourless-chip decision, and the ' +
+        'reuse), the OptionRow vocabulary reuse, the label-colour decision (auto ' +
+        'name-hash tint — the recorded deviation), and the ' +
         'header placement (the `ml-auto` cluster).\n' +
         '- No improvised primitive beyond the ONE designed here; token needs recorded.\n\n' +
         '## Context refs\n\n' +
@@ -483,8 +498,8 @@ export const story_5_4: PlanStory = {
         '(`issues/[key]/page.tsx`)\n' +
         '- `IssueFilterBar` OptionRow (the multi-select vocabulary) + `Combobox` (the ' +
         'listbox a11y bar)\n' +
-        '- The verified mirror behaviours (eye+count, folksonomy create, colourless ' +
-        'labels) in the Story 5.4 description\n' +
+        '- The verified mirror behaviours (eye+count, folksonomy create) + the ' +
+        'label-colour deviation in the Story 5.4 description\n' +
         '- Findings #35/#54; the design-mockup render checklist',
     },
     {
@@ -549,14 +564,18 @@ export const story_5_4: PlanStory = {
         'design specifies (value chips + remove ×, type-to-filter input, anchored ' +
         '`aria-multiselectable` listbox on the OptionRow vocabulary, full keyboard model ' +
         'incl. Backspace-removes-last, optional **create-row** via an `onCreate` prop, ' +
-        'optional per-value cap). PURE + typed-generic (options in, selection out — no ' +
+        'optional per-value cap, optional per-value **tint** — chip colour + the option-row ' +
+        'swatch dot). PURE + typed-generic (options in, selection out — no ' +
         'fetching), component-tested in isolation, documented for Epic-6 facet reuse. ' +
         'This is the ONE new primitive the story earns (rung-2: nothing multi-select ' +
         'exists; designed in 5.4.6 — not improvised).\n\n' +
         '**Rail cards** (in `CoreFieldsPanel`/siblings, the FieldCard grammar): ' +
         '**Labels** — the picker with `onCreate` wired to the folksonomy (typed ' +
         'no-spaces/cap errors inline), options from the bounded `searchLabels` ' +
-        'autocomplete (debounced), chips from the detail read; **Components** — the ' +
+        'autocomplete (debounced), chips from the detail read, **tinted by the ' +
+        'deterministic name-hash** (FNV-1a over `nameLower` mod 6 → the six `--el-tint-*` ' +
+        'pastels, `--el-text-strong` text — the Story 5.4 label-colour deviation; the ' +
+        'pure helper lives beside the picker for Epic-6 reuse); **Components** — the ' +
         'picker without create (options = `listComponents`, the empty-project state with ' +
         'the admin link). Both persist via server actions → the 5.4.2/5.4.3 services → ' +
         '`router.refresh()` (the rail pattern); viewer renders read-only chips. Strings ' +
@@ -567,7 +586,8 @@ export const story_5_4: PlanStory = {
         'Backspace paths); no fetching inside.\n' +
         '- The Labels card round-trips create/add/remove with the inline 422s; ' +
         'autocomplete is debounced + bounded; case-insensitive match surfaces the ' +
-        'existing casing.\n' +
+        'existing casing; the same label renders the same hash tint everywhere ' +
+        '(deterministic — unit-tested).\n' +
         '- The Components card assigns/unassigns from the project taxonomy; ' +
         'empty-project + read-only states match the design.\n' +
         '- Token tiers only; the detail-route axe sweep stays clean; integration tests ' +

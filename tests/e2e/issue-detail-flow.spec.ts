@@ -277,7 +277,7 @@ test('@smoke link management — add a blocked-by link via the panel; persists +
   // Default relationship is "Blocked by" — just pick the target + Add.
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await page.getByRole('option', { name: /The blocker issue/ }).click();
-  await page.getByRole('button', { name: 'Add' }).click();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
 
   // The blocker row appears and readiness flips to Blocked.
   await expect(page.getByRole('link', { name: /The blocker issue/ })).toBeVisible();
@@ -332,7 +332,7 @@ test('@smoke link management — removing a relates_to link drops both reciproca
   await page.getByRole('option', { name: 'Relates to' }).click();
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await page.getByRole('option', { name: /Issue Delta/ }).click();
-  await page.getByRole('button', { name: 'Add' }).click();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(page.getByRole('link', { name: /Issue Delta/ })).toBeVisible();
 
   // The reciprocal row shows on D's page.
@@ -364,7 +364,7 @@ test('@smoke link management — a cycle attempt surfaces an inline error and pe
   await page.getByRole('button', { name: 'Link work item' }).click();
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await page.getByRole('option', { name: /Alpha cyc/ }).click();
-  await page.getByRole('button', { name: 'Add' }).click();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
 
   // The typed trigger error round-trips inline; nothing persists.
   await expect(page.getByText('That would create a dependency cycle.')).toBeVisible();
@@ -386,7 +386,7 @@ test('@smoke create with a link (2.4.10): the link is written atomically with th
   // The Linked-issues section: pick the target (default "Blocked by") + Add.
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await page.getByRole('option', { name: /Pre-existing target/ }).click();
-  await page.getByRole('button', { name: 'Add' }).click();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
   // The pending row renders before submit.
   await expect(
     page.getByRole('button', { name: `Remove pending blocked by link to ${target.identifier}` }),
@@ -417,7 +417,7 @@ test('@smoke create with a link (2.4.10): removing the pending row before create
   await page.getByLabel('Title').fill('No links after all');
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await page.getByRole('option', { name: /Not actually linked/ }).click();
-  await page.getByRole('button', { name: 'Add' }).click();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
 
   // Drop the pending row before creating.
   const removePending = page.getByRole('button', {

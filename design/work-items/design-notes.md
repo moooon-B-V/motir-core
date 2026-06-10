@@ -1269,6 +1269,12 @@ files already attach at create via the editor path + link-on-write (5.2.3).
 **Per-project storage quotas / admin-configurable size limits** — Epic 6/8
 admin. **Jump-to-exact-comment** from a comment-sourced card — additive;
 the block only needs `source`. Custom-field file types are Story 5.3.
+**Row-less blob sweep** — the 5.2.7 orphan-GC reaches only blobs that still
+have an `attachment` row (it sweeps unlinked rows past the 7-day window,
+blob-then-row); a blob whose row is gone entirely (e.g. a workspace-cascade
+delete) is invisible to it. A prefix-listing sweep against the blob store
+itself is the named Epic-8 hardening extension (also recorded in the
+`attachmentGc` job header).
 
 ## Custom fields on the detail rail (Story 5.3 · 5.3.5 → 5.3.7)
 

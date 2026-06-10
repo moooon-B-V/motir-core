@@ -58,7 +58,9 @@ import './markdown-editor.css';
 
 export type { MentionCandidate };
 
-type Size = 'min' | 'full';
+// `compact` is the comment-composer mode (Story 5.1 · the comments mockup's
+// panel 3): the shortest editing area (~72px) with the inline-format toolbar.
+type Size = 'compact' | 'min' | 'full';
 
 /**
  * The canonical extension set. Exported so the round-trip fidelity test builds a
@@ -130,8 +132,15 @@ export interface MarkdownEditorProps {
    * header WITHOUT adding a second external label that duplicates `label`.
    */
   labelAccessory?: ReactNode;
-  /** Size variant. `min` for the create modal, `full` for the edit form. */
+  /** Size variant. `min` for the create modal, `full` for the edit form,
+   * `compact` for the comment composer (5.1.5 — the mockup's ~72px area). */
   size?: Size;
+  /**
+   * Render the label for screen readers only (the editing surface keeps its
+   * aria-label). The comment composer (5.1.5) is visually led by the author's
+   * avatar per the comments mockup — a visible field label would double it.
+   */
+  labelHidden?: boolean;
   /**
    * Persist a pasted/dropped/picked FILE (2.3.7, finding #52 — any allowed
    * type, not just images) and resolve to its URL. An image inserts as an
@@ -160,6 +169,7 @@ export function MarkdownEditor({
   label,
   labelAccessory,
   size = 'full',
+  labelHidden = false,
   onFileUpload,
   readOnly = false,
   mentionCandidates,
@@ -314,10 +324,12 @@ export function MarkdownEditor({
     // provider's stable SSR snapshot) but resolves to the OS preference on the
     // client — an intentional, sanctioned attribute mismatch, not a bug.
     <div className="flex flex-col gap-1" data-color-mode={colorMode} suppressHydrationWarning>
-      <span className="text-(--el-text) flex items-center gap-2 font-sans text-sm font-medium">
-        {label}
-        {labelAccessory}
-      </span>
+      {labelHidden ? null : (
+        <span className="text-(--el-text) flex items-center gap-2 font-sans text-sm font-medium">
+          {label}
+          {labelAccessory}
+        </span>
+      )}
       {readOnly ? (
         <div className="border-(--el-border) bg-(--el-surface) rounded-(--radius-input) border px-3 py-2">
           <MarkdownView value={value} />
@@ -336,7 +348,11 @@ export function MarkdownEditor({
           <div
             className={cn(
               'overflow-y-auto px-3 py-2',
-              size === 'min' ? 'min-h-[8rem]' : 'min-h-[22rem]',
+              size === 'compact'
+                ? 'min-h-[4.5rem]'
+                : size === 'min'
+                  ? 'min-h-[8rem]'
+                  : 'min-h-[22rem]',
             )}
           >
             {editor && <EditorContent editor={editor} />}
@@ -442,8 +458,29 @@ function Toolbar({
     },
   ];
 
+  // `compact` is the comments-mockup panel-3 set: inline marks + link + lists.
+  const strike: ToolbarButtonDef = {
+    icon: Strikethrough,
+    label: 'Strikethrough',
+    run: () => editor.chain().focus().toggleStrike().run(),
+  };
+  const bulletList: ToolbarButtonDef = {
+    icon: List,
+    label: 'Bulleted list',
+    run: () => editor.chain().focus().toggleBulletList().run(),
+  };
+  const orderedList: ToolbarButtonDef = {
+    icon: ListOrdered,
+    label: 'Numbered list',
+    run: () => editor.chain().focus().toggleOrderedList().run(),
+  };
+
   const buttons: ToolbarButtonDef[] =
-    size === 'min' ? [bold, italic, inlineCode, linkBtn] : [bold, italic, ...fullExtras, linkBtn];
+    size === 'compact'
+      ? [bold, italic, strike, inlineCode, linkBtn, bulletList, orderedList]
+      : size === 'min'
+        ? [bold, italic, inlineCode, linkBtn]
+        : [bold, italic, ...fullExtras, linkBtn];
 
   return (
     <div
