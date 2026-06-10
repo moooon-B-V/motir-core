@@ -217,7 +217,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.2',
       title:
         '`attachmentsService` management surface — attach-to-issue, paged list, permission-gated delete w/ blob cleanup + revision trail, routes',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
