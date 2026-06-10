@@ -1593,3 +1593,170 @@ tooltip/icon-btn-*`, `--height-input/control`, `--shadow-elevated/card`).
   subtask **5.4.7** (`design/projects/components.mock.html`).
 - Per-user autowatch preference + the in-app bell — Story 5.7's seam.
 - Voting (Jira's sibling feature — no use case for a small-team tool).
+
+## Activity History + the All stream (Story 5.5 · 5.5.3 → 5.5.4)
+
+`activity-history.mock.html` is the design for the issue detail page's
+**History feed** and the **All merged stream** — the completion of the
+Activity section. `comments.mock.html` (5.1.3) designs the SECTION — the
+`ContentSectionCard`, the segmented filter (History drawn as a disabled
+seam), the comment grammar, the sort toggle; every history ROW form and the
+All interleave are whole elements that asset does not depict, so the design
+gate (`notes.html` mistake #31) requires this asset before code Subtask
+**5.5.4** (History + All tabs UI). Mirror: the Jira Cloud issue-view
+changelog, verified at plan time in the 5.5 story module — entry anatomy =
+actor + "changed the <Field>" + old → new + timestamp, empty sides "None"
+(the changelog null); comment DELETIONS in History (who/when, never the
+content), comment ADDS under Comments/All only; ONE per-user sort toggle
+spanning every tab (JRACLOUD-73076); append-only — read-only for every role,
+no mutation affordance exists. An `activity-history.png` export accompanies
+the HTML for the board view; the HTML is the source of truth.
+
+### Placement + the tab row
+
+Same card, same slot as 5.1.3 (detail left column). The 5.1.3 segmented
+filter goes LIVE with three tabs — **All / Comments / History** (Jira's set
+minus Work log: no worklog feature), **default Comments** (the Jira
+default). Tab choice is URL-driven (`?activity=all|comments|history` — the
+2.5.8 `?view=` house pattern). The header gloss counts the ACTIVE tab's
+entries: "— 12 comments" / "— 34 changes" / "— 12 comments · 34 changes" on
+All. The sort control is the 5.1.3 `sort-btn` unchanged, but it now governs
+ALL tabs together (the verified cross-tab rule), persisted per user exactly
+as 5.1.5 stores it.
+
+### History row grammar (the new element)
+
+Comment-row-aligned but visually QUIETER — the feed-vs-conversation
+distinction:
+
+- Same grid (22px first column — the two row kinds stay left-aligned in
+  All) but an **18px** initial-letter `Avatar` (vs the comment row's 22px).
+- The **sentence line**: 13px `--el-text-secondary` prose with the actor
+  (13px semibold `--el-text`) and the field name (medium `--el-text`)
+  lifted out; relative time 12px `--el-text-muted`, absolute on hover via
+  `title` (the comment-row convention).
+- The **value line** below: old value struck-through `--el-text-muted`
+  (strike colour `--el-border-strong`), arrow `→` in `--el-text-faint`, new
+  value medium-weight `--el-text`. An empty side renders italic faint
+  **"None"** (the changelog null). State is carried by strike + weight, not
+  colour alone (WCAG 1.4.1).
+- **No action affordance on any row, for any role** — History is
+  append-only (the verified rule); there is no read-only variant because
+  the whole surface is read-only.
+
+Per-change-type value forms (all drawn in panels 1–2):
+
+- **Scalar** (title, kind, priority, estimate, story points, …): plain
+  old → new.
+- **Status**: the two workflow LABELS as `Pill`s (tint bg +
+  `--el-text-strong`, finding #35 — todo lavender / in-progress sky / done
+  mint / blocked peach) with the arrow between.
+- **User fields** (assignee, reporter): 18px avatar + name pairs.
+- **Dates**: the rail's `formatDate` form ("12 Jun 2026").
+- **Description / Explanation**: the verb sentence ONLY ("updated the
+  Description") — the body is never inlined.
+- **Sprint**: "moved this issue to Sprint 4 / the Backlog" — names
+  resolved, never ids; rendered with the old → new value line.
+- **Links**: identifier mono in `--el-link` + the link kind italic
+  ("linked `PROD-12` as _blocks_" / "removed the _relates to_ link to
+  `PROD-48`") — the links.mock vocabulary.
+- **Labels / components**: the 5.4 chip forms verbatim under an
+  added/removed sentence (labels keep their name-hash tint; components
+  neutral + glyph).
+- **Attachments**: filename mono ("attached `drag-repro.mp4`" / "removed
+  the attachment `old-screenshot.png`").
+- **Custom fields**: the DEFINITION's label as field name, option LABELS as
+  values; deleted options fall back to the stored label.
+- **Comment deleted**: "deleted a comment" + the reply-count gloss ("and
+  its 2 replies — content not retained") — NEVER the content (what 5.1.2
+  records).
+- **created**: the feed's oldest anchor ("created the issue");
+  **archived**: its own quiet row (both muted-ink sentences, no value
+  line).
+- **The generic fallback** — a DESIGNED state, not an accident (mistake
+  #29): an unregistered diff key renders mono on the `--el-muted` fill
+  ("changed `riskScore`") with safely-stringified values.
+- **Deleted referent**: the "Former member" form — muted "?" avatar
+  (`--el-muted` bg, `--el-text-muted` glyph), italic muted name; deleted
+  options/sprints/issues render their stored label fallback. Never a
+  broken entry.
+
+### The noise-suppression policy (what never renders)
+
+Pure `position` / `backlogRank` reorders and the denormalised `key` /
+`identifier` writes have **NO row form by design** — Jira shows no
+board-reorder noise in History. The 5.5.1 registry marks them `suppressed`
+(explicit disposition, not accidental omission); a diff mixing suppressed +
+renderable keys renders only the renderable parts. The trail still holds
+the rows — suppression is a render decision.
+
+### The All stream
+
+Comments (the full 5.1.3 grammar — 22px avatar, 14px body, quiet action
+row; Reply etc. still live here) interleave with history rows (this
+grammar) in true timestamp order — the bounded two-source composite-cursor
+merge (5.5.2, finding #57). The shared 22px grid column + the size/ink
+step-down (18px vs 22px avatar, 13px secondary vs 14px primary ink) is the
+visual rhythm that keeps the two scannable: conversation loud, telemetry
+quiet. A deleted comment appears ONCE, as history; live comments never
+duplicate into history.
+
+### Pagination + states
+
+Each tab pages its own read (History: the 1.4.6 revisions cursor, 20/page;
+All: the composite cursor) behind the 5.1.3 pager grammar at the OLDER edge
+— "Show more changes (N older)" / "Show more activity (N older)" — flipping
+top/bottom with the sort direction; clicking extends backward and keeps
+scroll position. **Loading**: the `BacklogSkeleton` pulse grammar shaped
+like history rows (18px circle + sentence/value bars, `aria-busy`).
+**Empty History**: the 5.1.3 empty grammar with the `history` glyph — "No
+history yet — changes to this issue will show up here" (practically
+unreachable; designed anyway). **Error**: the `ErrorState` grammar —
+"Couldn't load history" / "Something went wrong fetching the activity." +
+secondary Retry ("Couldn't load activity" on All).
+
+### Copy strings
+
+"All" / "Comments" / "History" · "— N changes" / "— N comments · N changes"
+· "changed the <Field>" · "updated the Description" · "None" · "moved this
+issue to Sprint N" / "moved this issue to the Backlog" · "linked <KEY> as
+<kind>" / "removed the <kind> link to <KEY>" · "added/removed the Label" ·
+"added/removed the Component" · "attached <file>" / "removed the attachment
+<file>" · "deleted a comment" + "and its N replies — content not retained"
+/ "content not retained" · "created the issue" · "archived the issue" ·
+"changed <key>" (fallback) · "Former member" · "Show more changes (N
+older)" / "Show more activity (N older)" · "Oldest first" / "Newest first"
+· "No history yet — changes to this issue will show up here" · "Couldn't
+load history" / "Couldn't load activity" / "Something went wrong fetching
+the activity." / "Retry".
+
+### Tokens / a11y
+
+NO new primitive and NO new token: everything composes the 5.1.3 section
+vocabulary (seg / sort-btn / show-more / skeleton / empty / ErrorState),
+the shipped `Pill` recipe, the 5.4 chip vocabulary, and the mono
+identifier + `--el-link` treatment. Colour only through `--el-*`; shape
+through the element-semantic tokens (`--radius-card/control/btn/badge`,
+`--spacing-card-padding`, `--spacing-control-x/y`, `--spacing-chip-x/y`,
+`--height-control`, `--height-btn-sm`, `--shadow-card`). The tab row is the
+5.1.3 `role="tablist"` grammar with all three tabs enabled; each feed is a
+labelled list (`role="list"` / `aria-label`) whose entries read as full
+sentences (the values are inline text, so a screen reader hears "Bo Philips
+changed the Status, To do → In progress, yesterday"); timestamps absolute
+via `title`; the skeleton sets `aria-busy`; AA holds in both themes (muted
+ink ≥4.5:1 on page bg, tinted Pills/chips use `--el-text-strong` — finding
+#35). Light + dark parity via the token flip (toggle in the mock).
+
+### Out of scope (documented extension slots)
+
+- A **Work log** tab — follows a time-tracking feature if one ever lands
+  (no such feature is planned).
+- History for comment EDITS beyond the "· Edited" tag (Jira keeps no
+  comment version history either).
+- Cross-issue / project-level activity streams — Epic-6 reporting
+  territory.
+- Retention / purge admin — the mirror has none; append-only is the
+  contract.
+- Rendering rank/position noise — suppressed by the explicit policy above.
+- Realtime updates — the section refreshes like every other surface (the
+  5.1 product-wide decision).

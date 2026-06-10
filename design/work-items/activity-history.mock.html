@@ -1,0 +1,1771 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · History entries + the All stream (Activity section) — Story 5.5 · 5.5.3 → 5.5.4
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the issue detail page's HISTORY feed and
+      the ALL merged stream — Subtask 5.5.3, the design that blocks code
+      Subtask 5.5.4 (History + All tabs UI). comments.mock.html (5.1.3) designs
+      the Activity SECTION — the card, the tab seam (History drawn disabled),
+      the comment grammar, the sort toggle; every history ROW form and the All
+      interleave are whole elements that asset does not depict, so the
+      planning-time design gate (notes.html mistake #31) requires this asset
+      first. This mockup EXTENDS the 5.1.3 section grammar — same card, same
+      segmented filter (now three tabs, all live), same sort control, same
+      pager — and adds the history row grammar.
+
+      MIRROR: the Jira Cloud issue-view Activity section, verified at plan time
+      in the 5.5 story module: filters All / Comments / History (no Work log —
+      no worklog feature), default Comments; a History entry = actor +
+      "changed the <Field>" + old → new + timestamp, empty sides rendered as
+      "None" (the changelog null); comment DELETIONS appear in History
+      (who/when, never the content), comment ADDS stay under Comments/All; ONE
+      per-user sort toggle spans every tab (JRACLOUD-73076); History is
+      append-only — read-only for everyone, no mutation affordance exists.
+
+      It composes ONLY shipped primitives — ContentSectionCard (the Activity
+      card), the initial-letter Avatar (18px here — smaller than the comment
+      row's 22px: the feed-vs-conversation distinction), Pill (status tones —
+      hue in the tint bg, --el-text-strong text, finding #35), the 5.4
+      label/component chip vocabulary, the mono identifier + --el-link
+      treatment from links.mock.html, the BacklogSkeleton pulse grammar,
+      ErrorState, and the 5.1.3 seg/sort/pager controls verbatim — so 5.5.4
+      invents NO new visual primitive and needs NO new token. Tokens copied
+      1:1 from app/globals.css; colour only via Tier-3 --el-*; shape via the
+      element-semantic radius / spacing / height / shadow tokens.
+
+      Panels:
+        0 · Placement + the activated tab row — the Activity card in the
+            detail left column with the three-tab filter LIVE (History active
+            here; the DEFAULT tab is Comments — the Jira default), per-tab
+            count gloss, the one sort toggle, "Show more changes" at the
+            older edge.
+        1 · History row grammar, part 1 — anatomy (18px avatar · actor ·
+            verb sentence · relative time) + the core value forms: scalar
+            (old struck-muted → new emphasised; "None" empty sides), status
+            (workflow-label Pills), user fields (avatar + name pairs), date
+            (rail formatDate convention), description (no body inline),
+            sprint (moved to Sprint N / the backlog).
+        2 · History row grammar, part 2 — links (mono identifier + kind),
+            labels / components (the 5.4 chip forms), attachments, custom
+            fields (definition label + option label), comment deleted (count
+            gloss, NO content), created (the anchor) + archived, the GENERIC
+            FALLBACK row (a designed state, not an accident), and the
+            deleted-referent "Former member" form.
+        3 · The All stream — comments (full 5.1.3 grammar) interleaved with
+            history rows in one chronology; the quieter history rows keep the
+            two scannable.
+        4 · Sort + pagination across tabs — the ONE toggle flips every tab
+            together (the verified cross-tab rule); the pager edge follows
+            the direction, per tab.
+        5 · States — loading skeleton (history-row variant), empty History,
+            error. The surface is read-only for every role — there is no
+            affordance delta for a viewer (the 6.4 read-only grammar has
+            nothing to hide here).
+
+      NOISE POLICY (drawn by omission, recorded here + in design-notes.md):
+      pure position / backlogRank reorders and the denormalised key /
+      identifier writes NEVER render — no row form exists for them by design
+      (Jira shows no board-reorder noise). The registry (5.5.1) marks them
+      suppressed; this asset deliberately contains no such row.
+
+      Toggle dark for token parity. See design-notes.md § Activity History.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 32px;
+        --focus-ring-color: var(--color-primary);
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-warning: var(--color-warning);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        /* issue-type hue (by kind) — IssueTypeIcon applies these */
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #3bb3ae;
+        --color-accent-green: #2fc94f;
+        --color-info: #4aa3ff;
+        --color-destructive: #f0656c;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 12px 40px rgba(15, 15, 15, 0.15);
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 120px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 860px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .stack {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 44px;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .row-of {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 32px;
+        align-items: flex-start;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding-left: 2px;
+      }
+      .panel-note {
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 940px;
+        padding-left: 2px;
+      }
+      .panel-note code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+      .mini-label {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin-bottom: 8px;
+      }
+      .variant {
+        flex: 1 1 300px;
+        min-width: 300px;
+        max-width: 480px;
+      }
+
+      /* ── Detail-page placement chrome (panel 0) — same grammar as
+            comments.mock.html panel 0 ──────────────────────────────────────── */
+      .detail-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 280px;
+        gap: 20px;
+        max-width: 1040px;
+      }
+      .col {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-width: 0;
+      }
+      .ghost {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 14px 18px;
+        color: var(--el-text-faint);
+        font-size: 13px;
+        background: var(--el-page-bg);
+      }
+      .rail-box {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 12px 16px;
+        background: var(--el-page-bg);
+      }
+      .rail-label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+      }
+
+      /* ── THE SECTION CARD — the shipped ContentSectionCard grammar ────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: var(--spacing-card-padding);
+        width: 100%;
+        max-width: 720px;
+      }
+      .section-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      .section-head h2 {
+        font-family: var(--font-sans);
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .section-head .gloss {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .head-right {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* The activity filter — the 5.1.3 segmented control, all three tabs LIVE */
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        background: var(--el-surface);
+        border-radius: var(--radius-control);
+        padding: 2px;
+      }
+      .seg-btn {
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        background: transparent;
+        border: 0;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        cursor: pointer;
+        line-height: 1;
+      }
+      .seg-btn.is-active {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        box-shadow: var(--shadow-card);
+      }
+      .seg-btn:hover:not(.is-active) {
+        color: var(--el-text);
+      }
+      .seg-btn:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+
+      /* Sort toggle — the 5.1.3 small-control vocabulary, unchanged */
+      .sort-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .sort-btn:hover {
+        background: var(--el-surface);
+      }
+      .sort-btn:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .sort-btn svg {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+      }
+
+      /* ── THE FEED ─────────────────────────────────────────────────────────── */
+      .feed {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      /* HISTORY ROW — comment-row-aligned (same 22px first column) but
+         visually QUIETER: 18px avatar, secondary-ink sentence, tighter gap.
+         The feed-vs-conversation distinction. */
+      .h-row {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
+        column-gap: 10px;
+      }
+      .h-avatar {
+        display: inline-flex;
+        width: 18px;
+        height: 18px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px; /* genuinely circular — allowed */
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 9px;
+        font-weight: 600;
+        flex: none;
+        margin: 1px auto 0;
+      }
+      .h-avatar.is-former {
+        background: var(--el-muted);
+        color: var(--el-text-muted);
+      }
+      .h-main {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      /* the sentence line — actor + verb + values + time, wraps as prose */
+      .h-line {
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .h-actor {
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .h-actor.is-former {
+        font-weight: 500;
+        color: var(--el-text-muted);
+        font-style: italic;
+      }
+      .h-field {
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .h-time {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        white-space: nowrap;
+        margin-left: 8px;
+      }
+      /* the value line — old → new, below the sentence when values render */
+      .h-vals {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .v-old {
+        color: var(--el-text-muted);
+        text-decoration: line-through;
+        text-decoration-color: var(--el-border-strong);
+      }
+      .v-new {
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .v-none {
+        color: var(--el-text-faint);
+        font-style: italic;
+        text-decoration: none;
+      }
+      .v-arrow {
+        color: var(--el-text-faint);
+        flex: none;
+      }
+      .v-gloss {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      /* mono identifiers (issue keys, filenames) — the links.mock vocabulary */
+      .v-key {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-link);
+      }
+      .v-file {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text);
+      }
+      .v-kind {
+        font-style: italic;
+      }
+      /* the generic-fallback key — a designed state, mono on the muted fill */
+      .v-rawkey {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+        color: var(--el-text);
+      }
+
+      /* status Pills — the shipped Pill recipe (hue in the tint bg,
+         --el-text-strong text — finding #35) */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+      }
+      .pill.s-todo {
+        background: var(--el-tint-lavender);
+      }
+      .pill.s-progress {
+        background: var(--el-tint-sky);
+      }
+      .pill.s-done {
+        background: var(--el-tint-mint);
+      }
+      .pill.s-blocked {
+        background: var(--el-tint-peach);
+      }
+
+      /* inline user value — 18px avatar + name (assignee/reporter forms) */
+      .v-user {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .v-user .h-avatar {
+        margin: 0;
+      }
+
+      /* label / component chips — the 5.4 chip vocabulary verbatim */
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+        max-width: 100%;
+      }
+      .chip .glyph {
+        width: 12px;
+        height: 12px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .chip.t-sky,
+      .chip.t-rose,
+      .chip.t-mint,
+      .chip.t-lavender,
+      .chip.t-peach,
+      .chip.t-yellow {
+        color: var(--el-text-strong);
+        border-color: transparent;
+      }
+      .chip.t-sky {
+        background: var(--el-tint-sky);
+      }
+      .chip.t-rose {
+        background: var(--el-tint-rose);
+      }
+      .chip.t-mint {
+        background: var(--el-tint-mint);
+      }
+      .chip.t-lavender {
+        background: var(--el-tint-lavender);
+      }
+      .chip.t-peach {
+        background: var(--el-tint-peach);
+      }
+      .chip.t-yellow {
+        background: var(--el-tint-yellow);
+      }
+
+      /* the created/archived ANCHOR rows — same grammar, dot-marked */
+      .h-anchor .h-line {
+        color: var(--el-text-muted);
+      }
+
+      /* "Show more …" — the 5.1.3 older-edge pager, unchanged */
+      .show-more {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: var(--height-control);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .show-more:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .show-more:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+
+      /* ── COMMENT ROWS (the 5.1.3 grammar, for the All interleave) ─────────── */
+      .c-row {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
+        column-gap: 10px;
+      }
+      .c-avatar {
+        display: inline-flex;
+        width: 22px;
+        height: 22px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px; /* genuinely circular — allowed */
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+        flex: none;
+        margin-top: 1px;
+      }
+      .c-main {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .c-head {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .c-author {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .c-time {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .c-body {
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text);
+      }
+      .c-body p {
+        margin: 0;
+      }
+      .c-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 2px;
+      }
+      .c-act {
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-muted);
+        background: transparent;
+        border: 0;
+        border-radius: var(--radius-control);
+        padding: 2px var(--spacing-kbd-x);
+        cursor: pointer;
+        line-height: 1.4;
+      }
+      .c-act:hover {
+        color: var(--el-text);
+        background: var(--el-surface);
+      }
+      .mention {
+        display: inline-flex;
+        align-items: center;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        font-size: 0.92em;
+        font-weight: 500;
+        line-height: 1.3;
+        white-space: nowrap;
+      }
+
+      /* ── Buttons (Retry) — the shipped Button variants (size sm) ─────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1;
+        border: 0;
+        cursor: pointer;
+      }
+      .btn:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 2px;
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border: 1px solid var(--el-border-strong);
+      }
+      .btn-secondary:hover {
+        background: var(--el-surface);
+      }
+
+      /* ── Loading / empty / error — the shipped grammars ───────────────────── */
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+      .skel {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
+        column-gap: 10px;
+      }
+      .skel .s-av {
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        background: var(--el-muted);
+        animation: pulse 2s ease-in-out infinite;
+        margin: 1px auto 0;
+      }
+      .skel .s-lines {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding-top: 2px;
+      }
+      .skel .s-bar {
+        height: 9px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+        animation: pulse 2s ease-in-out infinite;
+      }
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 28px 0;
+        text-align: center;
+      }
+      .empty svg {
+        width: 22px;
+        height: 22px;
+        color: var(--el-text-muted);
+      }
+      .empty .e-title {
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .error-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 20px 0;
+        text-align: center;
+      }
+      .error-state svg {
+        width: 32px;
+        height: 32px;
+        color: var(--el-danger);
+      }
+      .error-state .er-title {
+        font-family: var(--font-serif);
+        font-size: 17px;
+        color: var(--el-text);
+      }
+      .error-state .er-sub {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        max-width: 34ch;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>History entries + the All stream — the Activity section completed</h1>
+        <p>
+          Story 5.5 · design Subtask <strong>5.5.3</strong> → blocks 5.5.4 (History + All tabs UI).
+          Extends the <code>comments.mock.html</code> (5.1.3) section grammar: the disabled History
+          seam goes LIVE, an <strong>All</strong> tab merges both streams, and every history row
+          form is drawn — actor + "changed the &lt;Field&gt;" + old → new (the verified Jira
+          anatomy), empty sides as "None", append-only (no mutation affordance for anyone). One sort
+          toggle spans all tabs (JRACLOUD-73076). Built from the real <code>--el-*</code> +
+          element-shape tokens; no new primitive, no new token.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-history"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+          <path d="M3 3v5h5" />
+          <path d="M12 7v5l4 2" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-sort-asc"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 16 4 4 4-4" />
+          <path d="M7 20V4" />
+          <path d="M11 4h4" />
+          <path d="M11 8h7" />
+          <path d="M11 12h10" />
+        </g>
+        <g
+          id="i-sort-desc"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 8 4-4 4 4" />
+          <path d="M7 4v16" />
+          <path d="M11 12h4" />
+          <path d="M11 16h7" />
+          <path d="M11 20h10" />
+        </g>
+        <g
+          id="i-component"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M15.536 11.293a1 1 0 0 0 0 1.414l2.376 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z"
+          />
+          <path
+            d="M2.297 11.293a1 1 0 0 0 0 1.414l2.377 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414L6.088 8.916a1 1 0 0 0-1.414 0z"
+          />
+          <path
+            d="M8.916 17.912a1 1 0 0 0 0 1.415l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.415l-2.377-2.376a1 1 0 0 0-1.414 0z"
+          />
+          <path
+            d="M8.916 4.674a1 1 0 0 0 0 1.414l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z"
+          />
+        </g>
+      </defs>
+    </svg>
+
+    <div class="stack">
+      <!-- ════════════ PANEL 0 — placement + the activated tab row ════════════ -->
+      <div class="panel-label">
+        0 · Placement — the Activity card with the three-tab filter LIVE (History active; the
+        DEFAULT tab is Comments)
+      </div>
+      <div class="panel">
+        <div class="detail-grid">
+          <div class="col">
+            <div class="ghost">
+              <strong>Description</strong> — what to do
+              <span style="float: right">(2.4.1/2.4.2)</span>
+            </div>
+            <div class="ghost">
+              <strong>Children</strong> — direct child issues
+              <span style="float: right">(2.4.3)</span>
+            </div>
+
+            <!-- THE COMPLETED ACTIVITY SECTION — History tab active -->
+            <section class="card" aria-label="Activity">
+              <div class="section-head">
+                <h2>Activity</h2>
+                <span class="gloss">— 34 changes</span>
+                <div class="head-right">
+                  <div class="seg" role="tablist" aria-label="Activity filter">
+                    <button class="seg-btn" role="tab" aria-selected="false">All</button>
+                    <button class="seg-btn" role="tab" aria-selected="false">Comments</button>
+                    <button class="seg-btn is-active" role="tab" aria-selected="true">
+                      History
+                    </button>
+                  </div>
+                  <button class="sort-btn" aria-label="Sort activity, oldest first">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sort-asc" /></svg>
+                    Oldest first
+                  </button>
+                </div>
+              </div>
+
+              <div class="feed" role="list" aria-label="History">
+                <!-- the OLDER EDGE pager — top in oldest-first -->
+                <button class="show-more">Show more changes (24 older)</button>
+
+                <div class="h-row" role="listitem">
+                  <span class="h-avatar" aria-hidden="true">B</span>
+                  <div class="h-main">
+                    <div class="h-line">
+                      <span class="h-actor">Bo Philips</span> changed the
+                      <span class="h-field">Status</span>
+                      <span class="h-time" title="9 Jun 2026, 11:04">yesterday</span>
+                    </div>
+                    <div class="h-vals">
+                      <span class="pill s-todo">To do</span>
+                      <span class="v-arrow" aria-hidden="true">→</span>
+                      <span class="pill s-progress">In progress</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="h-row" role="listitem">
+                  <span class="h-avatar" aria-hidden="true">B</span>
+                  <div class="h-main">
+                    <div class="h-line">
+                      <span class="h-actor">Bo Philips</span> changed the
+                      <span class="h-field">Assignee</span>
+                      <span class="h-time" title="9 Jun 2026, 11:05">yesterday</span>
+                    </div>
+                    <div class="h-vals">
+                      <span class="v-old v-none">None</span>
+                      <span class="v-arrow" aria-hidden="true">→</span>
+                      <span class="v-user">
+                        <span class="h-avatar" aria-hidden="true">M</span>
+                        <span class="v-new">Mo</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="h-row" role="listitem">
+                  <span class="h-avatar" aria-hidden="true">Z</span>
+                  <div class="h-main">
+                    <div class="h-line">
+                      <span class="h-actor">Zhu Yue</span> changed the
+                      <span class="h-field">Priority</span>
+                      <span class="h-time" title="10 Jun 2026, 08:21">2 hours ago</span>
+                    </div>
+                    <div class="h-vals">
+                      <span class="v-old">Medium</span>
+                      <span class="v-arrow" aria-hidden="true">→</span>
+                      <span class="v-new">High</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="h-row" role="listitem">
+                  <span class="h-avatar" aria-hidden="true">Z</span>
+                  <div class="h-main">
+                    <div class="h-line">
+                      <span class="h-actor">Zhu Yue</span> updated the
+                      <span class="h-field">Description</span>
+                      <span class="h-time" title="10 Jun 2026, 08:24">2 hours ago</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div class="col">
+            <div class="rail-box"><div class="rail-label">Status</div></div>
+            <div class="rail-box"><div class="rail-label">Assignee</div></div>
+            <div class="rail-box"><div class="rail-label">Parent</div></div>
+            <div class="ghost" style="text-align: center">core-fields rail (2.4.2)</div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The 5.1.3 section, completed: the segmented filter's disabled History seam goes LIVE and
+          gains <strong>All</strong> — tab set <strong>All / Comments / History</strong> (Jira's set
+          minus Work log — no worklog feature), <strong>default Comments</strong> (the Jira default;
+          this panel shows History selected). The gloss counts the ACTIVE tab's entries ("— 12
+          comments" / "— 34 changes" / "— 46 entries" on All). The sort toggle is the 5.1.3 control
+          unchanged — but it now governs ALL tabs together (panel 4). The feed is cursor-paged
+          (20/page, finding #57); <em>Show more changes (N older)</em> sits at the older edge. Tab
+          choice is URL-driven (<code>?activity=…</code>). The whole surface is READ-ONLY — no entry
+          has any edit/delete affordance, for any role (append-only, the verified Jira rule).
+        </p>
+      </div>
+
+      <!-- ════════════ PANEL 1 — history row grammar, part 1 ════════════ -->
+      <div class="panel-label">
+        1 · History row grammar — anatomy + core value forms: scalar · status · user · date ·
+        description · sprint
+      </div>
+      <div class="panel">
+        <section class="card" aria-label="History row anatomy">
+          <div class="feed" role="list" aria-label="History">
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">Z</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Zhu Yue</span> changed the
+                  <span class="h-field">Priority</span>
+                  <span class="h-time" title="10 Jun 2026, 08:21">2 hours ago</span>
+                </div>
+                <div class="h-vals">
+                  <span class="v-old">Medium</span>
+                  <span class="v-arrow" aria-hidden="true">→</span>
+                  <span class="v-new">High</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">B</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Bo Philips</span> changed the
+                  <span class="h-field">Status</span>
+                  <span class="h-time" title="9 Jun 2026, 11:04">yesterday</span>
+                </div>
+                <div class="h-vals">
+                  <span class="pill s-progress">In progress</span>
+                  <span class="v-arrow" aria-hidden="true">→</span>
+                  <span class="pill s-done">Done</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">M</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Mo</span> changed the
+                  <span class="h-field">Assignee</span>
+                  <span class="h-time" title="9 Jun 2026, 14:40">yesterday</span>
+                </div>
+                <div class="h-vals">
+                  <span class="v-user">
+                    <span class="h-avatar" aria-hidden="true">O</span>
+                    <span class="v-old">Odie</span>
+                  </span>
+                  <span class="v-arrow" aria-hidden="true">→</span>
+                  <span class="v-user">
+                    <span class="h-avatar" aria-hidden="true">J</span>
+                    <span class="v-new">Julian</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">Z</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Zhu Yue</span> changed the
+                  <span class="h-field">Due date</span>
+                  <span class="h-time" title="8 Jun 2026, 17:02">2 days ago</span>
+                </div>
+                <div class="h-vals">
+                  <span class="v-old v-none">None</span>
+                  <span class="v-arrow" aria-hidden="true">→</span>
+                  <span class="v-new">12 Jun 2026</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">Z</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Zhu Yue</span> updated the
+                  <span class="h-field">Description</span>
+                  <span class="h-time" title="8 Jun 2026, 16:55">2 days ago</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">B</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Bo Philips</span> moved this issue to
+                  <span class="h-field">Sprint 4</span>
+                  <span class="h-time" title="8 Jun 2026, 10:12">2 days ago</span>
+                </div>
+                <div class="h-vals">
+                  <span class="v-old">Sprint 3</span>
+                  <span class="v-arrow" aria-hidden="true">→</span>
+                  <span class="v-new">Sprint 4</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">B</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Bo Philips</span> moved this issue to the
+                  <span class="h-field">Backlog</span>
+                  <span class="h-time" title="7 Jun 2026, 09:30">3 days ago</span>
+                </div>
+                <div class="h-vals">
+                  <span class="v-old">Sprint 4</span>
+                  <span class="v-arrow" aria-hidden="true">→</span>
+                  <span class="v-new">Backlog</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <p class="panel-note">
+          Row = the comment grid (same 22px first column — the two row kinds stay aligned in All)
+          with an <strong>18px</strong> initial-letter <code>Avatar</code> (smaller than the comment
+          row's 22px — the feed-vs-conversation distinction) · the <strong>sentence line</strong> in
+          13px <code>--el-text-secondary</code> with the actor (semibold <code>--el-text</code>) and
+          the field name (medium) lifted out · relative time (12px muted; absolute on hover via
+          <code>title</code>, the comment-row convention). The <strong>value line</strong> sits
+          below: old value struck-through muted, → in <code>--el-text-faint</code>, new value
+          medium-weight; an empty side renders italic faint <strong>"None"</strong> (the changelog
+          null). <strong>Status</strong> renders the two workflow LABELS as <code>Pill</code>s (tint
+          bg + <code>--el-text-strong</code>, finding #35 — todo lavender / in-progress sky / done
+          mint / blocked peach). <strong>User fields</strong> (Assignee, Reporter) pair the 18px
+          avatar with the name. <strong>Dates</strong> use the rail's <code>formatDate</code> form.
+          <strong>Description / Explanation</strong> edits render the verb sentence ONLY — the body
+          is never inlined. <strong>Sprint moves</strong> read "moved this issue to Sprint N / the
+          Backlog" (names resolved, never ids). Kind, estimate, story points and the other audited
+          scalars take the plain scalar form. No row carries an action — append-only.
+        </p>
+      </div>
+
+      <!-- ════════════ PANEL 2 — history row grammar, part 2 ════════════ -->
+      <div class="panel-label">
+        2 · History row grammar — links · labels · components · attachments · custom fields ·
+        comment deleted · created/archived · the generic fallback · former member
+      </div>
+      <div class="panel">
+        <section class="card" aria-label="History row forms">
+          <div class="feed" role="list" aria-label="History">
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">J</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Julian</span> linked <span class="v-key">PROD-12</span> as
+                  <span class="v-kind">blocks</span>
+                  <span class="h-time" title="9 Jun 2026, 16:02">yesterday</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">J</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Julian</span> removed the
+                  <span class="v-kind">relates to</span> link to
+                  <span class="v-key">PROD-48</span>
+                  <span class="h-time" title="9 Jun 2026, 16:05">yesterday</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">M</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Mo</span> added the
+                  <span class="h-field">Label</span>
+                  <span class="h-time" title="9 Jun 2026, 13:11">yesterday</span>
+                </div>
+                <div class="h-vals">
+                  <span class="chip t-sky"><span class="txt">design</span></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">M</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Mo</span> removed the
+                  <span class="h-field">Component</span>
+                  <span class="h-time" title="9 Jun 2026, 13:12">yesterday</span>
+                </div>
+                <div class="h-vals">
+                  <span class="chip">
+                    <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-component" />
+                    </svg>
+                    <span class="txt">Board engine</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">O</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Odie</span> attached
+                  <span class="v-file">drag-repro.mp4</span>
+                  <span class="h-time" title="8 Jun 2026, 15:44">2 days ago</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">O</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Odie</span> removed the attachment
+                  <span class="v-file">old-screenshot.png</span>
+                  <span class="h-time" title="8 Jun 2026, 15:46">2 days ago</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">Z</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Zhu Yue</span> changed
+                  <span class="h-field">Severity</span>
+                  <span class="h-time" title="8 Jun 2026, 11:20">2 days ago</span>
+                </div>
+                <div class="h-vals">
+                  <span class="v-old v-none">None</span>
+                  <span class="v-arrow" aria-hidden="true">→</span>
+                  <span class="v-new">Critical</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">B</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Bo Philips</span> deleted a comment
+                  <span class="h-time" title="8 Jun 2026, 09:58">2 days ago</span>
+                </div>
+                <div class="h-vals">
+                  <span class="v-gloss">and its 2 replies — content not retained</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">Z</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Zhu Yue</span> changed
+                  <span class="v-rawkey">riskScore</span>
+                  <span class="h-time" title="7 Jun 2026, 18:31">3 days ago</span>
+                </div>
+                <div class="h-vals">
+                  <span class="v-old">3</span>
+                  <span class="v-arrow" aria-hidden="true">→</span>
+                  <span class="v-new">7</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar is-former" aria-hidden="true">?</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor is-former">Former member</span> changed the
+                  <span class="h-field">Estimate</span>
+                  <span class="h-time" title="6 Jun 2026, 10:15">4 days ago</span>
+                </div>
+                <div class="h-vals">
+                  <span class="v-old">30m</span>
+                  <span class="v-arrow" aria-hidden="true">→</span>
+                  <span class="v-new">45m</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row h-anchor" role="listitem">
+              <span class="h-avatar" aria-hidden="true">B</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Bo Philips</span> archived the issue
+                  <span class="h-time" title="6 Jun 2026, 09:00">4 days ago</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row h-anchor" role="listitem">
+              <span class="h-avatar" aria-hidden="true">B</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Bo Philips</span> created the issue
+                  <span class="h-time" title="5 Jun 2026, 09:12">5 days ago</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <p class="panel-note">
+          <strong>Links</strong> render the identifier mono in <code>--el-link</code> with the link
+          kind italic ("linked <code>PROD-12</code> as <em>blocks</em>" / "removed the
+          <em>relates to</em> link to <code>PROD-48</code>") — the links.mock vocabulary.
+          <strong>Labels / components</strong> render the 5.4 chips verbatim (labels carry their
+          name-hash tint; components stay neutral + glyph) under an added/removed sentence.
+          <strong>Attachments</strong> name the file mono ("attached / removed the attachment").
+          <strong>Custom fields</strong> use the DEFINITION's label as the field name and the
+          option's LABEL as the value (typed values take their scalar form; deleted options fall
+          back to the stored label). <strong>Comment deletions</strong> show who/when + the
+          reply-count gloss — NEVER the content (exactly what 5.1.2 records; comment ADDS live under
+          Comments/All only). The <strong>generic fallback</strong> is a designed state: an
+          unregistered diff key renders mono on the muted fill with safely-stringified values —
+          legible, never a crash (mistake #29). A <strong>deleted referent</strong> renders the
+          "Former member" form (muted "?" avatar, italic name) — never a broken entry.
+          <strong>created</strong> is the feed's oldest anchor; <strong>archived</strong> renders as
+          its own quiet row. Pure <code>position</code>/<code>backlogRank</code> reorders and
+          denormalised <code>key</code>/<code>identifier</code> writes have NO row form — the
+          explicit suppression policy (Jira shows no reorder noise).
+        </p>
+      </div>
+
+      <!-- ════════════ PANEL 3 — the All stream ════════════ -->
+      <div class="panel-label">
+        3 · The All stream — comments (full 5.1.3 grammar) interleaved with the quieter history
+        rows, one chronology
+      </div>
+      <div class="panel">
+        <section class="card" aria-label="Activity, all">
+          <div class="section-head">
+            <h2>Activity</h2>
+            <span class="gloss">— 12 comments · 34 changes</span>
+            <div class="head-right">
+              <div class="seg" role="tablist" aria-label="Activity filter">
+                <button class="seg-btn is-active" role="tab" aria-selected="true">All</button>
+                <button class="seg-btn" role="tab" aria-selected="false">Comments</button>
+                <button class="seg-btn" role="tab" aria-selected="false">History</button>
+              </div>
+              <button class="sort-btn" aria-label="Sort activity, oldest first">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sort-asc" /></svg>
+                Oldest first
+              </button>
+            </div>
+          </div>
+
+          <div class="feed" role="list" aria-label="All activity">
+            <button class="show-more">Show more activity (32 older)</button>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">B</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Bo Philips</span> changed the
+                  <span class="h-field">Status</span>
+                  <span class="h-time" title="8 Jun 2026, 13:58">2 days ago</span>
+                </div>
+                <div class="h-vals">
+                  <span class="pill s-todo">To do</span>
+                  <span class="v-arrow" aria-hidden="true">→</span>
+                  <span class="pill s-progress">In progress</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- a COMMENT in its native 5.1.3 grammar -->
+            <div class="c-row" role="listitem">
+              <span class="c-avatar" aria-hidden="true">B</span>
+              <div class="c-main">
+                <div class="c-head">
+                  <span class="c-author">Bo Philips</span>
+                  <span class="c-time" title="8 Jun 2026, 14:02">2 days ago</span>
+                </div>
+                <div class="c-body">
+                  <p>
+                    The swimlane collapse state resets when you switch boards.
+                    <span class="mention">@Zhu Yue</span> is this scoped to the per-user preference
+                    read?
+                  </p>
+                </div>
+                <div class="c-actions">
+                  <button class="c-act">Reply</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">Z</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Zhu Yue</span> changed the
+                  <span class="h-field">Assignee</span>
+                  <span class="h-time" title="8 Jun 2026, 16:38">2 days ago</span>
+                </div>
+                <div class="h-vals">
+                  <span class="v-old v-none">None</span>
+                  <span class="v-arrow" aria-hidden="true">→</span>
+                  <span class="v-user">
+                    <span class="h-avatar" aria-hidden="true">B</span>
+                    <span class="v-new">Bo Philips</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="c-row" role="listitem">
+              <span class="c-avatar" aria-hidden="true">Z</span>
+              <div class="c-main">
+                <div class="c-head">
+                  <span class="c-author">Zhu Yue</span>
+                  <span class="c-time" title="8 Jun 2026, 16:40">2 days ago</span>
+                </div>
+                <div class="c-body">
+                  <p>Per board <em>and</em> per user — taking it with the drag fix.</p>
+                </div>
+                <div class="c-actions">
+                  <button class="c-act">Reply</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-row" role="listitem">
+              <span class="h-avatar" aria-hidden="true">B</span>
+              <div class="h-main">
+                <div class="h-line">
+                  <span class="h-actor">Bo Philips</span> deleted a comment
+                  <span class="h-time" title="9 Jun 2026, 08:30">yesterday</span>
+                </div>
+                <div class="h-vals">
+                  <span class="v-gloss">content not retained</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <p class="panel-note">
+          <strong>All</strong> interleaves the two streams in true timestamp order — a bounded
+          two-source merge behind a composite cursor (5.5.2; one paged read per source, never
+          fetch-all). Each entry keeps its NATIVE grammar: comments render the full 5.1.3 row (22px
+          avatar, 14px body, quiet action row — Reply etc. still work here); history rows render
+          this asset's quieter grammar (18px avatar, 13px secondary-ink sentence). The shared 22px
+          grid column + the size/ink step-down is the visual rhythm that keeps the two scannable —
+          conversation loud, telemetry quiet. A deleted comment appears ONCE, as history (it IS a
+          revision); live comments never duplicate into history. The gloss counts both sources.
+        </p>
+      </div>
+
+      <!-- ════════════ PANEL 4 — sort + pagination across tabs ════════════ -->
+      <div class="panel-label">
+        4 · Sort + pagination — ONE toggle flips every tab together; the pager edge follows the
+        direction, per tab
+      </div>
+      <div class="panel">
+        <div class="row-of">
+          <div class="variant" style="max-width: 520px; flex-basis: 420px">
+            <div class="mini-label">
+              History · oldest first (default) — older changes hidden ABOVE
+            </div>
+            <section class="card" style="max-width: none">
+              <div class="section-head">
+                <h2>Activity</h2>
+                <span class="gloss">— 34 changes</span>
+                <div class="head-right">
+                  <div class="seg" role="tablist" aria-label="Activity filter">
+                    <button class="seg-btn" role="tab" aria-selected="false">All</button>
+                    <button class="seg-btn" role="tab" aria-selected="false">Comments</button>
+                    <button class="seg-btn is-active" role="tab" aria-selected="true">
+                      History
+                    </button>
+                  </div>
+                  <button class="sort-btn" aria-label="Sort activity, oldest first">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sort-asc" /></svg>
+                    Oldest first
+                  </button>
+                </div>
+              </div>
+              <div class="feed" role="list" aria-label="History">
+                <button class="show-more">Show more changes (24 older)</button>
+                <div class="h-row" role="listitem">
+                  <span class="h-avatar" aria-hidden="true">M</span>
+                  <div class="h-main">
+                    <div class="h-line">
+                      <span class="h-actor">Mo</span> changed the
+                      <span class="h-field">Story points</span>
+                      <span class="h-time" title="9 Jun 2026, 12:10">yesterday</span>
+                    </div>
+                    <div class="h-vals">
+                      <span class="v-old">3</span>
+                      <span class="v-arrow" aria-hidden="true">→</span>
+                      <span class="v-new">5</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="h-row" role="listitem">
+                  <span class="h-avatar" aria-hidden="true">Z</span>
+                  <div class="h-main">
+                    <div class="h-line">
+                      <span class="h-actor">Zhu Yue</span> changed the
+                      <span class="h-field">Priority</span>
+                      <span class="h-time" title="10 Jun 2026, 08:21">2 hours ago</span>
+                    </div>
+                    <div class="h-vals">
+                      <span class="v-old">Medium</span>
+                      <span class="v-arrow" aria-hidden="true">→</span>
+                      <span class="v-new">High</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div class="variant" style="max-width: 520px; flex-basis: 420px">
+            <div class="mini-label">All · newest first (toggled) — older activity hidden BELOW</div>
+            <section class="card" style="max-width: none">
+              <div class="section-head">
+                <h2>Activity</h2>
+                <span class="gloss">— 12 comments · 34 changes</span>
+                <div class="head-right">
+                  <div class="seg" role="tablist" aria-label="Activity filter">
+                    <button class="seg-btn is-active" role="tab" aria-selected="true">All</button>
+                    <button class="seg-btn" role="tab" aria-selected="false">Comments</button>
+                    <button class="seg-btn" role="tab" aria-selected="false">History</button>
+                  </div>
+                  <button class="sort-btn" aria-label="Sort activity, newest first">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sort-desc" /></svg>
+                    Newest first
+                  </button>
+                </div>
+              </div>
+              <div class="feed" role="list" aria-label="All activity">
+                <div class="h-row" role="listitem">
+                  <span class="h-avatar" aria-hidden="true">Z</span>
+                  <div class="h-main">
+                    <div class="h-line">
+                      <span class="h-actor">Zhu Yue</span> changed the
+                      <span class="h-field">Priority</span>
+                      <span class="h-time" title="10 Jun 2026, 08:21">2 hours ago</span>
+                    </div>
+                    <div class="h-vals">
+                      <span class="v-old">Medium</span>
+                      <span class="v-arrow" aria-hidden="true">→</span>
+                      <span class="v-new">High</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="c-row" role="listitem">
+                  <span class="c-avatar" aria-hidden="true">O</span>
+                  <div class="c-main">
+                    <div class="c-head">
+                      <span class="c-author">Odie</span>
+                      <span class="c-time" title="9 Jun 2026, 09:12">yesterday</span>
+                    </div>
+                    <div class="c-body">
+                      <p>Repro: collapse "Done", drag any card, the lane re-expands.</p>
+                    </div>
+                    <div class="c-actions">
+                      <button class="c-act">Reply</button>
+                    </div>
+                  </div>
+                </div>
+                <button class="show-more">Show more activity (32 older)</button>
+              </div>
+            </section>
+          </div>
+        </div>
+        <p class="panel-note">
+          The sort toggle is the 5.1.5 per-user control GENERALISED to the whole section — the
+          verified cross-tab rule (JRACLOUD-73076): flipping it re-orders Comments, History AND All
+          together, persisted per user exactly as 5.1.5 stores it. Each tab pages its own read
+          (History: the revisions cursor; All: the composite two-source cursor) and its
+          <em>Show more</em> always sits at the OLDER edge, so the pager flips top/bottom with the
+          direction — the 5.1.3 pager behaviour, now per tab ("Show more comments / changes /
+          activity (N older)"). Clicking extends the page backward and keeps scroll position.
+        </p>
+      </div>
+
+      <!-- ════════════ PANEL 5 — states ════════════ -->
+      <div class="panel-label">
+        5 · States — loading skeleton (history-row variant) · empty · error
+      </div>
+      <div class="panel">
+        <div class="row-of">
+          <div class="variant">
+            <div class="mini-label">Loading — history-row pulse skeletons</div>
+            <section class="card" style="max-width: none" aria-busy="true">
+              <div class="section-head">
+                <h2>Activity</h2>
+              </div>
+              <div class="feed">
+                <div class="skel">
+                  <span class="s-av"></span>
+                  <div class="s-lines">
+                    <span class="s-bar" style="width: 64%"></span>
+                    <span class="s-bar" style="width: 34%"></span>
+                  </div>
+                </div>
+                <div class="skel">
+                  <span class="s-av"></span>
+                  <div class="s-lines">
+                    <span class="s-bar" style="width: 52%"></span>
+                    <span class="s-bar" style="width: 28%"></span>
+                  </div>
+                </div>
+                <div class="skel">
+                  <span class="s-av"></span>
+                  <div class="s-lines">
+                    <span class="s-bar" style="width: 58%"></span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Empty History — exists, though create always writes one</div>
+            <section class="card" style="max-width: none">
+              <div class="section-head">
+                <h2>Activity</h2>
+                <span class="gloss">— 0 changes</span>
+              </div>
+              <div class="empty">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-history" /></svg>
+                <span class="e-title"
+                  >No history yet — changes to this issue will show up here</span
+                >
+              </div>
+            </section>
+          </div>
+          <div class="variant">
+            <div class="mini-label">Error — ErrorState grammar + retry</div>
+            <section class="card" style="max-width: none">
+              <div class="section-head">
+                <h2>Activity</h2>
+              </div>
+              <div class="error-state" role="alert">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
+                <span class="er-title">Couldn't load history</span>
+                <span class="er-sub">Something went wrong fetching the activity.</span>
+                <button class="btn btn-secondary">Retry</button>
+              </div>
+            </section>
+          </div>
+        </div>
+        <p class="panel-note">
+          Loading reuses the <code>BacklogSkeleton</code> pulse grammar shaped like HISTORY rows
+          (18px avatar circle, two short bars — sentence + value line) so the section doesn't jump.
+          The empty state mirrors the 5.1.3 empty grammar with the <code>history</code> glyph —
+          practically unreachable (creating an issue writes the created revision) but designed, not
+          accidental. Errors are the <code>ErrorState</code> grammar ("Couldn't load history"; the
+          All tab reads "Couldn't load activity"). There is NO read-only variant to draw: the whole
+          surface is read-only for every role — a viewer sees exactly what an admin sees, no
+          affordance delta (append-only, the verified no-mutation rule).
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
