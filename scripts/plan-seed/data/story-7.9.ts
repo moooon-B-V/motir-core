@@ -103,7 +103,15 @@ import type { PlanStory } from '../types';
  *      code isn't on main, so a per-item PR to main would not even build),
  *      and on success the item is `mark_integrated` on the same branch.
  *   2. **`motir auto` (always the SESSION-BRANCH mode — no alternative):**
- *      at loop start the CLI creates a session branch off the LATEST
+ *      a WHILE loop, never a batch drain (Yue, 2026-06-10): the CLI never
+ *      fetches the ready list up front — the set CHANGES during the run —
+ *      it asks `next_ready` for ONE item per iteration, runs it, and loops
+ *      until nothing is ready. A ready UNEXPANDED epic/story (childless =
+ *      ready per 7.0.10) is a planning item: skipped + reported by default;
+ *      `--include-planning` (7.9.8) instead fires its async server-side
+ *      expansion (7.4) WITHOUT waiting and moves on — the expansion's new
+ *      children join the ready set mid-run and later iterations pick them
+ *      up. At loop start the CLI creates a session branch off the LATEST
  *      origin/main in each repo it dispatches into (e.g.
  *      `motir/auto-<run-id>`). Every item's prompt instructs the agent to
  *      integrate its work into THAT branch (branch-from + merge-back
@@ -179,7 +187,11 @@ export const story_7_9: PlanStory = {
     '`motir ready` (the ready set), `motir status` (project pulse), `motir next` / `motir run ' +
     '<key>` (dispatch one), `motir done <key>` / `motir done --session <branch>` (close-out ' +
     'after the human merges — per item, or every item a session branch carries), `motir auto` ' +
-    '(the loop — ALWAYS session-branch mode: one branch off latest main per touched repo, ' +
+    '(the loop — a WHILE loop asking `next_ready` for ONE item per iteration, never a ' +
+    'pre-fetched list (the ready set changes mid-run), until nothing is ready; a ready ' +
+    'unexpanded epic/story is skipped + reported by default, or `--include-planning` (7.9.8) ' +
+    'fires its async 7.4 expansion without waiting and moves on; ' +
+    'ALWAYS session-branch mode: one branch off latest main per touched repo, ' +
     'items integrate into it and move to IN_REVIEW with the branch recorded on the work item ' +
     '(7.8.11) so dependents cascade mid-run and their prompts build against that branch; ONE ' +
     'end-of-run PR per repo; auto-merging to main was rejected as dangerous — main only moves ' +
@@ -422,18 +434,33 @@ export const story_7_9: PlanStory = {
     {
       id: '7.9.4',
       title:
-        '`motir auto` — the sequential dispatch loop (drain the ready set, one item at a time)',
+        '`motir auto` — the sequential WHILE loop (one `next_ready` item per iteration, until none ready)',
       status: 'blocked',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 50,
       descriptionMd:
-        'The loop: repeat the 7.9.3 single-dispatch pipeline — STRICTLY one item at a time ' +
-        "(Yue's spec; no concurrent dispatches in this story) — until `next_ready` returns " +
-        'empty, then print a summary table (item, outcome, duration).\n\n' +
+        "**The shape is a WHILE loop, never a batch drain (Yue's spec, 2026-06-10).** " +
+        '`motir auto` MUST NOT fetch the ready list up front — the ready set CHANGES while ' +
+        'the run executes (an integrated item unlocks its dependents mid-run; a triggered ' +
+        'expansion adds brand-new leaves — 7.9.8). Each iteration asks the server for ' +
+        'exactly ONE item (`next_ready`, honoring the exclude list), runs it through the ' +
+        "7.9.3 single-dispatch pipeline — STRICTLY one at a time (Yue's spec; no " +
+        'concurrent dispatches in this story) — then loops; the loop EXITS when ' +
+        '`next_ready` returns empty, and prints a summary table (item, outcome, ' +
+        'duration). There is no pre-computed plan-of-the-run anywhere in the ' +
+        'implementation — the server is consulted fresh every single iteration.\n\n' +
         '**Semantics (the story-header integration modes):**\n' +
         '- Requires `--agent`/config `agentCommand` (an auto loop has no human to ' +
         'copy-paste; `--print` makes no sense here and errors with guidance).\n' +
+        '- **An unexpanded epic/story in the ready set is a PLANNING item, not a ' +
+        'dispatchable one — default behavior: SKIP it.** Per the 7.0.10 leaf rule a ' +
+        'CHILDLESS epic/story is legitimately ready, but there is no agent prompt for ' +
+        '"do the planning" in this subtask: the loop adds it to the exclude list, ' +
+        'continues with the next ready item, and the end-of-run summary names it under ' +
+        '"needs planning". The `--include-planning` flag that instead TRIGGERS its ' +
+        'async expansion is subtask 7.9.8 (gated on the 7.4 expansion engine — kept out ' +
+        'of this subtask so the loop does not block on Epic-7 planning work).\n' +
         '- **SESSION-BRANCH mode — the ONLY mode (auto-merge-to-main REJECTED, story ' +
         'header).** At loop start the CLI creates ' +
         '`motir/auto-<run-id>` off the LATEST origin/main in each repo it dispatches into ' +
@@ -468,10 +495,16 @@ export const story_7_9: PlanStory = {
         '- `--max <n>` caps dispatches per invocation; `--kinds` filters as in `next`.\n' +
         '- **Interrupt-safe:** Ctrl-C between items exits cleanly with the summary-so-far ' +
         '(and, in session mode, the end-of-run push + PR); mid-agent, the agent process is ' +
-        'terminated, the item is left in_progress and named, exit code non-zero.\n' +
-        '- Each iteration re-queries `next_ready` (never a pre-fetched batch) so ' +
-        'newly-unlocked items join in ready order.\n\n' +
+        'terminated, the item is left in_progress and named, exit code non-zero.\n\n' +
         '## Acceptance criteria\n\n' +
+        '- The implementation provably re-queries per iteration: a fixture where item B ' +
+        'becomes ready ONLY as a result of dispatching item A (and did not exist in any ' +
+        'pre-run listing) is picked up by the very next iteration; there is no code path ' +
+        'that materializes the full ready list before or during the loop.\n' +
+        '- An unexpanded (childless) story in the ready set is skipped without a dispatch ' +
+        'attempt, the loop continues past it, and the summary lists it under "needs ' +
+        'planning"; with children it never surfaces (the 7.0.10 exclusion, asserted as a ' +
+        'control).\n' +
         '- On a fixture DEPENDENCY CHAIN (A ← B ← C), `motir auto` with an always-green ' +
         'fake agent dispatches all three in order — B unlocks when A reaches in_review ' +
         "WITH the session branch recorded (the 7.8.11 rule), and B's dispatch payload " +
@@ -526,8 +559,11 @@ export const story_7_9: PlanStory = {
         '`motir done --session` close-out round-trip (all items done, branches cleared), ' +
         'the rejected-PR unwind list, and the no-auto-merge invariant (main unchanged ' +
         'across the run).\n' +
-        '- **Auto loop:** the 7.9.4 fixture graph end-to-end (drain order, halt vs ' +
-        '--keep-going, --max, the manual-merge-mode termination case).\n' +
+        '- **Auto loop:** the 7.9.4 fixture graph end-to-end (the per-iteration ' +
+        '`next_ready` re-query — an item made ready only BY the run is dispatched by the ' +
+        'same run; the unexpanded-story skip + "needs planning" summary line; halt vs ' +
+        '--keep-going, --max, the manual-merge-mode termination case). The ' +
+        '`--include-planning` lane rides 7.9.8, not this suite.\n' +
         '- **Attribution:** every transition lands as the PAT user in the revision trail.\n' +
         "- **Coverage:** the per-file ≥90% gate extends to the CLI's client core and " +
         'command modules (wire the package into the root coverage config or its own gate — ' +
@@ -616,6 +652,70 @@ export const story_7_9: PlanStory = {
         '- `packages/cli/` (the binary the image bundles)\n\n' +
         '**Branch.** `subtask/PROD-7.9.7-cli-sandbox`.',
       dependsOn: ['7.9.4'],
+    },
+    {
+      id: '7.9.8',
+      title:
+        '`motir auto --include-planning` — trigger async expansion of ready epics/stories, never wait',
+      status: 'blocked',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 40,
+      descriptionMd:
+        "The planning hook for the while loop (Yue's spec, 2026-06-10). Without the flag, " +
+        '7.9.4 SKIPS a ready unexpanded epic/story (a planning item — childless, so ' +
+        'legitimately ready per 7.0.10) and just reports it. With `--include-planning`, ' +
+        'the loop instead TRIGGERS its expansion and keeps moving:\n\n' +
+        '- **Trigger, never wait.** When `next_ready` hands back an unexpanded ' +
+        'epic/story, the CLI fires the server-side AI expansion for it (the 7.4 ' +
+        'expansion engine, surfaced per the MCP-first rule as an async `expand_item`-' +
+        'style tool — the job is queued server-side and the tool returns immediately), ' +
+        'adds the item to the in-flight set + exclude list, and IMMEDIATELY asks ' +
+        '`next_ready` for the next item. The dispatch loop never blocks on a planning ' +
+        'job.\n' +
+        '- **Planned work joins the run naturally.** When the expansion lands mid-run, ' +
+        'the new child subtasks enter the ready set (deps and all) and later iterations ' +
+        'pick them up like any other unlock — no special casing; the parent itself ' +
+        'leaves the ready set the moment it has children (7.0.10). This is exactly why ' +
+        '7.9.4 forbids a pre-fetched ready list.\n' +
+        '- **End-of-loop rule.** `next_ready` empty + NO triggered expansion in flight → ' +
+        'exit as in 7.9.4. `next_ready` empty + an expansion still in flight → the loop ' +
+        'WAITS (poll `next_ready` on a backoff) until the expansion lands (its children ' +
+        'surface as ready) or the job reports failure/empty — "don\'t wait" governs ' +
+        'dispatch continuation, not run abandonment: exiting while a plan the run itself ' +
+        'queued is about to surface work would strand that work.\n' +
+        '- **Failure policy.** A failed/empty expansion is NON-halting (unlike an agent ' +
+        'failure): nothing downstream depends on it within the run — the item stays ' +
+        'unexpanded, is named in the summary under "planning failed", and the loop ' +
+        'continues. `--keep-going` semantics are unchanged.\n' +
+        '- The summary table gains a planning section: triggered / landed (with child ' +
+        'count) / failed / still-in-flight-at-exit.\n' +
+        "- Cross-update `docs/cli.md`'s `motir auto` section (7.9.6 ships before this " +
+        'flag lands): the flag, the end-of-loop rule, the planning failure policy.\n\n' +
+        '**Dependency note.** The server capability (async expansion of a stub ' +
+        "epic/story + its MCP tool surface) is story 7.4's — the dep is story-level " +
+        '(the 2.6.x / 6.7 precedent for unexpanded siblings); retarget to the concrete ' +
+        '7.4.x subtask when 7.4 expands. Kept OUT of 7.9.4 so the base loop never ' +
+        'blocks on the planning layer.\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- Fixture: a ready unexpanded story whose (fake) expansion creates two child ' +
+        'subtasks mid-run — with the flag, the trigger fires, the loop dispatches OTHER ' +
+        'ready items while the expansion is pending, and the new children are dispatched ' +
+        'by later iterations of the SAME run.\n' +
+        '- Drained-but-in-flight: with nothing else ready and one expansion pending, the ' +
+        'loop waits, then dispatches the children when they land; if the expansion ' +
+        'fails, the loop exits cleanly with the item named under "planning failed" ' +
+        '(non-zero only if a DISPATCH failed).\n' +
+        '- Without the flag, the same fixture reproduces the 7.9.4 skip behavior ' +
+        '(asserted as a control); the trigger is never re-fired for an item already ' +
+        'in flight (exclude list holds across iterations).\n' +
+        '- The summary planning section reports all four outcomes.\n\n' +
+        '## Context refs\n\n' +
+        '- 7.9.4 (the while loop this extends — skip default, exclude list, summary)\n' +
+        '- stubs.ts story 7.4 (the expansion engine + the MCP-first tool surface)\n' +
+        '- story-7.0.ts 7.0.10 (childless epic/story = ready; childed = excluded)\n\n' +
+        '**Branch.** `subtask/PROD-7.9.8-auto-include-planning`.',
+      dependsOn: ['7.9.4', '7.4'],
     },
   ],
 };

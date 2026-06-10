@@ -188,7 +188,12 @@ export const STUB_STORIES: PlanStory[] = [
     status: 'planned',
     descriptionMd:
       'Augment an existing backlog from a prompt; on-demand + auto-suggested expansion of stubs; ' +
-      're-plan that respects completed work as immutable. (Former Epic 3 §3.2-3.5.)',
+      're-plan that respects completed work as immutable. (Former Epic 3 §3.2-3.5.) Contract ' +
+      'recorded by 7.9.8 (`motir auto --include-planning`): the expansion of a stub epic/story ' +
+      'must be triggerable as an ASYNC server-side job (queue + status, returns immediately) and ' +
+      'surfaced as an MCP tool (`expand_item`-style, per the 7.9 MCP-first rule) so the CLI loop ' +
+      'can fire it and keep dispatching without waiting; 7.9.8 carries a story-level dep here — ' +
+      'retarget it to the concrete subtask when this story expands.',
     items: [],
   },
   {
