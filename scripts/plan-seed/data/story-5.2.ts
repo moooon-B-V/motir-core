@@ -273,7 +273,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.3',
       title:
         'Link-on-write — parse referenced blob URLs in description/explanation + 5.1 comment bodies; link/unlink attachment rows (`source: editor`)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 26,
