@@ -52,7 +52,7 @@ import type { PlanStory } from '../types';
 export const story_4_5: PlanStory = {
   id: '4.5',
   title: 'Scrum board (sprint-scoped view)',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The **Scrum** variant of the board: the same Story-3.2/3.3 board surface, **scoped to a ' +
     "board's active sprint**, under a **sprint header** (name, goal, date range, time remaining, " +
@@ -358,7 +358,7 @@ export const story_4_5: PlanStory = {
       id: '4.5.4',
       title:
         'Story tests — sprint-scope projection + sprint summary + header + no-active-sprint (component + focused E2E)',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 20,
