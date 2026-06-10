@@ -776,7 +776,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Backlog selection bar: "Move to backlog" button is shown even when every selected item is already in the backlog (should hide / disable)',
-        status: 'in_progress',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 4 (current epic — discovered during Epic 4 work) · ' +
