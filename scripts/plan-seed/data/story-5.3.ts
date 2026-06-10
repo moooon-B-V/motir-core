@@ -218,7 +218,7 @@ export const story_5_3: PlanStory = {
       id: '5.3.2',
       title:
         '`customFieldsService` (definitions) — CRUD + option rename/reorder/archive/delete-when-unused + the 50/55 caps, admin-gated, routes',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -445,7 +445,7 @@ export const story_5_3: PlanStory = {
       id: '5.3.6',
       title:
         'Fields admin UI — Project settings → Fields (list/reorder, create/edit, options editor, caps + delete-with-count confirm)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
