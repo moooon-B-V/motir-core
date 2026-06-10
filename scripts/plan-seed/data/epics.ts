@@ -601,7 +601,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Backlog (zh): "Sprint" inconsistently localized to 冲刺 — should stay Latin "Sprint"',
-        status: 'in_progress',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 4 (Agile planning) · **Surface:** the backlog ' +
