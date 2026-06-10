@@ -497,7 +497,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.7',
       title:
         'Orphan-GC job — scheduled sweep of unlinked attachment rows past the safety window (blob + row), the blob-failure backstop',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
