@@ -563,7 +563,7 @@ export const story_4_6: PlanStory = {
       id: '4.6.7',
       title:
         'Story tests — burndown series (revision-trail derivation, scope changes, bounded), velocity (last-N + average + low-history), chart primitive a11y + render; focused E2E',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 26,
