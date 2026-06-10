@@ -226,17 +226,21 @@ jobs:
       # script; here we run it explicitly because we don't run build.)
       - run: pnpm prisma migrate deploy
       - run: pnpm exec playwright install --with-deps chromium
-      # board-at-scale (Story 3.5) needs the 3.5.1 cap/Done-age test seam
-      # configured, so it runs in its own seam-set step below — exclude it here.
-      - run: pnpm test:e2e --grep-invert "board-at-scale"
-      # Story 3.5 — the cross-cutting board journey AT SCALE. The spec self-seeds
-      # the 3.5.1 board-shaped fixture; these overrides (the 3.5.1 seam, forwarded
-      # to the dev server by playwright.config.ts) lower the issue cap + Done-age
-      # window so the over-cap banner + Done-age trim are reachable with tens of
-      # rows instead of 5,000. Covers 3.5.2 (load model) and — once it lands —
-      # 3.5.3 (interaction); both carry the `board-at-scale` grep tag.
-      - name: E2E — board at scale (Story 3.5)
-        run: pnpm test:e2e --grep "board-at-scale"
+      # The at-scale journeys — board-at-scale (Story 3.5, Kanban) AND
+      # board-scrum-at-scale (Story 4.7, Scrum) — need the 3.5.1 cap/Done-age
+      # test seam configured, so they run in their own seam-set step below —
+      # exclude both here ("board(-scrum)?-at-scale" matches the two grep tags).
+      - run: pnpm test:e2e --grep-invert "board(-scrum)?-at-scale"
+      # Stories 3.5 + 4.7 — the cross-cutting board journeys AT SCALE (Kanban +
+      # Scrum). The specs self-seed their fixtures (3.5.1 board-shaped · 4.7.1
+      # sprint-shaped); these overrides (the 3.5.1 seam, forwarded to the dev
+      # server by playwright.config.ts) lower the issue cap + Done-age window so
+      # the over-cap banner + Done-age trim are reachable with tens of rows
+      # instead of 5,000. Covers 3.5.2/3.5.3 (`board-at-scale`) and 4.7.2 — plus
+      # 4.7.3 once it lands (`board-scrum-at-scale`); workers=1, so the specs'
+      # DB resets never race.
+      - name: E2E — board at scale (Stories 3.5 + 4.7)
+        run: pnpm test:e2e --grep "board(-scrum)?-at-scale"
         env:
           BOARD_ISSUE_CAP_OVERRIDE: '40'
           DONE_AGE_WINDOW_DAYS_OVERRIDE: '7'
