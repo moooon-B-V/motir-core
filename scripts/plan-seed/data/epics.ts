@@ -597,6 +597,46 @@ export const EPICS: EpicMeta[] = [
       'the Scrum view sitting on the same board substrate Epic 3 already shipped.',
     items: [
       {
+        id: 'bug-backlog-zh-sprint-translated-as-chongci',
+        kind: 'bug',
+        title:
+          'Backlog (zh): "Sprint" inconsistently localized to 冲刺 — should stay Latin "Sprint"',
+        status: 'in_progress',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 4 (Agile planning) · **Surface:** the backlog ' +
+          '(Story 4.2) + estimation settings (Story 4.3) i18n catalog · **Locale:** `zh` ' +
+          '(Simplified Chinese) · **Reported by:** Yue.\n\n' +
+          'In the `zh` catalog the product term **Sprint** was rendered as **冲刺** in 6 keys, ' +
+          'while the rest of the backlog/estimation surface (~30 keys — the page subtitle, the ' +
+          'sprint error states, the entire start-sprint flow, create / collapse / expand sprint, ' +
+          'the DnD instructions, …) already keeps it Latin **Sprint**. A single product term was ' +
+          'split two ways inside one surface — the kind of inconsistency a native SaaS UI never ' +
+          'ships.\n\n' +
+          '**Decision (locked zh glossary).** **Sprint stays Latin "Sprint"** everywhere, the ' +
+          'same call already made for **Scrum** and **Kanban** (kept Latin; the methodology word ' +
+          "看板 is reserved for the Kanban board TYPE). Mirror check: Atlassian's own zh build " +
+          'keeps Sprint/Scrum/Kanban Latin in these contexts. CJK↔Latin spacing follows the ' +
+          'convention already in the file (a space between a CJK char and the Latin word; no ' +
+          'space against full-width punctuation 。，).\n\n' +
+          'The 6 offending keys: `estimation.cardSubtitle`, `estimation.statisticHint`, ' +
+          '`estimation.savedDesc`, `backlog.moveToSprint`, `backlog.noSprintsToMove`, ' +
+          '`backlog.sprintPoints.emptyAria`.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- All 6 keys render Latin **Sprint** (no `冲刺` remains anywhere in `messages/zh.json`).\n' +
+          '- Spacing matches the file convention (space between CJK and the Latin word; full-width ' +
+          'punctuation hugs the word).\n' +
+          '- The `en` catalog is untouched (byte-identical — tests/E2E assert English).\n' +
+          '- `tests/i18n-catalog.test.ts` stays green (structural parity holds; no key added or ' +
+          'removed) and `messages/zh.json` is Prettier-clean + valid JSON.\n\n' +
+          '## Context refs\n\n' +
+          '- `messages/zh.json` — the 6 keys above; `messages/en.json` for the source strings.\n' +
+          '- `tests/i18n-catalog.test.ts` — the parity gate.\n' +
+          '- Locked zh glossary (Scrum/Kanban/Sprint stay Latin; board → 面板, Kanban → 看板).\n\n' +
+          '**Resolution:** fixed in `subtask/PROD-bug-zh-sprint-latin` (PR #502) — the 6 stray ' +
+          '`冲刺` normalised to Latin `Sprint`; i18n-catalog parity + Prettier green.',
+      },
+      {
         id: 'bug-issue-list-not-refreshed-after-create',
         kind: 'bug',
         title: 'Issue list / tree does not update after creating a new work item via the modal',
