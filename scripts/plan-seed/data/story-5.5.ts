@@ -269,7 +269,7 @@ export const story_5_5: PlanStory = {
       id: '5.5.3',
       title:
         'Design — History entries + the All stream (`design/work-items/activity-history.mock.html`: per-change-type row grammar, tabs, fallbacks)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 32,
