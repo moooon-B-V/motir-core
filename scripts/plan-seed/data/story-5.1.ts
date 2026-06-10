@@ -455,7 +455,7 @@ export const story_5_1: PlanStory = {
       id: '5.1.5',
       title:
         'Comments section UI on the issue detail page — thread + composer + reply/edit/delete + "Show more" paging in the Activity slot',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
