@@ -38,7 +38,7 @@ import type { PlanStory } from '../types';
 export const story_6_4: PlanStory = {
   id: '6.4',
   title: 'Roles & permissions — project membership + access gating',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'Gate access at the **project** level, not just the workspace — the mirror-faithful model the ' +
     'PM core has been deferring (`// TODO(6.4): gate by project role`). A project gets an **access ' +
@@ -263,7 +263,7 @@ export const story_6_4: PlanStory = {
     {
       id: '6.4.8',
       title: 'Tests — project access gating (browse/edit per level × role) + focused E2E',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 24,
