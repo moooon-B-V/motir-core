@@ -352,3 +352,163 @@ When a string here disagrees with shipped 6.4.5 / 6.4.6 code, the code wins —
 file a fix so the mockup stays the reference. `access-members.mock.html` is
 the layout-confirmation artifact; it may drift from pixel-exact production
 once the React lands.
+
+---
+
+# Custom fields — Fields admin (Story 5.3) — Subtask 5.3.4 output
+
+Story 5.3 adds per-project **custom field definitions** (Text / Number / Date /
+Select / User) managed at **Project settings → Fields**. This section is the
+canonical reference for code subtask **5.3.6** (the Fields admin UI), which
+carries 5.3.4 in `dependsOn`. The companion rail surface (values on the issue
+detail) is **5.3.5** → `design/work-items/custom-fields.mock.html`.
+
+Like the 6.4.1 surface above, this is an **HTML mockup** —
+`fields.mock.html`, built FROM the real design system (the `app/globals.css`
+token block copied 1:1 + shipped `components/ui/*` primitives), with
+`fields.png` as the light-mode board render. The HTML is the source of truth;
+toggle `data-theme="dark"` in it to confirm token parity.
+
+## Files
+
+| HTML source (truth) | PNG export   |
+| ------------------- | ------------ |
+| `fields.mock.html`  | `fields.png` |
+
+The mockup is a seven-panel board (review EACH): **(0)** the settings hub with
+the new Fields card; **(1)** the populated project-admin field list; **(2)**
+the empty state + the 50-field cap state; **(3)** the create-field modal with
+the five-type picker (Select chosen → initial options); **(4)** the edit-field
+modal — immutable type + the full options editor + the 55-option cap;
+**(5)** the delete-field confirm naming the value count; **(6)** the non-admin
+read-only state + loading skeleton + ErrorState.
+
+## Mirror product (rung 1, VERIFIED June 2026 — Atlassian team-managed docs)
+
+- **Five types**, each a verified member of Jira's team-managed set: Short
+  text / Number / Date / Dropdown / People → our **Text / Number / Date /
+  Select / User**. Team-managed Dropdown is **single-select only** (multi is
+  the separate Checkbox type — a documented extension, not a cut).
+- **Caps**: 50 fields per project, 55 options per field (the documented Jira
+  limits). Both drawn: Add disabled + explanatory line, count pill `N / 50`.
+- **Field delete is HARD** (no trash): immediate, permanent, destroys values —
+  the confirm names the value count.
+- **Options**: rename + reorder freely; an **in-use option archives** (hidden
+  from new selection, existing values keep rendering); **delete only when
+  unused** (the verified "Optimize" rule; the DB `Restrict` backstops).
+
+## Composing primitives (no new primitive required)
+
+- **`Card`** — the field-list card (header + flush body) and the hub cards.
+  The **hub card** reuses the `MembersSettingsCard` grammar verbatim
+  (`Card p-0` + whole-row `Link` + `ChevronRight`), placed **after Estimation,
+  before Access & members** (field config groups with the issue-config cards;
+  Archive stays last).
+- **Field rows** — the members-row grammar (avatar slot → a **tinted type
+  tile**) + the board-settings **grip** reorder grammar (3.6;
+  keyboard-operable via the same dnd pattern). Label stacks over the gloss
+  (`Type · option count · usage`; "not used yet" at zero). Row actions =
+  ghost-sm `Edit` / `Delete`.
+- **`Modal`** — create / edit (size md, ghost Cancel + primary confirm — the
+  create-project grammar) and the delete confirm (the archive-confirm
+  heading: `TriangleAlert` in a `--el-tint-rose` circle + `danger` confirm;
+  **no typed-identifier arm step** — the value count is the consequence
+  statement, fetched fresh when the confirm opens).
+- **Type picker** — the 6.4.1 access radio-card grammar: tile + name +
+  one-liner + radio; selected = `--el-accent` border + filled radio. The
+  **type is immutable after create** (edit shows a frozen tile row + helper
+  "The type can't be changed after the field is created").
+- **Options editor** (select fields, inside create/edit) — option rows with
+  grip / inline rename (`--el-accent` focus border + Save) / `Archive` ·
+  `Unarchive` / `Delete`; in-use delete is **disabled with the Tooltip**
+  ("In use on N issues — archive instead"); archived rows are muted +
+  `Archived` neutral pill + "hidden from new selection", lose their grip, and
+  sit last. Footer: ghost-sm `Add option` + the `N / 55` cap gloss.
+- **`Pill`** — count chip (`pill-neutral`, `5 / 50`), `Archived`
+  (`pill-neutral`), `Read-only` (the mint chip, the 6.4 grammar).
+- **`EmptyState` / `ErrorState`** — "No custom fields yet" (lucide
+  `SlidersHorizontal`) and "Couldn't load fields" + Retry; the loading
+  skeleton extends the settings skeleton.
+
+## The per-type glyph map (SHARED with 5.3.5 — keep the two surfaces in sync)
+
+| Type   | lucide glyph        | tile tint            |
+| ------ | ------------------- | -------------------- |
+| Text   | `Type`              | `--el-tint-sky`      |
+| Number | `Hash`              | `--el-tint-peach`    |
+| Date   | `Calendar`          | `--el-tint-mint`     |
+| Select | `SquareChevronDown` | `--el-tint-lavender` |
+| User   | `CircleUserRound`   | `--el-tint-rose`     |
+
+Glyphs render in `--el-text-strong` on the tint background (AA-safe, finding
+#35; palette beyond grey+primary, finding #54). On the rail (5.3.5) the same
+glyph map applies; the tile is the admin-page presentation.
+
+## Copy strings catalog (use verbatim in 5.3.6; i18n under `settings.customFields`)
+
+| Surface               | String                                                                                                                                                                                  |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hub card title        | `"Fields"`                                                                                                                                                                              |
+| Hub card description  | `"Custom fields that issues in this project can carry — like severity, customer, or a go-live date."`                                                                                   |
+| Page title            | `"Fields"`                                                                                                                                                                              |
+| Page subtitle         | `"Custom fields that issues in {projectName} can carry, alongside the built-in ones. Fields belong to this project only."`                                                              |
+| List card title       | `"Custom fields"` (+ count pill `"{n} / 50"`)                                                                                                                                           |
+| Add button            | `"Add field"`                                                                                                                                                                           |
+| Usage gloss           | `"used on {n} issues"` / `"not used yet"`                                                                                                                                               |
+| Empty headline        | `"No custom fields yet"`                                                                                                                                                                |
+| Empty description     | `"Custom fields capture project-specific details — like severity, customer, or a go-live date — on every issue in this project."`                                                       |
+| Field-cap tooltip     | `"This project has reached the 50-field limit"`                                                                                                                                         |
+| Field-cap info line   | `"A project can hold up to 50 custom fields. Delete a field to add another."`                                                                                                           |
+| Create modal title    | `"Create field"`                                                                                                                                                                        |
+| Label field           | `"Label"` + helper `"Shown on issues and in filters."`                                                                                                                                  |
+| Type section          | `"Type"` + helper `"The type can't be changed after the field is created."`                                                                                                             |
+| Type one-liners       | Text `"A short line of text."` · Number `"A numeric value."` · Date `"A calendar date."` · Select `"One option from a list you manage."` · User `"A person who can view this project."` |
+| Description field     | `"Description (optional)"` + placeholder `"What this field is for…"`                                                                                                                    |
+| Create / save buttons | `"Create field"` / `"Save changes"` / `"Cancel"`                                                                                                                                        |
+| Edit modal title      | `"Edit field"`                                                                                                                                                                          |
+| Options section       | `"Options"` · `"Add option"` · cap gloss `"{n} / 55"` / `"55 / 55 — a field can hold up to 55 options"`                                                                                 |
+| Option archive states | `"Archive"` / `"Unarchive"` · pill `"Archived"` · gloss `"hidden from new selection"` · `"used on {n} issues"`                                                                          |
+| In-use delete tooltip | `"In use on {n} issues — archive instead"`                                                                                                                                              |
+| Delete confirm title  | `"Delete {Field}?"`                                                                                                                                                                     |
+| Delete confirm body   | `"Deletes the field and its values on {n} issues. This can't be undone."` (zero values: `"Deletes the field. No issues hold a value for it."`)                                          |
+| Delete confirm button | `"Delete field"`                                                                                                                                                                        |
+| Read-only chip + line | `"Read-only"` · `"Only project admins can manage fields."`                                                                                                                              |
+| Error state           | `"Couldn't load fields"` · `"Something went wrong on our side. Try again."` · `"Retry"`                                                                                                 |
+
+## Read-only degradation (differs from the viewer's board — deliberately)
+
+A non-admin sees the list with the mutation affordances **absent** (no Add
+field, no grips, no Edit/Delete) + the `Read-only` pill + the quiet permission
+line — the 6.4 members-page degradation. Unlike the viewer's board (where
+disabled-with-tooltip keeps the gate legible), every control on this page IS a
+mutation, so hiding is the right shape. Reads stay open to members/viewers —
+the rail needs the definitions.
+
+## Deliberate non-features (the documented extension slots — do NOT build)
+
+- No **required** flag, no **work-type layouts**, no **create-form
+  placement** — the layout-config admin subsystem is 6.5's settings-hub
+  extension; values are editable the moment an issue exists via the rail.
+- No further types (paragraph / checkbox-multi / labels / multi-person /
+  formula) — additive on the same EAV substrate, out of 5.3's scope.
+- The **key** (machine slug) is generated from the label and immutable; it is
+  deliberately NOT shown in this UI (an internal handle for revision diffs +
+  Epic-6 predicates, not an admin concern).
+
+## Tokens & a11y
+
+Colour is `--el-*` only; shape via the element shape tokens
+(`--radius-card/-modal/-input/-btn/-control/-badge`,
+`--spacing-card-padding/-btn-x/-input-x/-chip-*/-tooltip-*`,
+`--height-btn-sm/-btn-md/-input`, `--shadow-card/-elevated/-modal`).
+Reorder must be keyboard-operable (the board-settings dnd precedent); the
+delete confirm is focus-managed; tooltips on disabled controls need a
+focusable wrapper. `rounded-full` only on the radio dot. Dark parity verified
+by toggle.
+
+## Source of truth
+
+When a string here disagrees with shipped 5.3.6 code, the code wins — file a
+fix so the mockup stays the reference. `fields.mock.html` is the
+layout-confirmation artifact; it may drift from pixel-exact production once
+the React lands.
