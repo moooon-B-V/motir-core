@@ -21,6 +21,11 @@ export interface SegmentedOption<T extends string> {
   label: string;
   /** Optional leading glyph (decorative — the label carries the accessible name). */
   icon?: ReactNode;
+  /** Disable just this option — a forward-compatible seam (e.g. the Activity
+   * card's History filter, Story 5.5's slot) drawn present-but-inert. */
+  disabled?: boolean;
+  /** Tooltip for the option (e.g. why a seam option is disabled). */
+  title?: string;
 }
 
 export function Segmented<T extends string>({
@@ -55,7 +60,8 @@ export function Segmented<T extends string>({
             key={opt.value}
             type="button"
             aria-pressed={active}
-            disabled={disabled}
+            disabled={disabled || opt.disabled}
+            title={opt.title}
             onClick={() => {
               if (!active) onChange(opt.value);
             }}

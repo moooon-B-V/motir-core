@@ -441,6 +441,45 @@
     "reporterCreated": "Reporter: {reporter} · created {created}",
     "issueSaved": "{identifier} saved"
   },
+  "comments": {
+    "title": "Activity",
+    "countGloss": "{count, plural, one {# comment} other {# comments}}",
+    "filterAria": "Activity filter",
+    "filterComments": "Comments",
+    "filterHistory": "History",
+    "historySeamTitle": "History — field-change activity lands with Story 5.5",
+    "sortOldest": "Oldest first",
+    "sortNewest": "Newest first",
+    "sortAriaOldest": "Sort comments, oldest first",
+    "sortAriaNewest": "Sort comments, newest first",
+    "showMore": "Show more comments ({count} older)",
+    "showMoreReplies": "Show {count, plural, one {# more reply} other {# more replies}}",
+    "addPlaceholder": "Add a comment…",
+    "composerLabel": "Add a comment",
+    "editLabel": "Edit comment",
+    "replyLabel": "Write a reply",
+    "comment": "Comment",
+    "save": "Save",
+    "reply": "Reply",
+    "edit": "Edit",
+    "delete": "Delete",
+    "edited": "· Edited",
+    "editedTitle": "Edited {time}",
+    "empty": "No comments yet — start the conversation",
+    "errorTitle": "Couldn't load comments",
+    "errorDescription": "Something went wrong fetching the conversation.",
+    "deleteConfirm": "Delete this comment? Comments can't be restored.",
+    "deleteConfirmWithReplies": "Delete this comment? Also deletes {count, plural, one {# reply} other {# replies}} — comments can't be restored.",
+    "readOnly": "Read-only access — you can view comments but can't add them.",
+    "threadAria": "Comments",
+    "repliesAria": "Replies",
+    "errors": {
+      "notFound": "This comment no longer exists.",
+      "forbidden": "You don't have permission to do that.",
+      "empty": "A comment can't be empty.",
+      "generic": "Something went wrong — please try again."
+    }
+  },
   "ui": {
     "typePicker": {
       "label": "Type"

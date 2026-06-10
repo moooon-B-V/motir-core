@@ -6,6 +6,7 @@ import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
+import { commentsService } from '@/lib/services/commentsService';
 import { estimationService } from '@/lib/services/estimationService';
 import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
 import { ParentRollupBadge } from '@/components/issues/ParentRollupBadge';
@@ -21,7 +22,9 @@ import { ContentSectionCard } from './_components/ContentSectionCard';
 import { IssueExplanation } from './_components/IssueExplanation';
 import { ParentBreadcrumb } from './_components/ParentBreadcrumb';
 import { ChildList } from './_components/ChildList';
+import { CommentsSection } from './_components/CommentsSection';
 import { RelationshipsPanel } from './_components/RelationshipsPanel';
+import type { CommentsPageDTO } from '@/lib/dto/comments';
 
 // The issue DETAIL route (Story 2.4 · Subtask 2.4.1). Server Component:
 // resolves the active project (the shipped active-project model — finding #50,
@@ -86,6 +89,26 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
     accessLevel: ctx.project.accessLevel,
     ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
   });
+
+  // Comments (Story 5.1 · 5.1.5): the caller's comment capabilities (the Jira
+  // permission split on the 6.4 role model — viewer reads only) + the first
+  // cursor page (the NEWEST 20 threads; the section's "Show more comments"
+  // extends backward — finding #57, never load-all). A failed read renders the
+  // section's ErrorState + retry instead of crashing the page.
+  const commentCaps = await projectAccessService.getCommentCapabilities(ctx.projectId, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+  let initialComments: CommentsPageDTO | null = null;
+  try {
+    initialComments = await commentsService.listComments(
+      item.id,
+      { order: 'desc' },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+  } catch {
+    initialComments = null;
+  }
 
   // The project estimation config (Subtask 4.3.4) — the rail's inline
   // story-points EstimateBadge reads the scale deck from it via context.
@@ -178,9 +201,24 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
               currentItemId={item.id}
               identifier={item.identifier}
             />
-            {/* 2.4.3: direct children (a leaf renders nothing). Epic 5 extension
-              slots: comments · activity. */}
+            {/* 2.4.3: direct children (a leaf renders nothing). */}
             <ChildList items={detail.children} workflow={detail.workflow} members={members} />
+            {/* 5.1.5: the Activity section — the comments stream + composer in
+              the slot the page reserved for Epic 5 (after Relationships and
+              Children, per the comments mockup's panel 0). */}
+            <CommentsSection
+              workItemId={item.id}
+              canComment={commentCaps.canComment}
+              canModerate={commentCaps.canModerate}
+              currentUserId={ctx.userId}
+              currentUserName={session.user.name}
+              mentionCandidates={members.map((m) => ({
+                id: m.userId,
+                name: m.name,
+                email: m.email,
+              }))}
+              initialPage={initialComments}
+            />
           </main>
 
           <aside className="flex flex-col gap-4">
