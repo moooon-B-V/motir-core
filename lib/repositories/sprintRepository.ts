@@ -95,6 +95,30 @@ export const sprintRepository = {
   },
 
   /**
+   * The project's most-recently COMPLETED sprints, newest first, capped at
+   * `limit` — the BOUNDED read behind the velocity chart (Story 4.6.4, finding
+   * #57). Filters to `state = 'complete'` and orders by `completedAt` desc (the
+   * "last N" the chart means is completion recency) with `sequence` desc as the
+   * stable tie-break, then `LIMIT limit`. It NEVER loads every sprint; the
+   * `@@index([projectId, state])` backs the filter. The service reverses the
+   * page to oldest→newest for the X axis. Carries the explicit `workspaceId`
+   * gate (finding #26). `limit ≤ 0` returns [] (Prisma `take: 0` → empty).
+   */
+  async listCompletedByProject(
+    projectId: string,
+    workspaceId: string,
+    limit: number,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Sprint[]> {
+    const client = tx ?? db;
+    return client.sprint.findMany({
+      where: { projectId, workspaceId, state: 'complete' },
+      orderBy: [{ completedAt: 'desc' }, { sequence: 'desc' }],
+      take: limit,
+    });
+  },
+
+  /**
    * How many sprints in a project are in a given state (e.g. the active count,
    * for the service's pre-activation check that complements the DB index).
    */
