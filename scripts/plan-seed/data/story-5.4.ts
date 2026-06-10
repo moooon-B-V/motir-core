@@ -426,7 +426,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.6',
       title:
         'Design — issue-view additions (`design/work-items/labels-components-watch.mock.html`: multi-select chip picker, rail cards, watch control + popover)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 45,
