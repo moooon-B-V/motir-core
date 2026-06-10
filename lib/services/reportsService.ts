@@ -1,18 +1,25 @@
 import type { EstimationStatistic, Sprint } from '@prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
+import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { estimationService } from '@/lib/services/estimationService';
-import { toVelocityDto } from '@/lib/mappers/reportsMappers';
+import { toBurndownSeriesDto, toVelocityDto } from '@/lib/mappers/reportsMappers';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { SprintNotFoundError, SprintNotStartedError } from '@/lib/sprints/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { EstimationStatisticDto } from '@/lib/dto/estimation';
-import type { VelocityDto, VelocitySprintDto } from '@/lib/dto/reports';
+import type {
+  BurndownSeriesDto,
+  BurndownStatisticDto,
+  VelocityDto,
+  VelocitySprintDto,
+} from '@/lib/dto/reports';
 
 // Reports service (Story 4.6) — the read-only analytics layer over the data
-// Stories 4.1 / 4.3 / 4.4 already ship: NO new write model, NO migration. It is
-// the home Epic 6.3 (dashboards & reports) extends. This subtask (4.6.4) adds
-// the cross-sprint VELOCITY aggregate; sibling 4.6.3 adds the in-sprint burndown
-// (`getBurndownSeries`) to this same service.
+// Stories 4.1 / 4.3 / 4.4 / 1.4.6 already ship: NO new write model, NO
+// migration. It is the home Epic 6.3 (dashboards & reports) extends. Subtask
+// 4.6.4 added the cross-sprint VELOCITY aggregate (`getVelocity`); Subtask 4.6.3
+// added the in-sprint BURNDOWN (`getBurndownSeries`) to this same service.
 //
 // 4-layer (CLAUDE.md): reads only, so no transaction — the service composes
 // bounded repository reads + the shipped `estimationService.rollupForSprint`
@@ -20,11 +27,12 @@ import type { VelocityDto, VelocitySprintDto } from '@/lib/dto/reports';
 // leaves; the route is a thin HTTP transport.
 //
 // TENANCY (finding #26): every path carries an explicit `workspaceId` — the
-// project is gated by id + workspaceId (a cross-workspace project is an
-// indistinguishable 404), and the underlying `rollupForSprint` / sprint reads
-// each carry the same gate. BOUNDED (finding #57): velocity is a `LIMIT N`
-// sprint read + N (≤ MAX_LAST_N) bounded roll-ups — never an all-sprints or
-// all-issues scan.
+// project / sprint is gated by id + workspaceId (a cross-workspace entity is an
+// indistinguishable 404), and the underlying `rollupForSprint` / sprint /
+// revision reads each carry the same gate. BOUNDED (finding #57): velocity is a
+// `LIMIT N` sprint read + N (≤ MAX_LAST_N) bounded roll-ups; the burndown is a
+// grouped per-day aggregate over the revision rows scoped to the sprint window —
+// neither loads an all-sprints / all-issues / all-revisions row set.
 
 /** Jira's default velocity window — the last 7 completed sprints. */
 const DEFAULT_LAST_N = 7;
@@ -97,6 +105,99 @@ export const reportsService = {
     data.reverse();
     return toVelocityDto(data, statistic as EstimationStatisticDto);
   },
+
+  /**
+   * The in-sprint BURNDOWN series (Story 4.6.3) — the analytics view of how fast
+   * the committed work is being completed. Returns, for a started sprint, the
+   * GUIDELINE (the ideal straight descent from the committed baseline to 0 over
+   * the sprint window) and the ACTUAL stepped remaining line, reconstructed from
+   * the immutable 4.4.2 committed baseline + the 1.4.6 `work_item_revision`
+   * trail (completions burn it down, scope-adds + reopens raise it), plus the
+   * mid-sprint scope-change markers.
+   *
+   * The actual line's end-of-series value reconciles with
+   * `estimationService.rollupForSprint().remaining` (4.3.3 — the SAME `category
+   * = 'done'` predicate) — pinned to it for the points / issue-count series so
+   * the chart never disagrees with the numeric remaining the scrum header +
+   * sprint report show.
+   *
+   * Statistic: the project's configured estimation statistic, narrowed to what
+   * `startSprint` actually snapshots — `story_points` (the `committedPoints`
+   * baseline) when there IS point data, else `issue_count` (the
+   * `committedIssueCount` baseline). A `time_estimate` project, or a wholly
+   * unestimated sprint, degrades to the issue-count series, never `NaN`; an empty
+   * sprint is a flat guideline at 0.
+   *
+   * Bounded (finding #57): one grouped per-day `$queryRaw` over the revision rows
+   * + one O(1) baseline read + one bounded roll-up — never an all-revisions or
+   * all-issues load. The day count is bounded by the sprint length.
+   *
+   * Throws: `SprintNotFoundError` (404 — unknown / cross-workspace sprint);
+   * `SprintNotStartedError` (409 — a planned sprint has no window to draw).
+   */
+  async getBurndownSeries(sprintId: string, ctx: ServiceContext): Promise<BurndownSeriesDto> {
+    // Tenancy gate (finding #26): a missing / cross-workspace sprint is an
+    // indistinguishable 404. Mirrors `estimationService.rollupForSprint`.
+    const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
+    if (!sprint) throw new SprintNotFoundError(sprintId);
+
+    // A burndown needs a window: reject a not-yet-started (planned) sprint rather
+    // than draw an empty axis (Jira shows none for a future sprint).
+    if (sprint.state === 'planned' || sprint.startDate === null) {
+      throw new SprintNotStartedError(sprintId);
+    }
+    const start = sprint.startDate;
+
+    // The configured statistic (the same default `rollupForSprint` resolves),
+    // narrowed to what the sprint actually snapshotted at start.
+    const projectStatistic = await resolveStatistic(sprint.projectId);
+    const committedPoints = sprint.committedPoints === null ? null : Number(sprint.committedPoints);
+    // Points burndown only when the project measures points AND the sprint locked
+    // a non-zero point baseline; otherwise (issue-count project, time-estimate
+    // project — no committed-time snapshot exists — or a wholly unestimated
+    // sprint) the issue-count series.
+    const useCount =
+      projectStatistic !== 'story_points' || committedPoints === null || committedPoints === 0;
+    const statistic: BurndownStatisticDto = useCount ? 'issue_count' : 'story_points';
+    const committed = useCount ? (sprint.committedIssueCount ?? 0) : (committedPoints ?? 0);
+
+    // Window. The axis ends at the planned end (else completedAt, else now); the
+    // ACTUAL line is drawn to completedAt (complete) or now (active). The axis
+    // always covers the drawn actual (an overran active sprint extends it).
+    const now = new Date();
+    const rawAxisEnd = sprint.endDate ?? sprint.completedAt ?? now;
+    const actualCutoff = sprint.state === 'complete' ? (sprint.completedAt ?? rawAxisEnd) : now;
+    const axisEnd = new Date(
+      Math.max(rawAxisEnd.getTime(), actualCutoff.getTime(), start.getTime()),
+    );
+
+    // The bounded per-day deltas (finding #57) — events up to the actual cutoff.
+    const dailyDeltas = await workItemRevisionRepository.aggregateSprintBurndownByDay(
+      sprintId,
+      ctx.workspaceId,
+      { start, end: actualCutoff },
+      useCount,
+    );
+
+    // The authoritative present remaining (4.3.3). Anchor the last drawn actual
+    // point to it ONLY when the burndown is measured in the same unit as the
+    // roll-up (a degraded issue-count series over a points/time project must not
+    // be pinned to a points/minutes figure).
+    const rollup = await estimationService.rollupForSprint(sprintId, ctx);
+    const anchorRemaining = statistic === projectStatistic ? rollup.remaining : null;
+
+    return toBurndownSeriesDto({
+      sprintId,
+      state: sprint.state as 'active' | 'complete',
+      statistic,
+      committed,
+      start,
+      axisEnd,
+      actualCutoff,
+      dailyDeltas,
+      anchorRemaining,
+    });
+  },
 };
 
 /**
@@ -131,7 +232,7 @@ function clampLastN(lastN: number | undefined): number {
  * Resolve a project's configured estimation statistic, defaulting to
  * `story_points` when (somehow) no config row exists — the same resolution
  * `estimationService`'s roll-ups use, kept here as a read-only reference lookup
- * (the project's own tenancy gate already ran in the caller).
+ * (the project's / sprint's own tenancy gate already ran in the caller).
  */
 async function resolveStatistic(projectId: string): Promise<EstimationStatistic> {
   const config = await projectRepository.findEstimationConfig(projectId);

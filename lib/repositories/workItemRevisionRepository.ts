@@ -90,4 +90,97 @@ export const workItemRevisionRepository = {
     });
     return rows.length;
   },
+
+  /**
+   * The BOUNDED per-day event aggregate that drives the in-sprint BURNDOWN
+   * actual line (Story 4.6.3). In ONE grouped `$queryRaw` — never a load-all of
+   * the revision rows + a client reduce (finding #57) — it walks the
+   * `work_item_revision` trail scoped to (the sprint window) ∧ (this sprint's
+   * issues OR a sprint-association change touching this sprint), and emits, per
+   * UTC calendar day, the signed change to "remaining work":
+   *   • a status transition INTO a `done`-category status (and out of a non-done
+   *     one) BURNS down  → `-stat`
+   *   • a transition OUT of done (reopened)                    → `+stat`
+   *   • an issue ADDED to this sprint after start (scope up)   → `+stat`
+   *   • an issue REMOVED from this sprint (scope down)         → `-stat`
+   * `stat` is the per-issue statistic: `COALESCE(storyPoints, 0)` for the points
+   * series, or `1` for the issue-count series (`useCount`). An issue unestimated
+   * at read time contributes 0 to the points series (its `storyPoints` is NULL),
+   * never `NaN`.
+   *
+   * "Done" is resolved by joining `workflow_status` on the diff's `from`/`to`
+   * status KEYS (the diff stores keys — `workItemsService.moveStatus`, 1.4.6 /
+   * 2.2) and reading `category = 'done'` — the SAME predicate
+   * `workItemRepository.sumPointsForSprint` (4.3.3) uses inline, so the
+   * burndown's end-of-series remaining reconciles with `rollupForSprint`.
+   * Status events are scoped to issues CURRENTLY in the sprint (`w."sprintId" =`
+   * the sprint, non-archived) — matching the roll-up's current-members basis —
+   * while association events are matched on the diff regardless of current
+   * membership. `workspaceId` gates the read (finding #26). The result is
+   * bounded by the sprint length (one row per day with events, ≤ ~14), GROUPed
+   * server-side. Read-only path → `db` singleton.
+   *
+   * `remainingDelta` is the net change to remaining (all four event kinds);
+   * `scopeDelta` is the subset from association changes only (the chart's
+   * scope-change markers). A sprint with no qualifying revisions returns no rows
+   * (the caller derives a flat-at-committed line).
+   */
+  async aggregateSprintBurndownByDay(
+    sprintId: string,
+    workspaceId: string,
+    window: { start: Date; end: Date },
+    useCount: boolean,
+  ): Promise<Array<{ day: string; remainingDelta: number; scopeDelta: number }>> {
+    // The per-issue statistic value — an internal literal expression, never user
+    // input (mirrors `pointsAggExpr` in workItemRepository).
+    const stat = useCount ? Prisma.sql`1` : Prisma.sql`COALESCE(w."storyPoints", 0)`;
+    // Reused predicates for the four event kinds.
+    const isStatusEvent = Prisma.sql`r."diff" -> 'status' IS NOT NULL AND w."sprintId" = ${sprintId}`;
+    const burnedDown = Prisma.sql`${isStatusEvent} AND ts."category" = 'done' AND (fs."category" IS NULL OR fs."category" <> 'done')`;
+    const reopened = Prisma.sql`${isStatusEvent} AND (ts."category" IS NULL OR ts."category" <> 'done') AND fs."category" = 'done'`;
+    const scopeUp = Prisma.sql`(r."diff" -> 'sprintId' ->> 'to') = ${sprintId} AND COALESCE(r."diff" -> 'sprintId' ->> 'from', '') <> ${sprintId}`;
+    const scopeDown = Prisma.sql`(r."diff" -> 'sprintId' ->> 'from') = ${sprintId} AND COALESCE(r."diff" -> 'sprintId' ->> 'to', '') <> ${sprintId}`;
+
+    return db.$queryRaw<Array<{ day: string; remainingDelta: number; scopeDelta: number }>>`
+      SELECT
+        to_char(date_trunc('day', r."changedAt"), 'YYYY-MM-DD') AS "day",
+        COALESCE(SUM(
+          CASE
+            WHEN ${burnedDown} THEN -1 * (${stat})
+            WHEN ${reopened} THEN (${stat})
+            WHEN ${scopeUp} THEN (${stat})
+            WHEN ${scopeDown} THEN -1 * (${stat})
+            ELSE 0
+          END
+        ), 0)::float8 AS "remainingDelta",
+        COALESCE(SUM(
+          CASE
+            WHEN ${scopeUp} THEN (${stat})
+            WHEN ${scopeDown} THEN -1 * (${stat})
+            ELSE 0
+          END
+        ), 0)::float8 AS "scopeDelta"
+      FROM "work_item_revision" r
+      JOIN "work_item" w
+        ON w."id" = r."workItemId"
+       AND w."workspaceId" = ${workspaceId}
+       AND w."archivedAt" IS NULL
+      LEFT JOIN "workflow_status" fs
+        ON fs."project_id" = w."projectId"
+       AND fs."key" = (r."diff" -> 'status' ->> 'from')
+      LEFT JOIN "workflow_status" ts
+        ON ts."project_id" = w."projectId"
+       AND ts."key" = (r."diff" -> 'status' ->> 'to')
+      WHERE r."changeKind" = 'updated'
+        AND r."changedAt" >= ${window.start}
+        AND r."changedAt" <= ${window.end}
+        AND (
+              ${isStatusEvent}
+              OR (r."diff" -> 'sprintId' ->> 'to') = ${sprintId}
+              OR (r."diff" -> 'sprintId' ->> 'from') = ${sprintId}
+            )
+      GROUP BY 1
+      ORDER BY 1
+    `;
+  },
 };

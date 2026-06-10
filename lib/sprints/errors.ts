@@ -20,6 +20,7 @@ import type { SprintState } from '@prisma/client';
 //   SprintNotStartableError            → 422 (Subtask 4.4.2)
 //   SprintNotCompletableError          → 422 (Subtask 4.4.3)
 //   InvalidCarryOverTargetError        → 422 (Subtask 4.4.3)
+//   SprintNotStartedError              → 409 (Subtask 4.6.3)
 //
 // A foreign / unknown projectId (the create path) reuses `ProjectNotFoundError`
 // from `lib/projects/errors.ts` (already a 404) rather than inventing a parallel
@@ -32,6 +33,23 @@ export class SprintNotFoundError extends Error {
   constructor(sprintId: string) {
     super(`Sprint ${sprintId} not found.`);
     this.name = 'SprintNotFoundError';
+    this.sprintId = sprintId;
+  }
+}
+
+/**
+ * A burndown was requested for a sprint that has not started (`state =
+ * 'planned'`, no `startDate`) — there is no window to draw an actual line over,
+ * so the read is rejected rather than returning a meaningless empty axis. Jira
+ * likewise shows no burndown for a future sprint (decision-ladder rung 1). The
+ * burndown is the only consumer today (Subtask 4.6.3). → 409.
+ */
+export class SprintNotStartedError extends Error {
+  readonly code = 'SPRINT_NOT_STARTED' as const;
+  readonly sprintId: string;
+  constructor(sprintId: string) {
+    super(`Sprint ${sprintId} has not started; no burndown is available.`);
+    this.name = 'SprintNotStartedError';
     this.sprintId = sprintId;
   }
 }
