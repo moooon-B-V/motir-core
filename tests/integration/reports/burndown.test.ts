@@ -326,6 +326,116 @@ describe('reportsService.getBurndownSeries — degraded + edge states', () => {
     expect(series.days[0]!.remaining).toBe(5); // nothing done → flat at committed
   });
 
+  it('degrades a time_estimate project to the issue-count series WITHOUT anchoring to the points roll-up', async () => {
+    // A time_estimate project has no committed-time snapshot (4.6.3's documented
+    // narrowing), so the series degrades to issue_count — and because the drawn
+    // statistic differs from the project statistic, the end point must come from
+    // the revision trail alone, NOT be pinned to `rollupForSprint().remaining`
+    // (which would be in minutes).
+    const fx = await makeWorkItemFixture();
+    await db.project.update({
+      where: { id: fx.projectId },
+      data: { estimationStatistic: 'time_estimate' },
+    });
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Time' }, fx.ctx);
+    const a = await createTestWorkItem(fx, { kind: 'task', title: 'A' });
+    const b = await createTestWorkItem(fx, { kind: 'task', title: 'B' });
+    await place(a.id, sprint.id, 'done', null);
+    await place(b.id, sprint.id, 'todo', null);
+    await stampSprint(sprint.id, {
+      state: 'complete',
+      startDate: utcDay(2026, 6, 1),
+      endDate: utcDay(2026, 6, 5),
+      completedAt: utcDay(2026, 6, 5),
+      committedPoints: 13, // present, but a time project never burns points
+      committedIssueCount: 2,
+    });
+    await addRevision(a.id, fx.ownerId, utcDay(2026, 6, 3), {
+      status: { from: 'todo', to: 'done' },
+    });
+
+    const series = await reportsService.getBurndownSeries(sprint.id, fx.ctx);
+    expect(series.statistic).toBe('issue_count');
+    expect(series.committed).toBe(2);
+    // Trail-derived: 2 committed, one done on 06-03 → 1 — finite end to end.
+    expect(byDate(series.days)('2026-06-03').remaining).toBe(1);
+    expect(series.days[series.days.length - 1]!.remaining).toBe(1);
+  });
+
+  it('a zero point baseline degrades to issue-count (the committedPoints === 0 branch)', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'ZeroPts' }, fx.ctx);
+    const a = await createTestWorkItem(fx, { kind: 'task', title: 'A' });
+    await place(a.id, sprint.id, 'todo', null);
+    await stampSprint(sprint.id, {
+      state: 'complete',
+      startDate: utcDay(2026, 6, 1),
+      endDate: utcDay(2026, 6, 3),
+      completedAt: utcDay(2026, 6, 3),
+      committedPoints: 0, // a stamped-but-zero baseline is no baseline
+      committedIssueCount: 1,
+    });
+    const series = await reportsService.getBurndownSeries(sprint.id, fx.ctx);
+    expect(series.statistic).toBe('issue_count');
+    expect(series.committed).toBe(1);
+  });
+
+  it('a null committedIssueCount reads as 0 committed, never NaN (the ?? 0 guard)', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'NoBase' }, fx.ctx);
+    await stampSprint(sprint.id, {
+      state: 'complete',
+      startDate: utcDay(2026, 6, 1),
+      endDate: utcDay(2026, 6, 3),
+      completedAt: utcDay(2026, 6, 3),
+      committedPoints: null,
+      committedIssueCount: null, // defensive — a started sprint normally has one
+    });
+    const series = await reportsService.getBurndownSeries(sprint.id, fx.ctx);
+    expect(series.committed).toBe(0);
+    expect(series.days.every((d) => d.guideline === 0)).toBe(true);
+  });
+
+  it('an OVERRUN active sprint extends the axis to today (actual drawn past the planned end)', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Overrun' }, fx.ctx);
+    const a = await createTestWorkItem(fx, { kind: 'task', title: 'A' });
+    await place(a.id, sprint.id, 'todo', 5);
+    const now = new Date();
+    await stampSprint(sprint.id, {
+      state: 'active',
+      startDate: new Date(now.getTime() - 6 * DAY_MS),
+      endDate: new Date(now.getTime() - 2 * DAY_MS), // planned end already passed
+      completedAt: null,
+      committedPoints: 5,
+      committedIssueCount: 1,
+    });
+    const series = await reportsService.getBurndownSeries(sprint.id, fx.ctx);
+    const todayKey = now.toISOString().slice(0, 10);
+    // The axis covers TODAY (not just the overrun planned end) and today is drawn.
+    expect(series.days[series.days.length - 1]!.date).toBe(todayKey);
+    expect(series.days[series.days.length - 1]!.remaining).toBe(5);
+  });
+
+  it('falls back to completedAt for the axis end when a completed sprint has no planned end date', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'NoEnd' }, fx.ctx);
+    const a = await createTestWorkItem(fx, { kind: 'task', title: 'A' });
+    await place(a.id, sprint.id, 'todo', 5);
+    await stampSprint(sprint.id, {
+      state: 'complete',
+      startDate: utcDay(2026, 6, 1),
+      endDate: null, // no planned end — the axis ends at completedAt
+      completedAt: utcDay(2026, 6, 4),
+      committedPoints: 5,
+      committedIssueCount: 1,
+    });
+    const series = await reportsService.getBurndownSeries(sprint.id, fx.ctx);
+    expect(series.days).toHaveLength(4); // 06-01 … 06-04
+    expect(series.days[3]!.date).toBe('2026-06-04');
+    expect(series.days[3]!.remaining).toBe(5);
+  });
+
   it('rejects a not-started (planned) sprint with SprintNotStartedError', async () => {
     const fx = await makeWorkItemFixture();
     const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Planned' }, fx.ctx);

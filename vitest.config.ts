@@ -46,8 +46,11 @@ export default defineConfig({
     // `workItemsService` grew across Stories 2.3–2.5 (detail / tree / list /
     // pagination) after the 1.4.7 numbers were measured. 4.1.4 adds
     // `backlogService` (issue↔sprint association + backlog rank + the bounded
-    // reads). We scope `include` to exactly these files so the report (and the
-    // per-file thresholds below) stays focused on the surface this Epic is
+    // reads). 4.6.7 adds the Story-4.6 reports layer — `reportsService` (the
+    // burndown + velocity aggregates) + `reportsMappers` + `sprintRepository`
+    // (grown by 4.6.4's bounded completed-sprints read) + the 4.6.2 chart
+    // primitives. We scope `include` to exactly these files so the report (and
+    // the per-file thresholds below) stays focused on the surface this Epic is
     // responsible for, rather than diluting the signal across the whole tree.
     // Other modules carry their own coverage stories in their own Subtasks. v8
     // is the provider (matches @vitest/coverage-v8).
@@ -61,6 +64,15 @@ export default defineConfig({
         'lib/repositories/workItemRevisionRepository.ts',
         'lib/services/workflowsService.ts',
         'lib/repositories/workflowsRepository.ts',
+        'lib/services/reportsService.ts',
+        'lib/mappers/reportsMappers.ts',
+        'lib/repositories/sprintRepository.ts',
+        'components/ui/charts/scale.ts',
+        'components/ui/charts/LineChart.tsx',
+        'components/ui/charts/BarChart.tsx',
+        'components/ui/charts/ChartFrame.tsx',
+        'components/ui/charts/ChartLegend.tsx',
+        'components/ui/charts/ChartDataTable.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -78,6 +90,15 @@ export default defineConfig({
         },
         'lib/services/workflowsService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workflowsRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/reportsService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mappers/reportsMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/sprintRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/ui/charts/scale.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/ui/charts/LineChart.tsx': { branches: 90, functions: 90, lines: 90 },
+        'components/ui/charts/BarChart.tsx': { branches: 90, functions: 90, lines: 90 },
+        'components/ui/charts/ChartFrame.tsx': { branches: 90, functions: 90, lines: 90 },
+        'components/ui/charts/ChartLegend.tsx': { branches: 90, functions: 90, lines: 90 },
+        'components/ui/charts/ChartDataTable.tsx': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },

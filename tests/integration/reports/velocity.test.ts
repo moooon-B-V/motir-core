@@ -227,6 +227,47 @@ describe('reportsService.getVelocity', () => {
     expect(dto.sprints[0]).toMatchObject({ committed: 4, completed: 2 });
   });
 
+  it('reads the committedPoints baseline for a time_estimate project (the best-available snapshot)', async () => {
+    // 4.6.4's documented narrowing: there is no committed-time snapshot, so a
+    // time_estimate project's committed bar reads the committedPoints baseline.
+    const fx = await makeWorkItemFixture();
+    await db.project.update({
+      where: { id: fx.projectId },
+      data: { estimationStatistic: 'time_estimate' },
+    });
+    await seedCompletedSprint(fx, {
+      name: 'Timed',
+      sequence: 1,
+      completedAt: D('2026-06-01T00:00:00Z'),
+      committedPoints: 12,
+      committedIssueCount: 3,
+      issues: [{ points: null, done: true }],
+    });
+    const dto = await reportsService.getVelocity({ projectId: fx.projectId }, fx.ctx);
+    expect(dto.statistic).toBe('time_estimate');
+    expect(dto.sprints[0]!.committed).toBe(12);
+    expect(Number.isFinite(dto.sprints[0]!.completed)).toBe(true);
+  });
+
+  it('a null committedIssueCount on an issue_count project reads as 0, never NaN (the ?? 0 guard)', async () => {
+    const fx = await makeWorkItemFixture();
+    await db.project.update({
+      where: { id: fx.projectId },
+      data: { estimationStatistic: 'issue_count' },
+    });
+    await seedCompletedSprint(fx, {
+      name: 'NoBaseline',
+      sequence: 1,
+      completedAt: D('2026-06-01T00:00:00Z'),
+      committedPoints: null,
+      committedIssueCount: null, // defensive — a completed sprint normally has one
+      issues: [{ points: null, done: true }],
+    });
+    const dto = await reportsService.getVelocity({ projectId: fx.projectId }, fx.ctx);
+    expect(dto.sprints[0]!.committed).toBe(0);
+    expect(dto.averageCompleted).not.toBeNaN();
+  });
+
   it('404s a project outside the active workspace (finding-#26 tenancy gate)', async () => {
     const fx = await makeWorkItemFixture();
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTHR' });
