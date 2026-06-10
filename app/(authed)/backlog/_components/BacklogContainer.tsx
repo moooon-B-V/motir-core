@@ -116,6 +116,9 @@ export function BacklogContainer({
   // The project's active sprint (if any) — the start dialog names it in the
   // friendly one-active-sprint error (Subtask 4.4.5).
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
+  // The project's PLANNED sprints — the complete dialog's carry-over targets
+  // (Subtask 4.4.6: roll the unfinished issues into a future sprint).
+  const plannedSprints = sprints.filter((s) => s.state === 'planned');
 
   return (
     // One DndContext over the whole stack (Subtask 4.2.4) so a row drags between
@@ -136,7 +139,9 @@ export function BacklogContainer({
             assigneeNameById={assigneeNameById}
             projectName={projectName}
             activeSprint={activeSprint}
+            plannedSprints={plannedSprints}
             onStarted={refetchSprints}
+            onCompleted={refetchSprints}
           />
         ))}
 
