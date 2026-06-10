@@ -97,8 +97,12 @@ export default defineConfig({
         'lib/repositories/customFieldOptionRepository.ts',
         'lib/repositories/customFieldValueRepository.ts',
         // Story 5.2 (attachments): the service joins the gate with 5.2.7's
-        // orphan-GC sweep (the 2.3.7 upload half already carries its tests).
+        // orphan-GC sweep (the 2.3.7 upload half already carries its tests);
+        // the repo leaf + the panel mapper join with 5.2.2's management
+        // surface.
         'lib/services/attachmentsService.ts',
+        'lib/repositories/attachmentRepository.ts',
+        'lib/mappers/attachmentMappers.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -173,8 +177,11 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
-        // Story 5.2 (attachments): upload (2.3.7) + the 5.2.7 orphan-GC sweep.
+        // Story 5.2 (attachments): upload (2.3.7) + the 5.2.7 orphan-GC sweep
+        // + the 5.2.2 management surface (repo leaf + panel mapper).
         'lib/services/attachmentsService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/attachmentRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mappers/attachmentMappers.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },

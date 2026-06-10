@@ -16,6 +16,16 @@ export const attachmentRepository = {
   },
 
   /**
+   * One row by id — the delete path's resolve (5.2.2). Takes `tx` when called
+   * inside the delete transaction (the read guards the subsequent write); the
+   * service applies the workspace-scoping + linked checks (a repo is a leaf).
+   */
+  async findById(id: string, tx?: Prisma.TransactionClient): Promise<Attachment | null> {
+    const client = tx ?? db;
+    return client.attachment.findUnique({ where: { id } });
+  },
+
+  /**
    * One issue's attachments, newest first — the paged panel read (5.2.2),
    * backed by the (work_item_id, created_at DESC) index. Cursor-paginated like
    * workItemRevisionRepository.listByWorkItem: `cursor` is an attachment id,
