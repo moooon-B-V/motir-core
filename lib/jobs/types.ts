@@ -58,12 +58,37 @@ export type EmailSendData = TransactionalEmail & {
 };
 
 /**
+ * The `work-item/comment.created` event payload (Story 5.1 · Subtask 5.1.2) —
+ * emitted AFTER a comment write commits (never inside the transaction: a
+ * rollback must not have notified anyone). Deliberately CHANNEL-AGNOSTIC so
+ * the 5.1.6 mention-email job, Story 5.4 (watchers) and Story 5.7 (the in-app
+ * bell) all fan in off the same events without reshaping them.
+ *
+ * `mentionedUserIds` carries the validated, persisted mention set of the
+ * write that fired the event. On a comment EDIT the same event re-fires with
+ * ONLY the newly-added mention ids (no re-notify on unchanged mentions); the
+ * consumer's idempotency key (comment × user) makes any overlap harmless.
+ */
+export interface WorkItemCommentCreatedData {
+  workspaceId: string;
+  workItemId: string;
+  commentId: string;
+  /** The actor whose write produced the mentions (comment author / editor). */
+  authorId: string;
+  mentionedUserIds: string[];
+}
+
+/**
  * Map of event-name → payload. Each key is simultaneously a job id and the
- * event name that triggers it. Grows one entry per job.
+ * event name that triggers it. Grows one entry per job. (An event MAY land
+ * before its consuming job does — `work-item/comment.created` ships with
+ * 5.1.2 while the mention-notification job consuming it is 5.1.6; publishing
+ * to an event no function subscribes to is a no-op on Inngest's side.)
  */
 export interface JobEventDataMap {
   'system.daily-health-check': SystemScheduledData;
   'email.send': EmailSendData;
+  'work-item/comment.created': WorkItemCommentCreatedData;
 }
 
 /** Every registered event/job name. */

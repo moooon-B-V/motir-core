@@ -190,6 +190,20 @@ describe('commentRepository', () => {
     expect(await commentRepository.countByWorkItem(c.issue.id)).toBe(3);
     expect(await commentRepository.countRootsByWorkItem(c.issue.id)).toBe(2);
   });
+
+  it('countByParent counts a root’s replies (0 for a childless comment), inside and outside a tx', async () => {
+    const c = await makeCommentFixture();
+    const root = await addComment(c, { bodyMd: 'root' });
+    const lone = await addComment(c, { bodyMd: 'lone' });
+    await addComment(c, { bodyMd: 'r1', parentCommentId: root.id });
+    await addComment(c, { bodyMd: 'r2', parentCommentId: root.id });
+
+    expect(await commentRepository.countByParent(root.id)).toBe(2);
+    expect(await commentRepository.countByParent(lone.id)).toBe(0);
+    expect(await db.$transaction(async (tx) => commentRepository.countByParent(root.id, tx))).toBe(
+      2,
+    );
+  });
 });
 
 describe('commentMentionRepository', () => {
