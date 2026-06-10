@@ -398,7 +398,7 @@ export const story_5_1: PlanStory = {
       id: '5.1.4',
       title:
         'Mention capability in `MarkdownEditor` + mention-chip rendering in `MarkdownView` (tiptap Mention + `mention:` token round-trip)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
