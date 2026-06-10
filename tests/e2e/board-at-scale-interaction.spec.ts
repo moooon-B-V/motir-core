@@ -46,16 +46,21 @@
 // dragged card is pinned, not the scale. The board behaviour itself is driven
 // through the real /boards UI.
 
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 import {
   getBoard,
   columnByStatus,
   cardIdsIn,
-  columnCardNodes,
-  expectColumnVirtualized,
   expectNoLoadMore,
+  identifierOf,
+  revealDeepCard,
+  pointerDragForMove,
+  assigneeOf,
+  dragIntoCellUntil,
+  setGroupBy,
+  setColumnWip,
 } from './_helpers/board';
 import { createItem, transition } from './_helpers/workflow';
 import { projectsService } from '@/lib/services/projectsService';
@@ -63,7 +68,6 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
 import { seedLargeBoard } from '../../scripts/seedLargeBoard';
-import type { BoardProjectionDto } from '@/lib/dto/boards';
 
 const OWNER_EMAIL = 'e2e-board-at-scale-owner@example.com';
 // The catch-all swimlane key (BOARD_SWIMLANE_NO_VALUE) — the "No assignee" / "No
@@ -174,185 +178,6 @@ async function newItem(page: Page, projectId: string, title: string): Promise<st
 async function assign(page: Page, id: string, assigneeId: string): Promise<void> {
   const res = await page.request.patch(`/api/_test/work-items?id=${id}`, { data: { assigneeId } });
   expect(res.ok(), `assign ${id} → ${assigneeId}`).toBeTruthy();
-}
-
-/** Resolve a card id → its board identifier (the `board-card-<identifier>` testid). */
-function identifierOf(board: BoardProjectionDto, id: string): string {
-  for (const col of board.columns) {
-    const card = col.cards.find((c) => c.id === id);
-    if (card) return card.identifier;
-  }
-  throw new Error(`card ${id} not found on the board`);
-}
-
-// The column's internal scroll viewport (the `.col-body` overflow-y-auto div in
-// BoardColumn) — the element `useRowWindow` windows against. Setting its scrollTop
-// fires the scroll event the hook listens to, so the window recomputes.
-function columnScroller(page: Page, columnId: string): Locator {
-  return page.getByTestId(`board-column-${columnId}`).locator('div.overflow-y-auto').first();
-}
-
-// Scroll a virtualized column far enough that a card NOT in its initial row-window
-// mounts, and return that deep card's identifier. Proves the at-scale precondition
-// the drag tests need: a card reachable only by scrolling (virtualization), not by
-// paging. Asserts the column virtualized first (mounted ≪ total).
-async function revealDeepCard(page: Page, columnId: string, total: number): Promise<string> {
-  await expectColumnVirtualized(page, columnId, total);
-  const nodes = columnCardNodes(page, columnId);
-  const testidsOf = async () =>
-    (await nodes.evaluateAll((els) => els.map((e) => e.getAttribute('data-testid') ?? ''))).filter(
-      Boolean,
-    );
-  const initial = new Set(await testidsOf());
-
-  // Scroll roughly to the middle of the stack, then poll until a card that was NOT
-  // in the initial window has mounted and laid out.
-  const scroller = columnScroller(page, columnId);
-  await scroller.evaluate((el) => {
-    el.scrollTop = Math.floor(el.scrollHeight * 0.55);
-  });
-
-  let deepTestId = '';
-  await expect
-    .poll(
-      async () => {
-        const now = await testidsOf();
-        const fresh = now.find((tid) => !initial.has(tid));
-        if (fresh) deepTestId = fresh;
-        return Boolean(fresh);
-      },
-      { message: 'a card below the initial window mounted after scrolling', timeout: 10_000 },
-    )
-    .toBe(true);
-
-  const identifier = deepTestId.replace('board-card-', '');
-  await expect(page.getByTestId(deepTestId)).toBeVisible();
-  return identifier;
-}
-
-// A REAL pointer drag from one element onto another, clearing dnd-kit's 8px
-// PointerSensor activation distance before settling over the target, then
-// dropping. Returns the `/api/board/move` POST the drop fires so the caller can
-// assert its status (200 legal · 409 illegal). `dropYFrac` places the drop within
-// the target's height. Lifted from board-ui.spec.ts (3.2.7).
-async function pointerDragForMove(
-  page: Page,
-  from: Locator,
-  to: Locator,
-  dropYFrac = 0.4,
-): ReturnType<Page['waitForResponse']> {
-  await from.scrollIntoViewIfNeeded();
-  const f = (await from.boundingBox())!;
-  await to.scrollIntoViewIfNeeded();
-  const t = (await to.boundingBox())!;
-  const fx = f.x + f.width / 2;
-  const fy = f.y + f.height / 2;
-  const tx = t.x + t.width / 2;
-  const ty = t.y + t.height * dropYFrac;
-  await page.mouse.move(fx, fy);
-  await page.mouse.down();
-  await page.mouse.move(fx + 14, fy + 8, { steps: 5 }); // clear the 8px activation
-  await page.mouse.move(tx, ty, { steps: 18 });
-  await page.mouse.move(tx, ty, { steps: 4 }); // settle so the over-target sticks
-  const move = page.waitForResponse(
-    (r) => r.url().endsWith('/api/board/move') && r.request().method() === 'POST',
-    { timeout: 10_000 },
-  );
-  await page.mouse.up();
-  return move;
-}
-
-// A real pointer drag from a board card onto a swimlane LANE CELL (the
-// `lane-cell-<col>-<lane>` droppable that owns the reassign), mirroring the
-// activation-distance gesture board-swimlanes.spec.ts uses; the caller polls
-// committed state (a swimlane reassign goes through the field path, not
-// /api/board/move, so there is no single response to await). Drops at the cell's
-// CENTRE: the board resolves the over via dnd-kit `closestCenter`, which keys off
-// the dragged card's centre, so a centre-on-cell drop pins the destination
-// (lane, column) cell. Dropping onto a CARD inside another lane only re-sorts;
-// the lane-cell droppable is what triggers the cross-lane reassign.
-async function dragCardOntoCell(page: Page, cardTestId: string, target: Locator): Promise<void> {
-  const card = page.getByTestId(cardTestId);
-  // Settle BOTH into view BEFORE measuring — capturing the source box and THEN
-  // scrolling the target would invalidate the source coords (the target scroll
-  // shifts the page), so the pickup would grab whatever now sits at the stale
-  // point. Source + target lanes are adjacent + short here, so both fit on screen.
-  await card.scrollIntoViewIfNeeded();
-  await target.scrollIntoViewIfNeeded();
-  const from = (await card.boundingBox())!;
-  const to = (await target.boundingBox())!;
-  const fx = from.x + from.width / 2;
-  const fy = from.y + from.height / 2;
-  const tx = to.x + to.width / 2;
-  const ty = to.y + to.height / 2;
-  await page.mouse.move(fx, fy);
-  await page.mouse.down();
-  await page.mouse.move(fx + 24, fy, { steps: 6 });
-  await page.mouse.move(tx, ty, { steps: 18 });
-  await page.mouse.move(tx, ty, { steps: 4 });
-  await page.waitForTimeout(80); // let dnd-kit's onDragOver settle on the target cell
-  await page.mouse.up();
-}
-
-/** The committed assignee of a card id (scans the projection); null if unassigned
- *  or the card is not found. A single read — the retry helper polls with it. */
-function assigneeOf(board: BoardProjectionDto, id: string): string | null {
-  const card = board.columns.flatMap((c) => c.cards).find((c) => c.id === id);
-  return card ? card.assigneeId : null;
-}
-
-// Drag a card onto a lane cell and RETRY until the committed projection satisfies
-// `predicate`, or the attempts run out. dnd-kit pointer drags onto one of several
-// vertically-stacked lane cells are pixel-sensitive — an occasional drop lands a
-// lane off; re-dragging the same card (now wherever it landed) onto the target
-// cell converges. Returns whether the predicate held. The reassign/transition is
-// idempotent, so a repeat drop that already succeeded is a no-op.
-async function dragIntoCellUntil(
-  page: Page,
-  srcCardKey: string,
-  target: Locator,
-  predicate: (board: BoardProjectionDto) => boolean,
-  attempts = 4,
-): Promise<boolean> {
-  for (let i = 0; i < attempts; i++) {
-    await dragCardOntoCell(page, `board-card-${srcCardKey}`, target);
-    for (let poll = 0; poll < 10; poll++) {
-      if (predicate(await getBoard(page.request))) return true;
-      await page.waitForTimeout(100);
-    }
-  }
-  return false;
-}
-
-// Pick the active group-by dimension via the board-header Segmented control,
-// awaiting the PATCH so the server-side persistence has landed. From
-// board-swimlanes.spec.ts (3.3.7).
-async function setGroupBy(
-  page: Page,
-  label: 'None' | 'Assignee' | 'Epic' | 'Priority',
-): Promise<void> {
-  const control = page.getByRole('group', { name: 'Swimlane group by' });
-  const patch = page.waitForResponse(
-    (r) => r.url().endsWith('/api/board') && r.request().method() === 'PATCH',
-  );
-  await control.getByRole('button', { name: label, exact: true }).click();
-  expect((await patch).ok(), `group-by → ${label} persisted`).toBeTruthy();
-}
-
-// Set a column's WIP limit through its [⋯] menu's "Set WIP limit" editor, awaiting
-// the PATCH so the write has landed before asserting the over/at-limit treatment.
-// From board-swimlanes.spec.ts (3.3.7).
-async function setColumnWip(page: Page, columnId: string, value: string): Promise<void> {
-  await page.getByTestId(`board-column-actions-${columnId}`).click();
-  await page.getByRole('button', { name: 'Set WIP limit' }).click();
-  await page.getByTestId(`board-wip-input-${columnId}`).fill(value);
-  const patch = page.waitForResponse(
-    (r) =>
-      new RegExp(`/api/board/columns/${columnId}$`).test(r.url()) &&
-      r.request().method() === 'PATCH',
-  );
-  await page.getByRole('button', { name: 'Save' }).click();
-  expect((await patch).ok(), `set WIP ${value} on ${columnId} persisted`).toBeTruthy();
 }
 
 test.beforeEach(async () => {
