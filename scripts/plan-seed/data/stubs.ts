@@ -44,15 +44,12 @@ export const STUB_STORIES: PlanStory[] = [
   // (text/number/date/select/user), typed-EAV values (the Jira storage shape)
   // carrying the documented Epic-6 predicate contract, Fields admin in project
   // settings, rail rendering with "Show more fields".
-  {
-    id: '5.4',
-    title: 'Labels, components, watchers',
-    status: 'planned',
-    descriptionMd:
-      'Label + component taxonomies (project-scoped), assignment UI on issues, watcher ' +
-      'follow/unfollow. All filterable in Epic 6.',
-    items: [],
-  },
+  // 5.4 (Labels, components, watchers) is fully expanded — data/story-5.4.ts.
+  // Project-scoped label folksonomy (a recorded deviation from Jira's global
+  // pool — the scoping its users ask for), company-managed-shaped components
+  // w/ default-assignee-at-create + move-or-remove delete, watchers w/ the
+  // eye control + auto-watch + watcher emails on comment/transition (mention-
+  // deduped, actor excluded) riding the 5.1.6 events.
   {
     id: '5.5',
     title: 'Activity history feed',
