@@ -158,7 +158,7 @@ export const story_5_5: PlanStory = {
       id: '5.5.1',
       title:
         'Activity read service — paged revision feed + the TOTAL diff-renderer registry (batched display resolution, noise policy, fallbacks)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
