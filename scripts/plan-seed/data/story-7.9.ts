@@ -196,7 +196,11 @@ export const story_7_9: PlanStory = {
     '(7.8.11) so dependents cascade mid-run and their prompts build against that branch; ONE ' +
     'end-of-run PR per repo; auto-merging to main was rejected as dangerous — main only moves ' +
     'through a human-merged PR), ' +
-    '`motir open <key>` (jump to the browser). A reference SANDBOX container ships for the ' +
+    '`motir open <key>` (jump to the browser), and `motir plan "<description>"` / `motir plan ' +
+    '<KEY>` (terminal planning — generate/augment the tree or expand a stub via the async ' +
+    '7.3/7.4 engine, pushing a consent-gated local code-context bundle so the planner sees the ' +
+    "user's code — 7.9.9; the web chat's server-side counterpart is the 7.7 GitHub App read " +
+    'path per the 7.5 code-access decision). A reference SANDBOX container ships for the ' +
     'unattended form (`--agent "claude --dangerously-skip-permissions"` confined to the ' +
     'mounted workspace; manual-approval console runs stay supported). Built as an MCP client ' +
     'of the 7.8 ' +
@@ -241,6 +245,10 @@ export const story_7_9: PlanStory = {
     'claims done.\n' +
     '- Merge the session PR, run `motir done --session <branch>` — every carried item flips ' +
     'to Done on the board in one shot and the recorded branches clear.\n' +
+    '- (Once the 7.3/7.4 engine is live) `motir plan <KEY>` on a stub story expands it and ' +
+    'prints the new children; `motir plan "<description>"` first prints the code-context ' +
+    'bundle manifest and uploads NOTHING until you confirm — decline and verify no code left ' +
+    'the machine, confirm and verify the tree lands in the live project.\n' +
     '- Revoke the PAT → every command fails with the auth error and a re-login hint.',
   items: [
     {
@@ -716,6 +724,64 @@ export const story_7_9: PlanStory = {
         '- story-7.0.ts 7.0.10 (childless epic/story = ready; childed = excluded)\n\n' +
         '**Branch.** `subtask/PROD-7.9.8-auto-include-planning`.',
       dependsOn: ['7.9.4', '7.4'],
+    },
+    {
+      id: '7.9.9',
+      title:
+        '`motir plan` — terminal planning (describe → tree / expand <KEY>) with a consent-gated local code-context bundle',
+      status: 'blocked',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 45,
+      descriptionMd:
+        'The CLI form of the planning front door (the 7.2 web chat is the other; same ' +
+        'server-side engine behind both):\n\n' +
+        '- **`motir plan "<description>"`** — plan from a prompt: on a fresh project the ' +
+        '7.3 generation pass (describe → epic/story/task tree as real issues), on an ' +
+        'existing backlog the 7.4 augmentation pass — the server decides by project ' +
+        'state; the CLI does not pick.\n' +
+        '- **`motir plan <KEY>`** — expand that specific epic/story stub: the explicit ' +
+        'form of the SAME async `expand_item`-style tool 7.9.8 fires from the loop.\n' +
+        '- **Async, like 7.9.8:** the trigger returns a job; the command streams/polls ' +
+        'progress and prints the created/changed tree (keys + titles, indented) on ' +
+        'completion. `--detach` returns after the trigger (the 7.9.8 loop semantics); ' +
+        'default is to watch.\n\n' +
+        "**The code-context bundle — HOW the planner sees the user's code from the " +
+        'terminal.** The CLI runs where the code LIVES (the linked workspace root) — its ' +
+        'structural advantage over the web chat. Before triggering, it gathers a ' +
+        'planning-context bundle from the linked checkouts: the file TREE (per repo, ' +
+        '.gitignore-respecting), manifests (package.json / pyproject / go.mod …), ' +
+        'contract + docs files (README, CLAUDE.md-class agent contracts, docs/ index), ' +
+        'and size-capped excerpts of files the description names — never the whole ' +
+        'repo, hard-capped total size. **Consent is explicit:** the bundle MANIFEST ' +
+        '(file list + byte counts) prints first and nothing uploads without ' +
+        'confirmation (`--yes` for unattended; `--no-context` skips the bundle ' +
+        'entirely) — the code crosses into the closed prodect-ai layer, so the user ' +
+        'sees exactly what leaves the machine; the server side treats it as ' +
+        'REQUEST-SCOPED (the 7.5 code-access decision — never persisted). An EMPTY ' +
+        'linked folder sends no bundle and plans from the description alone — the ' +
+        'new-project kickoff flow stays first-class. (The GitHub App read path — 7.7 → ' +
+        '7.5 — is the SERVER-side code-access source for web-chat planning; this bundle ' +
+        'is the CLI-side source and the pre-GitHub fallback.)\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- `motir plan "<desc>"` on a seeded project triggers augmentation, on a fresh ' +
+        'empty project triggers generation (fake planner job in tests), watches the ' +
+        'job, and prints the resulting tree; `motir plan <KEY>` expands the named stub ' +
+        'via the shared 7.9.8 tool; `--detach` returns right after the trigger.\n' +
+        '- Bundle: respects .gitignore, includes tree/manifests/contract files, honors ' +
+        'the size cap, prints the manifest, and uploads NOTHING without confirmation ' +
+        '(`--yes`) — asserted including the refusal path; `--no-context` and the ' +
+        'empty-folder case send no bundle and still plan.\n' +
+        '- A failed planning job surfaces the server error verbatim, exit non-zero; ' +
+        'the PAT permission scoping applies (a read-only token cannot trigger ' +
+        'planning).\n\n' +
+        '## Context refs\n\n' +
+        '- 7.9.1 (client/config), 7.9.8 (the shared expand tool + async-job pattern)\n' +
+        '- stubs 7.3 / 7.4 (the engine — story-level deps; retarget on their expansion)\n' +
+        '- stubs 7.5 / 7.7 (the code-access decision this implements the CLI half of)\n' +
+        '- `.motir.json` / `motir link` (the checkouts the bundle walks)\n\n' +
+        '**Branch.** `subtask/PROD-7.9.9-cli-plan-command`.',
+      dependsOn: ['7.9.1', '7.9.8', '7.3', '7.4'],
     },
   ],
 };
