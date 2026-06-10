@@ -37,19 +37,9 @@ export const STUB_STORIES: PlanStory[] = [
   // notifies mentions in-app as well as by email, and no story owned that
   // surface (a no-V1-tier ownership gap, fixed at plan time); 5.1.6's job
   // events are channel-agnostic so 5.7 fans in off the same events.
-  {
-    id: '5.2',
-    title: 'Attachments',
-    status: 'planned',
-    descriptionMd:
-      'First-class attachments: a per-issue attachment list (download/delete), image preview, ' +
-      "size/type guards, workspace-scoped access. REUSES Story 2.3.7's upload primitive (finding " +
-      '#52) — the `attachmentsService.uploadAttachment` service, `POST ' +
-      '/api/upload/issue-attachment` route, shared `lib/blob/allowlist.ts`, and the `attachment` ' +
-      "table; this Story adds the `attachment.workItemId` link + the management UI (2.3.7's rows " +
-      "are intentionally work_item-unlinked). Don't rebuild the uploader.",
-    items: [],
-  },
+  // 5.2 (Attachments) is fully expanded — data/story-5.2.ts. Reuses the 2.3.7
+  // upload primitive per finding #52; adds the workItemId link, the panel UI,
+  // the embeds-are-attachments link-on-write, and the orphan-GC job.
   {
     id: '5.3',
     title: 'Custom fields (per-project definitions)',
