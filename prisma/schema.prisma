@@ -1035,6 +1035,9 @@ enum SprintState {
 // because its value set is open). `failure` is JSON: `{ message, stack, code? }`.
 // `idempotencyKey` is the rendered template (1.6.4 wires the dedup semantics;
 // the column ships now so the dashboard + dedup land without a later migration).
+// `output` (5.2.7) is the handler's JSON-safe resolved value, recorded on
+// success — what lets a run's summary (e.g. the attachment-GC's scanned/
+// deleted/failed counts) live on the ledger row itself, not only in Inngest.
 model JobRun {
   id             String       @id @default(cuid())
   workspaceId    String?      @map("workspace_id")
@@ -1047,6 +1050,7 @@ model JobRun {
   finishedAt     DateTime?    @map("finished_at")
   durationMs     Int?         @map("duration_ms")
   failure        Json?
+  output         Json?
   idempotencyKey String?      @map("idempotency_key")
 
   workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

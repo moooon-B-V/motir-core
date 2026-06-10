@@ -93,6 +93,9 @@ export default defineConfig({
         'lib/repositories/customFieldDefinitionRepository.ts',
         'lib/repositories/customFieldOptionRepository.ts',
         'lib/repositories/customFieldValueRepository.ts',
+        // Story 5.2 (attachments): the service joins the gate with 5.2.7's
+        // orphan-GC sweep (the 2.3.7 upload half already carries its tests).
+        'lib/services/attachmentsService.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -164,6 +167,8 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
+        // Story 5.2 (attachments): upload (2.3.7) + the 5.2.7 orphan-GC sweep.
+        'lib/services/attachmentsService.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },

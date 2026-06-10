@@ -108,7 +108,11 @@ they execute exactly once per run even when the handler replays across step
 boundaries — one row per run, not one per replay (the `job-run:start` step's
 result is reused across retries too). This is the read path the operator
 dashboard (1.6.5) renders without calling Inngest's API. `workspace_id` is null
-for system jobs.
+for system jobs. On success the row also records the handler's JSON-safe
+return value in its `output` column (5.2.7) — a run's summary (e.g. the
+attachment-GC's `{ scanned, deleted, failed }`) is readable from our ledger,
+not only from Inngest's dashboard; a non-JSON-safe return degrades to a NULL
+`output`, never a failed run.
 
 > **Why `onFailure`, not a try/catch (1.6.6).** The dead-letter write used to
 > live in a `try/catch` around the handler, on the "final attempt" branch. On
@@ -339,7 +343,11 @@ records the `job_run` row's `event_name` as the synthetic `scheduled.{job_id}`
 kinds the same, and a scheduled run that fails surfaces in the DLQ exactly like
 any other job. `system.daily-health-check`
 (`lib/jobs/definitions/dailyHealthCheck.ts`) is the reference example — a no-op
-that proves the scheduled path end-to-end.
+that proves the scheduled path end-to-end. `system.attachment-gc`
+(`lib/jobs/definitions/attachmentGc.ts`, Subtask 5.2.7) is the first real
+scheduled job: the daily orphan-attachment sweep (unlinked rows past the 7-day
+safety window → blob, then row), cursor-bounded per run and idempotent, with
+its `{ scanned, deleted, failed }` summary persisted as the run's `output`.
 
 Cron jobs live in the `system.*` namespace (untenanted — `workspace_id` is null)
 and are **not** emitted via `sendEvent`. The cron syntax is standard 5-field

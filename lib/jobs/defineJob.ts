@@ -208,7 +208,23 @@ export function defineJob<N extends JobEventName>(
     // attempts therefore leave the row `running` — the dashboard shows a
     // retrying run as in-flight, which is the intended UX.
     const result = await handler(ctx, jobServices);
-    await step.run('job-run:succeeded', () => jobRunsService.recordSuccess(jobRun.id));
+    // Persist the handler's resolved value on the ledger row when it survives a
+    // JSON round-trip (5.2.7) — Inngest serializes step/run results the same
+    // way, so anything it can return is storable; a non-serializable value
+    // (cycles, BigInt) degrades to a NULL output, never a failed run.
+    await step.run('job-run:succeeded', () =>
+      jobRunsService.recordSuccess(jobRun.id, serializeOutput(result)),
+    );
     return result;
   });
+}
+
+/** JSON-roundtrip a handler result for the ledger's `output` column; undefined when not JSON-safe. */
+function serializeOutput(result: unknown): Prisma.InputJsonValue | undefined {
+  if (result === undefined || result === null) return undefined;
+  try {
+    return JSON.parse(JSON.stringify(result)) as Prisma.InputJsonValue;
+  } catch {
+    return undefined;
+  }
 }

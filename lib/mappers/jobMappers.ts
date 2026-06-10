@@ -18,6 +18,7 @@ export function toJobRunDTO(run: JobRun): JobRunDTO {
     finishedAt: run.finishedAt ? run.finishedAt.toISOString() : null,
     durationMs: run.durationMs,
     failure: (run.failure as JobRunFailure | null) ?? null,
+    output: run.output ?? null,
     idempotencyKey: run.idempotencyKey,
   };
 }

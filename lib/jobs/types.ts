@@ -109,6 +109,7 @@ export interface WorkItemMentionedData {
  */
 export interface JobEventDataMap {
   'system.daily-health-check': SystemScheduledData;
+  'system.attachment-gc': SystemScheduledData;
   'email.send': EmailSendData;
   'work-item/comment.created': WorkItemCommentCreatedData;
   'work-item/mentioned': WorkItemMentionedData;

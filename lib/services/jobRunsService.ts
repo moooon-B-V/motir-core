@@ -80,8 +80,13 @@ export const jobRunsService = {
    * Flip a run to `succeeded`. Reads startedAt inside the tx to compute
    * durationMs from DB timestamps (not wall-clock in the wrapper, which would
    * be wrong across Inngest's step replays).
+   *
+   * `output` (5.2.7) is the handler's resolved value when it is JSON-safe —
+   * defineJob hands it over so a run's summary (the attachment-GC's
+   * scanned/deleted/failed counts) lives on the ledger row itself. Omitted /
+   * undefined stores NULL.
    */
-  async recordSuccess(id: string): Promise<JobRunDTO> {
+  async recordSuccess(id: string, output?: Prisma.InputJsonValue): Promise<JobRunDTO> {
     const run = await withSystemContext(async (tx) => {
       const existing = await jobRunRepository.findById(id, tx);
       if (!existing) {
@@ -89,7 +94,16 @@ export const jobRunsService = {
       }
       const finishedAt = new Date();
       const durationMs = finishedAt.getTime() - existing.startedAt.getTime();
-      return jobRunRepository.update(id, { status: 'succeeded', finishedAt, durationMs }, tx);
+      return jobRunRepository.update(
+        id,
+        {
+          status: 'succeeded',
+          finishedAt,
+          durationMs,
+          ...(output !== undefined ? { output } : {}),
+        },
+        tx,
+      );
     });
     return toJobRunDTO(run);
   },
