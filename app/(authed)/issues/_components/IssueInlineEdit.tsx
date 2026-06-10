@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useMemo, useState, useTransition } from 'react';
+import { createContext, useContext, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
@@ -82,18 +82,65 @@ function useIssueInlineEdit() {
   return useContext(IssueInlineEditContext);
 }
 
+// The optimistic value for one inline cell, converging on the server's
+// ACKNOWLEDGEMENT rather than on the first re-render that changes the prop
+// (bug-inline-status-revert-on-second-edit). Two rapid edits on different rows
+// put two action calls + two `router.refresh()`es in flight; a refresh that
+// snapshotted the DB before this row's write committed can apply AFTER the
+// fresh one, handing the cell stale server props. The old mechanic — key the
+// cell by the authoritative value so any server change remounts it and drops
+// the override — trusted whatever payload arrived last, so that stale payload
+// re-rendered the row's OLD value (display-only; the DB held the new one).
+//
+// Instead the override carries the `updatedAt` the action returned for the
+// row once the write is acknowledged, and yields to the server only when the
+// row's `updatedAt` has caught up (`>=`, lexicographic — both sides are
+// same-format UTC ISO-8601). An older snapshot is by definition missing our
+// committed write, so the override keeps rendering; a snapshot at/after it
+// includes the write (per-row `updatedAt` is monotonic), so the server value
+// wins — which also lets a genuinely later edit by someone else show through.
+// No remount, no setState-in-effect; a follow-up edit on the same cell
+// replaces the override (the token keeps a superseded action's confirm/fail
+// from clobbering it).
+function useConvergingOverride<T>(serverValue: T, serverUpdatedAt: string) {
+  const [override, setOverride] = useState<{ value: T; confirmedUpdatedAt?: string } | null>(null);
+  const tokenRef = useRef(0);
+
+  const serverCaughtUp =
+    override?.confirmedUpdatedAt !== undefined && serverUpdatedAt >= override.confirmedUpdatedAt;
+  const value = override !== null && !serverCaughtUp ? override.value : serverValue;
+
+  function begin(next: T): number {
+    const token = ++tokenRef.current;
+    setOverride({ value: next });
+    return token;
+  }
+  function confirm(token: number, updatedAt: string) {
+    if (tokenRef.current !== token) return;
+    setOverride((o) => (o === null ? o : { ...o, confirmedUpdatedAt: updatedAt }));
+  }
+  function fail(token: number) {
+    if (tokenRef.current !== token) return;
+    setOverride(null);
+  }
+  return { value, begin, confirm, fail };
+}
+
 // The shared commit path for the `updateIssueAction` fields (assignee / priority
-// / due / estimate). Optimistic: the caller mirrors the new value locally, then
-// `run` fires the gated action with the row's `expectedUpdatedAt`; on a stale /
-// error result `revert` drops the optimistic value and a toast surfaces the typed
-// message. On success the route revalidates and the cell remounts (keyed by the
-// authoritative value), discarding the override — no setState-in-effect.
+// / due / estimate). Optimistic: the caller begins a converging override, then
+// `run` fires the gated action with the row's `expectedUpdatedAt`; on success
+// `onConfirm` receives the acknowledged `updatedAt` (the override's converge
+// point) before the route revalidates; on a stale / error result `onFail` drops
+// the override and a toast surfaces the typed message.
 function useUpdateField(row: IssueRowData) {
   const router = useRouter();
   const { toast } = useToast();
   const t = useTranslations('issueViews');
   const [pending, startTransition] = useTransition();
-  function run(patch: Omit<UpdateIssueInput, 'id' | 'expectedUpdatedAt'>, revert: () => void) {
+  function run(
+    patch: Omit<UpdateIssueInput, 'id' | 'expectedUpdatedAt'>,
+    handlers: { onConfirm: (updatedAt: string) => void; onFail: () => void },
+  ) {
     startTransition(async () => {
       const res = await updateIssueAction({
         id: row.id,
@@ -101,13 +148,14 @@ function useUpdateField(row: IssueRowData) {
         ...patch,
       });
       if (res.ok) {
+        handlers.onConfirm(res.updatedAt);
         router.refresh();
       } else if (res.stale) {
-        revert();
+        handlers.onFail();
         toast({ variant: 'error', title: t('changedElsewhereRefreshing') });
         router.refresh();
       } else {
-        revert();
+        handlers.onFail();
         toast({ variant: 'error', title: res.error });
       }
     });
@@ -170,14 +218,13 @@ function InlineStatusEditor({ row, workflow }: { row: IssueRowData; workflow: Wo
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
-  // Optimistic override: the just-picked key, shown until the revalidate brings
-  // the authoritative row value back. The cell is keyed by `row.status` (see
-  // InlineStatusCell), so when the server value lands the editor REMOUNTS and the
-  // override resets to undefined — no setState-in-effect. On failure the override
-  // is dropped explicitly and the cell reverts.
-  const [override, setOverride] = useState<string | undefined>(undefined);
+  // Optimistic override: the just-picked key, held until the server's row
+  // catches up with the acknowledged write (see useConvergingOverride — a
+  // stale refresh payload must not revert the cell). On failure the override
+  // is dropped and the cell reverts.
+  const status = useConvergingOverride(row.status, row.updatedAt);
 
-  const statusKey = override ?? row.status;
+  const statusKey = status.value;
   const meta = workflow.statuses.find((s) => s.key === statusKey);
   const label = meta?.label ?? statusKey;
   const category = meta?.category ?? null;
@@ -185,13 +232,14 @@ function InlineStatusEditor({ row, workflow }: { row: IssueRowData; workflow: Wo
   function commit(toStatusKey: string) {
     setEditing(false);
     if (toStatusKey === statusKey) return;
-    setOverride(toStatusKey);
+    const token = status.begin(toStatusKey);
     startTransition(async () => {
       const res = await changeStatusAction({ id: row.id, toStatusKey });
       if (res.ok) {
+        status.confirm(token, res.updatedAt);
         router.refresh();
       } else {
-        setOverride(undefined);
+        status.fail(token);
         toast({ variant: 'error', title: res.error });
       }
     });
@@ -235,20 +283,25 @@ function InlineAssigneeEditor({
   const t = useTranslations('issueViews');
   const { run, pending } = useUpdateField(row);
   const [editing, setEditing] = useState(false);
-  // `undefined` = no pending edit; `{ id }` = optimistic value (id may be null
-  // for an unassign). Keyed by `row.assigneeId` (see InlineAssigneeCell) so the
-  // editor remounts (clearing the override) once the server value lands.
-  const [override, setOverride] = useState<{ id: string | null } | undefined>(undefined);
+  // Converging override (the value may be null for an unassign) — held until
+  // the server's row catches up with the acknowledged write.
+  const assignee = useConvergingOverride(row.assigneeId, row.updatedAt);
 
-  const assigneeId = override ? override.id : row.assigneeId;
+  const assigneeId = assignee.value;
   const member = assigneeId ? members.find((m) => m.userId === assigneeId) : undefined;
   const name = member ? member.name || member.email : null;
 
   function commit(userId: string | null) {
     setEditing(false);
     if (userId === assigneeId) return;
-    setOverride({ id: userId });
-    run({ assigneeId: userId }, () => setOverride(undefined));
+    const token = assignee.begin(userId);
+    run(
+      { assigneeId: userId },
+      {
+        onConfirm: (updatedAt) => assignee.confirm(token, updatedAt),
+        onFail: () => assignee.fail(token),
+      },
+    );
   }
 
   if (editing) {
@@ -281,15 +334,21 @@ function InlinePriorityEditor({ row }: { row: IssueRowData }) {
   const t = useTranslations('issueViews');
   const { run, pending } = useUpdateField(row);
   const [editing, setEditing] = useState(false);
-  const [override, setOverride] = useState<WorkItemPriorityDto | undefined>(undefined);
+  const priorityField = useConvergingOverride(row.priority, row.updatedAt);
 
-  const priority = override ?? row.priority;
+  const priority = priorityField.value;
 
   function commit(next: WorkItemPriorityDto) {
     setEditing(false);
     if (next === priority) return;
-    setOverride(next);
-    run({ priority: next }, () => setOverride(undefined));
+    const token = priorityField.begin(next);
+    run(
+      { priority: next },
+      {
+        onConfirm: (updatedAt) => priorityField.confirm(token, updatedAt),
+        onFail: () => priorityField.fail(token),
+      },
+    );
   }
 
   if (editing) {
@@ -322,10 +381,10 @@ function InlineDueEditor({ row }: { row: IssueRowData }) {
   const locale = useLocale() as Locale;
   const { run, pending } = useUpdateField(row);
   const [editing, setEditing] = useState(false);
-  // `undefined` = no pending edit; otherwise the optimistic ISO value (or null).
-  const [override, setOverride] = useState<string | null | undefined>(undefined);
+  // Converging override over the ISO value (or null for a cleared date).
+  const due = useConvergingOverride(row.dueDate, row.updatedAt);
 
-  const dueIso = override !== undefined ? override : row.dueDate;
+  const dueIso = due.value;
   const label = dueIso ? formatDate(dueIso, locale) : null;
 
   // The DatePicker yields a `YYYY-MM-DD` string (or null); commit it as the same
@@ -333,9 +392,15 @@ function InlineDueEditor({ row }: { row: IssueRowData }) {
   function commit(next: string | null) {
     setEditing(false);
     const iso = next ? new Date(`${next}T00:00:00.000Z`).toISOString() : null;
-    if (iso === (row.dueDate ?? null)) return;
-    setOverride(iso);
-    run({ dueDate: iso }, () => setOverride(undefined));
+    if (iso === (dueIso ?? null)) return;
+    const token = due.begin(iso);
+    run(
+      { dueDate: iso },
+      {
+        onConfirm: (updatedAt) => due.confirm(token, updatedAt),
+        onFail: () => due.fail(token),
+      },
+    );
   }
 
   if (editing) {
@@ -375,15 +440,19 @@ function InlineEstimateEditor({ row }: { row: IssueRowData }) {
   const t = useTranslations('issueViews');
   const { run, pending } = useUpdateField(row);
   const [editing, setEditing] = useState(false);
-  const [override, setOverride] = useState<number | null | undefined>(undefined);
-  // The free-text draft, seeded from the row (re-seeds on remount when the
-  // authoritative value changes — the cell is keyed by `row.estimateMinutes`).
-  const [draft, setDraft] = useState(
-    row.estimateMinutes != null ? String(row.estimateMinutes) : '',
-  );
+  const estimateField = useConvergingOverride(row.estimateMinutes, row.updatedAt);
+  // The free-text draft, seeded from the shown value each time the editor
+  // opens (the cell no longer remounts on a server change, so a mount-time
+  // seed would go stale).
+  const [draft, setDraft] = useState('');
 
-  const estimate = override !== undefined ? override : row.estimateMinutes;
+  const estimate = estimateField.value;
   const label = estimate != null ? formatDurationMinutes(estimate) : null;
+
+  function open() {
+    setDraft(estimate != null ? String(estimate) : '');
+    setEditing(true);
+  }
 
   // Commit on blur / Enter (not per-keystroke), like the detail page's estimate
   // field. An empty field clears the estimate; an invalid number is a no-op.
@@ -392,9 +461,15 @@ function InlineEstimateEditor({ row }: { row: IssueRowData }) {
     const trimmed = draft.trim();
     const next = trimmed === '' ? null : Number(trimmed);
     if (next != null && (!Number.isFinite(next) || next < 0)) return;
-    if (next === (row.estimateMinutes ?? null)) return;
-    setOverride(next);
-    run({ estimateMinutes: next }, () => setOverride(undefined));
+    if (next === (estimate ?? null)) return;
+    const token = estimateField.begin(next);
+    run(
+      { estimateMinutes: next },
+      {
+        onConfirm: (updatedAt) => estimateField.confirm(token, updatedAt),
+        onFail: () => estimateField.fail(token),
+      },
+    );
   }
 
   if (editing) {
@@ -433,7 +508,7 @@ function InlineEstimateEditor({ row }: { row: IssueRowData }) {
   return (
     <EditTrigger
       label={`${t('edit')} ${t('estimate')}`}
-      onOpen={() => setEditing(true)}
+      onOpen={open}
       disabled={pending}
       className="w-full justify-end"
     >
@@ -442,45 +517,45 @@ function InlineEstimateEditor({ row }: { row: IssueRowData }) {
   );
 }
 
+// NOTE (bug-inline-status-revert-on-second-edit): the editors below are
+// deliberately NOT keyed by their authoritative row value. The old keyed
+// remount discarded the optimistic override on the FIRST server change —
+// which let a stale refresh payload, applied after the fresh one, revert a
+// row another in-flight edit had already committed. Reconciliation now lives
+// in useConvergingOverride (the override yields only once the row's
+// `updatedAt` reaches the acknowledged write).
+
 /** STATUS cell — inline-editable inside a provider, else the read-only pill. */
 export function InlineStatusCell({ row }: { row: IssueRowData }) {
   const ctx = useIssueInlineEdit();
   if (!ctx) return <StatusValue category={row.statusCategory} label={row.statusLabel} />;
-  // Key by the authoritative value so a server change remounts the editor and
-  // discards a stale optimistic override (the no-effect reconcile).
-  return <InlineStatusEditor key={row.status} row={row} workflow={ctx.workflow} />;
+  return <InlineStatusEditor row={row} workflow={ctx.workflow} />;
 }
 
 /** ASSIGNEE cell — inline-editable inside a provider, else the read-only value. */
 export function InlineAssigneeCell({ row }: { row: IssueRowData }) {
   const ctx = useIssueInlineEdit();
   if (!ctx) return <AssigneeValue name={row.assigneeName} />;
-  return (
-    <InlineAssigneeEditor
-      key={row.assigneeId ?? '__unassigned__'}
-      row={row}
-      members={ctx.members}
-    />
-  );
+  return <InlineAssigneeEditor row={row} members={ctx.members} />;
 }
 
 /** PRIORITY cell — inline-editable inside a provider, else the read-only chip. */
 export function InlinePriorityCell({ row }: { row: IssueRowData }) {
   const ctx = useIssueInlineEdit();
   if (!ctx) return <PriorityValue priority={row.priority} />;
-  return <InlinePriorityEditor key={row.priority} row={row} />;
+  return <InlinePriorityEditor row={row} />;
 }
 
 /** DUE cell — inline-editable inside a provider, else the read-only date. */
 export function InlineDueCell({ row }: { row: IssueRowData }) {
   const ctx = useIssueInlineEdit();
   if (!ctx) return <DueValue label={row.dueLabel} />;
-  return <InlineDueEditor key={row.dueDate ?? '__none__'} row={row} />;
+  return <InlineDueEditor row={row} />;
 }
 
 /** ESTIMATE cell — inline-editable inside a provider, else the read-only value. */
 export function InlineEstimateCell({ row }: { row: IssueRowData }) {
   const ctx = useIssueInlineEdit();
   if (!ctx) return <EstimateValue label={row.estimateLabel} />;
-  return <InlineEstimateEditor key={row.estimateMinutes ?? '__none__'} row={row} />;
+  return <InlineEstimateEditor row={row} />;
 }
