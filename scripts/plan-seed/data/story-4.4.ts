@@ -531,7 +531,7 @@ export const story_4_4: PlanStory = {
       id: '4.4.7',
       title:
         'Story tests — sprint lifecycle state machine (start/complete/carry-over/provisioning/report) + focused E2E (plan → start → move → complete → report)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 24,
