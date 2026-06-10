@@ -318,7 +318,7 @@ export const story_5_1: PlanStory = {
       id: '5.1.3',
       title:
         'Design — comment thread + composer + mention picker (`design/work-items/comments.mock.html`; fills the detail Activity placeholder)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 40,
