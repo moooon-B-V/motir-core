@@ -32,144 +32,124 @@ export const STUB_STORIES: PlanStory[] = [
   // at scale on a large active sprint. See data/story-4.7.ts.
 
   // ── Epic 5: Collaboration & fields ────────────────────────────────────────
+  // 5.1 (Comments + @mentions) is fully expanded — data/story-5.1.ts. Its
+  // expansion also ADDED the 5.7 stub below (in-app notification center): Jira
+  // notifies mentions in-app as well as by email, and no story owned that
+  // surface (a no-V1-tier ownership gap, fixed at plan time); 5.1.6's job
+  // events are channel-agnostic so 5.7 fans in off the same events.
+  // 5.2 (Attachments) is fully expanded — data/story-5.2.ts. Reuses the 2.3.7
+  // upload primitive per finding #52; adds the workItemId link, the panel UI,
+  // the embeds-are-attachments link-on-write, and the orphan-GC job.
+  // 5.3 (Custom fields) is fully expanded — data/story-5.3.ts. Five types
+  // (text/number/date/select/user), typed-EAV values (the Jira storage shape)
+  // carrying the documented Epic-6 predicate contract, Fields admin in project
+  // settings, rail rendering with "Show more fields".
+  // 5.4 (Labels, components, watchers) is fully expanded — data/story-5.4.ts.
+  // Project-scoped label folksonomy (a recorded deviation from Jira's global
+  // pool — the scoping its users ask for), company-managed-shaped components
+  // w/ default-assignee-at-create + move-or-remove delete, watchers w/ the
+  // eye control + auto-watch + watcher emails on comment/transition (mention-
+  // deduped, actor excluded) riding the 5.1.6 events.
+  // 5.5 (Activity history feed) is fully expanded — data/story-5.5.ts. NO new
+  // write model: renders the existing 1.4.6 revision trail (a TOTAL diff-
+  // renderer registry w/ fallback + explicit noise suppression), adds the
+  // Jira-verified All/Comments/History tabs with the one cross-tab sort
+  // toggle, and the bounded two-source All merge. Activates the History seam
+  // 5.1 ships disabled.
+  // 5.6 (Tests) is fully expanded — data/story-5.6.ts. Re-scoped on deepening
+  // (the 3.5/4.7 precedent) to its non-duplicative remainder now that every
+  // 5.x story carries its own closing test subtask: the combined cross-story
+  // collaboration journey (the seams between stories) + the collaboration-
+  // heavy loaded-issue fixture and its bounded-read/bounded-DOM at-scale
+  // specs + the full-page strict a11y sweep. Epic 5 is now fully expanded
+  // except the 5.7 stub below.
   {
-    id: '5.1',
-    title: 'Comments + @mentions',
+    id: '5.7',
+    title: 'In-app notifications (bell + unread feed)',
     status: 'planned',
     descriptionMd:
-      'Comment model + rich-text composer + mention autocomplete over workspace members. Mention ' +
-      '→ notification hook (via Story 1.6 jobs).',
-    items: [],
-  },
-  {
-    id: '5.2',
-    title: 'Attachments',
-    status: 'planned',
-    descriptionMd:
-      'First-class attachments: a per-issue attachment list (download/delete), image preview, ' +
-      "size/type guards, workspace-scoped access. REUSES Story 2.3.7's upload primitive (finding " +
-      '#52) — the `attachmentsService.uploadAttachment` service, `POST ' +
-      '/api/upload/issue-attachment` route, shared `lib/blob/allowlist.ts`, and the `attachment` ' +
-      "table; this Story adds the `attachment.workItemId` link + the management UI (2.3.7's rows " +
-      "are intentionally work_item-unlinked). Don't rebuild the uploader.",
-    items: [],
-  },
-  {
-    id: '5.3',
-    title: 'Custom fields (per-project definitions)',
-    status: 'planned',
-    descriptionMd:
-      'Field-definition model (type + config) per project; render + edit on issue detail; values ' +
-      'stored against issues. The extensible-schema piece — design carefully so Epic 6 search can ' +
-      'filter on them.',
-    items: [],
-  },
-  {
-    id: '5.4',
-    title: 'Labels, components, watchers',
-    status: 'planned',
-    descriptionMd:
-      'Label + component taxonomies (project-scoped), assignment UI on issues, watcher ' +
-      'follow/unfollow. All filterable in Epic 6.',
-    items: [],
-  },
-  {
-    id: '5.5',
-    title: 'Activity history feed',
-    status: 'planned',
-    descriptionMd:
-      "Per-issue append-only activity (field changes, transitions, comments). Reuse Story 1.4's " +
-      'work_item_revision model where it fits; render a chronological feed on the detail view.',
-    items: [],
-  },
-  {
-    id: '5.6',
-    title: 'Tests — comments, mentions, custom-field values, activity',
-    status: 'planned',
-    descriptionMd:
-      'Vitest over comment/field/activity services; Playwright over comment+mention, attach a ' +
-      'file, set a custom field, read the activity feed.',
+      'The in-app half of the notification surface (5.1.6 ships the email half): a bell in the ' +
+      'shell header with an unread count, a notification feed (mentions first; watcher / ' +
+      'assignment / transition events as Stories 5.4 + 6.6 land), mark-read / mark-all-read, ' +
+      'deep links into issues, and per-user notification preferences (email vs in-app — the ' +
+      'Jira personal-notification-settings shape). Consumes the SAME channel-agnostic job ' +
+      'events 5.1.6 / 5.4 emit (`work-item/comment.created`, `work-item/mentioned`, …) — a ' +
+      'notification persistence model fed by a job, never a second emit path. Added during the ' +
+      '5.1 expansion: Jira notifies mentions in-app as well as by email, and no story owned ' +
+      'that surface (the no-V1-tier rule: an unowned capability is a planning bug, not a scope ' +
+      'cut).',
     items: [],
   },
 
   // ── Epic 6: Search, reporting & admin ─────────────────────────────────────
-  {
-    id: '6.1',
-    title: 'Structured search + filter builder',
-    status: 'planned',
-    descriptionMd:
-      'Filter-builder UI (field/operator/value rows + AND/OR) compiling to a safe parameterized ' +
-      'query over issues, including custom-field values from Epic 5. Free-text match on ' +
-      'title/description. NO query-language parser.',
-    items: [],
-  },
-  {
-    id: '6.2',
-    title: 'Saved filters',
-    status: 'planned',
-    descriptionMd:
-      'Persist named filters at project/workspace scope; reuse as data sources for boards, ' +
-      'dashboards, and reports.',
-    items: [],
-  },
-  {
-    id: '6.3',
-    title: 'Dashboards & reports',
-    status: 'planned',
-    descriptionMd:
-      'Configurable dashboard of widgets backed by saved filters; built-in reports ' +
-      '(created-vs-resolved, status distribution). Charts reuse the viz from Epic 4.',
-    items: [],
-  },
-  {
-    id: '6.5',
-    title: 'Project admin surface',
-    status: 'planned',
-    descriptionMd:
-      'A settings hub composing workflow editing (Epic 2), custom fields/labels/components (Epic ' +
-      '5), and members/roles (6.4) into one admin area per project.',
-    items: [],
-  },
-  {
-    id: '6.6',
-    title: 'Automation rules',
-    status: 'planned',
-    descriptionMd:
-      'When/then rule engine scoped per project, triggered by transition/activity events (Epics ' +
-      '2+5), executed via Story 1.6 jobs. A small built-in action set for v1 (set field, add ' +
-      'watcher, transition).',
-    items: [],
-  },
-  {
-    id: '6.7',
-    title: 'Tests — filter compilation, permissions, automation firing',
-    status: 'planned',
-    descriptionMd:
-      'Vitest over filter→query compilation (incl. injection safety), permission checks, ' +
-      'automation trigger/action; Playwright over build-a-filter, save it, gate a viewer, fire a ' +
-      'rule.',
-    items: [],
-  },
-  {
-    id: '6.8',
-    title: 'Edit project details + change project key (with old-key redirects)',
-    status: 'planned',
-    descriptionMd:
-      'Project-admin editing of project details (name, key, avatar) in the project settings area ' +
-      '(sits alongside 6.5). The load-bearing piece is **changing the project key mid-project, ' +
-      'Jira-faithfully** (decision-ladder rung 1 — Atlassian "Editing a project key"): on a key ' +
-      'change, re-render every issue identifier (`project.identifier` PROD → NIF; the per-project ' +
-      '`work_item.key` numbers are preserved, so PROD-42 → NIF-42) and **keep the old key working ' +
-      'as a permanent redirect** — old links, REST calls, and JQL/saved filters that reference the ' +
-      'old key all still resolve to the new one. Implementation notes: the current schema stores a ' +
-      'denormalized `work_item.identifier` ("PROD-42") per row, so a key change is a bulk re-write ' +
-      'of that column + a search re-index (Jira\'s "background re-index"); and it needs a NEW ' +
-      '`project_key_alias` (key-history) table — which the schema lacks today — so historical keys ' +
-      'redirect. Guards: key format + cross-project uniqueness (incl. against existing aliases), ' +
-      'admin-only, atomic rename in one transaction. This is the capability the 8.7 rebrand uses, ' +
-      'and it turns the PROD-vs-NIF question into a reversible setting rather than a migration.',
-    items: [],
-  },
+  // 6.4 (Roles & permissions) shipped early — data/story-6.4.ts, done.
+  // 6.1 (Structured search + filter builder) is fully expanded —
+  // data/story-6.1.ts. A flat Match-all/any builder delivering exactly the
+  // operators Jira's basic search blacklists to JQL (negation, empty,
+  // comparisons, OR) without a query language; a TOTAL per-field-type
+  // operator registry compiling to parameterized-only WHERE fragments that
+  // feed BOTH the List and the ancestor-retaining Tree; versioned ?filter=v1:
+  // URL serialization (the substrate 6.2 saved filters persist); Epic-5
+  // predicates via the 5.3.1/5.4.1 documented join contracts.
+  // 6.7 (Tests) is fully expanded — data/story-6.7.ts. Re-scoped on deepening
+  // (the 3.5/4.7/5.6 precedent) to the non-duplicative remainder — 6.1.6 owns
+  // filter compilation + injection, 6.4.8 (done) owns the level × role
+  // matrix, and the 6.2/6.3/6.5/6.6/6.8 expansions below each carry their own
+  // closing test subtask (their cards must point the epic-wide journey at
+  // 6.7, the 6.1.6 note as template). 6.7's remainder: the combined Epic-6
+  // journey (build a filter → save it → back a widget → gate a viewer → fire
+  // a rule, plus the unwind) + the reporting-shaped 10k time-spread corpus
+  // with indexed-search / SQL-aggregation / exactly-once-rule-storm at-scale
+  // specs + the combined admin-hub a11y sweep. Deps use story-level ids for
+  // the unexpanded siblings (the 2.6.x precedent; retargetable on expansion).
+  // 6.2 (Saved filters) is fully expanded — data/story-6.2.ts. A
+  // project-contained `saved_filter` persisting the 6.1.1 versioned FilterAST
+  // envelope (one codec, two carriers), with the Jira-verified Save/Save-as
+  // ownership split, private/project visibility on the 6.4 roles (the
+  // six-scope share model is the recorded deviation), starring + a filters
+  // directory, preset-schedule email subscriptions on the 1.6 cron substrate,
+  // built-in system filters, and the documented resolve-by-id data-source
+  // contract + delete-dependents warning that 6.3 dashboards consume (boards
+  // stay status-mapped — team-managed family, the 3.1/3.6 decision).
+  // 6.3 (Dashboards & reports) is fully expanded — data/story-6.3.ts.
+  // Workspace-level dashboards at the shipped /dashboard route (Jira-verified
+  // site-level shape; named grids, access private|workspace, 1/2/3-column
+  // layouts + dnd, 20-widget cap) whose widgets are backed by a 6.2 saved
+  // filter or a project through the 6.2.1 resolve-by-id contract, behind a
+  // TOTAL widget-type registry (filter-results ≤50/page / distribution /
+  // created-vs-resolved); + the /reports hub (agile links + the two analysis
+  // reports). Charts grow the 4.6.2 token-aware SVG layer (donut +
+  // difference/area); "resolved" = the done-category transition derived from
+  // the 1.4.6 trail (the 4.6.3 pattern); per-VIEWER 6.4 gating on every
+  // widget read; 6.3.1 fills 6.2.1's reserved widget-dependents line.
+  // 6.5 (Project admin surface) is fully expanded — data/story-6.5.ts. The
+  // unified Jira-shaped settings AREA (verified: a grouped settings nav, not
+  // a card hub; lands on Details, which owns identity + the danger zone): a
+  // TOTAL settings-nav registry re-housing Workflow / Boards / Estimation /
+  // Members / Fields / Components behind one chrome at the existing routes,
+  // `/settings/project` becomes the read-only Details landing (+ re-homed
+  // Archive danger zone) that Story 6.8 grows with editing + the key change;
+  // 6.6 mounts via a reserved Automation slot. Features / Notifications /
+  // Apps deviations recorded with justifications.
+  // 6.6 (Automation rules) is fully expanded — data/story-6.6.ts. The
+  // when/then engine, Jira-verified: trigger → flat 6.1-FilterAST condition
+  // group → ordered actions through the SHIPPED services as the rule owner
+  // (recorded actor deviation), async via the 1.6 pipeline, with the
+  // Jira-default loop prevention (provenance-stamped events never re-fire
+  // rules), the 90-day audit log, 10-consecutive-failure auto-disable +
+  // owner error email, and bounded caps. Mounts in the 6.5 settings area's
+  // reserved Automation slot; adds the `work-item/created` +
+  // `work-item/field.changed` events the 5.7 stub anticipates.
+  // 6.8 (Edit project details + change project key) is fully expanded —
+  // data/story-6.8.ts. Grows the 6.5.3 read-only Details landing into the
+  // editable surface (name, preset-icon+colour avatar, key); the key change
+  // is one FOR-UPDATE-locked atomic tx (a single bulk identifier rewrite,
+  // numbers preserved) + a NEW project_key_alias table giving the VERIFIED
+  // Jira split: old issue URLs 308-redirect to canonical, old-key API calls
+  // serve, old keys stay reserved with reclaim-by-revert + the Cloud-style
+  // release-with-confirm. UI deps point backward at 6.5.1/6.5.3; the
+  // backend (6.8.1/6.8.2) is independent. This is the capability the 8.7
+  // rebrand cutover consumes — PROD-vs-NIF becomes a reversible setting.
 
   // ── Epic 7: AI Planning Layer ─────────────────────────────────────────────
   {
