@@ -329,7 +329,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.4',
       title:
         'Design — attachments panel + preview (`design/work-items/attachments.mock.html`: strip/list views, upload affordances, editor-sourced block, lightbox)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 40,
