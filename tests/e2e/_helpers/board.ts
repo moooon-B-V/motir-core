@@ -149,3 +149,80 @@ export async function expectNoLoadMore(page: Page): Promise<void> {
 export function overCapBanner(page: Page): Locator {
   return page.getByTestId('board-overcap-banner');
 }
+
+// ── At-scale SCRUM helpers (Subtask 4.7.1) ──────────────────────────────────
+// The Scrum analogue of the 3.5.1 at-scale helpers above, for the cross-cutting
+// Scrum journey specs (4.7.2 load model + scope + header · 4.7.3 interaction +
+// complete). They drive the SPRINT-shaped seed (`SEED_SHAPE=scrum`,
+// scripts/seed-large.ts → seedLargeScrumSprint), which flips the BIG project's
+// board to scrum and gives it a large `active` sprint. Additive — they do not
+// touch the 3.5.1 board helpers. The page helpers lean on the SAME stable board
+// testids the kanban specs use, plus the scrum header surface defined by the
+// `design/boards/scrum.mock.html` (4.5.1) mockup that Story 4.5.3 builds:
+// `sprint-header`, a `points-summary` carrying the committed/completed/remaining
+// figures in its aria-label, and a per-column `board-points-<columnId>` pill.
+
+/** Sign in as the sprint-shaped seed's tenant owner and open the loaded Scrum
+ *  board. The scrum seed reuses the SAME tenant owner as the board seed (it
+ *  composes `seedLargeBoard`), with the project's board flipped to scrum + a
+ *  large active sprint — so `/boards` renders the sprint-scoped board. The single
+ *  entry point the Scrum at-scale specs use to reach a fully-populated active
+ *  sprint over the real stack. */
+export async function signInScrumSeedOwnerAndOpenScrumBoard(
+  page: Page,
+  loadTimeout = 30_000,
+): Promise<void> {
+  await signIn(page, SEED_LARGE_OWNER_EMAIL, SEED_LARGE_OWNER_PASSWORD);
+  await gotoLoadedBoard(page, loadTimeout);
+}
+
+/** The sprint header's committed / completed / remaining story points, parsed
+ *  from the `points-summary` aria-label inside `[data-testid="sprint-header"]`
+ *  (the 4.5.1 design: `aria-label="Story points: 34 committed, 12 completed, 22
+ *  remaining"`). The figures come from the 4.5.2 bounded aggregates, so they
+ *  reflect the WHOLE sprint — not a loaded page's sum. */
+export async function readSprintHeaderPoints(
+  page: Page,
+): Promise<{ committed: number; completed: number; remaining: number }> {
+  const summary = page
+    .getByTestId('sprint-header')
+    .locator('[aria-label*="committed"][aria-label*="completed"]');
+  const label = (await summary.getAttribute('aria-label')) ?? '';
+  const num = (word: string): number => {
+    const m = label.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s+${word}`, 'i'));
+    expect(m, `"${word}" figure in sprint-header aria-label "${label}"`).toBeTruthy();
+    return Number(m![1]);
+  };
+  return { committed: num('committed'), completed: num('completed'), remaining: num('remaining') };
+}
+
+/** A column's per-column story-point pill value (`board-points-<columnId>`, the
+ *  scrum-only addition to the column header in the 4.5.1 design). Distinct from
+ *  {@link columnTotalBadge} (the issue COUNT). */
+export async function columnPointPill(page: Page, columnId: string): Promise<number> {
+  const text = await page.getByTestId(`board-points-${columnId}`).textContent();
+  return Number((text ?? '').replace(/[^\d.]/g, ''));
+}
+
+/** Every card id currently mounted on the board, across all columns — the basis
+ *  for an "is / isn't in the active sprint scope" assertion over the projection
+ *  (the scrum board renders ONLY the active sprint's issues, so an id present
+ *  here is in scope; an out-of-sprint id is absent). Works off the API
+ *  projection {@link getBoard}, so it is independent of virtualization. */
+export function allBoardCardIds(board: BoardProjectionDto): string[] {
+  return board.columns.flatMap((c) => c.cards.map((card) => card.id));
+}
+
+/** Assert the projection is a scrum board scoped to an active sprint: `sprint`
+ *  is non-null, and an optional in-sprint id IS rendered while an optional
+ *  out-of-sprint id is absent (the seed leaves a backlog slice outside the
+ *  sprint). */
+export function expectActiveSprintScope(
+  board: BoardProjectionDto,
+  opts: { present?: string; absent?: string } = {},
+): void {
+  expect(board.sprint, 'scrum board has an active sprint summary').not.toBeNull();
+  const ids = new Set(allBoardCardIds(board));
+  if (opts.present) expect(ids.has(opts.present), `in-sprint ${opts.present} on board`).toBe(true);
+  if (opts.absent) expect(ids.has(opts.absent), `out-of-sprint ${opts.absent} absent`).toBe(false);
+}

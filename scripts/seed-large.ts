@@ -29,6 +29,15 @@
  * (Stories 3.5.2 / 3.5.3) runs against. Board-shape size knobs: SEED_BOARD_MEMBERS,
  * SEED_BOARD_EPICS, SEED_BOARD_STORIES_PER_EPIC, SEED_BOARD_ROOT_STORIES,
  * SEED_BOARD_TALL_EXTRA. See scripts/seedLargeBoard.ts.
+ *
+ * SEED_SHAPE=scrum (Subtask 4.7.1) is the SPRINT-shaped variant: the same
+ * board-shaped distribution, but the project's board is flipped to scrum and a
+ * large bounded `active` sprint (with a story-point spread) holds most of the
+ * issues — plus a `planned` carry-over target sprint and a backlog slice left
+ * OUTSIDE the sprint. The fixture the Epic-4 at-scale Scrum journey (Stories
+ * 4.7.2 / 4.7.3) runs against. Reuses the SEED_BOARD_* size knobs and adds
+ * SEED_SCRUM_BACKLOG_EVERY / SEED_SCRUM_UNESTIMATED_EVERY. See
+ * scripts/seedLargeBoard.ts → seedLargeScrumSprint.
  */
 /* eslint-disable no-console -- a CLI dev script: console IS its output surface */
 import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads
@@ -41,10 +50,12 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import {
   seedLargeBoard,
+  seedLargeScrumSprint,
   SEED_LARGE_BOARD_DEFAULTS,
   SEED_LARGE_OWNER_EMAIL,
   SEED_LARGE_OWNER_PASSWORD,
   type SeedLargeBoardManifest,
+  type SeedLargeScrumSprintManifest,
 } from './seedLargeBoard';
 
 const SEED_EMAIL = SEED_LARGE_OWNER_EMAIL;
@@ -65,8 +76,16 @@ const SMALL_CHILDREN = n('SEED_SMALL_CHILDREN', 30); // the other epics
 // SEED_SHAPE=board (Subtask 3.5.1) seeds the board-shaped variant instead of the
 // tree/list shape — issues spread across columns + swimlanes + a Done-age spread,
 // the fixture the Epic-3 at-scale board journey (3.5.2/3.5.3) runs against.
+// SEED_SHAPE=scrum (Subtask 4.7.1) seeds the SPRINT-shaped variant: the same
+// board-shaped distribution, but flipped to a scrum board with a large `active`
+// sprint (story-point spread) + a `planned` carry-over target — the fixture the
+// Epic-4 at-scale Scrum journey (4.7.2/4.7.3) runs against.
 const SEED_SHAPE = (process.env.SEED_SHAPE ?? 'tree').toLowerCase();
 const BOARD_MEMBERS = n('SEED_BOARD_MEMBERS', 6); // assignee-lane pool size
+// SEED_SHAPE=scrum knobs (4.7.1): every Nth board issue stays in the backlog
+// (scope catch-all); every Nth in-sprint issue is left unestimated.
+const SCRUM_BACKLOG_EVERY = n('SEED_SCRUM_BACKLOG_EVERY', 7);
+const SCRUM_UNESTIMATED_EVERY = n('SEED_SCRUM_UNESTIMATED_EVERY', 4);
 
 /**
  * The assignee pool for the board-shaped seed — `count` workspace members the
@@ -115,6 +134,38 @@ function printBoardSummary(
     `  Done-age:   ${m.terminalInWindow} in-window + ${m.terminalAgedOut} aged-out (trimmed)`,
   );
   console.log('  Then open  /boards  — every column filled, swimlanes by Assignee/Epic/Priority.');
+  console.log('────────────────────────────────────────────────────────');
+}
+
+function printScrumSummary(
+  identifier: string,
+  memberCount: number,
+  m: SeedLargeScrumSprintManifest,
+): void {
+  const perStatus = m.statusKeys.map((k) => `${k}=${m.perStatus[k]}`).join('  ');
+  console.log(`\n✅ Seeded ${m.created} board-shaped issues into a large active sprint.`);
+  console.log('────────────────────────────────────────────────────────');
+  console.log(`  Sign in:    ${SEED_EMAIL} / ${SEED_PASSWORD}`);
+  console.log(`  Workspace:  ${SEED_WORKSPACE_NAME}`);
+  console.log(`  Project:    ${SEED_PROJECT_NAME} (${identifier}) — board flipped to SCRUM`);
+  console.log(`  Sprint:     "${m.activeSprintName}" (active) — ${m.sprintIssueCount} issues`);
+  console.log(`  Backlog:    ${m.backlogIssueCount} issues OUT of the sprint (scope catch-all)`);
+  console.log(
+    `  Points:     ${m.estimatedSprintIssueCount} estimated (${m.committedPoints} committed) + ` +
+      `${m.sprintIssueCount - m.estimatedSprintIssueCount} unestimated`,
+  );
+  console.log(`  Carry-over: "${m.targetSprintName}" (planned target)`);
+  console.log(`  Columns:    ${perStatus}`);
+  console.log(
+    `  Tall col:   ${m.tallStatusKey} (${m.perStatus[m.tallStatusKey]} cards — virtualizes)`,
+  );
+  console.log(
+    `  Done-age:   ${m.terminalInWindow} in-window + ${m.terminalAgedOut} aged-out (trimmed)`,
+  );
+  console.log(
+    `  Assignees:  ${m.assigneeCount}/${memberCount} used + ${m.unassignedCount} unassigned`,
+  );
+  console.log('  Then open  /boards  — the Scrum board over a large active sprint.');
   console.log('────────────────────────────────────────────────────────');
 }
 
@@ -187,6 +238,39 @@ async function main() {
       data: { activeProjectId: project.id },
     });
     printBoardSummary(project.identifier, memberIds.length, manifest);
+    return;
+  }
+
+  // ── SEED_SHAPE=scrum (Subtask 4.7.1): the sprint-shaped at-scale fixture ────
+  if (SEED_SHAPE === 'scrum') {
+    const memberIds = await ensureBoardMembers(workspace.id, BOARD_MEMBERS);
+    console.log(`Seeding sprint-shaped issues across ${memberIds.length} assignees…`);
+    const manifest = await seedLargeScrumSprint(
+      {
+        workspaceId: workspace.id,
+        projectId: project.id,
+        projectIdentifier: project.identifier,
+        ownerId: owner.id,
+        memberIds,
+      },
+      // Full-size by default; reuses the SEED_BOARD_* size knobs + adds the two
+      // scrum knobs (SEED_SCRUM_BACKLOG_EVERY / SEED_SCRUM_UNESTIMATED_EVERY).
+      {
+        epics: n('SEED_BOARD_EPICS', SEED_LARGE_BOARD_DEFAULTS.epics),
+        storiesPerEpic: n('SEED_BOARD_STORIES_PER_EPIC', SEED_LARGE_BOARD_DEFAULTS.storiesPerEpic),
+        rootStories: n('SEED_BOARD_ROOT_STORIES', SEED_LARGE_BOARD_DEFAULTS.rootStories),
+        tallColumnExtra: n('SEED_BOARD_TALL_EXTRA', SEED_LARGE_BOARD_DEFAULTS.tallColumnExtra),
+        backlogSliceEvery: SCRUM_BACKLOG_EVERY,
+        unestimatedEvery: SCRUM_UNESTIMATED_EVERY,
+      },
+    );
+    // Pin the project active for the owner so the active-project-scoped /boards
+    // route resolves it on sign-in (manual eyeballing + the at-scale E2E specs).
+    await db.workspaceMembership.update({
+      where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },
+      data: { activeProjectId: project.id },
+    });
+    printScrumSummary(project.identifier, memberIds.length, manifest);
     return;
   }
 
