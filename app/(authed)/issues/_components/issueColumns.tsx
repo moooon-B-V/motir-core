@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { EstimateBadge } from '@/components/issues/EstimateBadge';
+import { ParentRollupBadge } from '@/components/issues/ParentRollupBadge';
 import type { IssueSortColumn } from '@/lib/issues/issueListView';
 import { Avatar } from './issueCellPrimitives';
 import {
@@ -123,24 +124,30 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
     },
     {
       // Story points (Subtask 4.3.4) — the agile estimate, a SEPARATE column
-      // from the TIME Est. (both coexist, like the detail rail). The inline
-      // `EstimateBadge` owns its own picker + write; `forceStoryPoints` keeps it
-      // a points column regardless of the project's display statistic. Editable
-      // when the EstimationConfigProvider reports canEdit.
+      // from the TIME Est. (both coexist, like the detail rail). A LEAF row
+      // shows its own inline `EstimateBadge` (own picker + write;
+      // `forceStoryPoints` keeps it a points column regardless of the project's
+      // display statistic). A PARENT row (4.3.5) shows the rolled-up SUBTREE
+      // total instead — the labelled `ParentRollupBadge`, lazily fetched per
+      // parent (a roll-up of descendants, distinct from the parent's own
+      // estimate, the way Jira rolls child points into an epic).
       key: 'points',
       header: t('issues.columns.points'),
       width: 80,
       align: 'end',
       sortColumn: 'points',
-      cell: (r) => (
-        <EstimateBadge
-          itemId={r.id}
-          storyPoints={r.storyPoints}
-          estimateMinutes={r.estimateMinutes}
-          forceStoryPoints
-          className="w-full justify-end"
-        />
-      ),
+      cell: (r) =>
+        r.hasChildren ? (
+          <ParentRollupBadge itemId={r.id} variant="compact" className="w-full justify-end" />
+        ) : (
+          <EstimateBadge
+            itemId={r.id}
+            storyPoints={r.storyPoints}
+            estimateMinutes={r.estimateMinutes}
+            forceStoryPoints
+            className="w-full justify-end"
+          />
+        ),
     },
     {
       key: 'status',

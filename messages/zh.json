@@ -1066,6 +1066,22 @@
     "deckCustom": "自定义",
     "clear": "清除",
     "cancelHint": "按 Esc 取消",
-    "saveError": "无法更新估算，请重试。"
+    "saveError": "无法更新估算，请重试。",
+    "rollup": {
+      "labelStoryPoints": "故事点",
+      "labelTime": "时间估算",
+      "labelIssues": "工作项",
+      "pts": "点",
+      "filledAria": "汇总{label}：{value}",
+      "emptyAria": "无已估算的子项"
+    },
+    "sprintPoints": {
+      "committed": "已承诺",
+      "done": "已完成",
+      "left": "剩余",
+      "filledAria": "点数：已承诺 {committed}，已完成 {completed}，剩余 {remaining}",
+      "committedAria": "点数：已承诺 {committed}",
+      "emptyAria": "本冲刺无已估算点数"
+    }
   }
 }

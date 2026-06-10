@@ -116,6 +116,7 @@ function row(over: Partial<IssueRowData> & { identifier: string }): IssueRowData
     storyPoints: null,
     estimateLabel: null,
     storyPointsLabel: null,
+    hasChildren: false,
     ...over,
   };
 }

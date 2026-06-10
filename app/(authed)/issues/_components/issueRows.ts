@@ -65,6 +65,15 @@ export interface IssueRowData {
   storyPoints: number | null;
   /** Pre-formatted story points ("5", "0.5"), or null when unestimated. */
   storyPointsLabel: string | null;
+  /**
+   * Whether this row has descendants (Subtask 4.3.5) — drives the Points
+   * column's epic/parent subtree roll-up badge (a parent shows the rolled-up
+   * subtree total instead of its own estimate; a leaf shows its own estimate).
+   * Carried by the tree DTOs; the flat List item has no hierarchy, so it
+   * defaults to `false` (the roll-up is a tree-parent concept — the design's
+   * `.trow` form has the expand chevron).
+   */
+  hasChildren: boolean;
 }
 
 /**
@@ -92,7 +101,10 @@ function buildLookups(workflow: WorkflowDto, members: WorkspaceMemberDTO[]) {
  * either view.
  */
 function shapeRowData(
-  item: WorkItemListItemDto,
+  // The tree DTOs (`WorkItemTreeNodeDto` / `WorkItemTreeRowDto`) carry
+  // `hasChildren`; the flat List item does not — so accept it optionally and
+  // default to `false` (no roll-up in the un-nested List).
+  item: WorkItemListItemDto & { hasChildren?: boolean },
   statusByKey: Map<string, WorkflowStatusDto>,
   nameById: Map<string, string>,
   locale: Locale,
@@ -120,6 +132,7 @@ function shapeRowData(
       item.estimateMinutes != null ? formatDurationMinutes(item.estimateMinutes) : null,
     storyPoints: item.storyPoints,
     storyPointsLabel: item.storyPoints != null ? formatStoryPoints(item.storyPoints) : null,
+    hasChildren: item.hasChildren ?? false,
   };
 }
 
