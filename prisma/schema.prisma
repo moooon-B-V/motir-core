@@ -103,6 +103,11 @@ model User {
   // commentMentions).
   defaultAssigneeComponents Component[]           @relation("ComponentDefaultAssignee")
   watchers                  Watcher[]
+  // Back-relation for CustomFieldValue (Subtask 5.3.1). A user can be the
+  // VALUE of a `user`-type custom field on many issues (SetNull on the FK:
+  // deleting the user clears the field value, never blocks the delete —
+  // the assignee semantics, not the reporter ones).
+  customFieldValues         CustomFieldValue[]
 
   @@map("user")
 }
@@ -182,23 +187,25 @@ model Workspace {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  memberships         WorkspaceMembership[]
-  projects            Project[]
-  workItems           WorkItem[]
-  workItemLinks       WorkItemLink[]
-  jobRuns             JobRun[]
-  jobRunDlqs          JobRunDlq[]
-  workflowStatuses    WorkflowStatus[]
-  workflowTransitions WorkflowTransition[]
-  attachments         Attachment[]
-  boards              Board[]
-  boardColumns        BoardColumn[]
-  boardColumnStatuses BoardColumnStatus[]
-  sprints             Sprint[]
-  projectMemberships  ProjectMembership[]
-  comments            Comment[]
-  labels              Label[]
-  components          Component[]
+  memberships            WorkspaceMembership[]
+  projects               Project[]
+  workItems              WorkItem[]
+  workItemLinks          WorkItemLink[]
+  jobRuns                JobRun[]
+  jobRunDlqs             JobRunDlq[]
+  workflowStatuses       WorkflowStatus[]
+  workflowTransitions    WorkflowTransition[]
+  attachments            Attachment[]
+  boards                 Board[]
+  boardColumns           BoardColumn[]
+  boardColumnStatuses    BoardColumnStatus[]
+  sprints                Sprint[]
+  projectMemberships     ProjectMembership[]
+  comments               Comment[]
+  labels                 Label[]
+  components             Component[]
+  customFieldDefinitions CustomFieldDefinition[]
+  customFieldValues      CustomFieldValue[]
 
   @@map("workspace")
 }
@@ -263,27 +270,30 @@ model Project {
   updatedAt           DateTime            @updatedAt
   archivedAt          DateTime?
 
-  workspace           Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace              Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   // Back-relation for WorkspaceMembership.activeProject. Named explicitly
   // so Prisma's relation inference doesn't have to guess; there is exactly
   // ONE relation between Project and WorkspaceMembership (the active-project
   // pointer), and both sides carry the same @relation("ActiveProject") name.
-  members             WorkspaceMembership[] @relation("ActiveProject")
-  workItems           WorkItem[]
-  workflowStatuses    WorkflowStatus[]
-  workflowTransitions WorkflowTransition[]
-  boards              Board[]
-  boardColumns        BoardColumn[]
-  boardColumnStatuses BoardColumnStatus[]
-  sprints             Sprint[]
+  members                WorkspaceMembership[]   @relation("ActiveProject")
+  workItems              WorkItem[]
+  workflowStatuses       WorkflowStatus[]
+  workflowTransitions    WorkflowTransition[]
+  boards                 Board[]
+  boardColumns           BoardColumn[]
+  boardColumnStatuses    BoardColumnStatus[]
+  sprints                Sprint[]
   // Explicit project membership (Story 6.4). Cascades: deleting a project
   // removes its membership rows.
-  memberships         ProjectMembership[]
+  memberships            ProjectMembership[]
   // Label folksonomy + component taxonomy (Subtask 5.4.1). Both cascade with
   // the project (project-scoped rows; projects are soft-archived in practice,
   // so this is the rare hard-delete path).
-  labels              Label[]
-  components          Component[]
+  labels                 Label[]
+  components             Component[]
+  // Per-project custom-field definitions (Story 5.3). Cascades: deleting a
+  // project removes its field definitions (and, through them, options/values).
+  customFieldDefinitions CustomFieldDefinition[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -501,37 +511,40 @@ model WorkItem {
   createdAt         DateTime                  @default(now())
   updatedAt         DateTime                  @updatedAt
 
-  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent      WorkItem?          @relation("WorkItemParent", fields: [parentId], references: [id], onDelete: NoAction)
-  children    WorkItem[]         @relation("WorkItemParent")
-  assignee    User?              @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  reporter    User               @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project           Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent            WorkItem?           @relation("WorkItemParent", fields: [parentId], references: [id], onDelete: NoAction)
+  children          WorkItem[]          @relation("WorkItemParent")
+  assignee          User?               @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter          User                @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
   // The sprint side of the association. Modelled on BOTH sides (Sprint.workItems
   // back-relation) with the SetNull action the migration uses, so `migrate dev`
   // reports "No difference detected" — the FK-drift rule (bug-attachment-fk-migration-drift).
-  sprint      Sprint?            @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  sprint            Sprint?             @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   // Back-relations for WorkItemLink (Subtask 1.4.3). Two named relations
   // because there are two distinct WorkItem↔WorkItemLink edges (from/to).
   // Cascading delete on both sides: removing an issue removes its links.
-  linksFrom   WorkItemLink[]     @relation("LinksFrom")
-  linksTo     WorkItemLink[]     @relation("LinksTo")
+  linksFrom         WorkItemLink[]      @relation("LinksFrom")
+  linksTo           WorkItemLink[]      @relation("LinksTo")
   // Audit trail (Subtask 1.4.6). A work item accrues many revision rows; the
   // FK cascades so hard-deleting an issue removes its history with it.
-  revisions   WorkItemRevision[]
+  revisions         WorkItemRevision[]
   // Comment thread (Subtask 5.1.1). Comments die with the issue (Cascade) —
   // the rare hard-delete path; issues are soft-archived in practice.
-  comments    Comment[]
+  comments          Comment[]
   // Issue attachments (Subtask 5.2.1). SetNull — NOT cascade: hard-deleting an
   // issue must leave the attachment rows behind (unlinked) so the orphan-GC
   // (5.2.7) can remove their blobs too; a cascade would strand the blobs.
-  attachments Attachment[]
+  attachments       Attachment[]
   // Organisation joins + watchers (Subtask 5.4.1). All three cascade with
   // the issue: label/component joins are pure association rows, watcher rows
   // are notification substrate.
-  labels      WorkItemLabel[]
-  components  WorkItemComponent[]
-  watchers    Watcher[]
+  labels            WorkItemLabel[]
+  components        WorkItemComponent[]
+  watchers          Watcher[]
+  // Custom-field values (Story 5.3). One row per (issue, field) pair; the FK
+  // cascades so deleting an issue takes its custom values with it.
+  customFieldValues CustomFieldValue[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -1398,4 +1411,162 @@ model Watcher {
   // The "issues I watch" read path (Story 5.7 / Epic 6).
   @@index([userId])
   @@map("watcher")
+}
+
+/// The five per-project custom-field types (Story 5.3). Each maps 1:1 to a
+/// verified member of Jira's team-managed set: Short text / Number / Date /
+/// Dropdown (single-select — multi-select is a separate mirror type, a
+/// documented extension) / People (restricted to single). Additive types
+/// (paragraph, checkbox-multi, labels, multi-person, formula) extend this
+/// enum + add a value column on the same typed-EAV substrate.
+enum CustomFieldType {
+  text
+  number
+  date
+  select
+  user
+
+  @@map("custom_field_type")
+}
+
+/// A per-project custom-field DEFINITION (Story 5.3 · Subtask 5.3.1) — the
+/// extensible-schema layer mirroring Jira team-managed "Project settings →
+/// Fields". Fields are project-scoped, never shared across projects (the
+/// team-managed rule); the service layer (5.3.2) caps them at 50 per project.
+///
+/// `key` is the machine slug — the stable handle revision diffs
+/// (`customFields.<key>`) and Epic-6 predicates reference. Generated from the
+/// label at create time and IMMUTABLE afterwards (renames touch `label` only),
+/// unique per project. The key/label split + fractional `position` mirror the
+/// `WorkflowStatus` project-scoped-config precedent.
+///
+/// Tenancy mirrors `workflow_status`: explicit non-null `workspaceId` + RLS
+/// (ENABLE + FORCE) gating on `app.workspace_id` — the pure workspace-gate
+/// policy (see the add_custom_fields migration).
+model CustomFieldDefinition {
+  id          String          @id @default(cuid())
+  workspaceId String          @map("workspace_id")
+  projectId   String          @map("project_id")
+  key         String
+  label       String
+  fieldType   CustomFieldType @map("field_type")
+  description String?
+  /// Fractional index (the `WorkflowStatus` convention — opaque base-62 keys
+  /// from lib/workItems/positioning.ts that sort lexicographically), so a
+  /// field reorder is a single-row write.
+  position    String          @db.Text
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // Managed options (select fields). Cascades: deleting a field removes its
+  // option rows.
+  options   CustomFieldOption[]
+  // Stored values. Cascades: team-managed field delete is hard — immediate,
+  // permanent, values destroyed (the service confirms with the value count).
+  values    CustomFieldValue[]
+
+  @@unique([projectId, key])
+  @@index([projectId, position])
+  @@index([workspaceId])
+  @@map("custom_field_definition")
+}
+
+/// A managed option of a `select` custom field (Story 5.3). Options are ROWS,
+/// not a JSON config blob: orderable (fractional `position`), renameable, and
+/// FK-able from value rows — the archive/delete rules need referential
+/// integrity. The verified Jira split: an option may be ARCHIVED any time
+/// (hidden from new selection; existing values keep rendering) but may be
+/// DELETED only when unused — the value FK's `Restrict` backstops that rule
+/// at the DB layer. The service (5.3.2) caps options at 55 per field.
+///
+/// No denormalized `workspaceId` (by design — the row's tenancy is its
+/// field's): RLS joins through the parent definition, the
+/// `work_item_revision` / `comment_mention` pattern.
+model CustomFieldOption {
+  id        String   @id @default(cuid())
+  fieldId   String   @map("field_id")
+  label     String
+  /// Fractional index — same shape as the parent definition's `position`.
+  position  String   @db.Text
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  field  CustomFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  // Values holding this option. Restrict (see CustomFieldValue.valueOption):
+  // the service must clear/migrate values before an option hard-deletes.
+  values CustomFieldValue[]
+
+  @@index([fieldId, position])
+  @@map("custom_field_option")
+}
+
+/// A custom-field VALUE on a work item (Story 5.3) — typed EAV, the shape
+/// Jira's own `customfieldvalue` table uses (STRINGVALUE / NUMBERVALUE /
+/// DATEVALUE… columns). One row per (workItemId, fieldId) pair — the unique
+/// is the upsert target; clearing a value DELETES the row (no tombstones).
+/// Exactly ONE per-type column is populated per row (matching the field's
+/// `fieldType`); the service layer (5.3.3) is the validation authority.
+///
+/// ── THE EPIC-6 PREDICATE CONTRACT (Story 6.1 consumes this) ───────────────
+/// Typed value columns + the four `[fieldId, value*]` indexes exist so the
+/// 6.1 filter builder compiles REAL JOIN predicates — no JSON parsing, every
+/// probe index-served. The sketch, for "issues where Severity = High":
+///
+///   SELECT w.* FROM "work_item" w
+///   JOIN "custom_field_value" v
+///     ON v."work_item_id" = w."id"
+///    AND v."field_id"       = $severityFieldId
+///   WHERE v."value_option_id" = $highOptionId;
+///
+/// — served by @@index([fieldId, valueOptionId]). Number/date range filters
+/// (`Effort >= 3`, `Go-live < 2026-07-01`) ride [fieldId, valueNumber] /
+/// [fieldId, valueDate] the same way; user filters ride [fieldId,
+/// valueUserId]; text probes ride the per-item unique ([workItemId, fieldId])
+/// or escalate to Epic-6's search infrastructure. "Field is empty" compiles
+/// to NOT EXISTS on the same join (absent row == empty — no tombstones is
+/// what makes that sound).
+/// ──────────────────────────────────────────────────────────────────────────
+///
+/// FK actions, each deliberate: workItem/field Cascade (values die with the
+/// issue; team-managed field delete destroys values), valueUser SetNull (a
+/// deleted user clears the value, never blocks — the assignee semantics),
+/// valueOption Restrict (the DB backstop of the only-when-unused option
+/// delete). Tenancy: explicit non-null `workspaceId` + the pure
+/// workspace-gate RLS policy (the `work_item` pattern).
+model CustomFieldValue {
+  id            String    @id @default(cuid())
+  workspaceId   String    @map("workspace_id")
+  workItemId    String    @map("work_item_id")
+  fieldId       String    @map("field_id")
+  valueText     String?   @map("value_text") @db.Text
+  /// Decimal, not Float — preserves scale, no floating-point drift (the
+  /// `storyPoints` rationale). Prisma's default Postgres mapping (numeric)
+  /// keeps arbitrary precision; the service caps input range.
+  valueNumber   Decimal?  @map("value_number")
+  /// Date-only (the dueDate convention: date-only ISO, UTC-safe).
+  valueDate     DateTime? @map("value_date") @db.Date
+  valueUserId   String?   @map("value_user_id")
+  valueOptionId String?   @map("value_option_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  workspace   Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem    WorkItem              @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  field       CustomFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  valueUser   User?                 @relation(fields: [valueUserId], references: [id], onDelete: SetNull)
+  valueOption CustomFieldOption?    @relation(fields: [valueOptionId], references: [id], onDelete: Restrict)
+
+  // One value per (issue, field) pair — the upsert target; also serves the
+  // by-item read (listByWorkItem) as its leading column is workItemId.
+  @@unique([workItemId, fieldId])
+  // The Epic-6 predicate indexes (see the contract block above).
+  @@index([fieldId, valueOptionId])
+  @@index([fieldId, valueNumber])
+  @@index([fieldId, valueDate])
+  @@index([fieldId, valueUserId])
+  @@index([workspaceId])
+  @@map("custom_field_value")
 }
