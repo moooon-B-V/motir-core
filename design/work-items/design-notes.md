@@ -1440,19 +1440,24 @@ the HTML is the source of truth.
 Designed ONCE, generically — labels, components, and future Epic-6 facet
 editors all compose it. **Generic API surface:** options in, selection out —
 NO fetching inside; `onCreate?` (adds the create-row, the folksonomy
-affordance); `cap?` (per-value limit, disables input at the cap); pure +
-typed-generic, component-tested standalone.
+affordance); `cap?` (per-value limit, disables input at the cap); `tint?`
+per value (a chip + option-swatch colour — Labels passes the name-hash tint
+below, Components passes none); pure + typed-generic, component-tested
+standalone.
 
 - **The box** — input-shaped: `--radius-input`, min-height `--height-input`,
   `--spacing-control-y/x` padding, `--el-border` on `--el-page-bg`,
   focus-WITHIN ring (`--focus-ring-color`, 2px, offset 1). Disabled (cap):
   `--el-surface-soft` fill, `not-allowed` cursor; chips stay removable.
-- **Chips** — `--radius-badge`, `--spacing-chip-y/x` padding, 12px medium;
-  **neutral tint**: `--el-surface` bg · `--el-border` border ·
-  `--el-text-secondary` text (the `Pill` neutral tone; hue-in-background
-  AA per finding #35). Trailing **remove ×** (12px lucide `x`,
-  `--el-text-muted` → `--el-text` + `--el-muted` bg on hover, accessible name
-  `Remove <value>`).
+- **Chips** — `--radius-badge`, `--spacing-chip-y/x` padding, 12px medium.
+  Two treatments via the `tint?` prop: **neutral** (the default —
+  `--el-surface` bg · `--el-border` border · `--el-text-secondary` text, the
+  `Pill` neutral tone; what Components uses) and **tinted** (what Labels
+  passes — the value's `--el-tint-*` background + `--el-text-strong` text,
+  transparent border; hue-in-background AA per finding #35). Trailing
+  **remove ×** (12px lucide `x`; neutral: `--el-text-muted` → `--el-text` +
+  `--el-muted` bg on hover; tinted: `--el-text-strong` at 65% → 100% + a
+  subtle ink overlay; accessible name `Remove <value>`).
 - **The listbox** — the `Combobox` menu panel grammar: `--radius-card`,
   `--shadow-elevated`, `--el-border`, 4px padding, max-width 288px;
   `role="listbox"` + **`aria-multiselectable="true"`**; rows are the
@@ -1470,10 +1475,27 @@ typed-generic, component-tested standalone.
 
 The picker with `onCreate` wired to the 5.4.2 folksonomy:
 
+- **Label colours — the recorded justified deviation (product owner,
+  2026-06-10).** Unlike Jira's colourless labels, Prodect label chips are
+  COLOURED — deliberately less enterprise, more personality. The colour is
+  **auto-assigned deterministically from the label name**: FNV-1a over
+  `nameLower`, mod 6, into the existing pastel family
+  `--el-tint-{peach,rose,mint,lavender,sky,yellow}` with `--el-text-strong`
+  text (finding #35: hue in the tint background, AA-strong text on top —
+  both themes hold via the dark tint variants). NO schema column, NO colour
+  picker, NO admin surface — the folksonomy stays type-to-create, and the
+  same label renders the same colour everywhere it appears (rail card,
+  picker chips, option-row swatches, future board/filter chips). The mock's
+  assignments (api=sky, perf-q3=peach, design-debt=lavender, infra=mint,
+  flaky=yellow, onboarding=rose) are illustrative; the hash is the contract.
+  **User-PICKED colours are the documented extension** (would add a `color`
+  column + picker affordance later without breaking the auto default).
 - **Create-row** — when the typed text matches no existing label the listbox
-  shows `Create 'perf-q3'` with a plus glyph in `--el-accent`. Options
-  otherwise come from the bounded `searchLabels` autocomplete (debounced,
-  take 20), rows with the lucide `tag` glyph. Case-insensitive match surfaces
+  shows `Create 'perf-q3'` with a plus glyph in `--el-accent`; the new label
+  takes its hash tint immediately. Options otherwise come from the bounded
+  `searchLabels` autocomplete (debounced, take 20) — each row's glyph slot
+  carries the label's 10px tint **swatch dot** (the filter-bar swatch
+  vocabulary) instead of an icon. Case-insensitive match surfaces
   the EXISTING label's original casing (no create-row offered).
 - **No-spaces error** — the typed 422 renders the inline error grammar
   (12px `--el-danger` + 14px `triangle-alert`, `role="alert"`):
@@ -1551,17 +1573,22 @@ tooltip/icon-btn-*`, `--height-input/control`, `--shadow-elevated/card`).
   everything else reuses FieldCard, OptionRow, the Combobox menu panel, the
   22px avatar, Pill neutral, the kbd chip, the inline-error grammar, the
   pulse skeleton.
-- Label chips are **colourless** (Jira labels carry no colour; Linear-style
-  coloured labels would be an improvised decision with no mirror backing —
-  the recorded extension slot).
-- AA holds in both themes: chip text `--el-text-secondary` on `--el-surface`;
-  `--el-danger` error text at 12px on `--el-page-bg`; accent count/border on
-  page bg. Dark parity via the token flip (toggle in the mock).
+- Label chips are **coloured** — the recorded justified deviation from Jira's
+  colourless labels (less enterprise, more personality; product owner,
+  2026-06-10). Tints auto-assigned by name hash from the EXISTING
+  `--el-tint-*` family — still no new token; components chips stay neutral
+  so the two facets read differently.
+- AA holds in both themes: neutral chip text `--el-text-secondary` on
+  `--el-surface`; tinted chip text `--el-text-strong` on the pastel tints
+  (the finding-#35 grammar, dark tint variants included); `--el-danger`
+  error text at 12px on `--el-page-bg`; accent count/border on page bg.
+  Dark parity via the token flip (toggle in the mock).
 
 ### Out of scope (documented extension slots)
 
-- Label colours (no mirror backing); label rename/merge admin (Jira's own
-  gap — Epic-6 admin territory).
+- User-PICKED label colours (the auto name-hash tint ships now; a `color`
+  column + picker is the additive extension); label rename/merge admin
+  (Jira's own gap — Epic-6 admin territory).
 - The Components ADMIN page (Project settings → Components) — its own design
   subtask **5.4.7** (`design/projects/components.mock.html`).
 - Per-user autowatch preference + the in-app bell — Story 5.7's seam.

@@ -20,9 +20,16 @@
 
       MIRROR (verified at plan time in the 5.4 story module): the Jira issue-view
       Labels / Components fields and the eye-icon watch control. Labels are a
-      type-to-create folksonomy (create-row in the picker, no spaces — hyphens,
-      colourless chips: Jira labels carry no colour, and Linear-style coloured
-      labels would be an improvised decision with no mirror backing). Components
+      type-to-create folksonomy (create-row in the picker, no spaces — hyphens).
+      ⚠️ JUSTIFIED DEVIATION (product owner, 2026-06-10): label chips are
+      COLOURED, unlike Jira's colourless labels — Prodect is deliberately less
+      enterprise / more colourful. The tint is AUTO-ASSIGNED deterministically
+      from the label name (FNV-1a over nameLower, mod 6 — the seed-loader hash
+      family) into the existing --el-tint-{peach,rose,mint,lavender,sky,yellow}
+      pastels with --el-text-strong text (finding #35: hue in the background,
+      AA-strong text on top). No schema column, no picker, no admin — the same
+      label renders the same colour everywhere (rail, board, Epic-6 filters);
+      user-PICKED colours are the documented extension. Components
       are an admin-managed taxonomy (no create-row in the issue field; options
       come from Project settings → Components). Watching is the eye + count at
       the header's right; anyone who can view may watch THEMSELVES (a viewer
@@ -40,9 +47,12 @@
       (22px glyph slot · label · trailing Check in --el-accent,
       aria-multiselectable="true"); keyboard-complete (type to filter, ↑↓ moves
       the active row, Enter toggles, Backspace removes the last chip, Esc
-      closes). Chips are --radius-badge neutral-tint (bg --el-surface, border
-      --el-border, --el-text-secondary text — the Pill neutral tone; AA-safe,
-      finding #35). Everything else composes shipped vocabulary: the FieldCard
+      closes). Chips are --radius-badge; the DEFAULT chip is neutral (bg
+      --el-surface, border --el-border, --el-text-secondary text — the Pill
+      neutral tone, what Components uses), and the primitive accepts an
+      optional per-value tint (the label colours above; hue-in-background +
+      --el-text-strong, AA-safe per finding #35). Everything else composes
+      shipped vocabulary: the FieldCard
       rail-card grammar (CoreFieldsPanel), the OptionRow + Combobox menu panel,
       the sort-btn small-header-control grammar (comments.mock.html), the
       22px initial-letter avatar, Pill neutral, the kbd chip, the 2.4.9 inline
@@ -474,7 +484,8 @@
         font-style: italic;
       }
 
-      /* ── CHIPS — neutral tint (Pill neutral tone), --radius-badge ────────── */
+      /* ── CHIPS — --radius-badge; neutral default (Pill neutral tone), with
+            the coloured label variants below ─────────────────────────────── */
       .chips {
         display: flex;
         flex-wrap: wrap;
@@ -527,6 +538,61 @@
       .chip-x svg {
         width: 12px;
         height: 12px;
+      }
+
+      /* LABEL chips — coloured (the recorded deviation from Jira's colourless
+         labels: Prodect is deliberately less enterprise / more colourful).
+         Hue in the tint BACKGROUND + --el-text-strong text (finding #35 AA);
+         tint auto-assigned deterministically from the label name (FNV-1a mod 6
+         — the seed-loader hash family), so no schema column, no picker, the
+         same label is the same colour everywhere. Components chips stay
+         neutral + glyph: the two facets read differently at a glance. */
+      .chip.t-peach,
+      .chip.t-rose,
+      .chip.t-mint,
+      .chip.t-lavender,
+      .chip.t-sky,
+      .chip.t-yellow {
+        color: var(--el-text-strong);
+        border-color: transparent;
+      }
+      .chip.t-peach {
+        background: var(--el-tint-peach);
+      }
+      .chip.t-rose {
+        background: var(--el-tint-rose);
+      }
+      .chip.t-mint {
+        background: var(--el-tint-mint);
+      }
+      .chip.t-lavender {
+        background: var(--el-tint-lavender);
+      }
+      .chip.t-sky {
+        background: var(--el-tint-sky);
+      }
+      .chip.t-yellow {
+        background: var(--el-tint-yellow);
+      }
+      .chip[class*='t-'] .chip-x {
+        color: var(--el-text-strong);
+        opacity: 0.65;
+      }
+      .chip[class*='t-'] .chip-x:hover {
+        opacity: 1;
+        background: rgba(0, 0, 0, 0.08);
+      }
+      [data-theme='dark'] .chip[class*='t-'] .chip-x:hover {
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      /* The label-tint swatch dot (option rows) — the filter-bar swatch
+         vocabulary (2.5.9) */
+      .swatch {
+        width: 10px;
+        height: 10px;
+        border-radius: 9999px; /* genuinely circular — allowed */
+        border: 1px solid var(--el-border);
       }
 
       /* ── MULTISELECTPICKER — the ONE new primitive (5.4.8) ───────────────── */
@@ -947,8 +1013,10 @@
           Labels/Components rail cards) and 5.4.9 (watch control + watchers popover).
           <code>detail.pen</code> predates all three surfaces. The ONE new primitive designed here:
           a generic chip-input <code>MultiSelectPicker</code> on the OptionRow vocabulary. Jira
-          mirrors: colourless label chips, type-to-create folksonomy, admin-managed components, the
-          eye + count watch control. Built from the real <code>--el-*</code> + element-shape tokens.
+          mirrors: type-to-create folksonomy, admin-managed components, the eye + count watch
+          control. Deliberate deviation: label chips are COLOURED (auto-tinted by name hash into the
+          six <code>--el-tint-*</code> pastels) — less enterprise than Jira's colourless labels.
+          Built from the real <code>--el-*</code> + element-shape tokens.
         </p>
       </div>
       <button
@@ -1133,9 +1201,9 @@
                 </div>
                 <div class="fcard-value">
                   <div class="chips">
-                    <span class="chip"><span class="txt">api</span></span>
-                    <span class="chip"><span class="txt">perf-q3</span></span>
-                    <span class="chip"><span class="txt">design-debt</span></span>
+                    <span class="chip t-sky"><span class="txt">api</span></span>
+                    <span class="chip t-peach"><span class="txt">perf-q3</span></span>
+                    <span class="chip t-lavender"><span class="txt">design-debt</span></span>
                   </div>
                 </div>
               </div>
@@ -1174,9 +1242,11 @@
           verbatim (11px uppercase label · corner chevron toggles edit mode) and slot
           <strong>between Parent and Due date</strong>: with the relational fields, ahead of the
           date/estimate group — the Jira details-panel grouping. Display mode renders chips only;
-          the chevron opens the picker (panels 1–3). Label chips are colourless (the mirror);
-          component chips carry the lucide <code>component</code> glyph in
-          <code>--el-text-muted</code>.
+          the chevron opens the picker (panels 1–3). Label chips are COLOURED — auto-tinted by name
+          hash into the six <code>--el-tint-*</code> pastels with <code>--el-text-strong</code> text
+          (the recorded less-enterprise deviation; finding #35 AA) — while component chips stay
+          neutral with the lucide <code>component</code> glyph in <code>--el-text-muted</code>, so
+          the two facets read differently at a glance.
         </p>
       </div>
 
@@ -1190,13 +1260,13 @@
             <div class="mini-label">Rest — chips + filter input (focus-within ring)</div>
             <div class="msp">
               <div class="msp-box is-focused">
-                <span class="chip">
+                <span class="chip t-sky">
                   <span class="txt">api</span>
                   <button class="chip-x" aria-label="Remove api">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
                   </button>
                 </span>
-                <span class="chip">
+                <span class="chip t-peach">
                   <span class="txt">perf-q3</span>
                   <button class="chip-x" aria-label="Remove perf-q3">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
@@ -1210,7 +1280,7 @@
             <div class="mini-label">Open — aria-multiselectable listbox, Check on selected</div>
             <div class="msp">
               <div class="msp-box is-focused">
-                <span class="chip">
+                <span class="chip t-sky">
                   <span class="txt">api</span>
                   <button class="chip-x" aria-label="Remove api">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
@@ -1220,27 +1290,27 @@
               </div>
               <div class="menu" role="listbox" aria-multiselectable="true" aria-label="Labels">
                 <button class="opt" role="option" aria-selected="true">
-                  <span class="glyph-slot">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-tag" /></svg>
-                  </span>
+                  <span class="glyph-slot"
+                    ><span class="swatch" style="background: var(--el-tint-sky)"></span
+                  ></span>
                   <span class="o-label">api</span>
                   <svg class="o-check" viewBox="0 0 24 24" aria-hidden="true">
                     <use href="#i-check" />
                   </svg>
                 </button>
                 <button class="opt is-active" role="option" aria-selected="false">
-                  <span class="glyph-slot">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-tag" /></svg>
-                  </span>
+                  <span class="glyph-slot"
+                    ><span class="swatch" style="background: var(--el-tint-lavender)"></span
+                  ></span>
                   <span class="o-label">design-debt</span>
                   <svg class="o-check" viewBox="0 0 24 24" aria-hidden="true">
                     <use href="#i-check" />
                   </svg>
                 </button>
                 <button class="opt" role="option" aria-selected="false">
-                  <span class="glyph-slot">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-tag" /></svg>
-                  </span>
+                  <span class="glyph-slot"
+                    ><span class="swatch" style="background: var(--el-tint-rose)"></span
+                  ></span>
                   <span class="o-label">onboarding</span>
                   <svg class="o-check" viewBox="0 0 24 24" aria-hidden="true">
                     <use href="#i-check" />
@@ -1253,7 +1323,7 @@
             <div class="mini-label">Typing — filtered as you type</div>
             <div class="msp">
               <div class="msp-box is-focused">
-                <span class="chip">
+                <span class="chip t-sky">
                   <span class="txt">api</span>
                   <button class="chip-x" aria-label="Remove api">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
@@ -1263,9 +1333,9 @@
               </div>
               <div class="menu" role="listbox" aria-multiselectable="true" aria-label="Labels">
                 <button class="opt is-active" role="option" aria-selected="false">
-                  <span class="glyph-slot">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-tag" /></svg>
-                  </span>
+                  <span class="glyph-slot"
+                    ><span class="swatch" style="background: var(--el-tint-lavender)"></span
+                  ></span>
                   <span class="o-label">design-debt</span>
                   <svg class="o-check" viewBox="0 0 24 24" aria-hidden="true">
                     <use href="#i-check" />
@@ -1300,12 +1370,16 @@
         <p class="panel-note">
           <strong>The generic API surface (5.4.8 + Epic-6 facet reuse):</strong> options in,
           selection out — no fetching inside; optional <code>onCreate</code> (adds the create-row,
-          panel 2), optional per-value <code>cap</code>. The box is input-shaped
-          (<code>--radius-input</code>, min-height <code>--height-input</code>, focus-within ring);
-          chips are <code>--radius-badge</code> neutral tint (Pill-neutral colours, finding #35 AA);
-          the listbox is the Combobox menu panel (<code>--radius-card</code>,
-          <code>--shadow-elevated</code>) of OptionRow rows — 22px glyph slot · truncating label ·
-          trailing 16px Check in <code>--el-accent</code>, <code>aria-selected</code> per row,
+          panel 2), optional per-value <code>cap</code>, optional per-value <code>tint</code> (a
+          chip + option-swatch colour — labels pass the name-hash tint; components pass none and get
+          the neutral default). The box is input-shaped (<code>--radius-input</code>, min-height
+          <code>--height-input</code>, focus-within ring); chips are <code>--radius-badge</code> —
+          neutral (Pill-neutral colours) by default, or the value's tint background +
+          <code>--el-text-strong</code> (finding #35 AA); a tinted value's option row swaps the
+          glyph slot for the 10px swatch dot (the filter-bar swatch vocabulary); the listbox is the
+          Combobox menu panel (<code>--radius-card</code>, <code>--shadow-elevated</code>) of
+          OptionRow rows — 22px glyph slot · truncating label · trailing 16px Check in
+          <code>--el-accent</code>, <code>aria-selected</code> per row,
           <code>aria-multiselectable="true"</code> on the listbox. Toggling does NOT close the menu
           (multi-select); the picker stays open until Esc / outside click — the filter-bar OptionRow
           behaviour.
@@ -1330,7 +1404,7 @@
               <div class="fcard-value">
                 <div class="msp">
                   <div class="msp-box is-focused">
-                    <span class="chip">
+                    <span class="chip t-sky">
                       <span class="txt">api</span>
                       <button class="chip-x" aria-label="Remove api">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
@@ -1362,7 +1436,7 @@
               <div class="fcard-value">
                 <div class="msp">
                   <div class="msp-box is-focused">
-                    <span class="chip">
+                    <span class="chip t-sky">
                       <span class="txt">api</span>
                       <button class="chip-x" aria-label="Remove api">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
@@ -1390,13 +1464,13 @@
               <div class="fcard-value">
                 <div class="msp">
                   <div class="msp-box is-disabled">
-                    <span class="chip">
+                    <span class="chip t-sky">
                       <span class="txt">api</span>
                       <button class="chip-x" aria-label="Remove api">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
                       </button>
                     </span>
-                    <span class="chip">
+                    <span class="chip t-peach">
                       <span class="txt">perf-q3</span>
                       <button class="chip-x" aria-label="Remove perf-q3">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
@@ -1405,13 +1479,13 @@
                     <span class="chip">
                       <span class="txt">…16 more</span>
                     </span>
-                    <span class="chip">
+                    <span class="chip t-mint">
                       <span class="txt">infra</span>
                       <button class="chip-x" aria-label="Remove infra">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
                       </button>
                     </span>
-                    <span class="chip">
+                    <span class="chip t-yellow">
                       <span class="txt">flaky</span>
                       <button class="chip-x" aria-label="Remove flaky">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
@@ -1445,8 +1519,8 @@
               </div>
               <div class="fcard-value">
                 <div class="chips">
-                  <span class="chip"><span class="txt">api</span></span>
-                  <span class="chip"><span class="txt">perf-q3</span></span>
+                  <span class="chip t-sky"><span class="txt">api</span></span>
+                  <span class="chip t-peach"><span class="txt">perf-q3</span></span>
                 </div>
               </div>
             </div>
