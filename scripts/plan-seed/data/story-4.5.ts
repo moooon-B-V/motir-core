@@ -293,7 +293,7 @@ export const story_4_5: PlanStory = {
       id: '4.5.3',
       title:
         'Scrum board page + sprint header UI — resolve scrum board, render sprint header + points + no-active-sprint state (reuses the 3.2/3.3 board)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
