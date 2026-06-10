@@ -270,7 +270,7 @@ export const story_5_3: PlanStory = {
       id: '5.3.3',
       title:
         '`customFieldsService` (values) — per-type validated set/clear + revision-trail diffs + the bounded detail-read join',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
