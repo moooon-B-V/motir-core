@@ -8,6 +8,7 @@ import type { SprintSummaryDto } from '@/lib/dto/boards';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import { SPRINT_STATE_TONE } from '@/app/(authed)/backlog/_components/backlogShared';
 import { CompleteSprintEntry } from './CompleteSprintEntry';
+import { SprintHeaderBurndown } from './SprintHeaderBurndown';
 
 // SprintHeader (Subtask 4.5.3) — the ONE net-new UI surface of the scrum board,
 // drawn per `design/boards/scrum.mock.html` panels 0–1/3. A labelled landmark
@@ -32,9 +33,10 @@ import { CompleteSprintEntry } from './CompleteSprintEntry';
 // sprint reads "Ended", never a negative number. The points are the
 // `SprintSummaryDto.points` bounded aggregate (NOT a sum of loaded cards, finding
 // #57); a wholly-unestimated sprint (committed === 0) renders "—" for every figure
-// (mirroring the shipped `SprintPointsBadge`), never a broken `NaN`. The in-sprint
-// burndown CHART is Story 4.6 — the header shows the numeric remaining + leaves a
-// seam. Colour via `--el-*`, shape via element-semantic tokens.
+// (mirroring the shipped `SprintPointsBadge`), never a broken `NaN`. The reserved
+// chart slot is FILLED by Subtask 4.6.5: `SprintHeaderBurndown` mounts the compact
+// in-sprint burndown BESIDE the numeric points (charts.mock.html panel 5), without
+// restructuring the band. Colour via `--el-*`, shape via element-semantic tokens.
 
 function formatDateRange(startDate: string | null, endDate: string | null, locale: string): string {
   if (!startDate || !endDate) return '';
@@ -168,8 +170,10 @@ export function SprintHeader({
         </div>
       </div>
 
-      {/* RIGHT — points summary + Complete-sprint entry point */}
-      <div className="flex shrink-0 items-center gap-4">
+      {/* RIGHT — the compact burndown (the 4.6.5-filled chart slot), the points
+          summary, and the Complete-sprint entry point */}
+      <div className="flex shrink-0 flex-wrap items-center gap-4">
+        <SprintHeaderBurndown sprintId={sprint.id} />
         <div className="flex items-stretch gap-1" aria-label={pointsAria}>
           <PointStat label={t('sprintCommitted')} value={fmtPts(sprint.points.committed)} />
           <PointStat label={t('sprintCompleted')} value={fmtPts(sprint.points.completed)} />

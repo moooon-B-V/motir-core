@@ -5,7 +5,7 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { SprintReport } from '@/app/(authed)/backlog/_components/SprintReport';
 import type { StatusByKey } from '@/app/(authed)/backlog/_components/backlogShared';
 import type { SprintDto, SprintReportDto } from '@/lib/dto/sprints';
-import type { VelocityDto } from '@/lib/dto/reports';
+import type { BurndownSeriesDto, VelocityDto } from '@/lib/dto/reports';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { RankedIssuePageDto } from '@/lib/dto/backlog';
 
@@ -14,8 +14,10 @@ import type { RankedIssuePageDto } from '@/lib/dto/backlog';
 // complete-modal success state and the standalone /sprints/[id]/report page. Pure
 // component — assert the points rollup, the scope-change line, the completed /
 // not-completed lists (bounded + a "View all in Issues" deep-link), the unestimated
-// "—" presentation, the carry-over "→ destination" chip, and the Story-4.6 chart
-// seam — against the real English catalog via renderWithIntl.
+// "—" presentation, the carry-over "→ destination" chip, and the Story-4.6 analytics
+// charts (4.6.5 burndown + 4.6.6 velocity) — against the real English catalog via
+// renderWithIntl. The deep burndown/velocity coverage is Subtask 4.6.7's; these are
+// the surface smoke checks.
 
 afterEach(cleanup);
 
@@ -95,7 +97,7 @@ function report(over: Partial<SprintReportDto> = {}): SprintReportDto {
 }
 
 describe('SprintReport (4.4.6)', () => {
-  it('renders the points rollup, scope-change line, lists, and the chart seam', () => {
+  it('renders the points rollup, scope-change line, lists, and the burndown slot', () => {
     render(<SprintReport report={report()} sprint={sprint()} statusByKey={statusByKey} />);
 
     // 3-up points: committed 42 / completed 29 / not-completed 13.
@@ -111,9 +113,10 @@ describe('SprintReport (4.4.6)', () => {
     const viewAll = screen.getAllByRole('link', { name: /View all in Issues/ });
     expect(viewAll.length).toBe(2);
     expect(viewAll[0]!.getAttribute('href')).toBe('/issues?sprint=sp6');
-    // The Story-4.6 burndown chart SEAM (no chart here).
+    // The Story-4.6 burndown section (4.6.5): with no server-fed series, the
+    // slot client-fetches and shows the loading skeleton first.
     expect(screen.getByText('Burndown')).toBeTruthy();
-    expect(screen.getByText('Story 4.6')).toBeTruthy();
+    expect(screen.getByRole('status', { name: /Loading the burndown chart/ })).toBeTruthy();
   });
 
   it('renders "—" for every point figure when the sprint was started unestimated', () => {
@@ -228,7 +231,71 @@ describe('SprintReport velocity (4.6.6)', () => {
   it('renders no velocity section when the host passes no velocity (the complete modal)', () => {
     render(<SprintReport report={report()} sprint={sprint()} statusByKey={statusByKey} />);
     expect(screen.queryByText('Velocity')).toBeNull();
-    // The burndown seam is still there.
-    expect(screen.getByText('Story 4.6')).toBeTruthy();
+    // The burndown section is still there (the modal slot self-fetches).
+    expect(screen.getByText('Burndown')).toBeTruthy();
+  });
+});
+
+// The burndown chart in the report's analytics row (Story 4.6 · Subtask 4.6.5) —
+// the 4.6.2 LineChart bound to the 4.6.3 `getBurndownSeries` read, filling the
+// seam 4.4.6 reserved per design/reports/charts.mock.html panels 1 + 5. The
+// full form: dashed guideline + stepped actual, the committed-baseline and
+// end-point annotations, the scope-change diamond, and the data-table fallback
+// (finding #35). Deep state coverage (unestimated / empty / active) is 4.6.7's.
+
+function burndown(over: Partial<BurndownSeriesDto> = {}): BurndownSeriesDto {
+  return {
+    sprintId: 'sp6',
+    state: 'complete',
+    statistic: 'story_points',
+    committed: 40,
+    startDate: '2026-06-09T00:00:00.000Z',
+    endDate: '2026-06-13T00:00:00.000Z',
+    days: [
+      { date: '2026-06-09', guideline: 40, remaining: 40 },
+      { date: '2026-06-10', guideline: 30, remaining: 32 },
+      { date: '2026-06-11', guideline: 20, remaining: 36 },
+      { date: '2026-06-12', guideline: 10, remaining: 24 },
+      { date: '2026-06-13', guideline: 0, remaining: 12 },
+    ],
+    scopeChanges: [{ date: '2026-06-11', delta: 4 }],
+    ...over,
+  };
+}
+
+describe('SprintReport burndown (4.6.5)', () => {
+  it('renders the completed-sprint burndown — legend, annotations, and the data-table fallback', () => {
+    render(
+      <SprintReport
+        report={report()}
+        sprint={sprint()}
+        statusByKey={statusByKey}
+        burndown={burndown()}
+      />,
+    );
+
+    // The TEXT legend names every series (finding #35) — the guideline, the
+    // actual remaining, and the scope marker.
+    // (each appears in the legend AND as a data-table column header)
+    expect(screen.getAllByText('Guideline').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Remaining').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Scope added')).toBeTruthy();
+    // The committed baseline + end-point annotations and the scope label.
+    expect(screen.getByText('40 committed')).toBeTruthy();
+    expect(screen.getByText('12 left')).toBeTruthy();
+    expect(screen.getByText('+4 scope')).toBeTruthy();
+    // The data-table fallback re-expresses the series as numbers, with the
+    // start + scope-change events.
+    expect(screen.getByText(/story points remaining by day/i)).toBeTruthy();
+    const tables = screen.getAllByRole('table');
+    const burndownTable = tables.find((el) =>
+      within(el).queryByText(/Sprint started · 40 committed/),
+    )!;
+    expect(burndownTable).toBeTruthy();
+    expect(within(burndownTable).getByText('+4 scope change')).toBeTruthy();
+    expect(within(burndownTable).getByText('Sprint completed')).toBeTruthy();
+    expect(screen.queryByText('NaN')).toBeNull();
+    // Server-fed: no client fetch, so no loading skeleton.
+    expect(screen.queryByRole('status', { name: /Loading the burndown chart/ })).toBeNull();
   });
 });

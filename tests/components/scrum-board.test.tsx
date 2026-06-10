@@ -114,8 +114,32 @@ function projection(over: Partial<BoardProjectionDto> = {}): BoardProjectionDto 
 
 const WORKFLOW: WorkflowDto = { statuses: [], transitions: [], policyMode: 'open' };
 
+// The active sprint's in-sprint burndown — the 4.6.5 `SprintHeaderBurndown`
+// slot client-fetches GET /api/sprints/[id]/burndown when the header mounts.
+// The figures deliberately AVOID the header-points fixture values (34/12/22)
+// and render no "—", so the 4.5.3 header assertions stay unambiguous.
+const headerBurndown = () => ({
+  sprintId: 's1',
+  state: 'active' as const,
+  statistic: 'story_points' as const,
+  committed: 30,
+  startDate: '2026-06-02T00:00:00.000Z',
+  endDate: '2026-06-14T00:00:00.000Z',
+  days: [
+    { date: '2026-06-02', guideline: 30, remaining: 30 },
+    { date: '2026-06-06', guideline: 20, remaining: 18 },
+    { date: '2026-06-14', guideline: 0, remaining: 6 },
+  ],
+  scopeChanges: [],
+});
+
 function mockFetchOk(data: BoardProjectionDto) {
-  return vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => data });
+  // Route by URL: the board projection for /api/board, the burndown for the
+  // header's chart slot; everything else gets the projection (legacy default).
+  return vi.fn().mockImplementation((url: unknown) => {
+    const body = String(url).includes('/burndown') ? headerBurndown() : data;
+    return Promise.resolve({ ok: true, status: 200, json: async () => body });
+  });
 }
 
 afterEach(() => {
@@ -159,7 +183,8 @@ describe('Scrum board (4.5.3) — sprint header', () => {
     expect(h.getByText('12')).toBeTruthy();
     expect(h.getByText('22')).toBeTruthy();
     expect(h.getByText('Committed')).toBeTruthy();
-    expect(h.getByText('Remaining')).toBeTruthy();
+    // "Remaining" is the stat label AND the 4.6.5 burndown table's column head.
+    expect(h.getAllByText('Remaining').length).toBeGreaterThanOrEqual(1);
     // The Complete-sprint entry point is mounted (the 4.4 flow opens on click).
     expect(h.getByTestId('scrum-complete-sprint')).toBeTruthy();
   });
