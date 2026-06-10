@@ -105,6 +105,29 @@ export const customFieldValueRepository = {
   },
 
   /**
+   * Per-field value counts for MANY fields in ONE query (groupBy fieldId) —
+   * the admin-list read (5.3.2) names each field's value count without a
+   * per-field round-trip (no N+1; the field set is ≤ the 50 cap). Fields
+   * with no values are simply absent from the result (count 0 to the
+   * caller). Empty-input guard: an empty id set short-circuits to [] with
+   * no query.
+   */
+  async countGroupedByField(
+    fieldIds: string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ fieldId: string; count: number }[]> {
+    if (fieldIds.length === 0) return [];
+    const client = tx ?? db;
+    const grouped = await client.customFieldValue.groupBy({
+      by: ['fieldId'],
+      where: { fieldId: { in: fieldIds }, workspaceId },
+      _count: { _all: true },
+    });
+    return grouped.map((g) => ({ fieldId: g.fieldId, count: g._count._all }));
+  },
+
+  /**
    * How many values hold this option — the only-when-unused delete rule's
    * guard read (0 → delete legal; >0 → typed OptionInUseError, archive
    * offered instead). Run inside the option-delete transaction (pass `tx`);
