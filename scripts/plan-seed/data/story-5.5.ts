@@ -158,7 +158,7 @@ export const story_5_5: PlanStory = {
       id: '5.5.1',
       title:
         'Activity read service — paged revision feed + the TOTAL diff-renderer registry (batched display resolution, noise policy, fallbacks)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -227,7 +227,7 @@ export const story_5_5: PlanStory = {
       id: '5.5.2',
       title:
         'The "All" merged stream — comments + history interleaved by composite cursor (bounded two-source merge)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
