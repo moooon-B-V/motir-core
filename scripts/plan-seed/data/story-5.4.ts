@@ -251,7 +251,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.2',
       title:
         '`labelsService` — type-to-create folksonomy (no-spaces, case-insensitive find-or-create, delete-on-last-use), bounded autocomplete, revision diffs',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 26,
