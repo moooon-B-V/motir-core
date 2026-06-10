@@ -7,7 +7,12 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
+import { attachmentsService } from '@/lib/services/attachmentsService';
 import { parseMentionIds } from '@/lib/mentions/parse';
+import {
+  extractReferencedBlobUrls,
+  extractReferencedBlobUrlsFromBodies,
+} from '@/lib/blob/referencedUrls';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { toCommentDto, toCommentThreadDto } from '@/lib/mappers/commentMappers';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -122,6 +127,37 @@ function requireBody(bodyMd: string): string {
   return bodyMd;
 }
 
+/**
+ * Link-on-write for a comment-body write (Subtask 5.2.3): an upload embedded
+ * in a comment is an attachment of the COMMENT's issue, so add/edit/delete
+ * re-resolve the linkage inside the write transaction — AFTER the comment row
+ * itself is written/deleted, so the still-referenced-elsewhere guard probes
+ * the body state this transaction commits. When anything links or unlinks, a
+ * dedicated 'updated' revision records the `attachments` diff (the uniform
+ * History trail — the deliberate fill of Jira's documented editor-add
+ * changelog gap; see Story 5.2).
+ */
+async function syncCommentAttachmentLinks(
+  workItem: WorkItem,
+  previousUrls: readonly string[],
+  nextUrls: readonly string[],
+  actorId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  if (previousUrls.length === 0 && nextUrls.length === 0) return;
+  const cell = await attachmentsService.syncEditorLinks({ workItem, previousUrls, nextUrls }, tx);
+  if (!cell) return;
+  await workItemRevisionsService.recordRevision(
+    {
+      workItemId: workItem.id,
+      changedById: actorId,
+      changeKind: 'updated',
+      diff: { attachments: cell },
+    },
+    tx,
+  );
+}
+
 /** Map one freshly-written comment row to its DTO (single-row side reads). */
 async function toSingleCommentDto(row: Comment, mentionedUserIds: string[]): Promise<CommentDTO> {
   const authors = await userRepository.findByIds([row.authorId]);
@@ -186,6 +222,17 @@ export const commentsService = {
         stored.map((mentionedUserId) => ({ commentId: created.id, mentionedUserId })),
         tx,
       );
+
+      // Link-on-write (5.2.3): uploads the new body references attach to the
+      // comment's issue, in this same transaction.
+      await syncCommentAttachmentLinks(
+        gate.item,
+        [],
+        extractReferencedBlobUrls(bodyMd, ctx.workspaceId),
+        ctx.userId,
+        tx,
+      );
+
       return { row: created, storedMentionIds: stored };
     });
 
@@ -258,6 +305,19 @@ export const commentsService = {
           stored.map((mentionedUserId) => ({ commentId, mentionedUserId })),
           tx,
         );
+
+        // Link-on-write (5.2.3): diff the old body's referenced uploads
+        // against the new body's — runs AFTER the row update so a URL this
+        // edit removed no longer counts as "still referenced" by this
+        // comment, and a URL kept elsewhere on the issue stays linked.
+        await syncCommentAttachmentLinks(
+          gate.item,
+          extractReferencedBlobUrls(current.bodyMd, ctx.workspaceId),
+          extractReferencedBlobUrls(bodyMd, ctx.workspaceId),
+          ctx.userId,
+          tx,
+        );
+
         return { row: updated, storedMentionIds: stored, addedMentionIds: added, changed: true };
       },
     );
@@ -291,10 +351,12 @@ export const commentsService = {
         throw new CommentForbiddenError('delete');
       }
 
-      const replyCount =
-        current.parentCommentId === null
-          ? await commentRepository.countByParent(current.id, tx)
-          : 0;
+      // A root's replies, read BEFORE the cascade takes them: their count
+      // feeds the deletion trace, their bodies feed the link-on-write unlink
+      // below (the thread's embeds vanish with it — Subtask 5.2.3).
+      const replies =
+        current.parentCommentId === null ? await commentRepository.listReplies(current.id, tx) : [];
+      const replyCount = replies.length;
 
       await workItemRevisionsService.recordRevision(
         {
@@ -311,6 +373,22 @@ export const commentsService = {
         tx,
       );
       await commentRepository.delete(current.id, tx);
+
+      // Link-on-write (5.2.3): uploads only this thread's bodies referenced
+      // unlink (GC-eligible, 5.2.7) — the Jira analogue: deleting the comment
+      // removes the attachment from the issue. Runs AFTER the delete so the
+      // still-referenced probe sees the post-cascade comment set; a URL the
+      // description or a surviving comment still references stays linked.
+      await syncCommentAttachmentLinks(
+        gate.item,
+        extractReferencedBlobUrlsFromBodies(
+          [current.bodyMd, ...replies.map((reply) => reply.bodyMd)],
+          ctx.workspaceId,
+        ),
+        [],
+        ctx.userId,
+        tx,
+      );
     });
   },
 
