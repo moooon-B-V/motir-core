@@ -12,6 +12,7 @@ import {
 import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
 import { Avatar, PriorityValue } from '../../issues/_components/issueCellPrimitives';
 import { ColumnActionsMenu } from './ColumnActionsMenu';
+import { ColumnPointsBadge } from './ColumnPointsBadge';
 import { ColumnWipBadge } from './ColumnWipBadge';
 import { LaneCell } from './LaneCell';
 import { bucketLanes } from './boardSwimlanes';
@@ -55,6 +56,7 @@ export function SwimlaneBoard({
   onSetWipLimit,
   activeCardId,
   overLaneKey,
+  columnPoints = null,
 }: {
   boardId: string;
   columns: BoardColumnDto[];
@@ -64,6 +66,10 @@ export function SwimlaneBoard({
   onSetWipLimit: (columnId: string, limit: number | null) => void;
   activeCardId: string | null;
   overLaneKey: string | null;
+  /** Per-column sprint point totals (Subtask 4.5.3) keyed by column id, or `null`
+   *  on a kanban board / unestimated sprint — the pinned column header renders the
+   *  "N pts" pill when present (the same scrum chrome as the flat board). */
+  columnPoints?: Record<string, number> | null;
 }) {
   const t = useTranslations('boards');
   const { collapsed, toggle } = useCollapsedLanes(boardId);
@@ -94,6 +100,9 @@ export function SwimlaneBoard({
             >
               {column.totalCount}
             </span>
+            {/* Per-column sprint point total (4.5.3) — coexists with the count on
+                the left; absent on a kanban board. */}
+            <ColumnPointsBadge columnId={column.id} points={columnPoints?.[column.id] ?? null} />
             <span className="flex-1" />
             {/* WIP chip + over-limit warning — the per-column total across lanes (3.3.6). */}
             <ColumnWipBadge
