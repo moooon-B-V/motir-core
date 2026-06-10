@@ -398,7 +398,7 @@ export const story_5_1: PlanStory = {
       id: '5.1.4',
       title:
         'Mention capability in `MarkdownEditor` + mention-chip rendering in `MarkdownView` (tiptap Mention + `mention:` token round-trip)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -455,7 +455,7 @@ export const story_5_1: PlanStory = {
       id: '5.1.5',
       title:
         'Comments section UI on the issue detail page — thread + composer + reply/edit/delete + "Show more" paging in the Activity slot',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
