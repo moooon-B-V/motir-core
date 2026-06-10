@@ -187,7 +187,7 @@ export const story_4_6: PlanStory = {
       id: '4.6.1',
       title:
         'Design — chart visual language + burndown + velocity (creates design/reports/; specs the 4.5 scrum-header + 4.4.6 sprint-report seam placements)',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 40,
@@ -264,7 +264,7 @@ export const story_4_6: PlanStory = {
       id: '4.6.2',
       title:
         'Reusable token-aware SVG chart primitives in components/ui/ (line/area + grouped bar + axis/grid/legend; a11y data-table fallback) — the viz Story 6.3 reuses',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
