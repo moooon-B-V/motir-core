@@ -319,7 +319,7 @@ export const story_4_7: PlanStory = {
       id: '4.7.3',
       title:
         'At-scale Scrum interaction + complete journey E2E — drag-as-transition · snap-back · swimlanes · cross-lane reassign · WIP · complete-sprint carry-over + report',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 25,
