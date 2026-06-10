@@ -21,6 +21,22 @@ import { db } from '@/lib/db';
 // attempt is caught by the RLS policy's WITH CHECK (42501) for non-bypass
 // roles, and the service's own admin gate is the application-layer guard.
 
+/**
+ * One definition with its option set and ONE work item's value rows (display
+ * relations resolved) — the element shape of the detail read's bounded query.
+ */
+export type CustomFieldDefinitionWithItemValue = Prisma.CustomFieldDefinitionGetPayload<{
+  include: {
+    options: true;
+    values: {
+      include: {
+        valueOption: true;
+        valueUser: { select: { id: true; name: true; image: true } };
+      };
+    };
+  };
+}>;
+
 export const customFieldDefinitionRepository = {
   /**
    * Insert one field definition. Required `tx` — the create rides the same
@@ -88,6 +104,36 @@ export const customFieldDefinitionRepository = {
     return client.customFieldDefinition.findMany({
       where: { projectId, workspaceId },
       orderBy: { position: 'asc' },
+    });
+  },
+
+  /**
+   * A project's definitions in `position` order, each carrying its full
+   * option set (position order, archived rows included — the renderer needs
+   * them) and ONE issue's value rows with their display relations — the
+   * single bounded query (≤50 defs by the cap; ≤1 value row per def by the
+   * pair unique) `getIssueDetail` slots into its parallel fetch (5.3.3). One
+   * Prisma operation: the per-item filter rides the `values` include, so
+   * there's no N+1 and no second round-trip.
+   */
+  async listWithValuesForWorkItem(
+    projectId: string,
+    workspaceId: string,
+    workItemId: string,
+  ): Promise<CustomFieldDefinitionWithItemValue[]> {
+    return db.customFieldDefinition.findMany({
+      where: { projectId, workspaceId },
+      orderBy: { position: 'asc' },
+      include: {
+        options: { orderBy: { position: 'asc' } },
+        values: {
+          where: { workItemId },
+          include: {
+            valueOption: true,
+            valueUser: { select: { id: true, name: true, image: true } },
+          },
+        },
+      },
     });
   },
 

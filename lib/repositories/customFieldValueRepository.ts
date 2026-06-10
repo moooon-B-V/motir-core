@@ -23,7 +23,42 @@ import { db } from '@/lib/db';
 // definitions half of the service (CLAUDE.md — repository naming matches
 // the primary entity, not the call site).
 
+/**
+ * One value row with its display relations resolved — the option (label +
+ * archived mark) and the user trio. What the set-value flow's current-state
+ * read and the detail-rail mapper both consume.
+ */
+export type CustomFieldValueWithRefs = Prisma.CustomFieldValueGetPayload<{
+  include: {
+    valueOption: true;
+    valueUser: { select: { id: true; name: true; image: true } };
+  };
+}>;
+
 export const customFieldValueRepository = {
+  /**
+   * THE row for a (workItemId, fieldId) pair, display relations included —
+   * the current-state read the set-value flow diffs against (the `from` side
+   * of the `customFields.<key>` revision cell needs the OLD option's label).
+   * Runs inside the set transaction (pass `tx`) so the diff it feeds is
+   * computed against the row the upsert/delete replaces, under the work
+   * item's FOR UPDATE lock. Served by the [workItemId, fieldId] unique.
+   */
+  async findByWorkItemAndField(
+    workItemId: string,
+    fieldId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<CustomFieldValueWithRefs | null> {
+    const client = tx ?? db;
+    return client.customFieldValue.findUnique({
+      where: { workItemId_fieldId: { workItemId, fieldId } },
+      include: {
+        valueOption: true,
+        valueUser: { select: { id: true, name: true, image: true } },
+      },
+    });
+  },
+
   /**
    * Upsert THE row for a (workItemId, fieldId) pair — the single write the
    * set-value flow needs. Required `tx`: the 5.3.3 revision diff
