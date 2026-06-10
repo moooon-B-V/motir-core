@@ -409,7 +409,7 @@ export const story_4_6: PlanStory = {
       id: '4.6.4',
       title:
         'Backend — `reportsService.getVelocity({ projectId, lastN })`: last-N completed sprints committed (4.4.2 baseline) vs completed (4.3.3 roll-up) + average, bounded',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
