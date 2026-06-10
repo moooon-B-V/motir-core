@@ -107,7 +107,7 @@ import type { PlanStory } from '../types';
 export const story_4_3: PlanStory = {
   id: '4.3',
   title: 'Story-point estimation',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The **estimation** layer of Epic 4 — Jira-faithful story-point estimation that fills the points ' +
     'seams the rest of the epic reserved. Four things ship: (1) a numeric **`work_item.storyPoints`** ' +
@@ -543,7 +543,7 @@ export const story_4_3: PlanStory = {
       id: '4.3.7',
       title:
         'Story tests — estimate write + config + bounded sprint/epic roll-ups (incl. statistic switch + at-scale) + badge/settings components + estimate-a-story E2E',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 24,
