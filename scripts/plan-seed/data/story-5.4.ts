@@ -189,7 +189,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.1',
       title:
         'Schema — `label` + `work_item_label`, `component` + `work_item_component`, `watcher` (+ Epic-6 join-predicate contract, repos)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
