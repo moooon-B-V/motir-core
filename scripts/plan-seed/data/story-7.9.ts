@@ -39,27 +39,43 @@ import type { PlanStory } from '../types';
  * 2.6.x / 6.7 precedent for unexpanded siblings; retarget to the concrete
  * subtask when 7.6 expands). Listing/auth/linking commands don't need 7.6.
  *
- * **Multi-repo projects are the NORM, and `motir link` is designed for them
- * (Yue, 2026-06-10).** A Prodect project usually spans several repos —
- * Prodect itself is `prodect-core` + `prodect-ai`. So linking binds a
- * **workspace root** (the parent directory holding the checkouts) to ONE
- * project, with a repo map inside: `.motir.json` carries `{ serverUrl,
- * workspace, project, repos: { "prodect-core": "./prodect-core",
- * "prodect-ai": "./prodect-ai" } }`. `motir link` run at that root
- * auto-discovers git checkouts in immediate children and confirms the
- * mapping; `motir link add <repo> <path>` amends it. A single-repo project
- * is the degenerate case (run `link` in the repo root, one "." entry).
- * Commands resolve `.motir.json` by walking UPWARD from cwd, so invoking
- * from inside `prodect-core/` still sees the whole map — ONE `motir auto`
- * loop serves the whole project, dispatching each item INTO its target
- * repo's checkout (cwd of the agent process) rather than forcing one loop
- * per repo. The item→repo association comes from the dispatch payload's
- * structured `targetRepo` field — sourced by 7.6's prompt/dispatch
- * generation (the card prose already names "Repo:" per subtask; 7.6 makes
- * it structured) and upgraded to the real repo entity when 7.7's
- * GitHub/repo model lands; this rides the existing 7.6 dep, no new edge.
- * Items targeting a repo with no local mapping are skipped with a
- * "`motir link add`" hint, never guessed into the wrong checkout.
+ * **Multi-repo projects are the NORM — and the link binds a FOLDER to a
+ * PROJECT, not repos (Yue, 2026-06-10, two refinements).** A Prodect project
+ * usually spans several repos (Prodect itself is `prodect-core` +
+ * `prodect-ai`), AND a brand-new project starts from an EMPTY folder — the
+ * plan's first work items are what CREATE the repos (Prodect's own 1.0.1
+ * scaffolded prodect-core into an empty directory). So `motir link` does
+ * exactly one thing: bind the **workspace root** directory to a server +
+ * workspace + project. **Repo paths are CONVENTION, not configuration:**
+ * the item's `targetRepo` resolves to `<root>/<repoName>` by default — the
+ * plan knows its repo names before the repos exist (planning names them,
+ * e.g. "prodect-core", at plan time), so convention covers the new-project
+ * flow from item one with NOTHING to link. `.motir.json` carries
+ * `{ serverUrl, workspace, project }` plus an OPTIONAL `repos` override map
+ * for the exceptions (a checkout living elsewhere / under a different
+ * name): `motir link add <repo> <path>` / `remove` manage overrides only.
+ * Running `link` in an empty folder is therefore first-class — bind and
+ * go. Commands resolve `.motir.json` by walking UPWARD from cwd, so
+ * invoking from inside `prodect-core/` still sees the whole root — ONE
+ * `motir auto` loop serves the whole project, dispatching each item INTO
+ * its target repo's checkout (cwd of the agent process). The item→repo
+ * association comes from the dispatch payload's structured `targetRepo`
+ * field — sourced by 7.6's prompt/dispatch generation (the card prose
+ * already names "Repo:" per subtask; 7.6 makes it structured) and upgraded
+ * to the real repo entity when 7.7's GitHub/repo model lands; rides the
+ * existing 7.6 dep, no new edge.
+ *
+ * **Missing-checkout semantics (the bootstrap rule).** When the resolved
+ * path does not exist, the only sane reading is "this item bootstraps the
+ * repo" — the agent runs with cwd = the workspace root, and the generated
+ * prompt's GIT WORKFLOW for a scaffold item already instructs creating the
+ * checkout (clone the fresh remote / scaffold into `./<repoName>`). After
+ * the agent exits 0, the CLI VERIFIES the conventional path now exists:
+ * present → routing for every later item of that repo just works (nothing
+ * was ever "linked"); absent → the dispatch is reported as suspect (the
+ * item claimed repo X but produced no `./X` — named in the output/summary
+ * with a `motir link add` hint for the off-convention case). The CLI never
+ * guesses an item into a DIFFERENT existing checkout.
  *
  * **Agent execution model.** The CLI does NOT bundle an agent. `motir next`
  * default-prints the prompt (explicit BYOK copy-paste); `--agent "<cmd>"`
@@ -101,9 +117,9 @@ export const story_7_9: PlanStory = {
     "The command-line tool that runs Prodect's execution loop from the terminal: `motir next` " +
     "dispatches the next ready work item to the user's own coding agent, `motir auto` keeps " +
     'dispatching one item at a time until the ready set drains. Full command set: `motir auth ' +
-    'login|status|logout` (PAT), `motir link` (bind a WORKSPACE ROOT — the parent directory ' +
-    "holding the project's repo checkouts, e.g. prodect-core + prodect-ai — to a project, " +
-    'with a repo→path map; single-repo is the degenerate case), ' +
+    'login|status|logout` (PAT), `motir link` (bind a WORKSPACE ROOT directory — possibly ' +
+    'EMPTY for a new project — to a project; repo checkouts resolve by CONVENTION ' +
+    '`<root>/<repoName>`, with an optional override map for exceptions), ' +
     '`motir ready` (the ready set), `motir status` (project pulse), `motir next` / `motir run ' +
     '<key>` (dispatch one), `motir done <key>` (close-out after the PR merges), `motir auto` ' +
     '(the loop), `motir open <key>` (jump to the browser). Built as an MCP client of the 7.8 ' +
@@ -114,14 +130,18 @@ export const story_7_9: PlanStory = {
   verificationRecipeMd:
     '- Pull the Story branch, `pnpm install`, `pnpm prisma migrate dev`, `pnpm db:seed`, ' +
     '`pnpm dev` (the MCP endpoint must be live).\n' +
-    '- Create a PAT in Settings → Account → API tokens. In a scratch WORKSPACE ROOT holding ' +
-    'two git checkouts (mirroring prodect-core + prodect-ai): `motir auth login` (paste the ' +
-    'token; `motir auth status` shows the resolved user), then `motir link` at the root — it ' +
-    'discovers both checkouts, you confirm the repo→path map, and `.motir.json` lands at the ' +
-    'root (no secrets in it).\n' +
-    '- From INSIDE one of the repos, run `motir ready` — the upward `.motir.json` resolution ' +
-    'finds the link; dispatch an item that targets the OTHER repo and verify the agent runs ' +
-    "in that repo's directory.\n" +
+    '- Create a PAT in Settings → Account → API tokens. **Start from an EMPTY scratch ' +
+    'folder** (the new-project flow): `motir auth login` (paste the token; `motir auth ' +
+    'status` shows the resolved user), then `motir link` — bind workspace/project; ' +
+    '`.motir.json` lands with NO repo entries (no secrets in it).\n' +
+    "- Dispatch the project's scaffold item with the fake agent: the agent runs at the " +
+    'root, creates `./<repoName>` (per its prompt), and the CLI confirms the checkout now ' +
+    'exists; the NEXT item targeting that repo dispatches with cwd INSIDE `./<repoName>` — ' +
+    'nothing was ever linked by hand.\n' +
+    '- With two checkouts present (the prodect-core + prodect-ai shape), run `motir ready` ' +
+    'from INSIDE one repo — the upward `.motir.json` resolution finds the binding; dispatch ' +
+    "an item that targets the OTHER repo and verify the agent runs in that repo's " +
+    'directory.\n' +
     '- `motir ready` lists the same set the /ready page shows; `motir status` shows the ' +
     'project pulse (ready / in-progress / sprint).\n' +
     '- `motir next --print` flips the picked item to **In progress** on the live board and ' +
@@ -167,18 +187,21 @@ export const story_7_9: PlanStory = {
         '(`~/.config/motir/config.json`, chmod 600 — the PAT never lands in a repo file); ' +
         '`auth status` — resolved server + token prefix + owning user; `auth logout` — ' +
         'remove the stored token.\n\n' +
-        '**Linking (multi-repo first — the story-header design).** `motir link` — run at ' +
-        "the WORKSPACE ROOT, the parent directory holding the project's repo checkouts " +
-        "(Prodect's own root holds prodect-core + prodect-ai). Interactive (or " +
-        '`--workspace/--project` flags): pick the workspace + project, then the command ' +
-        'auto-discovers git checkouts in immediate children and proposes the repo→path map ' +
-        'for confirmation. Written to `.motir.json` at that root: `{ serverUrl, workspace, ' +
-        'project, repos: { "<repo>": "<relative path>", … } }` — server URL + slugs + paths ' +
-        'only, NEVER the token (safe to commit). `motir link add <repo> <path>` / `motir ' +
-        'link remove <repo>` amend the map; bare `motir link` re-run shows + edits the ' +
-        'current binding. Single-repo projects: run it in the repo root → one "." entry, ' +
-        'same file shape. Commands resolve `.motir.json` by walking UPWARD from cwd (so ' +
-        'every command works from inside any mapped repo), overridable with `--project`.\n\n' +
+        '**Linking (folder → project; repos by convention — the story-header design).** ' +
+        '`motir link` — run at the WORKSPACE ROOT (the directory that holds, or WILL hold, ' +
+        "the project's repo checkouts — an EMPTY folder for a new project is first-class: " +
+        'bind and go, the first scaffold items create the checkouts). Interactive (or ' +
+        '`--workspace/--project` flags): pick the workspace + project; that is the whole ' +
+        'binding. Written to `.motir.json` at that root: `{ serverUrl, workspace, project, ' +
+        'repos?: { "<repo>": "<relative path>", … } }` — the `repos` map is OPTIONAL ' +
+        'OVERRIDES only (default resolution is the convention `<root>/<repoName>`); server ' +
+        'URL + slugs + paths only, NEVER the token (safe to commit). `motir link add <repo> ' +
+        '<path>` / `motir link remove <repo>` manage overrides; bare `motir link` re-run ' +
+        'shows + edits the binding and lists how each known repo currently resolves ' +
+        '(convention or override, exists or not-yet). Single-repo projects: run it in the ' +
+        'repo root → an override `"<repo>": "."`. Commands resolve `.motir.json` by walking ' +
+        'UPWARD from cwd (so every command works from inside any checkout), overridable ' +
+        'with `--project`.\n\n' +
         '## Acceptance criteria\n\n' +
         '- `pnpm --filter motir build` produces a runnable `motir` binary; the root app ' +
         'build/test/lint pipelines are unaffected (CI lanes stay green with the workspace ' +
@@ -187,10 +210,12 @@ export const story_7_9: PlanStory = {
         'a valid one persists with 0600 perms and `auth status` resolves the user.\n' +
         '- `.motir.json` contains no secret; commands error with a clear "run `motir link`" ' +
         'message when no link is found.\n' +
-        '- At a root holding two checkouts, `motir link` proposes both in the repo map and ' +
-        'the confirmed map round-trips; `link add`/`link remove` edit it; resolution walks ' +
-        'upward, so the same map is found from inside either repo; a single-repo link ' +
-        'yields the one-entry "." map (same file shape, no special case).\n' +
+        '- `motir link` succeeds in an EMPTY folder (binding only, no repo entries — the ' +
+        'new-project flow); at a root with checkouts it reports how each known repo ' +
+        'resolves (convention/override, exists/not-yet); `link add`/`link remove` edit ' +
+        'overrides and round-trip; resolution walks upward from inside any checkout; a ' +
+        'single-repo link yields the one-entry "." override (same file shape, no special ' +
+        'case).\n' +
         "- Every wrapper surfaces MCP tool errors with the tool's typed message (no " +
         'swallowed JSON-RPC errors).\n\n' +
         '## Context refs\n\n' +
@@ -263,15 +288,18 @@ export const story_7_9: PlanStory = {
         'status (the CLI analog of `prodect mark <id> done`, run after the human merges the ' +
         "PR in manual mode). Illegal transitions surface the service's allowed-targets " +
         'error verbatim.\n\n' +
-        '**Repo routing (the multi-repo design, story header).** Every dispatch resolves the ' +
-        "item's `targetRepo` from the dispatch payload (7.6 sources it; 7.7's repo entity " +
-        'upgrades it later) against the `.motir.json` repo map and runs the agent with ' +
-        "cwd = that repo's checkout — dispatching a prodect-ai item while standing in " +
-        'prodect-core works, because the map lives at the workspace root. An item whose ' +
-        'targetRepo has NO local mapping is never guessed into the wrong checkout: `next` ' +
-        'skips it (named, with a "`motir link add <repo> <path>`" hint) and picks the next ' +
-        'ready item; `run <key>` on it errors with the same hint. `--print` mode prints the ' +
-        'target repo alongside the prompt so the copy-paste user opens the right checkout.\n\n' +
+        '**Repo routing (convention + bootstrap, story header).** Every dispatch resolves ' +
+        "the item's `targetRepo` from the dispatch payload (7.6 sources it; 7.7's repo " +
+        'entity upgrades it later): an override from `.motir.json` if present, else the ' +
+        'convention `<root>/<repoName>`. Path EXISTS → the agent runs with cwd = that ' +
+        'checkout (dispatching a prodect-ai item while standing in prodect-core works). ' +
+        'Path MISSING → the bootstrap rule: the agent runs at the WORKSPACE ROOT (the ' +
+        "scaffold prompt's GIT WORKFLOW creates the checkout — the empty-folder new-project " +
+        'flow); after exit 0 the CLI verifies the path now exists and reports a suspect ' +
+        'dispatch (with a `motir link add` hint for off-convention layouts) if it does ' +
+        'not. The CLI never guesses an item into a DIFFERENT existing checkout. `--print` ' +
+        'mode prints the target repo + resolved path alongside the prompt so the ' +
+        'copy-paste user opens (or creates) the right checkout.\n\n' +
         '**The CLI never touches git.** Worktree/branch mechanics live inside the generated ' +
         "prompt's GIT WORKFLOW section — the agent (or human) executes them.\n\n" +
         '## Acceptance criteria\n\n' +
@@ -284,9 +312,11 @@ export const story_7_9: PlanStory = {
         '- `motir run <key>` refuses a blocked item without `--force`; `motir done <key>` ' +
         'flips to done and an illegal flip shows the allowed transitions.\n' +
         "- Repo routing: an item targeting repo B dispatches with the agent's cwd inside " +
-        "B's checkout even when invoked from repo A; an unmapped-repo item is skipped (in " +
-        '`next`) / errors (in `run`) with the `motir link add` hint and is NEVER executed ' +
-        'in the wrong checkout; `--print` names the target repo.\n' +
+        "B's checkout even when invoked from repo A (convention path, no override needed); " +
+        'a MISSING-path item dispatches at the workspace root and the CLI verifies the ' +
+        'checkout exists afterward (reported as suspect with the `motir link add` hint when ' +
+        'it does not); an item is NEVER executed in a different existing checkout; ' +
+        '`--print` names the target repo + resolved path.\n' +
         "- All flips are attributed to the PAT's owning user (visible in the item's " +
         'activity).\n\n' +
         '## Context refs\n\n' +
@@ -320,10 +350,11 @@ export const story_7_9: PlanStory = {
         '- **Manual merge mode reality:** the loop drains the CURRENTLY-ready set. Items ' +
         'whose deps complete only when a human merges + `motir done`s stay out of reach — ' +
         'the loop reports them as "blocked awaiting review" in the summary instead of ' +
-        'spinning; items targeting an UNMAPPED repo are likewise skipped once, reported ' +
-        'under "unmapped repo" with the `motir link add` hint, and excluded for the rest of ' +
-        "the invocation. Each dispatched item runs in its OWN target repo's checkout (the " +
-        '7.9.3 routing) — one loop serves the whole multi-repo project, no per-repo loops. ' +
+        "spinning. Each dispatched item runs in its OWN target repo's checkout per the " +
+        '7.9.3 routing — including the bootstrap case (missing path → dispatch at the root; ' +
+        'a bootstrap whose verification fails counts as a dispatch FAILURE for the halt / ' +
+        '--keep-going policy) — so one loop serves the whole multi-repo project from an ' +
+        'empty folder onward, no per-repo loops. ' +
         'In auto merge mode (workspace opt-in) the ready set refills as items reach done ' +
         'and the loop cascades.\n' +
         '- `--max <n>` caps dispatches per invocation; `--kinds` filters as in `next`.\n' +
@@ -364,11 +395,13 @@ export const story_7_9: PlanStory = {
         'server, with a fake agent script that records its stdin/`$MOTIR_PROMPT_FILE` and ' +
         'exits per fixture.\n\n' +
         '- **Auth + linking:** login with valid/invalid/revoked PATs; commands without a ' +
-        'link error with guidance; `.motir.json` resolution from a subdirectory. The ' +
-        'fixture is a TWO-checkout workspace root (the prodect-core + prodect-ai shape): ' +
-        'link discovery proposes both repos; dispatch routes each item into its target ' +
-        'checkout (the fake agent records its cwd); an unmapped-repo item is skipped with ' +
-        'the hint, asserted in both `next` and `auto`.\n' +
+        'link error with guidance; `.motir.json` resolution from a subdirectory. TWO ' +
+        'fixtures: (a) an EMPTY workspace root — link binds with no repo entries, the ' +
+        'scaffold item dispatches at the root (fake agent creates `./<repo>`), the next ' +
+        'item routes INTO it by convention; (b) a two-checkout root (the prodect-core + ' +
+        'prodect-ai shape) — dispatch routes each item into its target checkout (the fake ' +
+        'agent records its cwd), and a failed bootstrap (agent exits 0 but creates ' +
+        'nothing) is reported as suspect, asserted in both `next` and `auto`.\n' +
         '- **Read parity:** `motir ready --json` ≡ `list_ready` ≡ the /ready set for the ' +
         'same user.\n' +
         '- **Dispatch:** `next --print` flips in_progress + prints the server prompt ' +
