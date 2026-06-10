@@ -294,7 +294,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.3',
       title:
         '`componentsService` — admin CRUD + default-assignee-at-create (first-alphabetical) + move-or-remove delete + per-issue assignment, revision diffs',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
