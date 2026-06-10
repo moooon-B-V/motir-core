@@ -586,7 +586,7 @@ export const EPICS: EpicMeta[] = [
   {
     id: '4',
     title: 'Agile planning',
-    status: 'planned',
+    status: 'done',
     descriptionMd:
       'Sprint-based delivery on top of the issue tracker: the **backlog**, **sprints** (create / ' +
       'start / complete), **story-point estimation**, the **Scrum board** (the Epic-3 Kanban ' +
