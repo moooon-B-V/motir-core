@@ -919,7 +919,30 @@
     "boardCreateErrorDescription": "无法创建看板，请重试。",
     "boardRenameErrorDescription": "无法重命名看板，更改已撤销。",
     "boardSetDefaultErrorDescription": "无法设置默认看板，更改已撤销。",
-    "boardDeleteErrorDescription": "无法删除看板，更改已撤销。"
+    "boardDeleteErrorDescription": "无法删除看板，更改已撤销。",
+    "sprintRegionLabel": "{name} — {state}，{remaining}",
+    "sprintState": {
+      "planned": "已规划",
+      "active": "进行中",
+      "complete": "已完成"
+    },
+    "sprintGoalLead": "目标",
+    "sprintDaysRemaining": "{days, plural, other {剩余 # 天}}",
+    "sprintEnded": "已结束",
+    "sprintEndedTitle": "已超过结束日期 — 完成此 Sprint",
+    "sprintCommitted": "已承诺",
+    "sprintCompleted": "已完成",
+    "sprintRemaining": "剩余",
+    "sprintPointsAria": "点数：已承诺 {committed}，已完成 {completed}，剩余 {remaining}",
+    "sprintPointsUnestimatedAria": "本 Sprint 无已估算点数",
+    "sprintCompleteAction": "完成 Sprint",
+    "sprintCompleteLoadErrorTitle": "无法打开“完成 Sprint”",
+    "sprintCompleteLoadErrorDescription": "无法加载 Sprint 详情。请重试。",
+    "sprintColumnPoints": "{points} 点",
+    "sprintColumnPointsTitle": "此列共 {points} 个故事点",
+    "noActiveSprintTitle": "没有进行中的 Sprint",
+    "noActiveSprintDescription": "此看板当前没有进行中的 Sprint。在待办列表中规划并开始一个 Sprint，其事项将在此处的工作流列中显示。",
+    "noActiveSprintCta": "前往待办列表"
   },
   "ready": {
     "heading": "可开始",

@@ -919,7 +919,30 @@
     "boardCreateErrorDescription": "The board couldn’t be created. Please try again.",
     "boardRenameErrorDescription": "The board couldn’t be renamed. The change was reverted.",
     "boardSetDefaultErrorDescription": "Couldn’t set the default board. The change was reverted.",
-    "boardDeleteErrorDescription": "The board couldn’t be deleted. The change was reverted."
+    "boardDeleteErrorDescription": "The board couldn’t be deleted. The change was reverted.",
+    "sprintRegionLabel": "{name} — {state}, {remaining}",
+    "sprintState": {
+      "planned": "Planned",
+      "active": "Active",
+      "complete": "Completed"
+    },
+    "sprintGoalLead": "Goal",
+    "sprintDaysRemaining": "{days, plural, one {# day remaining} other {# days remaining}}",
+    "sprintEnded": "Ended",
+    "sprintEndedTitle": "Past the end date — complete this sprint",
+    "sprintCommitted": "Committed",
+    "sprintCompleted": "Completed",
+    "sprintRemaining": "Remaining",
+    "sprintPointsAria": "Story points: {committed} committed, {completed} completed, {remaining} remaining",
+    "sprintPointsUnestimatedAria": "Story points not estimated",
+    "sprintCompleteAction": "Complete sprint",
+    "sprintCompleteLoadErrorTitle": "Couldn’t open Complete sprint",
+    "sprintCompleteLoadErrorDescription": "We couldn’t load the sprint details. Try again.",
+    "sprintColumnPoints": "{points} pts",
+    "sprintColumnPointsTitle": "{points} story points in this column",
+    "noActiveSprintTitle": "No active sprint",
+    "noActiveSprintDescription": "This board has no sprint in progress. Plan and start a sprint from the backlog, and its issues will appear here in workflow columns.",
+    "noActiveSprintCta": "Go to Backlog"
   },
   "ready": {
     "heading": "Ready to start",

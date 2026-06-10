@@ -30,6 +30,7 @@ import type {
 } from '@/lib/dto/boards';
 import type { MoveCardResultDto } from '@/lib/dto/boards';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+import type { WorkflowDto } from '@/lib/dto/workflows';
 import { useCreateIssue } from '../../_components/CreateIssueProvider';
 import { usePeekOpen } from '../../issues/_components/IssueQuickView';
 import { updateIssueAction } from '../../issues/[key]/edit/actions';
@@ -38,7 +39,9 @@ import { BoardColumn } from './BoardColumn';
 import { BoardColumnPager, useActiveColumnIndex } from './BoardColumnPager';
 import { BoardEmptyState } from './BoardEmptyState';
 import { BoardSkeleton } from './BoardSkeleton';
+import { NoActiveSprintState } from './NoActiveSprintState';
 import { OverCapBanner } from './OverCapBanner';
+import { SprintHeader } from './SprintHeader';
 import { SwimlaneBoard } from './SwimlaneBoard';
 import { UnmappedStatusesTray } from './UnmappedStatusesTray';
 import {
@@ -102,6 +105,8 @@ export function BoardContainer({
   activeProjectId,
   selectedBoardId,
   canEdit = true,
+  projectName = '',
+  workflow,
 }: {
   members?: WorkspaceMemberDTO[];
   activeProjectId?: string;
@@ -112,6 +117,15 @@ export function BoardContainer({
    * disabled and a banner explains why (the server rejects the move regardless).
    */
   canEdit?: boolean;
+  /**
+   * Active project name + workflow — resolved once by the page (Subtask 4.5.3),
+   * threaded to the scrum `SprintHeader` so its Complete-sprint entry can mount
+   * the Story-4.4 flow (`projectName` = the dialog subtitle; `workflow` =
+   * `statusByKey` for the report). Only consumed on a scrum board with an active
+   * sprint; harmless (and unused) on a kanban board.
+   */
+  projectName?: string;
+  workflow?: WorkflowDto;
 }) {
   const t = useTranslations('boards');
   // The selected board (Subtask 3.7.5) — the page's `?board=<id>` selection. It
@@ -258,6 +272,38 @@ export function BoardContainer({
   const hasUnmapped = board.unmappedStatuses.length > 0;
   const isEmpty = !hasUnmapped && board.columns.every((c) => c.totalCount === 0);
 
+  // SCRUM resolution (Subtask 4.5.3) — keyed purely off the resolved board's
+  // `type` (which board is resolved when a project has several is a board-nav
+  // concern, Story 3.7). A scrum board with NO active sprint (`sprint: null` — the
+  // common pre-start / post-complete state) REPLACES the board with the
+  // no-active-sprint state (never an empty six-column board, never the unscoped
+  // backlog). A kanban board has `sprint: null` too, so the empty state is gated
+  // on `type === 'scrum'`. With an active sprint, the `SprintHeader` renders above
+  // the REUSED board, and the per-column point totals thread down to the columns.
+  const isScrum = board.type === 'scrum';
+  const noActiveSprint = isScrum && board.sprint === null;
+  // Per-column point pills only when the active sprint is ESTIMATED (committed >
+  // 0); an unestimated sprint would otherwise paint "0 pts" on every column. A
+  // kanban board passes `null` (no pills) — the same column header serves both.
+  const columnPoints =
+    board.sprint && board.sprint.points.committed > 0 ? board.sprint.columnPoints : null;
+
+  if (noActiveSprint) {
+    return (
+      <div className="flex min-w-0 flex-col gap-3">
+        {!canEdit ? (
+          <div
+            role="status"
+            className="rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-(--spacing-card-padding) py-(--spacing-control-y) text-sm text-(--el-text-secondary)"
+          >
+            {t('readOnlyBoardBanner')}
+          </div>
+        ) : null}
+        <NoActiveSprintState />
+      </div>
+    );
+  }
+
   // The over-cap banner (Subtask 3.8.4) is a board-level signal, so it sits
   // ABOVE both layouts in the container (like the unmapped tray) and shows for
   // the flat AND swimlane board — rendered exactly when the 3.8.2 projection's
@@ -265,6 +311,19 @@ export function BoardContainer({
   // so this never coincides with the empty state.
   return (
     <div className="flex min-w-0 flex-col gap-3">
+      {/* SCRUM sprint header (Subtask 4.5.3) — the one net-new surface, above the
+          REUSED 3.2/3.3 board, drawn from the 4.5.2 `SprintSummaryDto`. Present
+          only on a scrum board with an active sprint (the no-active-sprint case
+          returned early above; a kanban board has `sprint === null`). */}
+      {isScrum && board.sprint ? (
+        <SprintHeader
+          sprint={board.sprint}
+          projectName={projectName}
+          workflow={workflow}
+          canEdit={canEdit}
+          onSprintCompleted={retry}
+        />
+      ) : null}
       {/* The group-by control is portaled into the header toolbar slot (beside the
           switcher) — the design row, not a separate body row. Shown only for a
           non-empty board (an empty board has nothing to group); stays visible
@@ -305,6 +364,7 @@ export function BoardContainer({
           board={board}
           assigneeNameById={assigneeNameById}
           canEdit={canEdit}
+          columnPoints={columnPoints}
         />
       )}
     </div>
@@ -364,10 +424,17 @@ function BoardDnd({
   board,
   assigneeNameById,
   canEdit,
+  columnPoints,
 }: {
   board: BoardProjectionDto;
   assigneeNameById: Map<string, string>;
   canEdit: boolean;
+  /**
+   * Per-column sprint point totals (Subtask 4.5.3) keyed by column id, or `null`
+   * on a kanban board / an unestimated sprint — the column header renders the
+   * "N pts" pill when its entry is present.
+   */
+  columnPoints: Record<string, number> | null;
 }) {
   const t = useTranslations('boards');
   const { toast } = useToast();
@@ -865,6 +932,7 @@ function BoardDnd({
           onSetWipLimit={setColumnWip}
           activeCardId={activeCard?.id ?? null}
           overLaneKey={overLaneKey}
+          columnPoints={columnPoints}
         />
       ) : (
         <div className="flex min-w-0 flex-col gap-2">
@@ -890,6 +958,7 @@ function BoardDnd({
                   onOpenQuickView={openPeek}
                   activeCardId={activeCard?.id ?? null}
                   onSetWipLimit={setColumnWip}
+                  points={columnPoints?.[column.id] ?? null}
                 />
               </div>
             ))}

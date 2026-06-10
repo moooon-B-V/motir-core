@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
+import { workflowsService } from '@/lib/services/workflowsService';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { NewIssueButton } from '../issues/_components/NewIssueButton';
 import { IssueQuickView } from '../issues/_components/IssueQuickView';
@@ -100,11 +101,20 @@ export default async function BoardsPage({
   // the page calls services only (never Prisma) per the 4-layer rule.
   // Assignable users are scoped by access level (6.4.6): a private project lists
   // only its project members; open/limited list the whole workspace.
-  const members = await assignableMembersService.list({
-    projectId: ctx.projectId,
-    accessLevel: ctx.project.accessLevel,
-    ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
-  });
+  // `workflow` resolves the project's statuses → `statusByKey` for the scrum
+  // header's Complete-sprint dialog (Story 4.4 flow, mounted by 4.5.3). Resolved
+  // here (services only, 4-layer) and threaded to BoardContainer alongside the
+  // members; it's only consumed on a scrum board with an active sprint, but the
+  // page can't know the board type (the board is client-fetched), so it's a cheap
+  // unconditional read — harmless on a kanban board.
+  const [members, workflow] = await Promise.all([
+    assignableMembersService.list({
+      projectId: ctx.projectId,
+      accessLevel: ctx.project.accessLevel,
+      ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    }),
+    workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -144,6 +154,8 @@ export default async function BoardsPage({
         activeProjectId={ctx.projectId}
         selectedBoardId={selectedBoardId}
         canEdit={caps.canEdit}
+        projectName={ctx.project.name}
+        workflow={workflow}
       />
 
       {/* Quick-view peek — the modal frame mounts when `?peek` is present; the

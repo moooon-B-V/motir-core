@@ -8,6 +8,7 @@ import { useRowWindow } from '@/components/ui/useRowWindow';
 import type { BoardColumnDto } from '@/lib/dto/boards';
 import { BoardCard } from './BoardCard';
 import { ColumnActionsMenu } from './ColumnActionsMenu';
+import { ColumnPointsBadge } from './ColumnPointsBadge';
 import { ColumnWipBadge } from './ColumnWipBadge';
 
 // BoardColumn (Subtask 3.2.3 · drop 3.2.4 · scale 3.2.5 · load model 3.8.3) — one
@@ -56,6 +57,7 @@ export function BoardColumn({
   onOpenQuickView,
   activeCardId,
   onSetWipLimit,
+  points = null,
 }: {
   column: BoardColumnDto;
   /** The board being viewed — threaded to the `[⋯]` Board-settings link (3.7.8). */
@@ -64,6 +66,9 @@ export function BoardColumn({
   onOpenQuickView: (identifier: string) => void;
   activeCardId: string | null;
   onSetWipLimit: (columnId: string, limit: number | null) => void;
+  /** This column's sprint point total (Subtask 4.5.3), or `null` on a kanban
+   *  board / unestimated sprint — renders the "N pts" pill after the count badge. */
+  points?: number | null;
 }) {
   const t = useTranslations('boards');
   // The whole column is the droppable, so a drop anywhere in it (incl. the empty
@@ -129,6 +134,9 @@ export function BoardColumn({
         >
           {column.totalCount}
         </span>
+        {/* Per-column sprint point total (4.5.3) — sits with the count on the left
+            (both describe the column's contents); absent on a kanban board. */}
+        <ColumnPointsBadge columnId={column.id} points={points} />
         <span className="flex-1" />
         {/* WIP-limit chip — `n/limit` + the SOFT over-limit warning (3.3.6). */}
         <ColumnWipBadge
