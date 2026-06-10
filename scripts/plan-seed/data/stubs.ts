@@ -223,8 +223,10 @@ export const STUB_STORIES: PlanStory[] = [
       'GIT WORKFLOW block is a DISPATCH-TIME template parameter — TWO variants (per-item PR ' +
       'for `next` / session-branch <name> for `auto`; an auto-merge-to-main variant was ' +
       'REJECTED as dangerous, main only moves through a human-merged PR), selected by the ' +
-      'dispatch request; also a structured `targetRepo` field on the dispatch payload ' +
-      "(7.7's repo entity upgrades it later).",
+      'dispatch request; also a structured `targetRepo` field AND the inherited ' +
+      '`sessionBranch` (7.8.11 — when an item is ready via an integrated-awaiting-review ' +
+      'dep, the GIT WORKFLOW must instruct building on that recorded branch) on the ' +
+      "dispatch payload (7.7's repo entity upgrades targetRepo later).",
     items: [],
   },
   {

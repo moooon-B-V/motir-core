@@ -92,28 +92,40 @@ import type { PlanStory } from '../types';
  * and what unlocks the next item.** Dispatch always flips the item to
  * `in_progress` first; what happens at agent-success differs by mode:
  *
- *   1. **`motir next` (single item, default):** the prompt's GIT WORKFLOW
- *      is today's manual flow — branch from origin/main, open ONE PR for
- *      the item, stop. The human reviews/merges, then `motir done <key>`.
- *      Nothing auto-flips.
+ *   1. **`motir next` (single item):** if the item's deps are all done (on
+ *      main), the prompt's GIT WORKFLOW is today's manual flow — branch
+ *      from origin/main, open ONE PR for the item, stop; the human
+ *      reviews/merges, then `motir done <key>`. **If any dep is
+ *      integrated-awaiting-review** (its recorded `session_branch` is what
+ *      made this item ready — 7.8.11), the item JOINS that lineage: the
+ *      dispatch payload carries the inherited `sessionBranch`, the prompt
+ *      instructs branching from / integrating into THAT branch (the dep's
+ *      code isn't on main, so a per-item PR to main would not even build),
+ *      and on success the item is `mark_integrated` on the same branch.
  *   2. **`motir auto` (always the SESSION-BRANCH mode — no alternative):**
- *      at loop start
- *      the CLI creates a session branch off the LATEST origin/main in each
- *      repo it dispatches into (e.g. `motir/auto-<run-id>`). Every item's
- *      prompt instructs the agent to integrate its work into THAT branch
- *      (branch-from + merge-back inside the session line, no per-item PR).
- *      On agent success the CLI flips the item `done` — the work IS
- *      integrated on the session line, and that flip is what lets
- *      `next_ready` unlock the item's dependents WITHIN the run, so the
- *      loop cascades through the dependency graph instead of draining only
- *      the initially-ready set. At loop end (drained, --max, halt, or
- *      Ctrl-C) the CLI pushes each touched repo's session branch and opens
- *      ONE PR per touched repo (session branch → main) listing every item
- *      it carries — the human reviews the whole run as one unit. Recorded
- *      consequence: `done` statuses run AHEAD of main until that PR
- *      merges; if the human rejects it, the statuses are reverted by hand
- *      or via MCP (`transition_status`) — the summary names every flipped
- *      item precisely so that recovery is mechanical.
+ *      at loop start the CLI creates a session branch off the LATEST
+ *      origin/main in each repo it dispatches into (e.g.
+ *      `motir/auto-<run-id>`). Every item's prompt instructs the agent to
+ *      integrate its work into THAT branch (branch-from + merge-back
+ *      inside the session line, no per-item PR). On agent success the CLI
+ *      calls `mark_integrated(key, sessionBranch)` (7.8.11): the item
+ *      moves to **`in_review`** — NOT done; the work isn't on main yet —
+ *      with the session branch RECORDED on the work item. The 7.8.11
+ *      integrated-dep readiness rule (a dep with a recorded session
+ *      branch satisfies its dependents) is what lets `next_ready` unlock
+ *      the item's dependents WITHIN the run, so the loop cascades through
+ *      the dependency graph instead of draining only the initially-ready
+ *      set — and the recorded branch is what the dependents' prompts are
+ *      built against. At loop end (drained, --max, halt, or Ctrl-C) the
+ *      CLI pushes each touched repo's session branch and opens ONE PR per
+ *      touched repo (session branch → main) listing every carried item —
+ *      the human reviews the whole run as one unit. **Close-out:** after
+ *      merging the session PR, `motir done --session <branch>` (the
+ *      `complete_session` tool) flips every item recorded on that branch
+ *      to done and clears the field; rejecting the PR instead leaves the
+ *      items honestly in `in_review` — flip them back to in_progress (or
+ *      re-dispatch) and the field clears with the new outcome. Statuses
+ *      never claim main has work it doesn't have.
  * **REJECTED: `--auto-merge` (Yue, 2026-06-10 — same day, retracted).** A
  * mode where the agent merges its own per-item PRs straight to main was
  * considered and REJECTED as dangerous: an unattended loop must never
@@ -165,11 +177,13 @@ export const story_7_9: PlanStory = {
     'EMPTY for a new project — to a project; repo checkouts resolve by CONVENTION ' +
     '`<root>/<repoName>`, with an optional override map for exceptions), ' +
     '`motir ready` (the ready set), `motir status` (project pulse), `motir next` / `motir run ' +
-    '<key>` (dispatch one), `motir done <key>` (close-out after the PR merges), `motir auto` ' +
+    '<key>` (dispatch one), `motir done <key>` / `motir done --session <branch>` (close-out ' +
+    'after the human merges — per item, or every item a session branch carries), `motir auto` ' +
     '(the loop — ALWAYS session-branch mode: one branch off latest main per touched repo, ' +
-    'items integrate into it and flip done so dependents cascade mid-run, ONE end-of-run PR ' +
-    'per repo; auto-merging to main was rejected as dangerous — main only moves through a ' +
-    'human-merged PR), ' +
+    'items integrate into it and move to IN_REVIEW with the branch recorded on the work item ' +
+    '(7.8.11) so dependents cascade mid-run and their prompts build against that branch; ONE ' +
+    'end-of-run PR per repo; auto-merging to main was rejected as dangerous — main only moves ' +
+    'through a human-merged PR), ' +
     '`motir open <key>` (jump to the browser). A reference SANDBOX container ships for the ' +
     'unattended form (`--agent "claude --dangerously-skip-permissions"` confined to the ' +
     'mounted workspace; manual-approval console runs stay supported). Built as an MCP client ' +
@@ -203,14 +217,18 @@ export const story_7_9: PlanStory = {
     'as a dispatch failure with the item left in_progress and named in the output.\n' +
     '- Merge the (pretend) PR, run `motir done <key>` — the item flips to Done on the board.\n' +
     '- `motir auto --agent "./fake-agent.sh"` on a fixture with a dependency CHAIN: a session ' +
-    'branch appears off latest main, items dispatch one-by-one and flip done as they ' +
-    'integrate (dependents unlock MID-RUN), and the run ends with the session branch pushed + ' +
-    'ONE PR per touched repo listing every carried item; the summary table lists every item ' +
-    'with its outcome; a mid-loop agent failure halts by default and `--keep-going` skips ' +
-    'past it (the failed item stays in_progress, excluded from re-dispatch) — the end-of-run ' +
-    'PR still opens with what integrated cleanly.\n' +
+    'branch appears off latest main, items dispatch one-by-one and move to **In review** with ' +
+    'the branch recorded on each card (visible on the issue detail) as they integrate — ' +
+    'dependents unlock MID-RUN off that recorded branch — and the run ends with the session ' +
+    'branch pushed + ONE PR per touched repo listing every carried item; the summary table ' +
+    'lists every item with its outcome; a mid-loop agent failure halts by default and ' +
+    '`--keep-going` skips past it (the failed item stays in_progress, excluded from ' +
+    're-dispatch) — the end-of-run PR still opens with what integrated cleanly.\n' +
     '- Verify main NEVER moved during the run — every change sits on the session branch ' +
-    'behind the un-merged end-of-run PR (the no-auto-merge-to-main invariant).\n' +
+    'behind the un-merged end-of-run PR (the no-auto-merge-to-main invariant), and NO item ' +
+    'claims done.\n' +
+    '- Merge the session PR, run `motir done --session <branch>` — every carried item flips ' +
+    'to Done on the board in one shot and the recorded branches clear.\n' +
     '- Revoke the PAT → every command fails with the auth error and a re-login hint.',
   items: [
     {
@@ -342,7 +360,16 @@ export const story_7_9: PlanStory = {
         "**`motir done <key>`** — the close-out: `transition_status` → the project's done " +
         'status (the CLI analog of `prodect mark <id> done`, run after the human merges the ' +
         "PR in manual mode). Illegal transitions surface the service's allowed-targets " +
-        'error verbatim.\n\n' +
+        'error verbatim. **`motir done --session <branch>`** — the bulk close-out for a ' +
+        'merged SESSION PR: calls `complete_session` (7.8.11), flipping every item recorded ' +
+        'on that branch to done and clearing the field; prints the per-item outcomes.\n\n' +
+        '**Session-lineage `next` (the 7.8.11 inherited branch).** When the dispatch ' +
+        'payload carries an inherited `sessionBranch` (the item is ready BECAUSE a dep is ' +
+        'integrated-awaiting-review on that branch), `motir next` does NOT use the ' +
+        "per-item-PR flow — the dep's code is not on main, so a PR to main could not even " +
+        'build. The prompt (7.6 session variant) instructs branching from / integrating ' +
+        'into the inherited branch, and on success the item is `mark_integrated` on it — ' +
+        "the item JOINS the session lineage and ships with that session's PR.\n\n" +
         '**Repo routing (convention + bootstrap, story header).** Every dispatch resolves ' +
         "the item's `targetRepo` from the dispatch payload (7.6 sources it; 7.7's repo " +
         'entity upgrades it later): an override from `.motir.json` if present, else the ' +
@@ -390,7 +417,7 @@ export const story_7_9: PlanStory = {
         '- `PRODECT.md` § Prompt structure (what the generated prompt must contain — ' +
         'asserted server-side in 7.6, consumed here)\n\n' +
         '**Branch.** `subtask/PROD-7.9.3-cli-dispatch`.',
-      dependsOn: ['7.9.1', '7.8.5', '7.6'],
+      dependsOn: ['7.9.1', '7.8.5', '7.8.11', '7.6'],
     },
     {
       id: '7.9.4',
@@ -412,14 +439,19 @@ export const story_7_9: PlanStory = {
         '`motir/auto-<run-id>` off the LATEST origin/main in each repo it dispatches into ' +
         "(lazily, on that repo's first item). Each item's prompt (the 7.6 dispatch-mode " +
         'parameter) instructs the agent to integrate its work into that session branch — ' +
-        'no per-item PR. On agent success the CLI flips the item DONE (the work is ' +
-        'integrated on the session line), which is exactly what lets `next_ready` unlock ' +
-        'its dependents mid-run: the loop cascades through the dependency graph, not just ' +
-        'the initially-ready set. At loop end — drained, `--max`, halt, or Ctrl-C — the ' +
-        'CLI pushes each touched session branch and opens ONE PR per touched repo ' +
+        'no per-item PR. On agent success the CLI calls `mark_integrated(key, branch)` ' +
+        '(7.8.11): the item moves to IN_REVIEW — never done; main does not have the work ' +
+        'yet — with the session branch RECORDED on the work item. The 7.8.11 ' +
+        'integrated-dep readiness rule is what unlocks its dependents mid-run (the loop ' +
+        'cascades through the dependency graph, not just the initially-ready set), and ' +
+        'the recorded branch is what their dispatch payloads carry so 7.6 builds their ' +
+        'prompts against it. At loop end — drained, `--max`, halt, or Ctrl-C — the CLI ' +
+        'pushes each touched session branch and opens ONE PR per touched repo ' +
         '(session → main) listing every carried item; the human reviews the run as one ' +
-        'unit. The summary names every done-flipped item so a rejected PR can be unwound ' +
-        'mechanically (flip back by hand or via MCP).\n' +
+        'unit. **Close-out:** after merging the session PR, `motir done --session ' +
+        '<branch>` (7.9.3 / the `complete_session` tool) flips every carried item to done ' +
+        'and clears the recorded branch; a REJECTED PR leaves the items honestly ' +
+        'in_review — the summary names them, flip back or re-dispatch.\n' +
         '- **Main is never auto-advanced.** The loop has no path that merges to main: not ' +
         'the CLI, and not via the prompt (the generated GIT WORKFLOW for auto items ' +
         'integrates into the session branch ONLY). The single end-of-run PR per repo is ' +
@@ -441,24 +473,27 @@ export const story_7_9: PlanStory = {
         'newly-unlocked items join in ready order.\n\n' +
         '## Acceptance criteria\n\n' +
         '- On a fixture DEPENDENCY CHAIN (A ← B ← C), `motir auto` with an always-green ' +
-        'fake agent dispatches all three in order — B unlocks when A flips done on the ' +
-        'session line — one at a time, exits 0, and ends with the session branch pushed + ' +
-        "ONE PR per touched repo listing the carried items; main's ref is asserted " +
-        'UNCHANGED across the whole run (the no-auto-merge invariant).\n' +
+        'fake agent dispatches all three in order — B unlocks when A reaches in_review ' +
+        "WITH the session branch recorded (the 7.8.11 rule), and B's dispatch payload " +
+        'carries that branch — one at a time, exits 0, and ends with the session branch ' +
+        "pushed + ONE PR per touched repo listing the carried items; main's ref is " +
+        'asserted UNCHANGED across the whole run (the no-auto-merge invariant); no item ' +
+        'is done until `motir done --session` runs after the (fixture) merge, which flips ' +
+        'all three and clears the recorded branches.\n' +
         '- A mid-loop failure halts by default with a non-zero exit; `--keep-going` ' +
         'finishes the remainder and lists the failure; the failed item is in_progress and ' +
         'never re-dispatched in that invocation; in session mode the end-of-run PR still ' +
         'opens with the completed items.\n' +
-        '- The summary names every done-flipped item (the unwind contract); `--max` is ' +
-        'honored; Ctrl-C leaves the server state consistent (no half-applied transition) ' +
-        'and still lands the session push + PR.\n\n' +
+        '- The summary names every in_review item with its recorded branch (the unwind / ' +
+        'close-out contract); `--max` is honored; Ctrl-C leaves the server state ' +
+        'consistent (no half-applied transition) and still lands the session push + PR.\n\n' +
         '## Context refs\n\n' +
         '- 7.9.3 (the single-dispatch pipeline this loops)\n' +
         '- story-7.0.ts (`next_ready` sort/exclude contract)\n' +
         '- PRODECT.md `prodect run` (the readiness-is-dependency-only rule the loop ' +
         'mirrors)\n\n' +
         '**Branch.** `subtask/PROD-7.9.4-cli-auto-loop`.',
-      dependsOn: ['7.9.3'],
+      dependsOn: ['7.9.3', '7.8.11'],
     },
     {
       id: '7.9.5',
@@ -486,9 +521,11 @@ export const story_7_9: PlanStory = {
         'verbatim; `--agent` exit-code handling (0 / non-zero); `run --force` on a blocked ' +
         'item; `done` legal + illegal flips.\n' +
         '- **Session-branch integration:** the 7.9.4 dependency-chain fixture — mid-run ' +
-        'cascade via done-on-session-line, end-of-run push + one PR per touched repo, the ' +
-        'rejected-PR unwind list, and the no-auto-merge invariant (main unchanged across ' +
-        'the run).\n' +
+        "cascade via in_review + recorded branch (7.8.11), dependents' dispatch payloads " +
+        'carrying the inherited branch, end-of-run push + one PR per touched repo, the ' +
+        '`motir done --session` close-out round-trip (all items done, branches cleared), ' +
+        'the rejected-PR unwind list, and the no-auto-merge invariant (main unchanged ' +
+        'across the run).\n' +
         '- **Auto loop:** the 7.9.4 fixture graph end-to-end (drain order, halt vs ' +
         '--keep-going, --max, the manual-merge-mode termination case).\n' +
         '- **Attribution:** every transition lands as the PAT user in the revision trail.\n' +
@@ -518,9 +555,10 @@ export const story_7_9: PlanStory = {
         '(`pnpm --filter motir...`; npm install lands with the Epic-8 publish), `auth ' +
         'login` + PAT creation pointer (the 7.8.8 doc), `link`, every command with examples, ' +
         'agent wiring recipes (`--agent "claude -p"` headless and a copy-paste flow), the ' +
-        'SESSION-BRANCH semantics (done-flips run ahead of main until the end-of-run PR ' +
-        'merges, how to unwind a rejected run, and WHY there is no auto-merge-to-main — ' +
-        'the rejected-decision note), the failure policy, the SANDBOX recipe ' +
+        'SESSION-BRANCH semantics (in_review + the recorded branch while the end-of-run ' +
+        'PR awaits review, the `motir done --session` close-out, how to unwind a rejected ' +
+        'run, and WHY there is no auto-merge-to-main — the rejected-decision note), the ' +
+        'failure policy, the SANDBOX recipe ' +
         '(when to use the 7.9.7 container for `--dangerously-skip-permissions` agents vs ' +
         'a manual-approval console run), and troubleshooting (revoked token, no link, ' +
         'blocked item, failed bootstrap).\n\n' +

@@ -65,7 +65,12 @@ import type { PlanStory } from '../types';
  * when that codec lands, and the 7.8.10 sprint set (added on Yue's
  * direction, 2026-06-10: list/create/update/delete sprint, move items
  * sprint↔backlog, start, complete) — every sprint tool a thin adapter over
- * the shipped-and-done Epic-4 services. NOT in scope (each has an owning
+ * the shipped-and-done Epic-4 services. Plus the 7.8.11 INTEGRATION-STATE
+ * substrate the 7.9 CLI session loop rides (Yue, 2026-06-10): the
+ * `in_review` status, `work_item.session_branch`, the integrated-dep
+ * readiness rule (a dep with a recorded session branch unblocks its
+ * dependents before main merges), and the `mark_integrated` /
+ * `complete_session` tools. NOT in scope (each has an owning
  * story already): prompt generation (7.6), GitHub sync (7.7), planner tools /
  * shared-context retrieval (7.5), notifications (5.7). Completeness axis:
  * tool reads are paginated from day one (they wrap services that already
@@ -79,8 +84,10 @@ export const story_7_8: PlanStory = {
   gitBranch: 'story/PROD-7.8-mcp-server',
   descriptionMd:
     'An MCP server exposing the PM core to AI agents: query work items + the ready set, create ' +
-    'work items, log bugs, comment, transition statuses, and run the full sprint cadence ' +
-    '(create/scope/start/complete + settings, 7.8.10) — per-user API-token auth, every ' +
+    'work items, log bugs, comment, transition statuses, run the full sprint cadence ' +
+    '(create/scope/start/complete + settings, 7.8.10), and carry integration state for the ' +
+    'CLI session loop (7.8.11: in_review + session_branch + integrated-dep readiness + ' +
+    '`mark_integrated`/`complete_session`) — per-user API-token auth, every ' +
     'tool honoring the same workspace/project access checks as the UI (enforced in the service ' +
     'layer, 6.4). The mirror products ship exactly this (the official Atlassian Remote MCP ' +
     'Server — OAuth 2.1, read+write, "access only to data the user already has permission to ' +
@@ -538,6 +545,76 @@ export const story_7_8: PlanStory = {
       dependsOn: ['7.8.4'],
     },
     {
+      id: '7.8.11',
+      title:
+        'Integration-state substrate — `in_review` status, `work_item.session_branch`, integrated-dep readiness, `mark_integrated` / `complete_session` tools',
+      status: 'blocked',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 60,
+      descriptionMd:
+        "The server-side substrate for 7.9's session-branch loop (Yue, 2026-06-10): work " +
+        'merged to a session branch is NOT done — it is integrated-awaiting-review — but ' +
+        'it MUST still unblock dependents, and the branch it lives on must travel with the ' +
+        'work item so prompt generation can point the next agent at it.\n\n' +
+        '**`in_review` workflow status.** Add `in_review` to ' +
+        "`lib/workflows/defaultWorkflow.ts` (category `in_progress` — Jira's own In Review " +
+        'sits in the In Progress category) with transitions `in_progress ↔ in_review`, ' +
+        '`in_review → done` (and `in_review → blocked`), plus a migration adding the ' +
+        'status + transitions to EXISTING default workflows (mirror the blocked-status ' +
+        'precedent). Custom workflows are untouched — see the predicate design below for ' +
+        'why nothing keys on the status.\n\n' +
+        '**`work_item.session_branch`** (nullable text + index): the integration branch ' +
+        "the item's work currently sits on. Set when a run integrates the item; CLEARED " +
+        'when the item reaches done. Surfaced in the work-item DTO + the issue detail ' +
+        '(read-only line under status — no design change needed beyond the existing field ' +
+        'rows; if the rail needs a new element, the design gate fires at expansion of ' +
+        'that surface, not here).\n\n' +
+        '**Readiness: the integrated-dep rule — keyed on the FIELD, not the status.** ' +
+        '`listReady` / `next_ready` (7.0) currently require every `is_blocked_by` link in ' +
+        'the done category. New rule: a dep is satisfied when it is done OR its ' +
+        '`session_branch` is set (integrated-awaiting-review). Deliberately NOT keyed on ' +
+        'the `in_review` status key: custom workflows can name review states anything; ' +
+        'the recorded branch is the ground truth that the dependent can actually build on ' +
+        'the work. The dispatch payload gains TWO fields: `sessionBranch` (inherited — ' +
+        "the branch the item's in-review deps live on, so 7.6's GIT WORKFLOW variant " +
+        'tells the agent to branch from / integrate into IT) and the rule that an item ' +
+        'whose in-review deps span TWO different session branches is NOT ready ' +
+        '(conflicting lineages — surfaced in the readiness explanation, resolved by a ' +
+        'human merging one session PR first).\n\n' +
+        '**Tools (the 7.8.4 registry).** `mark_integrated(key, sessionBranch)` — one ' +
+        'transaction: transition to `in_review` (legal-transition validation applies) + ' +
+        'set `session_branch`; the tool the 7.9 loop calls on agent success. ' +
+        '`complete_session(sessionBranch)` — bulk close-out after the human merges the ' +
+        'session PR: every work item recorded on that branch transitions to done and the ' +
+        'field clears (one transaction; partial-failure surfaces per item). Both ' +
+        'permission-scoped via the services like every other tool; both join the 7.8.9 ' +
+        'registry-loop suite automatically.\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- Migration adds `in_review` + transitions to the default workflow (new AND ' +
+        'existing projects); `prisma migrate dev` afterwards reports no drift.\n' +
+        '- An item with `session_branch` set unblocks its dependents in `listReady` / ' +
+        '`next_ready` (vitest: A in_review-with-branch → B ready); a done dep still ' +
+        'unblocks; an in-review dep WITHOUT the field set does NOT (the field is the ' +
+        'signal); conflicting-branch deps keep the item out of the ready set with the ' +
+        'explanation.\n' +
+        '- The dispatch payload carries the inherited `sessionBranch`; items with no ' +
+        'in-review deps carry null.\n' +
+        '- `mark_integrated` is transactional (status + field together; illegal ' +
+        'transition → typed error, field untouched); `complete_session` flips every ' +
+        'recorded item to done and clears the field (vitest: a 3-item session).\n' +
+        '- `pnpm test:coverage` per-file gate holds for the touched services.\n\n' +
+        '## Context refs\n\n' +
+        '- `lib/workflows/defaultWorkflow.ts` (the blocked-status precedent for adding a ' +
+        'status)\n' +
+        '- `lib/services/workItemsService.ts` (`listReady` — the 7.0 predicate this ' +
+        'extends; `updateStatus` — the transition validation `mark_integrated` reuses)\n' +
+        '- `lib/mcp/registry.ts` (7.8.4), `prisma/schema.prisma`\n' +
+        "- story-7.9.ts header (the consuming loop's semantics)\n\n" +
+        '**Branch.** `subtask/PROD-7.8.11-integration-state`.',
+      dependsOn: ['7.8.5'],
+    },
+    {
       id: '7.8.9',
       title:
         'Story tests — MCP client round-trip suite (auth matrix, permission scoping, tool parity) + settings E2E',
@@ -577,7 +654,7 @@ export const story_7_8: PlanStory = {
         '- `vitest.config.ts` (per-file coverage gate list)\n' +
         "- 7.0's test suite (the ready-contract fixtures to reuse)\n\n" +
         '**Branch.** `subtask/PROD-7.8.9-mcp-story-tests`.',
-      dependsOn: ['7.8.3', '7.8.5', '7.8.6', '7.8.7', '7.8.10'],
+      dependsOn: ['7.8.3', '7.8.5', '7.8.6', '7.8.7', '7.8.10', '7.8.11'],
     },
   ],
 };
