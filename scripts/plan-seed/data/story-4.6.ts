@@ -519,7 +519,7 @@ export const story_4_6: PlanStory = {
       id: '4.6.6',
       title:
         'UI — mount the velocity chart (committed vs completed per sprint + average) into the Story-4.4.6 sprint-report chart seam',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 20,
