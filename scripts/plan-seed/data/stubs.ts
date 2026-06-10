@@ -241,6 +241,13 @@ export const STUB_STORIES: PlanStory[] = [
   // start/complete — over the done Epic-4 services), FilterAST search riding
   // 6.1.1, the reseed-preserves-live-status loader flip, and the PRODECT.md
   // runbook rewrite.
+  // 7.9 (Motir CLI — `motir next` / `motir auto` terminal dispatch) is fully
+  // expanded — data/story-7.9.ts. Added 2026-06-10 on Yue's direction: the
+  // productized `prodect run` loop (auth/link/ready/status/next/run/done/
+  // auto/open), built as an MCP CLIENT of the 7.8 server (one agent surface,
+  // one PAT auth path), consuming 7.6's server-side prompt generation;
+  // packages/cli workspace package, binary `motir`; npm publish is Epic-8
+  // work (name securing gates it — no forward dep).
 
   // ── Epic 8: Launch readiness ──────────────────────────────────────────────
   {
@@ -319,8 +326,11 @@ export const STUB_STORIES: PlanStory[] = [
       'README + license headers. The `PROD` issue key: RESOLVED — keep PROD-N (rung-1 ' +
       'verified: editing a project key is a reversible Jira-standard setting, and story 6.8 ' +
       'ships exactly that capability with old-key redirects, so a later switch to MOT-N is a ' +
-      'setting change, not a migration — no reason to churn dogfood keys now). Run-early, NOT ' +
-      'gated on other Epic-8 work — cheapest before launch/traction.',
+      'setting change, not a migration — no reason to churn dogfood keys now). Also owns ' +
+      '**publishing the `motir` npm package** (the 7.9 CLI ships in-repo only until the name ' +
+      'is secured — publishing rides the securing subtask here, keeping 7.9 free of a ' +
+      'forward-pointing dep). Run-early, NOT gated on other Epic-8 work — cheapest before ' +
+      'launch/traction.',
     items: [],
   },
 ];
