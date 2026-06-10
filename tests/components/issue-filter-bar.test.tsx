@@ -368,7 +368,7 @@ describe('IssueFilterBar — localization (finding #61)', () => {
 
     // Section headings + Clear + text placeholder render the zh catalog values…
     expect(screen.getByRole('button', { name: /清除筛选/ })).toBeTruthy();
-    expect(screen.getByPlaceholderText('按 ID 或标题查找…')).toBeTruthy();
+    expect(screen.getByPlaceholderText('按ID或标题查找…')).toBeTruthy();
     // …NOT the English literals (the regression this test exists to catch).
     expect(screen.queryByRole('button', { name: /Clear filters/ })).toBeNull();
     expect(screen.queryByPlaceholderText('Find by ID or title…')).toBeNull();
