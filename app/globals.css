@@ -361,6 +361,22 @@
   --el-type-bug: var(--color-destructive);
   --el-type-subtask: var(--color-accent-teal);
 
+  /* ── Chart series (Story 4.6 · the reusable viz Story 6.3 reuses) ──
+     Every chart colour routes through one of these, NEVER a raw --color-*
+     in chart code (the per-component growth pattern). They map to Tier-0
+     vars, so the Tier-1 dark block re-skins them automatically. The pair
+     committed/completed is distinguished by TEXT label too, never colour
+     alone (finding #35). */
+  --el-chart-guideline: var(--color-stone); /* burndown ideal line (dashed) */
+  --el-chart-actual: var(--color-primary); /* burndown actual remaining */
+  --el-chart-scope: var(--color-warning); /* scope-change marker */
+  --el-chart-committed: var(--color-info); /* velocity committed bar */
+  --el-chart-completed: var(--color-success); /* velocity completed bar */
+  --el-chart-average: var(--color-charcoal); /* velocity average (dashed ref) */
+  --el-chart-plot: var(--color-surface-soft); /* plot background fill */
+  --el-chart-grid: var(--color-border); /* gridlines */
+  --el-chart-axis: var(--color-steel); /* axis line + tick labels */
+
   /* ── Code/mono (used by /tokens reference route) ───────────────── */
   --el-code-bg: var(--color-muted);
   --el-code-text: var(--color-charcoal);

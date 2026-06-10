@@ -20,6 +20,7 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { ISSUE_TYPES } from '@/lib/issues/parentRules';
 import { useToast } from '@/components/ui/Toast';
 import { Button } from '@/components/ui/Button';
+import { BarChart, LineChart, chartColor } from '@/components/ui/charts';
 import { Card } from '@/components/ui/Card';
 import { CommandPalette, type CommandGroup } from '@/components/ui/CommandPalette';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -810,7 +811,177 @@ export default function TokensPage() {
         </p>
         <AppShellDemo />
       </Section>
+
+      <Section title="Charts — viz primitives (Story 4.6)">
+        <p
+          className="text-sm"
+          style={{ color: 'var(--el-page-text-muted)', marginBottom: 'var(--spacing-lg)' }}
+        >
+          The reusable token-aware SVG chart layer (Subtask 4.6.2) — a{' '}
+          <code className="font-mono text-xs">LineChart</code> (the burndown) and a grouped{' '}
+          <code className="font-mono text-xs">BarChart</code> (the velocity), the viz Story 6.3
+          reuses. No charting library: hand-rolled SVG consuming the{' '}
+          <code className="font-mono text-xs">--el-chart-*</code> tokens. Every chart ships a
+          visible legend, a <code className="font-mono text-xs">role=&quot;img&quot;</code>{' '}
+          <code className="font-mono text-xs">&lt;desc&gt;</code> summary, and a data-table fallback
+          (open &ldquo;View data table&rdquo;) so the series read as text+number, never colour alone
+          (finding #35).
+        </p>
+        <ChartsSpecimen />
+      </Section>
     </main>
+  );
+}
+
+/** The 4.6.2 chart primitives rendered with the `charts.mock.html` sample data. */
+function ChartsSpecimen() {
+  return (
+    <div style={{ display: 'grid', gap: 'var(--spacing-xl)', maxWidth: 640 }}>
+      <Card header={<h3 className="font-serif text-lg font-semibold">Burndown — Sprint 6</h3>}>
+        <LineChart
+          width={600}
+          height={300}
+          margin={{ top: 24, right: 24, bottom: 46, left: 44 }}
+          x={{
+            domain: [0, 10],
+            title: 'Sprint day',
+            ticks: Array.from({ length: 11 }, (_, d) => ({ value: d, label: String(d) })),
+          }}
+          y={{
+            domain: [0, 42],
+            title: 'Points remaining',
+            ticks: [0, 10, 20, 30, 40].map((v) => ({ value: v, label: String(v) })),
+          }}
+          description="Burndown for Sprint 6, a completed 10-day sprint. Guideline falls from 42 committed on day 0 to 0 on day 10. Actual remaining steps down to 35 by day 2, rises to 39 on day 3 when 4 points of scope were added, then falls to 13 remaining at completion."
+          ariaLabel="Sprint 6 burndown"
+          series={[
+            {
+              id: 'guideline',
+              label: 'Guideline (ideal)',
+              color: chartColor.guideline,
+              dashed: true,
+              strokeWidth: 2,
+              points: [
+                { x: 0, y: 42 },
+                { x: 10, y: 0 },
+              ],
+            },
+            {
+              id: 'actual',
+              label: 'Remaining (actual)',
+              color: chartColor.actual,
+              interpolation: 'step',
+              strokeWidth: 2.75,
+              points: [
+                { x: 0, y: 42 },
+                { x: 2, y: 35 },
+                { x: 3, y: 39 },
+                { x: 5, y: 31 },
+                { x: 8, y: 20 },
+                { x: 10, y: 13 },
+              ],
+            },
+          ]}
+          annotations={[
+            { x: 0, y: 42, color: chartColor.actual, shape: 'circle', label: '42 committed' },
+            { x: 3, y: 39, color: chartColor.scope, shape: 'diamond', label: '+4 scope' },
+            {
+              x: 10,
+              y: 13,
+              color: chartColor.actual,
+              shape: 'circle',
+              label: '13 left',
+              labelAnchor: 'end',
+              labelDy: 16,
+            },
+          ]}
+          legend={[
+            { label: 'Guideline (ideal)', color: chartColor.guideline, kind: 'dash' },
+            { label: 'Remaining (actual)', color: chartColor.actual, kind: 'line', emphasis: true },
+            { label: 'Scope added', color: chartColor.scope, kind: 'swatch' },
+          ]}
+          dataTable={{
+            caption: 'Sprint 6 burndown — points remaining by day (end-of-day).',
+            columns: ['Day', 'Guideline', 'Remaining'],
+            rows: [
+              {
+                header: '0',
+                cells: [
+                  { value: 42, numeric: true },
+                  { value: 42, numeric: true },
+                ],
+              },
+              {
+                header: '2',
+                cells: [
+                  { value: 34, numeric: true },
+                  { value: 35, numeric: true },
+                ],
+              },
+              {
+                header: '3',
+                cells: [
+                  { value: 29, numeric: true },
+                  { value: 39, numeric: true },
+                ],
+              },
+              {
+                header: '5',
+                cells: [
+                  { value: 21, numeric: true },
+                  { value: 31, numeric: true },
+                ],
+              },
+              {
+                header: '8',
+                cells: [
+                  { value: 8, numeric: true },
+                  { value: 20, numeric: true },
+                ],
+              },
+              {
+                header: '10',
+                cells: [
+                  { value: 0, numeric: true },
+                  { value: 13, numeric: true },
+                ],
+              },
+            ],
+          }}
+        />
+      </Card>
+
+      <Card header={<h3 className="font-serif text-lg font-semibold">Velocity</h3>}>
+        <BarChart
+          width={600}
+          height={300}
+          xTitle="Completed sprint (oldest → newest)"
+          yTitle="Story points"
+          yTicks={[0, 15, 30, 45].map((v) => ({ value: v, label: String(v) }))}
+          description="Velocity over the last 7 completed sprints. Committed vs completed points per sprint: Sprint 18 30/24, Sprint 19 28/30, Sprint 20 32/22, Sprint 21 26/26, Sprint 22 34/28, Sprint 23 30/25, Sprint 24 42/29. Average completed is 26."
+          ariaLabel="Velocity over the last 7 completed sprints"
+          series={[
+            { label: 'Committed', color: chartColor.committed },
+            { label: 'Completed', color: chartColor.completed },
+          ]}
+          groups={[
+            { label: 'S18', values: [30, 24] },
+            { label: 'S19', values: [28, 30] },
+            { label: 'S20', values: [32, 22] },
+            { label: 'S21', values: [26, 26] },
+            { label: 'S22', values: [34, 28] },
+            { label: 'S23', values: [30, 25] },
+            { label: 'S24', values: [42, 29] },
+          ]}
+          referenceLine={{
+            value: 26,
+            color: chartColor.average,
+            label: 'avg 26',
+            legendLabel: 'Average completed',
+          }}
+        />
+      </Card>
+    </div>
   );
 }
 
