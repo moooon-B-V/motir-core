@@ -130,6 +130,17 @@
       "UNSUPPORTED_FILE_TYPE": "不支持该文件类型。",
       "RATE_LIMITED": "上传过于频繁，请稍候再试。",
       "failed": "上传失败，请重试。"
+    },
+    "customFields": {
+      "CUSTOM_FIELD_NOT_FOUND": "未找到自定义字段。",
+      "VALUE_TYPE_MISMATCH": "值与字段类型不匹配。",
+      "TEXT_TOO_LONG": "文本最多{max}个字符。",
+      "INVALID_NUMBER": "请输入有效的数字。",
+      "INVALID_DATE": "请输入有效的日期。",
+      "OPTION_NOT_IN_FIELD": "该选项不属于此字段。",
+      "OPTION_ARCHIVED": "已归档的选项无法选择。",
+      "USER_NOT_ASSIGNABLE": "该用户无法设置到此项目。",
+      "READ_ONLY": "你对此项目仅有只读权限。"
     }
   },
   "email": {

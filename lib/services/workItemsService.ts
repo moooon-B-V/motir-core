@@ -6,6 +6,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { labelRepository } from '@/lib/repositories/labelRepository';
+import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
@@ -39,6 +40,7 @@ import {
 } from '@/lib/mappers/workItemMappers';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toLabelDto } from '@/lib/mappers/labelMappers';
+import { toCustomFieldWithValueDto } from '@/lib/mappers/customFieldValueMappers';
 import { toWorkItemRevisionDto } from '@/lib/mappers/workItemRevisionMappers';
 import type {
   WorkItemForestRow,
@@ -1473,6 +1475,7 @@ export const workItemsService = {
       clonesLinks,
       workflow,
       labelRows,
+      customFieldRows,
     ] = await Promise.all([
       // The breadcrumb chain (root→self, item excluded) — one CTE, workspace-
       // scoped. The immediate parent is `ancestors`' last element; we surface it
@@ -1488,6 +1491,15 @@ export const workItemsService = {
       // The issue's labels (5.4.2) — one bounded query riding the same
       // fan-out (no extra round-trip; capped per-issue by labelsService).
       labelRepository.listByWorkItem(item.id),
+      // The project's custom-field definitions + THIS issue's values (5.3.3)
+      // — ONE bounded query (≤50 defs by the project cap, ≤1 value row per
+      // def by the pair unique), options + value relations resolved in the
+      // same operation. No N+1, no second round-trip.
+      customFieldDefinitionRepository.listWithValuesForWorkItem(
+        item.projectId,
+        ctx.workspaceId,
+        item.id,
+      ),
     ]);
 
     const [blockerRows, blockingRows, relatesRows, duplicatesRows, clonesRows, readiness] =
@@ -1519,6 +1531,7 @@ export const workItemsService = {
       readiness: { ready: readiness.ready, openBlockers },
       workflow,
       labels: labelRows.map(toLabelDto),
+      customFields: customFieldRows.map(toCustomFieldWithValueDto),
     };
   },
 

@@ -11,6 +11,7 @@
 import type { WorkflowDto } from './workflows';
 import type { RelationshipKind } from './workItemLinks';
 import type { LabelDto } from './labels';
+import type { CustomFieldWithValueDto } from './customFieldValues';
 
 export type WorkItemKindDto = 'epic' | 'story' | 'task' | 'bug' | 'subtask';
 export type WorkItemPriorityDto = 'lowest' | 'low' | 'medium' | 'high' | 'highest';
@@ -134,6 +135,14 @@ export interface IssueDetailDto {
    * these as chips). Bounded in practice by the per-issue cap.
    */
   labels: LabelDto[];
+  /**
+   * The project's custom-field definitions in position order, each with its
+   * option set and THIS issue's resolved value (Subtask 5.3.3 — one bounded
+   * query in the detail read's parallel fetch, ≤50 by the project cap).
+   * Fields the issue holds no value for ship with `value: null` — the 5.3.7
+   * rail collapses those behind "Show more fields".
+   */
+  customFields: CustomFieldWithValueDto[];
 }
 
 /**

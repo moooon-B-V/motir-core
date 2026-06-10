@@ -130,6 +130,17 @@
       "UNSUPPORTED_FILE_TYPE": "That file type isn't supported.",
       "RATE_LIMITED": "Too many uploads — please wait a moment and try again.",
       "failed": "Upload failed — please try again."
+    },
+    "customFields": {
+      "CUSTOM_FIELD_NOT_FOUND": "Custom field not found.",
+      "VALUE_TYPE_MISMATCH": "The value does not match the field's type.",
+      "TEXT_TOO_LONG": "Text values are capped at {max} characters.",
+      "INVALID_NUMBER": "Enter a valid number.",
+      "INVALID_DATE": "Enter a valid date.",
+      "OPTION_NOT_IN_FIELD": "This option does not belong to the field.",
+      "OPTION_ARCHIVED": "Archived options can't be selected.",
+      "USER_NOT_ASSIGNABLE": "This user can't be set on this project.",
+      "READ_ONLY": "You have read-only access to this project."
     }
   },
   "email": {
