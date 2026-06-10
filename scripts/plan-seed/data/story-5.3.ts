@@ -385,7 +385,7 @@ export const story_5_3: PlanStory = {
       id: '5.3.5',
       title:
         'Design — custom fields on the detail rail (`design/work-items/custom-fields.mock.html`: per-type cards + editors + "Show more fields")',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 35,
