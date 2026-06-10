@@ -56,15 +56,13 @@ export const STUB_STORIES: PlanStory[] = [
   // Jira-verified All/Comments/History tabs with the one cross-tab sort
   // toggle, and the bounded two-source All merge. Activates the History seam
   // 5.1 ships disabled.
-  {
-    id: '5.6',
-    title: 'Tests — comments, mentions, custom-field values, activity',
-    status: 'planned',
-    descriptionMd:
-      'Vitest over comment/field/activity services; Playwright over comment+mention, attach a ' +
-      'file, set a custom field, read the activity feed.',
-    items: [],
-  },
+  // 5.6 (Tests) is fully expanded — data/story-5.6.ts. Re-scoped on deepening
+  // (the 3.5/4.7 precedent) to its non-duplicative remainder now that every
+  // 5.x story carries its own closing test subtask: the combined cross-story
+  // collaboration journey (the seams between stories) + the collaboration-
+  // heavy loaded-issue fixture and its bounded-read/bounded-DOM at-scale
+  // specs + the full-page strict a11y sweep. Epic 5 is now fully expanded
+  // except the 5.7 stub below.
   {
     id: '5.7',
     title: 'In-app notifications (bell + unread feed)',
