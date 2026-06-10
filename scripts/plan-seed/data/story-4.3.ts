@@ -543,7 +543,7 @@ export const story_4_3: PlanStory = {
       id: '4.3.7',
       title:
         'Story tests — estimate write + config + bounded sprint/epic roll-ups (incl. statistic switch + at-scale) + badge/settings components + estimate-a-story E2E',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 24,
