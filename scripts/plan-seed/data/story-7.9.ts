@@ -113,19 +113,21 @@ import type { PlanStory } from '../types';
  *      merges; if the human rejects it, the statuses are reverted by hand
  *      or via MCP (`transition_status`) — the summary names every flipped
  *      item precisely so that recovery is mechanical.
- *   3. **`motir auto --auto-merge` (also on `next`):** the prompt's GIT
- *      WORKFLOW instructs the agent to open its per-item PR against main
- *      AND merge it itself once checks are green (the agent env needs `gh`
- *      + merge rights — a docs/cli.md prerequisite). On success the CLI
- *      flips `done`; main advances item by item and the cascade runs
- *      against real main. This is the no-human-gate mode for users who
- *      trust the loop.
+ * **REJECTED: `--auto-merge` (Yue, 2026-06-10 — same day, retracted).** A
+ * mode where the agent merges its own per-item PRs straight to main was
+ * considered and REJECTED as dangerous: an unattended loop must never
+ * advance main without a human review. Main only ever moves through a
+ * human-merged PR — `motir next`'s per-item PR or `motir auto`'s
+ * end-of-run session PR. Do NOT re-add an auto-merge-to-main flag in a
+ * future expansion; the session branch IS the unattended mode, and its
+ * human gate is the point.
  *
  * The GIT WORKFLOW section is therefore a DISPATCH-TIME PARAMETER of the
  * server-side prompt generation: the dispatch request carries the mode +
  * session-branch name, and 7.6 renders the matching workflow block (one
- * template, three variants — recorded here as a requirement on 7.6's
- * expansion; the story-level dep already exists).
+ * template, two variants: per-item PR for `next`, session-branch for
+ * `auto` — recorded here as a requirement on 7.6's expansion; the
+ * story-level dep already exists).
  *
  * **The sandbox container (unattended runs need walls, not vibes).**
  * `motir auto --agent "claude --dangerously-skip-permissions"` is the
@@ -163,9 +165,10 @@ export const story_7_9: PlanStory = {
     '`<root>/<repoName>`, with an optional override map for exceptions), ' +
     '`motir ready` (the ready set), `motir status` (project pulse), `motir next` / `motir run ' +
     '<key>` (dispatch one), `motir done <key>` (close-out after the PR merges), `motir auto` ' +
-    '(the loop — default SESSION-BRANCH mode: one branch off latest main per touched repo, ' +
+    '(the loop — ALWAYS session-branch mode: one branch off latest main per touched repo, ' +
     'items integrate into it and flip done so dependents cascade mid-run, ONE end-of-run PR ' +
-    'per repo; `--auto-merge` instead has the agent open+merge per-item PRs on green), ' +
+    'per repo; auto-merging to main was rejected as dangerous — main only moves through a ' +
+    'human-merged PR), ' +
     '`motir open <key>` (jump to the browser). A reference SANDBOX container ships for the ' +
     'unattended form (`--agent "claude --dangerously-skip-permissions"` confined to the ' +
     'mounted workspace; manual-approval console runs stay supported). Built as an MCP client ' +
@@ -205,8 +208,8 @@ export const story_7_9: PlanStory = {
     'with its outcome; a mid-loop agent failure halts by default and `--keep-going` skips ' +
     'past it (the failed item stays in_progress, excluded from re-dispatch) — the end-of-run ' +
     'PR still opens with what integrated cleanly.\n' +
-    '- `motir auto --auto-merge` on the same fixture: per-item PRs merge to main as each ' +
-    'item finishes (no session branch), and the cascade runs against real main.\n' +
+    '- Verify main NEVER moved during the run — every change sits on the session branch ' +
+    'behind the un-merged end-of-run PR (the no-auto-merge-to-main invariant).\n' +
     '- Revoke the PAT → every command fails with the auth error and a re-login hint.',
   items: [
     {
@@ -351,13 +354,12 @@ export const story_7_9: PlanStory = {
         'not. The CLI never guesses an item into a DIFFERENT existing checkout. `--print` ' +
         'mode prints the target repo + resolved path alongside the prompt so the ' +
         'copy-paste user opens (or creates) the right checkout.\n\n' +
-        '**Mode flags.** `motir next` defaults to the per-item-PR workflow (branch from ' +
-        'origin/main, one PR, stop — the human merges then runs `motir done`); ' +
-        "`--auto-merge` switches the prompt's GIT WORKFLOW to open AND merge the per-item " +
-        'PR on green checks, with the CLI flipping done on success. The mode + (for auto) ' +
-        'session-branch name travel as DISPATCH-TIME PARAMETERS to the 7.6 prompt ' +
-        'generation — the GIT WORKFLOW block is a server-side template variant, never ' +
-        'assembled client-side.\n\n' +
+        '**Workflow mode.** `motir next` uses the per-item-PR workflow (branch from ' +
+        'origin/main, one PR, stop — the human merges then runs `motir done`). There is NO ' +
+        'auto-merge-to-main flag (the story-header rejected decision: main only moves ' +
+        'through a human-merged PR). The mode + (for auto) session-branch name travel as ' +
+        'DISPATCH-TIME PARAMETERS to the 7.6 prompt generation — the GIT WORKFLOW block ' +
+        'is a server-side template variant, never assembled client-side.\n\n' +
         '**Per-item git stays with the agent.** Worktree/branch/commit mechanics live ' +
         "inside the generated prompt's GIT WORKFLOW section — the agent (or human) " +
         "executes them; the CLI's only git surface is `motir auto`'s session-branch " +
@@ -404,7 +406,8 @@ export const story_7_9: PlanStory = {
         '**Semantics (the story-header integration modes):**\n' +
         '- Requires `--agent`/config `agentCommand` (an auto loop has no human to ' +
         'copy-paste; `--print` makes no sense here and errors with guidance).\n' +
-        '- **Default = SESSION-BRANCH mode.** At loop start the CLI creates ' +
+        '- **SESSION-BRANCH mode — the ONLY mode (auto-merge-to-main REJECTED, story ' +
+        'header).** At loop start the CLI creates ' +
         '`motir/auto-<run-id>` off the LATEST origin/main in each repo it dispatches into ' +
         "(lazily, on that repo's first item). Each item's prompt (the 7.6 dispatch-mode " +
         'parameter) instructs the agent to integrate its work into that session branch — ' +
@@ -416,10 +419,10 @@ export const story_7_9: PlanStory = {
         '(session → main) listing every carried item; the human reviews the run as one ' +
         'unit. The summary names every done-flipped item so a rejected PR can be unwound ' +
         'mechanically (flip back by hand or via MCP).\n' +
-        "- **`--auto-merge` mode.** Each item's prompt instructs the agent to open its " +
-        'per-item PR against main and MERGE it itself on green checks (agent env needs ' +
-        '`gh` + merge rights — docs prerequisite); the CLI flips done on success and the ' +
-        'cascade runs against real main. No session branch, no end-of-run PR.\n' +
+        '- **Main is never auto-advanced.** The loop has no path that merges to main: not ' +
+        'the CLI, and not via the prompt (the generated GIT WORKFLOW for auto items ' +
+        'integrates into the session branch ONLY). The single end-of-run PR per repo is ' +
+        'the human gate.\n' +
         '- **Failure policy:** halt on the first agent failure by default (the failed item ' +
         'stays in_progress and is named); `--keep-going` excludes the failed item ' +
         '(`excludeIds`) and continues with the rest. In session-branch mode a failure ' +
@@ -436,12 +439,11 @@ export const story_7_9: PlanStory = {
         '- Each iteration re-queries `next_ready` (never a pre-fetched batch) so ' +
         'newly-unlocked items join in ready order.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- On a fixture DEPENDENCY CHAIN (A ← B ← C), default `motir auto` with an ' +
-        'always-green fake agent dispatches all three in order — B unlocks when A flips ' +
-        'done on the session line — one at a time, exits 0, and ends with the session ' +
-        'branch pushed + ONE PR per touched repo listing the carried items.\n' +
-        '- `--auto-merge` on the same fixture produces per-item merges to main (fake-gh ' +
-        'fixture) and no session branch.\n' +
+        '- On a fixture DEPENDENCY CHAIN (A ← B ← C), `motir auto` with an always-green ' +
+        'fake agent dispatches all three in order — B unlocks when A flips done on the ' +
+        'session line — one at a time, exits 0, and ends with the session branch pushed + ' +
+        "ONE PR per touched repo listing the carried items; main's ref is asserted " +
+        'UNCHANGED across the whole run (the no-auto-merge invariant).\n' +
         '- A mid-loop failure halts by default with a non-zero exit; `--keep-going` ' +
         'finishes the remainder and lists the failure; the failed item is in_progress and ' +
         'never re-dispatched in that invocation; in session mode the end-of-run PR still ' +
@@ -482,10 +484,10 @@ export const story_7_9: PlanStory = {
         '- **Dispatch:** `next --print` flips in_progress + prints the server prompt ' +
         'verbatim; `--agent` exit-code handling (0 / non-zero); `run --force` on a blocked ' +
         'item; `done` legal + illegal flips.\n' +
-        '- **Integration modes:** the 7.9.4 dependency-chain fixture in BOTH modes — ' +
-        'session-branch (mid-run cascade via done-on-session-line, end-of-run push + one ' +
-        'PR per touched repo, rejected-PR unwind list) and `--auto-merge` (per-item merges ' +
-        'via a fake `gh`, no session branch).\n' +
+        '- **Session-branch integration:** the 7.9.4 dependency-chain fixture — mid-run ' +
+        'cascade via done-on-session-line, end-of-run push + one PR per touched repo, the ' +
+        'rejected-PR unwind list, and the no-auto-merge invariant (main unchanged across ' +
+        'the run).\n' +
         '- **Auto loop:** the 7.9.4 fixture graph end-to-end (drain order, halt vs ' +
         '--keep-going, --max, the manual-merge-mode termination case).\n' +
         '- **Attribution:** every transition lands as the PAT user in the revision trail.\n' +
@@ -515,9 +517,9 @@ export const story_7_9: PlanStory = {
         '(`pnpm --filter motir...`; npm install lands with the Epic-8 publish), `auth ' +
         'login` + PAT creation pointer (the 7.8.8 doc), `link`, every command with examples, ' +
         'agent wiring recipes (`--agent "claude -p"` headless and a copy-paste flow), the ' +
-        'INTEGRATION MODES (session-branch default — done-flips run ahead of main until ' +
-        'the end-of-run PR merges, and how to unwind a rejected run; `--auto-merge` — the ' +
-        'agent env needs `gh` + merge rights), the failure policy, the SANDBOX recipe ' +
+        'SESSION-BRANCH semantics (done-flips run ahead of main until the end-of-run PR ' +
+        'merges, how to unwind a rejected run, and WHY there is no auto-merge-to-main — ' +
+        'the rejected-decision note), the failure policy, the SANDBOX recipe ' +
         '(when to use the 7.9.7 container for `--dangerously-skip-permissions` agents vs ' +
         'a manual-approval console run), and troubleshooting (revoked token, no link, ' +
         'blocked item, failed bootstrap).\n\n' +

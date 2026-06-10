@@ -220,9 +220,11 @@ export const STUB_STORIES: PlanStory[] = [
       'Per-issue prompt generation by type (coding/copy/design/…) and the dispatch surface: the ' +
       'user runs the prompt in their own agent. THE seam the future native AI-coding layer ' +
       "extends. (Former Epic 4 §4.1, §4.2.) Contract recorded by 7.9 (Motir CLI): the prompt's " +
-      'GIT WORKFLOW block is a DISPATCH-TIME template parameter — three variants (per-item PR / ' +
-      'session-branch <name> / auto-merge), selected by the dispatch request; also a structured ' +
-      "`targetRepo` field on the dispatch payload (7.7's repo entity upgrades it later).",
+      'GIT WORKFLOW block is a DISPATCH-TIME template parameter — TWO variants (per-item PR ' +
+      'for `next` / session-branch <name> for `auto`; an auto-merge-to-main variant was ' +
+      'REJECTED as dangerous, main only moves through a human-merged PR), selected by the ' +
+      'dispatch request; also a structured `targetRepo` field on the dispatch payload ' +
+      "(7.7's repo entity upgrades it later).",
     items: [],
   },
   {
