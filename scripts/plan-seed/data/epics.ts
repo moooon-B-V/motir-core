@@ -346,12 +346,18 @@ export const EPICS: EpicMeta[] = [
           "in List view, inline-edit item A's Status cell (e.g. To do → In progress), then " +
           "promptly inline-edit item B's Status cell. Watch A's cell after B's edit settles — " +
           'on a hit, A renders its OLD status again.\n\n' +
-          '**⚠️ NOT diagnosed — failing repro test FIRST (the reproduce-before-diagnosing rule; ' +
-          'the filter check-mark lesson).** This card records the SYMPTOM; no root cause has ' +
-          'been verified, and the fix MUST begin with a red repro test — not a code-reading ' +
-          "theory. The FIRST question that test must answer: is A's status reverted **in the " +
-          'database** (a lost/overwritten write — data corruption, severity up) or **only in ' +
-          'the rendered list** (a stale-display race)? Assert the DB row, not just the cell.\n\n' +
+          '**Scoped to DISPLAY-ONLY (Yue, 2026-06-10): the backend is correct.** Yue verified ' +
+          "the API persists the update — A's row holds the NEW status in the database while the " +
+          'list renders the OLD one. So this is a client-side stale-display race in the list ' +
+          'UI, not a lost write: no data corruption, but trust-breaking (the user is shown ' +
+          'state the system knows is wrong, until the next reload).\n\n' +
+          '**⚠️ Client mechanism NOT diagnosed — failing repro test FIRST (the ' +
+          'reproduce-before-diagnosing rule; the filter check-mark lesson).** This card records ' +
+          'the SYMPTOM plus the backend-correct scoping above; WHICH client interleaving causes ' +
+          'the stale render has not been verified, and the fix MUST begin with a red repro ' +
+          'test — not a code-reading theory. The test still asserts the DB row alongside the ' +
+          'cell (locking in the backend-correct fact and catching any regression to a lost ' +
+          'write), but the red assertion is the rendered cell.\n\n' +
           '**Investigation surface (hypotheses to test, NOT conclusions).** Each inline cell ' +
           'editor in `IssueInlineEdit.tsx` keeps a local optimistic `override` and calls ' +
           '`router.refresh()` after its PATCH resolves. Two rapid edits put two PATCHes + two ' +
@@ -365,10 +371,12 @@ export const EPICS: EpicMeta[] = [
           'column-menu transition share the pattern (fix once in the shared mechanic if so).\n\n' +
           '## Acceptance criteria\n\n' +
           '- A repro test exists that is RED on the pre-fix code (two rapid inline status edits ' +
-          'with adversarial response ordering → first item reverts) and green after; it asserts ' +
-          'BOTH the rendered cell AND the persisted DB status of item A.\n' +
-          "- After the fix, A keeps its new status across B's edit and every refresh ordering; " +
-          "neither write is lost (both revision rows exist, A's latest wins for A).\n" +
+          'with adversarial response ordering → the first cell renders the old status) and ' +
+          'green after; it asserts the rendered cell, and confirms the DB row holds the new ' +
+          'status throughout (the backend-correct fact, locked in against regression).\n' +
+          "- After the fix, A's cell shows its new status across B's edit and every refresh " +
+          'ordering — the rendered list converges to the persisted state without a manual ' +
+          'reload.\n' +
           '- The fix covers all three inline editors sharing the mechanic (status / assignee / ' +
           'priority) — asserted for at least status + assignee — and any other surface found to ' +
           'share it during investigation.\n' +
