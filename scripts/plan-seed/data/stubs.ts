@@ -298,9 +298,9 @@ export const STUB_STORIES: PlanStory[] = [
     title: 'Production hardening + observability',
     status: 'planned',
     descriptionMd:
-      'Deploy, domain + SSL (the Motir domain — registration is an open 8.7 prerequisite; the ' +
-      'already-registered nifer.co belongs to the superseded name), transactional email ' +
-      'backend, analytics, error monitoring, backups, rate limits, day-1 admin tools.',
+      'Deploy, domain + SSL (motir.co — REGISTERED 2026-06-10, subtask 8.7.1; the attach + SSL ' +
+      'go-live happens here), transactional email backend, analytics, error monitoring, ' +
+      'backups, rate limits, day-1 admin tools.',
     items: [],
   },
   {
@@ -315,29 +315,12 @@ export const STUB_STORIES: PlanStory[] = [
       '`type: decision`/`manual` founder work routed through the queue.',
     items: [],
   },
-  {
-    id: '8.7',
-    title: 'Rebrand cutover: Prodect → Motir',
-    status: 'planned',
-    descriptionMd:
-      'One-time cross-repo rename. **The name is Motir** (Yue, 2026-06-10 — supersedes the ' +
-      '2026-06-08 nifer decision; notes.html mistake #34 records the nifer chapter as history). ' +
-      '**Securing Motir is an OPEN user-side prerequisite, not inherited from nifer:** the ' +
-      'registered nifer.co domain and the nifer EUIPO filing belong to the superseded name, so ' +
-      'this story starts with a `type: manual/human` securing subtask on expansion — register ' +
-      'the Motir domain, file the Motir EUTM (Nice classes 9 & 42, + USPTO if launching in the ' +
-      'US), and confirm before any rename code runs. The rename itself is NOT a blind ' +
-      'find-replace — touches prodect-core (UI copy, package names, app/SEO metadata, email ' +
-      'templates/chrome), prodect-ai, prodect-meta (PRODECT.md → MOTIR.md), the plan seed ' +
-      '(@prodect.co users → the Motir domain, tenant naming), domain/Vercel/email config, and ' +
-      'README + license headers. The `PROD` issue key: RESOLVED — keep PROD-N (rung-1 ' +
-      'verified: editing a project key is a reversible Jira-standard setting, and story 6.8 ' +
-      'ships exactly that capability with old-key redirects, so a later switch to MOT-N is a ' +
-      'setting change, not a migration — no reason to churn dogfood keys now). Also owns ' +
-      '**publishing the `motir` npm package** (the 7.9 CLI ships in-repo only until the name ' +
-      'is secured — publishing rides the securing subtask here, keeping 7.9 free of a ' +
-      'forward-pointing dep). Run-early, NOT gated on other Epic-8 work — cheapest before ' +
-      'launch/traction.',
-    items: [],
-  },
+  // 8.7 (Rebrand cutover: Prodect → Motir) is fully expanded — data/story-8.7.ts.
+  // Expanded 2026-06-10 on the news that the securing prerequisite is DONE
+  // (motir.co registered + the Motir trademark filed — subtask 8.7.1, done on
+  // Yue's confirmation): rename subtasks across prodect-core / prodect-ai /
+  // prodect-meta / the plan seed, the GitHub/Vercel infra renames, the npm
+  // name claim + `motir` package publish (the 7.9 CLI), and the post-rename
+  // sweep. PROD key stays (6.8-verified). Runs early, gated on nothing else
+  // in Epic 8.
 ];
