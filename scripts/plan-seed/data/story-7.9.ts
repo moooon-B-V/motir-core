@@ -96,7 +96,8 @@ import type { PlanStory } from '../types';
  *      is today's manual flow — branch from origin/main, open ONE PR for
  *      the item, stop. The human reviews/merges, then `motir done <key>`.
  *      Nothing auto-flips.
- *   2. **`motir auto` (default — the SESSION-BRANCH mode):** at loop start
+ *   2. **`motir auto` (always the SESSION-BRANCH mode — no alternative):**
+ *      at loop start
  *      the CLI creates a session branch off the LATEST origin/main in each
  *      repo it dispatches into (e.g. `motir/auto-<run-id>`). Every item's
  *      prompt instructs the agent to integrate its work into THAT branch
