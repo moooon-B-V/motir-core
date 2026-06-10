@@ -910,7 +910,7 @@ export const EPICS: EpicMeta[] = [
     status: 'planned',
     descriptionMd:
       'Everything between "feature complete" and "live, paid users." Stripe billing, marketing ' +
-      'site + the nifer brand mark, go-to-market strategy, the one-time Prodect → nifer rebrand ' +
+      'site + the Motir brand mark, go-to-market strategy, the one-time Prodect → Motir rebrand ' +
       'cutover, ToS + privacy policy, transactional email, basic analytics, production deploy, ' +
       'domain + SSL, onboarding, and day-1 admin tools. Most of this is human subtasks ' +
       "running through Prodect's own queue. (Formerly Epic 5.)",

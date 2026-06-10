@@ -265,8 +265,8 @@ export const STUB_STORIES: PlanStory[] = [
     title: 'Marketing site + brand mark',
     status: 'planned',
     descriptionMd:
-      'Landing page + the **nifer** wordmark/logomark (the name is now decided — the product was ' +
-      'renamed Prodect → nifer; see notes.html mistake #34 and story 8.7). Also bakes in ' +
+      'Landing page + the **Motir** wordmark/logomark (the name is decided — Prodect → Motir, ' +
+      'Yue 2026-06-10, superseding the earlier nifer decision; see story 8.7). Also bakes in ' +
       'entity-signal SEO so search engines learn the brand fast: Organization/WebSite structured ' +
       'data, Google Search Console, and early directory listings (G2 / Product Hunt / GitHub).',
     items: [],
@@ -284,7 +284,8 @@ export const STUB_STORIES: PlanStory[] = [
     title: 'Production hardening + observability',
     status: 'planned',
     descriptionMd:
-      'Deploy, domain + SSL (the nifer.co domain is already registered), transactional email ' +
+      'Deploy, domain + SSL (the Motir domain — registration is an open 8.7 prerequisite; the ' +
+      'already-registered nifer.co belongs to the superseded name), transactional email ' +
       'backend, analytics, error monitoring, backups, rate limits, day-1 admin tools.',
     items: [],
   },
@@ -302,18 +303,23 @@ export const STUB_STORIES: PlanStory[] = [
   },
   {
     id: '8.7',
-    title: 'Rebrand cutover: Prodect → nifer',
+    title: 'Rebrand cutover: Prodect → Motir',
     status: 'planned',
     descriptionMd:
-      'One-time cross-repo rename now that the name is decided + secured (nifer.co registered, ' +
-      'EUIPO trademark filed; see notes.html mistake #34). NOT a blind find-replace — touches ' +
-      'prodect-core (UI copy, package names, app/SEO metadata, email templates/chrome), ' +
-      'prodect-ai, prodect-meta (PRODECT.md → NIFER.md), the plan seed (@prodect.co users → ' +
-      '@nifer.co, tenant naming), domain/Vercel/email config, and README + license headers. Open ' +
-      'decision: the `PROD` issue key — keep PROD-N or switch to NIF-N (switching rewrites every ' +
-      'key; lean keep-PROD unless taking the clean break now while there is no real data). ' +
-      'Run-early, NOT gated on other Epic-8 work — cheapest before launch/traction. Also confirm ' +
-      'the EUTM covers Nice classes 9 & 42 (+ USPTO if launching in the US).',
+      'One-time cross-repo rename. **The name is Motir** (Yue, 2026-06-10 — supersedes the ' +
+      '2026-06-08 nifer decision; notes.html mistake #34 records the nifer chapter as history). ' +
+      '**Securing Motir is an OPEN user-side prerequisite, not inherited from nifer:** the ' +
+      'registered nifer.co domain and the nifer EUIPO filing belong to the superseded name, so ' +
+      'this story starts with a `type: manual/human` securing subtask on expansion — register ' +
+      'the Motir domain, file the Motir EUTM (Nice classes 9 & 42, + USPTO if launching in the ' +
+      'US), and confirm before any rename code runs. The rename itself is NOT a blind ' +
+      'find-replace — touches prodect-core (UI copy, package names, app/SEO metadata, email ' +
+      'templates/chrome), prodect-ai, prodect-meta (PRODECT.md → MOTIR.md), the plan seed ' +
+      '(@prodect.co users → the Motir domain, tenant naming), domain/Vercel/email config, and ' +
+      'README + license headers. Open decision: the `PROD` issue key — keep PROD-N or switch ' +
+      'to MOT-N (switching rewrites every key; lean keep-PROD unless taking the clean break ' +
+      'now while there is no real data). Run-early, NOT gated on other Epic-8 work — cheapest ' +
+      'before launch/traction.',
     items: [],
   },
 ];
