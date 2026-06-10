@@ -326,7 +326,7 @@ export const story_4_6: PlanStory = {
       id: '4.6.3',
       title:
         'Backend — `reportsService.getBurndownSeries(sprintId)`: day-bucketed remaining (guideline + actual) from the committed baseline + the 1.4.6 revision trail, bounded',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
