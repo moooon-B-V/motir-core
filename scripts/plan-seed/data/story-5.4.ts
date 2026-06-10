@@ -189,7 +189,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.1',
       title:
         'Schema — `label` + `work_item_label`, `component` + `work_item_component`, `watcher` (+ Epic-6 join-predicate contract, repos)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
@@ -240,7 +240,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.2',
       title:
         '`labelsService` — type-to-create folksonomy (no-spaces, case-insensitive find-or-create, delete-on-last-use), bounded autocomplete, revision diffs',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 26,
@@ -283,7 +283,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.3',
       title:
         '`componentsService` — admin CRUD + default-assignee-at-create (first-alphabetical) + move-or-remove delete + per-issue assignment, revision diffs',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -334,7 +334,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.4',
       title:
         '`watchersService` — self watch/unwatch + admin manage-others + view-access validation + auto-watch hooks (create, comment)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 26,
