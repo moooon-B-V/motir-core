@@ -111,15 +111,17 @@ export const STUB_STORIES: PlanStory[] = [
   // built-in system filters, and the documented resolve-by-id data-source
   // contract + delete-dependents warning that 6.3 dashboards consume (boards
   // stay status-mapped — team-managed family, the 3.1/3.6 decision).
-  {
-    id: '6.3',
-    title: 'Dashboards & reports',
-    status: 'planned',
-    descriptionMd:
-      'Configurable dashboard of widgets backed by saved filters; built-in reports ' +
-      '(created-vs-resolved, status distribution). Charts reuse the viz from Epic 4.',
-    items: [],
-  },
+  // 6.3 (Dashboards & reports) is fully expanded — data/story-6.3.ts.
+  // Workspace-level dashboards at the shipped /dashboard route (Jira-verified
+  // site-level shape; named grids, access private|workspace, 1/2/3-column
+  // layouts + dnd, 20-widget cap) whose widgets are backed by a 6.2 saved
+  // filter or a project through the 6.2.1 resolve-by-id contract, behind a
+  // TOTAL widget-type registry (filter-results ≤50/page / distribution /
+  // created-vs-resolved); + the /reports hub (agile links + the two analysis
+  // reports). Charts grow the 4.6.2 token-aware SVG layer (donut +
+  // difference/area); "resolved" = the done-category transition derived from
+  // the 1.4.6 trail (the 4.6.3 pattern); per-VIEWER 6.4 gating on every
+  // widget read; 6.3.1 fills 6.2.1's reserved widget-dependents line.
   // 6.5 (Project admin surface) is fully expanded — data/story-6.5.ts. The
   // unified Jira-shaped settings AREA (verified: a grouped settings nav, not
   // a card hub; lands on Details, which owns identity + the danger zone): a
