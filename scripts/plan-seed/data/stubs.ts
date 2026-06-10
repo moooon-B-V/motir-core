@@ -40,16 +40,10 @@ export const STUB_STORIES: PlanStory[] = [
   // 5.2 (Attachments) is fully expanded — data/story-5.2.ts. Reuses the 2.3.7
   // upload primitive per finding #52; adds the workItemId link, the panel UI,
   // the embeds-are-attachments link-on-write, and the orphan-GC job.
-  {
-    id: '5.3',
-    title: 'Custom fields (per-project definitions)',
-    status: 'planned',
-    descriptionMd:
-      'Field-definition model (type + config) per project; render + edit on issue detail; values ' +
-      'stored against issues. The extensible-schema piece — design carefully so Epic 6 search can ' +
-      'filter on them.',
-    items: [],
-  },
+  // 5.3 (Custom fields) is fully expanded — data/story-5.3.ts. Five types
+  // (text/number/date/select/user), typed-EAV values (the Jira storage shape)
+  // carrying the documented Epic-6 predicate contract, Fields admin in project
+  // settings, rail rendering with "Show more fields".
   {
     id: '5.4',
     title: 'Labels, components, watchers',
