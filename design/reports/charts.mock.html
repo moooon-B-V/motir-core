@@ -1,0 +1,2159 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Charts — visual language + burndown + velocity (Story 4.6 · 4.6.1)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the CHART visual language — Story 4.6.
+      There is NO chart design anywhere today: design/ has no reports/ area, and
+      the sprint (4.4.1) + scrum-board (4.5.1) designs only RESERVED an empty
+      chart SEAM (a dashed placeholder) — they never drew a chart. An unspecified
+      whole element == NO design, so the 4.6.1 design gate produces this FIRST
+      (mirrors 1.0.5 / 1.2.1 / 1.3.3 / 1.5.1 and the sibling 4.3.1 / 4.4.1 / 4.5.1).
+
+      This is the SOURCE OF TRUTH for the Story-4.6 UI subtasks:
+        • 4.6.2 — the reusable token-aware SVG chart primitives in components/ui/
+                  (LineChart/area + grouped BarChart + axis/grid/legend + a11y
+                  data-table fallback) — the "viz from Epic 4" Story 6.3 reuses.
+        • 4.6.5 — mounts the in-sprint burndown into the 4.5 scrum-header chart
+                  slot AND the completed-sprint burndown into the 4.4.6
+                  sprint-report chart seam.
+        • 4.6.6 — mounts the velocity chart into the 4.4.6 sprint-report seam.
+
+      DECISION (baked in per the no-shortcut rule): hand-rolled token-aware SVG,
+      NOT a charting library. The design system routes ALL colour through --el-*
+      and ALL shape through element-semantic tokens (CLAUDE.md); Recharts/Chart.js/
+      nivo ship their own canvas/DOM styling that bypasses the swap layer, pull
+      ~80–120 kB for two charts, and fight the a11y model. So the charts are SVG
+      composed from the design tokens directly.
+
+      Built FROM the real design system: the token block below is copied 1:1 from
+      app/globals.css (Tier-0 --color-* + Tier-3 --el-* + the shape tokens) and
+      EXTENDS Tier 3 with the NEW --el-chart-* series tokens 4.6.2 must add to
+      globals.css (guideline / actual / committed / completed / scope / average +
+      plot/grid/axis). --el-* only (no Tier-0 --color-* in chart markup); shape via
+      element shape tokens; AA-safe; READ AS TEXT (visible legend + value labels +
+      a data-table fallback), never colour or shape alone (finding #35).
+      Mirror product: Jira's Burndown Chart + Velocity Chart (decision-ladder
+      rung 1).
+
+      Covers (multi-panel — review EACH, not just the first):
+        (0) CHART VISUAL LANGUAGE — the reusable scaffold (plot frame · axes +
+            ticks · gridlines · legend) + the --el-chart-* token table 4.6.2 adds.
+        (1) BURNDOWN — full (sprint-report form): guideline + stepped actual +
+            scope-change marker + committed baseline at t=0 + completed end.
+        (2) BURNDOWN — compact (scrum-header form): small, live, "today" marker,
+            beside the numeric remaining.
+        (3) VELOCITY — grouped bars (committed vs completed per completed sprint)
+            + average reference + the last-7-sprints window.
+        (4) STATES — unestimated ("no point data" / issue-count) · empty sprint
+            (flat guideline at 0) · low-history velocity (0–1 sprints) · loading
+            skeleton · ErrorState.
+        (5) SEAM PLACEMENT — the compact burndown in the 4.5 scrum-header slot;
+            the full burndown + velocity in the 4.4.6 sprint-report seam. The
+            header/report chrome is REFERENCED (greyed), not redrawn.
+        (6) A11Y — the read-as-text legend + the data-table fallback every chart
+            exposes (role="img" + aria-describedby summary).
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        /* ★ NEW — Tier-3 chart SERIES tokens (4.6.2 adds these to globals.css).
+           Every chart colour routes through one of these — NEVER raw --color-*. */
+        --el-chart-plot: var(--color-surface-soft); /* plot background fill         */
+        --el-chart-grid: var(--color-border); /* gridlines                    */
+        --el-chart-axis: var(--color-steel); /* axis line + tick labels      */
+        --el-chart-guideline: var(--color-stone); /* burndown ideal (dashed)      */
+        --el-chart-actual: var(--color-primary); /* burndown actual remaining    */
+        --el-chart-scope: var(--color-warning); /* scope-change marker          */
+        --el-chart-committed: var(--color-info); /* velocity committed bar       */
+        --el-chart-completed: var(--color-success); /* velocity completed bar       */
+        --el-chart-average: var(--color-charcoal); /* velocity average (dashed)    */
+
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #9a968d;
+        --color-stone: #6f6c64;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-accent-orange: #ff8a3d;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-success: #38c463;
+        --color-info: #4d9fff;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 760px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+      }
+      .stage {
+        max-width: 1180px;
+        margin: 0 auto;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 24px;
+      }
+      .row {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+      .row > * {
+        flex: 1 1 360px;
+        min-width: 0;
+      }
+
+      /* ── The Card primitive the chart mounts inside (components/ui/Card) ──── */
+      .chart-card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: var(--spacing-card-padding);
+      }
+      .chart-card.tight {
+        padding: 16px;
+      }
+      .chart-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .chart-title {
+        font-family: var(--font-serif);
+        font-size: 17px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .chart-sub {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+
+      /* ── The shared LEGEND (read as TEXT — finding #35) ──────────────────── */
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 18px;
+        margin-bottom: 12px;
+      }
+      .legend.below {
+        margin: 12px 0 0;
+      }
+      .leg {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .leg b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .leg .sw {
+        width: 16px;
+        height: 12px;
+        border-radius: 3px;
+        flex: none;
+      }
+      .leg .sw-line {
+        width: 18px;
+        height: 0;
+        border-top-width: 3px;
+        border-top-style: solid;
+        flex: none;
+      }
+      .leg .sw-dash {
+        border-top-style: dashed;
+      }
+
+      .chart-svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        font-family: var(--font-sans);
+      }
+      .tick-txt {
+        fill: var(--el-chart-axis);
+        font-size: 11px;
+        font-family: var(--font-sans);
+      }
+      .val-txt {
+        font-size: 11px;
+        font-weight: 600;
+        font-family: var(--font-sans);
+      }
+      .annot {
+        font-size: 10.5px;
+        font-weight: 600;
+        font-family: var(--font-mono);
+      }
+
+      /* ── The a11y DATA-TABLE fallback (every chart ships one) ────────────── */
+      .data-fallback {
+        margin-top: 14px;
+        border-top: 1px solid var(--el-border);
+        padding-top: 12px;
+      }
+      .data-fallback summary {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .data-fallback summary svg {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+      }
+      table.dt {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 10px;
+        font-size: 12px;
+      }
+      table.dt caption {
+        text-align: left;
+        font-size: 11px;
+        color: var(--el-text-muted);
+        margin-bottom: 6px;
+      }
+      table.dt th,
+      table.dt td {
+        border: 1px solid var(--el-border);
+        padding: 4px 9px;
+        text-align: right;
+        color: var(--el-text-secondary);
+      }
+      table.dt th[scope='row'],
+      table.dt th[scope='col']:first-child {
+        text-align: left;
+      }
+      table.dt thead th {
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      table.dt td.n {
+        font-family: var(--font-mono);
+        color: var(--el-text);
+      }
+
+      /* ── Token table (panel 0) ──────────────────────────────────────────── */
+      table.tok {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 12.5px;
+        margin-top: 4px;
+      }
+      table.tok th,
+      table.tok td {
+        border: 1px solid var(--el-border);
+        padding: 7px 10px;
+        text-align: left;
+        vertical-align: middle;
+      }
+      table.tok thead th {
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+      }
+      table.tok td code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-strong);
+        background: var(--el-muted);
+        padding: 1px 6px;
+        border-radius: var(--radius-control);
+      }
+      .swcell {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .swcell .box {
+        width: 26px;
+        height: 14px;
+        border-radius: 3px;
+        flex: none;
+      }
+      .swcell .line {
+        width: 28px;
+        height: 0;
+        border-top-width: 3px;
+        border-top-style: solid;
+        flex: none;
+      }
+
+      /* ── States ─────────────────────────────────────────────────────────── */
+      .state-box {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        text-align: center;
+        min-height: 200px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        padding: 20px;
+      }
+      .state-box svg {
+        width: 26px;
+        height: 26px;
+        color: var(--el-text-faint);
+      }
+      .state-box .st-t {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .state-box .st-s {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        max-width: 280px;
+      }
+      .state-box.is-error svg {
+        color: var(--el-danger);
+      }
+      .state-box .retry {
+        margin-top: 4px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-accent);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        border-radius: var(--radius-btn);
+        padding: 6px 14px;
+        cursor: pointer;
+      }
+      /* skeleton */
+      .skel {
+        position: relative;
+        overflow: hidden;
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+      }
+      .skel::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+        transform: translateX(-100%);
+        animation: sh 1.4s infinite;
+      }
+      [data-theme='dark'] .skel::after {
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+      }
+      @keyframes sh {
+        100% {
+          transform: translateX(100%);
+        }
+      }
+
+      /* ── Seam reference chrome (panel 5) — greyed, NOT redrawn ───────────── */
+      .ref-chrome {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 14px 16px;
+      }
+      .ref-tag {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+      }
+      .ref-mute {
+        opacity: 0.55;
+        filter: grayscale(1);
+      }
+      /* the scrum-header reference strip */
+      .sh-ref {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 14px 18px;
+        margin-top: 10px;
+      }
+      .sh-ref .sh-left .nm {
+        font-family: var(--font-serif);
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .sh-ref .sh-left .dt {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+        margin-left: 8px;
+      }
+      .pill .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 9999px;
+        background: var(--el-success);
+      }
+      .sh-points {
+        display: flex;
+        gap: 18px;
+      }
+      .sh-points .stat {
+        text-align: center;
+      }
+      .sh-points .val {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .sh-points .lab {
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-muted);
+      }
+
+      .note {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 12px;
+        line-height: 1.55;
+      }
+      .note b {
+        color: var(--el-text-secondary);
+      }
+      .seam-flag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-warning);
+        background: var(--el-tint-peach);
+        border-radius: var(--radius-badge);
+        padding: 3px 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Charts — visual language · burndown · velocity</h1>
+        <p>
+          Story 4.6 · subtask 4.6.1 — the chart design every UI subtask of the story builds against.
+          Hand-rolled token-aware SVG (no charting library); colour via the new
+          <code>--el-chart-*</code> tokens, shape via element-shape tokens; every series read as
+          text (visible legend · value labels · data-table fallback) — finding #35.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- ═══════════════ PANEL 0 — CHART VISUAL LANGUAGE ═══════════════ -->
+    <div class="panel-label">
+      0 · Chart visual language — the reusable scaffold + the --el-chart-* token table (gates 4.6.2)
+    </div>
+    <div class="stage">
+      <div class="row">
+        <div class="chart-card" style="flex: 1 1 460px">
+          <div class="chart-head">
+            <h3 class="chart-title">Anatomy of a chart</h3>
+            <span class="chart-sub">plot frame · axes + ticks · gridlines · legend</span>
+          </div>
+          <!-- a labelled scaffold: the parts 4.6.2 builds into the shared frame -->
+          <svg
+            class="chart-svg"
+            viewBox="0 0 600 300"
+            role="img"
+            aria-label="Chart scaffold anatomy: a plot frame with a Y axis of point ticks, an X axis of categories, horizontal gridlines, and a single demo series."
+          >
+            <!-- plot background -->
+            <rect x="44" y="16" width="540" height="224" rx="4" fill="var(--el-chart-plot)" />
+            <!-- horizontal gridlines + Y ticks (0,10,20,30,40) -->
+            <g stroke="var(--el-chart-grid)" stroke-width="1">
+              <line x1="44" y1="240" x2="584" y2="240" />
+              <line x1="44" y1="189.1" x2="584" y2="189.1" />
+              <line x1="44" y1="138.2" x2="584" y2="138.2" />
+              <line x1="44" y1="87.3" x2="584" y2="87.3" />
+              <line x1="44" y1="36.4" x2="584" y2="36.4" />
+            </g>
+            <g class="tick-txt" text-anchor="end">
+              <text x="38" y="244">0</text>
+              <text x="38" y="193">10</text>
+              <text x="38" y="142">20</text>
+              <text x="38" y="91">30</text>
+              <text x="38" y="40">40</text>
+            </g>
+            <!-- Y axis line + label -->
+            <line
+              x1="44"
+              y1="16"
+              x2="44"
+              y2="240"
+              stroke="var(--el-chart-axis)"
+              stroke-width="1.5"
+            />
+            <text
+              class="tick-txt"
+              x="14"
+              y="130"
+              transform="rotate(-90 14 130)"
+              text-anchor="middle"
+            >
+              Story points
+            </text>
+            <!-- X axis line + label -->
+            <line
+              x1="44"
+              y1="240"
+              x2="584"
+              y2="240"
+              stroke="var(--el-chart-axis)"
+              stroke-width="1.5"
+            />
+            <text class="tick-txt" x="314" y="288" text-anchor="middle">
+              X axis (sprint days · or sprints)
+            </text>
+            <g class="tick-txt" text-anchor="middle">
+              <text x="152" y="260">tick</text>
+              <text x="314" y="260">tick</text>
+              <text x="476" y="260">tick</text>
+            </g>
+            <!-- demo series (accent line) -->
+            <polyline
+              points="44,40 152,90 314,70 476,150 584,120"
+              fill="none"
+              stroke="var(--el-chart-actual)"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <g fill="var(--el-chart-actual)">
+              <circle cx="44" cy="40" r="3.5" />
+              <circle cx="314" cy="70" r="3.5" />
+              <circle cx="584" cy="120" r="3.5" />
+            </g>
+          </svg>
+          <div class="legend below">
+            <span class="leg"
+              ><span class="sw-line" style="border-color: var(--el-chart-actual)"></span
+              ><b>Series</b> — line / area / bar</span
+            >
+            <span class="leg"
+              ><span class="sw" style="background: var(--el-chart-grid)"></span>Gridline</span
+            >
+            <span class="leg"
+              ><span class="sw" style="background: var(--el-chart-axis)"></span>Axis + ticks</span
+            >
+          </div>
+          <p class="note">
+            The shared frame is responsive (SVG <code>viewBox</code> +
+            <code>preserveAspectRatio</code>), with a tiny linear-scale helper — <b>no d3</b>. 4.6.2
+            builds it once; the burndown (LineChart) and velocity (grouped BarChart) compose it, and
+            <b>Story 6.3</b> reuses it for dashboards.
+          </p>
+        </div>
+
+        <div class="chart-card" style="flex: 1 1 380px">
+          <div class="chart-head">
+            <h3 class="chart-title">Series tokens to add</h3>
+            <span class="chart-sub">globals.css Tier 3 · --el-chart-*</span>
+          </div>
+          <table class="tok">
+            <thead>
+              <tr>
+                <th>Token</th>
+                <th>Maps to</th>
+                <th>Role</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <span class="swcell"
+                    ><span
+                      class="line"
+                      style="border-color: var(--el-chart-guideline); border-top-style: dashed"
+                    ></span
+                    ><code>--el-chart-guideline</code></span
+                  >
+                </td>
+                <td><code>--color-stone</code></td>
+                <td>burndown ideal (dashed)</td>
+              </tr>
+              <tr>
+                <td>
+                  <span class="swcell"
+                    ><span class="line" style="border-color: var(--el-chart-actual)"></span
+                    ><code>--el-chart-actual</code></span
+                  >
+                </td>
+                <td><code>--color-primary</code></td>
+                <td>burndown actual remaining</td>
+              </tr>
+              <tr>
+                <td>
+                  <span class="swcell"
+                    ><span class="box" style="background: var(--el-chart-scope)"></span
+                    ><code>--el-chart-scope</code></span
+                  >
+                </td>
+                <td><code>--color-warning</code></td>
+                <td>scope-change marker</td>
+              </tr>
+              <tr>
+                <td>
+                  <span class="swcell"
+                    ><span class="box" style="background: var(--el-chart-committed)"></span
+                    ><code>--el-chart-committed</code></span
+                  >
+                </td>
+                <td><code>--color-info</code></td>
+                <td>velocity committed bar</td>
+              </tr>
+              <tr>
+                <td>
+                  <span class="swcell"
+                    ><span class="box" style="background: var(--el-chart-completed)"></span
+                    ><code>--el-chart-completed</code></span
+                  >
+                </td>
+                <td><code>--color-success</code></td>
+                <td>velocity completed bar</td>
+              </tr>
+              <tr>
+                <td>
+                  <span class="swcell"
+                    ><span
+                      class="line sw-dash"
+                      style="border-color: var(--el-chart-average); border-top-style: dashed"
+                    ></span
+                    ><code>--el-chart-average</code></span
+                  >
+                </td>
+                <td><code>--color-charcoal</code></td>
+                <td>velocity average (dashed)</td>
+              </tr>
+              <tr>
+                <td>
+                  <span class="swcell"
+                    ><span class="box" style="background: var(--el-chart-plot)"></span
+                    ><code>--el-chart-plot</code></span
+                  >
+                </td>
+                <td><code>--color-surface-soft</code></td>
+                <td>plot background</td>
+              </tr>
+              <tr>
+                <td>
+                  <span class="swcell"
+                    ><span class="box" style="background: var(--el-chart-grid)"></span
+                    ><code>--el-chart-grid</code></span
+                  >
+                </td>
+                <td><code>--color-border</code></td>
+                <td>gridlines</td>
+              </tr>
+              <tr>
+                <td>
+                  <span class="swcell"
+                    ><span class="box" style="background: var(--el-chart-axis)"></span
+                    ><code>--el-chart-axis</code></span
+                  >
+                </td>
+                <td><code>--color-steel</code></td>
+                <td>axis line + tick labels</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="note">
+            Per CLAUDE.md: a colour the design needs that <code>--el-*</code> doesn't expose yet is
+            <b>added to Tier 3</b> (mapped to the right <code>--color-*</code>) and consumed — never
+            a raw <code>--color-*</code> in chart code. These flip with
+            <code>data-theme</code> (toggle to confirm) and a future <code>data-palette</code>.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ PANEL 1 — BURNDOWN (full / report form) ═══════════════ -->
+    <div class="panel-label">
+      1 · Burndown — full form (sprint-report seam) — guideline + stepped actual + scope marker +
+      committed baseline (gates 4.6.5)
+    </div>
+    <div class="stage">
+      <div class="chart-card">
+        <div class="chart-head">
+          <h3 class="chart-title">Sprint 6 · Burndown</h3>
+          <span class="chart-sub">Jun 2 → Jun 14 · completed · 42 pts committed</span>
+        </div>
+        <div class="legend">
+          <span class="leg"
+            ><span class="sw-line sw-dash" style="border-color: var(--el-chart-guideline)"></span
+            >Guideline <b>(ideal)</b></span
+          >
+          <span class="leg"
+            ><span class="sw-line" style="border-color: var(--el-chart-actual)"></span
+            ><b>Remaining</b> (actual)</span
+          >
+          <span class="leg"
+            ><span class="sw" style="background: var(--el-chart-scope); border-radius: 2px"></span
+            >Scope added</span
+          >
+        </div>
+        <svg class="chart-svg" viewBox="0 0 600 300" role="img" aria-describedby="bd-full-desc">
+          <desc id="bd-full-desc">
+            Burndown for Sprint 6, a completed 10-day sprint. Guideline falls straight from 42
+            points committed on day 0 to 0 on day 10. Actual remaining is a step line: 42 at start,
+            drops to 35 by day 2, rises to 39 on day 3 when 4 points of scope were added, then falls
+            to 13 remaining at completion on day 10 (29 of 42 points completed).
+          </desc>
+          <rect x="44" y="16" width="540" height="224" rx="4" fill="var(--el-chart-plot)" />
+          <!-- gridlines + Y ticks -->
+          <g stroke="var(--el-chart-grid)" stroke-width="1">
+            <line x1="44" y1="240" x2="584" y2="240" />
+            <line x1="44" y1="189.1" x2="584" y2="189.1" />
+            <line x1="44" y1="138.2" x2="584" y2="138.2" />
+            <line x1="44" y1="87.3" x2="584" y2="87.3" />
+            <line x1="44" y1="36.4" x2="584" y2="36.4" />
+          </g>
+          <g class="tick-txt" text-anchor="end">
+            <text x="38" y="244">0</text>
+            <text x="38" y="193">10</text>
+            <text x="38" y="142">20</text>
+            <text x="38" y="91">30</text>
+            <text x="38" y="40">40</text>
+          </g>
+          <line x1="44" y1="16" x2="44" y2="240" stroke="var(--el-chart-axis)" stroke-width="1.5" />
+          <text class="tick-txt" x="14" y="130" transform="rotate(-90 14 130)" text-anchor="middle">
+            Points remaining
+          </text>
+          <line
+            x1="44"
+            y1="240"
+            x2="584"
+            y2="240"
+            stroke="var(--el-chart-axis)"
+            stroke-width="1.5"
+          />
+          <!-- X day ticks 0..10 -->
+          <g class="tick-txt" text-anchor="middle">
+            <text x="44" y="258">0</text>
+            <text x="98" y="258">1</text>
+            <text x="152" y="258">2</text>
+            <text x="206" y="258">3</text>
+            <text x="260" y="258">4</text>
+            <text x="314" y="258">5</text>
+            <text x="368" y="258">6</text>
+            <text x="422" y="258">7</text>
+            <text x="476" y="258">8</text>
+            <text x="530" y="258">9</text>
+            <text x="584" y="258">10</text>
+          </g>
+          <text class="tick-txt" x="314" y="286" text-anchor="middle">Sprint day</text>
+          <!-- guideline (dashed): 42 → 0 -->
+          <line
+            x1="44"
+            y1="26.2"
+            x2="584"
+            y2="240"
+            stroke="var(--el-chart-guideline)"
+            stroke-width="2"
+            stroke-dasharray="5 5"
+            stroke-linecap="round"
+          />
+          <!-- actual step line -->
+          <path
+            d="M44,26.2 L98,26.2 L152,26.2 L152,61.8 L206,61.8 L206,41.5 L260,41.5 L314,41.5 L314,82.2 L368,82.2 L368,102.5 L422,102.5 L422,102.5 L476,102.5 L476,138.2 L530,138.2 L530,158.5 L584,158.5 L584,173.8"
+            fill="none"
+            stroke="var(--el-chart-actual)"
+            stroke-width="2.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <!-- committed baseline label at t=0 -->
+          <circle cx="44" cy="26.2" r="3.75" fill="var(--el-chart-actual)" />
+          <text class="annot" x="52" y="22" fill="var(--el-chart-actual)">42 committed</text>
+          <!-- scope-change marker at day 3 (rise) -->
+          <rect
+            x="201"
+            y="36.5"
+            width="10"
+            height="10"
+            rx="2"
+            transform="rotate(45 206 41.5)"
+            fill="var(--el-chart-scope)"
+          />
+          <text class="annot" x="214" y="38" fill="var(--el-chart-scope)">+4 scope</text>
+          <!-- completed end marker -->
+          <circle cx="584" cy="173.8" r="3.75" fill="var(--el-chart-actual)" />
+          <text class="annot" x="578" y="190" fill="var(--el-chart-actual)" text-anchor="end">
+            13 left
+          </text>
+        </svg>
+        <details class="data-fallback">
+          <summary>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 3v18" />
+              <rect width="18" height="18" x="3" y="3" rx="2" />
+              <path d="M3 9h18" />
+              <path d="M3 15h18" />
+            </svg>
+            View data table
+          </summary>
+          <table class="dt">
+            <caption>
+              Sprint 6 burndown — points remaining by day (end-of-day).
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Day</th>
+                <th scope="col">Guideline</th>
+                <th scope="col">Remaining</th>
+                <th scope="col">Event</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">0</th>
+                <td class="n">42</td>
+                <td class="n">42</td>
+                <td>Sprint started · 42 committed</td>
+              </tr>
+              <tr>
+                <th scope="row">2</th>
+                <td class="n">34</td>
+                <td class="n">35</td>
+                <td>7 pts completed</td>
+              </tr>
+              <tr>
+                <th scope="row">3</th>
+                <td class="n">29</td>
+                <td class="n">39</td>
+                <td>+4 scope added</td>
+              </tr>
+              <tr>
+                <th scope="row">5</th>
+                <td class="n">21</td>
+                <td class="n">31</td>
+                <td>8 pts completed</td>
+              </tr>
+              <tr>
+                <th scope="row">8</th>
+                <td class="n">8</td>
+                <td class="n">20</td>
+                <td>7 pts completed</td>
+              </tr>
+              <tr>
+                <th scope="row">10</th>
+                <td class="n">0</td>
+                <td class="n">13</td>
+                <td>Sprint completed · 29 of 42 done</td>
+              </tr>
+            </tbody>
+          </table>
+        </details>
+        <p class="note">
+          The actual line is reconstructed from the <b>1.4.6 work_item_revision trail</b> (status →
+          done-category transitions burn down; sprint-association adds raise) by <b>4.6.3</b>; the
+          end-point (<b>13</b>) equals <code>rollupForSprint().remaining</code> (4.3.3). The data is
+          the load-bearing part — the day buckets come from a bounded grouped
+          <code>$queryRaw</code>, not an all-revisions load (finding #57).
+        </p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ PANEL 2 — BURNDOWN (compact / header form) ═══════════════ -->
+    <div class="panel-label">
+      2 · Burndown — compact form (scrum-header seam) — small, live, "today" marker, beside the
+      numeric remaining (gates 4.6.5)
+    </div>
+    <div class="stage">
+      <div class="row">
+        <div class="chart-card tight" style="flex: 1 1 420px">
+          <div class="chart-head">
+            <h3 class="chart-title" style="font-size: 15px">Burndown</h3>
+            <span class="chart-sub">Sprint 24 · day 4 of 10</span>
+          </div>
+          <div class="legend" style="margin-bottom: 8px">
+            <span class="leg"
+              ><span class="sw-line sw-dash" style="border-color: var(--el-chart-guideline)"></span
+              >Guideline</span
+            >
+            <span class="leg"
+              ><span class="sw-line" style="border-color: var(--el-chart-actual)"></span
+              ><b>Remaining</b></span
+            >
+            <span class="leg"
+              ><span class="sw-line sw-dash" style="border-color: var(--el-chart-axis)"></span
+              >Today</span
+            >
+          </div>
+          <svg
+            class="chart-svg"
+            viewBox="0 0 360 160"
+            role="img"
+            aria-describedby="bd-compact-desc"
+          >
+            <desc id="bd-compact-desc">
+              Compact in-sprint burndown for the active Sprint 24, day 4 of 10. Guideline falls from
+              34 committed to 0. Actual remaining is drawn to today: 34, 34, 30, 26, 22 remaining.
+            </desc>
+            <rect x="30" y="12" width="320" height="112" rx="4" fill="var(--el-chart-plot)" />
+            <g stroke="var(--el-chart-grid)" stroke-width="1">
+              <line x1="30" y1="124" x2="350" y2="124" />
+              <line x1="30" y1="89.3" x2="350" y2="89.3" />
+              <line x1="30" y1="55.6" x2="350" y2="55.6" />
+              <line x1="30" y1="18.2" x2="350" y2="18.2" />
+            </g>
+            <g class="tick-txt" text-anchor="end">
+              <text x="25" y="127">0</text>
+              <text x="25" y="93">10</text>
+              <text x="25" y="59">20</text>
+              <text x="25" y="32">34</text>
+            </g>
+            <line
+              x1="30"
+              y1="12"
+              x2="30"
+              y2="124"
+              stroke="var(--el-chart-axis)"
+              stroke-width="1.5"
+            />
+            <line
+              x1="30"
+              y1="124"
+              x2="350"
+              y2="124"
+              stroke="var(--el-chart-axis)"
+              stroke-width="1.5"
+            />
+            <g class="tick-txt" text-anchor="middle">
+              <text x="30" y="140">0</text>
+              <text x="158" y="140">4</text>
+              <text x="350" y="140">10</text>
+            </g>
+            <!-- guideline -->
+            <line
+              x1="30"
+              y1="18.2"
+              x2="350"
+              y2="124"
+              stroke="var(--el-chart-guideline)"
+              stroke-width="1.75"
+              stroke-dasharray="4 4"
+              stroke-linecap="round"
+            />
+            <!-- "today" vertical marker at day 4 -->
+            <line
+              x1="158"
+              y1="12"
+              x2="158"
+              y2="124"
+              stroke="var(--el-chart-axis)"
+              stroke-width="1.5"
+              stroke-dasharray="3 3"
+            />
+            <!-- actual (to today only) -->
+            <path
+              d="M30,18.2 L62,18.2 L94,18.2 L94,30.7 L126,30.7 L126,43.1 L158,43.1 L158,55.6"
+              fill="none"
+              stroke="var(--el-chart-actual)"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <circle cx="158" cy="55.6" r="3.5" fill="var(--el-chart-actual)" />
+          </svg>
+          <details class="data-fallback">
+            <summary>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 3v18" />
+                <rect width="18" height="18" x="3" y="3" rx="2" />
+                <path d="M3 9h18" />
+                <path d="M3 15h18" />
+              </svg>
+              View data table
+            </summary>
+            <table class="dt">
+              <caption>
+                Sprint 24 — points remaining by day (live, to today).
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Day</th>
+                  <th scope="col">Guideline</th>
+                  <th scope="col">Remaining</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">0</th>
+                  <td class="n">34</td>
+                  <td class="n">34</td>
+                </tr>
+                <tr>
+                  <th scope="row">2</th>
+                  <td class="n">27</td>
+                  <td class="n">30</td>
+                </tr>
+                <tr>
+                  <th scope="row">3</th>
+                  <td class="n">24</td>
+                  <td class="n">26</td>
+                </tr>
+                <tr>
+                  <th scope="row">4 (today)</th>
+                  <td class="n">20</td>
+                  <td class="n">22</td>
+                </tr>
+              </tbody>
+            </table>
+          </details>
+        </div>
+        <div style="flex: 1 1 300px">
+          <p class="note" style="margin-top: 0">
+            <b>Same primitive, compact props.</b> The scrum-header form is the same 4.6.2
+            <code>LineChart</code> with a smaller frame, the Y axis topping at the committed
+            baseline, and the <b>actual line drawn only to "today"</b> (the live sprint) — vs the
+            full report form (panel 1) drawn to <code>completedAt</code>. It mounts
+            <b>beside</b> the numeric committed/completed/remaining stats the 4.5 header already
+            shows (see panel 5), never replacing them.
+          </p>
+          <p class="note">
+            Scope markers are omitted in the compact form for density; the full report form carries
+            them. Both expose the same data-table fallback.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ PANEL 3 — VELOCITY ═══════════════ -->
+    <div class="panel-label">
+      3 · Velocity — grouped bars (committed vs completed per completed sprint) + average + last-7
+      window (gates 4.6.6)
+    </div>
+    <div class="stage">
+      <div class="chart-card">
+        <div class="chart-head">
+          <h3 class="chart-title">Velocity</h3>
+          <span class="chart-sub"
+            >last 7 completed sprints · avg completed <b style="color: var(--el-text)">26</b></span
+          >
+        </div>
+        <div class="legend">
+          <span class="leg"
+            ><span class="sw" style="background: var(--el-chart-committed)"></span
+            ><b>Committed</b></span
+          >
+          <span class="leg"
+            ><span class="sw" style="background: var(--el-chart-completed)"></span
+            ><b>Completed</b></span
+          >
+          <span class="leg"
+            ><span class="sw-line sw-dash" style="border-color: var(--el-chart-average)"></span
+            >Average completed</span
+          >
+        </div>
+        <svg class="chart-svg" viewBox="0 0 600 300" role="img" aria-describedby="vel-desc">
+          <desc id="vel-desc">
+            Velocity over the last 7 completed sprints. Committed vs completed points per sprint:
+            Sprint 18 committed 30 completed 24; Sprint 19 28 and 30; Sprint 20 32 and 22; Sprint 21
+            26 and 26; Sprint 22 34 and 28; Sprint 23 30 and 25; Sprint 24 42 and 29. Average
+            completed is 26.
+          </desc>
+          <rect x="40" y="16" width="544" height="220" rx="4" fill="var(--el-chart-plot)" />
+          <!-- gridlines + Y ticks 0,15,30,45 -->
+          <g stroke="var(--el-chart-grid)" stroke-width="1">
+            <line x1="40" y1="236" x2="584" y2="236" />
+            <line x1="40" y1="162.7" x2="584" y2="162.7" />
+            <line x1="40" y1="89.3" x2="584" y2="89.3" />
+            <line x1="40" y1="16" x2="584" y2="16" />
+          </g>
+          <g class="tick-txt" text-anchor="end">
+            <text x="34" y="240">0</text>
+            <text x="34" y="166">15</text>
+            <text x="34" y="93">30</text>
+            <text x="34" y="20">45</text>
+          </g>
+          <line x1="40" y1="16" x2="40" y2="236" stroke="var(--el-chart-axis)" stroke-width="1.5" />
+          <text class="tick-txt" x="13" y="126" transform="rotate(-90 13 126)" text-anchor="middle">
+            Story points
+          </text>
+          <line
+            x1="40"
+            y1="236"
+            x2="584"
+            y2="236"
+            stroke="var(--el-chart-axis)"
+            stroke-width="1.5"
+          />
+          <!-- bars: committed (info) + completed (success), per sprint -->
+          <g>
+            <!-- S18 30/24 -->
+            <rect
+              x="52.9"
+              y="89.3"
+              width="24"
+              height="146.7"
+              rx="2"
+              fill="var(--el-chart-committed)"
+            />
+            <rect
+              x="80.9"
+              y="118.7"
+              width="24"
+              height="117.3"
+              rx="2"
+              fill="var(--el-chart-completed)"
+            />
+            <!-- S19 28/30 -->
+            <rect
+              x="130.6"
+              y="99.1"
+              width="24"
+              height="136.9"
+              rx="2"
+              fill="var(--el-chart-committed)"
+            />
+            <rect
+              x="158.6"
+              y="89.3"
+              width="24"
+              height="146.7"
+              rx="2"
+              fill="var(--el-chart-completed)"
+            />
+            <!-- S20 32/22 -->
+            <rect
+              x="208.3"
+              y="79.6"
+              width="24"
+              height="156.4"
+              rx="2"
+              fill="var(--el-chart-committed)"
+            />
+            <rect
+              x="236.3"
+              y="128.4"
+              width="24"
+              height="107.6"
+              rx="2"
+              fill="var(--el-chart-completed)"
+            />
+            <!-- S21 26/26 -->
+            <rect
+              x="286"
+              y="108.9"
+              width="24"
+              height="127.1"
+              rx="2"
+              fill="var(--el-chart-committed)"
+            />
+            <rect
+              x="314"
+              y="108.9"
+              width="24"
+              height="127.1"
+              rx="2"
+              fill="var(--el-chart-completed)"
+            />
+            <!-- S22 34/28 -->
+            <rect
+              x="363.7"
+              y="69.8"
+              width="24"
+              height="166.2"
+              rx="2"
+              fill="var(--el-chart-committed)"
+            />
+            <rect
+              x="391.7"
+              y="99.1"
+              width="24"
+              height="136.9"
+              rx="2"
+              fill="var(--el-chart-completed)"
+            />
+            <!-- S23 30/25 -->
+            <rect
+              x="441.4"
+              y="89.3"
+              width="24"
+              height="146.7"
+              rx="2"
+              fill="var(--el-chart-committed)"
+            />
+            <rect
+              x="469.4"
+              y="113.8"
+              width="24"
+              height="122.2"
+              rx="2"
+              fill="var(--el-chart-completed)"
+            />
+            <!-- S24 42/29 -->
+            <rect
+              x="519.1"
+              y="30.7"
+              width="24"
+              height="205.3"
+              rx="2"
+              fill="var(--el-chart-committed)"
+            />
+            <rect
+              x="547.1"
+              y="94.2"
+              width="24"
+              height="141.8"
+              rx="2"
+              fill="var(--el-chart-completed)"
+            />
+          </g>
+          <!-- value labels (read as text) -->
+          <g class="val-txt" text-anchor="middle">
+            <g fill="var(--el-chart-committed)">
+              <text x="64.9" y="84">30</text>
+              <text x="142.6" y="94">28</text>
+              <text x="220.3" y="74">32</text>
+              <text x="298" y="104">26</text>
+              <text x="375.7" y="64">34</text>
+              <text x="453.4" y="84">30</text>
+              <text x="531.1" y="25">42</text>
+            </g>
+            <g fill="var(--el-chart-completed)">
+              <text x="92.9" y="113">24</text>
+              <text x="170.6" y="84">30</text>
+              <text x="248.3" y="123">22</text>
+              <text x="326" y="104">26</text>
+              <text x="403.7" y="94">28</text>
+              <text x="481.4" y="108">25</text>
+              <text x="559.1" y="89">29</text>
+            </g>
+          </g>
+          <!-- average completed reference line at v=26 (y=108.9) -->
+          <line
+            x1="40"
+            y1="108.9"
+            x2="584"
+            y2="108.9"
+            stroke="var(--el-chart-average)"
+            stroke-width="1.75"
+            stroke-dasharray="6 4"
+          />
+          <text class="annot" x="46" y="105" fill="var(--el-chart-average)">avg 26</text>
+          <!-- X sprint labels -->
+          <g class="tick-txt" text-anchor="middle">
+            <text x="78.9" y="254">S18</text>
+            <text x="156.6" y="254">S19</text>
+            <text x="234.3" y="254">S20</text>
+            <text x="312" y="254">S21</text>
+            <text x="389.7" y="254">S22</text>
+            <text x="467.4" y="254">S23</text>
+            <text x="545.1" y="254">S24</text>
+          </g>
+          <text class="tick-txt" x="312" y="282" text-anchor="middle">
+            Completed sprint (oldest → newest)
+          </text>
+        </svg>
+        <details class="data-fallback">
+          <summary>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 3v18" />
+              <rect width="18" height="18" x="3" y="3" rx="2" />
+              <path d="M3 9h18" />
+              <path d="M3 15h18" />
+            </svg>
+            View data table
+          </summary>
+          <table class="dt">
+            <caption>
+              Velocity — committed vs completed points per sprint. Average completed: 26.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Sprint</th>
+                <th scope="col">Committed</th>
+                <th scope="col">Completed</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Sprint 18</th>
+                <td class="n">30</td>
+                <td class="n">24</td>
+              </tr>
+              <tr>
+                <th scope="row">Sprint 19</th>
+                <td class="n">28</td>
+                <td class="n">30</td>
+              </tr>
+              <tr>
+                <th scope="row">Sprint 20</th>
+                <td class="n">32</td>
+                <td class="n">22</td>
+              </tr>
+              <tr>
+                <th scope="row">Sprint 21</th>
+                <td class="n">26</td>
+                <td class="n">26</td>
+              </tr>
+              <tr>
+                <th scope="row">Sprint 22</th>
+                <td class="n">34</td>
+                <td class="n">28</td>
+              </tr>
+              <tr>
+                <th scope="row">Sprint 23</th>
+                <td class="n">30</td>
+                <td class="n">25</td>
+              </tr>
+              <tr>
+                <th scope="row">Sprint 24</th>
+                <td class="n">42</td>
+                <td class="n">29</td>
+              </tr>
+            </tbody>
+          </table>
+        </details>
+        <p class="note">
+          Committed is the locked <code>committedPoints</code> baseline (4.4.2); completed is
+          <code>rollupForSprint().completed</code> (4.3.3 — the same done-category aggregate the
+          scrum header uses, so bars match those surfaces). The read is bounded: a
+          <code>LIMIT 7</code> sprint query + 7 bounded roll-ups (4.6.4), never an all-issues scan.
+        </p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ PANEL 4 — STATES ═══════════════ -->
+    <div class="panel-label">
+      4 · States — unestimated · empty sprint · low-history · loading · error (drawn here, asserted
+      in 4.6.7)
+    </div>
+    <div class="stage">
+      <div class="row">
+        <!-- unestimated -->
+        <div class="chart-card tight">
+          <div class="chart-head">
+            <h3 class="chart-title" style="font-size: 14px">Unestimated</h3>
+            <span class="chart-sub">no story points</span>
+          </div>
+          <div class="state-box">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M16 7h6v6" />
+              <path d="m22 7-8.5 8.5-5-5L2 17" />
+            </svg>
+            <span class="st-t">No point data</span>
+            <span class="st-s"
+              >This sprint has no estimates — the burndown shows <b>issue count</b> instead, or this
+              empty state. Never <code>NaN</code>.</span
+            >
+            <span class="seam-flag" style="margin-top: 6px"
+              ><svg
+                viewBox="0 0 24 24"
+                width="12"
+                height="12"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                />
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" /></svg
+              >shows "—", not 0</span
+            >
+          </div>
+        </div>
+        <!-- empty sprint -->
+        <div class="chart-card tight">
+          <div class="chart-head">
+            <h3 class="chart-title" style="font-size: 14px">Empty sprint</h3>
+            <span class="chart-sub">0 issues</span>
+          </div>
+          <svg
+            class="chart-svg"
+            viewBox="0 0 320 200"
+            role="img"
+            aria-label="Empty sprint burndown: a flat guideline at 0 with no remaining work."
+          >
+            <rect x="34" y="14" width="272" height="150" rx="4" fill="var(--el-chart-plot)" />
+            <g stroke="var(--el-chart-grid)" stroke-width="1">
+              <line x1="34" y1="164" x2="306" y2="164" />
+              <line x1="34" y1="89" x2="306" y2="89" />
+            </g>
+            <g class="tick-txt" text-anchor="end"><text x="29" y="167">0</text></g>
+            <line
+              x1="34"
+              y1="14"
+              x2="34"
+              y2="164"
+              stroke="var(--el-chart-axis)"
+              stroke-width="1.5"
+            />
+            <line
+              x1="34"
+              y1="164"
+              x2="306"
+              y2="164"
+              stroke="var(--el-chart-axis)"
+              stroke-width="1.5"
+            />
+            <!-- flat guideline at 0 -->
+            <line
+              x1="34"
+              y1="164"
+              x2="306"
+              y2="164"
+              stroke="var(--el-chart-guideline)"
+              stroke-width="2"
+              stroke-dasharray="5 5"
+            />
+            <text class="tick-txt" x="170" y="100" text-anchor="middle">
+              Nothing committed — flat at 0
+            </text>
+          </svg>
+        </div>
+        <!-- low history velocity -->
+        <div class="chart-card tight">
+          <div class="chart-head">
+            <h3 class="chart-title" style="font-size: 14px">Low history</h3>
+            <span class="chart-sub">velocity · 0–1 sprints</span>
+          </div>
+          <div class="state-box">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M3 3v18h18" />
+              <path d="M18 17V9" />
+              <path d="M13 17V5" />
+              <path d="M8 17v-3" />
+            </svg>
+            <span class="st-t">Not enough history yet</span>
+            <span class="st-s"
+              >Velocity needs at least 2 completed sprints to show a trend. Complete a sprint to
+              start the chart.</span
+            >
+          </div>
+        </div>
+        <!-- loading -->
+        <div class="chart-card tight">
+          <div class="chart-head">
+            <h3 class="chart-title" style="font-size: 14px">Loading</h3>
+            <span class="chart-sub">skeleton</span>
+          </div>
+          <div
+            style="
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+              min-height: 200px;
+              justify-content: flex-end;
+              padding: 12px 6px;
+            "
+          >
+            <div class="skel" style="height: 14px; width: 40%"></div>
+            <div style="display: flex; align-items: flex-end; gap: 10px; height: 130px">
+              <div class="skel" style="width: 14%; height: 60%"></div>
+              <div class="skel" style="width: 14%; height: 85%"></div>
+              <div class="skel" style="width: 14%; height: 45%"></div>
+              <div class="skel" style="width: 14%; height: 70%"></div>
+              <div class="skel" style="width: 14%; height: 95%"></div>
+              <div class="skel" style="width: 14%; height: 55%"></div>
+            </div>
+            <div class="skel" style="height: 10px; width: 70%"></div>
+          </div>
+        </div>
+        <!-- error -->
+        <div class="chart-card tight">
+          <div class="chart-head">
+            <h3 class="chart-title" style="font-size: 14px">Error</h3>
+            <span class="chart-sub">ErrorState</span>
+          </div>
+          <div class="state-box is-error">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+              <path d="M12 9v4" />
+              <path d="M12 17h.01" />
+            </svg>
+            <span class="st-t">Couldn't load the chart</span>
+            <span class="st-s"
+              >Something went wrong fetching the report. The chart slot reuses the host surface's
+              <code>ErrorState</code>.</span
+            >
+            <button class="retry">Retry</button>
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        Each state reuses a shipped idiom — the burndown's "no point data" mirrors the 4.5.2 "—"
+        rule (the data layer stays total, returns 0/null; the UI owns the "—"), and loading/error
+        reuse the <b>surrounding surface's</b> skeleton + <code>ErrorState</code> (the chart never
+        invents its own). The flat-at-0 guideline is the empty-sprint case from 4.6.3.
+      </p>
+    </div>
+
+    <!-- ═══════════════ PANEL 5 — SEAM PLACEMENT ═══════════════ -->
+    <div class="panel-label">
+      5 · Seam placement — where each chart mounts (chrome REFERENCED, not redrawn)
+    </div>
+    <div class="stage">
+      <!-- 4.5 scrum-header seam -->
+      <div class="ref-chrome">
+        <span class="ref-tag"
+          >references design/boards/scrum.mock.html · Story 4.5 header — DO NOT REDRAW</span
+        >
+        <div class="sh-ref">
+          <div class="sh-left">
+            <div class="nm">
+              Sprint 24<span class="pill"><span class="dot"></span>Active</span>
+            </div>
+            <div class="dt">Jun 2 – Jun 14 · 5 days remaining</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 22px; flex-wrap: wrap">
+            <!-- the compact burndown DROPS INTO the reserved header slot -->
+            <div
+              style="
+                width: 230px;
+                border: 1.5px solid var(--el-chart-actual);
+                border-radius: var(--radius-card);
+                padding: 8px 10px;
+                background: var(--el-page-bg);
+              "
+            >
+              <div
+                style="
+                  font-size: 10.5px;
+                  font-weight: 600;
+                  color: var(--el-text-muted);
+                  margin-bottom: 4px;
+                  text-transform: uppercase;
+                  letter-spacing: 0.04em;
+                "
+              >
+                Burndown · 4.6.5
+              </div>
+              <svg
+                class="chart-svg"
+                viewBox="0 0 230 92"
+                role="img"
+                aria-label="Compact burndown mounted in the scrum header slot."
+              >
+                <rect x="4" y="4" width="222" height="74" rx="3" fill="var(--el-chart-plot)" />
+                <line
+                  x1="4"
+                  y1="10"
+                  x2="226"
+                  y2="78"
+                  stroke="var(--el-chart-guideline)"
+                  stroke-width="1.5"
+                  stroke-dasharray="4 4"
+                />
+                <line
+                  x1="92"
+                  y1="4"
+                  x2="92"
+                  y2="78"
+                  stroke="var(--el-chart-axis)"
+                  stroke-width="1.25"
+                  stroke-dasharray="3 3"
+                />
+                <path
+                  d="M4,10 L40,10 L40,28 L66,28 L66,40 L92,40 L92,50"
+                  fill="none"
+                  stroke="var(--el-chart-actual)"
+                  stroke-width="2.25"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <circle cx="92" cy="50" r="3" fill="var(--el-chart-actual)" />
+              </svg>
+            </div>
+            <div class="sh-points">
+              <div class="stat">
+                <div class="val">34</div>
+                <div class="lab">Committed</div>
+              </div>
+              <div class="stat">
+                <div class="val">12</div>
+                <div class="lab">Completed</div>
+              </div>
+              <div class="stat">
+                <div class="val">22</div>
+                <div class="lab">Remaining</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="note">
+          The compact burndown mounts in the <b>chart slot Story 4.5 reserved</b> in the scrum
+          header — <b>beside</b> the committed/completed/remaining numbers, not replacing them.
+          4.6.5 fills the slot; it does not restructure the header (the 3.2-Filter-seam /
+          4.4–4.5-seam pattern).
+        </p>
+      </div>
+
+      <!-- 4.4.6 sprint-report seam -->
+      <div class="ref-chrome" style="margin-top: 18px">
+        <span class="ref-tag"
+          >references design/sprints/sprint-lifecycle.mock.html · Story 4.4.6 report — DO NOT
+          REDRAW</span
+        >
+        <div
+          style="
+            background: var(--el-page-bg);
+            border: 1px solid var(--el-border);
+            border-radius: var(--radius-card);
+            padding: 18px;
+            margin-top: 10px;
+          "
+        >
+          <div
+            class="ref-mute"
+            style="font-family: var(--font-serif); font-size: 17px; font-weight: 600"
+          >
+            Sprint 6 report
+          </div>
+          <div
+            class="ref-mute"
+            style="font-size: 12px; color: var(--el-text-muted); margin: 2px 0 12px"
+          >
+            Jun 2 → Jun 14, 2026 · completed Jun 14 · 42 committed / 29 completed / 13 not completed
+          </div>
+          <!-- the report's reserved chart SEAM is now FILLED with burndown + velocity -->
+          <div class="row" style="gap: 16px">
+            <div
+              style="
+                border: 1.5px solid var(--el-chart-actual);
+                border-radius: var(--radius-card);
+                padding: 10px 12px;
+                flex: 1 1 300px;
+              "
+            >
+              <div
+                style="
+                  font-size: 10.5px;
+                  font-weight: 600;
+                  color: var(--el-text-muted);
+                  margin-bottom: 6px;
+                  text-transform: uppercase;
+                  letter-spacing: 0.04em;
+                "
+              >
+                Burndown · 4.6.5
+              </div>
+              <svg
+                class="chart-svg"
+                viewBox="0 0 300 130"
+                role="img"
+                aria-label="Completed-sprint burndown mounted in the sprint-report seam."
+              >
+                <rect x="6" y="6" width="288" height="100" rx="3" fill="var(--el-chart-plot)" />
+                <g stroke="var(--el-chart-grid)" stroke-width="1">
+                  <line x1="6" y1="106" x2="294" y2="106" />
+                  <line x1="6" y1="56" x2="294" y2="56" />
+                </g>
+                <line
+                  x1="6"
+                  y1="12"
+                  x2="294"
+                  y2="106"
+                  stroke="var(--el-chart-guideline)"
+                  stroke-width="1.5"
+                  stroke-dasharray="4 4"
+                />
+                <path
+                  d="M6,12 L34,12 L34,28 L62,28 L62,20 L90,20 L90,38 L118,38 L118,47 L146,47 L146,47 L174,47 L174,64 L202,64 L202,72 L240,72 L240,78 L294,78"
+                  fill="none"
+                  stroke="var(--el-chart-actual)"
+                  stroke-width="2.25"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <rect
+                  x="58"
+                  y="16"
+                  width="8"
+                  height="8"
+                  rx="2"
+                  transform="rotate(45 62 20)"
+                  fill="var(--el-chart-scope)"
+                />
+              </svg>
+            </div>
+            <div
+              style="
+                border: 1.5px solid var(--el-chart-completed);
+                border-radius: var(--radius-card);
+                padding: 10px 12px;
+                flex: 1 1 300px;
+              "
+            >
+              <div
+                style="
+                  font-size: 10.5px;
+                  font-weight: 600;
+                  color: var(--el-text-muted);
+                  margin-bottom: 6px;
+                  text-transform: uppercase;
+                  letter-spacing: 0.04em;
+                "
+              >
+                Velocity · 4.6.6
+              </div>
+              <svg
+                class="chart-svg"
+                viewBox="0 0 300 130"
+                role="img"
+                aria-label="Velocity chart mounted in the sprint-report seam."
+              >
+                <rect x="6" y="6" width="288" height="100" rx="3" fill="var(--el-chart-plot)" />
+                <line
+                  x1="6"
+                  y1="106"
+                  x2="294"
+                  y2="106"
+                  stroke="var(--el-chart-axis)"
+                  stroke-width="1.25"
+                />
+                <g>
+                  <rect
+                    x="20"
+                    y="50"
+                    width="13"
+                    height="56"
+                    rx="2"
+                    fill="var(--el-chart-committed)"
+                  />
+                  <rect
+                    x="35"
+                    y="62"
+                    width="13"
+                    height="44"
+                    rx="2"
+                    fill="var(--el-chart-completed)"
+                  />
+                  <rect
+                    x="68"
+                    y="54"
+                    width="13"
+                    height="52"
+                    rx="2"
+                    fill="var(--el-chart-committed)"
+                  />
+                  <rect
+                    x="83"
+                    y="50"
+                    width="13"
+                    height="56"
+                    rx="2"
+                    fill="var(--el-chart-completed)"
+                  />
+                  <rect
+                    x="116"
+                    y="44"
+                    width="13"
+                    height="62"
+                    rx="2"
+                    fill="var(--el-chart-committed)"
+                  />
+                  <rect
+                    x="131"
+                    y="66"
+                    width="13"
+                    height="40"
+                    rx="2"
+                    fill="var(--el-chart-completed)"
+                  />
+                  <rect
+                    x="164"
+                    y="58"
+                    width="13"
+                    height="48"
+                    rx="2"
+                    fill="var(--el-chart-committed)"
+                  />
+                  <rect
+                    x="179"
+                    y="58"
+                    width="13"
+                    height="48"
+                    rx="2"
+                    fill="var(--el-chart-completed)"
+                  />
+                  <rect
+                    x="212"
+                    y="38"
+                    width="13"
+                    height="68"
+                    rx="2"
+                    fill="var(--el-chart-committed)"
+                  />
+                  <rect
+                    x="227"
+                    y="54"
+                    width="13"
+                    height="52"
+                    rx="2"
+                    fill="var(--el-chart-completed)"
+                  />
+                  <rect
+                    x="260"
+                    y="22"
+                    width="13"
+                    height="84"
+                    rx="2"
+                    fill="var(--el-chart-committed)"
+                  />
+                  <rect
+                    x="275"
+                    y="48"
+                    width="13"
+                    height="58"
+                    rx="2"
+                    fill="var(--el-chart-completed)"
+                  />
+                </g>
+                <line
+                  x1="6"
+                  y1="62"
+                  x2="294"
+                  y2="62"
+                  stroke="var(--el-chart-average)"
+                  stroke-width="1.5"
+                  stroke-dasharray="5 4"
+                />
+              </svg>
+            </div>
+          </div>
+        </div>
+        <p class="note">
+          The completed-sprint <b>burndown</b> (4.6.5) and the <b>velocity</b> chart (4.6.6) fill
+          the single chart seam the 4.4.6 report reserved (the 4.4.1 design's labelled "SEAM · STORY
+          4.6" slot) — the two presented together as the report's analytics. No new "Reports" nav
+          surface is invented; that is <b>Story 6.3</b>, which reuses this primitive.
+        </p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ PANEL 6 — A11Y ═══════════════ -->
+    <div class="panel-label">
+      6 · A11y — read as text, never colour or shape alone (finding #35)
+    </div>
+    <div class="stage">
+      <div class="row">
+        <div style="flex: 1 1 340px">
+          <p class="note" style="margin-top: 0">
+            Every chart 4.6.2 ships is conveyed as <b>text + number</b>, not colour/shape:
+          </p>
+          <ul class="note" style="margin-top: 6px; padding-left: 18px; line-height: 1.7">
+            <li>
+              <b>role="img"</b> on the SVG with an <b>aria-label</b> (or <b>aria-describedby</b> → a
+              <code>&lt;desc&gt;</code> sentence summarising every series + endpoint).
+            </li>
+            <li>
+              A <b>visible text legend</b> above each chart — the series name carried in words, with
+              the swatch as reinforcement, never the sole signal.
+            </li>
+            <li>
+              <b>Value labels</b> printed on the velocity bars and at the burndown's committed
+              baseline + end-point.
+            </li>
+            <li>
+              A <b>data-table fallback</b> (the <code>&lt;details&gt;</code> "View data table"
+              disclosure) giving every series as a real <code>&lt;table&gt;</code> with row/col
+              headers — the chart re-expressed as numbers for assistive tech and for copy-out.
+            </li>
+            <li>
+              The committed/completed bars are distinguished by <b>text label</b> (legend + the data
+              table), not the blue/green pair alone — so they survive greyscale (toggle dark to
+              spot-check) and colour-blindness.
+            </li>
+          </ul>
+        </div>
+        <div class="chart-card" style="flex: 1 1 320px">
+          <div class="chart-head">
+            <h3 class="chart-title" style="font-size: 14px">The fallback table</h3>
+            <span class="chart-sub">always present, disclosure-toggled</span>
+          </div>
+          <table class="dt" style="margin-top: 0">
+            <caption>
+              Velocity — committed vs completed (the same data the bars encode).
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Sprint</th>
+                <th scope="col">Committed</th>
+                <th scope="col">Completed</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Sprint 23</th>
+                <td class="n">30</td>
+                <td class="n">25</td>
+              </tr>
+              <tr>
+                <th scope="row">Sprint 24</th>
+                <td class="n">42</td>
+                <td class="n">29</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ icon defs ═══════════════ -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-trending"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 7h6v6" />
+          <path d="m22 7-8.5 8.5-5-5L2 17" />
+        </g>
+      </defs>
+    </svg>
+  </body>
+</html>
