@@ -1,4 +1,4 @@
-import type { Board, BoardColumn, BoardColumnStatus, WorkItem } from '@prisma/client';
+import type { Board, BoardColumn, BoardColumnStatus, Sprint, WorkItem } from '@prisma/client';
 import type {
   BoardCardDto,
   BoardColumnConfigDto,
@@ -7,7 +7,10 @@ import type {
   BoardSummaryDto,
   BoardSwimlaneGroupByDto,
   BoardTypeDto,
+  SprintSummaryDto,
 } from '@/lib/dto/boards';
+import type { SprintStateDto } from '@/lib/dto/sprints';
+import type { SprintPointsDto } from '@/lib/dto/estimation';
 
 // Prisma → DTO converters for the board domain. The service calls these just
 // before returning so no Prisma row shape (Date objects, Prisma enums) leaks
@@ -104,4 +107,46 @@ export function toBoardCardDto(
   };
   if (opts.swimlaneKey !== undefined) dto.swimlaneKey = opts.swimlaneKey;
   return dto;
+}
+
+/** Whole calendar days from `now` to `endDate`, FLOORED at 0 (Subtask 4.5.2).
+ *  Date-only (UTC midnight) on both sides so the gap is an exact day multiple
+ *  (no DST/partial-day drift); an overdue sprint → 0 (the UI renders "Ended"),
+ *  never a negative number. `null` when the sprint has no `endDate`. */
+function sprintDaysRemaining(endDate: Date | null, now: Date): number | null {
+  if (!endDate) return null;
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const endDay = Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate());
+  const nowDay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.max(0, Math.round((endDay - nowDay) / DAY_MS));
+}
+
+/**
+ * Map a resolved active `sprint` row + its computed point figures to a
+ * `SprintSummaryDto` (Subtask 4.5.2 — the scrum board's sprint-header data).
+ * `points` / `columnPoints` are the bounded aggregates the service computed via
+ * `estimationService.sprintBoardPoints` (the SUM lives in the estimation
+ * domain; this mapper only shapes them). Dates normalize to ISO-8601 (or null);
+ * the Prisma `SprintState` enum is string-compatible with `SprintStateDto` (the
+ * same cast `toSprintDto` / `toBoardDto` use). `daysRemaining` is derived from
+ * `endDate` against `now` (the service injects the clock so the value is
+ * testable + the mapper stays pure).
+ */
+export function toSprintSummaryDto(
+  row: Sprint,
+  points: SprintPointsDto,
+  columnPoints: Record<string, number>,
+  now: Date,
+): SprintSummaryDto {
+  return {
+    id: row.id,
+    name: row.name,
+    goal: row.goal,
+    startDate: row.startDate ? row.startDate.toISOString() : null,
+    endDate: row.endDate ? row.endDate.toISOString() : null,
+    state: row.state as SprintStateDto,
+    daysRemaining: sprintDaysRemaining(row.endDate, now),
+    points,
+    columnPoints,
+  };
 }

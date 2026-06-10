@@ -97,6 +97,7 @@ function projection(over: Partial<BoardProjectionDto> = {}): BoardProjectionDto 
     unmappedStatuses: [],
     cap: 5000,
     truncated: false,
+    sprint: null,
     columns: [column({ id: 'c1', name: 'To Do' }), column({ id: 'c2', name: 'In Progress' })],
     ...over,
   };

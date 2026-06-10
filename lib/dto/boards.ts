@@ -13,6 +13,8 @@
 
 import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
+import type { SprintPointsDto } from '@/lib/dto/estimation';
+import type { SprintStateDto } from '@/lib/dto/sprints';
 
 /** Board kind — mirrors the Prisma `BoardType` enum (Story 3.1.1). */
 export type BoardTypeDto = 'kanban' | 'scrum';
@@ -225,6 +227,42 @@ export interface BoardColumnDto {
 }
 
 /**
+ * The active-sprint summary a SCRUM board's projection carries (Subtask 4.5.2)
+ * — the data the 4.5.3 sprint header renders. Present only on a `scrum` board
+ * that has an active sprint; a kanban board, or a scrum board with no active
+ * sprint, carries `sprint: null` on the projection below.
+ *
+ * `goal` / `startDate` / `endDate` come straight off the resolved active
+ * sprint (dates ISO-8601 or null — an active sprint whose window was never
+ * stamped, e.g. in a test fixture, has null dates). `state` is always `active`
+ * here (the projection only resolves the active sprint), typed as the full
+ * `SprintStateDto` for shape-consistency with `SprintDto`. `daysRemaining` is
+ * the calendar days from today to `endDate`, FLOORED at 0 (an overdue sprint →
+ * 0, surfaced by the UI as "Ended"); `null` when `endDate` is unset.
+ *
+ * `points` is the bounded `{ committed, completed, remaining }` roll-up over
+ * the project's configured estimation statistic (the SAME aggregate Story 4.3
+ * exposes via `estimationService.rollupForSprint` — the SUM lives in one
+ * place). `columnPoints` is the per-column point total (the Jira scrum "sprint
+ * health" number), keyed by `BoardColumnDto.id`: the configured statistic
+ * summed over the active sprint's issues whose status maps to that column.
+ * Both are aggregate SUMs scoped to the sprint, NEVER a sum over the bounded
+ * loaded card page (finding #57). A wholly-unestimated sprint yields all-0
+ * figures (the DTO stays total; the UI owns the "—" presentation).
+ */
+export interface SprintSummaryDto {
+  id: string;
+  name: string;
+  goal: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  state: SprintStateDto;
+  daysRemaining: number | null;
+  points: SprintPointsDto;
+  columnPoints: Record<string, number>;
+}
+
+/**
  * The board read projection (Subtask 3.1.4, load model corrected by 3.8.2): the
  * default board's columns (in `position` order), each with its bounded card set,
  * a board-level `cap` + `truncated` signal, plus `unmappedStatuses` — every
@@ -267,4 +305,13 @@ export interface BoardProjectionDto {
    * from "the cap was hit".
    */
   truncated: boolean;
+  /**
+   * The active-sprint summary for a SCRUM board (Subtask 4.5.2) — drives the
+   * 4.5.3 sprint header. `null` on a `kanban` board (no sprint scope) AND on a
+   * `scrum` board with no active sprint (the 4.5.3 UI then shows the
+   * "No active sprint" empty state in place of the board). A scrum board with
+   * an active sprint scopes `columns` to that sprint's issues and carries the
+   * summary here.
+   */
+  sprint: SprintSummaryDto | null;
 }

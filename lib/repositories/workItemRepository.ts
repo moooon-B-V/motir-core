@@ -776,7 +776,7 @@ export const workItemRepository = {
     workspaceId: string,
     statusKeys: string[],
     order: 'position' | 'recent',
-    opts: { limit: number; updatedSince?: Date },
+    opts: { limit: number; updatedSince?: Date; sprintId?: string },
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
     if (statusKeys.length === 0) return [];
@@ -792,6 +792,10 @@ export const workItemRepository = {
         archivedAt: null,
         status: { in: statusKeys },
         ...(opts.updatedSince ? { updatedAt: { gte: opts.updatedSince } } : {}),
+        // Sprint scope (Story 4.5.2) — a SCRUM board's projection passes the
+        // active sprint's id so the column loads only that sprint's issues; a
+        // kanban board omits it (unscoped, byte-for-byte the 3.1.4 load).
+        ...(opts.sprintId ? { sprintId: opts.sprintId } : {}),
       },
       orderBy,
       take: opts.limit,
@@ -908,6 +912,11 @@ export const workItemRepository = {
   // per card — so the board never fetches every card to discover its lanes.
   // `statusKeys` is the union of the board's mapped column statuses (a card on
   // the board has a status in this set); an empty set short-circuits.
+  //
+  // `sprintId` (Story 4.5.2) is the optional SCRUM scope: when present the lane
+  // aggregate counts only the active sprint's issues, so swimlanes compose with
+  // the sprint filter exactly as the columns do; omitted on a kanban board
+  // (unscoped, byte-for-byte the 3.3.4 lane counts).
 
   /**
    * Per-assignee card counts among the board's cards — one row per distinct
@@ -918,11 +927,18 @@ export const workItemRepository = {
     projectId: string,
     workspaceId: string,
     statusKeys: string[],
+    sprintId?: string,
   ): Promise<Array<{ assigneeId: string | null; count: number }>> {
     if (statusKeys.length === 0) return [];
     const rows = await db.workItem.groupBy({
       by: ['assigneeId'],
-      where: { projectId, workspaceId, archivedAt: null, status: { in: statusKeys } },
+      where: {
+        projectId,
+        workspaceId,
+        archivedAt: null,
+        status: { in: statusKeys },
+        ...(sprintId ? { sprintId } : {}),
+      },
       _count: { _all: true },
     });
     return rows.map((r) => ({ assigneeId: r.assigneeId, count: r._count._all }));
@@ -937,11 +953,18 @@ export const workItemRepository = {
     projectId: string,
     workspaceId: string,
     statusKeys: string[],
+    sprintId?: string,
   ): Promise<Array<{ priority: WorkItemPriority; count: number }>> {
     if (statusKeys.length === 0) return [];
     const rows = await db.workItem.groupBy({
       by: ['priority'],
-      where: { projectId, workspaceId, archivedAt: null, status: { in: statusKeys } },
+      where: {
+        projectId,
+        workspaceId,
+        archivedAt: null,
+        status: { in: statusKeys },
+        ...(sprintId ? { sprintId } : {}),
+      },
       _count: { _all: true },
     });
     return rows.map((r) => ({ priority: r.priority, count: r._count._all }));
@@ -963,8 +986,13 @@ export const workItemRepository = {
     projectId: string,
     workspaceId: string,
     statusKeys: string[],
+    sprintId?: string,
   ): Promise<Array<{ epicId: string; count: number }>> {
     if (statusKeys.length === 0) return [];
+    // Sprint scope (Story 4.5.2): only the anchor (the board CARDS) is sprint-
+    // filtered; the upward climb to the ancestor epic must NOT be (an epic
+    // ancestor is rarely itself in the sprint). Bound param, never interpolated.
+    const sprintScope = sprintId ? Prisma.sql`AND w."sprintId" = ${sprintId}` : Prisma.empty;
     return db.$queryRaw<Array<{ epicId: string; count: number }>>`
       WITH RECURSIVE up AS (
         SELECT w."id" AS card_id, w."id" AS node_id, w."parentId", w."kind"::text AS kind
@@ -973,6 +1001,7 @@ export const workItemRepository = {
             AND w."workspaceId" = ${workspaceId}
             AND w."archivedAt" IS NULL
             AND w."status" = ANY(${statusKeys})
+            ${sprintScope}
         UNION ALL
         SELECT u.card_id, p."id", p."parentId", p."kind"::text
           FROM up u
@@ -1147,6 +1176,36 @@ export const workItemRepository = {
          AND w."workspaceId" = ${workspaceId}
          AND w."archivedAt" IS NULL`;
     return rows[0] ?? { committed: 0, completed: 0 };
+  },
+
+  /**
+   * The BOUNDED per-STATUS points breakdown of a sprint (Story 4.5.2) — the
+   * configured `statistic` summed over the sprint's non-archived issues, GROUPED
+   * by `work_item.status`, in ONE grouped aggregate (never a load-all + client
+   * sum, finding #57). The board service folds these per-status sums into the
+   * scrum board's `columnPoints` (one column = a set of mapped statuses), so the
+   * per-column "sprint health" total comes from the DB, not the loaded card
+   * page. A status with no estimated points sums to 0 (the `COALESCE` in
+   * `pointsAggExpr`); a status with no sprint issues yields no row (the service
+   * defaults an absent column to 0). `workspaceId` is the tenant gate (finding
+   * #26). Returns one row per distinct status present in the sprint.
+   */
+  async sumPointsBySprintAndStatus(
+    sprintId: string,
+    workspaceId: string,
+    statistic: EstimationStatistic,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ status: string; points: number }>> {
+    const client = tx ?? db;
+    const points = pointsAggExpr(statistic, 'w', false);
+    return client.$queryRaw<Array<{ status: string; points: number }>>`
+      SELECT w."status" AS "status",
+             ${points}::float8 AS "points"
+        FROM "work_item" w
+       WHERE w."sprintId" = ${sprintId}
+         AND w."workspaceId" = ${workspaceId}
+         AND w."archivedAt" IS NULL
+       GROUP BY w."status"`;
   },
 
   /**
@@ -1490,6 +1549,16 @@ export interface RepoIssueFilter {
   assigneeIds?: string[];
   includeUnassigned?: boolean;
   text?: string;
+  /**
+   * Sprint scope (Story 4.5.2) — restrict to issues in this sprint. Used by the
+   * scrum board's `countProjectIssues` (the per-column `totalCount` + the
+   * truncation denominator + the epic catch-all), which scans the full
+   * `work_item` table (alias `w`, all columns available). The forest read
+   * (`findProjectForest`, alias `f`) projects a fixed column set that does NOT
+   * include `sprintId`, so it MUST NOT be passed this axis — its callers (the
+   * issue tree) never do.
+   */
+  sprintId?: string;
 }
 
 /**
@@ -1512,6 +1581,12 @@ function buildIssueFilterSql(filter: RepoIssueFilter, alias: 'f' | 'w'): Prisma.
   }
   if (filter.statuses && filter.statuses.length > 0) {
     predicates.push(Prisma.sql`${t}."status" = ANY(${filter.statuses})`);
+  }
+  if (filter.sprintId) {
+    // Sprint scope (Story 4.5.2) — only the scrum-board count path sets this; it
+    // scans `work_item` (alias `w`), which carries `sprintId`. (The forest read,
+    // alias `f`, never sets it — see RepoIssueFilter.sprintId.)
+    predicates.push(Prisma.sql`${t}."sprintId" = ${filter.sprintId}`);
   }
   const assigneeIds = filter.assigneeIds ?? [];
   if (assigneeIds.length > 0 || filter.includeUnassigned) {
