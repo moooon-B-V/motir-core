@@ -18,7 +18,8 @@
 // Layer rules (CLAUDE.md): this service owns no transaction of its own — it is
 // always invoked inside the caller's $transaction and threads the caller's
 // `tx` straight into the repository write (single-op leaf). It performs no DTO
-// mapping (it returns void; reads + mapping live on the read path).
+// mapping (it returns only the created row's id; reads + mapping live on the
+// read path).
 
 import type { Prisma } from '@prisma/client';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
@@ -52,10 +53,13 @@ export const workItemRevisionsService = {
   /**
    * Record a revision row for a work-item mutation, inside the caller's
    * transaction (required `tx` — a revision must commit atomically with the
-   * mutation it describes, or not at all).
+   * mutation it describes, or not at all). Returns the created revision's id —
+   * the description-mention path (5.1.6) carries it on the
+   * `work-item/mentioned` event as the notification idempotency scope
+   * (revision × user); other call sites are free to ignore it.
    */
-  async recordRevision(args: RecordRevisionArgs, tx: Prisma.TransactionClient): Promise<void> {
-    await workItemRevisionRepository.create(
+  async recordRevision(args: RecordRevisionArgs, tx: Prisma.TransactionClient): Promise<string> {
+    const row = await workItemRevisionRepository.create(
       {
         workItemId: args.workItemId,
         changedById: args.changedById,
@@ -64,5 +68,6 @@ export const workItemRevisionsService = {
       },
       tx,
     );
+    return row.id;
   },
 };

@@ -79,6 +79,28 @@ export interface WorkItemCommentCreatedData {
 }
 
 /**
+ * The `work-item/mentioned` event payload (Story 5.1 · Subtask 5.1.6) — the
+ * DESCRIPTION-mention sibling of `work-item/comment.created`. Emitted AFTER a
+ * work-item create / description-changing update commits, carrying ONLY the
+ * newly-added, view-validated mention ids (an edit never re-notifies mentions
+ * the previous body already carried). Channel-agnostic like its sibling, for
+ * the same 5.4 / 5.7 fan-in reasons.
+ *
+ * `revisionId` is the `work_item_revision` row written atomically with the
+ * mutation that introduced the mentions — the consumer's idempotency scope
+ * (revision × user), playing the role `commentId` plays on the comment event.
+ */
+export interface WorkItemMentionedData {
+  workspaceId: string;
+  workItemId: string;
+  /** The revision row recording the create/update that added the mentions. */
+  revisionId: string;
+  /** The actor whose write produced the mentions. */
+  authorId: string;
+  mentionedUserIds: string[];
+}
+
+/**
  * Map of event-name → payload. Each key is simultaneously a job id and the
  * event name that triggers it. Grows one entry per job. (An event MAY land
  * before its consuming job does — `work-item/comment.created` ships with
@@ -89,6 +111,7 @@ export interface JobEventDataMap {
   'system.daily-health-check': SystemScheduledData;
   'email.send': EmailSendData;
   'work-item/comment.created': WorkItemCommentCreatedData;
+  'work-item/mentioned': WorkItemMentionedData;
 }
 
 /** Every registered event/job name. */
@@ -100,8 +123,7 @@ export type JobEventData<N extends JobEventName> = JobEventDataMap[N];
 /**
  * The names of events that are workspace-scoped (everything OUTSIDE the
  * `system.*` namespace). `sendEvent` is typed to accept only these — system
- * events never go through `sendEvent` (they are cron / harness triggered). With
- * the map holding `system.daily-health-check` + `email.send`, this resolves to
- * just `email.send`.
+ * events never go through `sendEvent` (they are cron / harness triggered):
+ * `email.send` + the `work-item/*` events.
  */
 export type WorkspaceScopedEventName = Exclude<JobEventName, `system.${string}`>;
