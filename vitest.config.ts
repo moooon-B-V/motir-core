@@ -78,6 +78,13 @@ export default defineConfig({
         'lib/services/commentsService.ts',
         'lib/mappers/commentMappers.ts',
         'lib/mentions/parse.ts',
+        // Story 5.4 labels/components/watchers (5.4.1) — the five data-access
+        // leaves ship gated from day one; the services join in 5.4.2–5.4.4.
+        'lib/repositories/labelRepository.ts',
+        'lib/repositories/workItemLabelRepository.ts',
+        'lib/repositories/componentRepository.ts',
+        'lib/repositories/workItemComponentRepository.ts',
+        'lib/repositories/watcherRepository.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -115,6 +122,17 @@ export default defineConfig({
         'lib/services/commentsService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mappers/commentMappers.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mentions/parse.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 5.4 (labels/components/watchers): the repo leaves land gated
+        // from day one (Subtask 5.4.1); the 5.4.2–5.4.4 services join next.
+        'lib/repositories/labelRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/workItemLabelRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/componentRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/workItemComponentRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/repositories/watcherRepository.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },

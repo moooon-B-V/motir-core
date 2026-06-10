@@ -96,6 +96,13 @@ model User {
   // projectMemberships).
   authoredComments          Comment[]             @relation("CommentAuthor")
   commentMentions           CommentMention[]
+  // Back-relations for Component + Watcher (Subtask 5.4.1). A user is the
+  // default assignee of many components (SetNull: a departed user clears the
+  // default, never blocks) and watches many issues (Cascade: a watcher row
+  // is notification substrate, not audit — it goes with the user, mirroring
+  // commentMentions).
+  defaultAssigneeComponents Component[]           @relation("ComponentDefaultAssignee")
+  watchers                  Watcher[]
 
   @@map("user")
 }
@@ -190,6 +197,8 @@ model Workspace {
   sprints             Sprint[]
   projectMemberships  ProjectMembership[]
   comments            Comment[]
+  labels              Label[]
+  components          Component[]
 
   @@map("workspace")
 }
@@ -270,6 +279,11 @@ model Project {
   // Explicit project membership (Story 6.4). Cascades: deleting a project
   // removes its membership rows.
   memberships         ProjectMembership[]
+  // Label folksonomy + component taxonomy (Subtask 5.4.1). Both cascade with
+  // the project (project-scoped rows; projects are soft-archived in practice,
+  // so this is the rare hard-delete path).
+  labels              Label[]
+  components          Component[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -512,6 +526,12 @@ model WorkItem {
   // issue must leave the attachment rows behind (unlinked) so the orphan-GC
   // (5.2.7) can remove their blobs too; a cascade would strand the blobs.
   attachments Attachment[]
+  // Organisation joins + watchers (Subtask 5.4.1). All three cascade with
+  // the issue: label/component joins are pure association rows, watcher rows
+  // are notification substrate.
+  labels      WorkItemLabel[]
+  components  WorkItemComponent[]
+  watchers    Watcher[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -1203,4 +1223,179 @@ model CommentMention {
   // serves the by-comment lookup).
   @@index([mentionedUserId])
   @@map("comment_mention")
+}
+
+/// A project-scoped label (Story 5.4 · Subtask 5.4.1) — the folksonomy row.
+/// Jira labels are site-GLOBAL; project scoping is the recorded justified
+/// deviation (the global pool leaking across projects is the mirror's
+/// documented pain — open suggestion JRACLOUD-23656). Folksonomy semantics
+/// (the SERVICE, 5.4.2, is the authority): labels are created by TYPING in
+/// the issue field (find-or-create), there is NO admin UI, and a label row
+/// lives ONLY while used — removing its last `work_item_label` join row
+/// deletes the label (delete-on-last-use; no orphan-label GC needed by
+/// design). `name` keeps the first-typed display casing; `nameLower` is the
+/// case-INSENSITIVE uniqueness key per project (the wart-fix decision: Jira's
+/// 'Performance' vs 'performance' duplicate complaint, JRACLOUD-24907) and
+/// the autocomplete prefix-match column (`searchByPrefix`, bounded take).
+/// No-spaces / length / per-issue-cap validation is service-layer (5.4.2) —
+/// the schema carries only the uniqueness invariant.
+model Label {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  projectId   String   @map("project_id")
+  name        String
+  nameLower   String   @map("name_lower")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItems WorkItemLabel[]
+
+  // Case-insensitive uniqueness per project; doubles as the autocomplete
+  // prefix-scan index (searchByPrefix walks projectId = ? AND name_lower
+  // LIKE 'q%', bounded).
+  @@unique([projectId, nameLower])
+  @@index([workspaceId])
+  @@map("label")
+}
+
+/// Issue ↔ label join row (Subtask 5.4.1) — labels are multi-valued.
+///
+/// ⚠️ THE EPIC-6 JOIN-PREDICATE CONTRACT (documented beside the 5.3.1
+/// custom-field one): the Story 6.1 filter builder compiles a by-label
+/// filter into a REAL join predicate — no array column, no JSON:
+///
+///   SELECT wi.* FROM "work_item" wi
+///   JOIN "work_item_label" wil ON wil."work_item_id" = wi."id"
+///   JOIN "label" l            ON l."id" = wil."label_id"
+///   WHERE l."project_id" = $1 AND l."name_lower" = $2
+///
+/// The `@@index([labelId])` below is the reverse edge that join walks
+/// ("issues carrying label X"); the `@@unique([workItemId, labelId])` serves
+/// the forward direction ("labels of issue Y") as its left-prefix. Both
+/// FKs Cascade: deleting an issue sheds its label joins; deleting a label
+/// (the service's delete-on-last-use path) sheds nothing in practice — the
+/// row only deletes at zero uses.
+/// No `workspaceId` by design (the comment_mention / work_item_revision
+/// pattern — denormalized tenancy on a child row could lie); the RLS policy
+/// joins through the parent `work_item` instead.
+model WorkItemLabel {
+  id         String   @id @default(cuid())
+  workItemId String   @map("work_item_id")
+  labelId    String   @map("label_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  label    Label    @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@unique([workItemId, labelId])
+  // The Epic-6 by-label reverse edge (see the contract block above) AND the
+  // service's `countUsesByLabel` (the delete-on-last-use guard count).
+  @@index([labelId])
+  @@map("work_item_label")
+}
+
+/// A project component (Story 5.4 · Subtask 5.4.1) — the admin-managed
+/// taxonomy ("which part of the product"), mirroring company-managed Jira:
+/// name (required, case-insensitively unique per project — same `nameLower`
+/// mechanic as `label`), optional description, optional DEFAULT ASSIGNEE.
+/// Managed at Project settings → Components by project admins (the 6.4
+/// two-tier gate, enforced in the SERVICE, 5.4.3); issues carry multiple
+/// components via `work_item_component`.
+///
+/// `defaultAssigneeId` is the verified Jira five-way default-assignee enum
+/// COLLAPSED to a nullable user (recorded simplification: Prodect has no
+/// project-lead concept and component *lead* exists in Jira chiefly to feed
+/// that enum — the lead field is the documented extension). `SetNull`: a
+/// departed user clears the default, never blocks deletion. The at-create
+/// assignment rule (unassigned new issue takes the default of its
+/// first-alphabetical component that has one) lives in the service (5.4.3).
+model Component {
+  id                String   @id @default(cuid())
+  workspaceId       String   @map("workspace_id")
+  projectId         String   @map("project_id")
+  name              String
+  nameLower         String   @map("name_lower")
+  description       String?  @db.Text
+  defaultAssigneeId String?  @map("default_assignee_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  workspace       Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project         Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  defaultAssignee User?               @relation("ComponentDefaultAssignee", fields: [defaultAssigneeId], references: [id], onDelete: SetNull)
+  workItems       WorkItemComponent[]
+
+  @@unique([projectId, nameLower])
+  @@index([workspaceId])
+  @@map("component")
+}
+
+/// Issue ↔ component join row (Subtask 5.4.1) — components are multi-valued.
+///
+/// ⚠️ THE EPIC-6 JOIN-PREDICATE CONTRACT (the by-component twin of the
+/// `work_item_label` sketch above):
+///
+///   SELECT wi.* FROM "work_item" wi
+///   JOIN "work_item_component" wic ON wic."work_item_id" = wi."id"
+///   WHERE wic."component_id" = $1
+///
+/// served by the `@@index([componentId])` reverse edge; the
+/// `@@unique([workItemId, componentId])` left-prefix serves "components of
+/// issue Y".
+///
+/// `componentId` is **Restrict** — deliberately asymmetric with the label
+/// join's Cascade: a component delete MUST run the service's verified
+/// move-or-remove flow (5.4.3: move the joins to another component, or
+/// remove them — issues untouched either way) before the row can go; the
+/// DB backstops any missed path. `workItemId` Cascades (an issue delete
+/// sheds its component joins). No `workspaceId` by design — RLS joins
+/// through the parent `work_item` (the comment_mention pattern).
+model WorkItemComponent {
+  id          String   @id @default(cuid())
+  workItemId  String   @map("work_item_id")
+  componentId String   @map("component_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workItem  WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  component Component @relation(fields: [componentId], references: [id], onDelete: Restrict)
+
+  @@unique([workItemId, componentId])
+  // The Epic-6 by-component reverse edge (contract above), the service's
+  // `countItemsByComponent` (the delete dialog's count + in-use check), and
+  // the `reassignItems` move branch all walk this.
+  @@index([componentId])
+  @@map("work_item_component")
+}
+
+/// A watcher row (Story 5.4 · Subtask 5.4.1): `userId` follows `workItemId`
+/// for notifications — distinct from assignee. The verified Jira contract
+/// (enforced in the SERVICE, 5.4.4): anyone who can VIEW the issue watches
+/// THEMSELVES (a `viewer` may watch — watching is not editing); project
+/// admin + workspace admin/owner manage OTHERS; a watcher MUST hold view
+/// access (we reject with a typed error where Jira silently drops — the
+/// documented trap, fixed). Auto-watch on create/comment is the service's
+/// constant-on hook (the Story-5.7 preference is the documented seam).
+/// Watch/unwatch writes NO `work_item_revision` row (mirror: watching is
+/// not a field change). The 5.4.5 notification job pages through an issue's
+/// watchers off the unique's left-prefix; `@@index([userId])` is the
+/// "issues I watch" read Stories 5.7 / Epic 6 want.
+///
+/// Both FKs Cascade: an issue hard-delete sheds its watchers; a deleted
+/// user simply stops watching (notification substrate, not audit — the
+/// comment_mention precedent, NOT the reporter Restrict). No `workspaceId`
+/// by design — RLS joins through the parent `work_item`.
+model Watcher {
+  id         String   @id @default(cuid())
+  workItemId String   @map("work_item_id")
+  userId     String   @map("user_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workItemId, userId])
+  // The "issues I watch" read path (Story 5.7 / Epic 6).
+  @@index([userId])
+  @@map("watcher")
 }
