@@ -244,7 +244,7 @@ export const story_5_1: PlanStory = {
       id: '5.1.2',
       title:
         '`commentsService` — add/edit/delete/list with 6.4-role permissions, server-side mention parsing + `comment_mention` rows, paged reads, job events',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
