@@ -481,7 +481,7 @@ export const story_4_4: PlanStory = {
       id: '4.4.6',
       title:
         'UI — complete-sprint flow: complete modal (carry-over chooser) + sprint report view; self-mount in backlog active-sprint container',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
@@ -531,7 +531,7 @@ export const story_4_4: PlanStory = {
       id: '4.4.7',
       title:
         'Story tests — sprint lifecycle state machine (start/complete/carry-over/provisioning/report) + focused E2E (plan → start → move → complete → report)',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 24,
