@@ -59,6 +59,11 @@ describe('linePath', () => {
 });
 
 describe('stepPath', () => {
+  it('returns an empty path for no (finite) points — the empty-input guard', () => {
+    expect(stepPath([])).toBe('');
+    expect(stepPath([{ x: NaN, y: 10 }])).toBe('');
+  });
+
   it('holds the value then drops at the next x (step-after)', () => {
     // remaining 42 from day 0..2, then drops to 35 at day 2
     const pts: PixelPoint[] = [
@@ -86,6 +91,11 @@ describe('areaPath', () => {
     expect(area).toContain('L0,200');
     expect(area.endsWith('Z')).toBe(true);
   });
+
+  it('returns an empty path when there is nothing to close — the empty-input guard', () => {
+    expect(areaPath('', [], 200)).toBe('');
+    expect(areaPath('M0,0', [{ x: 0, y: NaN }], 200)).toBe('');
+  });
 });
 
 describe('niceTicks / niceMax', () => {
@@ -98,5 +108,15 @@ describe('niceTicks / niceMax', () => {
     expect(niceTicks(0)).toEqual([0]);
     expect(niceTicks(-5)).toEqual([0]);
     expect(niceTicks(Number.NaN)).toEqual([0]);
+    expect(niceMax(0)).toBe(0);
+    expect(niceMax(Number.NaN)).toBe(0);
+  });
+
+  it('picks the 1 / 2 / 5 / 10 nice step across magnitudes (Heckbert)', () => {
+    expect(niceTicks(4, 4)).toEqual([0, 1, 2, 3, 4]); // step 1
+    expect(niceTicks(8, 4)).toEqual([0, 2, 4, 6, 8]); // step 2
+    expect(niceTicks(19, 4)).toEqual([0, 5, 10, 15, 20]); // step 5
+    expect(niceMax(35, 1)).toBe(50); // raw 35 → norm 3.5 → step 50
+    expect(niceMax(80, 1)).toBe(100); // raw 80 → norm 8 → step 100 (the ≥7 branch)
   });
 });

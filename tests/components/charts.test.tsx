@@ -181,6 +181,164 @@ describe('BarChart (velocity primitive)', () => {
   });
 });
 
+// 4.6.7 — the closing Story-test pass: the primitive branches the 4.6.2 suite
+// above doesn't reach (horizontal reference lines + their derived legend entry,
+// per-point markers, area fills, the ariaLabel→description fallback, the
+// missing-value `?? 0` guard, a solid reference line, a reference-line-less
+// velocity render). Same a11y bar: every variant still carries the <desc> +
+// data-table fallback (finding #35).
+
+describe('LineChart — 4.6.7 branch pass', () => {
+  it('draws a HORIZONTAL reference line with its label and a derived legend entry', () => {
+    const { container } = render(
+      <LineChart
+        x={BURNDOWN.x}
+        y={BURNDOWN.y}
+        series={[{ ...BURNDOWN.series[1]!, markers: 'all' as const, area: true }]}
+        description="Remaining with an average rule at 20."
+        referenceLines={[
+          {
+            orientation: 'horizontal',
+            value: 20,
+            color: chartColor.average,
+            dashed: true,
+            label: 'avg 20',
+            legendLabel: 'Average',
+          },
+        ]}
+      />,
+    );
+    // the horizontal rule + its text label render
+    const rules = Array.from(container.querySelectorAll('line[stroke-dasharray="6 4"]'));
+    expect(rules.length).toBe(1);
+    expect(screen.getByText('avg 20')).toBeTruthy();
+    // the reference line's legendLabel lands in the derived legend
+    const legend = container.querySelector('ul');
+    expect(within(legend as HTMLElement).getByText('Average')).toBeTruthy();
+    // markers: 'all' puts a dot on every finite point (4 data points)
+    const dots = Array.from(container.querySelectorAll('circle[r="3.5"]'));
+    expect(dots.length).toBe(4);
+    // area: true fills under the line (a fill path with no stroke)
+    const fills = Array.from(container.querySelectorAll('path[fill-opacity]'));
+    expect(fills.length).toBe(1);
+  });
+
+  it('falls back to the description as the accessible name when no ariaLabel is given', () => {
+    render(
+      <LineChart
+        x={BURNDOWN.x}
+        y={BURNDOWN.y}
+        series={BURNDOWN.series}
+        description="Burndown summary sentence."
+      />,
+    );
+    expect(screen.getByRole('img', { name: 'Burndown summary sentence.' })).toBeTruthy();
+  });
+
+  it('honors host-supplied legend + dataTable overrides (kind defaults to swatch, headerless columns allowed)', () => {
+    const { container } = render(
+      <LineChart
+        x={BURNDOWN.x}
+        y={BURNDOWN.y}
+        series={BURNDOWN.series}
+        description="Burndown with host-driven legend and table."
+        // a kind-less legend item falls back to the swatch rendering
+        legend={[{ label: 'Custom entry', color: chartColor.actual }]}
+        // an empty columns list renders an empty corner header, not a crash
+        dataTable={{
+          caption: 'Host table.',
+          columns: [],
+          rows: [
+            // one numeric cell + one TEXT cell (the Event column shape)
+            { header: 'Day 1', cells: [{ value: 42, numeric: true }, { value: '+4 scope' }] },
+          ],
+        }}
+      />,
+    );
+    const legend = container.querySelector('ul');
+    expect(within(legend as HTMLElement).getByText('Custom entry')).toBeTruthy();
+    const table = container.querySelector('table');
+    expect(within(table as HTMLElement).getByText('Day 1')).toBeTruthy();
+    expect(within(table as HTMLElement).getAllByText('42').length).toBeGreaterThan(0);
+  });
+
+  it('hideLegend drops the visible legend while the data table still conveys the series', () => {
+    const { container } = render(
+      <LineChart
+        x={BURNDOWN.x}
+        y={BURNDOWN.y}
+        series={BURNDOWN.series}
+        description="Burndown."
+        hideLegend
+      />,
+    );
+    expect(container.querySelector('ul')).toBeNull();
+    expect(container.querySelector('table')).toBeTruthy();
+  });
+});
+
+describe('BarChart — 4.6.7 branch pass', () => {
+  it('renders without a reference line and treats a missing group value as 0', () => {
+    const { container } = render(
+      <BarChart
+        series={[
+          { label: 'Committed', color: chartColor.committed },
+          { label: 'Completed', color: chartColor.completed },
+        ]}
+        // S2's values array is SHORT — the second bar must read 0, never NaN
+        groups={[
+          { label: 'S1', values: [10, 8] },
+          { label: 'S2', values: [12] },
+        ]}
+        yTicks={[0, 5, 10, 15].map((v) => ({ value: v, label: String(v) }))}
+        description="Velocity without an average rule."
+      />,
+    );
+    // no reference line → no dashed rule, and no derived legend entry beyond the series
+    expect(container.querySelectorAll('line[stroke-dasharray="6 4"]').length).toBe(0);
+    const legend = container.querySelector('ul');
+    expect(within(legend as HTMLElement).queryByText('Average completed')).toBeNull();
+    // the short values row reads 0 in the value labels + the data table
+    const table = container.querySelector('table');
+    expect(within(table as HTMLElement).getAllByText('0').length).toBeGreaterThan(0);
+  });
+
+  it('draws a SOLID reference line when dashed is explicitly false', () => {
+    const { container } = render(
+      <BarChart
+        series={[{ label: 'Completed', color: chartColor.completed }]}
+        groups={[{ label: 'S1', values: [10] }]}
+        yTicks={[0, 5, 10].map((v) => ({ value: v, label: String(v) }))}
+        description="Velocity with a solid rule."
+        referenceLine={{ value: 7, color: chartColor.average, dashed: false }}
+      />,
+    );
+    // the rule renders WITHOUT a dash pattern (and without a label/legend entry)
+    const solid = Array.from(container.querySelectorAll('line')).filter(
+      (l) =>
+        l.getAttribute('stroke')?.includes('--el-chart') && !l.getAttribute('stroke-dasharray'),
+    );
+    expect(solid.length).toBeGreaterThan(0);
+  });
+
+  it('renders the zero-categories state without crashing (the n=0 guards)', () => {
+    const { container } = render(
+      <BarChart
+        series={[{ label: 'Completed', color: chartColor.completed }]}
+        groups={[]}
+        yTicks={[{ value: 0, label: '0' }]}
+        description="No completed sprints."
+      />,
+    );
+    expect(container.querySelector('svg')).toBeTruthy();
+    expect(
+      Array.from(container.querySelectorAll('rect')).filter((r) =>
+        (r.getAttribute('fill') ?? '').includes('--el-chart'),
+      ).length,
+    ).toBe(0);
+  });
+});
+
 describe('no charting library is bundled', () => {
   it('package.json declares no recharts / chart.js / nivo / d3 / victory', () => {
     const pkg = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'));
