@@ -174,6 +174,50 @@ export const estimationService = {
   },
 
   /**
+   * The scrum board's sprint point summary (Story 4.5.2) — the
+   * `{ committed, completed, remaining }` roll-up (the SAME bounded aggregate
+   * `rollupForSprint` returns) PLUS the per-column point breakdown, resolved
+   * against the project's configured estimation statistic ONCE. This keeps the
+   * sprint-points SUM in this one place (the 4.3.3 contract) while letting the
+   * board service stay free of estimation logic: it passes only its column→
+   * status layout (`columns`) and gets back board-ready numbers.
+   *
+   * `columns` is the board's `{ id, statusKeys }[]`; `columnPoints[col.id]` is
+   * the configured statistic summed over the sprint's issues whose status is in
+   * that column (a column with none → 0). Both figures come from bounded
+   * aggregates (`sumPointsForSprint` + `sumPointsBySprintAndStatus`), NEVER a
+   * sum over the bounded loaded card page (finding #57). A wholly-unestimated
+   * sprint yields all-0 figures (the data layer stays total; the 4.5.3 UI owns
+   * the "—" presentation).
+   *
+   * Throws: `SprintNotFoundError` (404 — unknown / cross-workspace sprint).
+   */
+  async sprintBoardPoints(
+    sprintId: string,
+    columns: Array<{ id: string; statusKeys: string[] }>,
+    ctx: ServiceContext,
+  ): Promise<{ points: SprintPointsDto; columnPoints: Record<string, number> }> {
+    const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
+    if (!sprint) throw new SprintNotFoundError(sprintId);
+
+    const statistic = await resolveStatistic(sprint.projectId);
+    const [{ committed, completed }, perStatus] = await Promise.all([
+      workItemRepository.sumPointsForSprint(sprintId, ctx.workspaceId, statistic),
+      workItemRepository.sumPointsBySprintAndStatus(sprintId, ctx.workspaceId, statistic),
+    ]);
+
+    const pointsByStatus = new Map(perStatus.map((r) => [r.status, r.points]));
+    const columnPoints: Record<string, number> = {};
+    for (const col of columns) {
+      columnPoints[col.id] = col.statusKeys.reduce(
+        (sum, key) => sum + (pointsByStatus.get(key) ?? 0),
+        0,
+      );
+    }
+    return { points: toSprintPointsDto(committed, completed), columnPoints };
+  },
+
+  /**
    * The BOUNDED epic/parent subtree roll-up (finding #57) — the configured
    * statistic summed over the parent's DESCENDANTS at any depth, via one
    * recursive-CTE aggregate. Distinct from the parent's OWN estimate. An

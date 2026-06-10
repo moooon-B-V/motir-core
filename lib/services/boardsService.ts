@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { boardRepository } from '@/lib/repositories/boardRepository';
 import { boardColumnRepository } from '@/lib/repositories/boardColumnRepository';
 import { boardColumnStatusRepository } from '@/lib/repositories/boardColumnStatusRepository';
+import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
@@ -11,6 +12,7 @@ import { userRepository } from '@/lib/repositories/userRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { estimationService } from '@/lib/services/estimationService';
 import { keyBetween, keyForAppend } from '@/lib/workItems/positioning';
 import { isOwnerRole } from '@/lib/workspaces/roles';
 import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
@@ -20,6 +22,7 @@ import {
   toBoardColumnStatusDto,
   toBoardDto,
   toBoardSummaryDto,
+  toSprintSummaryDto,
 } from '@/lib/mappers/boardMappers';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { buildDefaultBoard, DEFAULT_BOARD_NAME } from '@/lib/boards/defaultBoard';
@@ -38,6 +41,7 @@ import type {
   BoardTypeDto,
   MoveCardResultDto,
   MoveCardTarget,
+  SprintSummaryDto,
 } from '@/lib/dto/boards';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -233,6 +237,60 @@ export const boardsService = {
       liveByColumn.set(m.columnId, list);
     }
 
+    // The board's group-by (Subtask 3.3.4) — declared here because the scrum
+    // no-active-sprint early return below needs it too.
+    const groupBy = board.swimlaneGroupBy as BoardSwimlaneGroupByDto;
+
+    // SPRINT SCOPE (Subtask 4.5.2). A SCRUM board renders only its project's
+    // ACTIVE sprint. The sprint is PROJECT-scoped, not board-scoped (schema rung
+    // 2: there is no `board.sprintId`; the `sprint_one_active_per_project`
+    // partial-unique index makes "the board's active sprint" unambiguous — the
+    // 4.5.2 card's "per-board" wording predates that decision). A `kanban` board
+    // is unscoped — `sprintScopeId` stays `undefined`, so every bounded read
+    // below is byte-for-byte the 3.1.4 projection.
+    const activeSprint =
+      board.type === BoardType.scrum
+        ? await sprintRepository.findActiveByProject(projectId, ctx.workspaceId)
+        : null;
+
+    // A scrum board with NO active sprint: empty columns + `sprint: null`, so the
+    // 4.5.3 UI shows the "No active sprint" empty state in place of the board. We
+    // NEVER fall back to the unscoped board (that would masquerade the backlog as
+    // a sprint). The column meta (name / statusKeys / wipLimit) is still returned
+    // so the shape is honest, but every column is empty and nothing is counted.
+    if (board.type === BoardType.scrum && !activeSprint) {
+      const emptyColumns: BoardColumnDto[] = columns.map((col) => ({
+        id: col.id,
+        name: col.name,
+        position: col.position.toString(),
+        wipLimit: col.wipLimit,
+        statusKeys: (liveByColumn.get(col.id) ?? [])
+          .slice()
+          .sort(byPosition)
+          .map((s) => s.key),
+        cards: [],
+        totalCount: 0,
+        cursor: null,
+      }));
+      return {
+        boardId: board.id,
+        name: board.name,
+        type: board.type as BoardTypeDto,
+        swimlaneGroupBy: groupBy,
+        columns: emptyColumns,
+        swimlanes: [],
+        unmappedStatuses: statuses.filter((s) => !mappedStatusIds.has(s.id)),
+        cap: resolveBoardIssueCap(),
+        truncated: false,
+        sprint: null,
+      };
+    }
+
+    // The active-sprint id threaded through every bounded read so the scrum
+    // board's columns / counts / lanes all scope to the sprint; `undefined` on a
+    // kanban board (no scope).
+    const sprintScopeId = activeSprint?.id;
+
     // Build each column's full count + bounded card set (per-column, NOT per-card
     // — bounded by the board cap, so no N+1 over cards). Terminal columns are
     // windowed to issues touched within the Done-age window (3.8.2).
@@ -248,7 +306,16 @@ export const boardsService = {
         const live = (liveByColumn.get(col.id) ?? []).slice().sort(byPosition);
         const statusKeys = live.map((s) => s.key);
         const terminal = isTerminalColumn(statusKeys, terminalKeys);
-        return buildColumnCards(projectId, col, statusKeys, terminal, doneSince, cap, ctx);
+        return buildColumnCards(
+          projectId,
+          col,
+          statusKeys,
+          terminal,
+          doneSince,
+          cap,
+          ctx,
+          sprintScopeId,
+        );
       }),
     );
 
@@ -267,17 +334,33 @@ export const boardsService = {
     // empty `swimlanes` and no per-card `swimlaneKey` (so the projection is
     // byte-for-byte the 3.1.4 shape). The board TOTAL (over the same status
     // union) is the truncation denominator: `truncated` when it exceeds the cap.
-    const groupBy = board.swimlaneGroupBy as BoardSwimlaneGroupByDto;
+    // The sprint scope (4.5.2) composes with the lanes + the total exactly as it
+    // does with the columns — lanes are computed over the scoped issue set.
     const boardStatusKeys = [...new Set(built.flatMap((b) => b.statusKeys))];
     const [swimlaneKeyByCard, swimlanes, boardTotal] = await Promise.all([
       resolveSwimlaneKeys(groupBy, allRows, ctx),
-      buildSwimlanes(groupBy, projectId, boardStatusKeys, ctx),
+      buildSwimlanes(groupBy, projectId, boardStatusKeys, ctx, sprintScopeId),
       boardStatusKeys.length
         ? workItemRepository.countProjectIssues(projectId, ctx.workspaceId, {
             statuses: boardStatusKeys,
+            ...(sprintScopeId ? { sprintId: sprintScopeId } : {}),
           })
         : Promise.resolve(0),
     ]);
+
+    // The active-sprint summary that drives the 4.5.3 sprint header (Subtask
+    // 4.5.2) — present only on a scrum board with an active sprint. The points
+    // come from the estimation domain (the SUM lives in ONE place — 4.3.3); this
+    // service folds in the per-column breakdown via the column→status layout.
+    let sprint: SprintSummaryDto | null = null;
+    if (activeSprint) {
+      const { points, columnPoints } = await estimationService.sprintBoardPoints(
+        activeSprint.id,
+        built.map((b) => ({ id: b.col.id, statusKeys: b.statusKeys })),
+        ctx,
+      );
+      sprint = toSprintSummaryDto(activeSprint, points, columnPoints, new Date());
+    }
 
     const columnsDto: BoardColumnDto[] = built.map((b) => ({
       id: b.col.id,
@@ -308,6 +391,7 @@ export const boardsService = {
       unmappedStatuses: statuses.filter((s) => !mappedStatusIds.has(s.id)),
       cap,
       truncated: boardTotal > cap,
+      sprint,
     };
   },
 
@@ -1146,6 +1230,11 @@ function byPosition(a: WorkflowStatusDto, b: WorkflowStatusDto): number {
  * cap. No cursor — the whole bounded set loads at once (the client virtualizes).
  * `totalCount` is the full count (NOT windowed), so the header denominator is
  * unchanged. A column mapping no live status is an empty column.
+ *
+ * `sprintId` (Subtask 4.5.2) is the optional SCRUM scope: when set, BOTH the
+ * count and the card load are filtered to the active sprint's issues, so the
+ * scrum column shows only that sprint's cards (and its `totalCount` denominator
+ * is the sprint-scoped count). `undefined` on a kanban board (unscoped, 3.1.4).
  */
 async function buildColumnCards(
   projectId: string,
@@ -1155,6 +1244,7 @@ async function buildColumnCards(
   doneSince: Date,
   cap: number,
   ctx: ServiceContext,
+  sprintId?: string,
 ): Promise<{
   col: BoardColumn;
   statusKeys: string[];
@@ -1165,13 +1255,16 @@ async function buildColumnCards(
     return { col, statusKeys, rows: [], totalCount: 0 };
   }
   const [totalCount, rows] = await Promise.all([
-    workItemRepository.countProjectIssues(projectId, ctx.workspaceId, { statuses: statusKeys }),
+    workItemRepository.countProjectIssues(projectId, ctx.workspaceId, {
+      statuses: statusKeys,
+      ...(sprintId ? { sprintId } : {}),
+    }),
     workItemRepository.findColumnCards(
       projectId,
       ctx.workspaceId,
       statusKeys,
       terminal ? 'recent' : 'position',
-      { limit: cap, updatedSince: terminal ? doneSince : undefined },
+      { limit: cap, updatedSince: terminal ? doneSince : undefined, sprintId },
     ),
   ]);
   return { col, statusKeys, rows, totalCount };
@@ -1249,6 +1342,7 @@ async function buildSwimlanes(
   projectId: string,
   statusKeys: string[],
   ctx: ServiceContext,
+  sprintId?: string,
 ): Promise<BoardSwimlaneDto[]> {
   if (groupBy === 'none' || statusKeys.length === 0) return [];
 
@@ -1257,6 +1351,7 @@ async function buildSwimlanes(
       projectId,
       ctx.workspaceId,
       statusKeys,
+      sprintId,
     );
     const assigneeIds = rows.map((r) => r.assigneeId).filter((id): id is string => id !== null);
     const users = await userRepository.findByIds(assigneeIds);
@@ -1287,6 +1382,7 @@ async function buildSwimlanes(
       projectId,
       ctx.workspaceId,
       statusKeys,
+      sprintId,
     );
     return rows
       .map((r) => ({
@@ -1305,6 +1401,7 @@ async function buildSwimlanes(
     projectId,
     ctx.workspaceId,
     statusKeys,
+    sprintId,
   );
   const epics = await workItemRepository.findByIds(rows.map((r) => r.epicId));
   const epicById = new Map(epics.map((e) => [e.id, e]));
@@ -1327,6 +1424,7 @@ async function buildSwimlanes(
   const epicCardCount = rows.reduce((sum, r) => sum + r.count, 0);
   const total = await workItemRepository.countProjectIssues(projectId, ctx.workspaceId, {
     statuses: statusKeys,
+    ...(sprintId ? { sprintId } : {}),
   });
   const noEpicCount = total - epicCardCount;
   if (noEpicCount > 0) {
