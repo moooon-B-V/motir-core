@@ -358,7 +358,7 @@ export const story_4_5: PlanStory = {
       id: '4.5.4',
       title:
         'Story tests — sprint-scope projection + sprint summary + header + no-active-sprint (component + focused E2E)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 20,
