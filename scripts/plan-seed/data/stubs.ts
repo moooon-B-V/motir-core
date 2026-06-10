@@ -231,32 +231,14 @@ export const STUB_STORIES: PlanStory[] = [
       '+ Subtask CI feedback loop. (Former Epic 4 §4.3-4.6.)',
     items: [],
   },
-  {
-    id: '7.8',
-    title: 'Prodect MCP server (agent tool surface over the PM core)',
-    status: 'planned',
-    descriptionMd:
-      'An MCP server exposing the PM core to AI agents: query work items + the ready set, create ' +
-      'work items, log bugs, comment, and transition statuses — permission-scoped per-user auth ' +
-      '(API token / OAuth), every tool honoring the same workspace/project access checks as the ' +
-      'UI. The mirror products ship exactly this (the official Atlassian Remote MCP Server — ' +
-      'OAuth 2.1, read+write, "access only to data the user already has permission to view"; ' +
-      'Linear likewise), so this is the standard shape, not a deviation. Open-core: lives in ' +
-      "prodect-core beside the rest of the agent dispatch surface (story 7.0's `/ready` " +
-      'endpoints are the natural read/dispatch tools to wrap first); fulfils the long-promised ' +
-      '"agents log bugs via the Prodect MCP" protocol (notes.html #26 follow-ups, ' +
-      'PRODECT_FINDINGS preamble).\n\n' +
-      '**Dogfood payoff + workflow decision this story must land:** once agents can transition ' +
-      "statuses directly in the live tenant, the planner's status-flip seed PRs (and Yue's " +
-      'hand-drag of each card) retire. That moves the source of truth for STATUS from the plan ' +
-      'seed to the live DB, so the seed loader must flip its invariant: a reseed then PRESERVES ' +
-      'the live status of work items it re-creates (today seed status wins and the workflow ' +
-      'forbids skipping status-flip merges precisely so reseeds never clobber). Plan-structure ' +
-      'authority (adding/expanding stories) stays with the seed; only status authority moves. ' +
-      'PRODECT.md\'s "Plan seed § Workflow" + the `prodect run`/`mark done` runbook update ship ' +
-      'with this story.',
-    items: [],
-  },
+  // 7.8 (Prodect MCP server — agent tool surface over the PM core) is fully
+  // expanded — data/story-7.8.ts. Added 2026-06-10 (the orphaned-deferral fix:
+  // MCP existed only as notes.html/findings future-state prose with no owning
+  // story). PAT substrate + settings UI (design-gated), /api/mcp streamable-
+  // HTTP endpoint on the official SDK, read/dispatch tools wrapping the 7.0
+  // /ready contract, write tools (create incl. bug logging / transition /
+  // comment), FilterAST search riding 6.1.1, the reseed-preserves-live-status
+  // loader flip, and the PRODECT.md runbook rewrite.
 
   // ── Epic 8: Launch readiness ──────────────────────────────────────────────
   {
