@@ -93,6 +93,25 @@ export const customFieldOptionRepository = {
   },
 
   /**
+   * Every option across ALL of a project's fields in one query, `position`
+   * order — the admin-list read (5.3.2) assembles per-field sets from this
+   * in memory instead of a per-field round-trip (no N+1; bounded by the
+   * 50-fields × 55-options caps). Workspace-gated through the parent
+   * definition (finding #26).
+   */
+  async listByProject(
+    projectId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<CustomFieldOption[]> {
+    const client = tx ?? db;
+    return client.customFieldOption.findMany({
+      where: { field: { projectId, workspaceId } },
+      orderBy: { position: 'asc' },
+    });
+  },
+
+  /**
    * How many options the field already has — the 55-cap guard read. Runs
    * inside the add-option transaction (pass `tx`) so concurrent adds can't
    * slip past the cap unobserved.
