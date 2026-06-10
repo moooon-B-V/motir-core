@@ -169,7 +169,7 @@ export const story_4_7: PlanStory = {
     {
       id: '4.7.1',
       title: 'At-scale Scrum fixture — sprint-shaped large seed (active sprint + points) + helpers',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 25,
