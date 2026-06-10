@@ -37,7 +37,7 @@
  * created, so callers (and the test) can assert the distribution without
  * re-deriving it.
  */
-import { Prisma, type WorkItemKind, type WorkItemPriority } from '@prisma/client';
+import { BoardType, Prisma, type WorkItemKind, type WorkItemPriority } from '@prisma/client';
 import { db } from '@/lib/db';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -302,3 +302,195 @@ export async function seedLargeBoard(
     terminalInWindow: terminalIds.length - agedOutIds.length,
   };
 }
+
+// ── Sprint-shaped large seed (Subtask 4.7.1) ────────────────────────────────
+// The at-scale SCRUM fixture the Epic-4 cross-cutting Scrum journey (Stories
+// 4.7.2 / 4.7.3) runs against — the Scrum analogue of {@link seedLargeBoard}.
+//
+// `seedLargeBoard` spreads issues across every column / assignee / priority /
+// epic + a Done-age spread, but its issues are NOT associated with a sprint, so
+// the scrum projection (4.5.2) returns `sprint: null` over it (empty board, "no
+// active sprint"). This sibling COMPOSES that board-shaped distribution and adds
+// the SPRINT dimension on top:
+//
+//   (a) flips the project's default board to `scrum` (so `getBoard` takes the
+//       4.5.2 sprint-scoped path);
+//   (b) creates an `active` sprint (state-set directly, the way the 4.5.x
+//       projection tests do — the lifecycle UI is Story 4.4, not depended on
+//       here) plus a `planned` carry-over TARGET sprint (the 4.7.3
+//       complete-with-carry-over journey needs a non-backlog target);
+//   (c) associates a large bounded set of the board-shaped issues with the
+//       active sprint, leaving a slice OUTSIDE it (still in the backlog) so a
+//       scope test can assert those are absent from the scrum board;
+//   (d) gives the sprint issues a story-point spread (some estimated, some NULL)
+//       so the header committed/completed/remaining + per-column point pills are
+//       at scale and the unestimated-→0 path is covered.
+//
+// The sprint association + the point spread are applied with RAW `UPDATE`s, NOT
+// `db.workItem.update`, ON PURPOSE: `updatedAt` is `@updatedAt`-managed, and
+// `seedLargeBoard` has already backdated a fraction of terminal cards' updatedAt
+// to age them OUT of the Done-age window. A Prisma client update would bump
+// updatedAt and silently un-age them, collapsing the Done-age spread; a raw SQL
+// UPDATE leaves updatedAt untouched. This is the same reason `seedLargeBoard`
+// itself backdates via raw SQL.
+
+/** The default story-point values cycled across the estimated sprint issues
+ *  (Jira's Fibonacci-ish deck) — wide enough that the header point totals are at
+ *  scale and a single 40-card page sum never approximates the sprint total. */
+const SCRUM_POINT_DECK = [1, 2, 3, 5, 8, 13] as const;
+
+export interface SeedLargeScrumSprintOptions extends Partial<SeedLargeBoardOptions> {
+  /** Of the board-shaped issues (creation order), every Nth is left OUTSIDE the
+   *  active sprint (stays in the backlog) — the scope catch-all. Must be ≥ 2 so
+   *  the sprint still holds the bulk of the set. Default 7. */
+  backlogSliceEvery?: number;
+  /** Of the IN-sprint issues, every Nth is left UNESTIMATED (`storyPoints` NULL)
+   *  so the contributes-0 path is covered. Default 4. */
+  unestimatedEvery?: number;
+  /** The active sprint's window: it started `startedDaysAgo` ago and ends
+   *  `endsInDays` from now (a live, non-overdue sprint). Defaults 3 / 11. */
+  startedDaysAgo?: number;
+  endsInDays?: number;
+}
+
+export interface SeedLargeScrumSprintManifest extends SeedLargeBoardManifest {
+  /** The active sprint the scrum board scopes to. */
+  activeSprintId: string;
+  activeSprintName: string;
+  /** The `planned` carry-over target sprint (the 4.7.3 complete journey's target). */
+  targetSprintId: string;
+  targetSprintName: string;
+  /** Issues associated with the active sprint (on the scrum board). */
+  sprintIssueCount: number;
+  /** Issues left OUTSIDE the sprint, in the backlog (absent from the scrum board). */
+  backlogIssueCount: number;
+  /** In-sprint issues given a non-NULL story-point estimate. */
+  estimatedSprintIssueCount: number;
+  /** SUM of the estimated in-sprint issues' story points (the header "committed"). */
+  committedPoints: number;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Chunk `ids` and raw-UPDATE each chunk to keep the `IN (...)` parameter list
+ *  well under Postgres' bind limit even at full seed size. */
+async function rawUpdateIn(ids: string[], assign: Prisma.Sql): Promise<void> {
+  const CHUNK = 1000;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK);
+    if (slice.length === 0) continue;
+    await db.$executeRaw`UPDATE "work_item" SET ${assign} WHERE id IN (${Prisma.join(slice)})`;
+  }
+}
+
+export async function seedLargeScrumSprint(
+  params: SeedLargeScrumSprintParams,
+  options: SeedLargeScrumSprintOptions = {},
+): Promise<SeedLargeScrumSprintManifest> {
+  const backlogSliceEvery = Math.max(2, options.backlogSliceEvery ?? 7);
+  const unestimatedEvery = Math.max(2, options.unestimatedEvery ?? 4);
+  const startedDaysAgo = options.startedDaysAgo ?? 3;
+  const endsInDays = options.endsInDays ?? 11;
+  const { workspaceId, projectId } = params;
+
+  // 1. Build the board-shaped distribution (every column / lane / priority +
+  //    Done-age spread) — reused unchanged. `options` is passed straight through:
+  //    the board keys a caller set are honoured, the ones it OMITS fall back to
+  //    SEED_LARGE_BOARD_DEFAULTS (so the Done-age spread etc. survive), and the
+  //    scrum-only keys (backlogSliceEvery / unestimatedEvery / window) are extra
+  //    props seedLargeBoard ignores. (Do NOT re-pick the board keys explicitly —
+  //    that would pass `doneAgedOutEvery: undefined`, which spreads OVER and
+  //    clobbers the default, silently dropping the Done-age spread.)
+  const boardManifest = await seedLargeBoard(params, options);
+
+  // 2. Flip the project's seeded default board (kanban, 3.1.2) to scrum so
+  //    `getBoard` takes the 4.5.2 sprint-scoped path. The columns + mappings are
+  //    untouched (only the kind changes), exactly as the projection tests do.
+  await db.board.updateMany({ where: { projectId }, data: { type: BoardType.scrum } });
+
+  // 3. The active sprint + the planned carry-over target. State + window set
+  //    directly (the 4.4 lifecycle UI is not depended on by 4.7.1) — the same
+  //    direct-create the scrum-projection tests use. Sequences are explicit (the
+  //    project has no other sprints from the seed).
+  const todayUtcMidnight = (() => {
+    const now = new Date();
+    return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  })();
+  const activeSprintName = 'At-scale sprint';
+  const active = await db.sprint.create({
+    data: {
+      workspaceId,
+      projectId,
+      name: activeSprintName,
+      goal: 'Exercise the Scrum board at real-team scale',
+      state: 'active',
+      startDate: new Date(todayUtcMidnight - startedDaysAgo * DAY_MS),
+      endDate: new Date(todayUtcMidnight + endsInDays * DAY_MS),
+      sequence: 1,
+    },
+  });
+  const targetSprintName = 'Carry-over target';
+  const target = await db.sprint.create({
+    data: {
+      workspaceId,
+      projectId,
+      name: targetSprintName,
+      goal: 'Receives the unfinished issues on complete-sprint',
+      state: 'planned',
+      sequence: 2,
+    },
+  });
+
+  // 4. Partition the board-shaped issues (creation order = board order) into the
+  //    active sprint vs. a backlog slice. Every `backlogSliceEvery`-th issue
+  //    stays in the backlog; the rest join the sprint — so the sprint inherits
+  //    the full column / lane / priority / Done-age spread, while a representative
+  //    slice is provably out of scope.
+  const rows = await db.workItem.findMany({
+    where: { projectId, workspaceId },
+    select: { id: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  });
+  const sprintIds: string[] = [];
+  const backlogIds: string[] = [];
+  rows.forEach((r, i) => (i % backlogSliceEvery === 0 ? backlogIds : sprintIds).push(r.id));
+
+  // Associate the in-sprint set (raw UPDATE — preserves the Done-age backdating).
+  await rawUpdateIn(sprintIds, Prisma.sql`"sprintId" = ${active.id}`);
+
+  // 5. Story-point spread over the in-sprint issues: every `unestimatedEvery`-th
+  //    is left NULL (the contributes-0 path); the rest cycle the deck. Bucket by
+  //    value so it's a handful of raw UPDATEs, not one-per-issue.
+  const buckets = new Map<number, string[]>();
+  let estimatedSprintIssueCount = 0;
+  let committedPoints = 0;
+  sprintIds.forEach((id, j) => {
+    if (j % unestimatedEvery === 0) return; // unestimated → NULL
+    const value = SCRUM_POINT_DECK[j % SCRUM_POINT_DECK.length]!;
+    const bucket = buckets.get(value) ?? [];
+    bucket.push(id);
+    buckets.set(value, bucket);
+    estimatedSprintIssueCount++;
+    committedPoints += value;
+  });
+  for (const [value, ids] of buckets) {
+    await rawUpdateIn(ids, Prisma.sql`"storyPoints" = ${value}::numeric`);
+  }
+
+  return {
+    ...boardManifest,
+    activeSprintId: active.id,
+    activeSprintName,
+    targetSprintId: target.id,
+    targetSprintName,
+    sprintIssueCount: sprintIds.length,
+    backlogIssueCount: backlogIds.length,
+    estimatedSprintIssueCount,
+    committedPoints,
+  };
+}
+
+/** Same tenant inputs as {@link SeedLargeBoardParams} — the sprint seed composes
+ *  the board seed, so it needs nothing more. (Named separately for symmetry +
+ *  forward room.) */
+export type SeedLargeScrumSprintParams = SeedLargeBoardParams;
