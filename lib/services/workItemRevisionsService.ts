@@ -23,8 +23,15 @@
 import type { Prisma } from '@prisma/client';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 
-/** The audit verb for a revision row — mirrors WorkItemRevisionDto.changeKind. */
-export type RevisionChangeKind = 'created' | 'updated' | 'archived';
+/**
+ * The audit verb for a revision row — mirrors WorkItemRevisionDto.changeKind.
+ * `comment_deleted` (Story 5.1 · Subtask 5.1.2) records that a comment on the
+ * work item was HARD-deleted — the row itself is gone (no tombstone), so this
+ * revision is the surviving History trace Story 5.5 renders. The DB column is
+ * plain text, so the new kind needs no migration (the designed extension
+ * point — see workItemRevisionMappers).
+ */
+export type RevisionChangeKind = 'created' | 'updated' | 'archived' | 'comment_deleted';
 
 /**
  * The arguments a service write passes when recording a revision. `diff` is

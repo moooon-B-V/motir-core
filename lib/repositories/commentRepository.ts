@@ -111,6 +111,17 @@ export const commentRepository = {
   },
 
   /**
+   * How many replies a ROOT comment holds (Subtask 5.1.2) — the count the
+   * delete path records in the `work_item_revision` deletion trace (and the
+   * 5.1.5 confirm copy names) BEFORE the cascade takes the thread. Takes `tx`
+   * when read inside the delete transaction.
+   */
+  async countByParent(parentCommentId: string, tx?: Prisma.TransactionClient): Promise<number> {
+    const client = tx ?? db;
+    return client.comment.count({ where: { parentCommentId } });
+  },
+
+  /**
    * How many ROOT comments (threads) a work item holds — the paging
    * denominator for `listThreadsByWorkItem` (pages walk roots, so "is there
    * another page" is a root count, not a total count).

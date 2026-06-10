@@ -3,7 +3,13 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import type { Project } from '@prisma/client';
-import { canBrowse, canEdit, type ProjectAccessInputs } from '@/lib/projects/access';
+import {
+  canBrowse,
+  canComment,
+  canEdit,
+  canModerateComments,
+  type ProjectAccessInputs,
+} from '@/lib/projects/access';
 import { isWorkspaceManager } from '@/lib/projects/roles';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 
@@ -85,6 +91,35 @@ export const projectAccessService = {
   ): Promise<{ canBrowse: boolean; canEdit: boolean }> {
     const inputs = await resolveInputs(projectId, ctx, tx);
     return { canBrowse: canBrowse(inputs), canEdit: canEdit(inputs) };
+  },
+
+  /**
+   * The actor's COMMENT-domain capabilities on a project (Story 5.1 · Subtask
+   * 5.1.2) — one `resolveInputs` round-trip feeding the three comment gates:
+   * `canBrowse` (may they see the issue at all — the 404 gate), `canComment`
+   * (Jira's "Add comments"), `canModerate` (Jira's "Edit all / Delete all
+   * comments" — project admin or workspace owner/admin). `accessLevel` rides
+   * along so the caller can scope mention candidates via
+   * `assignableMembersService` without re-reading the project. Throws only
+   * ProjectNotFoundError (cross-workspace project ids stay hidden).
+   */
+  async getCommentCapabilities(
+    projectId: string,
+    ctx: AccessActorContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{
+    canBrowse: boolean;
+    canComment: boolean;
+    canModerate: boolean;
+    accessLevel: ProjectAccessInputs['accessLevel'];
+  }> {
+    const inputs = await resolveInputs(projectId, ctx, tx);
+    return {
+      canBrowse: canBrowse(inputs),
+      canComment: canComment(inputs),
+      canModerate: canModerateComments(inputs),
+      accessLevel: inputs.accessLevel,
+    };
   },
 
   /**

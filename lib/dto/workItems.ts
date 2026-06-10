@@ -419,6 +419,6 @@ export interface WorkItemRevisionDto {
   workItemId: string;
   changedById: string;
   changedAt: string;
-  changeKind: 'created' | 'updated' | 'archived';
+  changeKind: 'created' | 'updated' | 'archived' | 'comment_deleted';
   diff: Record<string, { from: unknown; to: unknown }>;
 }
