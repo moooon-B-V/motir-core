@@ -2,14 +2,23 @@
 
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowRight, CheckCircle2, Circle, TrendingUp, TriangleAlert } from 'lucide-react';
+import {
+  ArrowRight,
+  BarChart3,
+  CheckCircle2,
+  Circle,
+  TrendingUp,
+  TriangleAlert,
+} from 'lucide-react';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { SprintDto, SprintReportDto } from '@/lib/dto/sprints';
 import type { RankedIssuePageDto } from '@/lib/dto/backlog';
+import type { VelocityDto } from '@/lib/dto/reports';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import { StatusValue } from '../../issues/_components/issueCellPrimitives';
 import type { StatusByKey } from './backlogShared';
+import { VelocityChart } from './VelocityChart';
 
 // The sprint report (Story 4.4 · Subtask 4.4.6) — what got done vs. what did not,
 // per design/sprints/sprint-lifecycle.mock.html panels 6–7. A PURE presentational
@@ -54,9 +63,23 @@ export interface SprintReportProps {
    * standalone page.
    */
   carryOverLabel?: string | null;
+  /**
+   * The cross-sprint velocity read (4.6.4 `getVelocity`) — present on the
+   * standalone report page, which fetches it server-side; the report then shows
+   * the velocity chart beside the burndown in the Story-4.6 chart seam
+   * (design/reports/charts.mock.html panel 5). Absent in the complete-modal
+   * success state (the 4.4.1 modal design draws only the burndown section).
+   */
+  velocity?: VelocityDto;
 }
 
-export function SprintReport({ report, sprint, statusByKey, carryOverLabel }: SprintReportProps) {
+export function SprintReport({
+  report,
+  sprint,
+  statusByKey,
+  carryOverLabel,
+  velocity,
+}: SprintReportProps) {
   const t = useTranslations('backlog');
   const locale = useLocale();
 
@@ -136,24 +159,38 @@ export function SprintReport({ report, sprint, statusByKey, carryOverLabel }: Sp
         carryOverLabel={carryOverLabel}
       />
 
-      {/* Burndown chart SEAM — Story 4.6 (the report shows numeric/list summary
-          only; the chart reads this same history + the committed baseline). */}
-      <section className="flex flex-col gap-2">
-        <span className="flex items-center gap-1.5 text-sm font-semibold text-(--el-text-strong)">
-          <TrendingUp className="h-4 w-4 shrink-0 text-(--el-warning)" aria-hidden />
-          {t('sprintReport.burndown')}
-        </span>
-        <div
-          aria-label={t('sprintReport.burndownSeam')}
-          className="flex flex-col items-center justify-center gap-1 rounded-(--radius-card) border border-dashed border-(--el-border-strong) px-(--spacing-card-padding) py-6 text-center"
-        >
-          <TrendingUp className="h-6 w-6 text-(--el-text-faint)" aria-hidden />
-          <span className="text-sm text-(--el-text-muted)">{t('sprintReport.burndownSeam')}</span>
-          <span className="text-xs text-(--el-text-faint)">
-            {t('sprintReport.burndownSeamNote')}
+      {/* The report's analytics — the Story-4.6 charts, side by side per
+          design/reports/charts.mock.html panel 5. The burndown slot is still the
+          reserved SEAM (4.6.5 fills it); the velocity chart (4.6.6) renders when
+          the host passes the 4.6.4 read (the standalone report page). */}
+      <div className="flex flex-wrap gap-4">
+        <section className="flex min-w-0 flex-1 basis-[300px] flex-col gap-2">
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-(--el-text-strong)">
+            <TrendingUp className="h-4 w-4 shrink-0 text-(--el-warning)" aria-hidden />
+            {t('sprintReport.burndown')}
           </span>
-        </div>
-      </section>
+          <div
+            aria-label={t('sprintReport.burndownSeam')}
+            className="flex flex-col items-center justify-center gap-1 rounded-(--radius-card) border border-dashed border-(--el-border-strong) px-(--spacing-card-padding) py-6 text-center"
+          >
+            <TrendingUp className="h-6 w-6 text-(--el-text-faint)" aria-hidden />
+            <span className="text-sm text-(--el-text-muted)">{t('sprintReport.burndownSeam')}</span>
+            <span className="text-xs text-(--el-text-faint)">
+              {t('sprintReport.burndownSeamNote')}
+            </span>
+          </div>
+        </section>
+
+        {velocity ? (
+          <section className="flex min-w-0 flex-1 basis-[300px] flex-col gap-2">
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-(--el-text-strong)">
+              <BarChart3 className="h-4 w-4 shrink-0 text-(--el-success)" aria-hidden />
+              {t('sprintReport.velocity')}
+            </span>
+            <VelocityChart velocity={velocity} />
+          </section>
+        ) : null}
+      </div>
     </div>
   );
 }

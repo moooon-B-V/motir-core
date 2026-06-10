@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { ArrowLeft } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
+import { reportsService } from '@/lib/services/reportsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { SprintNotFoundError } from '@/lib/sprints/errors';
@@ -43,12 +44,16 @@ export default async function SprintReportPage({ params }: { params: Promise<{ i
   const sprint = sprints.find((s) => s.id === id);
   if (!sprint) notFound();
 
-  const [report, workflow] = await Promise.all([
+  // The velocity read (4.6.4) for the report's analytics row — the cross-sprint
+  // chart the Story-4.6 seam mounts beside the burndown (Subtask 4.6.6). A
+  // bounded last-7 read; loading/error ride the page scaffold (Server Component).
+  const [report, workflow, velocity] = await Promise.all([
     sprintsService.getSprintReport(id, {}, accessCtx).catch((err) => {
       if (err instanceof SprintNotFoundError) return null;
       throw err;
     }),
     workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
+    reportsService.getVelocity({ projectId: ctx.projectId }, accessCtx),
   ]);
   if (!report) notFound();
 
@@ -69,7 +74,7 @@ export default async function SprintReportPage({ params }: { params: Promise<{ i
         </h1>
       </div>
 
-      <SprintReport report={report} sprint={sprint} statusByKey={statusByKey} />
+      <SprintReport report={report} sprint={sprint} statusByKey={statusByKey} velocity={velocity} />
     </div>
   );
 }
