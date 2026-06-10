@@ -185,7 +185,7 @@ export const story_5_1: PlanStory = {
       id: '5.1.1',
       title:
         'Schema — `comment` + `comment_mention` models + migration (single-level threading via `parentCommentId`; FKs as Prisma relations)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 18,
@@ -244,7 +244,7 @@ export const story_5_1: PlanStory = {
       id: '5.1.2',
       title:
         '`commentsService` — add/edit/delete/list with 6.4-role permissions, server-side mention parsing + `comment_mention` rows, paged reads, job events',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
