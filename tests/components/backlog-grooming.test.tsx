@@ -340,3 +340,62 @@ describe('Backlog row ⋯ menu (4.2.5)', () => {
     });
   });
 });
+
+// The selection bar gates each bulk-move button to where the selection currently
+// lives (bug-backlog-selection-bar-move-to-backlog-always-shown): a no-op move is
+// never offered. The mirror of the row ⋯ menu, which already only offers "Move to
+// backlog" for a sprint row.
+describe('Backlog selection-bar contextual gating (bug-move-to-backlog-always-shown)', () => {
+  it('hides “Move to backlog” when every selected item is already in the backlog', async () => {
+    installFetch({
+      sprints: [sprint({ id: 'sp1', name: 'Sprint 25', state: 'planned', issueCount: 0 })],
+      backlog: [item({ id: 'b1', key: 150 }), item({ id: 'b2', key: 151 })],
+      sprintIssues: [],
+    });
+    render(ui);
+
+    fireEvent.click(await screen.findByTestId('backlog-row-check-PROD-150'));
+    fireEvent.click(screen.getByTestId('backlog-row-check-PROD-151'));
+    expect(screen.getByTestId('backlog-selection-count').textContent).toContain('2');
+
+    // All-backlog selection → the no-op "Move to backlog" is gone; "Move to
+    // sprint" stays (you can still send them to a sprint).
+    expect(screen.queryByRole('button', { name: 'Move to backlog' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Move to sprint' })).toBeTruthy();
+  });
+
+  it('shows both buttons for a mixed selection (≥1 sprint item + ≥1 backlog item)', async () => {
+    installFetch({
+      sprints: [sprint({ id: 'sp1', name: 'Sprint 25', state: 'planned', issueCount: 1 })],
+      backlog: [item({ id: 'b1', key: 150 })],
+      sprintIssues: [item({ id: 's1', key: 201 })],
+    });
+    render(ui);
+
+    fireEvent.click(await screen.findByTestId('backlog-row-check-PROD-150')); // backlog
+    fireEvent.click(screen.getByTestId('backlog-row-check-PROD-201')); // sprint
+    expect(screen.getByTestId('backlog-selection-count').textContent).toContain('2');
+
+    // Mixed → both moves are meaningful, so both buttons render.
+    expect(screen.getByRole('button', { name: 'Move to backlog' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Move to sprint' })).toBeTruthy();
+  });
+
+  it('hides “Move to sprint ▸” when every selected item is already in the SAME sprint', async () => {
+    installFetch({
+      sprints: [sprint({ id: 'sp1', name: 'Sprint 25', state: 'planned', issueCount: 2 })],
+      backlog: [],
+      sprintIssues: [item({ id: 's1', key: 201 }), item({ id: 's2', key: 202 })],
+    });
+    render(ui);
+
+    fireEvent.click(await screen.findByTestId('backlog-row-check-PROD-201'));
+    fireEvent.click(screen.getByTestId('backlog-row-check-PROD-202'));
+    expect(screen.getByTestId('backlog-selection-count').textContent).toContain('2');
+
+    // Same-sprint selection → re-picking that sprint is a no-op; "Move to sprint"
+    // is gone. "Move to backlog" stays (you can still send them back).
+    expect(screen.queryByRole('button', { name: 'Move to sprint' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Move to backlog' })).toBeTruthy();
+  });
+});

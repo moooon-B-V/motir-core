@@ -128,6 +128,16 @@ interface BacklogDndContextValue {
   rankItemToBoundary: (itemId: string, edge: 'top' | 'bottom') => void;
   /** Inline-create an issue into the backlog or a sprint (4.2.2 createBacklogIssue). */
   createInto: (input: CreateBacklogIssueInput) => Promise<boolean>;
+  /**
+   * Where an issue currently lives, for gating the bulk-move bar to the
+   * selection's origin (the `bug-backlog-selection-bar-move-to-backlog-always-shown`
+   * fix). Returns the sprint id (the row is in that sprint), `null` (it's in the
+   * backlog), or `undefined` (membership unknown — the row is in no mounted
+   * region, e.g. a collapsed sprint; the bar keeps the action available rather
+   * than hide it on a guess). Reads the live region refs, so it's fresh on every
+   * provider re-render.
+   */
+  getSprintIdFor: (id: string) => string | null | undefined;
   /** The project's planning sprints — the `⋯` "Move to sprint ▸" + bulk-bar submenu. */
   sprints: SprintDto[];
 }
@@ -147,6 +157,7 @@ const BacklogDndContext = createContext<BacklogDndContextValue>({
   moveItemsToBacklog: noop,
   rankItemToBoundary: noop,
   createInto: async () => false,
+  getSprintIdFor: () => undefined,
   sprints: [],
 });
 
@@ -260,6 +271,17 @@ export function BacklogDndProvider({
     const regions = [...registry.current.values()].sort((a, b) => a.order - b.order);
     return regions.flatMap((r) => r.itemsRef.current.map((i) => i.id));
   }, []);
+  // Which sprint an issue currently lives in — the selection bar's gate (see the
+  // BacklogDndContextValue doc). A mounted backlog row → null; a mounted sprint
+  // row → its sprint id; an unmounted row (collapsed sprint) → undefined.
+  const getSprintIdFor = useCallback(
+    (id: string): string | null | undefined => {
+      const region = regionContaining(id);
+      if (!region) return undefined;
+      return region.kind === 'sprint' ? (region.sprintId ?? null) : null;
+    },
+    [regionContaining],
+  );
 
   // ── Selection handlers ──────────────────────────────────────────────────────
   const activateRow = useCallback(
@@ -650,6 +672,7 @@ export function BacklogDndProvider({
       moveItemsToBacklog,
       rankItemToBoundary,
       createInto,
+      getSprintIdFor,
       sprints,
     }),
     [
@@ -666,6 +689,7 @@ export function BacklogDndProvider({
       moveItemsToBacklog,
       rankItemToBoundary,
       createInto,
+      getSprintIdFor,
       sprints,
     ],
   );
