@@ -42,7 +42,7 @@
 // `pnpm test:e2e` run and runs in the dedicated seam-configured CI step.
 
 import { expect, test, type Page } from '@playwright/test';
-import { BoardType } from '@prisma/client';
+import { BoardSwimlaneGroupBy, BoardType } from '@prisma/client';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import {
@@ -386,6 +386,23 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await db.$disconnect();
+});
+
+// Reset both tenants' boards to the FLAT layout before every test. `setGroupBy`
+// PERSISTS the swimlane group-by on the board row (PATCH /api/board), so a test
+// that switches to Assignee would otherwise leak swimlanes into the next test —
+// whose `gotoLoadedBoard` waits on the flat board's `board` testid and times
+// out. (The kanban twin, board-at-scale.spec.ts, has exactly this leak: its
+// Done-window test fails on the first attempt in CI and only passes because the
+// retry spawns a fresh worker that re-runs beforeAll's reseed — a retry-masked
+// flake, logged as a finding. This beforeEach keeps every test here order- and
+// retry-independent instead.)
+test.beforeEach(async () => {
+  if (!big) return; // seam unset → the whole block is skipped
+  await db.board.updateMany({
+    where: { projectId: { in: [big.projectId, small.projectId] } },
+    data: { swimlaneGroupBy: BoardSwimlaneGroupBy.none },
+  });
 });
 
 test.describe('board-scrum-at-scale — load model + scope + header (4.7.2)', () => {
