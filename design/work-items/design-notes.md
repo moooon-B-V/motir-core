@@ -1269,3 +1269,136 @@ files already attach at create via the editor path + link-on-write (5.2.3).
 **Per-project storage quotas / admin-configurable size limits** — Epic 6/8
 admin. **Jump-to-exact-comment** from a comment-sourced card — additive;
 the block only needs `source`. Custom-field file types are Story 5.3.
+
+## Custom fields on the detail rail (Story 5.3 · 5.3.5 → 5.3.7)
+
+`custom-fields.mock.html` is the design for **custom-field values on the
+issue detail rail** — the per-type cards, the per-type inline editors, and
+the "Show more fields" disclosure. `detail.pen` predates custom fields
+entirely, so all three were whole undesigned elements (the design-gate
+NONE-exists case, `notes.html` mistake #31); this asset gates code Subtask
+**5.3.7**, which carries 5.3.5 in `dependsOn`. Mirror: the Jira issue-view
+**Details** panel — fields with values show; empty ones hide behind **"Show
+more fields"** (the verified hide-when-empty rule), without the work-type
+layout-config admin (the documented 6.5 extension). A `custom-fields.png`
+export accompanies the HTML for the board view; the HTML is the source of
+truth.
+
+### Placement (panel 0)
+
+Custom-field cards are a contiguous block in definition `position` order,
+immediately **after the Estimate card** (the last built-in `FieldCard`) and
+**before the created/updated audit list**. The **"Show more fields (N)"**
+disclosure sits after the valued custom cards, immediately before
+created/updated. Built-ins never reorder. With **no definitions, nothing
+renders** — no disclosure, no section gap; the rail is byte-identical to
+today (5.3.7's null-case guarantee).
+
+### Card + per-type rendering (panel 1)
+
+Every custom card is **`CoreFieldsPanel`'s `FieldCard` verbatim** — Card
+chrome (`--radius-card`, `--shadow-card`, `--el-border`) with px-3.5/py-2.5,
+uppercase 11px `--el-text-secondary` field label, corner chevron `<button>`
+(`aria-label="Edit/Close <label>"`, rotates 180° in edit mode), value line
+mt-1.5 / 14px. **No new card chrome.** Value lines per type:
+
+- **text** — plain, truncating (full value via `title`);
+- **number** — the formatted decimal, plain;
+- **date** — the Due-date card grammar verbatim: 16px muted `calendar`
+  glyph + `formatDate` ("Jun 12, 2026");
+- **select** — the option label, plain; an **archived** option keeps
+  rendering as `label (archived)` — muted italic mark, never colour alone;
+- **user** — the assignee grammar verbatim: 24px initial Avatar + name;
+- **empty** — the rail's muted-italic **None** (the Parent card's exact
+  convention).
+
+The per-type TILE glyphs + tints (the 5.3.4-shared map: `type`/sky ·
+`hash`/peach · `calendar`/mint · `square-chevron-down`/lavender ·
+`circle-user`/rose, glyph in `--el-text-strong` on the tint — findings
+#54/#35) belong to the **Fields ADMIN page**; the rail keeps value lines
+clean — Jira renders custom values plain, and the rail's built-ins reserve
+glyphs for values that benefit (calendar, Avatar).
+
+### Per-type editors (panel 2)
+
+The chevron toggles the value line into the editor — the FieldCard pattern;
+each editor is a **shipped picker**, nothing hand-rolled:
+
+- **text / number** — `Input` chrome (`--height-input`,
+  `--radius-input`, `--el-border-strong`), autofocus; commit on blur or
+  chevron collapse (the Estimate card's exact grammar). Clearing = emptying
+  the input.
+- **date** — the shipped `DatePicker` (`autoOpen`), trailing × Clear; the
+  calendar popover's authority stays `datepicker.mock.html`.
+- **select** — the shipped `Combobox` (`autoOpen`); first row **None**
+  (muted italic — the clear path, the AssigneePicker NONE grammar); option
+  rows with `Check` on the selected one; **archived options are excluded
+  from the menu**, but a current archived value stays selected in the
+  trigger with the `(archived)` mark. `searchable` switches on at **≥8
+  options** (a 3-option set opens straight to the list; long sets get the
+  filter — the ParentPicker precedent).
+- **user** — the AssigneePicker-shaped member `Combobox`: searchable
+  ("Search members…"), **None** first row (Unset), member rows = name +
+  right-aligned email secondary (12px muted).
+- **Inline 422** — the editor STAYS OPEN: error border (`--el-danger`) on
+  the control + a rose-tint message box below (`--el-tint-rose` bg,
+  `--el-text-strong` text, 12px, `--radius-control`,
+  `--spacing-tooltip-x/y`, `role="alert"`) — the 2.4.9 inline-confirm
+  family; hue in the background with strong text (finding #35). Drawn:
+  number parse error, archived-option re-save, non-viewable user.
+- **Pending** — the in-flight write disables the open editor (opacity 50% —
+  the rail's `isPending` convention).
+
+### "Show more fields" disclosure (panel 3)
+
+A quiet full-width text `<button>` (13px `--el-text-secondary`,
+`--spacing-control-x/y` padding, `--radius-control`, hover `--el-surface`):
+**"Show more fields (N)"** with a leading chevron that rotates 180° when
+open, label flipping to **"Show fewer fields"**, `aria-expanded`. Expanding
+reveals the empty cards (muted-italic _None_, editable in place); a field
+that gains a value moves **above** the line on refresh, a cleared one moves
+back below. The row exists for **every role** — it is how all fields are
+viewed; only the editors are role-gated.
+
+### Viewer read-only + loading (panel 4)
+
+A read-only actor sees values with **no chevron** (`FieldCard
+editable={false}` — the rail's existing read-only grammar); the disclosure
+row stays. The loading skeleton extends naturally: ghost label + ghost value
+bars inside card chrome, one per custom field, same as the built-ins.
+
+### Copy strings
+
+"Show more fields (N)" / "Show fewer fields" · "None" (empty placeholder +
+the select/user clear row) · "(archived)" · "Search members…" · "Select a
+member…" · "Enter a number — e.g. 12.5." · "That option is archived — pick a
+current one. Saving again with "<option>" is rejected (422)." · "That person
+can't view this project, so they can't hold this field." · chevron
+`aria-label`: "Edit <label>" / "Close <label>".
+
+### Tokens / a11y
+
+Colour only through `--el-*` (the 422 box puts hue in the tint background
+with `--el-text-strong` text — finding #35; the archived mark is text, never
+colour alone); shape through the element-semantic tokens
+(`--radius-card/input/control/badge`, `--spacing-control-x/y`,
+`--spacing-input-x`, `--spacing-tooltip-x/y`, `--height-input`,
+`--height-control`, `--shadow-card/elevated`) — no Tier-0 utilities, no raw
+`rounded-*`. **No new `--el-*` or shape token is needed.** The disclosure is
+a real `aria-expanded` button; every editor is labelled by its field label;
+errors are `role="alert"`; the DatePicker trigger is a CONTAINER with the
+Clear × as a sibling button (never a button inside a button — the
+datepicker.mock rule); Combobox menus keep the `role="listbox"` /
+`aria-activedescendant` bar. Light + dark parity via the same tokens.
+
+### Out of scope (documented extension slots)
+
+Custom fields on the **create/edit forms** (work-type layouts, required
+flags, form placement — the 6.5 layout-config extension; values are
+editable the moment an issue exists, via this rail); custom-field columns
+on **board/list/tree** (Epic-6 saved-views territory); the **filter UI**
+over values (Story 6.1, consuming 5.3.1's predicate contract); the
+remaining mirror types (paragraph / checkbox-multi / labels / multi-person
+/ formula — additive on the same EAV substrate). Value-change **History**
+rendering is Story 5.5 (the `customFields.<key>` revision diffs land with
+5.3.3).
