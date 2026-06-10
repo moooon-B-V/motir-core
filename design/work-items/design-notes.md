@@ -1084,3 +1084,188 @@ navigation/action — a product-wide decision, not story-local. The **History
 filter** is Story 5.5's slot (the disabled seam). **In-app notifications**
 are Story 5.7; **watchers** are Story 5.4. Comment **reactions/emoji** and
 edit **history** are not planned features of 5.1.
+
+## Attachments panel + preview lightbox (Story 5.2 · 5.2.4 → 5.2.5 / 5.2.6)
+
+`attachments.mock.html` is the design for the issue detail page's
+**attachments surface** — the panel (strip + list views, upload, download,
+permission-gated delete) and the preview lightbox. `detail.pen` draws NO
+attachments section (the detail page reserves the Epic-5 slot in a code
+comment only), so every element here is a whole element no design specified —
+the design gate (`notes.html` mistake #31) requires this asset before code
+Subtasks **5.2.5** (the panel) and **5.2.6** (the lightbox). Mirror: the Jira
+Cloud issue-view attachments panel — the Jira-verified decisions (strip + list
+views with a count, embeds-are-attachments with the editor-sourced delete
+block, the three permissions, image/PDF-only preview, hard delete) are
+recorded in the 5.2 story module and drawn here. Deviation, recorded with its
+justification: the read is **cursor-paged (50/page) + "Show more (N)"** —
+never Jira's load-all-then-degrade (finding #57). An `attachments.png` export
+accompanies the HTML for the board view; the HTML is the source of truth.
+
+### Placement
+
+A left-column **`ContentSectionCard`** — content-width and multi-row, so the
+rail is wrong for it (the rail is for scalars; the same argument that placed
+Relationships, 2.4.5). It mounts in the detail page's reserved Epic-5 slot:
+after Children, before Activity (5.1). The section header keeps the
+`ContentSectionCard` grammar (16px sans semibold + `--el-text-secondary`
+gloss) and carries:
+
+- the **total count** in the gloss (`— 44`);
+- the **strip/list view toggle** — the shipped `Segmented` vocabulary (the
+  2.5.3 view-switcher grammar): icon + label `Strip` / `List`; the chosen
+  view persists per user (the 5.1.5 sort-preference pattern);
+- the **Attach button** — secondary `Button` (size sm) with the `paperclip`
+  glyph; opens a multi-select file picker. Always present for creating roles;
+  OMITTED for the viewer.
+
+### Strip view (panels 0–1)
+
+Tiles on a `repeat(auto-fill, minmax(148px, 1fr))` grid: an 88px thumbnail
+(the image itself, cover-fit, or the MIME-family glyph on
+`--el-surface-soft`) over filename (truncating, full on `title`) + relative
+date (absolute on `title`; size joins it on the anatomy panels). **The card's
+open target is its own button; the per-card actions are sibling icon
+buttons — never nested interactives.** Download + delete reveal on
+hover/focus-within. Activating a previewable card (image / PDF) opens the
+lightbox; any other type downloads (the DTO `isImage`/`isPdf` split).
+
+**File-type glyph map (5.2.5 builds this from `lib/blob/allowlist.ts`):**
+glyph on an `--el-surface-soft` tile, stroke taking the conventional family
+hue through EXISTING semantic tokens — no new token:
+
+| MIME family                                               | lucide glyph       | stroke                |
+| --------------------------------------------------------- | ------------------ | --------------------- |
+| `application/pdf`                                         | `file-text`        | `--el-danger`         |
+| docs/text (`msword`, docx, `text/plain`, `text/markdown`) | `file-text`        | `--el-info`           |
+| spreadsheets (`text/csv`, `ms-excel`, xlsx)               | `file-spreadsheet` | `--el-success`        |
+| `application/zip`                                         | `file-archive`     | `--el-warning`        |
+| image without a thumbnail                                 | `image`            | `--el-text-secondary` |
+
+**Editor-sourced cards** (the embeds-ARE-attachments rule) carry the lavender
+**source chip** (`--el-tint-lavender` bg + `--el-text-strong` text — the 5.1
+mention-chip treatment, AA-safe per finding #35; `--radius-badge`,
+`--spacing-kbd-x/y`) naming the source (`Description` / `Comment`), and their
+delete control is **disabled with the points-at-source tooltip** ("Added in
+the description — remove it there to delete it"). This is the Jira block that
+prevents the broken-embed hole. By contrast, a card whose delete the caller
+simply lacks (not the uploader, not an admin) **omits** the control entirely —
+absent, never disabled (the role grammar 5.1 set).
+
+### List view (panel 2)
+
+The toggle flips the same data into rows: family glyph · name (the row's own
+open button) · source chip when editor-sourced · size (right-aligned tabular)
+· date · uploader · the hover actions. Row activation previews or downloads —
+the same split as the cards.
+
+### Upload (panel 3)
+
+- The **Attach button** is the always-present, labelled affordance; the
+  **whole-panel dropzone** is the drag enhancement over it (drag-only upload
+  would be a keyboard hole).
+- **Drag-over** draws an inset overlay: 2px dashed `--el-accent` border +
+  `--el-tint-lavender` wash, `upload` glyph, "Drop files to attach" / "Up to
+  10 MB each".
+- **Uploading** queues per file: an `--el-surface-soft` row with the family
+  glyph, name, percent (or "Uploading…" + an indeterminate bar when the
+  request doesn't report progress), the `--el-accent` progress bar, and a
+  cancel ×.
+- **Errors isolate per file** as rose-tint AA banners (`--el-tint-rose` bg +
+  `--el-text-strong` text + `--el-danger` glyph — the 2.4.9 error grammar),
+  with the EXACT localized copy `lib/blob/uploadClient.ts` already maps
+  (`errors.upload.FILE_TOO_LARGE` / `UNSUPPORTED_FILE_TYPE` / `RATE_LIMITED`)
+  — reuse, don't fork. Dismiss ×. Successes become cards in place.
+
+### Pagination + states (panel 4)
+
+The read is cursor-paged (take 50, newest first) with a `totalCount`
+(finding #57 — no unbounded read). **"Show more (N)"** — the full-width quiet
+control (dashed `--el-border-strong`, `--radius-control`,
+`--el-surface-soft`, `--height-control`; the comments pager grammar) — sits
+at the strip/list end, extends in place keeping scroll position, and
+disappears when everything is loaded. **Loading** = tile-shaped pulse
+skeletons (`--el-muted`, `aria-busy`) so the card doesn't jump. **Empty** =
+centered `paperclip` + "No attachments yet — attach a file or drop one here";
+the Attach affordance stays live (never blank). **Error** = the `ErrorState`
+grammar: danger `triangle-alert`, serif "Couldn't load attachments", muted
+"Something went wrong fetching the files.", secondary **Retry**.
+
+### Delete confirm (panel 5)
+
+The `RemoveLinkButton` confirm-**Popover** pattern verbatim (300px,
+`--radius-card` + `--shadow-elevated`, ghost Cancel + danger **Delete**),
+anchored to the delete control: **"Delete &lt;filename&gt;? Attachments can't
+be restored."** — the hard-delete truth (row + blob + a History
+attachment-removed entry; no trash). Focus returns to the panel after.
+
+### Preview lightbox (panel 6 — for 5.2.6)
+
+A **full-screen `Modal`** over ONE focused attachment. Growth notes for
+5.2.6 (the 2.5.19 size-token precedent): add the `full` size variant, and
+deepen the overlay to `bg-black/80` for the lightbox (the default
+`Dialog.Overlay` is `bg-black/40`). Header bar (white-on-scrim): filename +
+size · a **Download** button · the close ×. **Images** render contain-fit,
+centered on the scrim. **PDFs** render in an embedded `<object>`/`<iframe>`
+frame over the blob URL, with the can't-inline fallback ("Preview isn't
+available here — download the file instead." + Download). Non-previewable
+types NEVER open it — the card downloads instead. **NO prev/next
+navigation** — unverified in the mirror itself, documented out ("no
+complexity for nothing"). Full Modal a11y contract: focus trap, Esc closes,
+focus returns to the opening card, dialog labelled by the filename, the
+image carries the filename as alt.
+
+### Viewer / read-only (panel 7)
+
+A project `viewer` sees the panel and can preview + download; every mutating
+affordance is **omitted** — no Attach, no dropzone reaction, no delete
+(absent, never disabled — the 5.1 viewer grammar). Count + view toggle
+remain.
+
+### Copy strings
+
+"Attachments" · "Attach" · "Strip" / "List" · "Show more (N)" · "Drop files
+to attach" / "Up to 10 MB each" · "Uploading…" · "Cancel" ·
+upload errors (from `errors.upload.*`): "File is too large — please choose a
+smaller file." / "That file type isn't supported." / "Too many uploads —
+please wait a moment and try again." · source chip "Description" / "Comment"
+
+- tooltip "Added in the description — remove it there to delete it" (/ "Added
+  in a comment — remove it there to delete it") · "Delete &lt;filename&gt;?
+  Attachments can't be restored." / "Delete" / "Cancel" · "No attachments yet —
+  attach a file or drop one here" · "Couldn't load attachments" / "Something
+  went wrong fetching the files." / "Retry" · lightbox "Download" / "Preview
+  isn't available here — download the file instead."
+
+### Tokens / a11y
+
+Colour only through `--el-*` (chips put hue in the tint background with
+`--el-text-strong` text — finding #35; the glyph map adds palette colour per
+finding #54 via the existing `--el-danger/info/success/warning` — **no new
+`--el-*` token**); shape through the element-semantic tokens
+(`--radius-card/control/btn/badge`, `--spacing-card-padding`,
+`--spacing-control-x/y`, `--spacing-icon-btn`, `--spacing-kbd-x/y`,
+`--spacing-chip-x/y`, `--height-control`, `--height-btn-sm`,
+`--shadow-card/elevated`) — no Tier-0 utilities, no raw `rounded-*`. The
+open/preview target of every card/row is its own `<button>`; action icon
+buttons are siblings (no nested interactives) and are individually labelled
+("Download &lt;name&gt;" / "Delete &lt;name&gt;"); the disabled editor-sourced
+delete uses `aria-disabled` + the tooltip; progress bars are
+`role="progressbar"` (valuenow, or `aria-busy` when indeterminate); the error
+group is `role="alert"`; the skeleton sets `aria-busy`; source and permission
+state are conveyed as text (chip label, tooltip), not colour alone. Light +
+dark parity via the same tokens.
+
+### Out of scope (documented extension slots)
+
+**Authed/private attachment serving** — the shipped storage layer is Vercel
+Blob `access: 'public'` + `addRandomSuffix` (public-but-unguessable, the JSM
+"unguessable links" shape); the authed download proxy / private storage is
+the named Epic-8 hardening extension. **In-preview prev/next** — unverified
+in the mirror, not planned. **"Download all" (ZIP)** — needs a server zipper;
+no use case at team scale yet. **Jira's grid view** — strip + list is the
+documented primary pair. **A dedicated attach field in the create modal** —
+files already attach at create via the editor path + link-on-write (5.2.3).
+**Per-project storage quotas / admin-configurable size limits** — Epic 6/8
+admin. **Jump-to-exact-comment** from a comment-sourced card — additive;
+the block only needs `source`. Custom-field file types are Story 5.3.

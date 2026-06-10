@@ -1,0 +1,2218 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Attachments panel + preview lightbox — Story 5.2 · 5.2.4 → 5.2.5 / 5.2.6
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the issue detail page's ATTACHMENTS surface —
+      Subtask 5.2.4, the design that blocks code Subtasks 5.2.5 (the panel) and
+      5.2.6 (the preview lightbox). detail.pen has NO attachments section (the
+      detail page reserves the Epic-5 slot in a code comment only), so the panel,
+      its cards, the upload affordances and the lightbox are whole elements no
+      design specifies — the planning-time design gate (notes.html mistake #31)
+      requires this asset first, the same way comments.mock.html (5.1.3) and
+      quick-view.mock.html (2.5.18) closed their gates.
+
+      MIRROR: the Jira Cloud issue-view attachments panel — verified at plan
+      time in the 5.2 story module: strip (thumbnail cards) + list (adds size)
+      views with a count; embeds ARE attachments (editor-sourced files appear
+      here, and their panel delete is BLOCKED, pointing at the source instead —
+      the rule that prevents Jira's own broken-embed hole); three permissions
+      (create / delete own / delete all) on the 6.4 roles; click-to-preview for
+      images + PDF only (other types download); hard delete (no trash). We
+      deviate from Jira's load-all-then-degrade to the house cursor-paged read
+      (50 + "Show more (N)" — finding #57); no in-preview prev/next (unverified
+      in the mirror — documented out).
+
+      It composes ONLY shipped primitives — ContentSectionCard (the detail
+      page's section-card grammar), the Segmented control vocabulary (the
+      strip/list toggle), Button variants, the RemoveLinkButton confirm-Popover
+      pattern (delete confirm), the BacklogSkeleton pulse grammar, EmptyState /
+      ErrorState, Modal (the lightbox — full-screen size; Dialog.Overlay's
+      bg-black/40 scrim deepened to /80 for the lightbox per the growth note in
+      design-notes) — so 5.2.5 / 5.2.6 invent NO new visual primitive. Tokens
+      copied 1:1 from app/globals.css; colour only via Tier-3 --el-*; shape via
+      the element-semantic radius / spacing / height / shadow tokens.
+
+      FILE-TYPE GLYPH MAP (recorded for 5.2.5, drawn in panels 1-2): non-image
+      cards show a lucide file glyph on an --el-surface-soft tile, the glyph
+      stroke taking the conventional family hue through EXISTING semantic
+      tokens (no new token): PDF file-text --el-danger · docs/text/markdown
+      file-text --el-info · spreadsheets/CSV file-spreadsheet --el-success ·
+      archives file-archive --el-warning · image-without-thumbnail image
+      --el-text-secondary. Image cards render the blob itself (cover-fit);
+      the gradients below are stand-ins for real thumbnails.
+
+      Panels:
+        0 · Placement — the Attachments section card in the detail left column,
+            after Children, before Activity (content-width, multi-row — the
+            rail is for scalars, same argument as 2.4.5): header (title ·
+            count · strip/list toggle · Attach), the strip, "Show more (N)".
+        1 · Strip card anatomy — image card (hover actions) · glyph card ·
+            editor-sourced card (source chip + DISABLED delete + tooltip) ·
+            no-delete-permission card (control omitted, never disabled).
+        2 · List view — the same rows densified: glyph · name · size · date ·
+            uploader · actions; the toggle sits in the header.
+        3 · Upload — the whole-panel dropzone drag-over state (dashed
+            --el-accent border + lavender wash) · the uploading queue
+            (per-file progress + cancel) · the three inline typed errors
+            (413 / 415 / 429 — copy from messages/en.json errors.upload.*).
+        4 · Pagination + states — "Show more (N)" · loading skeleton ·
+            empty · error.
+        5 · Delete confirm — the RemoveLinkButton confirm-Popover, naming the
+            file (the hard-delete truth).
+        6 · Preview lightbox (for 5.2.6) — full-screen Modal over a focused
+            attachment: image variant (contain-fit, dark scrim) and PDF
+            variant (embedded frame + can't-inline fallback); header bar =
+            filename + size · Download · close ×. Non-previewable types never
+            open it (the card downloads instead). NO prev/next.
+        7 · Viewer (read-only) — panel + preview reachable; no Attach, no
+            delete, no dropzone (controls omitted, never disabled).
+
+      Toggle dark for token parity. See design-notes.md § Attachments panel.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 32px;
+        --focus-ring-color: var(--color-primary);
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-warning: var(--color-warning);
+        --el-success: var(--color-success);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        /* issue-type hue (by kind) — IssueTypeIcon applies these */
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #3bb3ae;
+        --color-accent-green: #2fc94f;
+        --color-success: #2fc94f;
+        --color-warning: #f08c00;
+        --color-info: #4aa3ff;
+        --color-destructive: #f0656c;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 12px 40px rgba(15, 15, 15, 0.15);
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 120px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 860px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .stack {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 44px;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .row-of {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 32px;
+        align-items: flex-start;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding-left: 2px;
+      }
+      .panel-note {
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 940px;
+        padding-left: 2px;
+      }
+      .panel-note code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+      .mini-label {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin-bottom: 8px;
+      }
+      .variant {
+        flex: 1 1 300px;
+        min-width: 300px;
+        max-width: 480px;
+      }
+      .variant.is-wide {
+        flex: 1 1 100%;
+        max-width: 720px;
+      }
+
+      /* ── Detail-page placement chrome (panel 0) — same grammar as
+            relationships.mock.html / comments.mock.html panel 0 ─────────────── */
+      .detail-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 280px;
+        gap: 20px;
+        max-width: 1040px;
+      }
+      .col {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-width: 0;
+      }
+      .ghost {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 14px 18px;
+        color: var(--el-text-faint);
+        font-size: 13px;
+        background: var(--el-page-bg);
+      }
+      .rail-box {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 12px 16px;
+        background: var(--el-page-bg);
+      }
+      .rail-label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+      }
+
+      /* ── THE SECTION CARD — the shipped ContentSectionCard grammar ────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: var(--spacing-card-padding);
+        width: 100%;
+        max-width: 720px;
+        position: relative;
+      }
+      .section-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      .section-head h2 {
+        font-family: var(--font-sans);
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .section-head .gloss {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .head-right {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* Strip/List toggle — the shipped Segmented vocabulary (the 2.5.3
+         view-switcher grammar, same as the comments Comments/History seam) */
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        background: var(--el-surface);
+        border-radius: var(--radius-control);
+        padding: 2px;
+      }
+      .seg-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        background: transparent;
+        border: 0;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        cursor: pointer;
+        line-height: 1;
+      }
+      .seg-btn svg {
+        width: 13px;
+        height: 13px;
+      }
+      .seg-btn.is-active {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        box-shadow: var(--shadow-card);
+      }
+      .seg-btn:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+
+      /* ── Buttons — the shipped Button variants (size sm) ─────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1;
+        border: 0;
+        cursor: pointer;
+      }
+      .btn:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 2px;
+      }
+      .btn svg {
+        width: 14px;
+        height: 14px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-primary:hover {
+        opacity: 0.9;
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border: 1px solid var(--el-border-strong);
+      }
+      .btn-secondary:hover {
+        background: var(--el-surface);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn-ghost:hover {
+        background: var(--el-surface);
+      }
+      .btn-danger {
+        background: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      .btn-danger:hover {
+        opacity: 0.9;
+      }
+
+      /* ── THE STRIP — thumbnail cards ──────────────────────────────────────── */
+      .att-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+        gap: 12px;
+      }
+      .att-card {
+        position: relative;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .att-card:hover {
+        border-color: var(--el-border-strong);
+        box-shadow: var(--shadow-card);
+      }
+      /* the card's open/preview target is its OWN button (the per-card action
+         buttons are siblings, never nested inside another interactive) */
+      .att-open {
+        display: block;
+        width: 100%;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        font: inherit;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+      .att-open:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: -2px;
+      }
+      .att-thumb {
+        height: 88px;
+        background: var(--el-surface-soft);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .att-thumb.is-image {
+        background-size: cover;
+        background-position: center;
+      }
+      .att-thumb svg {
+        width: 28px;
+        height: 28px;
+      }
+      /* file-type glyph hues — conventional family colour through EXISTING
+         semantic tokens (the design-notes glyph map; no new token) */
+      .glyph-pdf {
+        color: var(--el-danger);
+      }
+      .glyph-doc {
+        color: var(--el-info);
+      }
+      .glyph-sheet {
+        color: var(--el-success);
+      }
+      .glyph-zip {
+        color: var(--el-warning);
+      }
+      .glyph-img {
+        color: var(--el-text-secondary);
+      }
+      .att-meta {
+        padding: 8px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .att-name {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .att-sub {
+        font-size: 11px;
+        color: var(--el-text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      /* hover/focus-revealed per-card actions (drawn forced-visible where a
+         panel demonstrates them) */
+      .att-actions {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        display: flex;
+        gap: 4px;
+        opacity: 0;
+        transition: opacity 0.12s ease;
+      }
+      .att-card:hover .att-actions,
+      .att-card:focus-within .att-actions,
+      .att-card.show-actions .att-actions {
+        opacity: 1;
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        color: var(--el-text-muted);
+        cursor: pointer;
+        box-shadow: var(--shadow-card);
+      }
+      .icon-btn:hover {
+        color: var(--el-text);
+        background: var(--el-surface);
+      }
+      .icon-btn.is-danger:hover {
+        color: var(--el-danger);
+        background: var(--el-tint-rose);
+        border-color: var(--el-tint-rose);
+      }
+      .icon-btn:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .icon-btn svg {
+        width: 13px;
+        height: 13px;
+        display: block;
+      }
+      .icon-btn[aria-disabled='true'] {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .icon-btn[aria-disabled='true']:hover {
+        color: var(--el-text-muted);
+        background: var(--el-page-bg);
+        border-color: var(--el-border);
+      }
+      /* editor-sourced chip — the mention-chip treatment (tint bg + strong
+         text, AA-safe — finding #35) */
+      .source-chip {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        font-size: 10px;
+        font-weight: 600;
+        line-height: 1.3;
+        white-space: nowrap;
+      }
+      .source-chip svg {
+        width: 10px;
+        height: 10px;
+      }
+
+      /* ── THE LIST — the same rows densified ──────────────────────────────── */
+      .att-list {
+        display: flex;
+        flex-direction: column;
+      }
+      .att-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: var(--height-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+      }
+      .att-row:hover {
+        background: var(--el-surface);
+      }
+      /* the row's open/preview target — the same no-nested-interactive split */
+      .row-open {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex: 1 1 auto;
+        min-width: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        font: inherit;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+        border-radius: var(--radius-control);
+      }
+      .row-open:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .att-row + .att-row {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .att-row svg.row-glyph {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .row-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+      .row-cell {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        white-space: nowrap;
+        flex: none;
+      }
+      .row-cell.w-size {
+        width: 58px;
+        text-align: right;
+      }
+      .row-cell.w-date {
+        width: 76px;
+      }
+      .row-cell.w-by {
+        width: 92px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .row-actions {
+        display: flex;
+        gap: 4px;
+        flex: none;
+        opacity: 0;
+      }
+      .att-row:hover .row-actions,
+      .att-row:focus-within .row-actions,
+      .att-row.show-actions .row-actions {
+        opacity: 1;
+      }
+      .row-source {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        font-size: 10px;
+        font-weight: 600;
+        flex: none;
+      }
+      .row-source svg {
+        width: 10px;
+        height: 10px;
+      }
+
+      /* ── Upload affordances ──────────────────────────────────────────────── */
+      /* drag-over — the whole-panel dropzone highlight: dashed --el-accent
+         border + the accent-family lavender wash (the mention-chip family) */
+      .dropzone-over {
+        position: absolute;
+        inset: 6px;
+        border: 2px dashed var(--el-accent);
+        border-radius: var(--radius-card);
+        background: var(--el-tint-lavender);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        z-index: 5;
+      }
+      .dropzone-over svg {
+        width: 26px;
+        height: 26px;
+        color: var(--el-accent);
+      }
+      .dropzone-over .dz-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .dropzone-over .dz-sub {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      /* uploading queue — per-file progress card */
+      .up-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .up-row svg.row-glyph {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .up-main {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .up-head {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .up-name {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .up-pct {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--el-text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .up-track {
+        height: 4px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        overflow: hidden;
+      }
+      .up-bar {
+        height: 100%;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+      }
+      .up-bar.is-indeterminate {
+        width: 32%;
+        animation: slide 1.2s ease-in-out infinite;
+      }
+      @keyframes slide {
+        0% {
+          transform: translateX(-100%);
+        }
+        100% {
+          transform: translateX(320%);
+        }
+      }
+      /* inline upload errors — the rose-tint AA banner (the 2.4.9 grammar) */
+      .up-error {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .up-error svg {
+        width: 14px;
+        height: 14px;
+        color: var(--el-danger);
+        flex: none;
+        margin-top: 1px;
+      }
+      .up-error .ue-name {
+        font-weight: 600;
+      }
+      .up-error .ue-dismiss {
+        margin-left: auto;
+        flex: none;
+        display: inline-flex;
+        padding: 2px;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .up-error .ue-dismiss:hover {
+        color: var(--el-text);
+      }
+      .up-error .ue-dismiss svg {
+        width: 12px;
+        height: 12px;
+        color: currentColor;
+        margin-top: 0;
+      }
+
+      /* ── "Show more (N)" — the older-edge pager (finding #57) ────────────── */
+      .show-more {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: var(--height-control);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        margin-top: 12px;
+      }
+      .show-more:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .show-more:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+
+      /* ── Loading / empty / error ─────────────────────────────────────────── */
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+      .skel-tile {
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-control);
+        overflow: hidden;
+      }
+      .skel-tile .s-thumb {
+        height: 88px;
+        background: var(--el-muted);
+        animation: pulse 2s ease-in-out infinite;
+      }
+      .skel-tile .s-lines {
+        padding: 8px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .skel-tile .s-bar {
+        height: 9px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+        animation: pulse 2s ease-in-out infinite;
+      }
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 28px 0;
+        text-align: center;
+      }
+      .empty svg {
+        width: 22px;
+        height: 22px;
+        color: var(--el-text-muted);
+      }
+      .empty .e-title {
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .error-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 20px 0;
+        text-align: center;
+      }
+      .error-state svg {
+        width: 32px;
+        height: 32px;
+        color: var(--el-danger);
+      }
+      .error-state .er-title {
+        font-family: var(--font-serif);
+        font-size: 17px;
+        color: var(--el-text);
+      }
+      .error-state .er-sub {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        max-width: 34ch;
+      }
+
+      /* ── Confirm popover — the RemoveLinkButton pattern ──────────────────── */
+      .confirm {
+        width: 300px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .confirm p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--el-text);
+      }
+      .confirm .c-btns {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      /* ── THE LIGHTBOX (panel 6, for 5.2.6) — Modal, full-screen size ─────── */
+      /* Drawn as a bounded stage; in the app it is a full-viewport
+         Dialog.Overlay (bg-black/80 for the lightbox — see design-notes) */
+      .lightbox {
+        position: relative;
+        width: 100%;
+        max-width: 720px;
+        height: 430px;
+        border-radius: var(--radius-card);
+        background: rgba(0, 0, 0, 0.8);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .lb-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        color: #ffffff;
+        background: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+        z-index: 2;
+      }
+      .lb-name {
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .lb-size {
+        font-size: 12px;
+        opacity: 0.75;
+        flex: none;
+      }
+      .lb-actions {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .lb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        border-radius: var(--radius-btn);
+        background: rgba(255, 255, 255, 0.1);
+        color: #ffffff;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .lb-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+      .lb-btn:focus-visible {
+        outline: var(--focus-ring-width) solid #ffffff;
+        outline-offset: 1px;
+      }
+      .lb-btn svg {
+        width: 14px;
+        height: 14px;
+      }
+      .lb-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: #ffffff;
+        cursor: pointer;
+      }
+      .lb-icon:hover {
+        background: rgba(255, 255, 255, 0.15);
+      }
+      .lb-icon:focus-visible {
+        outline: var(--focus-ring-width) solid #ffffff;
+        outline-offset: 1px;
+      }
+      .lb-icon svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+      .lb-stage {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 52px 32px 24px;
+      }
+      .lb-img {
+        max-width: 100%;
+        max-height: 100%;
+        width: 420px;
+        height: 280px;
+        border-radius: var(--radius-control);
+        background-size: contain;
+        background-repeat: no-repeat;
+        background-position: center;
+      }
+      .lb-pdf {
+        width: 330px;
+        height: 100%;
+        background: #ffffff;
+        border-radius: var(--radius-control);
+        padding: 26px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+        overflow: hidden;
+      }
+      .lb-pdf .pdf-bar {
+        height: 9px;
+        border-radius: 3px;
+        background: #e5e3df;
+      }
+      .lb-pdf .pdf-bar.is-head {
+        width: 55%;
+        height: 13px;
+        background: #c8c4be;
+        margin-bottom: 6px;
+      }
+      .lb-fallback {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        color: #ffffff;
+        text-align: center;
+      }
+      .lb-fallback svg {
+        width: 30px;
+        height: 30px;
+        opacity: 0.8;
+      }
+      .lb-fallback p {
+        margin: 0;
+        font-size: 13px;
+        opacity: 0.85;
+        max-width: 36ch;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Attachments panel + preview lightbox</h1>
+        <p>
+          Story 5.2 · design Subtask <strong>5.2.4</strong> → blocks 5.2.5 (the panel) and 5.2.6
+          (the lightbox). Fills the detail page's reserved Epic-5 slot — <code>detail.pen</code>
+          draws no attachments surface. Jira-mirror decisions drawn here: strip + list views with a
+          count, embeds-are-attachments with the editor-sourced delete BLOCK, the three permissions,
+          image/PDF preview only, hard delete; deviation: cursor-paged 50 + "Show more (N)" instead
+          of Jira's load-all-then-degrade (finding #57). Built from the real
+          <code>--el-*</code> + element-shape tokens; no new primitive.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-paperclip"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M13.234 20.252 21 12.3" />
+          <path
+            d="m16 6-8.414 8.586a2 2 0 0 0 0 2.828 2 2 0 0 0 2.828 0l8.414-8.586a4 4 0 0 0 0-5.656 4 4 0 0 0-5.656 0l-8.415 8.585a6 6 0 1 0 8.486 8.486"
+          />
+        </g>
+        <g
+          id="i-grid"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="7" height="7" x="3" y="3" rx="1" />
+          <rect width="7" height="7" x="14" y="3" rx="1" />
+          <rect width="7" height="7" x="14" y="14" rx="1" />
+          <rect width="7" height="7" x="3" y="14" rx="1" />
+        </g>
+        <g
+          id="i-list"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 5h.01" />
+          <path d="M3 12h.01" />
+          <path d="M3 19h.01" />
+          <path d="M8 5h13" />
+          <path d="M8 12h13" />
+          <path d="M8 19h13" />
+        </g>
+        <g
+          id="i-download"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <path d="m7 10 5 5 5-5" />
+          <path d="M12 15V3" />
+        </g>
+        <g
+          id="i-trash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 6h18" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          <path d="M10 11v6" />
+          <path d="M14 11v6" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-file-text"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+          <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+          <path d="M10 9H8" />
+          <path d="M16 13H8" />
+          <path d="M16 17H8" />
+        </g>
+        <g
+          id="i-file-sheet"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+          <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+          <path d="M8 13h2" />
+          <path d="M14 13h2" />
+          <path d="M8 17h2" />
+          <path d="M14 17h2" />
+        </g>
+        <g
+          id="i-file-zip"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10 12v-1" />
+          <path d="M10 18v-2" />
+          <path d="M10 7V6" />
+          <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+          <path d="M15.5 22H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v16a2 2 0 0 0 .274 1.01" />
+          <circle cx="10" cy="20" r="2" />
+        </g>
+        <g
+          id="i-image"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+          <circle cx="9" cy="9" r="2" />
+          <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+        </g>
+        <g
+          id="i-pen"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path
+            d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"
+          />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-upload"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <path d="m17 8-5-5-5 5" />
+          <path d="M12 3v12" />
+        </g>
+      </defs>
+    </svg>
+
+    <div class="stack">
+      <!-- ════════════════ PANEL 0 — placement in the detail page ════════════════ -->
+      <div class="panel-label">
+        0 · Placement — the Attachments section card in the detail left column, after Children,
+        before Activity (the reserved Epic-5 slot)
+      </div>
+      <div class="panel-note">
+        Content-width and multi-row, so it is a LEFT-COLUMN <code>ContentSectionCard</code> — the
+        rail is for scalars (the same argument that placed Relationships, 2.4.5). Header carries the
+        count gloss, the strip/list <code>Segmented</code> toggle, and the
+        <strong>Attach</strong> button. The whole panel is also the dropzone (panel 3). The strip
+        shows the newest page (50); older files load through "Show more (N)" — never the full set
+        (finding #57).
+      </div>
+      <div class="panel">
+        <div class="detail-grid">
+          <div class="col">
+            <div class="ghost">
+              <strong>Description</strong> — what to do
+              <span style="float: right">(2.4.1/2.4.2)</span>
+            </div>
+            <div class="ghost">
+              <strong>Relationships</strong> — dependencies &amp; links
+              <span style="float: right">(2.4.5)</span>
+            </div>
+            <div class="ghost">
+              <strong>Children</strong> — direct child issues
+              <span style="float: right">(2.4.3)</span>
+            </div>
+
+            <!-- THE NEW ELEMENT — the Attachments card in the reserved slot -->
+            <section class="card" aria-label="Attachments">
+              <div class="section-head">
+                <h2>Attachments</h2>
+                <span class="gloss">— 44</span>
+                <div class="head-right">
+                  <div class="seg" role="tablist" aria-label="Attachments view">
+                    <button class="seg-btn is-active" role="tab" aria-selected="true">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-grid" /></svg>
+                      Strip
+                    </button>
+                    <button class="seg-btn" role="tab" aria-selected="false">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list" /></svg>
+                      List
+                    </button>
+                  </div>
+                  <button class="btn btn-secondary">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-paperclip" /></svg>
+                    Attach
+                  </button>
+                </div>
+              </div>
+
+              <div class="att-grid">
+                <div class="att-card">
+                  <button class="att-open" aria-label="Preview screenshot-board.png">
+                    <div
+                      class="att-thumb is-image"
+                      style="
+                        background-image: linear-gradient(
+                          135deg,
+                          #dcecfa 0%,
+                          #e6e0f5 55%,
+                          #fde0ec 100%
+                        );
+                      "
+                    ></div>
+                    <div class="att-meta">
+                      <span class="att-name" title="screenshot-board.png"
+                        >screenshot-board.png</span
+                      >
+                      <span class="att-sub" title="10 Jun 2026, 09:41">2 hours ago</span>
+                    </div>
+                  </button>
+                  <div class="att-actions">
+                    <button class="icon-btn" aria-label="Download screenshot-board.png">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download" /></svg>
+                    </button>
+                    <button class="icon-btn is-danger" aria-label="Delete screenshot-board.png">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash" /></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="att-card">
+                  <button class="att-open" aria-label="Preview report-v2.pdf">
+                    <div class="att-thumb">
+                      <svg class="glyph-pdf" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-file-text" />
+                      </svg>
+                    </div>
+                    <div class="att-meta">
+                      <span class="att-name" title="report-v2.pdf">report-v2.pdf</span>
+                      <span class="att-sub" title="9 Jun 2026, 16:20">yesterday</span>
+                    </div>
+                  </button>
+                </div>
+
+                <div class="att-card">
+                  <button
+                    class="att-open"
+                    aria-label="Preview flow-diagram.png, added in the description"
+                  >
+                    <span
+                      class="source-chip"
+                      title="Added in the description — remove it there to delete it"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pen" /></svg>
+                      Description
+                    </span>
+                    <div
+                      class="att-thumb is-image"
+                      style="
+                        background-image: linear-gradient(
+                          160deg,
+                          #d9f3e1 0%,
+                          #dcecfa 60%,
+                          #fef7d6 100%
+                        );
+                      "
+                    ></div>
+                    <div class="att-meta">
+                      <span class="att-name" title="flow-diagram.png">flow-diagram.png</span>
+                      <span class="att-sub" title="8 Jun 2026, 11:05">2 days ago</span>
+                    </div>
+                  </button>
+                </div>
+
+                <div class="att-card">
+                  <button class="att-open" aria-label="Download sprint-metrics.xlsx">
+                    <div class="att-thumb">
+                      <svg class="glyph-sheet" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-file-sheet" />
+                      </svg>
+                    </div>
+                    <div class="att-meta">
+                      <span class="att-name" title="sprint-metrics.xlsx">sprint-metrics.xlsx</span>
+                      <span class="att-sub" title="3 Jun 2026, 10:12">Jun 3</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <button class="show-more">Show more (40)</button>
+            </section>
+
+            <div class="ghost">
+              <strong>Activity</strong> — comments + history
+              <span style="float: right">(5.1)</span>
+            </div>
+          </div>
+
+          <div class="col">
+            <div class="rail-box" style="min-height: 130px">
+              <div class="rail-label">Details rail</div>
+              <div style="font-size: 12px; color: var(--el-text-faint); margin-top: 8px">
+                status · assignee · priority · estimate · dates (2.4.4) — scalars only; the
+                attachments panel does NOT live here
+              </div>
+            </div>
+            <div class="ghost">custom fields — Story 5.3</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════ PANEL 1 — strip card anatomy ════════════════ -->
+      <div class="panel-label">
+        1 · Strip card anatomy — image · glyph · editor-sourced (delete BLOCKED) · no-permission
+      </div>
+      <div class="panel-note">
+        Cards are 148px-min tiles: 88px thumbnail (image cover-fit, or the MIME-family glyph on
+        <code>--el-surface-soft</code>) over name + date. Download / delete reveal on
+        hover/focus-within (drawn forced-visible here). <strong>Editor-sourced</strong> cards carry
+        the lavender source chip and their delete is
+        <strong>disabled with the points-at-source tooltip</strong> — the Jira rule that prevents
+        the broken-embed hole. A card whose delete the caller lacks (not the uploader, not an admin)
+        <strong>omits</strong> the control entirely — absent, never disabled (the 5.1 role grammar).
+        Activating a previewable card opens the lightbox (panel 6); a non-previewable card
+        downloads.
+      </div>
+      <div class="panel">
+        <div class="row-of">
+          <div class="variant" style="flex: 0 0 200px; min-width: 200px; max-width: 200px">
+            <div class="mini-label">Image — hover/focus (actions revealed)</div>
+            <div class="att-card show-actions">
+              <button class="att-open" aria-label="Preview screenshot-board.png">
+                <div
+                  class="att-thumb is-image"
+                  style="
+                    background-image: linear-gradient(
+                      135deg,
+                      #dcecfa 0%,
+                      #e6e0f5 55%,
+                      #fde0ec 100%
+                    );
+                  "
+                ></div>
+                <div class="att-meta">
+                  <span class="att-name" title="screenshot-board.png">screenshot-board.png</span>
+                  <span class="att-sub" title="10 Jun 2026, 09:41">2 hours ago · 1.2 MB</span>
+                </div>
+              </button>
+              <div class="att-actions">
+                <button class="icon-btn" aria-label="Download screenshot-board.png">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download" /></svg>
+                </button>
+                <button class="icon-btn is-danger" aria-label="Delete screenshot-board.png">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="variant" style="flex: 0 0 200px; min-width: 200px; max-width: 200px">
+            <div class="mini-label">Glyph (PDF) — hover/focus</div>
+            <div class="att-card show-actions">
+              <button class="att-open" aria-label="Preview report-v2.pdf">
+                <div class="att-thumb">
+                  <svg class="glyph-pdf" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-file-text" />
+                  </svg>
+                </div>
+                <div class="att-meta">
+                  <span class="att-name" title="report-v2.pdf">report-v2.pdf</span>
+                  <span class="att-sub" title="9 Jun 2026, 16:20">yesterday · 4.8 MB</span>
+                </div>
+              </button>
+              <div class="att-actions">
+                <button class="icon-btn" aria-label="Download report-v2.pdf">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download" /></svg>
+                </button>
+                <button class="icon-btn is-danger" aria-label="Delete report-v2.pdf">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="variant" style="flex: 0 0 200px; min-width: 200px; max-width: 200px">
+            <div class="mini-label">Editor-sourced — delete disabled + tooltip</div>
+            <div class="att-card show-actions">
+              <button
+                class="att-open"
+                aria-label="Preview flow-diagram.png, added in the description"
+              >
+                <span
+                  class="source-chip"
+                  title="Added in the description — remove it there to delete it"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pen" /></svg>
+                  Description
+                </span>
+                <div
+                  class="att-thumb is-image"
+                  style="
+                    background-image: linear-gradient(
+                      160deg,
+                      #d9f3e1 0%,
+                      #dcecfa 60%,
+                      #fef7d6 100%
+                    );
+                  "
+                ></div>
+                <div class="att-meta">
+                  <span class="att-name" title="flow-diagram.png">flow-diagram.png</span>
+                  <span class="att-sub" title="8 Jun 2026, 11:05">2 days ago · 860 KB</span>
+                </div>
+              </button>
+              <div class="att-actions">
+                <button class="icon-btn" aria-label="Download flow-diagram.png">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download" /></svg>
+                </button>
+                <button
+                  class="icon-btn is-danger"
+                  aria-disabled="true"
+                  title="Added in the description — remove it there to delete it"
+                  aria-label="Delete flow-diagram.png — unavailable, added in the description"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="variant" style="flex: 0 0 200px; min-width: 200px; max-width: 200px">
+            <div class="mini-label">No delete permission — control OMITTED</div>
+            <div class="att-card show-actions">
+              <button class="att-open" aria-label="Download design-export.zip">
+                <div class="att-thumb">
+                  <svg class="glyph-zip" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-file-zip" />
+                  </svg>
+                </div>
+                <div class="att-meta">
+                  <span class="att-name" title="design-export.zip">design-export.zip</span>
+                  <span class="att-sub" title="2 Jun 2026, 18:44">Jun 2 · 9.1 MB</span>
+                </div>
+              </button>
+              <div class="att-actions">
+                <button class="icon-btn" aria-label="Download design-export.zip">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════ PANEL 2 — list view ════════════════ -->
+      <div class="panel-label">2 · List view — the same rows densified (adds size + uploader)</div>
+      <div class="panel-note">
+        The toggle flips the SAME data into rows: family glyph · name · source chip (when
+        editor-sourced) · size · date · uploader · the hover actions. Row click previews (image /
+        PDF) or downloads — same split as the cards. The chosen view persists per user (the 5.1.5
+        sort-preference pattern). Sizes are right-aligned tabular; the glyph map is the design-notes
+        table.
+      </div>
+      <div class="panel">
+        <section class="card" aria-label="Attachments">
+          <div class="section-head">
+            <h2>Attachments</h2>
+            <span class="gloss">— 44</span>
+            <div class="head-right">
+              <div class="seg" role="tablist" aria-label="Attachments view">
+                <button class="seg-btn" role="tab" aria-selected="false">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-grid" /></svg>
+                  Strip
+                </button>
+                <button class="seg-btn is-active" role="tab" aria-selected="true">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list" /></svg>
+                  List
+                </button>
+              </div>
+              <button class="btn btn-secondary">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-paperclip" /></svg>
+                Attach
+              </button>
+            </div>
+          </div>
+
+          <div class="att-list">
+            <div class="att-row show-actions">
+              <button class="row-open" aria-label="Preview screenshot-board.png">
+                <svg class="row-glyph glyph-img" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-image" /></svg
+                ><span class="row-name" title="screenshot-board.png">screenshot-board.png</span>
+              </button>
+              <span class="row-cell w-size">1.2 MB</span>
+              <span class="row-cell w-date" title="10 Jun 2026, 09:41">2 hours ago</span>
+              <span class="row-cell w-by" title="Bo Philips">Bo Philips</span>
+              <span class="row-actions">
+                <button class="icon-btn" aria-label="Download screenshot-board.png">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download" /></svg>
+                </button>
+                <button class="icon-btn is-danger" aria-label="Delete screenshot-board.png">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash" /></svg>
+                </button>
+              </span>
+            </div>
+
+            <div class="att-row">
+              <button class="row-open" aria-label="Preview report-v2.pdf">
+                <svg class="row-glyph glyph-pdf" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-file-text" /></svg
+                ><span class="row-name" title="report-v2.pdf">report-v2.pdf</span>
+              </button>
+              <span class="row-cell w-size">4.8 MB</span>
+              <span class="row-cell w-date" title="9 Jun 2026, 16:20">yesterday</span>
+              <span class="row-cell w-by" title="Odie Andersen">Odie Andersen</span>
+              <span class="row-actions">
+                <button class="icon-btn" aria-label="Download report-v2.pdf">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download" /></svg>
+                </button>
+                <button class="icon-btn is-danger" aria-label="Delete report-v2.pdf">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash" /></svg>
+                </button>
+              </span>
+            </div>
+
+            <div class="att-row">
+              <button class="row-open" aria-label="Preview flow-diagram.png">
+                <svg class="row-glyph glyph-img" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-image" /></svg
+                ><span class="row-name" title="flow-diagram.png">flow-diagram.png</span>
+              </button>
+              <span
+                class="row-source"
+                title="Added in the description — remove it there to delete it"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pen" /></svg>
+                Description
+              </span>
+              <span class="row-cell w-size">860 KB</span>
+              <span class="row-cell w-date" title="8 Jun 2026, 11:05">2 days ago</span>
+              <span class="row-cell w-by" title="Zhu Yue">Zhu Yue</span>
+            </div>
+
+            <div class="att-row">
+              <button class="row-open" aria-label="Download sprint-metrics.xlsx">
+                <svg class="row-glyph glyph-sheet" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-file-sheet" /></svg
+                ><span class="row-name" title="sprint-metrics.xlsx">sprint-metrics.xlsx</span>
+              </button>
+              <span class="row-cell w-size">320 KB</span>
+              <span class="row-cell w-date" title="3 Jun 2026, 10:12">Jun 3</span>
+              <span class="row-cell w-by" title="Mo Haddad">Mo Haddad</span>
+            </div>
+
+            <div class="att-row">
+              <button class="row-open" aria-label="Download notes.md">
+                <svg class="row-glyph glyph-doc" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-file-text" /></svg
+                ><span class="row-name" title="notes.md">notes.md</span>
+              </button>
+              <span class="row-cell w-size">6 KB</span>
+              <span class="row-cell w-date" title="2 Jun 2026, 19:02">Jun 2</span>
+              <span class="row-cell w-by" title="Julian Reyes">Julian Reyes</span>
+            </div>
+
+            <div class="att-row">
+              <button class="row-open" aria-label="Download design-export.zip">
+                <svg class="row-glyph glyph-zip" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-file-zip" /></svg
+                ><span class="row-name" title="design-export.zip">design-export.zip</span>
+              </button>
+              <span class="row-cell w-size">9.1 MB</span>
+              <span class="row-cell w-date" title="2 Jun 2026, 18:44">Jun 2</span>
+              <span class="row-cell w-by" title="Eikooc Lim">Eikooc Lim</span>
+            </div>
+          </div>
+
+          <button class="show-more">Show more (38)</button>
+        </section>
+      </div>
+
+      <!-- ════════════════ PANEL 3 — upload affordances ════════════════ -->
+      <div class="panel-label">
+        3 · Upload — drag-over dropzone · uploading queue · the three inline typed errors
+      </div>
+      <div class="panel-note">
+        The Attach button (multi-select file picker) is the always-present, labelled affordance; the
+        whole-panel dropzone is the drag enhancement over it (drag-only upload would be a keyboard
+        hole). Drag-over draws the dashed <code>--el-accent</code> border + the lavender wash.
+        Uploads queue per file — name + progress (percent when the request reports it, indeterminate
+        otherwise) + cancel; each failure isolates to its own rose-tint banner with the EXACT
+        localized copy <code>lib/blob/uploadClient.ts</code> already maps (<code
+          >errors.upload.*</code
+        >
+        — reuse, don't fork). Successes become cards in place.
+      </div>
+      <div class="panel">
+        <div class="row-of">
+          <div class="variant is-wide">
+            <div class="mini-label">Drag-over — the whole panel is the dropzone</div>
+            <section class="card" aria-label="Attachments" style="min-height: 240px">
+              <div class="section-head">
+                <h2>Attachments</h2>
+                <span class="gloss">— 44</span>
+                <div class="head-right">
+                  <div class="seg" role="tablist" aria-label="Attachments view">
+                    <button class="seg-btn is-active" role="tab" aria-selected="true">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-grid" /></svg>
+                      Strip
+                    </button>
+                    <button class="seg-btn" role="tab" aria-selected="false">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list" /></svg>
+                      List
+                    </button>
+                  </div>
+                  <button class="btn btn-secondary">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-paperclip" /></svg>
+                    Attach
+                  </button>
+                </div>
+              </div>
+              <div class="dropzone-over" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><use href="#i-upload" /></svg>
+                <span class="dz-title">Drop files to attach</span>
+                <span class="dz-sub">Up to 10 MB each</span>
+              </div>
+            </section>
+          </div>
+
+          <div class="variant">
+            <div class="mini-label">Uploading — per-file progress + cancel</div>
+            <div style="display: flex; flex-direction: column; gap: 8px">
+              <div class="up-row">
+                <svg class="row-glyph glyph-img" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-image" />
+                </svg>
+                <div class="up-main">
+                  <div class="up-head">
+                    <span class="up-name">whiteboard-photo.jpg</span>
+                    <span class="up-pct">64%</span>
+                  </div>
+                  <div
+                    class="up-track"
+                    role="progressbar"
+                    aria-valuenow="64"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-label="Uploading whiteboard-photo.jpg"
+                  >
+                    <div class="up-bar" style="width: 64%"></div>
+                  </div>
+                </div>
+                <button class="icon-btn" aria-label="Cancel uploading whiteboard-photo.jpg">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                </button>
+              </div>
+              <div class="up-row">
+                <svg class="row-glyph glyph-pdf" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-file-text" />
+                </svg>
+                <div class="up-main">
+                  <div class="up-head">
+                    <span class="up-name">spec-draft.pdf</span>
+                    <span class="up-pct">Uploading…</span>
+                  </div>
+                  <div
+                    class="up-track"
+                    role="progressbar"
+                    aria-label="Uploading spec-draft.pdf"
+                    aria-busy="true"
+                  >
+                    <div class="up-bar is-indeterminate"></div>
+                  </div>
+                </div>
+                <button class="icon-btn" aria-label="Cancel uploading spec-draft.pdf">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="variant">
+            <div class="mini-label">Inline errors — 413 · 415 · 429 (per-file, isolated)</div>
+            <div style="display: flex; flex-direction: column; gap: 8px" role="alert">
+              <div class="up-error">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
+                <span>
+                  <span class="ue-name">screen-recording.zip</span> — File is too large — please
+                  choose a smaller file.
+                </span>
+                <button class="ue-dismiss" aria-label="Dismiss error for screen-recording.zip">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                </button>
+              </div>
+              <div class="up-error">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
+                <span>
+                  <span class="ue-name">demo-clip.mov</span> — That file type isn't supported.
+                </span>
+                <button class="ue-dismiss" aria-label="Dismiss error for demo-clip.mov">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                </button>
+              </div>
+              <div class="up-error">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
+                <span>
+                  <span class="ue-name">batch-7.png</span> — Too many uploads — please wait a moment
+                  and try again.
+                </span>
+                <button class="ue-dismiss" aria-label="Dismiss error for batch-7.png">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════ PANEL 4 — pagination + states ════════════════ -->
+      <div class="panel-label">
+        4 · Pagination + states — "Show more (N)" · skeleton · empty · error
+      </div>
+      <div class="panel-note">
+        The read is cursor-paged (50/page, newest first) with a total count — the
+        <code>show-more</code> control extends in place, keeping scroll position; it disappears when
+        everything is loaded. The skeleton is tile-shaped pulses (<code>aria-busy</code>) so the
+        card doesn't jump; empty keeps the Attach affordance live (never blank); error is the
+        <code>ErrorState</code> grammar with Retry.
+      </div>
+      <div class="panel">
+        <div class="row-of">
+          <div class="variant">
+            <div class="mini-label">Loading — tile skeletons (aria-busy)</div>
+            <section
+              class="card"
+              aria-label="Attachments"
+              aria-busy="true"
+              style="max-width: 480px"
+            >
+              <div class="section-head">
+                <h2>Attachments</h2>
+              </div>
+              <div class="att-grid">
+                <div class="skel-tile">
+                  <div class="s-thumb"></div>
+                  <div class="s-lines">
+                    <div class="s-bar" style="width: 85%"></div>
+                    <div class="s-bar" style="width: 50%"></div>
+                  </div>
+                </div>
+                <div class="skel-tile">
+                  <div class="s-thumb"></div>
+                  <div class="s-lines">
+                    <div class="s-bar" style="width: 70%"></div>
+                    <div class="s-bar" style="width: 45%"></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="variant">
+            <div class="mini-label">Empty — the affordance stays live</div>
+            <section class="card" aria-label="Attachments" style="max-width: 480px">
+              <div class="section-head">
+                <h2>Attachments</h2>
+                <div class="head-right">
+                  <button class="btn btn-secondary">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-paperclip" /></svg>
+                    Attach
+                  </button>
+                </div>
+              </div>
+              <div class="empty">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-paperclip" /></svg>
+                <span class="e-title">No attachments yet — attach a file or drop one here</span>
+              </div>
+            </section>
+          </div>
+
+          <div class="variant">
+            <div class="mini-label">Error — ErrorState + Retry</div>
+            <section class="card" aria-label="Attachments" style="max-width: 480px">
+              <div class="section-head">
+                <h2>Attachments</h2>
+              </div>
+              <div class="error-state">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
+                <div class="er-title">Couldn't load attachments</div>
+                <div class="er-sub">Something went wrong fetching the files.</div>
+                <button class="btn btn-secondary">Retry</button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════ PANEL 5 — delete confirm ════════════════ -->
+      <div class="panel-label">
+        5 · Delete confirm — names the file, states the hard-delete truth
+      </div>
+      <div class="panel-note">
+        The <code>RemoveLinkButton</code> confirm-<code>Popover</code> pattern verbatim (300px,
+        <code>--radius-card</code> + <code>--shadow-elevated</code>, ghost Cancel + danger Delete),
+        anchored to the card/row delete control. Delete is permanent — row + blob + a History
+        "attachment removed" entry; no trash, so the copy says so. Focus returns to the panel after.
+      </div>
+      <div class="panel">
+        <div class="confirm" role="dialog" aria-label="Delete attachment confirmation">
+          <p>Delete <strong>report-v2.pdf</strong>? Attachments can't be restored.</p>
+          <div class="c-btns">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-danger">Delete</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════ PANEL 6 — preview lightbox (5.2.6) ════════════════ -->
+      <div class="panel-label">
+        6 · Preview lightbox — image (contain-fit) · PDF (embedded frame + fallback)
+      </div>
+      <div class="panel-note">
+        A full-screen <code>Modal</code> (the 2.5.19 size-token growth pattern adds the
+        <code>full</code> size; the overlay deepens to <code>bg-black/80</code> for the lightbox)
+        over ONE focused attachment. Header: filename + size · Download · close ×. Images render
+        contain-fit on the scrim; PDFs in an embedded <code>&lt;object&gt;</code> frame with the
+        can't-inline fallback message. Non-previewable types (zip, docs, csv) NEVER open it — the
+        card downloads instead (the DTO's <code>isImage</code>/<code>isPdf</code> split). NO
+        prev/next navigation (unverified in the mirror — documented out). Esc closes; focus returns
+        to the opening card; the dialog is labelled by the filename.
+      </div>
+      <div class="panel">
+        <div class="row-of">
+          <div class="variant is-wide">
+            <div class="mini-label">Image preview — contain-fit on the dark scrim</div>
+            <div class="lightbox" role="dialog" aria-modal="true" aria-label="screenshot-board.png">
+              <div class="lb-head">
+                <span class="lb-name">screenshot-board.png</span>
+                <span class="lb-size">1.2 MB</span>
+                <div class="lb-actions">
+                  <button class="lb-btn">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download" /></svg>
+                    Download
+                  </button>
+                  <button class="lb-icon" aria-label="Close preview">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="lb-stage">
+                <div
+                  class="lb-img"
+                  role="img"
+                  aria-label="screenshot-board.png"
+                  style="
+                    background-image: linear-gradient(
+                      135deg,
+                      #dcecfa 0%,
+                      #e6e0f5 55%,
+                      #fde0ec 100%
+                    );
+                    background-size: cover;
+                  "
+                ></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="variant is-wide">
+            <div class="mini-label">PDF preview — embedded frame (fallback beside the frame)</div>
+            <div class="lightbox" role="dialog" aria-modal="true" aria-label="report-v2.pdf">
+              <div class="lb-head">
+                <span class="lb-name">report-v2.pdf</span>
+                <span class="lb-size">4.8 MB</span>
+                <div class="lb-actions">
+                  <button class="lb-btn">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download" /></svg>
+                    Download
+                  </button>
+                  <button class="lb-icon" aria-label="Close preview">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="lb-stage" style="gap: 24px">
+                <div class="lb-pdf" aria-hidden="true">
+                  <div class="pdf-bar is-head"></div>
+                  <div class="pdf-bar" style="width: 92%"></div>
+                  <div class="pdf-bar" style="width: 88%"></div>
+                  <div class="pdf-bar" style="width: 95%"></div>
+                  <div class="pdf-bar" style="width: 64%"></div>
+                  <div class="pdf-bar" style="width: 0; height: 8px; background: none"></div>
+                  <div class="pdf-bar" style="width: 90%"></div>
+                  <div class="pdf-bar" style="width: 84%"></div>
+                  <div class="pdf-bar" style="width: 52%"></div>
+                </div>
+                <div class="lb-fallback" style="max-width: 220px">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-file-text" /></svg>
+                  <p>
+                    Fallback when the browser can't inline PDFs: "Preview isn't available here —
+                    download the file instead." + the Download button.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════ PANEL 7 — viewer (read-only) ════════════════ -->
+      <div class="panel-label">7 · Viewer (read-only) — no Attach, no delete, no dropzone</div>
+      <div class="panel-note">
+        A project <code>viewer</code> (6.4 read-only role) sees the panel and can preview +
+        download, but every mutating affordance is <strong>omitted</strong> — no Attach button, no
+        dropzone reaction, no delete controls (absent, never disabled — the same grammar as the 5.1
+        comments viewer state). The count and view toggle remain.
+      </div>
+      <div class="panel">
+        <section class="card" aria-label="Attachments" style="max-width: 560px">
+          <div class="section-head">
+            <h2>Attachments</h2>
+            <span class="gloss">— 44</span>
+            <div class="head-right">
+              <div class="seg" role="tablist" aria-label="Attachments view">
+                <button class="seg-btn is-active" role="tab" aria-selected="true">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-grid" /></svg>
+                  Strip
+                </button>
+                <button class="seg-btn" role="tab" aria-selected="false">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list" /></svg>
+                  List
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="att-grid">
+            <div class="att-card show-actions">
+              <button class="att-open" aria-label="Preview screenshot-board.png">
+                <div
+                  class="att-thumb is-image"
+                  style="
+                    background-image: linear-gradient(
+                      135deg,
+                      #dcecfa 0%,
+                      #e6e0f5 55%,
+                      #fde0ec 100%
+                    );
+                  "
+                ></div>
+                <div class="att-meta">
+                  <span class="att-name" title="screenshot-board.png">screenshot-board.png</span>
+                  <span class="att-sub" title="10 Jun 2026, 09:41">2 hours ago</span>
+                </div>
+              </button>
+              <div class="att-actions">
+                <button class="icon-btn" aria-label="Download screenshot-board.png">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download" /></svg>
+                </button>
+              </div>
+            </div>
+            <div class="att-card">
+              <button class="att-open" aria-label="Preview report-v2.pdf">
+                <div class="att-thumb">
+                  <svg class="glyph-pdf" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-file-text" />
+                  </svg>
+                </div>
+                <div class="att-meta">
+                  <span class="att-name" title="report-v2.pdf">report-v2.pdf</span>
+                  <span class="att-sub" title="9 Jun 2026, 16:20">yesterday</span>
+                </div>
+              </button>
+            </div>
+            <div class="att-card">
+              <button class="att-open" aria-label="Download sprint-metrics.xlsx">
+                <div class="att-thumb">
+                  <svg class="glyph-sheet" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-file-sheet" />
+                  </svg>
+                </div>
+                <div class="att-meta">
+                  <span class="att-name" title="sprint-metrics.xlsx">sprint-metrics.xlsx</span>
+                  <span class="att-sub" title="3 Jun 2026, 10:12">Jun 3</span>
+                </div>
+              </button>
+            </div>
+          </div>
+          <button class="show-more">Show more (41)</button>
+        </section>
+      </div>
+    </div>
+  </body>
+</html>
