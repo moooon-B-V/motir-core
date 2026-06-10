@@ -156,7 +156,7 @@ export const story_5_3: PlanStory = {
       id: '5.3.1',
       title:
         'Schema — `custom_field_definition` + `custom_field_option` + typed-EAV `custom_field_value` (+ the documented Epic-6 predicate contract)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 20,
