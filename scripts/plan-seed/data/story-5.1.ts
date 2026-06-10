@@ -185,7 +185,7 @@ export const story_5_1: PlanStory = {
       id: '5.1.1',
       title:
         'Schema — `comment` + `comment_mention` models + migration (single-level threading via `parentCommentId`; FKs as Prisma relations)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 18,
