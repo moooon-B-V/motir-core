@@ -171,7 +171,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.1',
       title:
         'Schema — `attachment.workItemId` link + `source` + indexes (SetNull lifecycle, relations both sides) + repo methods',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 18,
