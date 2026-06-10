@@ -264,7 +264,7 @@ export const story_4_6: PlanStory = {
       id: '4.6.2',
       title:
         'Reusable token-aware SVG chart primitives in components/ui/ (line/area + grouped bar + axis/grid/legend; a11y data-table fallback) — the viz Story 6.3 reuses',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
