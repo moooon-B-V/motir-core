@@ -224,7 +224,7 @@ export const story_4_5: PlanStory = {
       id: '4.5.2',
       title:
         'Projection — sprint scope + `SprintSummaryDto` (committed/completed/remaining points + per-column totals) in `getBoard` for scrum boards',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
