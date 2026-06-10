@@ -5,6 +5,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
 import { emailService } from '@/lib/services/emailService';
 import { mentionNotificationsService } from '@/lib/services/mentionNotificationsService';
+import { attachmentsService } from '@/lib/services/attachmentsService';
 
 // The service-layer injection bag handed to every job handler as its 2nd arg
 // (Story 1.6 · Subtask 1.6.2). This is the seam that keeps the 4-layer rule
@@ -25,6 +26,7 @@ export const jobServices = {
   users: usersService,
   email: emailService,
   mentionNotifications: mentionNotificationsService,
+  attachments: attachmentsService,
 };
 
 export type JobServices = typeof jobServices;

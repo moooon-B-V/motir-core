@@ -24,6 +24,8 @@ export interface JobRunDTO {
   finishedAt: string | null;
   durationMs: number | null;
   failure: JobRunFailure | null;
+  /** The handler's JSON-safe resolved value, recorded on success (5.2.7) — e.g. the attachment-GC's { scanned, deleted, failed } summary. */
+  output: unknown;
   idempotencyKey: string | null;
 }
 
