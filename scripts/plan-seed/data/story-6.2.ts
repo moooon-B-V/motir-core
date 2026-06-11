@@ -234,7 +234,7 @@ export const story_6_2: PlanStory = {
       id: '6.2.2',
       title:
         'Design — saved-filter surfaces (`design/work-items/saved-filters.mock.html`: save + dirty state, dropdown, directory, visibility, delete warning, subscription editor)',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 40,
