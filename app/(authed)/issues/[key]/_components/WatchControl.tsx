@@ -291,7 +291,9 @@ export function WatchControl({
         width={288}
         className="p-1"
       >
-        <div className="px-(--spacing-control-x) py-(--spacing-control-y) font-mono text-[11px] font-semibold tracking-[0.06em] text-(--el-text-faint) uppercase">
+        {/* --el-text-muted, not -faint: the SectionLabel eyebrow token — faint
+            sits at 2.6:1 on the popover bg (5.4.11's strict axe sweep). */}
+        <div className="px-(--spacing-control-x) py-(--spacing-control-y) font-mono text-[11px] font-semibold tracking-[0.06em] text-(--el-text-muted) uppercase">
           {t('watchersHeading', { count: pageMeta?.totalCount ?? count })}
         </div>
 
