@@ -23,7 +23,7 @@ import type { PlanStory } from '../types';
  * names the asset in Context-refs. A board-config code subtask never reaches the
  * ready set before its design asset exists (Principle #13: design before code).
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 3.3`. Matches the
+ * Expanded from its `stubs.ts` entry per `motir plan 3.3`. Matches the
  * canonical depth + string-literal style of Stories 3.1 / 3.2.
  */
 export const story_3_3: PlanStory = {
@@ -112,7 +112,7 @@ export const story_3_3: PlanStory = {
     '- Pull the Story branch, `pnpm install`, `pnpm prisma migrate dev` (picks up the `board.swimlaneGroupBy` column), `pnpm db:seed`, `pnpm dev`.\n' +
     '- `pnpm test` — vitest covers: the `swimlaneGroupBy` write + `wipLimit` write services (workspace-gated), the projection lane-grouping (correct `swimlaneKey` per group-by incl. epic-ancestor resolution, the catch-all lane, per-lane counts, still bounded/paged), the over-limit predicate (strictly-greater, exactly-at-limit not warned), and the cross-lane reassign reducer.\n' +
     '- `pnpm test:e2e --grep board-swimlanes` — Playwright drives the real board: set group-by → lanes render; collapse a lane; set a column WIP limit → over-limit warning shows; an over-limit drop still SUCCEEDS (soft); a cross-lane drag reassigns the field.\n' +
-    '- **Swimlane render check:** open `/boards` on the seeded `moooon` → `prodect` project, switch group-by to **Assignee** → the board re-lays into one row per assignee that has cards + a "No assignee" catch-all lane last; each lane header shows a label + an aggregate count; switching to **Priority** and **Epic** regroups; **None** returns the flat 3.2 board. The layout matches `design/boards/swimlanes-wip.mock.html`.\n' +
+    '- **Swimlane render check:** open `/boards` on the seeded `moooon` → `motir` project, switch group-by to **Assignee** → the board re-lays into one row per assignee that has cards + a "No assignee" catch-all lane last; each lane header shows a label + an aggregate count; switching to **Priority** and **Epic** regroups; **None** returns the flat 3.2 board. The layout matches `design/boards/swimlanes-wip.mock.html`.\n' +
     '- **Group-by epic check:** with group-by **Epic**, a story/task lands in the lane of its ancestor **epic** (not its immediate parent); a card with no epic ancestor falls into the "No epic" catch-all.\n' +
     '- **Cross-lane reassign check:** with group-by Assignee, drag a card from one assignee lane into another → the assignee is reassigned (re-open the issue / quick-view to confirm) with no status change; drag into "No assignee" → the card is unassigned. Under group-by Priority, the same drag changes priority. A diagonal drag (different column AND lane) both transitions and reassigns; an illegal transition snaps the column part back while the lane part is unaffected (independent reconcile).\n' +
     '- **WIP soft-warning check:** set a column WIP limit of 2 via the column `[⋯]` menu on a column holding 3 cards → the column header + count render the over-limit warning (`3/2`) paired with an icon/label (not colour-alone, finding #35). Drag a 4th card in → the drop **succeeds** (soft, never blocked) and the warning persists. Remove the limit → the warning clears. A column at exactly its limit (2/2) is NOT warned.\n' +
@@ -206,7 +206,7 @@ export const story_3_3: PlanStory = {
         '## Context refs\n\n' +
         '- `prisma/schema.prisma` — the `board` model + `BoardType` enum (3.1.1) to mirror for the new enum; `board_column.wipLimit` (already present — confirm, do not re-add)\n' +
         '- Story 3.1.1 — the board tables + RLS pattern this extends\n' +
-        '- `prodect-core/CLAUDE.md` — migration conventions (one migration, application-seeded data, RLS-forced tables)',
+        '- `motir-core/CLAUDE.md` — migration conventions (one migration, application-seeded data, RLS-forced tables)',
     },
     {
       id: '3.3.3',
@@ -252,7 +252,7 @@ export const story_3_3: PlanStory = {
         '- `lib/services/boardsService.ts` + `lib/repositories/boardRepository.ts` / `boardColumnRepository.ts` (Story 3.1.3) — the services/repos this extends (add the two writes)\n' +
         '- `lib/services/workflowsService.ts` + `app/api/.../settings/project/workflow` (Story 2.2.5) — the project-settings write + membership-gate precedent to mirror (incl. the "member can write, RBAC later" stance)\n' +
         '- `lib/dto/boards.ts` + `lib/mappers/boardMappers.ts` — the board/column DTO shapes to return\n' +
-        '- finding #26 — the explicit app-layer `workspaceId` gate; `prodect-core/CLAUDE.md` — the 4-layer rules (route HTTP-only, service owns tx + DTO, repo single-op tx-required write)',
+        '- finding #26 — the explicit app-layer `workspaceId` gate; `motir-core/CLAUDE.md` — the 4-layer rules (route HTTP-only, service owns tx + DTO, repo single-op tx-required write)',
     },
     {
       id: '3.3.4',
@@ -308,7 +308,7 @@ export const story_3_3: PlanStory = {
         '- `lib/services/boardsService.ts` `getBoard` + `lib/mappers/boardMappers.ts` + `lib/dto/boards.ts` (Story 3.1.4) — the projection + `BoardProjectionDto`/`BoardCardDto` this extends\n' +
         '- `lib/repositories/workItemRepository.ts` — `findProjectIssuesFlat` / count + any ancestor/parent-chain helper (Story 1.4 / 2.5) for epic resolution\n' +
         '- `lib/dto/workItems.ts` — the assignee-summary / priority / parent fields the lane labels reuse\n' +
-        '- finding #57 — bounded projection (no load-all); `prodect-core/CLAUDE.md` — service owns DTO mapping, mappers in `lib/mappers/*`',
+        '- finding #57 — bounded projection (no load-all); `motir-core/CLAUDE.md` — service owns DTO mapping, mappers in `lib/mappers/*`',
     },
     {
       id: '3.3.5',
@@ -362,7 +362,7 @@ export const story_3_3: PlanStory = {
         '- `app/(authed)/issues/_components/IssueInlineEdit.tsx` + the Story-2.5 assignee/priority/parent update endpoints — the field-reassign path the cross-lane drop reuses (the same optimistic precedent 3.2.4 mirrors)\n' +
         '- Story 3.3.3 — the `PATCH …/board` group-by write; Story 3.3.4 — the `swimlaneGroupBy` + `swimlanes[]` + per-card `swimlaneKey` projection this binds to\n' +
         '- Story 2.5.15 — the virtualization primitive to reuse; `design/boards/swimlanes-wip.mock.html` + `design-notes.md` (3.3.1) — the lane/drag/announcement spec\n' +
-        '- finding #35 (not colour-alone); `prodect-core/CLAUDE.md` — `--el-*` + element-shape rules (client UI)',
+        '- finding #35 (not colour-alone); `motir-core/CLAUDE.md` — `--el-*` + element-shape rules (client UI)',
     },
     {
       id: '3.3.6',
@@ -403,7 +403,7 @@ export const story_3_3: PlanStory = {
         '- `app/(authed)/boards/_components/BoardColumn.tsx` (Story 3.2.3) — the column header + reserved WIP slot + `[⋯]` menu this fills; the 3.2.4 drop handler (confirm it is NOT WIP-gated)\n' +
         '- Story 3.3.3 — the `PATCH …/board/columns/[id]` WIP write this calls; Story 3.3.4 — the `wipLimit` + per-column count on the projection\n' +
         '- `components/ui/*` (the menu primitive, input, `Tooltip`, the warning Pill/badge) + `--el-warning`/`--el-danger` tokens\n' +
-        '- `design/boards/swimlanes-wip.mock.html` + `design-notes.md` (3.3.1) — the WIP-config + over-limit spec; finding #35 (not colour-alone); `prodect-core/CLAUDE.md` — token rules',
+        '- `design/boards/swimlanes-wip.mock.html` + `design-notes.md` (3.3.1) — the WIP-config + over-limit spec; finding #35 (not colour-alone); `motir-core/CLAUDE.md` — token rules',
     },
     {
       id: '3.3.7',
@@ -449,7 +449,7 @@ export const story_3_3: PlanStory = {
         '## Context refs\n\n' +
         '- `tests/e2e/board-ui.spec.ts` (Story 3.2.7) — the board UI E2E this builds on (group-by/WIP layer); `tests/e2e/board-projection.spec.ts` (3.1.7) — the projection E2E precedent\n' +
         '- `tests/helpers/db.ts` — real-Postgres truncation; the dnd-kit testing notes for driving keyboard/pointer DnD (incl. cross-lane drops) in Playwright\n' +
-        '- Story 3.5 — the Epic-3 test story this defers the at-scale combined journey to; `prodect-core/CLAUDE.md` — test conventions (real Postgres, no mocks, single `getSession` mock)',
+        '- Story 3.5 — the Epic-3 test story this defers the at-scale combined journey to; `motir-core/CLAUDE.md` — test conventions (real Postgres, no mocks, single `getSession` mock)',
     },
     {
       id: '3.3.8',
@@ -514,7 +514,7 @@ export const story_3_3: PlanStory = {
         '- `app/(authed)/boards/_components/LaneCell.tsx` — the `useRowWindow` call with no `getScrollElement` (the bug); `app/(authed)/boards/_components/BoardColumn.tsx` — the working pattern (passes an explicit `getScrollElement`) to mirror\n' +
         '- `components/ui/useRowWindow.ts` — `recompute` / `measureElement` / the windowing decision + the render-all degrade path\n' +
         '- `tests/e2e/board-swimlanes.spec.ts` (3.3.7) — the quarantined `test.fixme` to un-quarantine; `tests/components/board-swimlanes.test.ts` — the reassign reducer coverage that already passes\n' +
-        '- `prodect-core/CLAUDE.md` — finding #57 (no second virtualization lib); the `--el-*` / shape-token rules',
+        '- `motir-core/CLAUDE.md` — finding #57 (no second virtualization lib); the `--el-*` / shape-token rules',
     },
   ],
 };

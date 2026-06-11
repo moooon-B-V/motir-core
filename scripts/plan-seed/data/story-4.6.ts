@@ -64,7 +64,7 @@ import type { PlanStory } from '../types';
  * "viz from Epic 4" that **Story 6.3** (dashboards & reports) reuses — so it is
  * planned as a reusable primitive, not a one-off inside this story.
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 4.6`. Matches the
+ * Expanded from its `stubs.ts` entry per `motir plan 4.6`. Matches the
  * canonical depth + string-literal style of Stories 4.3 / 4.4 / 4.5.
  */
 export const story_4_6: PlanStory = {
@@ -152,7 +152,7 @@ export const story_4_6: PlanStory = {
     'slot to mount into, and at least one completed sprint with estimated, completed issues to chart.)\n' +
     '- `pnpm test:coverage` — Vitest (real Postgres, no mocks except `getSession`) over the burndown ' +
     'series derivation + the velocity aggregate stays ≥90% per-file branch/fn/line on the new ' +
-    '`reportsService` / revision-aggregate repo files (the CI coverage gate, `prodect-core-coverage-' +
+    '`reportsService` / revision-aggregate repo files (the CI coverage gate, `motir-core-coverage-' +
     'gate`); any new repo method has a direct empty-input-guard test.\n' +
     '- **Burndown data check:** `getBurndownSeries(sprintId)` returns the guideline (committed → 0 ' +
     'across the sprint window) and the actual stepped remaining series reconstructed from the 1.4.6 ' +
@@ -164,7 +164,7 @@ export const story_4_6: PlanStory = {
     'locked 4.4.2 baseline) vs completed (4.3.3 `rollupForSprint`) and the average; a project with 0–1 ' +
     'completed sprints returns the low-history state; the read is a bounded `LIMIT N`, not all ' +
     'sprints.\n' +
-    '- **Chart render check:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz`, open a project with an ' +
+    '- **Chart render check:** sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open a project with an ' +
     'active scrum sprint → `/boards`: the **scrum header** shows the in-sprint **burndown** in the ' +
     'reserved chart slot (guideline + actual line) beside the numeric remaining; complete the sprint ' +
     "(or open a completed sprint's report) → the **sprint report** shows the completed-sprint " +
@@ -303,7 +303,7 @@ export const story_4_6: PlanStory = {
         '`design/reports/charts.mock.html`.\n' +
         '- Colour comes ONLY from `--el-*` (the 4.6.1 series tokens, added to globals.css Tier 3 if ' +
         'missing); shape from element shape tokens; no Tier-0 `--color-*`, no raw `rounded-*`/`p-*` ' +
-        'for surface shape (`prodect-core/CLAUDE.md`).\n' +
+        'for surface shape (`motir-core/CLAUDE.md`).\n' +
         '- Each chart is **a11y-complete**: a visible text legend + axis labels, `role="img"` with an ' +
         '`aria-label`/`aria-describedby` summary, and a data-table fallback conveying every series as ' +
         'text+number (finding #35); colour/shape never the sole signal.\n' +
@@ -317,7 +317,7 @@ export const story_4_6: PlanStory = {
         'visual language + the `--el-*` series tokens to consume\n' +
         '- `components/ui/*` (the existing primitive conventions — props/variants/exports) + the ' +
         '`/tokens` specimen route pattern (1.0.5) to add a chart specimen\n' +
-        '- `app/globals.css` Tier-3 `--el-*` + the element-shape tokens; `prodect-core/CLAUDE.md` ' +
+        '- `app/globals.css` Tier-3 `--el-*` + the element-shape tokens; `motir-core/CLAUDE.md` ' +
         '(colour via `--el-*`, shape via element tokens)\n' +
         '- Story **6.3** (dashboards & reports) — the downstream consumer to keep the API generic for; ' +
         'findings #35 (read as text), #54 (use the palette)',
@@ -389,7 +389,7 @@ export const story_4_6: PlanStory = {
         'cross-workspace access is denied (finding #26).\n' +
         '- `GET /api/sprints/[id]/burndown` is HTTP-only (parse → one service call → map errors); the ' +
         'new repo aggregate is a single op with a direct empty-input-guard test; `pnpm test:coverage` ' +
-        'keeps the new files ≥90% branch/fn/line (`prodect-core-coverage-gate`).\n\n' +
+        'keeps the new files ≥90% branch/fn/line (`motir-core-coverage-gate`).\n\n' +
         '## Context refs\n\n' +
         '- Story **1.4.6** `workItemRevisionsService` + the revision repository / `work_item_revision` ' +
         'model — the audit trail the actual line is derived from (status-transition + sprint-' +
@@ -401,9 +401,9 @@ export const story_4_6: PlanStory = {
         '— reconcile the endpoint remaining + reuse the statistic resolution; `workflowsService.' +
         'getTerminalStatusKeys` — the `category = \'done\'` split (resolve "done" identically to ' +
         '4.5.2)\n' +
-        '- `prodect-core/CLAUDE.md` (4-layer; repo single-ops, service owns DTOs/errors); findings #57 ' +
-        '(bounded grouped aggregate, not load-all), #26 (`workspaceId` gate), `prodect-core-coverage-' +
-        'gate` (≥90% + empty-input guard); `prodect-core-local-postgres` (sandbox PG@5433)',
+        '- `motir-core/CLAUDE.md` (4-layer; repo single-ops, service owns DTOs/errors); findings #57 ' +
+        '(bounded grouped aggregate, not load-all), #26 (`workspaceId` gate), `motir-core-coverage-' +
+        'gate` (≥90% + empty-input guard); `motir-core-local-postgres` (sandbox PG@5433)',
     },
     {
       id: '4.6.4',
@@ -460,8 +460,8 @@ export const story_4_6: PlanStory = {
         '- Story **4.1.2** `sprintRepository.listByProject` / `countByProjectAndState` — the sprint ' +
         'list to filter to `complete` + limit (extend minimally if a state-filter+limit variant is ' +
         'needed)\n' +
-        '- `reportsService` (introduced in 4.6.3) — the shared service home; `prodect-core/CLAUDE.md` ' +
-        '(4-layer); findings #57 (bounded), #26 (`workspaceId` gate); `prodect-core-coverage-gate`',
+        '- `reportsService` (introduced in 4.6.3) — the shared service home; `motir-core/CLAUDE.md` ' +
+        '(4-layer); findings #57 (bounded), #26 (`workspaceId` gate); `motir-core-coverage-gate`',
     },
     {
       id: '4.6.5',
@@ -501,7 +501,7 @@ export const story_4_6: PlanStory = {
         "report's numeric remaining.\n" +
         '- Both reuse the 4.6.2 chart primitive (no second chart implementation) + its a11y fallback; ' +
         'unestimated / empty / loading / error states render per the design (never `NaN`).\n' +
-        '- Colour via `--el-*`, shape via element shape tokens (`prodect-core/CLAUDE.md`); the chart ' +
+        '- Colour via `--el-*`, shape via element shape tokens (`motir-core/CLAUDE.md`); the chart ' +
         'region is a labelled landmark read as text+number (finding #35).\n' +
         '- Component/E2E coverage: the burndown appears in the scrum header for an active sprint and ' +
         'in the report for a completed sprint (asserted in 4.6.7).\n\n' +
@@ -513,7 +513,7 @@ export const story_4_6: PlanStory = {
         '- Story **4.6.2** (`LineChart` primitive) + **4.6.3** (`getBurndownSeries` + `GET ' +
         '/api/sprints/[id]/burndown`) — the primitive + data this binds; `design/reports/charts.mock.html` ' +
         '(4.6.1) — the placement/sizing spec\n' +
-        '- `prodect-core/CLAUDE.md` (colour/shape tokens, no improvised UI); findings #35, #54',
+        '- `motir-core/CLAUDE.md` (colour/shape tokens, no improvised UI); findings #35, #54',
     },
     {
       id: '4.6.6',
@@ -557,7 +557,7 @@ export const story_4_6: PlanStory = {
         '/api/projects/[id]/velocity`) — the primitive + data this binds; `design/reports/charts.mock.html` ' +
         '(4.6.1) — the placement spec\n' +
         '- Story **6.3** (dashboards & reports) — the future standalone-reports home this deliberately ' +
-        'does NOT build; `prodect-core/CLAUDE.md`; findings #35, #54',
+        'does NOT build; `motir-core/CLAUDE.md`; findings #35, #54',
     },
     {
       id: '4.6.7',
@@ -621,8 +621,8 @@ export const story_4_6: PlanStory = {
         'the at-scale combined Scrum journey defers to\n' +
         '- `tests/e2e/board-scrum.spec.ts` (4.5.4) + `tests/e2e/sprint-lifecycle.spec.ts` (4.4.7) — the ' +
         'sibling E2Es this composes the chart assertions on top of\n' +
-        '- `prodect-core-coverage-gate` (≥90% per-file; empty-input guards need a direct test) + ' +
-        '`prodect-core-local-postgres` (sandbox PG@5433 + Playwright chromium) + `prodect-core/CLAUDE.md` ' +
+        '- `motir-core-coverage-gate` (≥90% per-file; empty-input guards need a direct test) + ' +
+        '`motir-core-local-postgres` (sandbox PG@5433 + Playwright chromium) + `motir-core/CLAUDE.md` ' +
         '(real Postgres, no mocks, single `getSession` mock)',
     },
   ],

@@ -64,7 +64,7 @@ import type { PlanStory } from '../types';
  * that owns the data. The Backlog AS A WHOLE is complete (no scope cut); the work
  * is partitioned along the real dependency lines.
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 4.2`. Matches the canonical
+ * Expanded from its `stubs.ts` entry per `motir plan 4.2`. Matches the canonical
  * depth + string-literal style of Stories 4.1 / 4.5 / 3.2.
  */
 export const story_4_2: PlanStory = {
@@ -72,7 +72,7 @@ export const story_4_2: PlanStory = {
   title: 'Backlog UI (groom + rank + assign to sprint)',
   status: 'done',
   descriptionMd:
-    "The **Backlog / sprint-planning** screen — Prodect's clone of the Jira backlog. A new nav " +
+    "The **Backlog / sprint-planning** screen — Motir's clone of the Jira backlog. A new nav " +
     "destination (`/backlog`, project-scoped) showing the project's **ranked backlog** (issues with " +
     '`sprint_id IS NULL`, in `backlog_rank` order) beneath a stack of **sprint-planning containers**, ' +
     'where a team grooms and plans: drag-to-reorder (rank), drag an issue into a sprint (assign), ' +
@@ -140,14 +140,14 @@ export const story_4_2: PlanStory = {
     'navigator — the **Story-2.5 `/issues` List/Tree** (every issue across the backlog AND all sprints, ' +
     'sortable/filterable/paginated). VERIFIED against Jira (June 2026): the backlog/board does NOT ' +
     'flatten its grouped planning view into a flat "all issues" list on the same page — it LINKS OUT to ' +
-    'the navigator with the board filter applied. Prodect already ships that navigator, so 4.2 reuses ' +
+    'the navigator with the board filter applied. Motir already ships that navigator, so 4.2 reuses ' +
     'it via a plain `<a>` (no new view, no flat list duplicated here — "no complexity for nothing"); ' +
     'when Epic-6 board/saved filters land the link can carry the active filter query.\n\n' +
     '**Nav + a11y + tokens.** A new **Backlog** sidebar item + ⌘K entry (project-scoped, adjacent to ' +
     'Boards, with a `nav.backlog` i18n key); drag is keyboard-operable (dnd-kit keyboard sensor, per ' +
     '3.2); selection + counts are read as text (not colour/shape alone — finding #35); colour via ' +
     '`--el-*`, shape via the element shape tokens (no Tier-0 `--color-*` / raw `rounded-*` — ' +
-    '`prodect-core/CLAUDE.md`).\n\n' +
+    '`motir-core/CLAUDE.md`).\n\n' +
     '**Out of scope (Epic-4 siblings / Epic 6 / later):** story-point estimation + the inline-estimate ' +
     'badge + the committed-points roll-up that fills the seam (Story **4.3**); the velocity comparison ' +
     'that fills the velocity seam (Story **4.6**); the sprint START / COMPLETE flows + scope-lock + ' +
@@ -163,7 +163,7 @@ export const story_4_2: PlanStory = {
     '- **Design exists first:** `design/backlog/backlog.mock.html` + `backlog-scale.mock.html` + a PNG export + `design/backlog/design-notes.md` exist (subtask 4.2.1), built from `components/ui/*` + `--el-*`/element-shape tokens only, AA-safe, passing the render checklist — and the points/velocity/start-sprint SEAMS are named in the notes as filled by Stories 4.3 / 4.6 / 4.4.\n' +
     '- `pnpm test` — vitest (real Postgres) covers the 4.2.2 composition: `bulkAssignToSprint` / `bulkMoveToBacklog` move every selected issue in ONE transaction (partial failure rolls back), the same-project guard rejects a cross-project member of the batch, the batch size is bounded, and `createBacklogIssue` creates + appends a `backlog_rank` + optionally assigns in one tx and records a 1.4.6 revision.\n' +
     '- `pnpm test:e2e --grep backlog` — Playwright drives a real grooming session: the `/backlog` page renders the sprint containers + the ranked backlog; drag a row to reorder (its `backlog_rank` changes, neighbours do not); drag a row into a sprint (it leaves the backlog and the sprint count increments); multi-select two rows and bulk-move them to a sprint atomically; inline-create an issue into the backlog and into a sprint; the Start-sprint entry point is present (the flow is 4.4).\n' +
-    "- **Backlog render check:** sign in as `zhuyue@prodect.co`, open the `prodect` project → the **Backlog** nav item leads to `/backlog`, which shows the sprint-planning container(s) above the ranked backlog list, each issue row with type icon / key / summary / epic chip / assignee / status, the empty **estimate slot** (the 4.3 seam, not a number yet) and the sprint header's empty **committed-points slot** (the 4.3 seam) + **velocity slot** (the 4.6 seam). Layout matches `design/backlog/backlog.mock.html`.\n" +
+    "- **Backlog render check:** sign in as `zhuyue@motir.co`, open the `motir` project → the **Backlog** nav item leads to `/backlog`, which shows the sprint-planning container(s) above the ranked backlog list, each issue row with type icon / key / summary / epic chip / assignee / status, the empty **estimate slot** (the 4.3 seam, not a number yet) and the sprint header's empty **committed-points slot** (the 4.3 seam) + **velocity slot** (the 4.6 seam). Layout matches `design/backlog/backlog.mock.html`.\n" +
     '- **View-all-issues check:** the page-head toolbar shows a **View all issues** link that navigates to the project\'s issue navigator (`/issues`, Story 2.5) — every issue across the backlog and all sprints in the sortable/filterable list; the backlog page does NOT rebuild a flat all-issues list (Jira\'s "View in Issue Navigator" mirror).\n' +
     "- **Rank check:** dragging an issue between two neighbours writes a single `backlog_rank` (4.1.4 `keyBetween`) that lands it strictly between them; no other row's rank changes; the order survives reload.\n" +
     '- **Assign check:** dragging a backlog issue into a sprint sets its `sprint_id` (it disappears from the backlog list, appears in the sprint container, the counts update); dragging it back to the backlog restores it in rank order.\n' +
@@ -292,7 +292,7 @@ export const story_4_2: PlanStory = {
         '- Story 4.1.4 (`assignToSprint` / `moveToBacklog` / `rankIssue` + the create-time-rank path) + 4.1.3 (`sprintsService` + DTOs/errors) — the single-issue primitives this composes; do NOT re-implement them\n' +
         '- `lib/services/workItemsService.ts` — the `create` path `createBacklogIssue` reuses; the 1.4.6 `workItemRevisionsService` audit write to reuse in the same tx\n' +
         '- `lib/services/boardsService.ts` — the bulk/transaction + DTO-mapping shape to mirror; `lib/mappers/*`, `lib/dto/*`, `lib/<domain>/errors.ts` layout\n' +
-        '- `prodect-core/CLAUDE.md` (4-layer: one-tx-per-method, repo single-ops, required-`tx` writes, HTTP-only routes) + `prodect-core-coverage-gate` (empty-input guard tests) + finding #26 (`workspaceId` gate)',
+        '- `motir-core/CLAUDE.md` (4-layer: one-tx-per-method, repo single-ops, required-`tx` writes, HTTP-only routes) + `prodect-core-coverage-gate` (empty-input guard tests) + finding #26 (`workspaceId` gate)',
     },
     {
       id: '4.2.3',
@@ -358,7 +358,7 @@ export const story_4_2: PlanStory = {
         '- `app/(authed)/_components/SidebarNav.tsx` + `AppCommandPalette.tsx` — where the Backlog nav item + ⌘K entry land; the i18n `nav.*` key pattern\n' +
         '- `app/(authed)/issues/` (Story 2.5 List/Tree — the issue navigator the **View all issues** toolbar link targets); Jira "View in Issue Navigator" is the mirror — link out, do not rebuild a flat list here\n' +
         '- Story 4.1.4 (`getBacklog` / `getSprintIssues`) + 4.1.3 (`listByProject` / `createSprint`) — the reads/CRUD this binds to; `components/ui/*` (`Pill`, `EmptyState`, `ErrorState`) + the work-items row\n' +
-        '- finding #57 (bounded/virtualized list), #35 (not colour-alone), #54 (palette); `prodect-core/CLAUDE.md` (`--el-*` + element-shape rules)',
+        '- finding #57 (bounded/virtualized list), #35 (not colour-alone), #54 (palette); `motir-core/CLAUDE.md` (`--el-*` + element-shape rules)',
     },
     {
       id: '4.2.4',
@@ -406,7 +406,7 @@ export const story_4_2: PlanStory = {
         '- `app/(authed)/boards/_components/boardMove.ts` + `BoardColumn.tsx` (`DndContext` + `useRowWindow` + the active-node-attached guard) + `BoardCard.tsx` (Story 3.2.3–3.2.5) — the dnd-kit move contract + virtualized-drag pattern to reuse\n' +
         '- Story 4.1.4 (`rankIssue` / `assignToSprint` / `moveToBacklog`) — the single-row writes the drops call; 4.2.2 — the bulk path 4.2.5 layers on (single here)\n' +
         '- `design/backlog/backlog.mock.html` drag-state panels (4.2.1) — the overlay + drop-highlight spec\n' +
-        '- `@dnd-kit/core` / `@dnd-kit/sortable` / `@dnd-kit/utilities` (already in `package.json`); finding #57 (drag over a bounded list); `prodect-core/CLAUDE.md`',
+        '- `@dnd-kit/core` / `@dnd-kit/sortable` / `@dnd-kit/utilities` (already in `package.json`); finding #57 (drag over a bounded list); `motir-core/CLAUDE.md`',
     },
     {
       id: '4.2.5',
@@ -452,7 +452,7 @@ export const story_4_2: PlanStory = {
         '- Story 4.2.2 (`bulkAssignToSprint` / `bulkMoveToBacklog` / `createBacklogIssue`) — the atomic endpoints these actions bind to; Story 4.2.4 (optimistic/snap-back + the dnd context) — the drag path multi-select drag reuses\n' +
         '- `design/backlog/backlog.mock.html` multi-select + context-menu panels (4.2.1) — the selection bar + `⋯` menu spec\n' +
         '- `components/ui/*` menu primitive (the shipped dropdown/menu; no nested buttons) + the work-items row; `app/(authed)/boards/_components/ColumnActionsMenu.tsx` — the row/column `⋯` menu pattern to mirror\n' +
-        '- finding #35 (selection read as text, not colour-alone); `prodect-core/CLAUDE.md` (`--el-*` + element-shape, menu primitive reuse)',
+        '- finding #35 (selection read as text, not colour-alone); `motir-core/CLAUDE.md` (`--el-*` + element-shape, menu primitive reuse)',
     },
     {
       id: '4.2.6',
@@ -503,7 +503,7 @@ export const story_4_2: PlanStory = {
         '## Context refs\n\n' +
         '- `tests/e2e/board-ui.spec.ts` (3.2.7) + `tests/e2e/board-swimlanes.spec.ts` (3.3.7) — the dnd-kit + virtualized-list E2E patterns (drag, drop, scroll) to build the backlog E2E on; `tests/helpers/db.ts` (real-Postgres truncation + large-seed fixture)\n' +
         '- Story 4.2.2 (bulk/create service) + 4.2.3/4.2.4/4.2.5 (the UI under test); Story 4.1.5 — the single-issue association/rank/bounded-read tests this builds atop (no duplication)\n' +
-        '- `prodect-core-coverage-gate` (≥90% per-file; empty-input guards need a direct test) + `prodect-core-local-postgres` (sandbox PG@5433 + Playwright) + `prodect-core/CLAUDE.md` (real-Postgres, no mocks, single `getSession` mock) + the `prodect-e2e-selector-gotchas` / `prodect-e2e-run-harness-oom` lessons',
+        '- `prodect-core-coverage-gate` (≥90% per-file; empty-input guards need a direct test) + `prodect-core-local-postgres` (sandbox PG@5433 + Playwright) + `motir-core/CLAUDE.md` (real-Postgres, no mocks, single `getSession` mock) + the `prodect-e2e-selector-gotchas` / `prodect-e2e-run-harness-oom` lessons',
     },
   ],
 };

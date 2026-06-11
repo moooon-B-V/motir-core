@@ -1,11 +1,11 @@
 import type { PlanStory } from '../types';
 
 /**
- * Story 7.8 — Prodect MCP server (the agent tool surface over the PM core).
+ * Story 7.8 — Motir MCP server (the agent tool surface over the PM core).
  *
  * **Why this story exists (the orphaned-deferral fix).** An MCP server was
  * promised in prose for months — notes.html #26's follow-ups ("eventually a
- * Prodect MCP lets agents log bugs directly") and the PRODECT_FINDINGS
+ * Motir MCP lets agents log bugs directly") and the PRODECT_FINDINGS
  * preamble's bug-logging protocol — but no story owned it. Per the no-V1-tier
  * rule, an unowned capability is a planning bug, not a scope cut. Yue's
  * concrete trigger (2026-06-10): the planner's status-flip seed PRs + his
@@ -22,7 +22,7 @@ import type { PlanStory } from '../types';
  *
  * **One justified deviation from the mirror: PAT bearer auth, not OAuth 2.1.**
  * Atlassian's server is a CLOUD-hosted gateway with Atlassian-account OAuth.
- * prodect-core is a self-hostable open core with no authorization-server
+ * motir-core is a self-hostable open core with no authorization-server
  * infrastructure; requiring OAuth 2.1 would force every self-hoster to operate
  * an AS before their first agent connects. The durable, widely-deployed
  * alternative is per-user API tokens sent as `Authorization: Bearer` (GitHub's
@@ -32,11 +32,11 @@ import type { PlanStory } from '../types';
  * front of it later without re-shaping a single tool (the MCP spec's auth is
  * transport-level). Use case recorded; complexity earned.
  *
- * **Placement: prodect-core, not prodect-ai.** Every tool is a thin adapter
+ * **Placement: motir-core, not motir-ai.** Every tool is a thin adapter
  * over already-shipped PM-core services — the MCP server is part of the open
  * agent dispatch surface (like story 7.0's /ready endpoints, which the
  * dispatch tools wrap 1:1), not AI intelligence. A team that never buys the
- * AI layer still points their own agents at their own Prodect.
+ * AI layer still points their own agents at their own Motir.
  *
  * **Permission model: enforce in the SERVICE layer, surface in the tool.**
  * No tool re-implements authorization. Each tool resolves the PAT to its
@@ -49,16 +49,16 @@ import type { PlanStory } from '../types';
  * **The workflow flip this story must land (status authority moves seed →
  * live DB).** Today the plan seed is the source of truth for STATUS too:
  * status-flip seed PRs must merge so a later `[reseed]` regenerates the same
- * statuses (PRODECT.md § Plan seed Workflow step-4 invariant). Once
+ * statuses (MOTIR.md § Plan seed Workflow step-4 invariant). Once
  * `transition_status` (7.8.5) exists, statuses change in the live tenant
  * without a seed edit — so a reseed that re-applies seed statuses would
  * CLOBBER them. 7.8.7 flips the loader invariant: a reseed PRESERVES the live
  * workflow status of plan items that already exist in the tenant; seed
  * statuses become initial-only (applied to NEW items). Plan-STRUCTURE
  * authority (adding/expanding stories) stays with the seed. 7.8.8 rewrites
- * the PRODECT.md runbook (status flips via MCP; status-flip seed PRs retire).
+ * the MOTIR.md runbook (status flips via MCP; status-flip seed PRs retire).
  *
- * **Scope (narrowed ruthlessly, axes per prodect plan step 6).** Three read
+ * **Scope (narrowed ruthlessly, axes per motir plan step 6).** Three read
  * tools (`get_work_item`, `list_ready`, `next_ready`), three work-item write
  * tools (`create_work_item` incl. bug logging, `transition_status`,
  * `add_comment`), `search_work_items` riding the 6.1.1 FilterAST envelope
@@ -79,7 +79,7 @@ import type { PlanStory } from '../types';
  */
 export const story_7_8: PlanStory = {
   id: '7.8',
-  title: 'Prodect MCP server (agent tool surface over the PM core)',
+  title: 'Motir MCP server (agent tool surface over the PM core)',
   status: 'planned',
   gitBranch: 'story/PROD-7.8-mcp-server',
   descriptionMd:
@@ -91,25 +91,25 @@ export const story_7_8: PlanStory = {
     'tool honoring the same workspace/project access checks as the UI (enforced in the service ' +
     'layer, 6.4). The mirror products ship exactly this (the official Atlassian Remote MCP ' +
     'Server — OAuth 2.1, read+write, "access only to data the user already has permission to ' +
-    'view"; Linear likewise). Open-core: lives in prodect-core beside the rest of the agent ' +
+    'view"; Linear likewise). Open-core: lives in motir-core beside the rest of the agent ' +
     "dispatch surface — the dispatch tools wrap story 7.0's shipped `/api/ready` contract 1:1. " +
-    'Fulfils the long-promised "agents log bugs via the Prodect MCP" protocol (notes.html #26 ' +
+    'Fulfils the long-promised "agents log bugs via the Motir MCP" protocol (notes.html #26 ' +
     'follow-ups, PRODECT_FINDINGS preamble).\n\n' +
     '**Dogfood payoff + the workflow decision this story lands:** once agents transition ' +
     "statuses directly in the live tenant, the planner's status-flip seed PRs (and Yue's " +
     'hand-drag of each card) retire. Status authority moves from the plan seed to the live DB: ' +
     '7.8.7 flips the loader invariant so a reseed PRESERVES live statuses (today seed status ' +
-    'wins), and 7.8.8 ships the PRODECT.md runbook rewrite. Plan-structure authority stays ' +
+    'wins), and 7.8.8 ships the MOTIR.md runbook rewrite. Plan-structure authority stays ' +
     'with the seed.',
   verificationRecipeMd:
     '- Pull the Story branch, `pnpm install`, `pnpm prisma generate`, `pnpm prisma migrate dev`, ' +
     '`pnpm db:seed`, `pnpm dev`.\n' +
     '- `pnpm test` — vitest covers the PAT lifecycle, the MCP auth gate, every tool, and the ' +
     'permission scoping (see 7.8.9).\n' +
-    '- Sign in as `zhuyue@prodect.co` → Settings → Account → **API tokens** → create a token ' +
+    '- Sign in as `zhuyue@motir.co` → Settings → Account → **API tokens** → create a token ' +
     '(label "claude-code", 90-day expiry). The plaintext shows ONCE with a copy affordance; the ' +
     'list shows the prefix, created, expires, last-used.\n' +
-    '- Wire a real agent: `claude mcp add --transport http prodect http://localhost:3000/api/mcp ' +
+    '- Wire a real agent: `claude mcp add --transport http motir http://localhost:3000/api/mcp ' +
     '--header "Authorization: Bearer <token>"` — then, in a Claude Code session: ask it to list ' +
     'ready items (`list_ready` returns the same set the /ready page shows), open one ' +
     '(`get_work_item PROD-<n>`), move it (`transition_status` → "In progress"), and comment on ' +
@@ -145,11 +145,11 @@ export const story_7_8: PlanStory = {
         'FK-relation rule — `ApiToken.user` ↔ `User.apiTokens`, `onDelete: Cascade`), `label` ' +
         '(user-facing name, e.g. "claude-code"), `tokenHash` (sha-256 hex of the full secret, ' +
         '`@unique` — the lookup key), `tokenPrefix` (first 12 chars of the secret, display-only ' +
-        'so the list can show `prodect_pat_AbC1…`), `expiresAt` (nullable timestamptz), ' +
+        'so the list can show `motir_pat_AbC1…`), `expiresAt` (nullable timestamptz), ' +
         '`lastUsedAt` (nullable), `revokedAt` (nullable — soft revoke, the row stays for the ' +
         'audit trail), `createdAt`. Index on `userId`. RLS policies matching the existing ' +
         'per-table pattern (the `prodect_app` non-bypass role).\n\n' +
-        '**Token format.** `prodect_pat_` + 32 bytes of `crypto.randomBytes` base62. The fixed ' +
+        '**Token format.** `motir_pat_` + 32 bytes of `crypto.randomBytes` base62. The fixed ' +
         'prefix makes tokens greppable in leaked-secret scanners (the GitHub `ghp_` rationale).\n\n' +
         '**Service (`lib/services/apiTokensService.ts`) + repository ' +
         '(`lib/repositories/apiTokenRepository.ts`), 4-layer split.** `create(userId, {label, ' +
@@ -196,13 +196,13 @@ export const story_7_8: PlanStory = {
         '`design/settings/` area yet — the settings pages shipped so far (account, workspace, ' +
         'jobs dashboard) predate or carry their own references; this surface gets its own ' +
         'asset BEFORE 7.8.3 writes any UI.\n\n' +
-        'Produce `prodect-core/design/settings/api-tokens.mock.html` — a `*.mock.html` mockup ' +
+        'Produce `motir-core/design/settings/api-tokens.mock.html` — a `*.mock.html` mockup ' +
         'built from the real design system (`components/ui/*` primitives, `--el-*` colour ' +
         'tokens, `[data-display-style]` shape tokens; the 7.0.1 convention) — plus ' +
         '`design/settings/design-notes.md`.\n\n' +
         '**Mirror surface (rung 1):** Atlassian API tokens (id.atlassian.com → Security → API ' +
         'tokens): create with label + expiry, a list showing label / created / expires / ' +
-        "last-used, revoke per row. Keep Prodect's coloured-personality register (the " +
+        "last-used, revoke per row. Keep Motir's coloured-personality register (the " +
         'less-enterprise-than-Jira standing policy) without inventing new primitives.\n\n' +
         '**Panels (EVERY panel — the multi-panel rule, mistake #31):**\n\n' +
         '- **Panel 1 — populated list** inside the existing Settings → Account layout: table ' +
@@ -284,7 +284,7 @@ export const story_7_8: PlanStory = {
         "record the pick — if `mcp-handler` is unsuitable, wire the SDK's " +
         '`StreamableHTTPServerTransport` directly; either way the tool registry below is the ' +
         'stable contract).\n\n' +
-        '**Auth gate.** Every request requires `Authorization: Bearer prodect_pat_…`; resolve ' +
+        '**Auth gate.** Every request requires `Authorization: Bearer motir_pat_…`; resolve ' +
         'via `apiTokensService.verify` to the owning user, reject failures with the proper ' +
         'JSON-RPC auth error BEFORE any tool dispatch. The resolved user becomes the actor for ' +
         'every service call — identical permission surface to the cookie session (6.4 roles, ' +
@@ -339,7 +339,7 @@ export const story_7_8: PlanStory = {
         'kind-parent matrix (finding #41), key allocation, revision row, and 6.4 permission ' +
         "checks all apply unchanged. Reporter = the token's owning user. **`kind: bug` under " +
         'a story/epic IS the findings bug-logging protocol** — the tool description says so, ' +
-        'so an agent told to "log this bug in Prodect" finds the right tool.\n' +
+        'so an agent told to "log this bug in Motir" finds the right tool.\n' +
         '- `transition_status` — work-item key + target status (key or name). Calls ' +
         '`workItemsService.updateStatus`: the workflow legal-transition validation ' +
         '(`workflowsService` / `canTransition`) decides; an illegal transition returns the ' +
@@ -379,7 +379,7 @@ export const story_7_8: PlanStory = {
       descriptionMd:
         'The query tool, deliberately SECOND to the dispatch tools: agents that only run the ' +
         'planner loop never need it, but a real agent surface needs arbitrary search (the ' +
-        "Atlassian MCP ships JQL search as a first-class tool — Prodect's structured " +
+        "Atlassian MCP ships JQL search as a first-class tool — Motir's structured " +
         'equivalent is the 6.1 FilterAST).\n\n' +
         '`search_work_items` accepts the SAME versioned FilterAST envelope the 6.1.1 codec ' +
         'defines (one codec, N carriers — URL `?filter=v1:…`, 6.2 saved filters, and now the ' +
@@ -440,14 +440,14 @@ export const story_7_8: PlanStory = {
     {
       id: '7.8.8',
       title:
-        'Docs + runbook flip — `docs/mcp.md` (tool catalog, client wiring) + PRODECT.md status-workflow rewrite',
+        'Docs + runbook flip — `docs/mcp.md` (tool catalog, client wiring) + MOTIR.md status-workflow rewrite',
       status: 'blocked',
       type: 'content',
       executor: 'coding_agent',
       estimateMinutes: 35,
       descriptionMd:
         'Two documents, two repos, one PR each.\n\n' +
-        '**`docs/mcp.md` (prodect-core).** The user-facing doc the 7.8.2 empty state links ' +
+        '**`docs/mcp.md` (motir-core).** The user-facing doc the 7.8.2 empty state links ' +
         'to: what the MCP server is, creating a token (Settings → Account → API tokens), ' +
         'client wiring with copy-paste examples (Claude Code `claude mcp add --transport ' +
         'http … --header "Authorization: Bearer …"` and the equivalent `.mcp.json`; one ' +
@@ -455,8 +455,8 @@ export const story_7_8: PlanStory = {
         "the permission model (tools see exactly what the token's user sees), and security " +
         'notes (shown-once, expiry, revoke immediately on leak). Follow the `docs/jobs.md` ' +
         'register.\n\n' +
-        '**PRODECT.md (prodect-meta).** Rewrite the status-flip workflow: `prodect run` / ' +
-        '`prodect mark <id> done` flip statuses via the MCP `transition_status` tool against ' +
+        '**MOTIR.md (motir-meta).** Rewrite the status-flip workflow: `motir run` / ' +
+        '`motir mark <id> done` flip statuses via the MCP `transition_status` tool against ' +
         'the live tenant; status-flip seed PRs + the hand-drag retire; the step-4 reseed ' +
         'table loses its status-flip row; the 7.8.7 PRESERVE invariant replaces the ' +
         '"reseed regenerates the same statuses" prose everywhere it appears. Plan-structure ' +
@@ -464,16 +464,16 @@ export const story_7_8: PlanStory = {
         '## Acceptance criteria\n\n' +
         '- `docs/mcp.md` exists; a reader can go token → wired agent → first `list_ready` ' +
         'call from the doc alone; every shipped tool is cataloged.\n' +
-        '- PRODECT.md no longer instructs status-flip seed PRs anywhere (grep-verified); the ' +
+        '- MOTIR.md no longer instructs status-flip seed PRs anywhere (grep-verified); the ' +
         'new MCP flip path is the documented mechanic; the reseed-invariant prose matches ' +
         '7.8.7.\n\n' +
         '## Context refs\n\n' +
         '- `docs/jobs.md` (register + structure exemplar)\n' +
-        '- `prodect-meta/PRODECT.md` (§ Plan seed Workflow step 4; `prodect run` step 5; ' +
-        '`prodect mark <id> done`)\n' +
+        '- `motir-meta/MOTIR.md` (§ Plan seed Workflow step 4; `motir run` step 5; ' +
+        '`motir mark <id> done`)\n' +
         '- 7.8.4/7.8.5/7.8.6/7.8.10 tool registry (the catalog source)\n\n' +
-        '**Branch.** `subtask/PROD-7.8.8-mcp-docs` (prodect-core); the PRODECT.md edit ships ' +
-        "as a plain prodect-meta commit per that repo's convention.",
+        '**Branch.** `subtask/PROD-7.8.8-mcp-docs` (motir-core); the MOTIR.md edit ships ' +
+        "as a plain motir-meta commit per that repo's convention.",
       dependsOn: ['7.8.5', '7.8.7', '7.8.10'],
     },
     {
@@ -489,7 +489,7 @@ export const story_7_8: PlanStory = {
         'that plans and dispatches work also has to RUN the cadence — create the sprint, scope ' +
         'it, start it, and close it out. Jira exposes every one of these as a first-class ' +
         'Agile REST operation (create/update/delete sprint, move issues to sprint/backlog, ' +
-        "start, complete); Prodect's equivalents are ALL shipped and `done` (4.1 sprint " +
+        "start, complete); Motir's equivalents are ALL shipped and `done` (4.1 sprint " +
         'entity, 4.2 backlog scoping, 4.4 lifecycle), so — like 7.8.5 — every tool here is a ' +
         'thin adapter in the 7.8.4 registry over an existing service method, no new business ' +
         'logic.\n\n' +

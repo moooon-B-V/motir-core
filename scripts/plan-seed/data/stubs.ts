@@ -154,7 +154,7 @@ export const STUB_STORIES: PlanStory[] = [
   // ── Epic 7: AI Planning Layer ─────────────────────────────────────────────
   {
     id: '7.1',
-    title: 'Core ↔ AI API contract (prodect-core ↔ prodect-ai)',
+    title: 'Core ↔ AI API contract (motir-core ↔ motir-ai)',
     status: 'planned',
     descriptionMd:
       'The documented HTTP boundary the open core calls into. All later stories ride this ' +
@@ -178,7 +178,7 @@ export const STUB_STORIES: PlanStory[] = [
     status: 'planned',
     descriptionMd:
       'First plan pass: generate a comet-shaped epic/story/task tree as actual issues (Epic 2 ' +
-      'model), not a parallel artifact. The differentiator that makes Prodect AI-native. (Former ' +
+      'model), not a parallel artifact. The differentiator that makes Motir AI-native. (Former ' +
       'Epic 3 §3.1.) Contract recorded by 7.9.9 (`motir plan`): generation must be invokable ' +
       'HEADLESSLY — an async server-side job + MCP tool surface (the 7.9 MCP-first rule), not ' +
       'only via the 7.2 web chat — and must accept an OPTIONAL code-context bundle (the ' +
@@ -216,7 +216,7 @@ export const STUB_STORIES: PlanStory[] = [
       'are rollup, not blocking.\n\n' +
       '**Front-half shipped ahead in Story 7.0** (the ready-set page + endpoints — `GET ' +
       '/api/ready` and `POST /api/ready/next` + the `/ready` sidebar surface — pulled forward ' +
-      "as the AI dispatch contract for BYOK `prodect run`). 7.5's remaining scope: " +
+      "as the AI dispatch contract for BYOK `motir run`). 7.5's remaining scope: " +
       '**shared-context retrieval** (the file-content injection into dispatch payloads — the ' +
       'prompt-quality moat itself) + **the broader planner tool surface** beyond `ready` (the ' +
       'narrow single-artifact tools an AI planner calls). The split is justified inline in ' +
@@ -231,7 +231,7 @@ export const STUB_STORIES: PlanStory[] = [
       'prompt injection), and (b) **the CLI-pushed code-context bundle** (7.9.9 — the CLI runs ' +
       'where the code LIVES, so it gathers context locally with explicit user consent; covers ' +
       'pre-GitHub / non-GitHub projects and needs no server-side credential). Either source ' +
-      'crossing the 7.1 core↔AI boundary is REQUEST-SCOPED: prodect-ai consumes the context ' +
+      'crossing the 7.1 core↔AI boundary is REQUEST-SCOPED: motir-ai consumes the context ' +
       "per job and never persists the user's code.",
     items: [],
   },
@@ -269,7 +269,7 @@ export const STUB_STORIES: PlanStory[] = [
       'planning/dispatch context retrieval (see the 7.5 code-access decision).',
     items: [],
   },
-  // 7.8 (Prodect MCP server — agent tool surface over the PM core) is fully
+  // 7.8 (Motir MCP server — agent tool surface over the PM core) is fully
   // expanded — data/story-7.8.ts. Added 2026-06-10 (the orphaned-deferral fix:
   // MCP existed only as notes.html/findings future-state prose with no owning
   // story). PAT substrate + settings UI (design-gated), /api/mcp streamable-
@@ -277,11 +277,11 @@ export const STUB_STORIES: PlanStory[] = [
   // /ready contract, write tools (create incl. bug logging / transition /
   // comment), sprint tools (list/create/update/delete, move sprint↔backlog,
   // start/complete — over the done Epic-4 services), FilterAST search riding
-  // 6.1.1, the reseed-preserves-live-status loader flip, and the PRODECT.md
+  // 6.1.1, the reseed-preserves-live-status loader flip, and the MOTIR.md
   // runbook rewrite.
   // 7.9 (Motir CLI — `motir next` / `motir auto` terminal dispatch) is fully
   // expanded — data/story-7.9.ts. Added 2026-06-10 on Yue's direction: the
-  // productized `prodect run` loop (auth/link/ready/status/next/run/done/
+  // productized `motir run` loop (auth/link/ready/status/next/run/done/
   // auto/batch/open/plan), built as an MCP CLIENT of the 7.8 server (one agent surface,
   // one PAT auth path), consuming 7.6's server-side prompt generation;
   // packages/cli workspace package, binary `motir`; npm publish is Epic-8
@@ -349,8 +349,8 @@ export const STUB_STORIES: PlanStory[] = [
   // 8.7 (Rebrand cutover: Prodect → Motir) is fully expanded — data/story-8.7.ts.
   // Expanded 2026-06-10 on the news that the securing prerequisite is DONE
   // (motir.co registered + the Motir trademark filed — subtask 8.7.1, done on
-  // Yue's confirmation): rename subtasks across prodect-core / prodect-ai /
-  // prodect-meta / the plan seed, the GitHub/Vercel infra renames, the npm
+  // Yue's confirmation): rename subtasks across motir-core / motir-ai /
+  // motir-meta / the plan seed, the GitHub/Vercel infra renames, the npm
   // name claim + `motir` package publish (the 7.9 CLI), and the post-rename
   // sweep. PROD key stays (6.8-verified). Runs early, gated on nothing else
   // in Epic 8.

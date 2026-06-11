@@ -48,7 +48,7 @@ import type { PlanStory } from '../types';
  * leaf at the head of Epic 4's build order (its consumers 4.2 / 4.4 / 4.5 all
  * point back at it).
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 4.1`. Matches the canonical
+ * Expanded from its `stubs.ts` entry per `motir plan 4.1`. Matches the canonical
  * depth + string-literal style of Stories 3.1 / 4.5.
  */
 export const story_4_1: PlanStory = {
@@ -120,7 +120,7 @@ export const story_4_1: PlanStory = {
   verificationRecipeMd:
     '- Pull the Story branch, `pnpm install`, `pnpm prisma migrate dev` (applies the `add_sprint_and_backlog_rank` migration), `pnpm db:seed`, `pnpm dev`.\n' +
     '- **Migration is clean (no drift):** a second `pnpm prisma migrate dev` reports **"No difference detected"** — the `Sprint` FK and `work_item.sprint_id` FK are modelled as `@relation` on both sides (no spurious `DROP CONSTRAINT`, per `bug-attachment-fk-migration-drift`). `pnpm prisma migrate status` is up to date.\n' +
-    '- `pnpm test:coverage` — Vitest (real Postgres) over the sprint state machine + association + rank + guards stays ≥90% per-file branch/fn/line on the new service/repository files (the CI coverage gate, `prodect-core-coverage-gate`); empty-input guards on any new repo method have a direct test.\n' +
+    '- `pnpm test:coverage` — Vitest (real Postgres) over the sprint state machine + association + rank + guards stays ≥90% per-file branch/fn/line on the new service/repository files (the CI coverage gate, `motir-core-coverage-gate`); empty-input guards on any new repo method have a direct test.\n' +
     '- **State machine:** `assertSprintTransition` allows `planned→active` and `active→complete`; rejects `planned→complete` (skip), `complete→active` / `active→planned` (reopen), and any self-transition, with the typed error.\n' +
     '- **One-active guard:** creating/activating a second `active` sprint in the same project fails on the partial-unique index (`sprint_one_active_per_project`); a different project may have its own active sprint concurrently.\n' +
     '- **Association + backlog:** assigning an issue to a sprint sets `sprint_id` and drops it from the backlog read; moving it back to the backlog nulls `sprint_id` and restores it in `backlog_rank` order; assigning an issue to a sprint in a DIFFERENT project is rejected (same-project guard).\n' +
@@ -187,7 +187,7 @@ export const story_4_1: PlanStory = {
         '- `prisma/schema.prisma` `model WorkItem` (lines ~299), `model Board` + `enum BoardType` (~607) — the tenancy-denormalization + partial-unique (`board_one_default_per_project`) + RLS patterns to mirror\n' +
         '- `prisma/sql/*` board/workflow_status migrations — the raw-SQL partial-unique-index + RLS-policy precedents to copy\n' +
         '- `lib/workItems/positioning.ts` — the base-62 fractional-index scheme the backfill emits (so new ranks interleave with backfilled ones)\n' +
-        '- `prodect-core/CLAUDE.md` (FK-as-`@relation` on both sides; the migration FK-drift rule) + the `bug-attachment-fk-migration-drift` precedent\n' +
+        '- `motir-core/CLAUDE.md` (FK-as-`@relation` on both sides; the migration FK-drift rule) + the `bug-attachment-fk-migration-drift` precedent\n' +
         '- Jira sprint states (future/active/closed) as the mirror for `planned/active/complete`',
     },
     {
@@ -217,7 +217,7 @@ export const story_4_1: PlanStory = {
         '`countBacklog(projectId)` + `findSprintIssues(sprintId)` / `countSprintIssues(sprintId)` + the ' +
         '`findRankNeighbours`/boundary reads `rankIssue` needs (the prev/next `backlog_rank` around a ' +
         'target). Each is a single Prisma op (`$queryRaw` only where a grouped/aggregate read needs it).\n\n' +
-        '**Empty-input guards** (the `prodect-core-coverage-gate` lesson): any method that can be called ' +
+        '**Empty-input guards** (the `motir-core-coverage-gate` lesson): any method that can be called ' +
         'with an empty id list / null cursor short-circuits with a direct unit test so the per-file ' +
         'branch-coverage gate stays green.\n\n' +
         '## Acceptance criteria\n\n' +
@@ -228,7 +228,7 @@ export const story_4_1: PlanStory = {
         '## Context refs\n\n' +
         '- `lib/repositories/boardRepository.ts` / `workItemRepository.ts` — the single-op + required-`tx` + `$queryRaw`-aggregate patterns to mirror; where the `work_item` sprint/rank methods land\n' +
         '- `lib/workItems/positioning.ts` — `keyBetween` (the service computes the rank; the repo just persists it)\n' +
-        '- `prodect-core/CLAUDE.md` (repository layer rules; entity-name-wins for method placement) + `prodect-core-coverage-gate` (empty-input-guard tests)',
+        '- `motir-core/CLAUDE.md` (repository layer rules; entity-name-wins for method placement) + `motir-core-coverage-gate` (empty-input-guard tests)',
     },
     {
       id: '4.1.3',
@@ -275,7 +275,7 @@ export const story_4_1: PlanStory = {
         '## Context refs\n\n' +
         '- `lib/services/boardsService.ts` (3.1/3.7) — the service shape to mirror (one-tx-per-method, DTO mapping, `workspaceId` gate); `lib/mappers/*`, `lib/dto/*`, `lib/<domain>/errors.ts` layout\n' +
         '- Story 4.4 (sprint lifecycle) — the consumer of `assertSprintTransition` + the one-active guard; Story 4.2 (backlog UI) — the consumer of the CRUD + DTOs\n' +
-        '- `prodect-core/CLAUDE.md` (service layer: transactions, DTOs, typed errors) + `prodect-core-coverage-gate`',
+        '- `motir-core/CLAUDE.md` (service layer: transactions, DTOs, typed errors) + `motir-core-coverage-gate`',
     },
     {
       id: '4.1.4',
@@ -326,7 +326,7 @@ export const story_4_1: PlanStory = {
         '- Story 4.1.2 (`work_item` sprint/rank repo methods) + 4.1.3 (`sprintsService` + DTOs/errors) — the layers this composes\n' +
         '- `lib/workItems/positioning.ts` (`keyBetween` / `keyForAppend` / `keyForPrepend`) — the single-row rank computation\n' +
         '- `lib/services/workItemsService.ts` + the 1.4.6 `workItemRevisionsService` — the create path to append the rank into + the audit-trail write to reuse\n' +
-        '- Story 4.2 (backlog UI) — the consumer of `getBacklog` / `assignToSprint` / `rankIssue`; finding #57 (bounded reads); finding #26 (`workspaceId` gate); `prodect-core/CLAUDE.md`',
+        '- Story 4.2 (backlog UI) — the consumer of `getBacklog` / `assignToSprint` / `rankIssue`; finding #57 (bounded reads); finding #26 (`workspaceId` gate); `motir-core/CLAUDE.md`',
     },
     {
       id: '4.1.5',
@@ -365,7 +365,7 @@ export const story_4_1: PlanStory = {
         '## Context refs\n\n' +
         '- `tests/helpers/db.ts` — real-Postgres truncation harness + the large-seed fixture pattern\n' +
         '- Story 4.1.3 (service + guard) + 4.1.4 (association + rank + bounded reads) — the units under test\n' +
-        '- `prodect-core-coverage-gate` (≥90% per-file; empty-input guards need a direct test) + `prodect-core-local-postgres` (the sandbox already has PG@5433) + `prodect-core/CLAUDE.md` (real-Postgres, no mocks)\n' +
+        '- `motir-core-coverage-gate` (≥90% per-file; empty-input guards need a direct test) + `motir-core-local-postgres` (the sandbox already has PG@5433) + `motir-core/CLAUDE.md` (real-Postgres, no mocks)\n' +
         '- Story 4.5.4 — where the sprint-rendering E2E lives (4.1 ships no UI, so no E2E here)',
     },
   ],

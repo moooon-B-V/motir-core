@@ -18,7 +18,7 @@ import type { PlanStory } from '../types';
  * the same via the **"Browse Projects"** permission restricted to project roles.
  * So project access = a per-project membership/role, NOT just site membership.
  * We mirror the team-managed three-level model (it is the simpler, more direct
- * fit for Prodect's workspace→project shape).
+ * fit for Motir's workspace→project shape).
  *
  * This formalizes Story 1.2's flat `WorkspaceMembership.role` string into an
  * explicit role set and adds a `ProjectMembership` + a project `accessLevel`.
@@ -32,7 +32,7 @@ import type { PlanStory } from '../types';
  * `dependsOn` (Principle #13).
  *
  * Seed loop: once `ProjectMembership` exists, 6.4.7 updates `pnpm db:seed` to
- * enroll the moooon team in the `prodect` project (the project-gating half of
+ * enroll the moooon team in the `motir` project (the project-gating half of
  * the workspace+project ask) — the workspace half already shipped.
  */
 export const story_6_4: PlanStory = {
@@ -72,7 +72,7 @@ export const story_6_4: PlanStory = {
   verificationRecipeMd:
     '- Pull the Story branch, `pnpm install`, `pnpm prisma migrate dev`, `pnpm db:seed`, `pnpm dev`.\n' +
     '- `pnpm test` — vitest covers: the browse gate per access level (open/limited/private), project-role assignment, the workspace-role migration mapping + the `open` project default, and assignable-users scoping to project members.\n' +
-    '- **Private-project gating (the core check):** as the PM (`zhuyue@prodect.co`) set the `prodect` project to **Private**; sign in as a workspace member who is NOT a project member → the project is absent from the switcher and a direct `/boards` / `/issues` link shows the no-access state; add them as a project member → it appears and opens.\n' +
+    '- **Private-project gating (the core check):** as the PM (`zhuyue@motir.co`) set the `motir` project to **Private**; sign in as a workspace member who is NOT a project member → the project is absent from the switcher and a direct `/boards` / `/issues` link shows the no-access state; add them as a project member → it appears and opens.\n' +
     '- **Roles:** a project **viewer** can open the board/issues but cannot edit (create/move/assign disabled); a **member** can edit; an **admin** can manage members + access. Workspace **owner/admin** always have access regardless of project membership.\n' +
     '- **Access levels:** **open** → every workspace member sees + edits; **limited** → every member sees + comments but cannot edit; **private** → only members.\n' +
     '- **Assignable users:** on a private project, the assignee/reporter pickers list only project members (not the whole workspace).\n' +
@@ -132,7 +132,7 @@ export const story_6_4: PlanStory = {
         '- `prisma generate` types the new model/enums; a vitest (real Postgres) asserts a project defaults to `open` and a `ProjectMembership` round-trips under RLS.\n\n' +
         '## Context refs\n\n' +
         '- `prisma/schema.prisma` — `WorkspaceMembership` (Story 1.2, the `role` string + RLS pattern to mirror) + `Project`\n' +
-        '- `prodect-core/CLAUDE.md` — one migration, application-seeded data, RLS-forced tenant tables',
+        '- `motir-core/CLAUDE.md` — one migration, application-seeded data, RLS-forced tenant tables',
     },
     {
       id: '6.4.3',
@@ -162,7 +162,7 @@ export const story_6_4: PlanStory = {
         '- Vitest (real Postgres) covers each access level × role for both browse + edit, and the owner/admin bypass.\n\n' +
         '## Context refs\n\n' +
         '- `lib/services/projectsService.ts`, `boardsService.getBoard`, `workItemsService` reads/writes — the seams to gate (search the `TODO(6.4)` notes, e.g. workflowsService 2.2.5, boardsService 3.3.3)\n' +
-        '- finding #26 (explicit app-layer workspace gate — this adds the project tier beneath it); `prodect-core/CLAUDE.md`',
+        '- finding #26 (explicit app-layer workspace gate — this adds the project tier beneath it); `motir-core/CLAUDE.md`',
     },
     {
       id: '6.4.4',
@@ -188,7 +188,7 @@ export const story_6_4: PlanStory = {
         '- Vitest (real Postgres) covers add/remove/setRole, the go-private seeding, the last-admin guard, and a non-admin denial.\n\n' +
         '## Context refs\n\n' +
         '- `lib/services/workspacesService.ts` `addMember`/`removeMember`/`listMembers` (Story 1.2) — the membership service precedent to mirror at project scope; the last-member guard pattern\n' +
-        '- Story 6.4.2 (`ProjectMembership` + `accessLevel`); `prodect-core/CLAUDE.md` (4-layer)',
+        '- Story 6.4.2 (`ProjectMembership` + `accessLevel`); `motir-core/CLAUDE.md` (4-layer)',
     },
     {
       id: '6.4.5',
@@ -239,8 +239,7 @@ export const story_6_4: PlanStory = {
     },
     {
       id: '6.4.7',
-      title:
-        'Seed — enroll the moooon team in the `prodect` project (close the project-gating loop)',
+      title: 'Seed — enroll the moooon team in the `motir` project (close the project-gating loop)',
       status: 'done',
       type: 'code',
       executor: 'coding_agent',
@@ -248,15 +247,15 @@ export const story_6_4: PlanStory = {
       dependsOn: ['6.4.2', '6.4.4'],
       descriptionMd:
         'Now that `ProjectMembership` exists, update `pnpm db:seed` to enroll the team in the ' +
-        '`prodect` project — the project-gating half of the original "add the team to the workspace ' +
+        '`motir` project — the project-gating half of the original "add the team to the workspace ' +
         'AND the project" ask (the workspace half already shipped). Add each seed user as a ' +
-        '`ProjectMembership` (zhuyue@prodect.co = project **admin**, the rest = **member**) and set ' +
-        'the `prodect` project’s `accessLevel` (keep **open** so the demo tenant is browsable, OR ' +
+        '`ProjectMembership` (zhuyue@motir.co = project **admin**, the rest = **member**) and set ' +
+        'the `motir` project’s `accessLevel` (keep **open** so the demo tenant is browsable, OR ' +
         '**private** to showcase gating — pick one and document it; default **open** for a friendly ' +
         'demo). Idempotent with the existing clear/reseed.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- `pnpm db:seed` creates a `ProjectMembership` for every seed user on the `prodect` project (zhuyue = admin, others = member) and sets the project access level explicitly; re-running stays idempotent.\n' +
-        '- A note in `seed.ts` (and the PRODECT.md Plan-seed section) records the chosen access level + the per-user project roles.\n\n' +
+        '- `pnpm db:seed` creates a `ProjectMembership` for every seed user on the `motir` project (zhuyue = admin, others = member) and sets the project access level explicitly; re-running stays idempotent.\n' +
+        '- A note in `seed.ts` (and the MOTIR.md Plan-seed section) records the chosen access level + the per-user project roles.\n\n' +
         '## Context refs\n\n' +
         '- `scripts/plan-seed/seed.ts` — the team/workspace seeding to extend (the per-item reporter/assignee/priority work already landed); Story 6.4.2/6.4.4 (the model + service)',
     },
@@ -282,7 +281,7 @@ export const story_6_4: PlanStory = {
         '- `pnpm test:e2e --grep project-access` runs green: private-project denial + grant, the no-access state, viewer-cannot-edit, admin-manages-members.\n' +
         '- Reuses `tests/helpers/db.ts` truncation + the seeded team; no mocks beyond `getSession`.\n\n' +
         '## Context refs\n\n' +
-        '- the 6.4.2–6.4.7 surfaces under test; `tests/helpers/db.ts`; `prodect-core/CLAUDE.md` (real Postgres, no mocks)',
+        '- the 6.4.2–6.4.7 surfaces under test; `tests/helpers/db.ts`; `motir-core/CLAUDE.md` (real Postgres, no mocks)',
     },
   ],
 };

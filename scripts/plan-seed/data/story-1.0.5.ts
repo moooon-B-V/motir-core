@@ -9,7 +9,7 @@ export const story_1_0_5: PlanStory = {
   title: 'Design system & brand',
   status: 'done',
   descriptionMd:
-    "Define Prodect's visual language before any design Subtask runs. Without this, every design " +
+    "Define Motir's visual language before any design Subtask runs. Without this, every design " +
     'prompt would produce a different look — buttons that disagree, spacing that fights, typography ' +
     'that varies per page. The output of this Story is the reference every later "design" Subtask ' +
     'prompt is expected to honor.\n\n' +
@@ -43,7 +43,7 @@ export const story_1_0_5: PlanStory = {
     '    confirm `http://localhost:3000/tokens` renders the full design\n' +
     '    system specimen page; delete the throwaway repo.\n' +
     '- If all five checks pass, approve and merge the PR. If anything is\n' +
-    '  missing or off, add a comment and Prodect will produce a follow-up\n' +
+    '  missing or off, add a comment and Motir will produce a follow-up\n' +
     '  Subtask to fix it.',
   items: [
     {
@@ -56,9 +56,9 @@ export const story_1_0_5: PlanStory = {
       estimateMinutes: 30,
       dependsOn: ['1.0.1'],
       descriptionMd:
-        "Set up Prodect's **two-axis theme architecture** (Color × Shape, mirroring " +
+        "Set up Motir's **two-axis theme architecture** (Color × Shape, mirroring " +
         "[dooooWeb](https://github.com/yuezhu/doooo)'s implementation) and ship ONE " +
-        "initial palette + display style. Write Prodect's **DESIGN.md** in " +
+        "initial palette + display style. Write Motir's **DESIGN.md** in " +
         '[Google Stitch format](https://stitch.withgoogle.com/docs/design-md/format/) ' +
         '(9 sections) as the planner-agent reference document — Epic 4 will inject this into every ' +
         'design-type Subtask prompt.\n\n' +
@@ -67,12 +67,12 @@ export const story_1_0_5: PlanStory = {
         'theme change. The two-axis pattern lets users flip `data-palette="warm"` or ' +
         '`data-display-style="soft"` on `<html>` and the entire UI ' +
         'updates via CSS only — no React re-render. dooooWeb proved this works at scale.\n\n' +
-        "**Source for the initial palette:** Prodect's first palette is a " +
+        "**Source for the initial palette:** Motir's first palette is a " +
         "**blend of Notion's colors** (warm earthy minimalism — terracotta, ochre, " +
         "sage, soft surfaces) and **Figma's shape language** (vibrant, playful, " +
         'energetic component shapes). The coding agent fetches both via ' +
         '`npx getdesign@latest add notion` and `add figma`, then synthesizes. ' +
-        "The DESIGN.md documents Prodect's blended choices, not Notion's or Figma's verbatim.\n\n" +
+        "The DESIGN.md documents Motir's blended choices, not Notion's or Figma's verbatim.\n\n" +
         '**Typography stack (locked):** ' +
         '**Inter** (variable) for sans body + UI, ' +
         '**Source Serif 4** (variable) for serif headings — ' +
@@ -86,7 +86,7 @@ export const story_1_0_5: PlanStory = {
         'Notion\'s warm minimalism is the explicit antidote to the "AI tools look like terminals" ' +
         "aesthetic. Figma's shape personality adds energy without sacrificing approachability.\n\n" +
         '**Token-growth principle (anti-overplanning):** dooooWeb has ~700 lines ' +
-        'of element tokens (`--el-*`) because it has a full UI. Prodect has ZERO real ' +
+        'of element tokens (`--el-*`) because it has a full UI. Motir has ZERO real ' +
         'UI components yet. Start with the bare minimum (~10-15 element tokens covering page bg / ' +
         "text / accent / surface / border). As Story 1.0.5's component primitives (1.0.5.2: " +
         'Button/Input/Card/etc.) land, each one ADDS its own element tokens. Do NOT front-load ' +
@@ -190,7 +190,7 @@ export const story_1_0_5: PlanStory = {
         '  per display-style.\n\n' +
         '**DESIGN.md:**\n\n' +
         "- `docs/DESIGN.md` exists in Google Stitch's 9-section format.\n" +
-        "- Content reflects Prodect's blended choices, not Notion's or Figma's verbatim. The\n" +
+        "- Content reflects Motir's blended choices, not Notion's or Figma's verbatim. The\n" +
         '  top of the file credits both as inspiration sources.\n' +
         '- The "Agent Prompt Guide" section is concrete enough that Epic 4\'s planner can\n' +
         '  inject it directly into design-type Subtask prompts.\n\n' +
@@ -222,7 +222,7 @@ export const story_1_0_5: PlanStory = {
       dependsOn: ['1.0.5.1'],
       descriptionMd:
         'Build the React primitive components that every screen will compose from. Nine primitives ' +
-        "cover almost everything Prodect's UI needs: Button (4 variants), Input, Textarea, Card, " +
+        "cover almost everything Motir's UI needs: Button (4 variants), Input, Textarea, Card, " +
         'Modal, Pill / Tag, Tooltip, Toast, Spinner. Each must use only the tokens from 1.0.5.1 — ' +
         'never hardcoded values — so a future theme tweak propagates through one source.\n\n' +
         '**Why this is the biggest Subtask in Story 1.0.5:** primitives are the foundation ' +
@@ -264,7 +264,7 @@ export const story_1_0_5: PlanStory = {
       estimateMinutes: 12,
       dependsOn: ['1.0.5.2'],
       descriptionMd:
-        'Every screen in Prodect will eventually have an empty state ("you don\'t have any ' +
+        'Every screen in Motir will eventually have an empty state ("you don\'t have any ' +
         'projects yet — create your first one") and at least one error state ("we couldn\'t load ' +
         'this — try again"). If each screen invents its own version, the product feels ' +
         'inconsistent. This Subtask produces two reusable React components — `EmptyState` ' +
@@ -348,40 +348,40 @@ export const story_1_0_5: PlanStory = {
       estimateMinutes: 20,
       dependsOn: ['1.0.5.5'],
       descriptionMd:
-        'Snapshot `prodect-core` at the end of Story 1.0.5 (i.e., with the full ' +
+        'Snapshot `motir-core` at the end of Story 1.0.5 (i.e., with the full ' +
         'design system landed: tokens, primitives, patterns, `docs/design-system.md`, ' +
         '`/tokens` specimen page) into a brand-new public GitHub Template repo at ' +
         '`moooon-B-V/nextjs-prisma-vercel-starter-with-design`. This is the ' +
         '**designed starter** referenced in ' +
-        '[design_wizard.html](../design_wizard.html) — the fork Prodect hands future ' +
-        "users who skip the design wizard (and use Prodect's defaults).\n\n" +
+        '[design_wizard.html](../design_wizard.html) — the fork Motir hands future ' +
+        "users who skip the design wizard (and use Motir's defaults).\n\n" +
         "**Why this Subtask is needed (Layer-2 context):** the design wizard's " +
         '"skip-all" outcome says "no design Story will be planned; use the designed starter." ' +
         'For that to be a real path, the designed starter has to exist as a forkable repo. This ' +
-        "Subtask creates it. Future Prodect users who skip the wizard get this repo's snapshot; " +
+        "Subtask creates it. Future Motir users who skip the wizard get this repo's snapshot; " +
         'users who pick any axis get the bare starter (`nextjs-prisma-vercel-starter`, ' +
         'shipped in 1.0.6) plus a planned design Story that builds the system from scratch with ' +
         'their choices baked in.\n\n' +
         '**Why now (last Subtask of Story 1.0.5):** at this commit, ' +
-        '`prodect-core` contains the generic Next.js + Prisma + Tailwind + ' +
+        '`motir-core` contains the generic Next.js + Prisma + Tailwind + ' +
         'ESLint/Prettier + Vercel + Neon scaffolding *plus* the full design system ' +
         '(1.0.5.1 architecture, 1.0.5.2 primitives, 1.0.5.3 patterns, 1.0.5.5 ' +
-        'design-system.md) — and *nothing* Prodect-the-product-specific (no User model ' +
+        'design-system.md) — and *nothing* Motir-the-product-specific (no User model ' +
         'yet, no workspace tables, no auth wiring, no work-item schema). Forking now means ' +
         "minimal stripping. If we waited until Stories 1.1 / 1.2 / 1.4 land, we'd have to " +
-        'surgically remove Prodect-the-product code, which is harder and easier to get wrong. ' +
+        'surgically remove Motir-the-product code, which is harder and easier to get wrong. ' +
         'This is a semantic-ordering constraint: **1.0.5.6 must close before any ' +
-        'Prodect-the-product code (Story 1.1+ auth, workspaces, etc.) merges to ' +
-        "`prodect-core`'s main.**\n\n" +
+        'Motir-the-product code (Story 1.1+ auth, workspaces, etc.) merges to ' +
+        "`motir-core`'s main.**\n\n" +
         '**Mechanism: manual copy + new repo + mark as Template** (NOT a GitHub ' +
         'fork) — same pattern as 1.0.6. GitHub Templates create a new repo with a clean ' +
         'single-commit history when downstream users click "Use this template" — no inherited ' +
-        'Prodect git history, no "forked from" badge. A raw fork would carry Prodect\'s planning ' +
-        'commits forever and make the template look like "a fork of Prodect" to anyone browsing ' +
+        'Motir git history, no "forked from" badge. A raw fork would carry Motir\'s planning ' +
+        'commits forever and make the template look like "a fork of Motir" to anyone browsing ' +
         'the repo.\n\n' +
         '**License: MIT**, not GPL-3.0. Same rationale as 1.0.6 — templates ' +
         "ship under MIT because GPL's copyleft requirement repels would-be forkers. " +
-        '`prodect-core` stays GPL-3.0; the designed starter is independent and ' +
+        '`motir-core` stays GPL-3.0; the designed starter is independent and ' +
         'MIT-licensed.\n\n' +
         "**Value proposition (for the README pitch):** the designed starter's " +
         'differentiator vs. the bare starter is the *full design system already wired in*. ' +
@@ -395,12 +395,12 @@ export const story_1_0_5: PlanStory = {
         'polished design system you can extend or replace."\n\n' +
         "**What you'll do:**\n\n" +
         '1. Create the empty public repo: `gh repo create moooon-B-V/nextjs-prisma-vercel-starter-with-design --public`\n' +
-        '2. Locally: copy the current `prodect-core` tree (sans `.git`,\n' +
+        '2. Locally: copy the current `motir-core` tree (sans `.git`,\n' +
         '   `node_modules`, `.next`) into a new sibling directory.\n' +
         '3. `git init`, set the remote to the new repo, single initial commit.\n' +
         '4. Apply the strip/genericize edits (see Acceptance criteria for the full list).\n' +
         "   The strip is *narrower* than 1.0.6's because the design system stays — only\n" +
-        '   Prodect-the-product mentions (wordmark in `app/page.tsx`, README pitch\n' +
+        '   Motir-the-product mentions (wordmark in `app/page.tsx`, README pitch\n' +
         '   copy, planning-doc references) need to be genericized.\n' +
         '5. Push to main as the initial commit. Verify all four quality gates pass.\n' +
         '6. Mark as template: `gh repo edit moooon-B-V/nextjs-prisma-vercel-starter-with-design --template`\n' +
@@ -413,20 +413,20 @@ export const story_1_0_5: PlanStory = {
         '**Repo + GitHub setup:**\n\n' +
         '- GitHub repo `moooon-B-V/nextjs-prisma-vercel-starter-with-design` exists, **public**, **MIT**-licensed.\n' +
         '- Repo is marked as a GitHub Template (`is_template: true`) — the "Use this template" button is visible on the repo page.\n' +
-        '- Single initial commit; no inherited Prodect git history.\n\n' +
+        '- Single initial commit; no inherited Motir git history.\n\n' +
         '**License + branding strip:**\n\n' +
         '- `LICENSE` is the canonical MIT text, copyright "© 2026 moooon B.V." or similar.\n' +
-        '- `package.json`\'s `"license": "MIT"`, `"name": "nextjs-prisma-vercel-starter-with-design"`, generic `"description"` (no Prodect mention).\n' +
-        '- `app/page.tsx` is a generic placeholder (e.g., "Next.js + Prisma starter, with design system"); NO "Prodect" wordmark. May reference `/tokens` to show off the design system.\n' +
-        '- `app/layout.tsx` metadata uses generic title and description (no Prodect mention).\n' +
-        '- README does NOT reference Prodect, `prodect-ai`, `prodect-core`, `vision.html`, `feasibility.html`, `design_wizard.html`, or any planning docs.\n' +
+        '- `package.json`\'s `"license": "MIT"`, `"name": "nextjs-prisma-vercel-starter-with-design"`, generic `"description"` (no Motir mention).\n' +
+        '- `app/page.tsx` is a generic placeholder (e.g., "Next.js + Prisma starter, with design system"); NO "Motir" wordmark. May reference `/tokens` to show off the design system.\n' +
+        '- `app/layout.tsx` metadata uses generic title and description (no Motir mention).\n' +
+        '- README does NOT reference Motir, `motir-ai`, `motir-core`, `vision.html`, `feasibility.html`, `design_wizard.html`, or any planning docs.\n' +
         '- README\'s value proposition: leads with "everything in `nextjs-prisma-vercel-starter`, plus a polished design system" and links to `docs/design-system.md` + `docs/DESIGN.md` as the references.\n\n' +
         '**Design system preservation (the load-bearing part):**\n\n' +
         '- `components/ui/*` ships intact — all 9 primitives + 2 patterns + FormField helper, with their JSDoc preserved.\n' +
         '- `app/globals.css` ships intact — full 4-tier token taxonomy, light/dark + soft display style.\n' +
         '- `app/tokens/page.tsx` ships intact — the live specimen page renders all tokens, primitives, and patterns.\n' +
         '- `docs/DESIGN.md` ships intact (architectural spec).\n' +
-        '- `docs/design-system.md` ships intact (canonical reference). Any sentences that mention "Prodect" by name as the consumer should be genericized to "this starter" or "the project that forks this template."\n' +
+        '- `docs/design-system.md` ships intact (canonical reference). Any sentences that mention "Motir" by name as the consumer should be genericized to "this starter" or "the project that forks this template."\n' +
         '- `lib/utils/cn.ts`, `lib/contexts/theme-context.tsx`, `lib/theme/*` all ship intact.\n' +
         '- Composition stack deps stay in `package.json`: `class-variance-authority`, `tailwind-merge`, `clsx`, `@radix-ui/react-{dialog,tooltip,toast}`, `lucide-react`, fonts (next/font handles them — no package additions).\n\n' +
         '**DB naming convention:**\n\n' +
@@ -434,7 +434,7 @@ export const story_1_0_5: PlanStory = {
         '- Docker container name: `nextjs-prisma-vercel-starter-with-design-postgres`.\n' +
         '- Volume name: `nextjs-prisma-vercel-starter-with-design-pg-data`.\n\n' +
         '**Schema:**\n\n' +
-        '- `prisma/schema.prisma`: drop any "Prodect" comment; keep the placeholder model and the migration file as-is.\n\n' +
+        '- `prisma/schema.prisma`: drop any "Motir" comment; keep the placeholder model and the migration file as-is.\n\n' +
         '**Quality gates:**\n\n' +
         '- All four quality gates pass: `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, `pnpm build`.\n' +
         '- GitHub Actions CI runs on the initial commit and goes green.\n\n' +
@@ -444,9 +444,9 @@ export const story_1_0_5: PlanStory = {
         "- The repo's existence is what makes the design wizard's \"skip-all\" path real. After this Subtask closes, [design_wizard.html](../design_wizard.html)'s reference to `moooon-B-V/nextjs-prisma-vercel-starter-with-design` resolves to a real GitHub repo.\n\n" +
         '## Context refs\n\n' +
         '- [design_wizard.html](../design_wizard.html) — the Layer-2 doc this Subtask makes real\n' +
-        '- [Subtask 1.0.6](story-1.0-project-bootstrap.html#1.0.6) — the sibling pattern (forking `prodect-core` into the bare starter); mirror its strip/template/MIT steps\n' +
+        '- [Subtask 1.0.6](story-1.0-project-bootstrap.html#1.0.6) — the sibling pattern (forking `motir-core` into the bare starter); mirror its strip/template/MIT steps\n' +
         '- [notes.html mistake #20](../notes.html) — the lesson driving both starter Subtasks\n' +
-        "- `prodect-core`'s current tree at the end of Story 1.0.5 — the source to fork from\n" +
+        "- `motir-core`'s current tree at the end of Story 1.0.5 — the source to fork from\n" +
         '- GitHub\'s ["Creating a template repository"](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository) docs',
     },
   ],

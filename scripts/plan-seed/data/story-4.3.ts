@@ -101,7 +101,7 @@ import type { PlanStory } from '../types';
  * subtask (4.3.4 / 4.3.5 / 4.3.6) carries 4.3.1 in `dependsOn` and is seeded
  * `status: 'blocked'` until it lands (Principle #13: design before code).
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 4.3`. Matches the canonical
+ * Expanded from its `stubs.ts` entry per `motir plan 4.3`. Matches the canonical
  * depth + string-literal style of Stories 4.1 / 4.2 / 4.5.
  */
 export const story_4_3: PlanStory = {
@@ -191,7 +191,7 @@ export const story_4_3: PlanStory = {
     '- **Scale check (finding #57):** `pnpm db:seed:large` (a project with a large sprint + deep epic subtree) → the sprint + epic roll-ups return from one bounded aggregate each (no load-all), and the inline estimate writes stay O(1); the backlog/board DOM row count stays bounded.\n' +
     "- **`pnpm test:e2e --grep estimation`** — Playwright: estimate a backlog story via the inline picker (the badge updates), see the sprint container committed-points figure increase, open the issue detail and see the story-points field, and see the parent epic's rolled-up total reflect the change.\n" +
     "- **4.5 seam check:** `rollupForSprint(sprintId, statistic)` is exported as a reusable bounded aggregate that Story 4.5.2's `SprintSummaryDto.points` consumes (documented in `design/estimation/design-notes.md` + 4.5.2's notes) — 4.3 does not duplicate the scrum `columnPoints` breakdown.\n" +
-    '- **a11y / tokens:** the estimate badge + roll-up figures read as TEXT (number + label, not colour/shape alone — finding #35); colour via `--el-*`, shape via element shape tokens (no Tier-0 `--color-*` / raw `rounded-*` — `prodect-core/CLAUDE.md`); the picker is keyboard-operable.',
+    '- **a11y / tokens:** the estimate badge + roll-up figures read as TEXT (number + label, not colour/shape alone — finding #35); colour via `--el-*`, shape via element shape tokens (no Tier-0 `--color-*` / raw `rounded-*` — `motir-core/CLAUDE.md`); the picker is keyboard-operable.',
   items: [
     {
       id: '4.3.1',
@@ -316,7 +316,7 @@ export const story_4_3: PlanStory = {
         '- `pnpm prisma generate` + `pnpm typecheck` + `pnpm build` pass; no other model changes; no speculative index (add one only if a roll-up query measurably needs it).\n\n' +
         '## Context refs\n\n' +
         '- `prisma/schema.prisma` `model WorkItem` (the `estimateMinutes` / `sprintId` / `backlogRank` columns + the camelCase-no-`@map` convention comment) and `model Project` (`workflowPolicyMode` / `accessLevel` — the project-config-column pattern to mirror)\n' +
-        '- `prodect-core/CLAUDE.md` (the migration drift rule — even without an FK, a second `migrate dev` must report "No difference detected") + the `bug-attachment-fk-migration-drift` precedent\n' +
+        '- `motir-core/CLAUDE.md` (the migration drift rule — even without an FK, a second `migrate dev` must report "No difference detected") + the `bug-attachment-fk-migration-drift` precedent\n' +
         '- Jira estimation statistics (Story Points / Original Time Estimate / Issue Count) + planning-poker decks (Fibonacci / linear) as the mirror for the enums',
     },
     {
@@ -387,7 +387,7 @@ export const story_4_3: PlanStory = {
         '- Story 4.5.2 (`SprintSummaryDto.points` = `SUM(storyPoints)`) — the consumer of `rollupForSprint`; resolve "done" the SAME way (workflow `category = \'done\'`), so the figure matches the scrum header\n' +
         "- `lib/repositories/workItemRepository.ts` / `projectRepository.ts` / `boardRepository.ts` — the single-op + required-`tx` + `$queryRaw`-aggregate patterns; `lib/workflows/*` (the `category = 'done'` terminal-status resolution, finding #21)\n" +
         '- `lib/services/workItemsService.ts` + the 1.4.6 `workItemRevisionsService` — the audit-trail write to reuse in the same tx; `lib/mappers/*`, `lib/dto/*`, `lib/<domain>/errors.ts` layout\n' +
-        '- `prodect-core/CLAUDE.md` (4-layer; entity-name-wins) + `prodect-core-coverage-gate` (empty-input guards) + finding #57 (bounded aggregates) + finding #26 (`workspaceId` gate)',
+        '- `motir-core/CLAUDE.md` (4-layer; entity-name-wins) + `prodect-core-coverage-gate` (empty-input guards) + finding #57 (bounded aggregates) + finding #26 (`workspaceId` gate)',
     },
     {
       id: '4.3.4',
@@ -442,7 +442,7 @@ export const story_4_3: PlanStory = {
         '- `design/estimation/estimation.mock.html` + `design-notes.md` (4.3.1) — the badge + picker spec + the reserved-slot placement\n' +
         '- `app/(authed)/boards/_components/BoardCard.tsx` (the `.pts` chip rendering `estimateMinutes` today — generalise it) + the backlog row (4.2.3) + the issue-detail rail (Story 2.4) + the list (Story 2.5 `Est.` column) — the surfaces to wire into\n' +
         '- Story 4.3.3 (`setEstimate` / `getEstimationConfig`) — the write + config read this binds to; `components/ui/*` menu/popover primitive (no nested buttons) + `Pill`/chip\n' +
-        '- The `prodect-i18n-threading-pattern` (the `estimation.*` keys across locales); finding #35 (read as text), #54 (palette); `prodect-core/CLAUDE.md` (`--el-*` + element-shape, primitive reuse)',
+        '- The `prodect-i18n-threading-pattern` (the `estimation.*` keys across locales); finding #35 (read as text), #54 (palette); `motir-core/CLAUDE.md` (`--el-*` + element-shape, primitive reuse)',
     },
     {
       id: '4.3.5',
@@ -489,7 +489,7 @@ export const story_4_3: PlanStory = {
         '- `design/estimation/estimation.mock.html` + `design-notes.md` (4.3.1) — the roll-up display spec; `design/backlog/design-notes.md` (the committed-points slot this fills)\n' +
         '- Story 4.3.3 (`rollupForSprint` / `rollupForParent`) — the bounded aggregates this renders; Story 4.5.2 (the scrum header reading the same `rollupForSprint`) — keep the backlog + scrum figures consistent\n' +
         '- The backlog sprint container (Story 4.2.3) + the issue-detail header/rail (Story 2.4) + the list/tree (Story 2.5) — the surfaces this decorates\n' +
-        '- finding #57 (bounded, not load-all-and-sum), #35 (read as text); the `prodect-i18n-threading-pattern`; `prodect-core/CLAUDE.md`',
+        '- finding #57 (bounded, not load-all-and-sum), #35 (read as text); the `prodect-i18n-threading-pattern`; `motir-core/CLAUDE.md`',
     },
     {
       id: '4.3.6',
@@ -537,7 +537,7 @@ export const story_4_3: PlanStory = {
         '- `design/estimation/estimation-settings.mock.html` + `design-notes.md` (4.3.1) — the panel spec\n' +
         '- `app/(authed)/settings/project/board` + `workflow` + their `_components/*SettingsCard.tsx` (`BoardSettingsCard` / `WorkflowSettingsCard`) + `settings/project/page.tsx` — the settings-page shell + nav-card + admin-gate pattern to mirror\n' +
         '- Story 4.3.3 (`getEstimationConfig` / `updateEstimationConfig` + `InvalidScaleConfigError` / `EstimationConfigForbiddenError`) — the read/write this binds to\n' +
-        '- `components/ui/*` (`FormField`, `Segmented`, the settings card, `Button`); the `prodect-i18n-threading-pattern`; the Jira board Estimation settings as the mirror; `prodect-core/CLAUDE.md`',
+        '- `components/ui/*` (`FormField`, `Segmented`, the settings card, `Button`); the `prodect-i18n-threading-pattern`; the Jira board Estimation settings as the mirror; `motir-core/CLAUDE.md`',
     },
     {
       id: '4.3.7',
@@ -589,7 +589,7 @@ export const story_4_3: PlanStory = {
         '## Context refs\n\n' +
         '- `tests/e2e/backlog.spec.ts` (4.2.6) + `tests/e2e/board-scrum.spec.ts` (4.5.4) — the backlog/board E2E patterns to build the estimation E2E on; `tests/helpers/db.ts` (real-Postgres truncation + large-seed fixture)\n' +
         '- Story 4.3.3 (service + roll-ups) + 4.3.4/4.3.5/4.3.6 (the UI under test); Story 4.1.5 / 4.2.6 — the sibling test-subtask split this mirrors (no duplication of their association/rank/grooming tests)\n' +
-        '- `prodect-core-coverage-gate` (≥90% per-file; empty-input guards need a direct test) + `prodect-core-local-postgres` (sandbox PG@5433 + Playwright) + `prodect-core/CLAUDE.md` (real-Postgres, no mocks, single `getSession` mock) + the `prodect-e2e-selector-gotchas` / `prodect-e2e-run-harness-oom` lessons',
+        '- `prodect-core-coverage-gate` (≥90% per-file; empty-input guards need a direct test) + `prodect-core-local-postgres` (sandbox PG@5433 + Playwright) + `motir-core/CLAUDE.md` (real-Postgres, no mocks, single `getSession` mock) + the `prodect-e2e-selector-gotchas` / `prodect-e2e-run-harness-oom` lessons',
     },
   ],
 };

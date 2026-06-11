@@ -94,7 +94,7 @@ import type { PlanStory } from '../types';
  * the build order) → the audit passes. 4.5's dependency on 4.4 is the correct
  * one-way arrow.
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 4.4`. Matches the canonical
+ * Expanded from its `stubs.ts` entry per `motir plan 4.4`. Matches the canonical
  * depth + string-literal style of Stories 4.1 / 4.5 / 3.7.
  */
 export const story_4_4: PlanStory = {
@@ -213,12 +213,12 @@ export const story_4_4: PlanStory = {
     '- Pull the Story branch, `pnpm install`, `pnpm prisma migrate dev` (applies `add_sprint_lifecycle_fields` — the two scope-lock baseline columns), `pnpm db:seed`, `pnpm dev`. (Requires Story 4.1 merged for the sprint entity + guard + association; Story 4.3 merged for `rollupForSprint`; Story 4.2 merged for the backlog Start/Complete entry points the flows wire into.)\n' +
     '- **Migration is clean (no drift):** a second `pnpm prisma migrate dev` reports **"No difference detected"** — the baseline columns are plain additive scalars on `Sprint` (no FK, no raw-SQL-only constraint). `pnpm prisma migrate status` is up to date.\n' +
     '- **Design exists first:** `design/sprints/sprint-lifecycle.mock.html` + a PNG export + `design/sprints/design-notes.md` exist (subtask 4.4.1), built from `components/ui/*` + `--el-*`/element-shape tokens only, AA-safe, passing the render checklist — drawing the start-sprint modal, the complete-sprint modal (completed/incomplete split + carry-over chooser), and the sprint report (lists + points + scope change + the 4.6 chart seam).\n' +
-    '- `pnpm test:coverage` — Vitest (real Postgres) over the lifecycle service stays ≥90% per-file branch/fn/line on the new/changed service/repository files (the CI coverage gate, `prodect-core-coverage-gate`); empty-input guards on any new repo method have a direct test.\n' +
+    '- `pnpm test:coverage` — Vitest (real Postgres) over the lifecycle service stays ≥90% per-file branch/fn/line on the new/changed service/repository files (the CI coverage gate, `motir-core-coverage-gate`); empty-input guards on any new repo method have a direct test.\n' +
     '- **Start flow:** `startSprint` on a planned sprint with ≥1 issue flips it to `active`, stamps `startDate`/`endDate` (from the chosen duration) + the `committedPoints`/`committedIssueCount` baseline, ensures a `type == scrum` board exists for the project (created if missing, via `createBoard`), and records a 1.4.6 revision — all in one transaction. Starting a sprint while another is `active` in the same project throws `SprintAlreadyActiveError` (the friendly 409, before the partial-unique backstop); a different project may start its own concurrently. An `endDate < startDate` window is rejected.\n' +
     '- **One-active rail (defence in depth):** with the service guard bypassed, the `sprint_one_active_per_project` index (4.1.1) still refuses a second active sprint — the data layer is the backstop, the service error is the friendly path.\n' +
     "- **Complete flow + carry-over:** `completeSprint(sprintId, { carryOverTo: 'backlog' })` moves every NON-done-category issue back to the backlog (in `backlog_rank` order), leaves the done issues on the sprint, sets `completedAt`, flips `state` to `complete`, and frees the one-active slot — one transaction. `{ carryOverTo: { sprintId } }` instead assigns the unfinished issues into the chosen PLANNED sprint (same-project guarded; a cross-project or non-planned target is rejected). A sprint with no incomplete issues completes without a carry-over step.\n" +
     '- **Sprint report:** `getSprintReport` returns the completed vs not-completed issue lists (the done-category split), the points summary (`committed` = the locked baseline, `completed` = SUM over done issues via 4.3 `rollupForSprint`, `not completed` = the remainder), and the scope-change count ("added after start" from the 1.4.6 revisions vs `startDate`); an unestimated sprint shows "—" for points (no `NaN`). The lists are cursor-paginated (first bounded page + a "view all" deep-link to `/issues` filtered to the sprint), NOT a full dump (finding #57).\n' +
-    '- **Start-sprint UI:** sign in as `zhuyue@prodect.co`, open the `prodect` project → `/backlog`; a planned sprint with issues shows an enabled **Start sprint** button → the start modal (name / duration / dates / goal) → confirm flips the sprint active and navigates to `/boards`. An empty sprint\'s Start button is disabled; starting a second sprint shows the "already active" message. Matches `design/sprints/sprint-lifecycle.mock.html`.\n' +
+    '- **Start-sprint UI:** sign in as `zhuyue@motir.co`, open the `motir` project → `/backlog`; a planned sprint with issues shows an enabled **Start sprint** button → the start modal (name / duration / dates / goal) → confirm flips the sprint active and navigates to `/boards`. An empty sprint\'s Start button is disabled; starting a second sprint shows the "already active" message. Matches `design/sprints/sprint-lifecycle.mock.html`.\n' +
     '- **Complete-sprint UI:** on the active sprint (from the backlog active-sprint container — and, once Story 4.5 lands, the scrum header) the **Complete sprint** action opens the complete modal showing the completed/incomplete counts and the carry-over chooser (Backlog · a planned sprint) → confirm completes the sprint, moves the unfinished issues, and shows the **sprint report** (completed/incomplete lists + committed/completed points + "N added during sprint"). Matches the design.\n' +
     '- **Scale check (finding #57):** `pnpm db:seed:large` with a large active sprint → the report COUNTS + point figures come from grouped aggregates (not a load-all), the issue lists render one bounded page with a "view all" link, and the carry-over move is ONE bounded transaction (a forced mid-batch failure rolls back — none moved, not a partial set).\n' +
     '- **Tenancy:** a cross-workspace start/complete/report call is denied by the finding-#26 `workspaceId` gate; the `sprint` RLS policy rejects access outside the active workspace context.\n' +
@@ -335,7 +335,7 @@ export const story_4_4: PlanStory = {
         '- `lib/services/sprintsService.ts` + `lib/sprints/errors.ts` + `lib/mappers/sprintMappers.ts` + `lib/dto/sprints.ts` (Story 4.1.3) — the service/errors/DTOs this extends; the pure `assertSprintTransition` to compose; `lib/repositories/sprintRepository.ts` `findActiveByProject` (the `FOR UPDATE` variant)\n' +
         '- `lib/services/boardsService.ts` `createBoard(projectId, { name, type })` (Story 3.7.3) — the shipped scrum-board provisioning primitive to call for "board opens"\n' +
         '- Story 4.3.3 `rollupForSprint` / the `SUM(storyPoints)` aggregate (for the committed baseline; graceful 0 when unestimated) — read here, defined there\n' +
-        '- `prisma/schema.prisma` `model Sprint` (4.1.1) — where the two baseline columns land; `prodect-core/CLAUDE.md` (4-layer: service owns the tx + DTO mapping; FK-as-`@relation`/no-drift rule); finding #26 (`workspaceId` gate); `prodect-core-coverage-gate`',
+        '- `prisma/schema.prisma` `model Sprint` (4.1.1) — where the two baseline columns land; `motir-core/CLAUDE.md` (4-layer: service owns the tx + DTO mapping; FK-as-`@relation`/no-drift rule); finding #26 (`workspaceId` gate); `motir-core-coverage-gate`',
     },
     {
       id: '4.4.3',
@@ -384,7 +384,7 @@ export const story_4_4: PlanStory = {
         '- Story 4.4.2 (`startSprint` + the extended `sprintsService`/errors) — the layer this completes; the pure `assertSprintTransition` to compose\n' +
         '- `lib/repositories/workItemRepository.ts` `setSprint` / `lib/services` `moveToBacklog` + `assignToSprint` (Story 4.1.4) — the association MOVES the carry-over drives; the same-project guard to reuse; the 4.2.2 bulk-tx shape to mirror for the bounded batch\n' +
         '- `lib/services/workflowsService.ts` `getTerminalStatusKeys` (Epic 3) — the `category = \'done\'` set that defines "unfinished"\n' +
-        '- the 1.4.6 `workItemRevisionsService` — the audit-trail write to reuse per move; `prodect-core/CLAUDE.md` (4-layer); finding #26 + #57 (bounded batch); `prodect-core-coverage-gate`',
+        '- the 1.4.6 `workItemRevisionsService` — the audit-trail write to reuse per move; `motir-core/CLAUDE.md` (4-layer); finding #26 + #57 (bounded batch); `motir-core-coverage-gate`',
     },
     {
       id: '4.4.4',
@@ -430,7 +430,7 @@ export const story_4_4: PlanStory = {
         '- Story 4.4.3 (`completeSprint` — sets `completedAt` + the done/unfinished split) + 4.4.2 (the `committedPoints`/`committedIssueCount` baseline) — the data this reports on\n' +
         '- Story 4.3.3 `rollupForSprint(sprintId)` (committed/completed/remaining points, bounded aggregate) — the points source to REUSE, not re-sum\n' +
         '- `lib/services/workflowsService.ts` `getTerminalStatusKeys` — the done-category split; the 1.4.6 `workItemRevisionsService` — the sprint-association revisions the scope-change count reads\n' +
-        '- Story 2.5 `/issues` navigator — the "view all" deep-link target (filtered to the sprint); finding #57 (bounded aggregates + paginated lists); `prodect-core/CLAUDE.md` (service owns DTO mapping); `prodect-core-coverage-gate`',
+        '- Story 2.5 `/issues` navigator — the "view all" deep-link target (filtered to the sprint); finding #57 (bounded aggregates + paginated lists); `motir-core/CLAUDE.md` (service owns DTO mapping); `motir-core-coverage-gate`',
     },
     {
       id: '4.4.5',
@@ -475,7 +475,7 @@ export const story_4_4: PlanStory = {
         '- `app/(authed)/backlog/_components/*` (Story 4.2.3 — the sprint container + the Start-sprint entry-point seam) — where the dialog mounts; the 3.2 Filter-seam pattern to mirror\n' +
         '- Story 4.4.2 (`POST /api/sprints/[id]/start` + the typed errors) — the backend this calls; Story 4.4.1 (`design/sprints/sprint-lifecycle.mock.html` + design-notes) — the modal spec\n' +
         '- `components/ui/*` (`Modal`, `FormField`, `Button`, `Combobox`/segmented control, date input) — the primitives to reuse\n' +
-        '- finding #35 (not colour-alone), #54 (use the palette); `prodect-core/CLAUDE.md` (`--el-*` + element-shape rules, client UI)',
+        '- finding #35 (not colour-alone), #54 (use the palette); `motir-core/CLAUDE.md` (`--el-*` + element-shape rules, client UI)',
     },
     {
       id: '4.4.6',
@@ -525,7 +525,7 @@ export const story_4_4: PlanStory = {
         '- Story 4.4.3 (`POST /api/sprints/[id]/complete` + carry-over) + 4.4.4 (`GET /api/sprints/[id]/report`) — the backends this binds; Story 4.4.1 (`design/sprints/sprint-lifecycle.mock.html` + design-notes) — the modal + report spec\n' +
         '- `app/(authed)/backlog/_components/*` (Story 4.2.3 — the active-sprint container) — where the Complete action self-mounts; Story 4.5.3 — the scrum-header consumer that re-mounts this exported flow\n' +
         '- Story 2.5 `/issues` navigator — the report\'s "view all" deep-link; the work-items row vocabulary the report lists reuse\n' +
-        '- `components/ui/*` (`Modal`, `Combobox`, `Button`, `EmptyState`, `Pill`) — the primitives; finding #35 / #54; `prodect-core/CLAUDE.md` (`--el-*` + element-shape, client UI)',
+        '- `components/ui/*` (`Modal`, `Combobox`, `Button`, `EmptyState`, `Pill`) — the primitives; finding #35 / #54; `motir-core/CLAUDE.md` (`--el-*` + element-shape, client UI)',
     },
     {
       id: '4.4.7',
@@ -572,7 +572,7 @@ export const story_4_4: PlanStory = {
         '- `tests/helpers/db.ts` — real-Postgres truncation harness + the seed/fixture pattern (a planned sprint with issues; a project with a configured workflow so done-category statuses exist)\n' +
         '- Stories 4.4.2 / 4.4.3 / 4.4.4 (service flows) + 4.4.5 / 4.4.6 (the modals) — the units under test; Story 4.7 — the test story the at-scale combined Scrum journey defers to\n' +
         '- `tests/e2e/backlog.spec.ts` (4.2.6) + `tests/e2e/board-scrum.spec.ts` (4.5.4) — the sibling E2Es this composes the lifecycle flow on top of\n' +
-        '- `prodect-core-coverage-gate` (≥90% per-file; empty-input guards need a direct test) + `prodect-core-local-postgres` (sandbox PG@5433 + Playwright chromium) + `prodect-core/CLAUDE.md` (real Postgres, no mocks, single `getSession` mock)',
+        '- `motir-core-coverage-gate` (≥90% per-file; empty-input guards need a direct test) + `motir-core-local-postgres` (sandbox PG@5433 + Playwright chromium) + `motir-core/CLAUDE.md` (real Postgres, no mocks, single `getSession` mock)',
     },
     {
       id: '4.4.8',
@@ -626,7 +626,7 @@ export const story_4_4: PlanStory = {
         '- `app/(authed)/backlog/_components/StartSprintDialog.tsx` (4.4.5) — drops the pre-start PATCH; ' +
         'its component test asserts the single-call shape\n' +
         '- `lib/services/sprintsService.ts` `updateSprint` (4.1.3) — the plain-edit PATCH, left as-is; ' +
-        'PRODECT_FINDINGS #68; `prodect-core/CLAUDE.md` (one service method = one transaction)',
+        'PRODECT_FINDINGS #68; `motir-core/CLAUDE.md` (one service method = one transaction)',
     },
     {
       id: '4.4.9',
@@ -682,7 +682,7 @@ export const story_4_4: PlanStory = {
         'display consumers\n' +
         '- the 4.5.2 sprint-header "—"-when-unestimated pattern (the UI owns the "—", the DTO stays ' +
         'total); finding #57 (bounded aggregate, not load-all); PRODECT_FINDINGS #69; ' +
-        '`prodect-core/CLAUDE.md` (4-layer: route is HTTP-only; `--el-*` + element-shape tokens)',
+        '`motir-core/CLAUDE.md` (4-layer: route is HTTP-only; `--el-*` + element-shape tokens)',
     },
   ],
 };

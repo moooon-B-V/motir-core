@@ -71,7 +71,7 @@ import type { PlanStory } from '../types';
  * code subtask (6.8.4) carries 6.8.3 + 6.5.3 in `dependsOn` and seeds
  * `'blocked'` (Principle #13).
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 6.8`, on the standing
+ * Expanded from its `stubs.ts` entry per `motir plan 6.8`, on the standing
  * `seed/epic-5-plan` branch (Epic-5/6 planning). Matches the canonical style
  * of 5.1–5.6 / 6.1. Cross-epic dependency audit: clean — every dep points at
  * 6.8 siblings, 6.5 (same-epic, backward — 6.5 < 6.8), or shipped substrate
@@ -142,7 +142,7 @@ export const story_6_8: PlanStory = {
     '- `pnpm test:coverage` — Vitest (real Postgres) over the rename tx (atomicity, lock ' +
     'ordering, collision matrix incl. aliases, reclaim + release) ≥90% per-file ' +
     'branch/fn/line.\n' +
-    '- **Details page:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz` → Settings → Project — ' +
+    '- **Details page:** sign in as `zhuyue@motir.co` / `!QAZ1qaz` → Settings → Project — ' +
     'the 6.5 area lands on Details, now editable, matching ' +
     '`design/projects/details.mock.html` panel-for-panel. Rename the project → the ' +
     'breadcrumb + switcher update. Pick an avatar icon + colour → the chip renders on the ' +
@@ -231,7 +231,7 @@ export const story_6_8: PlanStory = {
         '`WorkItem.identifier` (denormalized "PROD-42", `@@unique([projectId, ' +
         'identifier])`)\n' +
         '- The 6.4.3 project-admin gate + the `/api/projects/[key]/access` route pattern\n' +
-        '- `prodect-core/CLAUDE.md` (4-layer, required-tx, FK-as-@relation); the ' +
+        '- `motir-core/CLAUDE.md` (4-layer, required-tx, FK-as-@relation); the ' +
         'lock-before-read-derived-update rule; the verified mirror behaviour in the ' +
         'Story 6.8 description',
     },
@@ -429,7 +429,7 @@ export const story_6_8: PlanStory = {
         '- The Story 6.8 verification recipe — the checklist this automates\n' +
         "- 6.8.1/6.8.2 (the matrices' contracts); 6.8.4 (the surface under test)\n" +
         '- `tests/integration/` + `tests/e2e/` conventions; the harness/selector ' +
-        'memories; the prodect-core coverage gate\n' +
+        'memories; the motir-core coverage gate\n' +
         '- Story 6.7 (the epic-wide remainder — do not duplicate)',
     },
   ],

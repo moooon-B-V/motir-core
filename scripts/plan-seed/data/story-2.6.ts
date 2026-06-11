@@ -60,7 +60,7 @@ import type { PlanStory } from '../types';
  * the CI `test` + `e2e` jobs already exist (Story 1.0 / 1.4.7), so there is no
  * SaaS / secret / dashboard prerequisite to provision.
  *
- * Expanded from its stubs.ts entry per `prodect plan 2.6`. Matches the canonical
+ * Expanded from its stubs.ts entry per `motir plan 2.6`. Matches the canonical
  * depth + string-literal style of the Epic-2 modules (2.2 / 2.5) and the 1.4.7
  * coverage-matrix convention.
  */
@@ -104,7 +104,7 @@ export const story_2_6: PlanStory = {
     '1.0 + 1.4.7) and the CI `test` + `e2e` jobs already exist, so there is no SaaS / secret / ' +
     'dashboard prerequisite to provision. All five subtasks are `type: test`, `executor: ' +
     'coding_agent`. Tests use real Postgres (never mocks; the only allowed `vi.mock` is ' +
-    '`getSession()`), per `prodect-core/CLAUDE.md`.',
+    '`getSession()`), per `motir-core/CLAUDE.md`.',
   verificationRecipeMd:
     '- Pull the Story branch(es), `pnpm install && pnpm prisma generate && pnpm prisma migrate dev` against a fresh local DB (PG at :5433).\n' +
     '- **Coverage matrix exists:** open `tests/EPIC2_COVERAGE.md` — every scope bullet from the 2.6 card (issue CRUD, type-parent rules, workflow transitions, key uniqueness, issue list/tree reads, assignees, RLS) maps to a covering test (file → `describe`), tagged inherited / filled / added, mirroring `tests/integration/work-items/TEST_COVERAGE.md` (1.4.7).\n' +
@@ -157,7 +157,7 @@ export const story_2_6: PlanStory = {
         '- `tests/integration/work-items/TEST_COVERAGE.md` — the 1.4.7 matrix this mirrors\n' +
         '- `tests/integration/work-items/*.test.ts`, `tests/workflows/*.test.ts`, `tests/issues/*.test.ts`, `tests/work-item-rls.test.ts`, `tests/project-counter.test.ts`, `tests/e2e/{issue-create-edit-flow,issue-detail-flow,workflow-flow,workflow-settings,workflow-delete-reassign}.spec.ts` — the surface being audited\n' +
         '- `vitest.config.ts` (`coverage` block) — the existing gate 2.6.4 extends\n' +
-        '- `prodect-core/CLAUDE.md` — real-Postgres test rule (no mocks beyond `getSession`)',
+        '- `motir-core/CLAUDE.md` — real-Postgres test rule (no mocks beyond `getSession`)',
     },
     {
       id: '2.6.2',
@@ -348,7 +348,7 @@ export const story_2_6: PlanStory = {
         '- `tests/e2e/work-items-isolation.spec.ts`, `playwright.config.ts`, the e2e auth/sign-in helper\n' +
         '- The issue create modal + detail page + List/Tree view components (Stories 2.3 / 2.4 / 2.5)\n' +
         '- Memory: prodect-e2e-selector-gotchas (Combobox option name = label + secondary; `/issues` empty-state headings)\n' +
-        '- `prodect-core/CLAUDE.md` — manual merge mode; real-stack E2E',
+        '- `motir-core/CLAUDE.md` — manual merge mode; real-stack E2E',
     },
   ],
 };

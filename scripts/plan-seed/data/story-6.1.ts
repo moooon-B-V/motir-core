@@ -70,7 +70,7 @@ import type { PlanStory } from '../types';
  * (6.1.4 / 6.1.5) carry it in `dependsOn` and seed `'blocked'`
  * (Principle #13).
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 6.1`, on the standing
+ * Expanded from its `stubs.ts` entry per `motir plan 6.1`, on the standing
  * `seed/epic-5-plan` branch (Epic-5/6 planning). Matches the canonical style
  * of 5.1–5.6.
  */
@@ -141,7 +141,7 @@ export const story_6_1: PlanStory = {
     '- `pnpm test:coverage` — Vitest (real Postgres) over the AST/registry/compiler ' +
     '(operator matrix, injection fuzz, serialization round-trip) ≥90% per-file ' +
     'branch/fn/line.\n' +
-    '- **Builder flow:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz` → /issues → the ' +
+    '- **Builder flow:** sign in as `zhuyue@motir.co` / `!QAZ1qaz` → /issues → the ' +
     '"Advanced" affordance beside the 2.5.4 facet bar (matching ' +
     '`design/work-items/filter-builder.mock.html`). Build: Status is any of (To do, In ' +
     'progress) AND Priority is none of (Lowest) AND Due in the next 14 days → the List ' +
@@ -235,7 +235,7 @@ export const story_6_1: PlanStory = {
         'consumers of the fragment\n' +
         '- The verified Jira basic/JQL operator split in the Story 6.1 description; ' +
         '`notes.html` mistake #29 (total registries)\n' +
-        '- `prodect-core/CLAUDE.md` (repo layer owns `$queryRaw`; FK/migration rules); ' +
+        '- `motir-core/CLAUDE.md` (repo layer owns `$queryRaw`; FK/migration rules); ' +
         'finding #57 (the trgm index)',
     },
     {

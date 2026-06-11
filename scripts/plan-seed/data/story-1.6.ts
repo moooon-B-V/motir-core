@@ -60,7 +60,7 @@ export const story_1_6: PlanStory = {
       estimateMinutes: 24,
       descriptionMd:
         "Validate that Inngest's three load-bearing surfaces actually work against " +
-        "`prodect-core`'s stack BEFORE the SDK lands in main. The Story's runtime " +
+        "`motir-core`'s stack BEFORE the SDK lands in main. The Story's runtime " +
         'decision (Inngest) is durable but unverified — this Subtask is the gate that lets us ' +
         'back out cleanly if the local-dev story or the Vercel deploy story breaks. Three ' +
         'specific things to prove:\n\n' +
@@ -90,7 +90,7 @@ export const story_1_6: PlanStory = {
         'lands; no production code from this branch ever reaches main.\n\n' +
         '**If validation fails:** log the failure mode in PRODECT_FINDINGS.md, re-open the ' +
         'runtime decision (this is the ONE escape hatch from the durable Inngest choice). The ' +
-        'replan would be a fresh `prodect plan 1.6` with the finding as input.\n\n' +
+        'replan would be a fresh `motir plan 1.6` with the finding as input.\n\n' +
         '## Acceptance criteria\n\n' +
         '- A throwaway branch (`subtask/PROD-1.6.1-inngest-spike`) demonstrates the no-op ' +
         '`example.ping` function invoked successfully via: (a) the local `inngest-cli dev` ' +
@@ -100,7 +100,7 @@ export const story_1_6: PlanStory = {
         '- Env-var requirements documented in the PR body: which Inngest keys are needed in CI, ' +
         'in Vercel preview, in Vercel production; how preview-branch DB isolation interacts with ' +
         "Inngest's prod control plane discovering preview URLs.\n" +
-        '- A finding entry exists in `prodect-meta/prodect_plan/PRODECT_FINDINGS.md` capturing ' +
+        '- A finding entry exists in `motir-meta/prodect_plan/PRODECT_FINDINGS.md` capturing ' +
         'any sharp edges (e.g., preview-URL registration quirks, dev-server port conflicts with ' +
         'the existing `pnpm dev` port), even if the entry is "no sharp edges discovered."\n' +
         '- The PR is NOT merged; the throwaway branch is deleted after the finding is logged. ' +
@@ -109,7 +109,7 @@ export const story_1_6: PlanStory = {
         "failure mode and recommends an explicit replan; 1.6.2's status stays `planned` until " +
         'a replan resolves the issue.\n\n' +
         '## Context refs\n\n' +
-        '- `prodect-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
+        '- `motir-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
         '- `lib/env.ts` — the `requiredEnv` pattern any new env vars must register against\n' +
         '- `.github/workflows/ci.yml` — where placeholder env vars get added for the build step\n' +
         '- `.github/workflows/cleanup-preview-deployments.yml` — the existing preview-cleanup ' +
@@ -136,7 +136,7 @@ export const story_1_6: PlanStory = {
         'The Inngest `client` instance is the singleton from `lib/jobs/client.ts`.\n' +
         '- **`lib/jobs/` wrapper:**\n' +
         '  - `lib/jobs/client.ts` — exports the singleton `inngest` client, configured with ' +
-        '`id: "prodect-core"` and `eventKey` from `lib/env.ts`.\n' +
+        '`id: "motir-core"` and `eventKey` from `lib/env.ts`.\n' +
         '  - `lib/jobs/defineJob.ts` — the canonical wrapper around `inngest.createFunction()`. ' +
         'Forces every job to declare: `id` (e.g., `"email.send"`), the matching `event` name ' +
         '(always `id`-derived to keep the convention 1:1), `retries` (default 3), `concurrency` ' +
@@ -203,7 +203,7 @@ export const story_1_6: PlanStory = {
         '- All quality gates green; existing tests + E2E stay green; CI build succeeds against ' +
         'the placeholder Inngest env values.\n\n' +
         '## Context refs\n\n' +
-        '- `prodect-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
+        '- `motir-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
         '- The 1.6.1 findings entry — the validated patterns to mirror exactly\n' +
         "- `lib/env.ts` — the `requiredEnv` pattern (extend it; don't re-shape it)\n" +
         '- `lib/auth/index.ts` + `lib/users/repo.ts` + `lib/workspaces/service.ts` — exemplars ' +
@@ -299,7 +299,7 @@ export const story_1_6: PlanStory = {
         'as the reference exemplar.\n' +
         '- All quality gates green; existing tests + E2E stay green.\n\n' +
         '## Context refs\n\n' +
-        '- `prodect-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
+        '- `motir-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
         '- `lib/email.ts` + `lib/emailTemplates/` — the abstraction the job wraps; no shape ' +
         'change needed\n' +
         '- `lib/auth/password-reset.ts` — the Better-Auth `sendResetPassword` hook ' +
@@ -393,7 +393,7 @@ export const story_1_6: PlanStory = {
         'with worked examples for each.\n' +
         '- All quality gates green; existing tests + E2E stay green.\n\n' +
         '## Context refs\n\n' +
-        '- `prodect-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
+        '- `motir-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
         "- `prisma/sql/` + Story 1.2's RLS migration — the canonical RLS pattern to mirror\n" +
         '- `lib/db.ts` + the workspace-context middleware from Story 1.2 — how ' +
         '`prodect.workspace_id` gets set on the session\n' +
@@ -476,7 +476,7 @@ export const story_1_6: PlanStory = {
         "- All quality gates green; existing tests + E2E stay green; Story 1.5's a11y spec " +
         'extends to cover the new route (zero axe violations).\n\n' +
         '## Context refs\n\n' +
-        '- `prodect-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
+        '- `motir-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
         '- `app/(authed)/settings/workspace/page.tsx` + the workspace settings layout — the ' +
         'existing structure this Subtask extends\n' +
         '- `app/(authed)/settings/project/page.tsx` — exemplar for the owner-role gating ' +
@@ -601,7 +601,7 @@ export const story_1_6: PlanStory = {
         'Protection → Protection Bypass for Automation) and configure Inngest with it. ' +
         '(Disabling protection entirely is NOT recommended — it weakens preview security.)\n' +
         '- **Get the keys.** Inngest dashboard (app.inngest.com) → create / confirm the ' +
-        '`prodect-core` app → copy `INNGEST_SIGNING_KEY` + `INNGEST_EVENT_KEY` for each ' +
+        '`motir-core` app → copy `INNGEST_SIGNING_KEY` + `INNGEST_EVENT_KEY` for each ' +
         'target environment.\n' +
         '- **Set the keys in Vercel.** Vercel → Project → Settings → Environment Variables → ' +
         'add both, scope **Preview** (and later **Production**). Do **NOT** set `INNGEST_DEV` ' +

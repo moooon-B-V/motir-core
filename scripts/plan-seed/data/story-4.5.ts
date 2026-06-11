@@ -15,8 +15,8 @@ import type { PlanStory } from '../types';
  * Moved here per `notes.html` mistake #32 (epic ordering follows the dependency
  * arrow): a Scrum board NEEDS sprints, and sprints are Epic 4. As Story 3.4 it
  * was a forward-pointing cross-epic dependency (Epic 3 → Epic 4) that would
- * silently break `prodect next`'s readiness logic. The (a)-vs-(b) decision
- * (see `PRODECT.md`) was (b)-move rather than (a)-swap, because only THIS
+ * silently break `motir next`'s readiness logic. The (a)-vs-(b) decision
+ * (see `MOTIR.md`) was (b)-move rather than (a)-swap, because only THIS
  * story crossed — Stories 3.1/3.2/3.3/3.6 (Kanban projection, drag-drop,
  * swimlanes/WIP, board config) are pure Kanban substrate that stands alone in
  * the mirror product (Jira and Linear both ship Kanban without sprints). So
@@ -46,7 +46,7 @@ import type { PlanStory } from '../types';
  * asset in Context-refs. A UI code subtask never reaches the ready set before
  * its design asset exists (Principle #13: design before code).
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 4.5`. Matches the
+ * Expanded from its `stubs.ts` entry per `motir plan 4.5`. Matches the
  * canonical depth + string-literal style of Stories 3.1 / 3.2 / 3.3.
  */
 export const story_4_5: PlanStory = {
@@ -66,7 +66,7 @@ export const story_4_5: PlanStory = {
     'under Epic 3 (Boards), this Story was the canonical example of mistake #32: a forward-pointing ' +
     'cross-epic dependency (Epic 3 → Epic 4) that would have shipped a story whose own file admitted ' +
     'its subtasks could not reach the ready set until the next epic landed. The fix per the (a)-vs-' +
-    '(b) decision (PRODECT.md) was (b)-move-the-story, not (a)-swap-the-epics, because only this ' +
+    '(b) decision (MOTIR.md) was (b)-move-the-story, not (a)-swap-the-epics, because only this ' +
     'story crossed (Stories 3.1 / 3.2 / 3.3 / 3.6 — Kanban projection, drag-drop, swimlanes/WIP, ' +
     'board config — are pure Kanban substrate, a standalone capability in the mirror product). So ' +
     '4.5 ships from inside Epic 4 alongside the sprints, points, and lifecycle it depends on; its ' +
@@ -287,7 +287,7 @@ export const story_4_5: PlanStory = {
         '- Story 3.3.4 — the `swimlaneGroupBy` + `swimlanes[]` + per-card `swimlaneKey` projection the sprint filter must compose with\n' +
         '- Story 4.1 (sprint entity + issue→sprint association) + Story 4.3 (story-point field) — the sibling Epic-4 model this reads (story-level dep; fields defined there, read here)\n' +
         '- `lib/repositories/boardRepository.ts` / `workItemRepository.ts` — where the active-sprint read + the SUM/grouped point aggregates land (single-op, `$queryRaw` for aggregates)\n' +
-        '- finding #57 — bounded projection (aggregates, not load-all); finding #26 — the app-layer `workspaceId` gate; `prodect-core/CLAUDE.md` — 4-layer (service owns DTO mapping, repo single-op)',
+        '- finding #57 — bounded projection (aggregates, not load-all); finding #26 — the app-layer `workspaceId` gate; `motir-core/CLAUDE.md` — 4-layer (service owns DTO mapping, repo single-op)',
     },
     {
       id: '4.5.3',
@@ -352,7 +352,7 @@ export const story_4_5: PlanStory = {
         '- `app/(authed)/boards/_components/*` swimlane/WIP additions (Story 3.3.5/3.3.6) — the group-by + WIP layer that composes on the scrum board unchanged\n' +
         '- Story 4.5.2 — the `sprint` + `columnPoints` + sprint-scoped projection this binds to; Story 4.4 — the complete-sprint flow the header reuses; Story 4.2 — the Backlog route the empty-state CTA links to\n' +
         '- `components/ui/*` (`Pill`, `Tooltip`, `EmptyState`, `ErrorState`, `Button`) + `design/boards/scrum.mock.html` + design-notes (4.5.1) — the header/state spec\n' +
-        '- finding #35 (not colour-alone), #54 (use the palette); `prodect-core/CLAUDE.md` — `--el-*` + element-shape rules (client UI)',
+        '- finding #35 (not colour-alone), #54 (use the palette); `motir-core/CLAUDE.md` — `--el-*` + element-shape rules (client UI)',
     },
     {
       id: '4.5.4',
@@ -401,7 +401,7 @@ export const story_4_5: PlanStory = {
         '- `tests/e2e/board-ui.spec.ts` (3.2.7) + `tests/e2e/board-swimlanes.spec.ts` (3.3.7) — the board E2Es this builds the scrum layer on; `tests/e2e/board-projection.spec.ts` (3.1.7) — the projection E2E precedent\n' +
         '- `tests/helpers/db.ts` — real-Postgres truncation; the fixture pattern for setting an active sprint + points directly (the lifecycle UI is Story 4.4)\n' +
         '- Story 4.5.2 (projection) + 4.5.3 (header/page) — the units under test; Stories 3.5 / 4.7 — the test stories this defers the at-scale combined journey to\n' +
-        '- `prodect-core/CLAUDE.md` — test conventions (real Postgres, no mocks, single `getSession` mock)',
+        '- `motir-core/CLAUDE.md` — test conventions (real Postgres, no mocks, single `getSession` mock)',
     },
   ],
 };
