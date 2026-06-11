@@ -1,4 +1,4 @@
-// Prodect — prodect-core schema
+// Motir — motir-core schema
 //
 // Subtask 1.1.3 lands the auth tables. Better-Auth (configured in 1.1.2 +
 // adapter-wired in this Subtask via @better-auth/prisma-adapter) consumes
@@ -450,7 +450,7 @@ enum PointScale {
   @@map("point_scale")
 }
 
-/// The unit of tracked work in Prodect's PM core (Story 1.4). Every epic,
+/// The unit of tracked work in Motir's PM core (Story 1.4). Every epic,
 /// story, task, bug, and subtask a team plans is a row here. Self-referencing
 /// tree via `parentId`, with the kind-parent matrix, the 4-level depth limit,
 /// and cycle prevention all enforced at the DB layer by PL/pgSQL triggers
@@ -465,7 +465,7 @@ enum PointScale {
 ///   - explanationMd  — "why this matters" (the context a non-technical
 ///                       reviewer needs). Mostly AI-drafted in steady state,
 ///                       but the column is just text + a provenance enum; the
-///                       closed-source AI logic lives in prodect-ai. The
+///                       closed-source AI logic lives in motir-ai. The
 ///                       GPL boundary stays clean — this table can't tell an
 ///                       AI-drafted value from a hand-typed one except via
 ///                       `explanationSource`.
@@ -1031,7 +1031,7 @@ enum SprintState {
 // `defineJob`-wrapped Inngest function writes ONE row here: a `running` row at
 // start, flipped to `succeeded` / `failed` on completion. This is the read
 // path the operator dashboard (1.6.5) renders WITHOUT calling Inngest's own
-// API — Prodect owns its job-observability data.
+// API — Motir owns its job-observability data.
 //
 // `workspaceId` is NULLABLE on purpose: most jobs are workspace-scoped (the
 // durable invariant `sendEvent` enforces — every business event carries a
@@ -1338,7 +1338,7 @@ model WorkItemLabel {
 /// components via `work_item_component`.
 ///
 /// `defaultAssigneeId` is the verified Jira five-way default-assignee enum
-/// COLLAPSED to a nullable user (recorded simplification: Prodect has no
+/// COLLAPSED to a nullable user (recorded simplification: Motir has no
 /// project-lead concept and component *lead* exists in Jira chiefly to feed
 /// that enum — the lead field is the documented extension). `SetNull`: a
 /// departed user clears the default, never blocks deletion. The at-create
@@ -1596,7 +1596,7 @@ model CustomFieldValue {
 /// project/workspace admins, who can SEE every filter but manage only shared
 /// ones) and `project` (everyone who can browse the project, riding the 6.4
 /// gate). Jira Cloud's six share scopes + per-filter Viewers/Editors grant
-/// lists presuppose site-global filters and groups, which Prodect doesn't
+/// lists presuppose site-global filters and groups, which Motir doesn't
 /// have — the recorded two-visibility deviation; the grant list is the
 /// documented extension.
 enum SavedFilterVisibility {

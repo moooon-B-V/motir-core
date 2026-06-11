@@ -220,7 +220,7 @@ describe('strip/list toggle', () => {
     fireEvent.click(screen.getByRole('button', { name: 'List' }));
     expect(screen.getByText('Bo Philips')).toBeTruthy();
     expect(screen.getByText('1.2 MB')).toBeTruthy();
-    expect(window.localStorage.getItem('prodect.issues.attachments.view')).toBe('list');
+    expect(window.localStorage.getItem('motir.issues.attachments.view')).toBe('list');
   });
 });
 

@@ -1,7 +1,7 @@
 // DTOs for the Ready-set surface (Story 7.0 — the AI dispatch surface). These
 // define EXACTLY what crosses the HTTP / Server-Action boundary for `GET
 // /api/ready` (the page + browse consumer) and `POST /api/ready/next` (the BYOK
-// `prodect run` agent consumer). No Prisma model leaks; the service returns
+// `motir run` agent consumer). No Prisma model leaks; the service returns
 // these, never raw Prisma rows — the established DTO convention (see
 // `lib/dto/workItems.ts`).
 //

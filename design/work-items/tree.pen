@@ -62,7 +62,7 @@
                   "type": "text",
                   "id": "o1Fr7",
                   "fill": "$--foreground",
-                  "content": "Prodect",
+                  "content": "Motir",
                   "fontFamily": "$--font-sans",
                   "fontSize": 13,
                   "fontWeight": "500"
@@ -197,7 +197,7 @@
                       "type": "text",
                       "id": "oy3Ug",
                       "fill": "$--muted-foreground",
-                      "content": "All issues in Prodect — Q3 launch",
+                      "content": "All issues in Motir — Q3 launch",
                       "fontFamily": "$--font-sans",
                       "fontSize": 14,
                       "fontWeight": "normal"
@@ -1894,7 +1894,7 @@
                   "type": "text",
                   "id": "pcVVQ",
                   "fill": "$--foreground",
-                  "content": "Prodect",
+                  "content": "Motir",
                   "fontFamily": "$--font-sans",
                   "fontSize": 13,
                   "fontWeight": "500"
@@ -2030,7 +2030,7 @@
                       "type": "text",
                       "id": "Yfa6G",
                       "fill": "$--muted-foreground",
-                      "content": "All issues in Prodect — Q3 launch",
+                      "content": "All issues in Motir — Q3 launch",
                       "fontFamily": "$--font-sans",
                       "fontSize": 14,
                       "fontWeight": "normal"
@@ -2196,7 +2196,7 @@
                   "type": "text",
                   "id": "Ewfz7",
                   "fill": "$--foreground",
-                  "content": "Prodect",
+                  "content": "Motir",
                   "fontFamily": "$--font-sans",
                   "fontSize": 13,
                   "fontWeight": "500"

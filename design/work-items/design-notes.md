@@ -686,7 +686,7 @@ filtered set is the **List view's** job (2.5.8), not the filter bar's.
 
 `create.mock.html` extends the create-issue modal (2.3.3) with a **Due date**
 field — finding #56 ("yes, mirror Jira"). Jira's create dialog collects a Due
-date; Prodect's modal did not, and `create.pen` designs the modal with
+date; Motir's modal did not, and `create.pen` designs the modal with
 type/parent/title/description/priority (+ an **Assignee** field that was never
 built — finding #51) but **no Due date**. This pins where it goes and how it
 composes, so 2.3.12 isn't improvising (the design gate — `create.pen` omits it).
@@ -1077,7 +1077,7 @@ the same tokens.
 
 **Per-comment visibility restriction** (Jira's padlock) is a deliberate
 non-feature: it needs the company-managed role/group substrate, and Jira's
-team-managed projects — the small-team shape Prodect mirrors — do not support
+team-managed projects — the small-team shape Motir mirrors — do not support
 it; documented as an Epic-6 admin extension slot. **Realtime** live-updating
 comments: no realtime substrate exists in the codebase; comments refresh on
 navigation/action — a product-wide decision, not story-local. The **History
@@ -1482,7 +1482,7 @@ standalone.
 The picker with `onCreate` wired to the 5.4.2 folksonomy:
 
 - **Label colours — the recorded justified deviation (product owner,
-  2026-06-10).** Unlike Jira's colourless labels, Prodect label chips are
+  2026-06-10).** Unlike Jira's colourless labels, Motir label chips are
   COLOURED — deliberately less enterprise, more personality. The colour is
   **auto-assigned deterministically from the label name**: FNV-1a over
   `nameLower`, mod 6, into the existing pastel family
@@ -1908,7 +1908,7 @@ applied live` · `Condition limit reached (20) — remove one to add another.` �
 `Not applied yet — pick a value to activate this condition.` · `Unknown value`
 · `This value no longer exists in the project — this condition matches
 nothing.` · `This filter link couldn't be read` · `The filter in this URL is
-invalid or from a newer version of Prodect, so no filter was applied. Clear it
+invalid or from a newer version of Motir, so no filter was applied. Clear it
 to dismiss this message.` · `Clear filter` · `N issues match` · `No issues
 match this filter` · `Try removing a condition, or clear the filter to see
 everything.` · the superseded tooltip (above). All via next-intl in 6.1.4/6.1.5.

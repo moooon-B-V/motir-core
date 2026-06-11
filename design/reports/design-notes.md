@@ -25,7 +25,7 @@ Atlassian's report docs, not asserted).
 ## The core decision — hand-rolled token-aware SVG, NOT a charting library
 
 The design system routes **all colour through `--el-*`** and **all shape through
-element-semantic tokens** (`prodect-core/CLAUDE.md`). A third-party chart lib
+element-semantic tokens** (`motir-core/CLAUDE.md`). A third-party chart lib
 (Recharts / Chart.js / nivo) ships its own canvas/DOM styling that **bypasses the
 swap layer**, pulls ~80–120 kB for two charts, and fights the a11y model — so per
 the no-shortcut / justified-deviation rule, **4.6.2 builds small SVG primitives

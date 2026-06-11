@@ -1917,7 +1917,7 @@ export const workItemsService = {
   },
 
   /**
-   * Dispatch ONE ready item (Subtask 7.0.2) — the BYOK `prodect run` /
+   * Dispatch ONE ready item (Subtask 7.0.2) — the BYOK `motir run` /
    * coding-agent consumer of `POST /api/ready/next`. Returns the FIRST ready
    * item under the `(type asc, priority desc, key asc)` sort that is NOT in `excludeIds`,
    * as the full `ReadyItemDispatchDto` (body + parsed context refs + resolved
@@ -2070,7 +2070,7 @@ function rowReadyContext(row: ReadyCandidateRow): ReadyItemContext {
 /**
  * Decorate a ready candidate row with the dispatch-only payload (Subtask 7.0.2):
  * the parent key, the resolved blocker keys, and the `contextRefs` parsed from
- * the body's `## Context refs` section (finding #62 — Prodect stores refs in
+ * the body's `## Context refs` section (finding #62 — Motir stores refs in
  * `descriptionMd`, not a column; this supplies REAL paths into the 7.0.3
  * mapper's `contextRefs` input instead of the `[]` placeholder). For a READY
  * item the blockers are all terminal — the dependency story the agent's prompt

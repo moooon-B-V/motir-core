@@ -34,7 +34,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // same headroom the sibling board/lifecycle specs take.
 test.describe.configure({ mode: 'serial', timeout: 120_000 });
 
-const OWNER_EMAIL = 'charts-owner@prodect.dev';
+const OWNER_EMAIL = 'charts-owner@motir.dev';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** The real 4.5/4.6 done-path: walk the defaultWorkflow's legal transitions so

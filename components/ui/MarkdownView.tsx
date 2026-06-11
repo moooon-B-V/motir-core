@@ -14,7 +14,7 @@ import './markdown-editor.css';
 // editing surface and the read surface can never drift. A grep guard in the
 // test suite enforces that no other file imports `react-markdown` directly.
 //
-// Typography comes from the shared `prodect-prose` styles (markdown-editor.css)
+// Typography comes from the shared `motir-prose` styles (markdown-editor.css)
 // — the SAME content styles the WYSIWYG editor uses (2.3.10), so the read
 // surface and the edit surface share one look. The legacy `wmde-markdown` class
 // is kept as a stable styling/test hook.
@@ -34,7 +34,7 @@ export function MarkdownView({ value, className, ...rest }: MarkdownViewProps) {
   // gets it from the ONE module.
   return (
     <div
-      className={['wmde-markdown', 'prodect-prose', className].filter(Boolean).join(' ')}
+      className={['wmde-markdown', 'motir-prose', className].filter(Boolean).join(' ')}
       {...rest}
     >
       {renderMarkdown(value)}

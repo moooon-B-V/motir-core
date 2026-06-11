@@ -811,7 +811,7 @@ board is the standard; default-only is the gap.
 - **(0) Board-scoped settings page** — the 3.6.1 page, now board-scoped. The new
   header element is a right-aligned **board switcher** under a **"Configuring
   board"** label that NAMES the board being edited (here `Triage`, not the
-  default); the crumb carries the board name (`Settings · prodect · Board ·
+  default); the crumb carries the board name (`Settings · motir · Board ·
 Triage`). The editor body (name field · unmapped rail · column manager) is the
   **unchanged 3.6.3 surface**, just built from THAT board's projection.
 - **(1) Switcher open on the settings page** — reuses the 3.7.4 switcher

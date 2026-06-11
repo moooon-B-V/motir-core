@@ -50,7 +50,7 @@ const PRIORITIES: WorkItemPriority[] = ['lowest', 'low', 'medium', 'high', 'high
 /** The board-seed tenant owner's credentials — exported (no side effects) so the
  *  at-scale E2E specs/helpers can sign in as the owner `db:seed:large` creates.
  *  `seed-large.ts` consumes these too, so there is one source of truth. */
-export const SEED_LARGE_OWNER_EMAIL = 'seed-large@prodect.dev';
+export const SEED_LARGE_OWNER_EMAIL = 'seed-large@motir.dev';
 export const SEED_LARGE_OWNER_PASSWORD = 'hunter2hunter2'; // satisfies the credential-strength rule
 
 export interface SeedLargeBoardParams {

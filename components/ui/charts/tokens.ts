@@ -3,7 +3,7 @@
  *
  * Every colour a chart renders MUST route through one of the Tier-3
  * `--el-chart-*` element tokens (added to `app/globals.css`), NEVER a raw
- * Tier-0 `--color-*` — the swap-layer discipline in `prodect-core/CLAUDE.md`.
+ * Tier-0 `--color-*` — the swap-layer discipline in `motir-core/CLAUDE.md`.
  * These constants are the typed handles: pass `chartColor.actual` (a
  * `var(--el-chart-actual)` string) as a series/bar/reference colour and the
  * colour stays inside the swap layer (it re-skins under dark mode + a future

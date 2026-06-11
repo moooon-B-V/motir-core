@@ -29,7 +29,7 @@
         (2) the sidebar rail with the new "Ready" entry (active) BETWEEN Issues
             and Boards, carrying the readiness count badge.
         (3) the empty state (zero ready items) — the EmptyState primitive.
-        (4) the per-row "Copy prodect run …" confirmation toast.
+        (4) the per-row "Copy motir run …" confirmation toast.
       Toggle dark mode to confirm token parity. See design-notes.md for the spec.
     -->
     <style>
@@ -1160,7 +1160,7 @@
             <h2>Ready to start</h2>
             <span class="count-pill">6 ready</span>
           </div>
-          <p class="sub">Prodect · PROD</p>
+          <p class="sub">Motir · PROD</p>
         </div>
         <button class="help-btn" aria-haspopup="dialog" aria-expanded="false">
           <svg class="ic" viewBox="0 0 24 24"><use href="#i-help" /></svg>What is this?
@@ -1227,7 +1227,7 @@
               ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
             >
             <span class="copy-wrap">
-              <div class="tooltip" role="tooltip">Copy <code>prodect run PROD-42</code></div>
+              <div class="tooltip" role="tooltip">Copy <code>motir run PROD-42</code></div>
               <button class="copy-btn" aria-label="Copy run command for PROD-42">
                 <svg class="ic" viewBox="0 0 24 24"><use href="#i-copy" /></svg>
               </button>
@@ -1322,7 +1322,7 @@
           it has no unfinished blockers and can be started right now.
         </p>
         <p>
-          Click <code>Copy</code> on any row to put its <code>prodect run PROD-…</code> command on
+          Click <code>Copy</code> on any row to put its <code>motir run PROD-…</code> command on
           your clipboard, then paste it into your own coding agent to dispatch the work.
         </p>
       </div>
@@ -1339,7 +1339,7 @@
           <div class="rail-head">
             <span class="pj">P</span>
             <div>
-              <div class="pj-name">Prodect</div>
+              <div class="pj-name">Motir</div>
               <div class="pj-sub">moooon workspace</div>
             </div>
           </div>
@@ -1428,7 +1428,7 @@
 
     <!-- ════════════ PANEL 4 — copy-affordance confirmation toast ════════════ -->
     <div class="panel-label">
-      4 · Copy confirmation — clicking a row's "Copy prodect run …" fires the shipped Toast (success
+      4 · Copy confirmation — clicking a row's "Copy motir run …" fires the shipped Toast (success
       variant), bottom-right of the viewport.
     </div>
     <div class="panel">
@@ -1437,7 +1437,7 @@
           <svg class="t-ic" viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>
           <div class="t-body">
             <div class="t-title">Copied</div>
-            <div class="t-desc">Paste <code>prodect run PROD-42</code> into your terminal.</div>
+            <div class="t-desc">Paste <code>motir run PROD-42</code> into your terminal.</div>
           </div>
           <button class="t-close" aria-label="Close">
             <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>

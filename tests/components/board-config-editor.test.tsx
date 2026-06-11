@@ -25,7 +25,7 @@ import {
 function model(over: Partial<BoardConfigModel> = {}): BoardConfigModel {
   return {
     boardId: 'b1',
-    boardName: 'prodect board',
+    boardName: 'motir board',
     columns: [
       {
         id: 'c1',
@@ -135,7 +135,7 @@ describe('BoardConfigEditor (3.6.3) — status mapping (keyboard / non-drag path
 describe('BoardConfigEditor (3.6.3) — board rename', () => {
   it('auto-saves the board name on Enter (PATCH /api/board) and shows Saved', async () => {
     render(<BoardConfigEditor model={model()} isAdmin />);
-    const input = screen.getByDisplayValue('prodect board') as HTMLInputElement;
+    const input = screen.getByDisplayValue('motir board') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'Roadmap' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     fireEvent.blur(input);

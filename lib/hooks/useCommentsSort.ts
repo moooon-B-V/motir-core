@@ -10,9 +10,9 @@ import { useSyncExternalStore } from 'react';
  * oldest-first default (the Jira default sort) and the stored choice applies
  * right after hydration without a setState-in-effect.
  *
- * Persisted under `prodect.issues.comments.sort` in the `prodect.*` namespace.
+ * Persisted under `motir.issues.comments.sort` in the `motir.*` namespace.
  */
-export const COMMENTS_SORT_STORAGE_KEY = 'prodect.issues.comments.sort';
+export const COMMENTS_SORT_STORAGE_KEY = 'motir.issues.comments.sort';
 
 export type CommentsSortOrder = 'asc' | 'desc';
 

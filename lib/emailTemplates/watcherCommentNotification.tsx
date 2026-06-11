@@ -116,7 +116,7 @@ function buildPlainText(p: WatcherCommentNotificationEmailProps, t: T): string {
     '',
     t('reason', { identifier: p.workItemIdentifier }),
     '',
-    '— Prodect',
+    '— Motir',
   ].join('\n');
 }
 

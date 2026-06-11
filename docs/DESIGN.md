@@ -1,9 +1,9 @@
-# Prodect — DESIGN.md
+# Motir — DESIGN.md
 
 > Inspired by Notion's color & spacing and Figma's shape language. The
 > source DESIGN.md files (fetched via `npx getdesign@latest add notion` /
 > `add figma`) live in [`./inspiration/`](./inspiration/). This file
-> documents Prodect's own choices — what we actually built, not what we
+> documents Motir's own choices — what we actually built, not what we
 > took inspiration from verbatim.
 
 ## 1. Visual Theme & Atmosphere
@@ -117,7 +117,7 @@ All scale tokens are defined under `@theme` in `globals.css` as
 ### Rules
 
 - **Headlines default to `font-serif`** (Source Serif 4) — this is the
-  Prodect choice that distinguishes us from Notion's all-sans approach.
+  Motir choice that distinguishes us from Notion's all-sans approach.
 - **Body defaults to `font-sans`** (Inter). Don't use serif for body —
   Source Serif 4 isn't optimized for long reading at small sizes.
 - **Mono is for character-by-character meaning**: code, IDs, file paths,
@@ -176,7 +176,7 @@ via `open` + `onOpenChange`. Compose `Modal.Footer` for action buttons;
 
 Compact status or severity label. Two variant axes (use one or the other):
 
-- `status`: `planned | in-progress | done` — Prodect's Subtask lifecycle.
+- `status`: `planned | in-progress | done` — Motir's Subtask lifecycle.
 - `severity`: `info | success | warning | danger` — generic UI states.
 
 Always renders with `--radius-badge` (full pill) regardless of display style
@@ -363,10 +363,10 @@ in Story 1.0.5.2+.
 
 ## 9. Agent Prompt Guide
 
-**For Prodect's planner (Epic 4) — inject this section into every
+**For Motir's planner (Epic 4) — inject this section into every
 design-type Subtask prompt:**
 
-When generating UI for Prodect:
+When generating UI for Motir:
 
 - **Use semantic Tailwind classes** for color and shape: `bg-background`,
   `text-foreground`, `bg-primary`, `text-muted-foreground`,

@@ -1,4 +1,4 @@
-# Prodect — Design System Reference
+# Motir — Design System Reference
 
 > The canonical "how to use the design system" doc. Tokens, primitives,
 > patterns, voice & tone, and the don'ts. Every design-type Subtask prompt
@@ -15,7 +15,7 @@
 1. [Tokens](#tokens) — palette, type, spacing, radius, shadow
 2. [Primitives](#primitives) — the components in `components/ui/` (incl. the App shell)
 3. [Patterns](#patterns) — `EmptyState` and `ErrorState`
-4. [Voice & tone](#voice--tone) — how Prodect's copy reads
+4. [Voice & tone](#voice--tone) — how Motir's copy reads
 5. [Don'ts](#donts) — the anti-patterns that break the system
 
 ---
@@ -136,7 +136,7 @@ a generic "warning" (that's `Pill severity="warning"`).
 
 ```tsx
 <Input label="Email" type="email" helperText="We'll never share it." />
-<Input label="Workspace URL" addonStart={<Globe />} addonEnd=".prodect.dev" />
+<Input label="Workspace URL" addonStart={<Globe />} addonEnd=".motir.dev" />
 <Input label="Name" error="Required." />
 ```
 
@@ -240,7 +240,7 @@ overlay-backed dialogs use `Modal`; for hover hints use `Tooltip`.
 
 Two variant axes (one or the other, never both):
 
-- `status: planned | in-progress | done` — Prodect's Subtask lifecycle.
+- `status: planned | in-progress | done` — Motir's Subtask lifecycle.
 - `severity: info | success | warning | danger` — generic UI states.
 
 Always full-pill regardless of display style. **When to use**: short status
@@ -361,7 +361,7 @@ cmd-K `CommandGroupHeader` share one source of truth.
 
 **Supporting hooks** (`lib/hooks/`): `useSidebarCollapsed()` →
 `[collapsed, setCollapsed, toggleCollapsed]`, a persisted
-(`prodect.shell.sidebar.collapsed`) external store mirroring `lib/theme/`'s
+(`motir.shell.sidebar.collapsed`) external store mirroring `lib/theme/`'s
 lazy-read + `useSyncExternalStore` recipe; `useSidebarDrawer()` →
 `[open, setOpen]`, an ephemeral (not persisted) shared store;
 `useShortcut(combo, handler, opts?)`, the one shared keyboard-shortcut
@@ -461,10 +461,10 @@ still unhelpful.
 
 ### 4. Honest about AI
 
-Prodect ships an AI planner. When it guessed or doesn't know, say so —
+Motir ships an AI planner. When it guessed or doesn't know, say so —
 don't pretend agents are oracles.
 
-- ✅ "Prodect picked Next.js based on 'React + Postgres' in your description.
+- ✅ "Motir picked Next.js based on 'React + Postgres' in your description.
   Wrong stack? Edit the discovery doc."
 - ❌ "Based on our advanced AI analysis, we determined Next.js is optimal."
 
@@ -472,7 +472,7 @@ don't pretend agents are oracles.
 
 Names users already know. It's "delete", not "decommission"; "save", not
 "persist". Reserve domain words (Epic, Story, Subtask) for the actual
-Prodect data model.
+Motir data model.
 
 - ✅ "Delete project — this can't be undone."
 - ❌ "Decommission project — initiate irreversible removal flow."

@@ -162,7 +162,7 @@ jobs:
     name: Playwright E2E
     runs-on: ubuntu-latest
     # Skip E2E on plan-seed and design PRs. A `seed/*` PR only edits
-    # scripts/plan-seed/** (the plan data the seed loads — see PRODECT.md "Plan
+    # scripts/plan-seed/** (the plan data the seed loads — see MOTIR.md "Plan
     # seed"); a `design/*` PR only edits design/** (mockups / .pen / PNG /
     # design-notes.md from a `type: design` subtask). Neither touches app code in
     # the Next bundle, so the Playwright suite has nothing new to exercise.
@@ -203,9 +203,9 @@ jobs:
       # these on the dev server it spawns, but setting them at the job
       # level too keeps them visible to anyone reading the workflow file.
       EMAIL_PROVIDER: file
-      EMAIL_OUTBOX_PATH: /tmp/prodect-test-emails.jsonl
+      EMAIL_OUTBOX_PATH: /tmp/motir-test-emails.jsonl
       E2E_TEST_OAUTH: '1'
-      E2E_TEST_OAUTH_USER_PATH: /tmp/prodect-test-oauth-user.json
+      E2E_TEST_OAUTH_USER_PATH: /tmp/motir-test-oauth-user.json
       # Skip the husky install postinstall — CI has no .git/hooks to wire.
       HUSKY: '0'
     steps:

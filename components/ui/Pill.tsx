@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils/cn';
  * Pill — compact status or severity label. Pure span, no interaction.
  *
  * Variant axes (use exactly one):
- *  - `status`: planned | in-progress | done — Prodect's Subtask lifecycle states.
+ *  - `status`: planned | in-progress | done — Motir's Subtask lifecycle states.
  *  - `severity`: info | success | warning | danger — semantic UI states.
  *  - `memberRole`: admin | member | viewer — a project membership role
  *    (Story 6.4), one hued tint per role. (Named `memberRole`, not `role`, so

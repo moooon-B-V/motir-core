@@ -102,7 +102,7 @@ VERIFIED June 2026, Atlassian support/community — checked, not asserted, per
 planning view into an "all issues" list on the same page — it provides a link
 that opens the **issue navigator** (the all-issues search/list view) with the
 board's filter applied, so you can see every issue across the backlog AND all
-sprints in one sortable/filterable list. Prodect already ships that navigator —
+sprints in one sortable/filterable list. Motir already ships that navigator —
 the **Story-2.5 `/issues` List/Tree view** (every project issue, sortable +
 filterable + server-paged) — so the backlog does NOT rebuild a flat list; it
 **deep-links out to it**. (This is exactly why "see all issues from the

@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code and any other coding agent working
 in this repository. It is auto-loaded as durable context for every Subtask
-prompt dispatched against `prodect-core`.
+prompt dispatched against `motir-core`.
 
 The architecture rules below are the project's load-bearing structural
 contracts. They are not style preferences — every new endpoint, every new
@@ -240,7 +240,7 @@ lib/emailTemplates/
   `process.env` lookups, no token generation. All inputs come in as
   typed props. This makes them snapshot-testable in isolation and
   preview-renderable via `react-email dev` when we wire that up.
-- Shared chrome (the "Prodect" header, the "— Prodect" sign-off, the
+- Shared chrome (the "Motir" header, the "— Motir" sign-off, the
   CTA button) belongs in `_components/` so layout changes happen once.
 - The template file ALSO has a default export of the underlying React
   component. That's required for the `react-email dev` preview server
@@ -265,7 +265,7 @@ function WorkspaceInviteEmail(p: WorkspaceInviteEmailProps) {
   return (
     <EmailLayout preview={`${p.inviterName} invited you to join ${p.workspaceName}`}>
       <Text>Hi,</Text>
-      <Text>{p.inviterName} invited you to join {p.workspaceName} on Prodect.</Text>
+      <Text>{p.inviterName} invited you to join {p.workspaceName} on Motir.</Text>
       <PrimaryButton href={p.acceptUrl} label="Accept invite" />
     </EmailLayout>
   );
@@ -276,7 +276,7 @@ export async function workspaceInviteEmail(
 ): Promise<RenderedEmail> {
   const html = await render(<WorkspaceInviteEmail {...props} />);
   return {
-    subject: `You're invited to join ${props.workspaceName} on Prodect`,
+    subject: `You're invited to join ${props.workspaceName} on Motir`,
     text: buildPlainText(props),
     html,
   };
@@ -534,5 +534,5 @@ swap can redefine the full shape language, not just colour.
   with no spurious drop.)
 - **Out-of-scope findings** go to
   `/Users/yuezhu/projects/prodect/prodect_plan/PRODECT_FINDINGS.md`,
-  not into a CLAUDE.md or PRODECT.md update. The planner promotes
+  not into a CLAUDE.md or MOTIR.md update. The planner promotes
   findings into future Subtasks during replan passes.

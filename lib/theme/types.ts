@@ -1,5 +1,5 @@
 /**
- * Theme types for Prodect's two-axis design system.
+ * Theme types for Motir's two-axis design system.
  *
  * Axis 1 — Color (light/dark base, accent override, full-palette override)
  * Axis 2 — Shape (display-style controls radius/shadow/spacing/density)
@@ -21,8 +21,8 @@ export type DisplayStyle = 'default' | 'soft';
 
 /** Storage keys for persisting user preferences. */
 export const THEME_STORAGE_KEYS = {
-  pattern: 'prodect.theme.pattern',
-  displayStyle: 'prodect.theme.displayStyle',
+  pattern: 'motir.theme.pattern',
+  displayStyle: 'motir.theme.displayStyle',
 } as const;
 
 /** Sensible defaults if localStorage is empty. */

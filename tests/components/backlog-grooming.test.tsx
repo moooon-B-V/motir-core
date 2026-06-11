@@ -177,7 +177,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-const ui = <BacklogContainer workflow={workflow} members={members} projectName="prodect" />;
+const ui = <BacklogContainer workflow={workflow} members={members} projectName="motir" />;
 
 describe('Backlog selection model (4.2.5)', () => {
   it('click selects one; the checkbox toggles; the selection bar shows the count', async () => {

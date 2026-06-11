@@ -16,7 +16,7 @@ import { BUILTIN_FILTER_ID_PREFIX, BUILTIN_RECENT_WINDOW_DAYS } from './constant
 //     2.2 category roll-up), read fresh per resolve.
 // "Viewed recently" is omitted (no view-history substrate — the recorded
 // extension slot); "Resolved recently" approximates Jira's resolutiondate
-// (a substrate Prodect doesn't carry) as done-category + updated-recently —
+// (a substrate Motir doesn't carry) as done-category + updated-recently —
 // the closest expressible shape, noted in the story's recorded deviations.
 
 export interface BuiltinFilterInputs {

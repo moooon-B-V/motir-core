@@ -2,7 +2,7 @@ import { defineJob } from '../defineJob';
 import type { EmailSendData } from '../types';
 
 // The first PRODUCTION background job (Story 1.6 · Subtask 1.6.3): the durable
-// `email.send`. Every transactional email in prodect-core flows through here.
+// `email.send`. Every transactional email in motir-core flows through here.
 // The request-lifecycle callers (password reset in lib/auth, workspace invites
 // in workspaceInvitesService) used to render + `sendEmail()` INSIDE the HTTP
 // request — so a slow or down provider stalled the request or returned a

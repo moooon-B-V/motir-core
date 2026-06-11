@@ -20,7 +20,7 @@ const SECTIONS: SidebarSection[] = [
   },
 ];
 
-const STORAGE_KEY = 'prodect.shell.sidebar.collapsed';
+const STORAGE_KEY = 'motir.shell.sidebar.collapsed';
 
 /** Re-import the shell modules fresh so each test gets a pristine store. */
 async function loadShell() {

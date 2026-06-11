@@ -2,7 +2,7 @@
 //
 // The dev server runs with EMAIL_PROVIDER=file (set in playwright.config.ts's
 // webServer.env), which appends each email as a JSON line to
-// EMAIL_OUTBOX_PATH (default /tmp/prodect-test-emails.jsonl). This helper
+// EMAIL_OUTBOX_PATH (default /tmp/motir-test-emails.jsonl). This helper
 // polls the file and returns the most recent email matching a recipient
 // predicate.
 //
@@ -17,7 +17,7 @@
 
 import { readFile } from 'node:fs/promises';
 
-const EMAIL_OUTBOX_PATH = process.env['EMAIL_OUTBOX_PATH'] ?? '/tmp/prodect-test-emails.jsonl';
+const EMAIL_OUTBOX_PATH = process.env['EMAIL_OUTBOX_PATH'] ?? '/tmp/motir-test-emails.jsonl';
 
 interface CapturedEmail {
   to: string;

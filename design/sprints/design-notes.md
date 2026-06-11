@@ -69,7 +69,7 @@ rung 1 — verified against Atlassian's "Complete a sprint" docs, not asserted).
    end-date trigger in `--el-danger` + an inline `field-error` ("End date must be
    after the start date", alert glyph) and DISABLES the primary button. Text +
    `--el-danger`, never colour alone (finding #35).
-3. **Start blocked — already active.** A `--el-tint-peach` `alert` ("**prodect**
+3. **Start blocked — already active.** A `--el-tint-peach` `alert` ("**motir**
    already has an active sprint (**Sprint 6**). Complete it first — a project can
    run one active sprint at a time." + a "View Sprint 6" link) maps to the backend
    `SprintAlreadyActiveError` (409); primary disabled. (One active sprint per

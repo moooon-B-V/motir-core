@@ -21,7 +21,7 @@ import { GoogleButton } from '../_components/GoogleButton';
  *                     Renders mockup 02.
  *
  * One route, internal state. The URL stays /sign-in throughout (per
- * Story-1.1 decision recorded in PRODECT.md). On wrong password, the
+ * Story-1.1 decision recorded in MOTIR.md). On wrong password, the
  * user stays on step 2 and sees an inline error (mockup 07).
  *
  * The "Forgot password?" position is ABOVE the password field — that's

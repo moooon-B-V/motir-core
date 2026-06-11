@@ -14,7 +14,7 @@ import { EstimationConfigProvider } from '@/components/issues/EstimationConfigPr
 import { NewIssueButton } from '../issues/_components/NewIssueButton';
 import { BacklogContainer } from './_components/BacklogContainer';
 
-// The Backlog / sprint-planning surface (Story 4.2 · Subtask 4.2.3) — Prodect's
+// The Backlog / sprint-planning surface (Story 4.2 · Subtask 4.2.3) — Motir's
 // clone of the Jira backlog. The destination the new "Backlog" sidebar item +
 // the ⌘K "Go to Backlog" entry open. Server Component: it resolves the active
 // project, renders the page header + toolbar immediately, then hands off to the

@@ -205,7 +205,7 @@ export const backlogService = {
    * moved issues' DTOs in selection order.
    *
    * Empty `itemIds` is a guarded NO-OP (returns `[]`, no transaction) — not an
-   * error (`prodect-core-coverage-gate`). Throws: `BulkBatchTooLargeError` (400
+   * error (`motir-core-coverage-gate`). Throws: `BulkBatchTooLargeError` (400
    * — over the cap), `SprintNotFoundError` (404), `WorkItemNotFoundError` (404 —
    * an unknown / cross-workspace member), `CrossProjectSprintAssignmentError`
    * (422).

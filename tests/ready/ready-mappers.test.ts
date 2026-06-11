@@ -45,7 +45,7 @@ function makeAssignee(overrides: Partial<User> = {}): ReadyAssignee {
   return {
     id: 'user_a',
     name: 'Ada Lovelace',
-    email: 'ada@prodect.co',
+    email: 'ada@motir.co',
     image: 'https://cdn.example/ada.png',
     ...(overrides as Partial<ReadyAssignee>),
   };
@@ -85,7 +85,7 @@ describe('toReadyItemDto', () => {
   it('falls back to the email localpart when the assignee has no name', () => {
     const dto = toReadyItemDto(makeWorkItem(), {
       statusCategory: 'todo',
-      assignee: makeAssignee({ name: '', email: 'grace@prodect.co' }),
+      assignee: makeAssignee({ name: '', email: 'grace@motir.co' }),
     });
     expect(dto.assignee?.name).toBe('grace');
   });

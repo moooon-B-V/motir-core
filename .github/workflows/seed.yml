@@ -1,11 +1,11 @@
 name: Reseed plan on merge
 
 # A plan-seed PR merges and `main` changes under scripts/plan-seed/** — but
-# reseeding the live `moooon`/`prodect` tenant is a destructive clear-and-reseed
+# reseeding the live `moooon`/`motir` tenant is a destructive clear-and-reseed
 # that burns Neon compute, so we DON'T do it for every seed merge. Reseeding is
 # OPT-IN, gated on a `[reseed]` marker in the merge commit message:
 #
-#   • STATUS-FLIP seed PRs (the common `prodect run` / `prodect mark <id> done`
+#   • STATUS-FLIP seed PRs (the common `motir run` / `motir mark <id> done`
 #     case — flipping a subtask planned→in_progress→done) edit the seed so it
 #     stays the source of truth, but DON'T carry the marker. Yue applies those
 #     status changes by hand in the live tenant (a cheap drag), so this workflow
@@ -18,7 +18,7 @@ name: Reseed plan on merge
 # commit subject AND the default merge-commit body, so it lands in
 # github.event.head_commit.message regardless of merge style.
 #
-# The seed clears-and-reseeds ONLY the `moooon`/`prodect` workspace (by name,
+# The seed clears-and-reseeds ONLY the `moooon`/`motir` workspace (by name,
 # owned by the fixed seed user); no other tenant is touched. Because status-flip
 # PRs keep the seed truthful, a later `[reseed]` regenerates the SAME statuses —
 # the user's manual flips are not reverted (invariant: never skip MERGING a
@@ -46,7 +46,7 @@ concurrency:
 
 jobs:
   reseed:
-    name: Reseed moooon/prodect from the plan seed
+    name: Reseed moooon/motir from the plan seed
     runs-on: ubuntu-latest
     env:
       # The production (unpooled) Neon connection string — add this as a GitHub

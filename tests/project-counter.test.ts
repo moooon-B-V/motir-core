@@ -35,7 +35,7 @@ async function makeWorkspaceWithProject(email: string, name: string, identifier?
 
 describe('allocateWorkItemNumber', () => {
   it('returns sequential, gap-free numbers (1, 2, 3, …)', async () => {
-    const { projectId } = await makeWorkspaceWithProject('owner@example.com', 'Prodect Core');
+    const { projectId } = await makeWorkspaceWithProject('owner@example.com', 'Motir Core');
 
     const n1 = await db.$transaction((tx) =>
       projectRepository.allocateWorkItemNumber(projectId, tx),
@@ -79,7 +79,7 @@ describe('allocateWorkItemNumber', () => {
   });
 
   it('is gap-free under concurrent allocation', async () => {
-    const { projectId } = await makeWorkspaceWithProject('owner@example.com', 'Prodect Core');
+    const { projectId } = await makeWorkspaceWithProject('owner@example.com', 'Motir Core');
 
     // Fire 20 allocations concurrently. UPDATE … RETURNING serializes on the
     // row, so the set of returned numbers must be exactly {1..20} with no

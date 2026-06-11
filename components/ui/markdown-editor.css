@@ -1,84 +1,84 @@
 /* Content styles for the WYSIWYG editor (Subtask 2.3.10). The editor edits the
    RENDERED view — these give typed Markdown its inline appearance (headings,
-   bold, lists, code, quotes, task lists). Scoped to `.prodect-prose` so they
+   bold, lists, code, quotes, task lists). Scoped to `.motir-prose` so they
    never leak. Colors come from the design-system custom properties so dark mode
    works via the `data-color-mode` wrapper. */
-.prodect-prose {
+.motir-prose {
   font-size: 0.875rem;
   line-height: 1.6;
   color: var(--el-text);
 }
-.prodect-prose:focus {
+.motir-prose:focus {
   outline: none;
 }
-.prodect-prose > * + * {
+.motir-prose > * + * {
   margin-top: 0.6em;
 }
-.prodect-prose h1 {
+.motir-prose h1 {
   font-size: 1.5rem;
   font-weight: 600;
   line-height: 1.25;
 }
-.prodect-prose h2 {
+.motir-prose h2 {
   font-size: 1.25rem;
   font-weight: 600;
   line-height: 1.3;
 }
-.prodect-prose h3 {
+.motir-prose h3 {
   font-size: 1.1rem;
   font-weight: 600;
 }
-.prodect-prose strong {
+.motir-prose strong {
   font-weight: 600;
 }
-.prodect-prose em {
+.motir-prose em {
   font-style: italic;
 }
-.prodect-prose a {
+.motir-prose a {
   color: var(--el-highlight);
   text-decoration: underline;
 }
-.prodect-prose ul,
-.prodect-prose ol {
+.motir-prose ul,
+.motir-prose ol {
   padding-left: 1.5rem;
 }
-.prodect-prose ul {
+.motir-prose ul {
   list-style: disc;
 }
-.prodect-prose ol {
+.motir-prose ol {
   list-style: decimal;
 }
-.prodect-prose blockquote {
+.motir-prose blockquote {
   border-left: 3px solid var(--el-border);
   padding-left: 0.75rem;
   color: var(--el-text-muted);
 }
-.prodect-prose code {
+.motir-prose code {
   font-family: var(--font-mono, monospace);
   font-size: 0.85em;
   background: var(--el-surface);
   padding: 0.1em 0.35em;
   border-radius: 4px;
 }
-.prodect-prose pre {
+.motir-prose pre {
   background: var(--el-surface);
   padding: 0.75rem;
   border-radius: 6px;
   overflow-x: auto;
 }
-.prodect-prose pre code {
+.motir-prose pre code {
   background: transparent;
   padding: 0;
 }
-.prodect-prose img {
+.motir-prose img {
   max-width: 100%;
   border-radius: 6px;
 }
-.prodect-prose ul[data-type='taskList'] {
+.motir-prose ul[data-type='taskList'] {
   list-style: none;
   padding-left: 0.25rem;
 }
-.prodect-prose ul[data-type='taskList'] li {
+.motir-prose ul[data-type='taskList'] li {
   display: flex;
   gap: 0.5rem;
   align-items: flex-start;
@@ -88,8 +88,8 @@
    hue in the tint BACKGROUND with strong text (AA, finding #35), badge radius +
    the small-chip kbd padding pair (element shape tokens — they flip with
    data-display-style). One rule covers BOTH surfaces: the editor's mention node
-   and MarkdownView's rendered token, since each sits inside .prodect-prose. */
-.prodect-prose .mention-chip {
+   and MarkdownView's rendered token, since each sits inside .motir-prose. */
+.motir-prose .mention-chip {
   display: inline-flex;
   align-items: center;
   background: var(--el-tint-lavender);

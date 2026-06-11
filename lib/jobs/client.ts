@@ -13,6 +13,9 @@ import { inngestEventKey, isInngestDev } from '@/lib/env';
 // auto-detects cloud. The signing key is read automatically by the SDK from
 // INNGEST_SIGNING_KEY (it's not a settable option here).
 export const inngest = new Inngest({
+  // The Inngest CLOUD APP ID — a live dashboard identifier (1.6.7 wiring), not
+  // a brand string. Renaming it orphans the synced app, so the 8.7 rebrand
+  // leaves it; an id change needs its own Inngest-dashboard re-sync pass.
   id: 'prodect-core',
   eventKey: inngestEventKey(),
   isDev: isInngestDev() || undefined,

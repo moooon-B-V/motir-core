@@ -22,7 +22,7 @@
       Labels / Components fields and the eye-icon watch control. Labels are a
       type-to-create folksonomy (create-row in the picker, no spaces — hyphens).
       ⚠️ JUSTIFIED DEVIATION (product owner, 2026-06-10): label chips are
-      COLOURED, unlike Jira's colourless labels — Prodect is deliberately less
+      COLOURED, unlike Jira's colourless labels — Motir is deliberately less
       enterprise / more colourful. The tint is AUTO-ASSIGNED deterministically
       from the label name (FNV-1a over nameLower, mod 6 — the seed-loader hash
       family) into the existing --el-tint-{peach,rose,mint,lavender,sky,yellow}
@@ -541,7 +541,7 @@
       }
 
       /* LABEL chips — coloured (the recorded deviation from Jira's colourless
-         labels: Prodect is deliberately less enterprise / more colourful).
+         labels: Motir is deliberately less enterprise / more colourful).
          Hue in the tint BACKGROUND + --el-text-strong text (finding #35 AA);
          tint auto-assigned deterministically from the label name (FNV-1a mod 6
          — the seed-loader hash family), so no schema column, no picker, the

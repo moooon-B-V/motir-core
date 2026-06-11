@@ -57,8 +57,7 @@ async function assertSignedInAs(page: Page, email: string): Promise<void> {
   await expect(accountPopover).not.toBeVisible();
 }
 
-const TEST_USER_PATH =
-  process.env['E2E_TEST_OAUTH_USER_PATH'] ?? '/tmp/prodect-test-oauth-user.json';
+const TEST_USER_PATH = process.env['E2E_TEST_OAUTH_USER_PATH'] ?? '/tmp/motir-test-oauth-user.json';
 
 const GOOGLE_USER_EMAIL = 'google-e2e@example.com';
 const GOOGLE_USER_SUB = 'google-sub-001';

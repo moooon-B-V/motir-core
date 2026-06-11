@@ -29,7 +29,7 @@
 // per-feature specs: sign up through the real UI (shell-session.signUp →
 // auto-workspace → /dashboard), then seed the project + the two parent
 // candidates SERVER-SIDE through the shipped services (the one sanctioned
-// cross-layer reach for tests), so the seeded tree is exactly what Prodect
+// cross-layer reach for tests), so the seeded tree is exactly what Motir
 // itself renders. The journey item itself is created THROUGH the UI — that is
 // the surface under test.
 //

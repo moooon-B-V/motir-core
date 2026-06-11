@@ -64,7 +64,7 @@ describe('fileProvider', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'prodect-email-test-'));
+    tmpDir = mkdtempSync(join(tmpdir(), 'motir-email-test-'));
     process.env['EMAIL_PROVIDER'] = 'file';
     process.env['EMAIL_OUTBOX_PATH'] = join(tmpDir, 'outbox.jsonl');
   });

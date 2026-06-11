@@ -49,9 +49,9 @@
 // Default Jira keeps Story / Task / Bug as strict siblings (Epic → standard
 // issue → Sub-task only). This matrix is deeper — it also allows story→task,
 // story→bug, and task→bug. That is an intentional, justified deviation, NOT an
-// oversight: Prodect is AI-native and the work-item tree IS the execution DAG,
+// oversight: Motir is AI-native and the work-item tree IS the execution DAG,
 // so scoping finer work under coarser work earns rollup (a task isn't done
-// while it has open child bugs) and coding-agent context inheritance. Prodect
+// while it has open child bugs) and coding-agent context inheritance. Motir
 // already plans itself this way (Epic → Story → typed sub-work). Per the
 // justified-deviation rule, the richer shape ships only because a concrete use
 // case earns its complexity.

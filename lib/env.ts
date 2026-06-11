@@ -18,7 +18,7 @@
 //     SDK from the environment (it's a read-only getter on the client, not a
 //     settable option), so there's no accessor here. In cloud mode a missing
 //     key raises Inngest's OWN clear error at request time — that's the loud-
-//     failure surface, NOT a Prodect boot check (forcing a module-load throw
+//     failure surface, NOT a Motir boot check (forcing a module-load throw
 //     would break local dev / CI / concurrent sibling worktrees that have no
 //     reason to set it — finding #30 sharp edge #6).
 //

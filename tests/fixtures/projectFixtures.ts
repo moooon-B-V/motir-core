@@ -17,7 +17,7 @@ import type { ProjectDTO } from '@/lib/dto/projects';
 export interface CreateTestProjectOptions {
   workspaceId: string;
   actorUserId: string;
-  /** Override the project name (default 'Prodect'). */
+  /** Override the project name (default 'Motir'). */
   name?: string;
   /** Override the project identifier prefix (default 'PROD'). */
   identifier?: string;
@@ -31,7 +31,7 @@ export async function createTestProject(opts: CreateTestProjectOptions): Promise
   return projectsService.createProject({
     workspaceId: opts.workspaceId,
     actorUserId: opts.actorUserId,
-    name: opts.name ?? 'Prodect',
+    name: opts.name ?? 'Motir',
     identifier: opts.identifier ?? 'PROD',
   });
 }

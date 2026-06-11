@@ -154,7 +154,7 @@ beforeEach(() => {
 describe('Scrum board (4.5.3) — page resolution', () => {
   it('renders the Kanban view with NO sprint header / point pills when type=kanban', async () => {
     vi.stubGlobal('fetch', mockFetchOk(projection({ type: 'kanban', sprint: null })));
-    render(<BoardContainer projectName="Prodect" workflow={WORKFLOW} />);
+    render(<BoardContainer projectName="Motir" workflow={WORKFLOW} />);
     await waitFor(() => expect(screen.getByTestId('board')).toBeTruthy());
     expect(screen.queryByTestId('sprint-header')).toBeNull();
     expect(screen.queryByTestId('board-points-c1')).toBeNull();
@@ -162,7 +162,7 @@ describe('Scrum board (4.5.3) — page resolution', () => {
 
   it('renders the sprint header + the board when type=scrum with an active sprint', async () => {
     vi.stubGlobal('fetch', mockFetchOk(projection({ type: 'scrum', sprint: sprint() })));
-    render(<BoardContainer projectName="Prodect" workflow={WORKFLOW} />);
+    render(<BoardContainer projectName="Motir" workflow={WORKFLOW} />);
     await waitFor(() => expect(screen.getByTestId('board')).toBeTruthy());
     expect(screen.getByTestId('sprint-header')).toBeTruthy();
   });
@@ -171,7 +171,7 @@ describe('Scrum board (4.5.3) — page resolution', () => {
 describe('Scrum board (4.5.3) — sprint header', () => {
   it('shows name, state, goal, time remaining and the committed/completed/remaining points', async () => {
     vi.stubGlobal('fetch', mockFetchOk(projection({ type: 'scrum', sprint: sprint() })));
-    render(<BoardContainer projectName="Prodect" workflow={WORKFLOW} />);
+    render(<BoardContainer projectName="Motir" workflow={WORKFLOW} />);
     const header = await screen.findByTestId('sprint-header');
     const h = within(header);
     expect(h.getByText('Sprint 24')).toBeTruthy();
@@ -194,7 +194,7 @@ describe('Scrum board (4.5.3) — sprint header', () => {
       'fetch',
       mockFetchOk(projection({ type: 'scrum', sprint: sprint({ daysRemaining: 0 }) })),
     );
-    render(<BoardContainer projectName="Prodect" workflow={WORKFLOW} />);
+    render(<BoardContainer projectName="Motir" workflow={WORKFLOW} />);
     const header = await screen.findByTestId('sprint-header');
     expect(within(header).getByText('Ended')).toBeTruthy();
     expect(within(header).queryByText(/days remaining/)).toBeNull();
@@ -210,7 +210,7 @@ describe('Scrum board (4.5.3) — sprint header', () => {
         }),
       ),
     );
-    render(<BoardContainer projectName="Prodect" workflow={WORKFLOW} />);
+    render(<BoardContainer projectName="Motir" workflow={WORKFLOW} />);
     const header = await screen.findByTestId('sprint-header');
     expect(within(header).getAllByText('—').length).toBe(3);
     // Unestimated → no per-column point pills (they'd all read "0 pts").
@@ -219,7 +219,7 @@ describe('Scrum board (4.5.3) — sprint header', () => {
 
   it('hides the Complete-sprint entry when the actor cannot edit', async () => {
     vi.stubGlobal('fetch', mockFetchOk(projection({ type: 'scrum', sprint: sprint() })));
-    render(<BoardContainer projectName="Prodect" workflow={WORKFLOW} canEdit={false} />);
+    render(<BoardContainer projectName="Motir" workflow={WORKFLOW} canEdit={false} />);
     await screen.findByTestId('sprint-header');
     expect(screen.queryByTestId('scrum-complete-sprint')).toBeNull();
   });
@@ -228,7 +228,7 @@ describe('Scrum board (4.5.3) — sprint header', () => {
 describe('Scrum board (4.5.3) — per-column point totals', () => {
   it('renders the "N pts" pill in each column header for an estimated sprint', async () => {
     vi.stubGlobal('fetch', mockFetchOk(projection({ type: 'scrum', sprint: sprint() })));
-    render(<BoardContainer projectName="Prodect" workflow={WORKFLOW} />);
+    render(<BoardContainer projectName="Motir" workflow={WORKFLOW} />);
     await waitFor(() => expect(screen.getByTestId('board')).toBeTruthy());
     expect(screen.getByTestId('board-points-c1').textContent).toBe('13 pts');
     expect(screen.getByTestId('board-points-c2').textContent).toBe('8 pts');
@@ -240,7 +240,7 @@ describe('Scrum board (4.5.3) — per-column point totals', () => {
 describe('Scrum board (4.5.3) — no active sprint', () => {
   it('replaces the board with the "No active sprint" state + a Backlog CTA', async () => {
     vi.stubGlobal('fetch', mockFetchOk(projection({ type: 'scrum', sprint: null })));
-    render(<BoardContainer projectName="Prodect" workflow={WORKFLOW} />);
+    render(<BoardContainer projectName="Motir" workflow={WORKFLOW} />);
     await waitFor(() => expect(screen.getByText('No active sprint')).toBeTruthy());
     // The board itself is NOT rendered (no empty six-column board).
     expect(screen.queryByTestId('board')).toBeNull();
@@ -251,7 +251,7 @@ describe('Scrum board (4.5.3) — no active sprint', () => {
 
   it('does NOT show the no-active-sprint state for a kanban board with no sprint', async () => {
     vi.stubGlobal('fetch', mockFetchOk(projection({ type: 'kanban', sprint: null })));
-    render(<BoardContainer projectName="Prodect" workflow={WORKFLOW} />);
+    render(<BoardContainer projectName="Motir" workflow={WORKFLOW} />);
     await waitFor(() => expect(screen.getByTestId('board')).toBeTruthy());
     expect(screen.queryByText('No active sprint')).toBeNull();
   });

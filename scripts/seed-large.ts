@@ -96,7 +96,7 @@ const SCRUM_UNESTIMATED_EVERY = n('SEED_SCRUM_UNESTIMATED_EVERY', 4);
 async function ensureBoardMembers(workspaceId: string, count: number): Promise<string[]> {
   const ids: string[] = [];
   for (let i = 0; i < count; i++) {
-    const email = `seed-large-board-m${i + 1}@prodect.dev`;
+    const email = `seed-large-board-m${i + 1}@motir.dev`;
     const existing = await db.user.findUnique({ where: { email } });
     const user =
       existing ??

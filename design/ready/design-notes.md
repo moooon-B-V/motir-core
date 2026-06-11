@@ -57,7 +57,7 @@ The board is flat — there is **no `/ready` board view**; readiness is a set.
     **"{n} ready"** (`t('ready.count', { count })`). The denominator the agent
     will dispatch from; neutral, never coloured by urgency.
   - **Subtitle** — `text-(--el-text-muted) text-sm` reading the active project:
-    **"{projectName} · {projectKey}"** (e.g. "Prodect · PROD").
+    **"{projectName} · {projectKey}"** (e.g. "Motir · PROD").
   - **"What is this?" button** — a `Button variant="ghost" size="sm"` with a
     leading lucide `circle-question-mark` (the glyph behind `CircleHelp`),
     `text-(--el-text-secondary)`. Opens the predicate popover (panel 1b). First-
@@ -99,7 +99,7 @@ text-(--el-text-muted)`.
   revealed on row hover / keyboard focus. Keyboard-reachable with an explicit
   `aria-label` **"Copy run command for PROD-<n>"**. On hover it shows the
   **`Tooltip`** (dark `--el-text` bubble, `--el-text-inverted` text) reading
-  **Copy `prodect run PROD-<n>`**. Click copies the server-built `runCommand`
+  **Copy `motir run PROD-<n>`**. Click copies the server-built `runCommand`
   (`ReadyItemDispatchDto.runCommand`, the 7.0.3 field) verbatim and fires the
   panel-4 toast.
 
@@ -112,9 +112,9 @@ header help button. Copy:
 - **Heading** — `What is "ready"?`
 - **Body 1** — "A work item is **ready** when every issue blocking it has been
   completed — so it has no unfinished blockers and can be started right now."
-- **Body 2** — "Click `Copy` on any row to put its `prodect run PROD-…` command on
+- **Body 2** — "Click `Copy` on any row to put its `motir run PROD-…` command on
   your clipboard, then paste it into your own coding agent to dispatch the work."
-  (the `prodect run PROD-…` rendered as an inline `--el-code-bg` code chip.)
+  (the `motir run PROD-…` rendered as an inline `--el-code-bg` code chip.)
 
 ## Sidebar entry + count badge (panel 2)
 
@@ -129,7 +129,7 @@ border)` + `shadow-(--shadow-subtle)` + accent icon + `font-medium`), exactly
   card defers to me). The card _suggested_ `Zap`, but **`Zap` is already the
   epic issue-type glyph** (`ISSUE_TYPE_META.epic.icon`) — reusing it for a nav
   item invites a glyph clash. `circle-play` reads as "run / dispatch", which is
-  exactly what this surface does (its rows copy a `prodect run` command), and it
+  exactly what this surface does (its rows copy a `motir run` command), and it
   collides with no issue-type glyph. Justified deviation from the card's
   suggestion under a concrete reason (the dispatch semantic + the glyph-clash
   avoidance).
@@ -163,7 +163,7 @@ The shipped **`Toast`** primitive, `variant="success"` (left `border-(--el-
 success)`, `CheckCircle2` icon in `--el-success`), bottom-right of the viewport:
 
 - **Title** — **"Copied"** (`t('ready.toast.title')`).
-- **Description** — **"Paste `prodect run PROD-<n>` into your terminal."**
+- **Description** — **"Paste `motir run PROD-<n>` into your terminal."**
   (`t('ready.toast.body', { command })`), the command as an inline `--el-code-bg`
   code chip.
 - Fired via `useToast()` from the row's copy handler. The close `×` is the
