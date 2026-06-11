@@ -5,9 +5,11 @@ import { customFieldErrorResponse } from '@/lib/customFields/errorResponse';
 
 // /api/fields/[fieldId] (Story 5.3 · Subtask 5.3.2) — project-admin gated.
 //   PATCH  — exactly ONE of:
-//            { label }    → rename (the machine `key` is immutable)
-//            { position } → reorder (a client-minted fractional key — the
-//                           board-settings precedent)
+//            { label }       → rename (the machine `key` is immutable)
+//            { position }    → reorder (a client-minted fractional key — the
+//                              board-settings precedent)
+//            { description } → update the description (5.3.6's edit modal;
+//                              empty string clears to null)
 //   DELETE — HARD-delete the field (team-managed semantics: immediate,
 //            permanent; options + stored values cascade). Returns the
 //            receipt naming the destroyed value count.
@@ -35,23 +37,26 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
   const b = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
   const label = typeof b.label === 'string' ? b.label : null;
   const position = typeof b.position === 'string' ? b.position : null;
-  if ((label === null) === (position === null)) {
+  const description = typeof b.description === 'string' ? b.description : null;
+  const provided = [label, position, description].filter((v) => v !== null).length;
+  if (provided !== 1) {
     return NextResponse.json(
-      { error: 'Provide exactly one of "label" or "position".', code: 'BAD_REQUEST' },
+      {
+        error: 'Provide exactly one of "label", "position", or "description".',
+        code: 'BAD_REQUEST',
+      },
       { status: 400 },
     );
   }
 
   try {
+    const base = { fieldId, actorUserId: ctx.userId, ctx };
     const field =
       label !== null
-        ? await customFieldsService.renameField({ fieldId, actorUserId: ctx.userId, ctx, label })
-        : await customFieldsService.reorderField({
-            fieldId,
-            actorUserId: ctx.userId,
-            ctx,
-            position: position!,
-          });
+        ? await customFieldsService.renameField({ ...base, label })
+        : position !== null
+          ? await customFieldsService.reorderField({ ...base, position })
+          : await customFieldsService.updateFieldDescription({ ...base, description });
     return NextResponse.json({ field });
   } catch (err) {
     const mapped = customFieldErrorResponse(err);
