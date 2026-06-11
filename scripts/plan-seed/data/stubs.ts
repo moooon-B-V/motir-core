@@ -226,7 +226,8 @@ export const STUB_STORIES: PlanStory[] = [
       "planner reads the user's CODE through TWO retrieval sources, both landing in this " +
       "story's retrieval layer — (a) **the 7.7 GitHub App read path** (server-side: an App " +
       'installation with per-repo selection + contents:read — the verified standard shape for ' +
-      'CodeRabbit-class server-side AI tools; serves web-chat planning 7.2/7.3 and dispatch-' +
+      'hosted AI dev tools that read your repo from their cloud, e.g. the CodeRabbit-style ' +
+      'GitHub App installation; serves web-chat planning 7.2/7.3 and dispatch-' +
       'prompt injection), and (b) **the CLI-pushed code-context bundle** (7.9.9 — the CLI runs ' +
       'where the code LIVES, so it gathers context locally with explicit user consent; covers ' +
       'pre-GitHub / non-GitHub projects and needs no server-side credential). Either source ' +
@@ -260,7 +261,8 @@ export const STUB_STORIES: PlanStory[] = [
       '+ Subtask CI feedback loop. (Former Epic 4 §4.3-4.6.) Shape decision (recorded ' +
       '2026-06-10): the integration ships as a **GitHub App installation** — per-repo selection, ' +
       'contents:read + metadata for the code-read path, write scopes only where the status-sync/' +
-      'review loop needs them — the verified standard for server-side AI tools (CodeRabbit-class; ' +
+      'review loop needs them — the verified standard for hosted AI dev tools that read your ' +
+      'repo from their cloud (CodeRabbit-style, per its GitHub-integration docs; ' +
       'OAuth identifies the USER, the App installation grants the REPO access — two separate ' +
       "grants). This App read path is ALSO the server-side code-access source for 7.5's " +
       'planning/dispatch context retrieval (see the 7.5 code-access decision).',
