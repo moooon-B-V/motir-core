@@ -379,7 +379,7 @@ export const story_8_7: PlanStory = {
     {
       id: '8.7.10',
       title: 'Post-rename sweep — cross-repo residue audit + live smoke',
-      status: 'in_progress',
+      status: 'done',
       type: 'review',
       executor: 'coding_agent',
       estimateMinutes: 20,
