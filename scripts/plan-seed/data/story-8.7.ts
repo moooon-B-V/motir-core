@@ -111,9 +111,9 @@ export const story_8_7: PlanStory = {
     {
       id: '8.7.2',
       title: 'Claim the `motir` npm name + provision the NPM_TOKEN publish secret',
-      status: 'planned',
-      type: 'manual',
-      executor: 'human',
+      status: 'in_progress',
+      type: 'deploy',
+      executor: 'coding_agent',
       estimateMinutes: 20,
       descriptionMd:
         'npm has no reserve-without-publish, and the name is now public (domain + filing) — ' +
@@ -123,15 +123,22 @@ export const story_8_7: PlanStory = {
         '**automation** token and add it to the prodect-core GitHub repo as the ' +
         '`NPM_TOKEN` Actions secret — the 8.7.9 release workflow consumes it. The real ' +
         '0.1.0 publish (8.7.9) supersedes the placeholder.\n\n' +
+        'Reclassified `manual/human` → `deploy/coding_agent` (Yue, 2026-06-11): every ' +
+        'step is a CLI operation (`npm publish`, `npm token create`, `gh secret set`), so ' +
+        "the agent runs it. The user's only part is interactive auth the sandbox cannot " +
+        'script — an in-session `npm login` (account + 2FA), plus the per-command OTP if ' +
+        'the token/publish steps prompt for one. Fall back to the npm website only if the ' +
+        'CLI cannot mint an automation-grade token.\n\n' +
         '## Acceptance criteria\n\n' +
         "- `npm view motir` resolves to the placeholder owned by the user's account; 2FA " +
         'is on.\n' +
-        '- The `NPM_TOKEN` automation-token secret exists on the repo (Actions scope).\n' +
-        '- User confirmation — the manual-subtask done gate.\n\n' +
+        '- The `NPM_TOKEN` automation-token secret exists on the repo (Actions scope), ' +
+        'verified via `gh secret list`.\n\n' +
         '## Context refs\n\n' +
         '- `packages/cli` / story 7.9 (the package that will own the name)\n' +
         '- 8.7.9 (the release workflow consuming the secret)\n\n' +
-        'No PR — `type: manual`, dashboard/secret work (the 1.6.7 convention).',
+        'No feature PR — the deliverable is external (the npm registry + the repo ' +
+        'secret); the done gate is the CLI verification above.',
       dependsOn: ['8.7.1'],
     },
     {
