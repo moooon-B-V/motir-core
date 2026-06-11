@@ -329,7 +329,7 @@ export const story_5_5: PlanStory = {
       id: '5.5.4',
       title:
         'History + All tabs UI — activate the Activity section seam (feed rows, Show more, the cross-tab sort toggle)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
