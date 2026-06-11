@@ -181,7 +181,7 @@ export const story_6_2: PlanStory = {
       id: '6.2.1',
       title:
         'Schema + service + API — `saved_filter` (versioned AST envelope, visibility, stars) + permission matrix + built-in defaults + the 6.3 data-source contract',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 34,
