@@ -1,6 +1,15 @@
 import { Prisma, type WorkItem } from '@prisma/client';
 import { db } from '@/lib/db';
-import { validateFilterAst } from '@/lib/filters/registry';
+import {
+  astHasEpic5Conditions,
+  collectFilterReferentIds,
+  resolveFilterAst,
+  type CustomFieldFilterType,
+  type ProjectFilterCustomField,
+  type ProjectFilterReferents,
+} from '@/lib/filters/registry';
+import type { FilterAst } from '@/lib/filters/ast';
+import { customFieldOptionRepository } from '@/lib/repositories/customFieldOptionRepository';
 import { assertValidParent, allowedParentKinds, type IssueType } from '@/lib/issues/parentRules';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -240,7 +249,10 @@ export interface ListWorkItemsFilter {
  * whitespace never hides the whole project. `includeUnassigned` is forwarded
  * verbatim — the "Unassigned" bucket, OR-ed with any `assigneeIds`.
  */
-function buildRepoFilter(filter: ProjectTreeFilter): RepoIssueFilter {
+function buildRepoFilter(
+  filter: ProjectTreeFilter,
+  filterReferents?: ProjectFilterReferents,
+): RepoIssueFilter {
   const repoFilter: RepoIssueFilter = {};
   if (filter.kinds && filter.kinds.length > 0) repoFilter.kinds = filter.kinds;
   if (filter.statuses && filter.statuses.length > 0) repoFilter.statuses = filter.statuses;
@@ -250,16 +262,70 @@ function buildRepoFilter(filter: ProjectTreeFilter): RepoIssueFilter {
   if (filter.includeUnassigned) repoFilter.includeUnassigned = true;
   const text = filter.text?.trim();
   if (text) repoFilter.text = text;
-  // The advanced-builder axis (Story 6.1 · 6.1.1): validate at the service
+  // The advanced-builder axis (Story 6.1 · 6.1.1): resolve at the service
   // boundary — typed FilterValidationErrors (→ 422 at the HTTP layer) on an
-  // unknown field/operator id or a bad value; the repo compiler re-validates
-  // (defence in depth). An empty row set constrains nothing and is dropped so
-  // it never activates tree pruning.
+  // unknown field/operator id or a bad value; the repo compiler re-resolves
+  // (defence in depth). Epic-5 conditions (6.1.2) resolve against the
+  // referents `loadFilterReferents` fetched — stale referents are NOT errors
+  // (they compile to match-nothing). An empty row set constrains nothing and
+  // is dropped so it never activates tree pruning.
   if (filter.ast) {
-    validateFilterAst(filter.ast);
-    if (filter.ast.conditions.length > 0) repoFilter.ast = filter.ast;
+    resolveFilterAst(filter.ast, filterReferents);
+    if (filter.ast.conditions.length > 0) {
+      repoFilter.ast = filter.ast;
+      repoFilter.filterReferents = filterReferents;
+    }
   }
   return repoFilter;
+}
+
+/**
+ * Load the per-project referent set an AST's Epic-5 conditions (labels /
+ * components / `cf:<fieldId>` custom fields, Subtask 6.1.2) resolve against:
+ * BOUNDED reads over only the ids the filter actually references (finding
+ * #57 — never load-all; the one exception is the definition list, already
+ * capped at 50 by 5.3.2's service rule). Every read is tenancy-gated
+ * (project + workspace), so a cross-tenant id resolves to nothing — and
+ * therefore reads as a stale referent, exactly like a deleted one: the
+ * condition matches nothing and surfaces the unknown-value notice instead of
+ * erroring (the rule Story 6.2 saved filters depend on). Returns undefined
+ * when the AST carries no Epic-5 condition (no reads spent). Exported for
+ * the 6.1.4/6.1.5 page wiring, which resolves the same referents to render
+ * the per-row stale notices.
+ */
+export async function loadFilterReferents(
+  projectId: string,
+  workspaceId: string,
+  ast: FilterAst,
+): Promise<ProjectFilterReferents | undefined> {
+  if (!astHasEpic5Conditions(ast)) return undefined;
+  const ids = collectFilterReferentIds(ast);
+  const [definitions, options, labels, components] = await Promise.all([
+    ids.customFieldIds.length > 0
+      ? customFieldDefinitionRepository.listByProject(projectId, workspaceId)
+      : [],
+    customFieldOptionRepository.findByIds(ids.customFieldValueIds, projectId, workspaceId),
+    labelRepository.findByIds(ids.labelIds, projectId),
+    componentRepository.findByIds(ids.componentIds),
+  ]);
+
+  const customFields = new Map<string, ProjectFilterCustomField>();
+  for (const def of definitions) {
+    if (!ids.customFieldIds.includes(def.id)) continue;
+    customFields.set(def.id, {
+      fieldType: def.fieldType as CustomFieldFilterType,
+      optionIds: new Set(options.filter((o) => o.fieldId === def.id).map((o) => o.id)),
+    });
+  }
+  return {
+    customFields,
+    labelIds: new Set(labels.map((l) => l.id)),
+    componentIds: new Set(
+      components
+        .filter((c) => c.projectId === projectId && c.workspaceId === workspaceId)
+        .map((c) => c.id),
+    ),
+  };
 }
 
 /** True when the repo filter constrains at least one axis (drives forest pruning). */
@@ -1224,7 +1290,10 @@ export const workItemsService = {
     }
     await projectAccessService.assertCanBrowse(projectId, ctx);
 
-    const repoFilter = buildRepoFilter(filter);
+    const referents = filter.ast
+      ? await loadFilterReferents(projectId, project.workspaceId, filter.ast)
+      : undefined;
+    const repoFilter = buildRepoFilter(filter, referents);
     const rows = await workItemRepository.findProjectForest(
       projectId,
       project.workspaceId,
@@ -1254,7 +1323,10 @@ export const workItemsService = {
     }
     await projectAccessService.assertCanBrowse(projectId, ctx);
 
-    const repoFilter = buildRepoFilter(params.filter ?? {});
+    const referents = params.filter?.ast
+      ? await loadFilterReferents(projectId, project.workspaceId, params.filter.ast)
+      : undefined;
+    const repoFilter = buildRepoFilter(params.filter ?? {}, referents);
     const pageSize = ISSUE_LIST_PAGE_SIZE;
 
     // Count the filtered set first so an out-of-range ?page CLAMPS to the last

@@ -6,8 +6,13 @@ import {
   type WorkItemPriority,
 } from '@prisma/client';
 import { db } from '@/lib/db';
-import type { FilterAst, FilterCondition, FilterFieldId } from '@/lib/filters/ast';
-import { filterFieldDef, validateFilterAst } from '@/lib/filters/registry';
+import type { BuiltInFilterFieldId, FilterAst, FilterCondition } from '@/lib/filters/ast';
+import {
+  resolveFilterAst,
+  type CustomFieldFilterType,
+  type FilterFieldDef,
+  type ProjectFilterReferents,
+} from '@/lib/filters/registry';
 import { UnknownFilterOperatorError } from '@/lib/filters/errors';
 import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
 import { READY_KIND_RANK, type ReadyCursor } from '@/lib/workItems/readyFilter';
@@ -627,7 +632,7 @@ export const workItemRepository = {
     // row instead: the CTE's fixed projection lacks the columns the builder
     // can reference (`sprintId` / `createdAt` / `descriptionMd`), and
     // re-projecting Markdown blobs through the recursion would bloat it.
-    const { ast, ...facetAxes } = filter;
+    const { ast, filterReferents, ...facetAxes } = filter;
     const facetMatched = buildIssueFilterSql(facetAxes, 'f');
     const hasAst = ast !== undefined && ast.conditions.length > 0;
     // COALESCE the combined expression: unlike a WHERE (where NULL means
@@ -635,7 +640,7 @@ export const workItemRepository = {
     // and AST arms over nullable columns (text contains, number comparisons)
     // can yield SQL NULL — which must surface as `false`, not a null DTO field.
     const matched = hasAst
-      ? Prisma.sql`COALESCE((${facetMatched}) AND (${compileFilterConditionsSql(ast)}), FALSE)`
+      ? Prisma.sql`COALESCE((${facetMatched}) AND (${compileFilterConditionsSql(ast, filterReferents)}), FALSE)`
       : facetMatched;
     const astJoin = hasAst ? Prisma.sql`JOIN "work_item" w ON w."id" = f."id"` : Prisma.empty;
 
@@ -1587,6 +1592,15 @@ export interface RepoIssueFilter {
    * CTE's fixed projection lacks `sprintId` / `createdAt` / `descriptionMd`).
    */
   ast?: FilterAst;
+  /**
+   * The per-project referent set the AST's Epic-5 conditions (labels /
+   * components / `cf:<fieldId>` custom fields, Subtask 6.1.2) resolve
+   * against — loaded by the SERVICE from bounded reads over the ids the
+   * filter references. Omitted (or missing an id) ⇒ those conditions are
+   * STALE referents and compile to match-nothing `FALSE` (the deleted-id
+   * degrade rule, never an error). Built-in-only ASTs don't need it.
+   */
+  filterReferents?: ProjectFilterReferents;
 }
 
 // ---------------------------------------------------------------------------
@@ -1601,7 +1615,7 @@ export interface RepoIssueFilter {
  * `::text` so bound text arrays compare text-to-text (the
  * `buildIssueFilterSql` convention).
  */
-const FILTER_FIELD_COLUMN_SQL: Record<Exclude<FilterFieldId, 'text'>, Prisma.Sql> = {
+const FILTER_FIELD_COLUMN_SQL: Record<Exclude<BuiltInFilterFieldId, 'text'>, Prisma.Sql> = {
   kind: Prisma.sql`w."kind"::text`,
   status: Prisma.sql`w."status"`,
   priority: Prisma.sql`w."priority"::text`,
@@ -1667,18 +1681,149 @@ const NUMBER_COMPARE_SQL: Record<'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte', Pris
   gte: Prisma.sql`>=`,
 };
 
-/** One validated condition → its parenthesized predicate fragment. */
-function compileConditionSql(condition: FilterCondition): Prisma.Sql {
+// ---------------------------------------------------------------------------
+// The Epic-5 condition compilers (Subtask 6.1.2) — the documented join
+// contracts: `work_item_label` / `work_item_component` EXISTS probes (5.4.1)
+// and the typed-EAV `custom_field_value` probes over the four
+// `[fieldId, value*]` indexes (5.3.1). Each condition is a self-contained
+// correlated subquery with its own alias scope, so any number of conditions
+// compose under either combinator with no join collision (bounded by the
+// 20-row cap). Table/column names are fixed literals selected by enum
+// switches — only VALUES bind as parameters.
+// ---------------------------------------------------------------------------
+
+const JOIN_LIST_SQL = {
+  lbl: {
+    table: Prisma.sql`"work_item_label"`,
+    idColumn: Prisma.sql`"label_id"`,
+  },
+  cmp: {
+    table: Prisma.sql`"work_item_component"`,
+    idColumn: Prisma.sql`"component_id"`,
+  },
+} as const;
+
+/**
+ * A label/component condition → the 5.4.1 EXISTS probe. `is_any_of` walks the
+ * reverse-edge index (`[labelId]` / `[componentId]`); `is_none_of` is its
+ * NOT-EXISTS (which — join rows being absent — includes the no-labels bucket,
+ * the enum none-of rule); `is empty` = no join rows at all.
+ */
+function joinListConditionSql(entity: 'lbl' | 'cmp', condition: FilterCondition): Prisma.Sql {
+  const { table, idColumn } = JOIN_LIST_SQL[entity];
+  switch (condition.operator) {
+    case 'is_any_of':
+    case 'is_none_of': {
+      const ids = condition.value as string[];
+      const exists = Prisma.sql`EXISTS (SELECT 1 FROM ${table} j WHERE j."work_item_id" = w."id" AND j.${idColumn} = ANY(${ids}))`;
+      return condition.operator === 'is_none_of' ? Prisma.sql`NOT ${exists}` : exists;
+    }
+    case 'is_empty':
+      return Prisma.sql`NOT EXISTS (SELECT 1 FROM ${table} j WHERE j."work_item_id" = w."id")`;
+    case 'is_not_empty':
+      return Prisma.sql`EXISTS (SELECT 1 FROM ${table} j WHERE j."work_item_id" = w."id")`;
+    /* istanbul ignore next -- defensive: resolveFilterAst pins lbl/cmp to the enum operator set before this switch */
+    default:
+      throw new UnknownFilterOperatorError(condition.field, condition.operator);
+  }
+}
+
+/** The typed value column a custom field's conditions probe (the 5.3.1
+ * `[fieldId, value*]` index family), per field type. */
+const CF_VALUE_COLUMN_SQL: Record<CustomFieldFilterType, Prisma.Sql> = {
+  text: Prisma.sql`v."value_text"`,
+  number: Prisma.sql`v."value_number"`,
+  date: Prisma.sql`v."value_date"`,
+  select: Prisma.sql`v."value_option_id"`,
+  user: Prisma.sql`v."value_user_id"`,
+};
+
+/** The correlated probe: does this issue carry a value row for the field
+ * satisfying `valuePredicate`? The `[fieldId, value*]` composite indexes
+ * serve the (field_id, value) pair; the `[workItemId, fieldId]` unique
+ * serves the correlation. */
+function cfExistsSql(fieldId: string, valuePredicate: Prisma.Sql): Prisma.Sql {
+  return Prisma.sql`EXISTS (SELECT 1 FROM "custom_field_value" v WHERE v."work_item_id" = w."id" AND v."field_id" = ${fieldId} AND ${valuePredicate})`;
+}
+
+/**
+ * A `cf:<fieldId>` condition → its typed-EAV probe (the 5.3.1 contract).
+ * Empty == no value row (clearing DELETES the row — no tombstones), so
+ * `is empty` compiles to NOT EXISTS; the `IS NOT NULL` arm additionally
+ * covers the one nullable-in-place case (a deleted user SetNulls
+ * `value_user_id`, leaving the row behind). The negative value operators
+ * keep the JQL `!=`/`!~` rule the built-ins pin: `ne`/`not_contains`
+ * require a value row (empties don't match — `is empty` is the explicit
+ * operator), while `is_none_of`'s NOT-EXISTS includes the empty bucket
+ * (the enum none-of rule).
+ */
+function customFieldConditionSql(
+  condition: FilterCondition,
+  cf: { id: string; fieldType: CustomFieldFilterType },
+): Prisma.Sql {
+  const column = CF_VALUE_COLUMN_SQL[cf.fieldType];
+  const { operator, value } = condition;
+  switch (operator) {
+    case 'is_any_of':
+    case 'is_none_of': {
+      const exists = cfExistsSql(cf.id, Prisma.sql`${column} = ANY(${value as string[]})`);
+      return operator === 'is_none_of' ? Prisma.sql`NOT ${exists}` : exists;
+    }
+    case 'is_empty':
+      return Prisma.sql`NOT ${cfExistsSql(cf.id, Prisma.sql`${column} IS NOT NULL`)}`;
+    case 'is_not_empty':
+      return cfExistsSql(cf.id, Prisma.sql`${column} IS NOT NULL`);
+    case 'eq':
+    case 'ne':
+    case 'lt':
+    case 'lte':
+    case 'gt':
+    case 'gte':
+      return cfExistsSql(
+        cf.id,
+        Prisma.sql`${column} ${NUMBER_COMPARE_SQL[operator]} ${value as number}`,
+      );
+    case 'contains':
+    case 'not_contains': {
+      const pattern = `%${escapeLikePattern((value as string).trim())}%`;
+      return operator === 'contains'
+        ? cfExistsSql(cf.id, Prisma.sql`${column} ILIKE ${pattern}`)
+        : cfExistsSql(cf.id, Prisma.sql`NOT (${column} ILIKE ${pattern})`);
+    }
+    case 'on_or_before':
+      return cfExistsSql(cf.id, Prisma.sql`${column} <= (${value as string})::date`);
+    case 'on_or_after':
+      return cfExistsSql(cf.id, Prisma.sql`${column} >= (${value as string})::date`);
+    case 'between': {
+      const [from, to] = value as [string, string];
+      return cfExistsSql(cf.id, Prisma.sql`${column} BETWEEN (${from})::date AND (${to})::date`);
+    }
+    case 'in_last_days':
+      return cfExistsSql(
+        cf.id,
+        Prisma.sql`${column} >= CURRENT_DATE - (${value as number})::int AND ${column} <= CURRENT_DATE`,
+      );
+    case 'in_next_days':
+      return cfExistsSql(
+        cf.id,
+        Prisma.sql`${column} >= CURRENT_DATE AND ${column} <= CURRENT_DATE + (${value as number})::int`,
+      );
+  }
+}
+
+/** One resolved condition → its parenthesized predicate fragment. */
+function compileConditionSql(condition: FilterCondition, def: FilterFieldDef): Prisma.Sql {
+  if (def.customField) return customFieldConditionSql(condition, def.customField);
+  if (def.id === 'lbl' || def.id === 'cmp') return joinListConditionSql(def.id, condition);
   const { field, operator, value } = condition;
   if (field === 'text') {
     // Validation pinned the text ops + a string value.
     return textMatchSql(value as string, operator === 'not_contains');
   }
-  const column = FILTER_FIELD_COLUMN_SQL[field];
+  const column = FILTER_FIELD_COLUMN_SQL[field as Exclude<BuiltInFilterFieldId, 'text'>];
   switch (operator) {
     case 'is_any_of':
     case 'is_none_of': {
-      const def = filterFieldDef(field);
       return enumListSql(column, value as string[], def.emptySentinel, operator === 'is_none_of');
     }
     case 'is_empty':
@@ -1715,16 +1860,27 @@ function compileConditionSql(condition: FilterCondition): Prisma.Sql {
 
 /**
  * Compile a FilterAST into one parameterized predicate over the `work_item`
- * alias `w` (Subtask 6.1.1). Re-validates against the registry first (defence
- * in depth — typed 422s, mistake #29: no unvalidated AST can reach SQL even
- * through a future second caller), then joins the per-condition fragments
- * under the AND/OR combinator. An empty row set compiles to `TRUE` (match
- * all). Exported for the injection/operator test matrix.
+ * alias `w` (Subtask 6.1.1; Epic-5 conditions 6.1.2). Re-resolves against the
+ * registry + the referents first (defence in depth — typed 422s, mistake #29:
+ * no unvalidated AST can reach SQL even through a future second caller), then
+ * joins the per-condition fragments under the AND/OR combinator. A STALE
+ * condition (a deleted field/option/label/component referent — including the
+ * no-referents default, under which every Epic-5 condition is stale) compiles
+ * to `FALSE`: it matches nothing under either combinator, never errors, and
+ * none of its input reaches SQL at all. An empty row set compiles to `TRUE`
+ * (match all). Exported for the injection/operator test matrix.
  */
-export function compileFilterConditionsSql(ast: FilterAst): Prisma.Sql {
-  validateFilterAst(ast);
-  if (ast.conditions.length === 0) return Prisma.sql`TRUE`;
-  const fragments = ast.conditions.map((c) => Prisma.sql`(${compileConditionSql(c)})`);
+export function compileFilterConditionsSql(
+  ast: FilterAst,
+  referents?: ProjectFilterReferents,
+): Prisma.Sql {
+  const resolved = resolveFilterAst(ast, referents);
+  if (resolved.conditions.length === 0) return Prisma.sql`TRUE`;
+  const fragments = resolved.conditions.map((rc) =>
+    rc.stale !== null || rc.def === null
+      ? Prisma.sql`(FALSE)`
+      : Prisma.sql`(${compileConditionSql(rc.condition, rc.def)})`,
+  );
   return Prisma.join(fragments, ast.combinator === 'or' ? ' OR ' : ' AND ');
 }
 
@@ -1780,7 +1936,9 @@ function buildIssueFilterSql(filter: RepoIssueFilter, alias: 'f' | 'w'): Prisma.
     if (alias !== 'w') {
       throw new Error('RepoIssueFilter.ast requires the full work_item alias (w)');
     }
-    predicates.push(Prisma.sql`(${compileFilterConditionsSql(filter.ast)})`);
+    predicates.push(
+      Prisma.sql`(${compileFilterConditionsSql(filter.ast, filter.filterReferents)})`,
+    );
   }
   return predicates.length ? Prisma.join(predicates, ' AND ') : Prisma.sql`TRUE`;
 }

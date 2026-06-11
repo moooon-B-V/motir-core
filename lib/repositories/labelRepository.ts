@@ -51,6 +51,19 @@ export const labelRepository = {
   },
 
   /**
+   * Bulk id resolution for the filter builder's stale-referent check
+   * (Subtask 6.1.2): which of the label ids a `?filter=` AST references
+   * still exist in this project (a deleted — or cross-project — id resolves
+   * to nothing and therefore reads as stale). Bounded by the filter's own
+   * value lists, never a load-all. Read-only path → `db` singleton. Empty
+   * input is an empty result by contract (coverage gate).
+   */
+  async findByIds(ids: string[], projectId: string): Promise<Label[]> {
+    if (ids.length === 0) return [];
+    return db.label.findMany({ where: { id: { in: ids }, projectId } });
+  },
+
+  /**
    * The labels riding an issue's detail read (5.4.2 slots this into
    * `getIssueDetail`'s parallel fetch — one bounded query, no N+1; bounded
    * in practice by the service's per-issue cap). Relation filter, name

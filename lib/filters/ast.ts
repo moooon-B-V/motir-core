@@ -16,8 +16,8 @@ import { UNASSIGNED_TOKEN } from '@/lib/issues/issueListFilter';
 export type FilterCombinator = 'and' | 'or';
 
 /** The registered built-in field ids (Subtask 6.1.1 scope — everything
- * shipped today; 6.1.2 adds the Epic-5 fields through the registry). */
-export type FilterFieldId =
+ * shipped today; 6.1.2 adds the Epic-5 fields below). */
+export type BuiltInFilterFieldId =
   | 'kind'
   | 'status'
   | 'priority'
@@ -30,6 +30,29 @@ export type FilterFieldId =
   | 'due'
   | 'storyPoints'
   | 'estimate';
+
+/** The Epic-5 field ids (Subtask 6.1.2): the static label/component fields
+ * and the per-project DYNAMIC custom-field entries, keyed `cf:<fieldId>` —
+ * the field list is data, so these resolve against a per-project referent
+ * set (`ProjectFilterReferents` in lib/filters/registry.ts), never a static
+ * map. */
+export type Epic5FilterFieldId = 'lbl' | 'cmp' | `cf:${string}`;
+
+export type FilterFieldId = BuiltInFilterFieldId | Epic5FilterFieldId;
+
+/** The `cf:<fieldId>` key a custom-field definition contributes (6.1.2). */
+export const CUSTOM_FIELD_FILTER_PREFIX = 'cf:';
+
+export function customFieldFilterFieldId(fieldId: string): FilterFieldId {
+  return `${CUSTOM_FIELD_FILTER_PREFIX}${fieldId}`;
+}
+
+/** The definition id inside a `cf:<fieldId>` key, or null for other fields. */
+export function customFieldIdOfFilterField(field: string): string | null {
+  return field.startsWith(CUSTOM_FIELD_FILTER_PREFIX)
+    ? field.slice(CUSTOM_FIELD_FILTER_PREFIX.length)
+    : null;
+}
 
 /** Every operator any field type offers (per-field sets live in the registry). */
 export type FilterOperatorId =
