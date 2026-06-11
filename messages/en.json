@@ -141,6 +141,22 @@
       "OPTION_ARCHIVED": "That option is archived — pick a current one.",
       "USER_NOT_ASSIGNABLE": "That person can't view this project, so they can't hold this field.",
       "READ_ONLY": "You have read-only access to this project."
+    },
+    "labels": {
+      "INVALID_LABEL_NAME": "Labels can’t contain spaces — use a hyphen: {suggestion}",
+      "LABEL_NAME_TOO_LONG": "Labels are capped at {max} characters.",
+      "LABEL_LIMIT_EXCEEDED": "Label limit reached ({limit}) — remove one to add another.",
+      "READ_ONLY": "You don’t have permission to edit labels."
+    },
+    "components": {
+      "COMPONENT_NOT_FOUND": "That component no longer exists.",
+      "INVALID_COMPONENT_NAME": "Enter a valid component name.",
+      "COMPONENT_NAME_CONFLICT": "A component with this name already exists.",
+      "INVALID_DEFAULT_ASSIGNEE": "The default assignee must be a member who can view this project.",
+      "INVALID_MOVE_TARGET": "Pick a different component to move work items to.",
+      "CROSS_PROJECT_COMPONENT": "That component belongs to another project.",
+      "NOT_PROJECT_ADMIN": "Only a project admin can manage components.",
+      "READ_ONLY": "You don’t have permission to edit components."
     }
   },
   "email": {
@@ -365,6 +381,18 @@
   },
   "issueViews": {
     "heading": "Work Items",
+    "labelsField": "Labels",
+    "labelsPlaceholder": "Add a label…",
+    "labelsCreate": "Create ‘{name}’",
+    "labelsRemove": "Remove {label}",
+    "labelsLimitReached": "Label limit reached ({limit}) — remove one to add another.",
+    "noLabels": "No labels",
+    "componentsField": "Components",
+    "componentsPlaceholder": "Add a component…",
+    "componentsRemove": "Remove {label}",
+    "componentsNoneDefined": "No components defined",
+    "componentsManageLink": "Manage components in Project settings →",
+    "noComponents": "No components",
     "noProjectTitle": "No project selected",
     "noProjectListDescription": "Pick or create a project from the switcher to track its work items.",
     "noProjectDetailDescription": "Pick a project from the switcher to view its work items.",

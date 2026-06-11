@@ -49,14 +49,16 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 // links-diff precedent). No-op writes (re-adding an attached label, removing
 // a label the issue doesn't carry) write NOTHING.
 
-/** Longest accepted label name, in characters (a recorded constant). */
-export const LABEL_NAME_MAX_LENGTH = 60;
+// The recorded limits live in the Prisma-free `lib/labels/constants` (the
+// 5.4.8 rail card consumes them client-side); re-exported here so existing
+// server-side importers keep their path.
+import {
+  LABEL_NAME_MAX_LENGTH,
+  LABELS_PER_ISSUE_LIMIT,
+  LABEL_SEARCH_LIMIT,
+} from '@/lib/labels/constants';
 
-/** Per-issue label cap — the Story 5.4 sanity guard ("100 labels is absurd"). */
-export const LABELS_PER_ISSUE_LIMIT = 20;
-
-/** Autocomplete window — a bounded prefix read, never a load-all (finding #57). */
-export const LABEL_SEARCH_LIMIT = 20;
+export { LABEL_NAME_MAX_LENGTH, LABELS_PER_ISSUE_LIMIT, LABEL_SEARCH_LIMIT };
 
 /**
  * Validate + normalize one incoming label name per the verified Jira rules:

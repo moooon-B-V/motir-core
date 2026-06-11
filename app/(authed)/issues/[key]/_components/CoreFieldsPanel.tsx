@@ -9,6 +9,8 @@ import type { WorkItemDto, WorkItemKindDto, WorkItemSummaryDto } from '@/lib/dto
 import type { WorkflowDto, StatusCategoryDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
+import type { LabelDto } from '@/lib/dto/labels';
+import type { ComponentDto } from '@/lib/dto/components';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { Locale } from '@/lib/i18n/locales';
 import { Input } from '@/components/ui/Input';
@@ -30,6 +32,8 @@ import { formatDurationMinutes } from '@/lib/utils/duration';
 import { changeStatusAction, updateIssueAction, type UpdateIssueInput } from '../edit/actions';
 import { Avatar, FieldCard } from './FieldCard';
 import { CustomFieldsSection } from './CustomFieldsSection';
+import { LabelsCard } from './LabelsCard';
+import { ComponentsCard } from './ComponentsCard';
 
 // The issue detail metadata rail (Story 2.4 · Subtasks 2.4.2 + 2.4.4). Per the
 // mockup `design/work-items/detail.png`: a stack of field cards that DISPLAY the
@@ -54,6 +58,22 @@ export interface CoreFieldsPanelProps {
    * created/updated. With no definitions the rail renders exactly as before.
    */
   customFields?: CustomFieldWithValueDto[];
+  /**
+   * Labels + components (Story 5.4 · Subtask 5.4.8) — the two cards slot
+   * between Parent and Due date (the relational group, ahead of the
+   * date/estimate block — labels-components-watch.mock.html panel 0). The
+   * page threads the project key (the label-autocomplete route), the project
+   * taxonomy (the components picker's option source), and the admin flag
+   * (the empty-taxonomy "Manage components" link). Omitted (older call
+   * sites / unit tests), the rail renders without the two cards.
+   */
+  labelsComponents?: {
+    projectKey: string;
+    labels: LabelDto[];
+    components: ComponentDto[];
+    projectComponents: ComponentDto[];
+    canManageProject: boolean;
+  };
 }
 
 type EditableKey = 'status' | 'type' | 'priority' | 'assignee' | 'parent' | 'dueDate' | 'estimate';
@@ -77,6 +97,7 @@ export function CoreFieldsPanel({
   parent,
   reporterIsSelf,
   customFields = [],
+  labelsComponents,
 }: CoreFieldsPanelProps) {
   const router = useRouter();
   const t = useTranslations('issueViews');
@@ -271,6 +292,27 @@ export function CoreFieldsPanel({
           muted(t('none'))
         )}
       </FieldCard>
+
+      {/* Labels + Components (5.4.8) — between Parent and Due date: with the
+          relational fields, ahead of the date/estimate group (the Jira
+          details-panel grouping; labels-components-watch.mock.html panel 0).
+          Each card owns its edit state + picker; commits confirm from the
+          action response (no whole-tree refresh). */}
+      {labelsComponents ? (
+        <>
+          <LabelsCard
+            workItemId={item.id}
+            projectKey={labelsComponents.projectKey}
+            initialLabels={labelsComponents.labels}
+          />
+          <ComponentsCard
+            workItemId={item.id}
+            initialComponents={labelsComponents.components}
+            projectComponents={labelsComponents.projectComponents}
+            canManageProject={labelsComponents.canManageProject}
+          />
+        </>
+      ) : null}
 
       <FieldCard
         label={t('dueDate')}

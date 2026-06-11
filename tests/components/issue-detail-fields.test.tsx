@@ -28,6 +28,15 @@ vi.mock('@/app/(authed)/issues/actions', () => ({
 vi.mock('@/app/(authed)/issues/[key]/customFieldActions', () => ({
   setCustomFieldValueAction: vi.fn().mockResolvedValue({ ok: true }),
 }));
+// Same for the Labels/Components cards' actions (5.4.8) — the panel imports
+// the cards statically even when the optional `labelsComponents` prop is
+// absent (their behaviour is covered by labels-components-cards.test.tsx).
+vi.mock('@/app/(authed)/issues/[key]/labelComponentActions', () => ({
+  addLabelAction: vi.fn().mockResolvedValue({ ok: true, labels: [] }),
+  removeLabelAction: vi.fn().mockResolvedValue({ ok: true, labels: [] }),
+  addComponentAction: vi.fn().mockResolvedValue({ ok: true, components: [] }),
+  removeComponentAction: vi.fn().mockResolvedValue({ ok: true, components: [] }),
+}));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: refreshSpy }) }));
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ toast: toastSpy }) }));
 
