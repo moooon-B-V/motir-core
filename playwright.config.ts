@@ -41,6 +41,16 @@ for (const k of ['BOARD_ISSUE_CAP_OVERRIDE', 'DONE_AGE_WINDOW_DAYS_OVERRIDE']) {
   if (v !== undefined && v !== '') BOARD_LOAD_SEAM_ENV[k] = v;
 }
 
+// The RUNNER process publishes events too (Subtask 5.4.5): seed helpers call
+// services directly (e.g. scrum-board-seed's gated updateStatus walk), and
+// those service methods emit post-commit (`work-item/transitioned`,
+// `work-item/comment.created`). Point the runner's Inngest SDK at the same
+// :8288 dev server the Next app uses (the second webServer entry below —
+// health-checked before any spec runs), so a seed-level emit publishes
+// instead of throwing "no event key". Config-module scope runs in the main
+// runner process before workers fork, and workers inherit its env.
+process.env['INNGEST_DEV'] ??= '1';
+
 /**
  * Playwright config for prodect-core's E2E auth smoke suite.
  *

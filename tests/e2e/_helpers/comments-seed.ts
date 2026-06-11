@@ -13,10 +13,11 @@
 //   * the surface under test is the cursor-paged READ + "Show more comments"
 //     UI, not the write path (the journey spec covers that over the real
 //     stack), and 100+ service calls would burn ~10s per run;
-//   * commentsService.addComment awaits the post-commit `sendEvent`, and the
-//     Playwright RUNNER process has no Inngest dev-mode env wired — the
-//     in-app dev server does (INNGEST_DEV=1 via playwright.config.ts), the
-//     runner doesn't, so a service-level seed here would be event-flaky.
+//   * commentsService.addComment awaits the post-commit `sendEvent` — and
+//     while the runner process IS Inngest-wired since Subtask 5.4.5
+//     (INNGEST_DEV at playwright.config.ts module scope), 100+ service-level
+//     writes would also publish 100+ pointless events for the dev server to
+//     fan out mid-run.
 // createdAt is spaced one second apart so the repository's
 // `orderBy [{createdAt}, {id}]` walk is deterministic for the assertions.
 
