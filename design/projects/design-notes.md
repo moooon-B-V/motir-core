@@ -677,3 +677,246 @@ When a string here disagrees with shipped 5.4.10 code, the code wins — file a
 fix so the mockup stays the reference. `components.mock.html` is the
 layout-confirmation artifact; it may drift from pixel-exact production once
 the React lands.
+
+---
+
+# Project settings AREA (Story 6.5) — Subtask 6.5.1 output
+
+Story 6.5 turns the flat **card hub** at `/settings/project` into the
+Jira-shaped project-settings **AREA**: ONE chrome wrapping every per-project
+admin page behind a grouped settings navigation, **landing on a read-only
+Details page**. It is a **composition** story — every section already exists
+(Workflow 2.2.5, Boards 3.6/3.7, Estimation 4.3.5, Members & access 6.4.5,
+Fields 5.3.6, Components 5.4.10); 6.5 ships the **area shell**, the
+**settings-nav registry**, and the **Details landing**. It re-houses; it does
+not rebuild.
+
+This section is the canonical reference for the UI code subtasks **6.5.2**
+(settings-nav registry + area `layout.tsx`) and **6.5.3** (the Details
+landing) — both carry 6.5.1 in `dependsOn` and seed `'blocked'`. Like the
+6.4.1 / 5.3.4 / 5.4.7 surfaces above, the asset is an **HTML mockup** —
+`settings-area.mock.html`, built FROM the real design system (the
+`app/globals.css` token block copied 1:1 — incl. the `--el-sidebar-*` shell
+tokens — + shipped `components/ui/*` primitives), with `settings-area.png` as
+the light-mode render. The HTML is the source of truth; toggle
+`data-theme="dark"` in it to confirm token parity.
+
+## Files
+
+| HTML source (truth)       | PNG export          |
+| ------------------------- | ------------------- |
+| `settings-area.mock.html` | `settings-area.png` |
+
+The mockup is a five-panel board (review EACH): **(0)** THE AREA — entry +
+chrome + the Details landing (rail = grouped settings nav with the
+project-identity header + back-to-project; content = Details, read-only
+identity + Archive danger zone), the hero panel; **(1)** the grouped nav
+close-up + the nav-entry ↔ registry mapping table (incl. the Automation
+slot); **(2)** a re-housed page (Workflow exemplar) inside the area chrome;
+**(3)** role states — the non-admin member view + the 6.4.4 no-access state;
+**(4)** narrow viewport (the nav collapses to a "Settings menu" disclosure +
+sheet) + the no-active-project empty state.
+
+## Entry + chrome decision — the area REPLACES the project nav in the SAME rail
+
+The load-bearing layout decision (the card called for "pick one and draw
+it"): entering settings **swaps the app-shell rail's project-nav sections**
+(Dashboard / Issues / Ready / Boards / Backlog / Reports) **for the grouped
+settings nav**, and swaps the rail header (the `ProjectSwitcher`) for a **"←
+Back to {project}"** link + a static **project-identity block** (avatar +
+name + key). It does **NOT** nest a second rail beside the app rail.
+
+- **Why replace, not nest (rung 1).** Jira's verified team-managed shape is
+  exactly this: opening project settings turns the left sidebar INTO the
+  settings nav, with a way back to the project. One rail, no double chrome.
+  Nesting a second rail would burn horizontal space and invent a
+  two-sidebar pattern the app does not otherwise have — complexity for
+  nothing.
+- **Primitive reuse.** The rail stays the shipped `Sidebar`
+  (`components/ui/Sidebar.tsx`): groups are `SidebarSection`s with a
+  `label` (the `SectionLabel` caption), rows are `SidebarNavItem`s (the
+  inset active treatment — `--el-sidebar-item-bg-active` +
+  `--el-sidebar-border` + `--shadow-subtle` + accent icon — and
+  `aria-current="page"`). 6.5.2 renders the rail from the **registry**, not a
+  hand-kept list. The "Back to {project}" + identity block sit in the
+  Sidebar `header` slot (replacing the `SidebarHeader`/`ProjectSwitcher` while
+  in the area).
+- **Landing rule.** `/settings/project` **IS** the Details page (6.5.3) — it
+  is no longer a hub. Entering settings from the app sidebar lands here with
+  the `Details` nav entry active.
+
+## The settings-nav registry (the 6.5.2 contract)
+
+One typed entry per project-settings page drives the nav, the
+command-palette deep links, AND the totality test:
+
+```ts
+{
+  (id, group, href, icon, labelKey, access);
+}
+```
+
+| Group · entry                 | `href` (route preserved)       | icon (lucide)       |
+| ----------------------------- | ------------------------------ | ------------------- |
+| **General** · Details         | `/settings/project`            | `SlidersHorizontal` |
+| **Access** · Members & access | `/settings/project/members`    | `Users`             |
+| **Work** · Workflow           | `/settings/project/workflow`   | `Workflow`          |
+| **Work** · Boards             | `/settings/project/board`      | `Columns3`          |
+| **Work** · Estimation         | `/settings/project/estimation` | `Gauge`             |
+| **Work** · Fields             | `/settings/project/fields`     | `Tag`               |
+| **Work** · Components         | `/settings/project/components` | `Box`               |
+| **Automation** · Rules        | _reserved_ (6.6)               | `Bot`               |
+
+- **Routes are preserved** — every existing settings URL resolves unchanged
+  inside the chrome (zero deep-link breakage, no redirects). Only the landing
+  moves (`/settings/project` → Details) and the per-page back-crumbs drop.
+- **`icon`** uses the named lucide glyphs above (the `Columns3` boards glyph
+  matches the app-nav Boards icon — keep them in sync; `Workflow` is the
+  three-box connected glyph, NOT `GitBranch`).
+- **`access`** rides the **shipped 6.4.3 policy** (`lib/projects/access.ts`
+  - `projectAccessService`) — never a second role check. Admin manages;
+    member sees the page's shipped read-only state; a role without browse
+    access sees **neither the nav entry nor the page** (the 6.4.4 no-access
+    state on direct nav).
+- **Totality (mistake #29).** A unit test enumerates
+  `app/(authed)/settings/project/**/page.tsx` and fails unless each route has
+  **exactly one** registry entry (and vice versa) — drift is a red suite, not
+  a silent gap. The reserved Automation slot is NOT a route entry until 6.6
+  ships its page; it renders as a disabled "Soon" row, excluded from the
+  route↔entry assertion.
+
+## Groups & the Automation slot
+
+Four groups, in rail order: **General** (Details), **Access** (Members &
+access), **Work** (Workflow, Boards, Estimation, Fields, Components),
+**Automation** (the 6.6 slot). The Automation **Rules** row is drawn as a
+**designed-for "Soon" entry** — present (so the area's shape is legible from
+day one) but disabled, with a `--el-tint-yellow` "Soon" chip and
+`--el-text-faint` ink; it is NOT a registry route entry until Story 6.6 adds
+its page. This is the "draw the slot, don't build the page" convention.
+
+## Composing primitives (no new primitive required)
+
+- **`Sidebar` / `SidebarNav` vocabulary** — the rail: grouped sections, the
+  inset active row, the hover lift (`--el-sidebar-item-bg-hover`), the
+  back-link + identity header in the `header` slot. Icons at 18px in
+  `--el-text-muted` (active → `--el-accent`).
+- **The serif page-title grammar** — KEPT from every shipped settings page
+  (`<h1 class="font-serif text-3xl">` + the muted `text-sm` sub). Re-housed
+  pages keep their `<header>` exactly; only the back-crumb is removed.
+- **`Card`** — the Details **Project details** card (identity rows) and the
+  **Danger zone** card (the re-homed `ArchiveProjectCard` — `border-2
+border-(--el-danger)`, the `Archive…` `danger` Button + its modal, UNCHANGED
+  — a move, not a rebuild).
+- **Identity rows** — label-and-value rows (a 132px muted label with a 15px
+  lucide glyph + the value); the Key value is mono; the Avatar row holds a
+  40px project tile (issue-type-task hue square, `--radius-control`). A quiet
+  `--el-surface` **seam note** states "editing arrives with project-details
+  editing" — the 6.8 seam (6.8 swaps these rows for edit forms + the
+  key-change flow; **no edit affordances are improvised here**).
+- **`Pill`** — the `Admin` chip (lavender tint, the 6.4 role grammar) and the
+  member view's `Read-only` chip (mint tint, `--el-text-strong` — AA per
+  finding #35).
+- **`Button`** — `danger` (Archive…), `ghost`/`primary` (the no-access
+  actions).
+- **`EmptyState`** — the no-active-project state (kept from the hub; the
+  route still resolves, no 404; the create CTA lives on the dashboard).
+- **`ErrorState` family** — the 6.4.4 no-access panel, **referenced verbatim**
+  (off `ProjectAccessDeniedError`), not redrawn here.
+- **Command palette** — `AppCommandPalette` grows **per-section** entries
+  generated FROM the registry (replacing today's single "Go to settings"
+  action); each deep-links to its `href`.
+
+## Role states
+
+- **Member (non-admin)** — the SAME grouped nav (members can VIEW every
+  section); each re-housed page renders its **shipped read-only state** (the
+  5.4 / 6.4 degradation grammar); the **Details page shows NO danger zone** —
+  archive is admin-gated (the 1.3.4 rule), so the member sees identity rows +
+  a `Read-only` pill, no Archive.
+- **No browse access** — a non-member who follows a direct
+  `/settings/project*` link to a private project hits the **6.4.4
+  ErrorState** ("You don't have access to this project" + Request access /
+  Back to projects). The nav never leaks — the registry's `access` predicate
+  filters the whole area away.
+
+## Narrow viewport + empty state
+
+- **Mobile (< md).** The rail collapses to a **"Settings menu" disclosure**
+  in a top bar showing the current section; tapping opens the grouped nav
+  **inline as a sheet** (same groups, same active state) — reachable, not
+  clipped. (Parallels the app shell's `SidebarDrawer`.)
+- **No active project.** Kept from the retiring hub: the `EmptyState`
+  ("No project selected") renders on the route so it never 404s.
+
+## Copy strings catalog (use verbatim in 6.5.2 / 6.5.3; i18n under `settings`)
+
+| Surface                      | String                                                                                                                                                                                                                       |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rail back link               | `"Back to {projectName}"`                                                                                                                                                                                                    |
+| Rail eyebrow                 | `"Project settings"`                                                                                                                                                                                                         |
+| Group labels                 | `"General"` · `"Access"` · `"Work"` · `"Automation"`                                                                                                                                                                         |
+| Nav entries                  | `"Details"` · `"Members & access"` · `"Workflow"` · `"Boards"` · `"Estimation"` · `"Fields"` · `"Components"` · `"Rules"`                                                                                                    |
+| Automation slot chip         | `"Soon"`                                                                                                                                                                                                                     |
+| Details page title           | `"Details"`                                                                                                                                                                                                                  |
+| Details page subtitle        | `"Project name, key and avatar. Workspace owners and admins can edit these — editing arrives with project-details editing."`                                                                                                 |
+| Details card title           | `"Project details"`                                                                                                                                                                                                          |
+| Identity row labels          | `"Avatar"` · `"Name"` · `"Key"` · `"Workspace"` · `"Created"`                                                                                                                                                                |
+| 6.8 seam note                | `"Editing name, key and avatar — plus changing the project key with old-key redirects — arrives with project-details editing. For now these are read-only."`                                                                 |
+| Danger zone heading          | `"Danger zone"` (the shipped `settings.danger.heading`)                                                                                                                                                                      |
+| Archive row                  | `"Archive this project"` · `"Hide {projectName} from the project list and stop new work. You can restore it later."` · `"Archive…"` (shipped `settings.archive.*`)                                                           |
+| Member read-only chip + line | `"Read-only"` · `"Only project admins can manage project settings."`                                                                                                                                                         |
+| No-access state              | `"You don't have access to this project"` · `"{projectName} is a private project. Ask a project admin to add you, or pick another project to keep working."` · `"Request access"` · `"Back to projects"` (the 6.4.1 strings) |
+| No-active-project empty      | `"No project selected"` · `"Choose a project from the switcher, or create one from the dashboard, to manage its settings."`                                                                                                  |
+| Mobile disclosure            | `"{currentSection}"` (the active entry's label)                                                                                                                                                                              |
+
+Details / Archive strings that already ship (`settings.project.*`,
+`settings.danger.*`, `settings.archive.*`) are **reused** — 6.5.3 keeps the
+existing keys; only the page LAYOUT changes (hub → Details landing).
+
+## Recorded deviations from the mirror (justified — no complexity for nothing)
+
+Verified against the Atlassian project-settings-sidebar + team-managed docs
+at plan time (2026-06-10):
+
+- **No Features toggle page** — Jira's kanban-vs-scrum / feature-flags axis is
+  owned in Motir by board **TYPE** (3.7 multi-board CRUD + 4.5 Scrum board); a
+  per-project toggle would duplicate it.
+- **No project-level Notifications admin** — notification preferences are
+  **per-USER** in Motir's event-driven model (the 5.7 surface); an
+  admin-owned scheme has no stated use case.
+- **No Apps page** — no marketplace.
+- **No settings search box** — Jira ships one at site-admin scale; ~8 bounded
+  entries do not earn it (finding #57: the nav is bounded, not a scale
+  surface).
+
+## Extension slots (reserved — do NOT build here)
+
+- **Automation rules** — Story 6.6 (the reserved Automation slot; mounts by
+  adding a registry entry).
+- **Details editing + project-key change with old-key redirects** — Story
+  6.8 (grows the 6.5.3 Details page; keep the seam aligned with its
+  description).
+- **Per-work-type field layouts** — the 5.3 documented extension; the
+  registry reserves a slot, it is NOT an entry here.
+
+## Tokens & a11y
+
+Colour is `--el-*` only (incl. the `--el-sidebar-*` shell tokens + the
+`--el-type-task` project tile + the `--el-tint-*` pill/chip backgrounds —
+finding #54: not grey + primary alone); shape via the element shape tokens
+(`--radius-card/-input/-btn/-control/-badge/-modal`,
+`--spacing-card-padding/-control-*/-chip-*/-btn-x`,
+`--height-control/-btn-md`, `--shadow-subtle/-card`). The settings nav is a
+labelled `navigation` landmark with `aria-current="page"` on the active row
+and is fully keyboard-operable; the "Soon" row is `aria-disabled` and conveys
+its state with the chip text, not colour alone; `rounded-full` only on the
+avatar dots. AA holds on every tint chip (hue in the background,
+`--el-text-strong` text). Dark parity verified by toggle.
+
+## Source of truth
+
+When a string here disagrees with shipped 6.5.2 / 6.5.3 code, the code wins —
+file a fix so the mockup stays the reference. `settings-area.mock.html` is the
+layout-confirmation artifact; it may drift from pixel-exact production once
+the React lands.
