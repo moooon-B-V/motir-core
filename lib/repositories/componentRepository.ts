@@ -25,6 +25,18 @@ export const componentRepository = {
   },
 
   /**
+   * Bulk id resolution — the same-project validation read behind
+   * `setComponents` and `createWorkItem`'s componentIds pre-flight (5.4.3):
+   * one query, the service asserts workspace + project per id. Optional
+   * `tx`. Empty input is an empty result by contract (coverage gate).
+   */
+  async findByIds(ids: string[], tx?: Prisma.TransactionClient): Promise<Component[]> {
+    if (ids.length === 0) return [];
+    const client = tx ?? db;
+    return client.component.findMany({ where: { id: { in: ids } } });
+  },
+
+  /**
    * The case-insensitive uniqueness probe (5.4.3's create/rename guard —
    * the `@@unique([projectId, nameLower])` key; the constraint backstops
    * the concurrent-create race). Optional `tx` — called inside the
