@@ -141,6 +141,22 @@
       "OPTION_ARCHIVED": "该选项已归档，请选择一个现行选项。",
       "USER_NOT_ASSIGNABLE": "该成员无法查看此项目，因此不能设置在此字段。",
       "READ_ONLY": "你对此项目仅有只读权限。"
+    },
+    "labels": {
+      "INVALID_LABEL_NAME": "标签不能包含空格，请改用连字符：{suggestion}",
+      "LABEL_NAME_TOO_LONG": "标签最多{max}个字符。",
+      "LABEL_LIMIT_EXCEEDED": "标签数量已达上限（{limit}个），移除一个后才能继续添加。",
+      "READ_ONLY": "你没有编辑标签的权限。"
+    },
+    "components": {
+      "COMPONENT_NOT_FOUND": "该组件已不存在。",
+      "INVALID_COMPONENT_NAME": "请输入有效的组件名称。",
+      "COMPONENT_NAME_CONFLICT": "已存在同名组件。",
+      "INVALID_DEFAULT_ASSIGNEE": "默认负责人必须是可查看此项目的成员。",
+      "INVALID_MOVE_TARGET": "请选择另一个组件作为移动目标。",
+      "CROSS_PROJECT_COMPONENT": "该组件属于其他项目。",
+      "NOT_PROJECT_ADMIN": "只有项目管理员才能管理组件。",
+      "READ_ONLY": "你没有编辑组件的权限。"
     }
   },
   "email": {
@@ -365,6 +381,18 @@
   },
   "issueViews": {
     "heading": "工作项",
+    "labelsField": "标签",
+    "labelsPlaceholder": "添加标签…",
+    "labelsCreate": "创建“{name}”",
+    "labelsRemove": "移除{label}",
+    "labelsLimitReached": "标签数量已达上限（{limit}个），移除一个后才能继续添加。",
+    "noLabels": "暂无标签",
+    "componentsField": "组件",
+    "componentsPlaceholder": "添加组件…",
+    "componentsRemove": "移除{label}",
+    "componentsNoneDefined": "尚未定义组件",
+    "componentsManageLink": "前往项目设置管理组件 →",
+    "noComponents": "暂无组件",
     "noProjectTitle": "未选择项目",
     "noProjectListDescription": "从切换器中选择或创建一个项目，以跟踪其工作项。",
     "noProjectDetailDescription": "从切换器中选择一个项目，以查看其工作项。",

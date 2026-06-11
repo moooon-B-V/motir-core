@@ -8,6 +8,10 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { commentsService } from '@/lib/services/commentsService';
 import { estimationService } from '@/lib/services/estimationService';
+import { componentsService } from '@/lib/services/componentsService';
+import { projectMembersService } from '@/lib/services/projectMembersService';
+import { workspacesService } from '@/lib/services/workspacesService';
+import { isWorkspaceManager } from '@/lib/projects/roles';
 import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
 import { ParentRollupBadge } from '@/components/issues/ParentRollupBadge';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -109,6 +113,27 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
   } catch {
     initialComments = null;
   }
+
+  // Labels + components (Story 5.4 · Subtask 5.4.8): the issue's rows ride the
+  // detail read above; the rail's Components picker additionally needs the
+  // project taxonomy (browse-gated, name-ordered, admin-bounded — finding #57),
+  // and the empty-taxonomy "Manage components" link is admin-only — resolved
+  // like the settings pages do (workspace manager OR project-role admin).
+  const [projectComponents, wsRole, projectMembers] = await Promise.all([
+    componentsService.listComponents(ctx.project.identifier, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    }),
+    workspacesService.getMemberRole(ctx.userId, ctx.workspaceId),
+    projectMembersService.listMembers({
+      key: ctx.project.identifier,
+      actorUserId: ctx.userId,
+      ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    }),
+  ]);
+  const canManageProject =
+    isWorkspaceManager(wsRole) ||
+    projectMembers.find((m) => m.userId === ctx.userId)?.role === 'admin';
 
   // The project estimation config (Subtask 4.3.4) — the rail's inline
   // story-points EstimateBadge reads the scale deck from it via context.
@@ -229,6 +254,13 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
               parent={detail.parent}
               reporterIsSelf={item.reporterId === ctx.userId}
               customFields={detail.customFields}
+              labelsComponents={{
+                projectKey: ctx.project.identifier,
+                labels: detail.labels,
+                components: detail.components,
+                projectComponents,
+                canManageProject,
+              }}
             />
             {/* The 2.4.3 parent breadcrumb lives in the header (per detail.png),
               not here. Epic 5: custom fields · attachments. */}
