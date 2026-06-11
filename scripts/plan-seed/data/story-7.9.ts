@@ -182,7 +182,7 @@ import type { PlanStory } from '../types';
  * standard TS CLI build — evaluate commander vs yargs + tsup vs esbuild at
  * build time and record the pick; node >= 22). It ships from the repo first
  * (installable via the checkout / `pnpm --filter cli`); **publishing the
- * `motir` npm package is Epic-8 work** (8.7 — gated on the Motir
+ * `@motir/cli` npm package is Epic-8 work** (8.7 — gated on the Motir
  * name-securing prerequisite), NOT a 7.9 dep: a forward-pointing 7.9 → 8.7
  * dep would fail the cross-epic audit, and in-repo install needs no
  * publish.
@@ -225,8 +225,9 @@ export const story_7_9: PlanStory = {
     'of the 7.8 ' +
     'server (one agent surface, one auth path — PAT bearer), consuming 7.6 server-side prompt ' +
     'generation; the agent itself is the user\'s own (`--agent "claude -p"` or copy-paste). ' +
-    'Lives in `packages/cli` (first workspace package), binary named `motir` per the 8.7 name ' +
-    'decision; npm publishing belongs to Epic 8 (name securing gates it).',
+    'Lives in `packages/cli` (first workspace package), package `@motir/cli` with the binary ' +
+    'named `motir` per the 8.7 name decision (finding #83 — the bare npm name is ' +
+    'registry-blocked); npm publishing belongs to Epic 8 (name securing gates it).',
   verificationRecipeMd:
     '- Pull the Story branch, `pnpm install`, `pnpm prisma migrate dev`, `pnpm db:seed`, ' +
     '`pnpm dev` (the MCP endpoint must be live).\n' +
@@ -287,10 +288,11 @@ export const story_7_9: PlanStory = {
         'client and the config/linking layer.\n\n' +
         '**Package.** `packages/cli` — the first real workspace package (the repo already has ' +
         '`pnpm-workspace.yaml`; extend its globs if needed and keep the Next app build ' +
-        'unaffected). `package.json` name `motir`, `bin: { "motir": ... }`, node >= 22, ' +
+        'unaffected). `package.json` name `@motir/cli` (the bare `motir` npm name is ' +
+        'registry-blocked — finding #83), `bin: { "motir": ... }`, node >= 22, ' +
         'standard TS CLI toolchain (evaluate commander vs yargs + tsup vs esbuild at build ' +
         'time, record the pick in the package README). NOT published to npm in this story — ' +
-        'in-repo install (`pnpm --filter motir...`) is the 7.9 distribution; publishing is ' +
+        'in-repo install (`pnpm --filter @motir/cli...`) is the 7.9 distribution; publishing is ' +
         'Epic-8 (name securing).\n\n' +
         '**MCP client core (`src/client.ts`).** One shared module: connect to ' +
         '`<serverUrl>/api/mcp` (streamable HTTP, official `@modelcontextprotocol/sdk` ' +
@@ -319,7 +321,7 @@ export const story_7_9: PlanStory = {
         'UPWARD from cwd (so every command works from inside any checkout), overridable ' +
         'with `--project`.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- `pnpm --filter motir build` produces a runnable `motir` binary; the root app ' +
+        '- `pnpm --filter @motir/cli build` produces a runnable `motir` binary; the root app ' +
         'build/test/lint pipelines are unaffected (CI lanes stay green with the workspace ' +
         'package present).\n' +
         '- `auth login` rejects an invalid/revoked PAT at login time (validation round-trip); ' +
@@ -619,7 +621,7 @@ export const story_7_9: PlanStory = {
       estimateMinutes: 30,
       descriptionMd:
         'The user-facing CLI doc, `docs/jobs.md` register: install from the repo ' +
-        '(`pnpm --filter motir...`; npm install lands with the Epic-8 publish), `auth ' +
+        '(`pnpm --filter @motir/cli...`; npm install lands with the Epic-8 publish), `auth ' +
         'login` + PAT creation pointer (the 7.8.8 doc), `link`, every command with examples, ' +
         'agent wiring recipes (`--agent "claude -p"` headless and a copy-paste flow), the ' +
         'SESSION-BRANCH semantics (in_review + the recorded branch while the end-of-run ' +
