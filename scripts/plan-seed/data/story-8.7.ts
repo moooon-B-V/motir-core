@@ -151,7 +151,7 @@ export const story_8_7: PlanStory = {
     {
       id: '8.7.3',
       title: 'prodect-core user-facing rename — messages, metadata, auth + email copy',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 45,
