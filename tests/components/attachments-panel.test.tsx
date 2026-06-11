@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type { AttachmentDTO, AttachmentsPageDTO } from '@/lib/dto/attachments';
 import { MAX_UPLOAD_BYTES } from '@/lib/blob/allowlist';
@@ -338,5 +338,105 @@ describe('states', () => {
 
     await waitFor(() => expect(screen.getByText('recovered.png')).toBeTruthy());
     expect(fetchMock).toHaveBeenCalledWith('/api/work-items/wi-1/attachments');
+  });
+});
+
+describe('preview lightbox (5.2.6)', () => {
+  const image = () =>
+    attachment({ filename: 'photo.png', mimeType: 'image/png', isImage: true, isPdf: false });
+  const pdf = () =>
+    attachment({
+      filename: 'report.pdf',
+      mimeType: 'application/pdf',
+      isImage: false,
+      isPdf: true,
+    });
+  const zip = () =>
+    attachment({
+      filename: 'bundle.zip',
+      mimeType: 'application/zip',
+      isImage: false,
+      isPdf: false,
+    });
+
+  /** Swallow the transient download anchor's click; collect the hrefs. */
+  function spyDownloads(): string[] {
+    const hrefs: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      hrefs.push(this.href);
+    });
+    return hrefs;
+  }
+
+  it('an image card opens the lightbox: labelled dialog, contain-fit img with filename alt, header name + size + Download', () => {
+    const att = image();
+    renderPanel(page([att]));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview photo.png' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'photo.png' });
+    const img = within(dialog).getByRole('img', { name: 'photo.png' });
+    expect(img.getAttribute('src')).toBe(att.blobUrl);
+    expect(within(dialog).getByText('1.2 MB')).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Download' })).toBeTruthy();
+  });
+
+  it('a PDF card opens the embedded frame with the can’t-inline fallback path', () => {
+    const att = pdf();
+    renderPanel(page([att]));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview report.pdf' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'report.pdf' });
+    const frame = dialog.querySelector('object');
+    expect(frame?.getAttribute('data')).toBe(att.blobUrl);
+    expect(frame?.getAttribute('type')).toBe('application/pdf');
+    // The fallback (rendered when the browser can't inline) carries the
+    // download-instead message + its own Download affordance.
+    expect(
+      within(dialog).getByText("Preview isn't available here — download the file instead."),
+    ).toBeTruthy();
+  });
+
+  it('a non-previewable card never opens the lightbox — activation downloads', () => {
+    const att = zip();
+    const hrefs = spyDownloads();
+    renderPanel(page([att]));
+
+    // The open target is labelled as a download, not a preview.
+    expect(screen.queryByRole('button', { name: 'Preview bundle.zip' })).toBeNull();
+    const [open] = screen.getAllByRole('button', { name: 'Download bundle.zip' });
+    if (!open) throw new Error('open target not rendered');
+    fireEvent.click(open);
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(hrefs).toHaveLength(1);
+    expect(hrefs[0]).toContain('download=1');
+  });
+
+  it('keyboard path: Esc closes the lightbox', async () => {
+    // Radix owns focus-trap + return-focus; happy-dom never fires its
+    // unmount focus restore (verified against a minimal Modal harness), so
+    // the return-focus half of the contract is asserted in the 5.2.8
+    // Playwright journey ("Esc returns focus") against a real browser.
+    renderPanel(page([image()]));
+    const open = screen.getByRole('button', { name: 'Preview photo.png' });
+    open.focus();
+    fireEvent.click(open);
+
+    const dialog = screen.getByRole('dialog', { name: 'photo.png' });
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('the header close × closes the lightbox', async () => {
+    renderPanel(page([image()]));
+    fireEvent.click(screen.getByRole('button', { name: 'Preview photo.png' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close preview' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });

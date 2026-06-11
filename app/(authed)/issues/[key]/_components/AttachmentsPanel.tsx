@@ -24,7 +24,9 @@ import { ALLOWED_UPLOAD_TYPES, MAX_UPLOAD_BYTES } from '@/lib/blob/allowlist';
 import { useAttachmentsView } from '@/lib/hooks/useAttachmentsView';
 import { formatBytes } from '@/lib/utils/bytes';
 import { cn } from '@/lib/utils/cn';
+import { triggerDownload } from './attachmentDownload';
 import { AttachmentGlyph } from './AttachmentGlyph';
+import { AttachmentPreview, isPreviewable } from './AttachmentPreview';
 import { ContentSectionCard } from './ContentSectionCard';
 
 // The Attachments panel in the detail page's reserved Epic-5 slot (Story 5.2 ·
@@ -55,8 +57,8 @@ import { ContentSectionCard } from './ContentSectionCard';
 //     load-all (finding #57); tile skeletons / inviting empty / ErrorState.
 //
 // Activating a previewable card (the DTO's `isImage`/`isPdf` split) opens the
-// 5.2.6 preview lightbox; until that subtask lands, every activation downloads
-// (the non-previewable behaviour — the graceful interim, no improvised UI).
+// 5.2.6 AttachmentPreview lightbox; non-previewable activations download (the
+// Jira-verified split — images + PDF preview, the rest download).
 // Mutations go through the 5.2.2 routes; this client component owns the loaded
 // window, applies results in place, and calls `router.refresh()` so the
 // server-rendered first page stays fresh (the CommentsSection pattern).
@@ -126,27 +128,6 @@ function postAttachment(
   });
 }
 
-/** The blob URL with the store's forced content-disposition switch. */
-function downloadHref(blobUrl: string): string {
-  try {
-    const url = new URL(blobUrl);
-    url.searchParams.set('download', '1');
-    return url.toString();
-  } catch {
-    return blobUrl;
-  }
-}
-
-function triggerDownload(attachment: AttachmentDTO): void {
-  const anchor = document.createElement('a');
-  anchor.href = downloadHref(attachment.blobUrl);
-  anchor.download = attachment.filename;
-  anchor.rel = 'noopener';
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-}
-
 const iconButtonClass =
   'inline-flex items-center justify-center rounded-(--radius-control) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-icon-btn) text-(--el-text-muted) shadow-(--shadow-card) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none';
 const dangerIconButtonClass =
@@ -184,6 +165,8 @@ export function AttachmentsPanel({
   const [uploadErrors, setUploadErrors] = useState<UploadError[]>([]);
   // Drag depth, not a boolean — dragenter/dragleave fire per child element.
   const [dragDepth, setDragDepth] = useState(0);
+  // The lightbox's focused attachment (5.2.6); null while closed.
+  const [preview, setPreview] = useState<AttachmentDTO | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadSeq = useRef(0);
@@ -292,6 +275,13 @@ export function AttachmentsPanel({
     setAttachments((current) => current.filter((item) => item.id !== attachment.id));
     setTotalCount((current) => Math.max(0, current - 1));
     router.refresh();
+  }
+
+  // The card/row activation — the Jira-verified split (5.2.6): images + PDFs
+  // open the preview lightbox, every other type downloads.
+  function openAttachment(attachment: AttachmentDTO) {
+    if (isPreviewable(attachment)) setPreview(attachment);
+    else triggerDownload(attachment);
   }
 
   // ── Dropzone (drag enhancement over the Attach button) ──────────────────
@@ -492,6 +482,7 @@ export function AttachmentsPanel({
                   attachment={attachment}
                   canDeleteAll={canDeleteAll}
                   currentUserId={currentUserId}
+                  onOpen={() => openAttachment(attachment)}
                   onDeleted={() => handleDeleted(attachment)}
                 />
               ))}
@@ -504,6 +495,7 @@ export function AttachmentsPanel({
                   attachment={attachment}
                   canDeleteAll={canDeleteAll}
                   currentUserId={currentUserId}
+                  onOpen={() => openAttachment(attachment)}
                   onDeleted={() => handleDeleted(attachment)}
                 />
               ))}
@@ -523,6 +515,8 @@ export function AttachmentsPanel({
           ) : null}
         </div>
       </ContentSectionCard>
+
+      <AttachmentPreview attachment={preview} onClose={() => setPreview(null)} />
 
       {/* Drag-over — the whole panel is the dropzone (decorative; the drop
           handlers live on the wrapper, so this never intercepts events). */}
@@ -548,11 +542,14 @@ function AttachmentCard({
   attachment,
   canDeleteAll,
   currentUserId,
+  onOpen,
   onDeleted,
 }: {
   attachment: AttachmentDTO;
   canDeleteAll: boolean;
   currentUserId: string;
+  /** Card activation — previewable types open the lightbox, others download. */
+  onOpen: () => void;
   onDeleted: () => void;
 }) {
   const t = useTranslations('attachments');
@@ -563,8 +560,10 @@ function AttachmentCard({
     <li className="group border-(--el-border) bg-(--el-page-bg) hover:border-(--el-border-strong) hover:shadow-(--shadow-card) relative overflow-hidden rounded-(--radius-control) border">
       <button
         type="button"
-        onClick={() => triggerDownload(attachment)}
-        aria-label={t('downloadAria', { name: attachment.filename })}
+        onClick={onOpen}
+        aria-label={t(isPreviewable(attachment) ? 'previewAria' : 'downloadAria', {
+          name: attachment.filename,
+        })}
         className="block w-full cursor-pointer text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--focus-ring-color)"
       >
         {attachment.isImage ? (
@@ -613,11 +612,14 @@ function AttachmentRow({
   attachment,
   canDeleteAll,
   currentUserId,
+  onOpen,
   onDeleted,
 }: {
   attachment: AttachmentDTO;
   canDeleteAll: boolean;
   currentUserId: string;
+  /** Row activation — previewable types open the lightbox, others download. */
+  onOpen: () => void;
   onDeleted: () => void;
 }) {
   const t = useTranslations('attachments');
@@ -628,8 +630,10 @@ function AttachmentRow({
     <li className="group hover:bg-(--el-surface) border-(--el-border-soft) flex min-h-(--height-control) items-center gap-2.5 rounded-(--radius-control) border-t px-(--spacing-control-x) py-(--spacing-control-y) first:border-t-0">
       <button
         type="button"
-        onClick={() => triggerDownload(attachment)}
-        aria-label={t('downloadAria', { name: attachment.filename })}
+        onClick={onOpen}
+        aria-label={t(isPreviewable(attachment) ? 'previewAria' : 'downloadAria', {
+          name: attachment.filename,
+        })}
         className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-(--radius-control) text-left focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
         <AttachmentGlyph mimeType={attachment.mimeType} className="h-4 w-4 shrink-0" />

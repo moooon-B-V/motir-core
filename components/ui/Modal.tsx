@@ -56,6 +56,11 @@ const contentVariants = cva(
         // the design-system --spacing-* scale stays untouched (see the comment
         // above on why we pin rems instead of max-w-{key}).
         xl: 'max-w-[58rem]',
+        // The whole viewport (Subtask 5.2.6's attachment preview lightbox —
+        // the 2.5.19 growth pattern one step further). Like `xl`, the variant
+        // only lifts the size caps; the consumer pairs it with bg/border/
+        // radius/padding overrides to drop the panel chrome it doesn't want.
+        full: 'h-dvh max-h-dvh w-screen max-w-none',
       },
     },
     defaultVariants: { size: 'md' },
@@ -79,6 +84,12 @@ export interface ModalProps extends VariantProps<typeof contentVariants> {
    */
   srTitle?: string;
   className?: string;
+  /**
+   * Extra classes merged onto the backdrop — e.g. the attachment preview
+   * lightbox (Subtask 5.2.6) deepens the default `bg-black/40` scrim to
+   * `bg-black/80` per `design/work-items/attachments.mock.html` panel 6.
+   */
+  overlayClassName?: string;
 }
 
 function ModalRoot({
@@ -90,13 +101,14 @@ function ModalRoot({
   hideClose,
   srTitle,
   className,
+  overlayClassName,
   children,
 }: ModalProps) {
   const tc = useTranslations('common');
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
+        <Dialog.Overlay className={cn('fixed inset-0 z-40 bg-black/40', overlayClassName)} />
         {/*
           PRODECT_FINDINGS #8: Radix checks for a describing element
           (Dialog.Description → aria-describedby) independently of the Title
