@@ -403,7 +403,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.5',
       title:
         'Attachments panel UI on the issue detail page — strip/list, upload (button + drag-drop), download, gated delete, "Show more" paging',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
@@ -455,7 +455,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.6',
       title:
         'Preview lightbox — full-screen image/PDF preview modal from a panel card (download inside; non-previewable types download)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
