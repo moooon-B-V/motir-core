@@ -179,7 +179,11 @@ export const STUB_STORIES: PlanStory[] = [
     descriptionMd:
       'First plan pass: generate a comet-shaped epic/story/task tree as actual issues (Epic 2 ' +
       'model), not a parallel artifact. The differentiator that makes Prodect AI-native. (Former ' +
-      'Epic 3 §3.1.)',
+      'Epic 3 §3.1.) Contract recorded by 7.9.9 (`motir plan`): generation must be invokable ' +
+      'HEADLESSLY — an async server-side job + MCP tool surface (the 7.9 MCP-first rule), not ' +
+      'only via the 7.2 web chat — and must accept an OPTIONAL code-context bundle (the ' +
+      "CLI-gathered snapshot of the user's checkout, 7.9.9) alongside the chat-derived " +
+      'discovery context.',
     items: [],
   },
   {
@@ -188,7 +192,15 @@ export const STUB_STORIES: PlanStory[] = [
     status: 'planned',
     descriptionMd:
       'Augment an existing backlog from a prompt; on-demand + auto-suggested expansion of stubs; ' +
-      're-plan that respects completed work as immutable. (Former Epic 3 §3.2-3.5.)',
+      're-plan that respects completed work as immutable. (Former Epic 3 §3.2-3.5.) Contract ' +
+      'recorded by 7.9.8 (`motir auto --include-planning`): the expansion of a stub epic/story ' +
+      'must be triggerable as an ASYNC server-side job (queue + status, returns immediately) and ' +
+      'surfaced as an MCP tool (`expand_item`-style, per the 7.9 MCP-first rule) so the CLI loop ' +
+      'can fire it and keep dispatching without waiting; 7.9.8 carries a story-level dep here — ' +
+      'retarget it to the concrete subtask when this story expands. `motir plan` (7.9.9) drives ' +
+      'augmentation ("plan <description>" on an existing backlog) and explicit expansion ' +
+      '("plan <KEY>") through the SAME async-job + MCP-tool surface, optionally carrying the ' +
+      '7.9.9 code-context bundle.',
     items: [],
   },
   {
@@ -209,7 +221,18 @@ export const STUB_STORIES: PlanStory[] = [
       'prompt-quality moat itself) + **the broader planner tool surface** beyond `ready` (the ' +
       'narrow single-artifact tools an AI planner calls). The split is justified inline in ' +
       'story-7.0.ts; see also notes.html #32 (epic-ordering-follows-deps) — 7.0 has no ' +
-      'forward-pointing deps, so the early ship is a clean deviation, not a planning bug.',
+      'forward-pointing deps, so the early ship is a clean deviation, not a planning bug.\n\n' +
+      '**Code-access decision (recorded 2026-06-10, for `motir plan` / planning context):** the ' +
+      "planner reads the user's CODE through TWO retrieval sources, both landing in this " +
+      "story's retrieval layer — (a) **the 7.7 GitHub App read path** (server-side: an App " +
+      'installation with per-repo selection + contents:read — the verified standard shape for ' +
+      'hosted AI dev tools that read your repo from their cloud, e.g. the CodeRabbit-style ' +
+      'GitHub App installation; serves web-chat planning 7.2/7.3 and dispatch-' +
+      'prompt injection), and (b) **the CLI-pushed code-context bundle** (7.9.9 — the CLI runs ' +
+      'where the code LIVES, so it gathers context locally with explicit user consent; covers ' +
+      'pre-GitHub / non-GitHub projects and needs no server-side credential). Either source ' +
+      'crossing the 7.1 core↔AI boundary is REQUEST-SCOPED: prodect-ai consumes the context ' +
+      "per job and never persists the user's code.",
     items: [],
   },
   {
@@ -221,7 +244,8 @@ export const STUB_STORIES: PlanStory[] = [
       'user runs the prompt in their own agent. THE seam the future native AI-coding layer ' +
       "extends. (Former Epic 4 §4.1, §4.2.) Contract recorded by 7.9 (Motir CLI): the prompt's " +
       'GIT WORKFLOW block is a DISPATCH-TIME template parameter — TWO variants (per-item PR ' +
-      'for `next` / session-branch <name> for `auto`; an auto-merge-to-main variant was ' +
+      'for `next` and `batch` (7.9.10 reuses it unchanged) / session-branch <name> for `auto`; ' +
+      'an auto-merge-to-main variant was ' +
       'REJECTED as dangerous, main only moves through a human-merged PR), selected by the ' +
       'dispatch request; also a structured `targetRepo` field AND the inherited ' +
       '`sessionBranch` (7.8.11 — when an item is ready via an integrated-awaiting-review ' +
@@ -235,7 +259,14 @@ export const STUB_STORIES: PlanStory[] = [
     status: 'planned',
     descriptionMd:
       'GitHub OAuth, repo/branch/PR model, webhooks → issue status sync, Story-level verification ' +
-      '+ Subtask CI feedback loop. (Former Epic 4 §4.3-4.6.)',
+      '+ Subtask CI feedback loop. (Former Epic 4 §4.3-4.6.) Shape decision (recorded ' +
+      '2026-06-10): the integration ships as a **GitHub App installation** — per-repo selection, ' +
+      'contents:read + metadata for the code-read path, write scopes only where the status-sync/' +
+      'review loop needs them — the verified standard for hosted AI dev tools that read your ' +
+      'repo from their cloud (CodeRabbit-style, per its GitHub-integration docs; ' +
+      'OAuth identifies the USER, the App installation grants the REPO access — two separate ' +
+      "grants). This App read path is ALSO the server-side code-access source for 7.5's " +
+      'planning/dispatch context retrieval (see the 7.5 code-access decision).',
     items: [],
   },
   // 7.8 (Prodect MCP server — agent tool surface over the PM core) is fully
@@ -251,7 +282,7 @@ export const STUB_STORIES: PlanStory[] = [
   // 7.9 (Motir CLI — `motir next` / `motir auto` terminal dispatch) is fully
   // expanded — data/story-7.9.ts. Added 2026-06-10 on Yue's direction: the
   // productized `prodect run` loop (auth/link/ready/status/next/run/done/
-  // auto/open), built as an MCP CLIENT of the 7.8 server (one agent surface,
+  // auto/batch/open/plan), built as an MCP CLIENT of the 7.8 server (one agent surface,
   // one PAT auth path), consuming 7.6's server-side prompt generation;
   // packages/cli workspace package, binary `motir`; npm publish is Epic-8
   // work (name securing gates it — no forward dep).
@@ -298,9 +329,9 @@ export const STUB_STORIES: PlanStory[] = [
     title: 'Production hardening + observability',
     status: 'planned',
     descriptionMd:
-      'Deploy, domain + SSL (the Motir domain — registration is an open 8.7 prerequisite; the ' +
-      'already-registered nifer.co belongs to the superseded name), transactional email ' +
-      'backend, analytics, error monitoring, backups, rate limits, day-1 admin tools.',
+      'Deploy, domain + SSL (motir.co — REGISTERED 2026-06-10, subtask 8.7.1; the attach + SSL ' +
+      'go-live happens here), transactional email backend, analytics, error monitoring, ' +
+      'backups, rate limits, day-1 admin tools.',
     items: [],
   },
   {
@@ -315,29 +346,12 @@ export const STUB_STORIES: PlanStory[] = [
       '`type: decision`/`manual` founder work routed through the queue.',
     items: [],
   },
-  {
-    id: '8.7',
-    title: 'Rebrand cutover: Prodect → Motir',
-    status: 'planned',
-    descriptionMd:
-      'One-time cross-repo rename. **The name is Motir** (Yue, 2026-06-10 — supersedes the ' +
-      '2026-06-08 nifer decision; notes.html mistake #34 records the nifer chapter as history). ' +
-      '**Securing Motir is an OPEN user-side prerequisite, not inherited from nifer:** the ' +
-      'registered nifer.co domain and the nifer EUIPO filing belong to the superseded name, so ' +
-      'this story starts with a `type: manual/human` securing subtask on expansion — register ' +
-      'the Motir domain, file the Motir EUTM (Nice classes 9 & 42, + USPTO if launching in the ' +
-      'US), and confirm before any rename code runs. The rename itself is NOT a blind ' +
-      'find-replace — touches prodect-core (UI copy, package names, app/SEO metadata, email ' +
-      'templates/chrome), prodect-ai, prodect-meta (PRODECT.md → MOTIR.md), the plan seed ' +
-      '(@prodect.co users → the Motir domain, tenant naming), domain/Vercel/email config, and ' +
-      'README + license headers. The `PROD` issue key: RESOLVED — keep PROD-N (rung-1 ' +
-      'verified: editing a project key is a reversible Jira-standard setting, and story 6.8 ' +
-      'ships exactly that capability with old-key redirects, so a later switch to MOT-N is a ' +
-      'setting change, not a migration — no reason to churn dogfood keys now). Also owns ' +
-      '**publishing the `motir` npm package** (the 7.9 CLI ships in-repo only until the name ' +
-      'is secured — publishing rides the securing subtask here, keeping 7.9 free of a ' +
-      'forward-pointing dep). Run-early, NOT gated on other Epic-8 work — cheapest before ' +
-      'launch/traction.',
-    items: [],
-  },
+  // 8.7 (Rebrand cutover: Prodect → Motir) is fully expanded — data/story-8.7.ts.
+  // Expanded 2026-06-10 on the news that the securing prerequisite is DONE
+  // (motir.co registered + the Motir trademark filed — subtask 8.7.1, done on
+  // Yue's confirmation): rename subtasks across prodect-core / prodect-ai /
+  // prodect-meta / the plan seed, the GitHub/Vercel infra renames, the npm
+  // name claim + `motir` package publish (the 7.9 CLI), and the post-rename
+  // sweep. PROD key stays (6.8-verified). Runs early, gated on nothing else
+  // in Epic 8.
 ];
