@@ -102,7 +102,7 @@ export const story_5_6: PlanStory = {
       id: '5.6.1',
       title:
         'Collaboration-heavy fixture — `db:seed:collab` loaded-issue seed through the shipped services (+ helpers, CI-lane cap)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
