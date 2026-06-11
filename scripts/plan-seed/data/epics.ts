@@ -331,7 +331,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           "Issue list: inline status edit — the first item's status sometimes reverts after editing a second item",
-        status: 'in_progress',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 2 · **Surface:** issue list inline cell editing ' +
@@ -403,8 +403,15 @@ export const EPICS: EpicMeta[] = [
           'longer revalidate, cells no longer refresh on success (only the optimistic-' +
           'concurrency STALE conflict still refreshes), so there are no payloads left to ' +
           'race. The detail page `CoreFieldsPanel` shares the refresh-on-success mechanic ' +
-          'but is owned by open PR #633 — logged as a finding for a follow-up, not touched ' +
-          'in #640.',
+          'but is owned by open PR #633 — logged as a finding (#79) for a follow-up, not ' +
+          'touched in #640.\n\n' +
+          '**Closed (2026-06-11): PR #640 merged.** Full CI green including the inline-edit ' +
+          'E2E. The PR also fixed a consequence the first commit introduced and the E2E ' +
+          'caught: with no refresh, server props freeze, so a follow-up edit on the same row ' +
+          'submitted a dead `expectedUpdatedAt` — the provider now keeps a per-row ledger of ' +
+          'server-acknowledged `updatedAt` values and submissions send max(ledger, prop). ' +
+          'Regression tests cover same-cell (reassign → unassign) and cross-cell (status → ' +
+          'assignee) follow-ups against the real service.',
       },
     ],
   },
