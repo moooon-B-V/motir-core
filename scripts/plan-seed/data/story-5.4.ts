@@ -686,7 +686,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.11',
       title:
         'Story tests — Vitest matrix (folksonomy × components × watchers × notifications) + Playwright E2E + a11y sweep',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 32,
