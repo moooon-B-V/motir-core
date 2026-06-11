@@ -512,3 +512,168 @@ When a string here disagrees with shipped 5.3.6 code, the code wins — file a
 fix so the mockup stays the reference. `fields.mock.html` is the
 layout-confirmation artifact; it may drift from pixel-exact production once
 the React lands.
+
+---
+
+# Components admin (Story 5.4) — Subtask 5.4.7 output
+
+Story 5.4 adds an admin-managed **component** taxonomy (name + description +
+default assignee, multi-valued per issue) managed at **Project settings →
+Components**. This section is the canonical reference for code subtask
+**5.4.10** (the Components admin UI), which carries 5.4.7 in `dependsOn`. The
+companion issue-view surface (the Components rail card + chip picker) is
+**5.4.6** → `design/work-items/labels-components-watch.mock.html`.
+
+Like the 6.4.1 and 5.3.4 surfaces above, this is an **HTML mockup** —
+`components.mock.html`, built FROM the real design system (the
+`app/globals.css` token block copied 1:1 + shipped `components/ui/*`
+primitives), with `components.png` as the light-mode board render. The HTML is
+the source of truth; toggle `data-theme="dark"` in it to confirm token parity.
+
+## Files
+
+| HTML source (truth)    | PNG export       |
+| ---------------------- | ---------------- |
+| `components.mock.html` | `components.png` |
+
+The mockup is an eight-panel board (review EACH): **(0)** the settings hub
+with the new Components card; **(1)** the populated project-admin list;
+**(2)** the empty state (+ the 5.4.6 cross-reference); **(3)** the create
+modal with the default-assignee picker OPEN; **(4)** the edit modal + the
+case-insensitive-unique inline 422; **(5)** the in-use delete dialog — the
+move-or-remove choice, BOTH branches; **(6)** the unused delete confirm;
+**(7)** the non-admin read-only state + loading skeleton + ErrorState.
+
+## Mirror product (rung 1, VERIFIED at plan time 2026-06-10 — Atlassian docs)
+
+**Company-managed Jira** is the shape mirror (team-managed gets Compass
+components — a different product seam):
+
+- `name` (required, **case-insensitively unique** per project — the 5.4.1
+  `nameLower` unique), `description?`, `defaultAssigneeId?`; issues carry
+  **multiple components**.
+- **Default assignee (the verified rule):** an issue CREATED with components
+  and no assignee takes the default assignee of its **first-alphabetical**
+  component that has one — create-time only; later component edits never touch
+  the assignee. The helper line under the picker states this.
+- **Delete with issues = the verified move-or-remove choice:** move every
+  association to another component, or just remove it — the work items
+  themselves are untouched either way. Unused components confirm simply.
+
+**Recorded simplification:** Jira's five-way default-assignee enum (project
+default / project lead / component lead / unassigned / person) collapses to a
+**nullable user** — Prodect has no project-lead concept, and component _lead_
+exists in Jira chiefly to feed that enum. Component lead = the documented
+extension.
+
+## Composing primitives (no new primitive required)
+
+- **`Card`** — the component-list card (header + flush body) and the hub
+  cards. The **hub card** reuses the `MembersSettingsCard` grammar verbatim
+  (`Card p-0` + whole-row `Link` + `ChevronRight`), placed **after Fields**
+  (the in-flight 5.3.6 card; both sit between Estimation and Access & members
+  — the issue-config group; Archive stays last).
+- **Component rows** — the members-row grammar with the avatar slot holding a
+  **neutral component tile** (lucide `component` glyph in
+  `--el-text-secondary` on `--el-surface`, `--radius-control`) — matching
+  5.4.6's recorded decision that components stay NEUTRAL so the labels'
+  name-hash tints read as meaningful (the two surfaces share one identity;
+  finding #54 is satisfied by avatars + state grammars, not an invented
+  component hue). Row = tile · name · description gloss (truncating) ·
+  **default-assignee cluster** (28px ink avatar + name + the 11px "Default
+  assignee" sublabel; a dashed empty avatar + muted "None" when unset) ·
+  usage (`N issues` / `not used yet`) · ghost-sm `Edit` / `Delete`. **NO
+  grip** — components are name-ordered (`listComponents` sorts by name), never
+  manually reordered (unlike fields). The count pill is a plain count (no cap
+  — the mirror has none; the read is bounded server-side).
+- **`Modal`** — create / edit (size md, ghost Cancel + primary confirm — the
+  create-project grammar) and the delete dialog (the archive-confirm heading:
+  `TriangleAlert` in a `--el-tint-rose` circle + `danger` confirm; no
+  typed-identifier arm step — the live count is the consequence statement,
+  fetched when the dialog opens).
+- **Default-assignee picker** — the 6.4.1 add-member **`Combobox`** grammar
+  (trigger `--height-control`/`--radius-input` + elevated menu + avatar option
+  rows + search), scoped via `assignableMembersService` ("Only people who can
+  view this project are listed."), with an explicit **"None"** row (dashed
+  empty avatar, gloss "No automatic assignment") so clearing the default is a
+  first-class choice. The trigger shows the chosen member's 22px avatar +
+  name, or muted "None".
+- **Move-or-remove choice** — the 6.4.1 access **radio-card** grammar: two
+  stacked cards (title + one-line consequence + radio; selected =
+  `--el-accent` border + filled radio). The MOVE card embeds a component
+  `Combobox` (component glyph + name) **excluding the component being
+  deleted**; the picker collapses while the card is unselected.
+- **`Pill`** — the count chip (`pill-neutral`) + `Read-only` (the mint chip,
+  the 6.4 grammar).
+- **`Input`** — name (helper "Unique within this project."), description; the
+  unique-collision 422 uses the Input **error grammar** (`--el-danger` border
+  - message) and names the EXISTING casing.
+- **`EmptyState` / `ErrorState`** — "No components yet" (lucide `Component`
+  icon) and "Couldn't load components" + Retry; the loading skeleton extends
+  the settings skeleton.
+
+## Copy strings catalog (use verbatim in 5.4.10; i18n under `settings.components`)
+
+| Surface                   | String                                                                                                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hub card title            | `"Components"`                                                                                                                                                      |
+| Hub card description      | `"The parts of the product issues belong to — like API, Web, or Billing — each with an optional default assignee."`                                                 |
+| Page title                | `"Components"`                                                                                                                                                      |
+| Page subtitle             | `"The parts of {projectName} that issues can belong to. An issue can carry several components; components belong to this project only."`                            |
+| List card title           | `"Components"` (+ a plain count pill)                                                                                                                               |
+| Add button                | `"Add component"`                                                                                                                                                   |
+| Default-assignee sublabel | `"Default assignee"` (+ muted `"None"` when unset)                                                                                                                  |
+| Usage gloss               | `"{n} issues"` / `"not used yet"`                                                                                                                                   |
+| Empty headline            | `"No components yet"`                                                                                                                                               |
+| Empty description         | `"Components group issues by part of the product — like API, Web, or Billing. New issues created with a component can pick up its default assignee automatically."` |
+| Create modal title        | `"Create component"`                                                                                                                                                |
+| Name field                | `"Name"` + helper `"Unique within this project."`                                                                                                                   |
+| Description field         | `"Description (optional)"` + placeholder `"What part of the product this covers…"`                                                                                  |
+| Default-assignee field    | `"Default assignee"` + helper `"New issues created with this component and no assignee are assigned to this person. Existing issues are never changed."`            |
+| Picker None row           | `"None"` + gloss `"No automatic assignment"`                                                                                                                        |
+| Picker scope note         | `"Only people who can view this project are listed."`                                                                                                               |
+| Unique-name 422           | `"A component named “{Existing}” already exists in this project."`                                                                                                  |
+| Create / save buttons     | `"Create component"` / `"Save changes"` / `"Cancel"`                                                                                                                |
+| Edit modal title          | `"Edit component"`                                                                                                                                                  |
+| Delete confirm title      | `"Delete {Component}?"`                                                                                                                                             |
+| Delete in-use body        | `"{Component} is on {n} work items. Choose what happens to them — the work items themselves are untouched."`                                                        |
+| Move choice               | `"Move {n} work items to…"` + gloss `"Their {Component} association is replaced. Items already carrying the target keep one."`                                      |
+| Remove choice             | `"Remove the component from {n} work items"` + gloss `"They keep their other components."`                                                                          |
+| Delete unused body        | `"No work items carry this component. This removes it from the project."`                                                                                           |
+| Delete confirm button     | `"Delete component"`                                                                                                                                                |
+| Read-only chip + line     | `"Read-only"` · `"Only project admins can manage components."`                                                                                                      |
+| Error state               | `"Couldn't load components"` · `"Something went wrong on our side. Try again."` · `"Retry"`                                                                         |
+
+## Read-only degradation (the 6.4 / 5.3 shape)
+
+A non-admin sees the list with the mutation affordances **absent** (no Add
+component, no Edit/Delete) + the `Read-only` pill + the quiet permission line
+— the members-page / fields-page degradation: every control on this page IS a
+mutation, so hiding is the right shape. Reads stay open to members/viewers —
+the issue-view rail picker needs the component list.
+
+## Deliberate non-features (the documented extension slots — do NOT build)
+
+- **Component lead** + Jira's five-way default-assignee enum — the nullable
+  user covers the use case (no project-lead concept; recorded simplification).
+- **No manual reorder** — components are name-ordered, matching the mirror.
+- **No per-project component cap** — the mirror has none; the admin read is
+  bounded server-side (finding #57 honoured without inventing a limit).
+
+## Tokens & a11y
+
+Colour is `--el-*` only; shape via the element shape tokens
+(`--radius-card/-modal/-input/-btn/-control/-badge`,
+`--spacing-card-padding/-btn-x/-input-x/-control-*/-chip-*`,
+`--height-btn-sm/-btn-md/-input/-control`, `--shadow-card/-elevated/-modal`).
+The move-or-remove dialog is focus-managed with the radio group labelled; the
+default-assignee picker is the shipped Combobox a11y bar; the dashed "None"
+avatar conveys absence with text ("None"), never colour alone. `rounded-full`
+only on avatars and radio dots. Dark parity verified by toggle.
+
+## Source of truth
+
+When a string here disagrees with shipped 5.4.10 code, the code wins — file a
+fix so the mockup stays the reference. `components.mock.html` is the
+layout-confirmation artifact; it may drift from pixel-exact production once
+the React lands.
