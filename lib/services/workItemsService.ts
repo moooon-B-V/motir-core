@@ -6,6 +6,8 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { labelRepository } from '@/lib/repositories/labelRepository';
+import { componentRepository } from '@/lib/repositories/componentRepository';
+import { workItemComponentRepository } from '@/lib/repositories/workItemComponentRepository';
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -29,6 +31,7 @@ import {
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
 import { CrossWorkspaceLinkError, WorkItemLinkNotFoundError } from '@/lib/workItems/linkErrors';
+import { ComponentNotFoundError, CrossProjectComponentError } from '@/lib/components/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -42,6 +45,7 @@ import {
 } from '@/lib/mappers/workItemMappers';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toLabelDto } from '@/lib/mappers/labelMappers';
+import { toComponentDto } from '@/lib/mappers/componentMappers';
 import { toCustomFieldWithValueDto } from '@/lib/mappers/customFieldValueMappers';
 import { toWorkItemRevisionDto } from '@/lib/mappers/workItemRevisionMappers';
 import type {
@@ -397,6 +401,25 @@ export const workItemsService = {
       }
     }
 
+    // Component pre-flight (Subtask 5.4.3 — the create modal's Components
+    // picker): every id must resolve to a component of the SAME project — an
+    // unknown / cross-workspace id reads as 404 (no existence leak), a
+    // same-workspace component from another project is the typed 422.
+    // Checked before the key-allocation transaction (the sprint rule); the
+    // join rows are written inside it.
+    const componentIds = [...new Set(input.componentIds ?? [])];
+    if (componentIds.length > 0) {
+      const components = await componentRepository.findByIds(componentIds);
+      const componentsById = new Map(components.map((c) => [c.id, c]));
+      for (const id of componentIds) {
+        const component = componentsById.get(id);
+        if (!component || component.workspaceId !== workspaceId) {
+          throw new ComponentNotFoundError(id);
+        }
+        if (component.projectId !== input.projectId) throw new CrossProjectComponentError(id);
+      }
+    }
+
     // Initial status (Subtask 2.2.4): a new item lands in the project's
     // workflow initial status — there's no "from" status to validate against
     // on a brand-new row, so this bypasses transition validation. The pre-2.2.4
@@ -455,6 +478,29 @@ export const workItemsService = {
       );
       const backlogRank = keyForAppend(lastBacklogRank);
 
+      // The at-create default-assignee rule (Subtask 5.4.3, the verified
+      // Jira behaviour): an issue created with components and NO assignee
+      // takes the default assignee of its FIRST-ALPHABETICAL component (by
+      // nameLower) that has one — resolved inside the create transaction,
+      // create-time only (later component changes never touch the
+      // assignee). The default was validated assignable when the component
+      // was configured; a deleted user is SetNull'd away. The one residual
+      // gap — a default whose user has since LEFT the workspace — is
+      // skipped silently (the SetNull intent: a departure never blocks a
+      // create), keeping the assignee-membership invariant intact.
+      let assigneeId = input.assigneeId ?? null;
+      if (assigneeId === null && componentIds.length > 0) {
+        const defaulted = await componentRepository.findFirstDefaultAssignee(componentIds, tx);
+        if (defaulted?.defaultAssigneeId != null) {
+          const stillMember = await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
+            defaulted.defaultAssigneeId,
+            workspaceId,
+            tx,
+          );
+          if (stillMember) assigneeId = defaulted.defaultAssigneeId;
+        }
+      }
+
       const data: Prisma.WorkItemUncheckedCreateInput = {
         workspaceId,
         projectId: input.projectId,
@@ -468,7 +514,7 @@ export const workItemsService = {
         status: statusKey,
         ...(input.explanationSource ? { explanationSource: input.explanationSource } : {}),
         ...(input.priority ? { priority: input.priority } : {}),
-        assigneeId: input.assigneeId ?? null,
+        assigneeId,
         reporterId: ctx.userId,
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         estimateMinutes: input.estimateMinutes ?? null,
@@ -499,6 +545,20 @@ export const workItemsService = {
       // revision: like the create-modal links above, attachments arriving
       // with the issue are part of creation, not a later edit — the
       // 'created' anchor is the History record.
+      // Components picked in the create modal (Subtask 5.4.3), written in
+      // the SAME transaction as the item (pre-validated same-project above —
+      // issue + components commit or roll back together, the links rule).
+      // Like links and birth attachments, they're part of creation, not a
+      // later edit — no separate `{ components }` revision; the 'created'
+      // anchor is the History record, and the defaulted assignee (if any)
+      // rides the created-row diff.
+      if (componentIds.length > 0) {
+        await workItemComponentRepository.createMany(
+          componentIds.map((componentId) => ({ workItemId: row.id, componentId })),
+          tx,
+        );
+      }
+
       const birthUrls = extractReferencedBlobUrlsFromBodies(
         [row.descriptionMd, row.explanationMd],
         workspaceId,
@@ -1527,6 +1587,7 @@ export const workItemsService = {
       clonesLinks,
       workflow,
       labelRows,
+      componentRows,
       customFieldRows,
     ] = await Promise.all([
       // The breadcrumb chain (root→self, item excluded) — one CTE, workspace-
@@ -1543,6 +1604,10 @@ export const workItemsService = {
       // The issue's labels (5.4.2) — one bounded query riding the same
       // fan-out (no extra round-trip; capped per-issue by labelsService).
       labelRepository.listByWorkItem(item.id),
+      // The issue's components (5.4.3) — the same bounded-slot shape as
+      // labels: one query riding the fan-out, name-ordered, bounded by the
+      // admin-curated taxonomy.
+      componentRepository.listByWorkItem(item.id),
       // The project's custom-field definitions + THIS issue's values (5.3.3)
       // — ONE bounded query (≤50 defs by the project cap, ≤1 value row per
       // def by the pair unique), options + value relations resolved in the
@@ -1583,6 +1648,7 @@ export const workItemsService = {
       readiness: { ready: readiness.ready, openBlockers },
       workflow,
       labels: labelRows.map(toLabelDto),
+      components: componentRows.map(toComponentDto),
       customFields: customFieldRows.map(toCustomFieldWithValueDto),
     };
   },
