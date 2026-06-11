@@ -196,7 +196,7 @@ export const story_6_6: PlanStory = {
       id: '6.6.1',
       title:
         'Schema + TOTAL trigger/action registries + `automationRulesService` CRUD (admin-gated, enable/disable, caps) + routes',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
