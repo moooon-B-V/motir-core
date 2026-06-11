@@ -555,6 +555,12 @@ model WorkItem {
   // Serves BOTH the backlog read (`sprintId IS NULL`, `backlogRank` order) and a
   // sprint's ranked issues (`sprintId = ?`, `backlogRank` order) off one composite.
   @@index([projectId, sprintId, backlogRank])
+  // pg_trgm GIN over the free-text contains-match columns (Story 6.1 · 6.1.1,
+  // finding #57): the filter builder's `text contains` compiles to ILIKE over
+  // title + description, which must not table-scan at 10k issues. A multicolumn
+  // GIN serves predicates on either column. The pg_trgm EXTENSION itself is
+  // created by the migration SQL (Prisma doesn't model extensions here).
+  @@index([title(ops: raw("gin_trgm_ops")), descriptionMd(ops: raw("gin_trgm_ops"))], type: Gin)
   @@map("work_item")
 }
 

@@ -8,6 +8,7 @@
 // `string` (a fractional-index key is already a string and Decimals don't
 // JSON-serialize losslessly as numbers). The mapper owns those conversions.
 
+import type { FilterAst } from '@/lib/filters/ast';
 import type { WorkflowDto } from './workflows';
 import type { RelationshipKind } from './workItemLinks';
 import type { LabelDto } from './labels';
@@ -225,6 +226,13 @@ export interface ProjectTreeFilter {
   /** Include items with NO assignee (the "Unassigned" bucket), OR-ed with `assigneeIds`. */
   includeUnassigned?: boolean;
   text?: string;
+  /**
+   * The advanced filter builder's AST (Story 6.1 · 6.1.1) — validated against
+   * the operator registry at the service boundary (typed 422s on unknown
+   * field/operator ids or bad values), AND-ed with the facet axes above. The
+   * facets remain the quick path; this is the superseding rich shape.
+   */
+  ast?: FilterAst;
 }
 
 /**
