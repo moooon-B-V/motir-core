@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, Eye, MessageSquare } from 'lucide-react';
@@ -61,6 +61,7 @@ export function CommentsSection({
   currentUserName,
   mentionCandidates,
   initialPage,
+  headerControls,
 }: {
   workItemId: string;
   canComment: boolean;
@@ -71,6 +72,10 @@ export function CommentsSection({
   /** The server-rendered first page (newest 20 threads), or null when the
    * server read failed — the section then renders ErrorState + retry. */
   initialPage: CommentsPageDTO | null;
+  /** Replacement header controls (Story 5.5: ActivitySection passes the LIVE
+   * three-tab filter + the shared sort toggle). Absent → the original 5.1.5
+   * controls render (Comments active, History drawn disabled — the seam). */
+  headerControls?: ReactNode;
 }) {
   const t = useTranslations('comments');
   const router = useRouter();
@@ -217,35 +222,37 @@ export function CommentsSection({
       title={t('title')}
       subtitle={failed ? undefined : t('countGloss', { count: totalCount })}
       headerRight={
-        <div className="flex items-center gap-2">
-          <Segmented
-            label={t('filterAria')}
-            value="comments"
-            onChange={() => {}}
-            options={[
-              { value: 'comments', label: t('filterComments') },
-              {
-                value: 'history',
-                label: t('filterHistory'),
-                disabled: true,
-                title: t('historySeamTitle'),
-              },
-            ]}
-          />
-          <button
-            type="button"
-            onClick={toggleOrder}
-            aria-label={order === 'asc' ? t('sortAriaOldest') : t('sortAriaNewest')}
-            className="border-(--el-border) text-(--el-text-secondary) hover:text-(--el-text) inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-btn) border px-(--spacing-control-x) font-sans text-xs focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-          >
-            {order === 'asc' ? (
-              <ArrowDownNarrowWide className="text-(--el-text-muted) h-3.5 w-3.5" aria-hidden />
-            ) : (
-              <ArrowUpNarrowWide className="text-(--el-text-muted) h-3.5 w-3.5" aria-hidden />
-            )}
-            {order === 'asc' ? t('sortOldest') : t('sortNewest')}
-          </button>
-        </div>
+        headerControls ?? (
+          <div className="flex items-center gap-2">
+            <Segmented
+              label={t('filterAria')}
+              value="comments"
+              onChange={() => {}}
+              options={[
+                { value: 'comments', label: t('filterComments') },
+                {
+                  value: 'history',
+                  label: t('filterHistory'),
+                  disabled: true,
+                  title: t('historySeamTitle'),
+                },
+              ]}
+            />
+            <button
+              type="button"
+              onClick={toggleOrder}
+              aria-label={order === 'asc' ? t('sortAriaOldest') : t('sortAriaNewest')}
+              className="border-(--el-border) text-(--el-text-secondary) hover:text-(--el-text) inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-btn) border px-(--spacing-control-x) font-sans text-xs focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            >
+              {order === 'asc' ? (
+                <ArrowDownNarrowWide className="text-(--el-text-muted) h-3.5 w-3.5" aria-hidden />
+              ) : (
+                <ArrowUpNarrowWide className="text-(--el-text-muted) h-3.5 w-3.5" aria-hidden />
+              )}
+              {order === 'asc' ? t('sortOldest') : t('sortNewest')}
+            </button>
+          </div>
+        )
       }
     >
       <div className="flex flex-col gap-4">

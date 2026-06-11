@@ -28,11 +28,14 @@ import { ContentSectionCard } from './_components/ContentSectionCard';
 import { IssueExplanation } from './_components/IssueExplanation';
 import { ParentBreadcrumb } from './_components/ParentBreadcrumb';
 import { ChildList } from './_components/ChildList';
-import { CommentsSection } from './_components/CommentsSection';
+import { ActivitySection } from './_components/ActivitySection';
 import { AttachmentsPanel } from './_components/AttachmentsPanel';
 import { RelationshipsPanel } from './_components/RelationshipsPanel';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
 import type { AttachmentsPageDTO } from '@/lib/dto/attachments';
+import type { ActivityAllPageDto, ActivityHistoryPageDto } from '@/lib/dto/activity';
+import { activityService } from '@/lib/services/activityService';
+import { parseActivityTab } from '@/lib/activity/tab';
 
 // The issue DETAIL route (Story 2.4 · Subtask 2.4.1). Server Component:
 // resolves the active project (the shipped active-project model — finding #50,
@@ -46,7 +49,13 @@ import type { AttachmentsPageDTO } from '@/lib/dto/attachments';
 // fields · activity). Cross-workspace / missing → 404 (no existence leak);
 // unauthenticated → /sign-in; no active project → a hint, not a crash.
 
-export default async function IssueDetailPage({ params }: { params: Promise<{ key: string }> }) {
+export default async function IssueDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ key: string }>;
+  searchParams: Promise<{ activity?: string }>;
+}) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
@@ -107,15 +116,38 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
+
+  // The Activity tab (Story 5.5 · 5.5.4): URL-driven via `?activity=`
+  // (default Comments — the Jira default); the server fetches ONLY the
+  // active tab's first cursor page (finding #57 — the other tabs fetch when
+  // switched to, via a URL replace that re-renders this page). A failed read
+  // renders that tab's ErrorState + retry instead of crashing the page.
+  const activityTab = parseActivityTab((await searchParams).activity);
   let initialComments: CommentsPageDTO | null = null;
+  let initialHistory: ActivityHistoryPageDto | null = null;
+  let initialAll: ActivityAllPageDto | null = null;
   try {
-    initialComments = await commentsService.listComments(
-      item.id,
-      { order: 'desc' },
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-    );
+    if (activityTab === 'comments') {
+      initialComments = await commentsService.listComments(
+        item.id,
+        { order: 'desc' },
+        { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      );
+    } else if (activityTab === 'history') {
+      initialHistory = await activityService.listHistory(
+        item.id,
+        { order: 'desc' },
+        { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      );
+    } else {
+      initialAll = await activityService.listAll(
+        item.id,
+        { order: 'desc' },
+        { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      );
+    }
   } catch {
-    initialComments = null;
+    // The active tab's section renders ErrorState + retry on its null page.
   }
 
   // Attachments (Story 5.2 · 5.2.5): the caller's attachment capabilities
@@ -278,21 +310,28 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
               currentUserId={ctx.userId}
               initialPage={initialAttachments}
             />
-            {/* 5.1.5: the Activity section — the comments stream + composer in
-              the slot the page reserved for Epic 5 (after Relationships and
-              Children, per the comments mockup's panel 0). */}
-            <CommentsSection
+            {/* 5.1.5 + 5.5.4: the completed Activity section — the All /
+              Comments / History tabs (URL-driven, default Comments) in the
+              slot the page reserved for Epic 5 (after Relationships and
+              Children, per the activity-history mockup's panel 0). */}
+            <ActivitySection
               workItemId={item.id}
-              canComment={commentCaps.canComment}
-              canModerate={commentCaps.canModerate}
-              currentUserId={ctx.userId}
-              currentUserName={session.user.name}
-              mentionCandidates={members.map((m) => ({
-                id: m.userId,
-                name: m.name,
-                email: m.email,
-              }))}
-              initialPage={initialComments}
+              tab={activityTab}
+              workflowStatuses={detail.workflow.statuses}
+              comments={{
+                canComment: commentCaps.canComment,
+                canModerate: commentCaps.canModerate,
+                currentUserId: ctx.userId,
+                currentUserName: session.user.name,
+                mentionCandidates: members.map((m) => ({
+                  id: m.userId,
+                  name: m.name,
+                  email: m.email,
+                })),
+              }}
+              initialComments={initialComments}
+              initialHistory={initialHistory}
+              initialAll={initialAll}
             />
           </main>
 
