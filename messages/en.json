@@ -394,7 +394,8 @@
       "goToSettings": "Go to Settings",
       "switchTo": "Switch to {name}",
       "current": "Current",
-      "goToBacklog": "Go to Backlog"
+      "goToBacklog": "Go to Backlog",
+      "goToFilters": "Go to Filters"
     },
     "shortcuts": {
       "title": "Keyboard shortcuts",
@@ -1564,6 +1565,99 @@
       "filledAria": "Points: {committed} committed, {completed} completed, {remaining} remaining",
       "committedAria": "Points: {committed} committed",
       "emptyAria": "Sprint has no estimated points"
+    }
+  },
+  "savedFilters": {
+    "heading": "Filters",
+    "subtitle": "Saved filters for {project}. Save new ones from Issues.",
+    "searchLabel": "Search filters",
+    "searchPlaceholder": "Search filters…",
+    "columns": {
+      "name": "Name",
+      "owner": "Owner",
+      "visibility": "Visibility",
+      "stars": "Stars",
+      "actions": "Actions"
+    },
+    "visibility": {
+      "private": "Private",
+      "project": "Project",
+      "builtin": "Built-in"
+    },
+    "visibilityHint": {
+      "private": "Only you and project admins can see it.",
+      "project": "Everyone who can browse this project can see and apply it."
+    },
+    "ownerNone": "—",
+    "builtinOwner": "—",
+    "star": "Star {name}",
+    "unstar": "Unstar {name}",
+    "starCount": "{count, plural, one {# star} other {# stars}}",
+    "rowActions": "Actions for {name}",
+    "apply": "Apply {name} on Issues",
+    "editDetails": "Edit details",
+    "changeOwner": "Change owner",
+    "delete": "Delete",
+    "applyError": "This filter can't be applied — its saved criteria are no longer valid.",
+    "starError": "Couldn't update your star. Please try again.",
+    "pager": {
+      "summary": "{count, plural, one {# filter} other {# filters}} · page {page} of {pages}",
+      "prev": "Previous page",
+      "next": "Next page"
+    },
+    "empty": {
+      "title": "No saved filters yet",
+      "description": "Build a filter on Issues and save it to reuse and share it here.",
+      "action": "Go to Issues"
+    },
+    "noMatches": {
+      "title": "No filters match “{query}”",
+      "description": "Try a different search."
+    },
+    "error": {
+      "title": "Couldn't load filters",
+      "description": "Something went wrong while loading this project's filters.",
+      "retry": "Try again"
+    },
+    "loading": "Loading filters…",
+    "edit": {
+      "title": "Edit filter details",
+      "nameLabel": "Name",
+      "namePlaceholder": "Filter name",
+      "descriptionLabel": "Description (optional)",
+      "descriptionPlaceholder": "What is this filter for?",
+      "visibilityLegend": "Who can see this filter?",
+      "viewerNote": "Sharing needs the Member role — as a viewer, your filters stay private to you.",
+      "goPrivateNote": "Making this private hides it from everyone else — their subscriptions stop delivering, and dashboard widgets using it show “Filter missing”.",
+      "duplicateName": "A filter named “{name}” already exists in this project.",
+      "save": "Save changes",
+      "cancel": "Cancel",
+      "savedToast": "Filter updated",
+      "errorTitle": "Couldn't save the filter",
+      "errorGeneric": "Something went wrong. Please try again."
+    },
+    "changeOwnerDialog": {
+      "title": "Change owner of “{name}”",
+      "description": "The new owner must be able to browse this project.",
+      "pickerLabel": "New owner",
+      "pickerPlaceholder": "Select a project member",
+      "save": "Change owner",
+      "cancel": "Cancel",
+      "savedToast": "Owner changed to {name}",
+      "errorTitle": "Couldn't change the owner",
+      "errorInvalidOwner": "That member can't browse this project.",
+      "errorGeneric": "Something went wrong. Please try again."
+    },
+    "deleteDialog": {
+      "title": "Delete filter?",
+      "body": "This permanently deletes “{name}” for everyone in this project.",
+      "subscriptions": "{count, plural, one {# subscription} other {# subscriptions}} will be removed.",
+      "noDependents": "No subscriptions depend on this filter.",
+      "confirm": "Delete filter",
+      "cancel": "Cancel",
+      "deletedToast": "Filter deleted",
+      "errorTitle": "Couldn't delete the filter",
+      "errorGeneric": "Something went wrong. Please try again."
     }
   }
 }
