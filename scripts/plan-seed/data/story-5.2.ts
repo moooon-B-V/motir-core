@@ -403,7 +403,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.5',
       title:
         'Attachments panel UI on the issue detail page — strip/list, upload (button + drag-drop), download, gated delete, "Show more" paging',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
