@@ -205,7 +205,7 @@ export const story_5_6: PlanStory = {
       id: '5.6.3',
       title:
         'The loaded issue at scale — bounded-read + bounded-DOM specs and the full-page strict a11y sweep over every Epic-5 surface at once',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
