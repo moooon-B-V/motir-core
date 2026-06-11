@@ -1766,3 +1766,182 @@ ink ≥4.5:1 on page bg, tinted Pills/chips use `--el-text-strong` — finding
 - Rendering rank/position noise — suppressed by the explicit policy above.
 - Realtime updates — the section refreshes like every other surface (the
   5.1 product-wide decision).
+
+---
+
+## Filter builder — the Advanced surface (Story 6.1 · 6.1.3 → 6.1.4 / 6.1.5)
+
+`filter-builder.mock.html` is the design for the **advanced filter builder** —
+the structured field / operator / value rows under a flat **Match all / Match
+any** combinator that Story 6.1 ships as the no-parser advanced mode.
+`filter.mock.html` (2.5.9) designs ONLY the basic facet popover, so the builder
+was the design-gate NONE-exists case; this asset closes it for code Subtasks
+**6.1.4** (built-in rows) and **6.1.5** (Epic-5 rows). Mirrors: Jira basic's
+field/value vocabulary for the editors; the flat-rows structured builder shape
+(Linear's filter editor) for exactly the operator set Jira's own docs say basic
+cannot express (OR across fields, NOT, EMPTY, comparisons) — the recorded
+richer-than-basic justification in the Story 6.1 module. A `filter-builder.png`
+export accompanies the HTML for the board view; the HTML is the source of
+truth.
+
+### The UI contract is the SHIPPED 6.1.1 registry
+
+The builder **renders `lib/filters/registry.ts`** — it never hard-codes a field
+list. Field menu = `FILTER_FIELDS` in registry order, then the project's
+dynamic entries (6.1.2/6.1.5). Choosing a field populates its operator menu
+from `def.operators`; the operator resolves the value editor via
+`filterValueEditorKind`. The editor-kind ↔ component mapping (the 6.1.1 UI
+contract, pinned):
+
+| `FilterValueEditorKind`            | Component (shipped)                                                    | Drawn in panel |
+| ---------------------------------- | ---------------------------------------------------------------------- | -------------- |
+| `kind-select`                      | `MultiSelectPicker` — kind options w/ `IssueTypeIcon` hue              | 1              |
+| `status-select`                    | `MultiSelectPicker` — workflow statuses w/ the StatusPicker dot        | 1, 2           |
+| `priority-select`                  | `MultiSelectPicker` — priorities w/ the `PRIORITY_META` direction icon | 1              |
+| `member-select`                    | `MultiSelectPicker` — members w/ Avatar; **Unassigned sentinel first** | 1 (Reporter)   |
+| `sprint-select`                    | `MultiSelectPicker` — sprints; **Backlog sentinel first**              | 1              |
+| `text`                             | `Input`                                                                | 1              |
+| `number`                           | `Input` (`inputmode="numeric"`, tabular-nums)                          | 1              |
+| `date`                             | `DatePicker` trigger (2.4.11 calendar)                                 | 1              |
+| `date-range`                       | two `DatePicker` triggers joined by "and"                              | 1              |
+| `days`                             | `Input` numeric + the "days" unit suffix                               | 1              |
+| `none` (`is empty / is not empty`) | the value slot COLLAPSES (field + operator only)                       | 1 (Assignee)   |
+
+Operator menu labels (the registry ids, humanized — pinned copy):
+`is any of` · `is none of` · `is empty` · `is not empty` · `contains` ·
+`does not contain` · `=` `≠` `<` `≤` `>` `≥` · `on or before` · `on or after` ·
+`is between` · `in the last … days` · `in the next … days`. The windowed
+operators render the trigger label without the count ("in the next") and put
+the count in the `days` editor. The single registry `text` field covers
+title + description — its menu row carries the "title + description" secondary.
+
+### Entry + coexistence (panel 0)
+
+- **[Advanced]** is a `ToolbarButton` (the `.tb-btn` grammar) with the lucide
+  `funnel-plus` glyph, placed **immediately after the shipped [Filter]** facet
+  button in the `/issues` toolbar. Active state = the 2.5.4 grammar extended:
+  accent ring + lavender fill + a count badge of **applied (complete) rows**.
+- **Upgrade (one-way, lossless)** — the facet popover gains a footer row,
+  `Edit in Advanced` (link-styled, `funnel-plus`), which opens the builder with
+  every facet selection carried in as rows (the 6.1.1 facet→AST map). The 2.5.4
+  facet bar REMAINS the quick path.
+- **Superseded facet state** — when the AST exceeds facet expressiveness
+  (OR / negation / empty / comparisons / non-facet fields), the [Filter] button
+  mutes its label and gains a small lavender `funnel-plus` badge
+  (`aria-label="Managed in Advanced"`) + tooltip: _"Managed in Advanced — this
+  filter uses conditions the quick filter can't show. Open Advanced to edit
+  it."_ Opening it shows the popover read-only with the same hand-off. **Never
+  a silent down-conversion** (the verified mirror rule).
+
+### The builder surface (panels 1–4)
+
+- **Container** — a `Popover` (`role="dialog"`, labelled "Advanced filter")
+  anchored under [Advanced]: 680px, `--radius-card`, `--el-border` hairline,
+  `--shadow-elevated`. Header = mono 11px uppercase title + **Clear all**
+  (the `fp-clear` link grammar). Footer = **+ Add condition** (link + plus) ·
+  the live hint `N of 20 conditions · applied live`.
+- **Combinator** — the `Segmented` control (3.3.5) read as a sentence:
+  "Match **[all | any]** of the following conditions:". One level only — no
+  nested groups (the documented builder→parser extension slot).
+- **Condition row** — a labelled `role="group"`: field `Combobox` trigger
+  (158px) · operator `Combobox` trigger (168px) · the operator's value editor
+  (flex) · the remove × (`--spacing-icon-btn` square). Triggers are
+  `--height-control`, editors `--height-input` — **the primitives' own heights,
+  centre-aligned; no new size variants and no new primitive**. CF rows carry
+  their 5.3.4 type glyph in the field trigger; Label/Component rows the
+  `tag`/`component` glyph.
+- **Live-apply + pending rows** — there is NO Apply button (the 2.5.4
+  precedent): complete rows write `?filter=v1:…` (composing with
+  `?view/?sort/?page`, Suspense-keyed) as they land. A row missing its value is
+  **pending**: dashed boxes + the italic line _"Not applied yet — pick a value
+  to activate this condition."_ — excluded from the badge count, the URL, and
+  the result set; emptying an applied row returns it to pending without
+  dropping it.
+- **Row cap** — at `FILTER_ROW_CAP` (20) Add condition disables with
+  _"Condition limit reached (20) — remove one to add another."_
+- **Epic-5 rows (6.1.5)** — the field menu grows the project's dynamic entries
+  under **Custom fields** (5.3.4 type glyphs) and **Other** (Label, Component).
+  Select-CF chips include archived options with the 5.3.5 italic "(archived)"
+  mark (historical matching); label chips take the 5.4 name-hash tint with
+  `--el-text-strong` text; component chips stay neutral with the glyph; CF
+  user/number/date/text reuse the built-in editors. Member/sprint/label/
+  component listboxes are their owners' bounded reads + sub-search (the 5.4.6
+  vocabulary).
+
+### Applied state (panel 5)
+
+The toolbar summary (active [Advanced] + row-count badge) plus a read-only
+**condition-chip readout** under the toolbar — a `Match any` lavender chip
+(only on OR) followed by one neutral chip per condition (`**Field** operator
+values`); clicking any chip or the trigger opens the builder. The result
+**count line** (`N issues match`, `role="status"`) tracks edits live.
+Zero results = the EmptyState grammar: _"No issues match this filter"_ /
+_"Try removing a condition, or clear the filter to see everything."_ +
+**Clear all**.
+
+### Durable-URL states (panel 6)
+
+- **Stale referent** — a condition whose field/option/label/component/member
+  id no longer resolves (a shared or saved URL outliving the data) renders the
+  **Unknown value** chip (triangle-alert in `--el-warning` on the peach tint,
+  `--el-text-strong` text) + the per-row `role="status"` notice _"This value no
+  longer exists in the project — this condition matches nothing."_ The row
+  stays visible and editable; the query matches nothing for it (the 6.2
+  saved-filter durability rule). A field deleted under an open builder degrades
+  its row to the same state.
+- **Invalid `?filter=` param** — the typed recoverable decode failure renders a
+  callout card (_"This filter link couldn't be read"_ + **Clear filter**) above
+  the UNFILTERED list — never a crash, never a silent drop.
+
+### Both views (panel 7)
+
+One compiled predicate feeds both reads: the List (the navigator-faithful
+result — sortable headers, 50/page + count, 2.5.8/2.5.12) and the Tree
+(ancestor-retaining, muted non-matching ancestors — the shipped 2.5.1
+behaviour, referenced not redrawn). Identical match sets.
+
+### Copy strings
+
+`Advanced` · `Edit in Advanced` · `Advanced filter` · `Match all/any of the
+following conditions:` · `Add condition` · `Clear all` · `N of 20 conditions ·
+applied live` · `Condition limit reached (20) — remove one to add another.` ·
+`Not applied yet — pick a value to activate this condition.` · `Unknown value`
+· `This value no longer exists in the project — this condition matches
+nothing.` · `This filter link couldn't be read` · `The filter in this URL is
+invalid or from a newer version of Prodect, so no filter was applied. Clear it
+to dismiss this message.` · `Clear filter` · `N issues match` · `No issues
+match this filter` · `Try removing a condition, or clear the filter to see
+everything.` · the superseded tooltip (above). All via next-intl in 6.1.4/6.1.5.
+
+### Tokens / a11y
+
+- Colour only via Tier-3 `--el-*`: count badge / selected rows / Check / the
+  active ring = `--el-accent`; the stale grammar = `--el-warning` glyph +
+  `--el-tint-peach` + `--el-text-strong` (AA, finding #35 — and never colour
+  alone: the glyph + notice text carry the state); label chips the name-hash
+  `--el-tint-*`; **no new token needed**.
+- Shape via element-semantic tokens only (`--radius-card/input/control/btn/
+badge`, `--spacing-control/input/chip/icon-btn/tooltip-*`,
+  `--height-control/input`, `--shadow-elevated/subtle`) — the builder reshapes
+  under `data-display-style`.
+- **No new primitive**: Popover + Combobox + MultiSelectPicker + Input +
+  DatePicker + Segmented + Pill + the toolbar/empty/callout grammars cover
+  every element.
+- A11y: the builder is a labelled dialog; rows are labelled groups; every
+  picker keyboard-complete per its own primitive's bar; the combinator is a
+  labelled `role="group"` of `aria-pressed` buttons reading as a sentence; the
+  count line `role="status"`; the stale notice `role="status"`, the invalid
+  callout `role="alert"`; remove buttons carry value-specific names. Light +
+  dark parity via the token flip (toggle in the mock).
+
+### Out of scope (documented extension slots)
+
+- **Nested condition groups** — the builder→parser line (the Story 6.1
+  recorded extension).
+- **Saving / naming filters** — Story 6.2 persists the `?filter=v1:`
+  serialization this surface writes.
+- A JQL-style text query language (the stub's hard NO); cross-project search
+  (the substrate is active-project-scoped — rung 2); stemmed full-text search
+  (ILIKE + trgm ships).
+- Filter chips editable in place (the readout is read-only; editing happens in
+  the builder — one editing surface).

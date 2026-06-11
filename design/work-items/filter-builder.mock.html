@@ -1,0 +1,2690 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Filter builder — the Advanced surface (Story 6.1 · 6.1.3 → 6.1.4 / 6.1.5)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the ADVANCED FILTER BUILDER — the surface
+      filter.mock.html (2.5.9) does NOT specify (that asset designs only the
+      basic facet popover). Without this asset, 6.1.4/6.1.5 would be
+      improvising UI — the planning-time design gate.
+
+      Built FROM the real design system: token values copied 1:1 from
+      app/globals.css (Tier-0 --color-* + Tier-3 --el-* + shape tokens), and
+      the markup composes the SHIPPED primitives only — the toolbar
+      ToolbarButton (.tb-btn, list.mock/filter.mock), the Combobox trigger +
+      menu/option vocabulary (field + operator pickers), the MultiSelectPicker
+      (5.4.6/5.4.8 — the enum value editor, box/chips/listbox verbatim), the
+      Input (text/number editors), the DatePicker trigger (2.4.11), the
+      Segmented control (3.3.5 — the combinator), IssueTypeIcon hues, the
+      StatusPicker dot, the member Avatar, Pill, and the inline-error/notice
+      grammar. The mixed control heights inside a condition row are the
+      primitives' own (--height-control triggers, --height-input editors,
+      centre-aligned) — NO new size variants, NO new primitive.
+
+      The UI contract is the SHIPPED 6.1.1 registry (lib/filters/registry.ts):
+      field menu order, per-field operator sets, value-editor kinds
+      (kind/status/priority/member/sprint-select · text · number · date ·
+      date-range · days · none), the empty-bucket sentinels (Unassigned /
+      Backlog), and the 20-row cap. The builder renders the registry — it
+      never hard-codes field lists.
+
+      Covers (multi-panel): (0) entry + coexistence — the [Advanced] toolbar
+      affordance beside [Filter], the facet popover's "Edit in Advanced"
+      upgrade footer, and the SUPERSEDED facet state (badge + tooltip; the
+      one-way basic→advanced rule) · (1) the builder OPEN, populated with a
+      row for EVERY value-editor kind, Match all/any · (2) the three pickers
+      open — field menu (built-ins + the dynamic Epic-5 groups), operator
+      menu, enum value listbox · (3) the pending (incomplete) row + the
+      20-row cap state · (4) Epic-5 rows — custom field / label / component
+      conditions (6.1.5) · (5) the applied state — toolbar summary chips,
+      result count, zero results · (6) the stale unknown-value row + the
+      invalid-URL-param recovery state · (7) the filter applied over BOTH
+      views (List + Tree). Toggle dark mode to confirm token parity. See
+      design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 10px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-icon-btn: 4px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+        --height-input: 44px;
+        --focus-ring-width: 2px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-info: var(--color-info);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1100px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 36px auto 10px;
+        padding-left: 2px;
+        max-width: 1100px;
+      }
+      .float-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 24px;
+      }
+      .row-note {
+        margin: 10px 2px 0;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        font-style: italic;
+      }
+      .legend {
+        max-width: 1100px;
+        margin: 10px auto 0;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.7;
+      }
+      .legend code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+
+      /* ── Page shell — header + toolbar (mirrors app/(authed)/issues/page.tsx) ─ */
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin: 4px 0 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        position: relative;
+      }
+      /* Toolbar button — the shipped ToolbarButton shape (h-control) */
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        position: relative;
+      }
+      .tb-btn .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn .caret {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn.primary {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+      }
+      .tb-btn.primary .ic {
+        color: var(--el-accent-text);
+      }
+      /* Active trigger — the 2.5.4 grammar extended to the Advanced button */
+      .tb-btn.is-active {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+      }
+      .tb-btn.is-active .ic {
+        color: var(--el-accent);
+      }
+      .tb-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 11px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      /* SUPERSEDED facet trigger — the builder holds conditions the facets
+         can't express. The label mutes, a small accent badge marks the
+         hand-off; the tooltip says why. NEVER a silent down-conversion. */
+      .tb-btn.is-superseded {
+        color: var(--el-text-muted);
+      }
+      .tb-sup {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-lavender);
+        color: var(--el-accent);
+        flex: none;
+      }
+      .tb-sup svg {
+        width: 11px;
+        height: 11px;
+      }
+      /* Tooltip — the ink tooltip grammar (shape: --spacing-tooltip-*) */
+      .tip {
+        position: absolute;
+        top: calc(var(--height-control) + 8px);
+        left: 0;
+        z-index: 30;
+        width: 240px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 12px;
+        line-height: 1.5;
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        border-radius: var(--radius-control);
+        box-shadow: var(--shadow-elevated);
+      }
+
+      /* ── Facet popover bits (filter.mock.html verbatim) + the upgrade footer ── */
+      .filter-pop {
+        position: absolute;
+        top: calc(var(--height-control) + 6px);
+        left: 0;
+        z-index: 20;
+        width: 320px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        overflow: hidden;
+      }
+      .fp-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .fp-title {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-muted);
+      }
+      .fp-clear {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: none;
+        border: 0;
+        padding: 2px 4px;
+        margin: -2px -4px;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .fp-clear:hover {
+        text-decoration: underline;
+      }
+      .fp-clear .ic {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+      .fp-clear[disabled] {
+        color: var(--el-text-faint);
+        cursor: default;
+        text-decoration: none;
+      }
+      .fp-body {
+        padding: 6px;
+      }
+      .fp-group-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding: 4px 8px;
+      }
+      /* The upgrade footer — the basic→advanced hand-off (one-way) */
+      .fp-foot {
+        border-top: 1px solid var(--el-border);
+        padding: 8px 12px;
+      }
+      .fp-upgrade {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: none;
+        border: 0;
+        padding: 2px 4px;
+        margin: -2px -4px;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .fp-upgrade:hover {
+        text-decoration: underline;
+      }
+      .fp-upgrade .ic {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+
+      /* ── The BUILDER panel — Popover card chrome, wider ──────────────────── */
+      .adv {
+        position: relative;
+        z-index: 10;
+        width: 680px;
+        max-width: 100%;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+      }
+      .adv-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .adv-body {
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      /* Combinator — a sentence with the Segmented control inline (3.3.5) */
+      .adv-match {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        padding-bottom: 2px;
+      }
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        padding: 2px;
+      }
+      .seg button {
+        display: inline-flex;
+        align-items: center;
+        height: 28px;
+        padding: 0 var(--spacing-control-x);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .seg button[aria-pressed='true'] {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+
+      /* Condition row — field · operator · value · remove */
+      .cond {
+        display: grid;
+        grid-template-columns: 158px 168px minmax(0, 1fr) 26px;
+        gap: 8px;
+        align-items: center;
+      }
+      /* Combobox trigger (the shipped trigger: h-control, radius-input) */
+      .cb {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        width: 100%;
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        text-align: left;
+      }
+      .cb .lbl {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cb .glyph {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .cb .caret {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .cb.is-open {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .cb .ph {
+        color: var(--el-text-muted);
+      }
+      /* Value editors — Input (44px), DatePicker trigger, the days stepper */
+      .vin {
+        height: var(--height-input);
+        width: 100%;
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .vin::placeholder {
+        color: var(--el-text-muted);
+      }
+      .vin:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .vin.num {
+        width: 110px;
+        font-variant-numeric: tabular-nums;
+      }
+      .vwrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .vwrap .joiner {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .vdays {
+        width: 84px;
+      }
+      /* DatePicker trigger (2.4.11 — h-input, calendar glyph + value) */
+      .dp {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        min-width: 0;
+        white-space: nowrap;
+      }
+      .dp .glyph {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      /* The MultiSelectPicker box — 5.4.6 verbatim (min-h input, chips wrap) */
+      .msp-box {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        min-height: var(--height-input);
+        width: 100%;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        cursor: text;
+      }
+      .msp-box.is-focused {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .msp-input {
+        flex: 1 1 50px;
+        min-width: 50px;
+        border: 0;
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        outline: none;
+        padding: 2px 0;
+      }
+      .msp-input::placeholder {
+        color: var(--el-text-muted);
+      }
+      /* Chips — Pill chrome; neutral by default, tinted when the value
+         carries a tint (labels; the finding-#35 hue-in-background rule) */
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .chip .cg {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .chip .cx {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        margin-right: -4px;
+        border: 0;
+        background: none;
+        border-radius: var(--radius-badge);
+        color: var(--el-text-muted);
+        cursor: pointer;
+        padding: 0;
+      }
+      .chip .cx:hover {
+        color: var(--el-text);
+        background: var(--el-muted);
+      }
+      .chip .cx svg {
+        width: 10px;
+        height: 10px;
+      }
+      .chip.tinted {
+        border-color: transparent;
+        color: var(--el-text-strong);
+      }
+      .chip.tinted .cx {
+        color: var(--el-text-strong);
+        opacity: 0.65;
+      }
+      .chip.tinted .cx:hover {
+        opacity: 1;
+        background: rgba(15, 15, 15, 0.08);
+      }
+      .chip .avatar {
+        width: 16px;
+        height: 16px;
+        font-size: 8px;
+        margin-left: -4px;
+      }
+      .chip .dot {
+        width: 8px;
+        height: 8px;
+      }
+      .chip .arch {
+        font-style: italic;
+        color: var(--el-text-muted);
+        font-weight: 400;
+      }
+      /* Stale unknown-value chip — warning glyph + strong text on peach tint */
+      .chip.stale {
+        background: var(--el-tint-peach);
+        border-color: transparent;
+        color: var(--el-text-strong);
+      }
+      .chip.stale .cg {
+        color: var(--el-warning);
+      }
+      /* Row remove × — square icon button */
+      .x-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: none;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .x-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .x-btn svg {
+        width: 14px;
+        height: 14px;
+      }
+      /* Pending (incomplete) row — muted + the explicit not-applied line */
+      .cond.pending .cb,
+      .cond.pending .msp-box,
+      .cond.pending .vin,
+      .cond.pending .dp {
+        border-style: dashed;
+        color: var(--el-text-muted);
+      }
+      .cond-note {
+        grid-column: 1 / -1;
+        margin: -4px 0 0;
+        font-size: 12px;
+        font-style: italic;
+        color: var(--el-text-muted);
+      }
+      /* Stale-referent notice under a row (role="status") */
+      .stale-note {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: -2px 0 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .stale-note .wi {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        color: var(--el-warning);
+      }
+      /* Footer — Add condition · live-apply count */
+      .adv-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 14px;
+        border-top: 1px solid var(--el-border);
+      }
+      .add-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: none;
+        border: 0;
+        padding: 2px 4px;
+        margin: -2px -4px;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .add-btn:hover {
+        text-decoration: underline;
+      }
+      .add-btn .ic {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .add-btn[disabled] {
+        color: var(--el-text-faint);
+        cursor: default;
+        text-decoration: none;
+      }
+      .foot-hint {
+        font-size: 12px;
+        color: var(--el-text-faint);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ── Combobox menus (field / operator) + the MSP listbox ─────────────── */
+      .menu {
+        width: 260px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .menu .msearch {
+        position: relative;
+        margin: 2px 2px 4px;
+      }
+      .menu .msearch .si {
+        position: absolute;
+        left: 9px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+        pointer-events: none;
+      }
+      .menu .msearch input {
+        width: 100%;
+        height: 32px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 0 10px 0 30px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .menu .msearch input::placeholder {
+        color: var(--el-text-muted);
+      }
+      .menu .mgroup {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding: 6px 8px 2px;
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .opt:hover,
+      .opt.is-active {
+        background: var(--el-surface);
+      }
+      .opt[aria-selected='true'] {
+        background: var(--el-surface);
+      }
+      .opt .lbl {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .opt .check {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-accent);
+        opacity: 0;
+      }
+      .opt[aria-selected='true'] .check {
+        opacity: 1;
+      }
+      .opt .glyph {
+        width: 22px;
+        height: 16px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        color: var(--el-text-muted);
+      }
+      .opt .glyph svg {
+        width: 14px;
+        height: 14px;
+      }
+      .opt .sec {
+        flex: none;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+
+      /* Leading glyphs (filter.mock vocabulary) */
+      .type-icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+      .status-dot,
+      .dot {
+        width: 10px;
+        height: 10px;
+        flex: none;
+        border-radius: 9999px;
+        border: 1px solid var(--el-border);
+        display: inline-block;
+      }
+      .sd-todo {
+        background: var(--el-text-faint);
+      }
+      .sd-inprogress {
+        background: var(--el-info);
+      }
+      .sd-review {
+        background: var(--el-accent);
+      }
+      .sd-done {
+        background: var(--el-success);
+      }
+      .avatar {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .avatar.unassigned {
+        background: transparent;
+        border: 1px dashed var(--el-border);
+        color: var(--el-text-muted);
+      }
+      .avatar.unassigned svg {
+        width: 13px;
+        height: 13px;
+      }
+      .swatch {
+        width: 10px;
+        height: 10px;
+        flex: none;
+        border-radius: 9999px;
+      }
+      .pri-ic {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Applied state — summary chips + count + empty/invalid states ────── */
+      .summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin: -12px 0 16px;
+      }
+      .sum-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .sum-chip strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .sum-chip.any {
+        background: var(--el-tint-lavender);
+        border-color: transparent;
+        color: var(--el-text-strong);
+      }
+      .count-line {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        margin: 0 0 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .empty {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 48px 24px;
+        text-align: center;
+      }
+      .empty h3 {
+        font-family: var(--font-serif);
+        font-size: 17px;
+        font-weight: 600;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 0 0 16px;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      /* Invalid ?filter= param — the typed recoverable state (callout card) */
+      .callout {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 14px 16px;
+        max-width: 560px;
+      }
+      .callout .wi {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        color: var(--el-warning);
+        margin-top: 1px;
+      }
+      .callout h4 {
+        margin: 0 0 2px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .callout p {
+        margin: 0 0 10px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+      }
+
+      /* ── Result tables (List + Tree) — list.mock/filter.mock verbatim ────── */
+      .tree-table {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .tt-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 150px 130px;
+        align-items: center;
+        column-gap: 16px;
+        padding: 0 28px 0 16px;
+      }
+      .tt-head {
+        height: 40px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .tt-row {
+        height: 44px;
+        border-bottom: 1px solid var(--el-border);
+        text-decoration: none;
+        color: inherit;
+      }
+      .tt-row:last-child {
+        border-bottom: 0;
+      }
+      .tt-row:hover {
+        background: var(--el-surface);
+      }
+      .tt-row.context {
+        color: var(--el-text-muted);
+      }
+      .cell-title {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .cell-title .lr-id {
+        flex: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .cell-title .ttl {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+      }
+      .tt-row.context .ttl {
+        color: var(--el-text-muted);
+      }
+      .cell-person {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .cell-person .nm {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: 2px 10px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill--todo {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill--inprogress {
+        background: var(--el-tint-sky);
+      }
+      .pill--done {
+        background: var(--el-tint-mint);
+      }
+      /* Pagination footer (2.5.12 grammar, abbreviated) */
+      .pgn {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 16px;
+        border-top: 1px solid var(--el-border);
+        font-size: 13px;
+        color: var(--el-text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .pgn .pg-btns {
+        display: flex;
+        gap: 6px;
+      }
+      .pg-btn {
+        height: 28px;
+        padding: 0 10px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .pg-btn[disabled] {
+        color: var(--el-text-faint);
+        cursor: default;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Filter builder — the Advanced surface</h1>
+        <p>
+          Story 6.1 · design for 6.1.4 / 6.1.5 (the builder filter.mock.html leaves undesigned).
+          Renders the shipped 6.1.1 registry; composes shipped primitives only.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke, used by <use>) — filter.mock set + the builder's additions -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <!-- task = square-check-big -->
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <g
+          id="i-sliders"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="21" x2="14" y1="4" y2="4" />
+          <line x1="10" x2="3" y1="4" y2="4" />
+          <line x1="21" x2="12" y1="12" y2="12" />
+          <line x1="8" x2="3" y1="12" y2="12" />
+          <line x1="21" x2="16" y1="20" y2="20" />
+          <line x1="12" x2="3" y1="20" y2="20" />
+          <line x1="14" x2="14" y1="2" y2="6" />
+          <line x1="8" x2="8" y1="10" y2="14" />
+          <line x1="16" x2="16" y1="18" y2="22" />
+        </g>
+        <!-- funnel-plus — the Advanced trigger glyph (filter + more) -->
+        <g
+          id="i-funnel-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M13.354 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14v6a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341l1.218-1.348"
+          />
+          <path d="M16 6h6" />
+          <path d="M19 3v6" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-list-tree"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12h-8" />
+          <path d="M21 6H8" />
+          <path d="M21 18h-8" />
+          <path d="M3 6v4c0 1.1.9 2 2 2h3" />
+          <path d="M3 10v6c0 1.1.9 2 2 2h3" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-user-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <line x1="17" x2="22" y1="8" y2="13" />
+          <line x1="22" x2="17" y1="8" y2="13" />
+        </g>
+        <g
+          id="i-calendar"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M8 2v4" />
+          <path d="M16 2v4" />
+          <rect width="18" height="18" x="3" y="4" rx="2" />
+          <path d="M3 10h18" />
+        </g>
+        <g
+          id="i-triangle-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <!-- 5.3.4 custom-field TYPE glyphs (the admin/glyph map) -->
+        <g
+          id="i-type"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 4v16" />
+          <path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2" />
+          <path d="M9 20h6" />
+        </g>
+        <g
+          id="i-hash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="4" x2="20" y1="9" y2="9" />
+          <line x1="4" x2="20" y1="15" y2="15" />
+          <line x1="10" x2="8" y1="3" y2="21" />
+          <line x1="16" x2="14" y1="3" y2="21" />
+        </g>
+        <g
+          id="i-square-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="m16 10-4 4-4-4" />
+        </g>
+        <g
+          id="i-circle-user"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <circle cx="12" cy="10" r="3" />
+          <path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662" />
+        </g>
+        <g
+          id="i-tag"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"
+          />
+          <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g
+          id="i-component"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M15.536 11.293a1 1 0 0 0 0 1.414l2.376 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z"
+          />
+          <path
+            d="M2.297 11.293a1 1 0 0 0 0 1.414l2.377 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414L6.088 8.916a1 1 0 0 0-1.414 0z"
+          />
+          <path
+            d="M8.916 17.912a1 1 0 0 0 0 1.415l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.415l-2.377-2.376a1 1 0 0 0-1.414 0z"
+          />
+          <path
+            d="M8.916 4.674a1 1 0 0 0 0 1.414l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z"
+          />
+        </g>
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════ PANEL 0 — entry + coexistence ════════════ -->
+    <div class="panel-label">
+      0 · Entry + coexistence — the [Advanced] ToolbarButton sits beside the shipped [Filter] facet
+      button. Left: the facet popover gains an "Edit in Advanced" footer (the lossless one-way
+      upgrade). Right: a builder state BEYOND facet expressiveness marks the facet button SUPERSEDED
+      (muted label + accent badge + tooltip) — never a silent down-conversion.
+    </div>
+    <div class="panel">
+      <div class="page-head" style="margin-bottom: 290px">
+        <div>
+          <h2>Issues</h2>
+          <p class="sub">All issues in Prodect — Q3 launch</p>
+        </div>
+        <div class="toolbar">
+          <button class="tb-btn is-active" aria-haspopup="dialog" aria-expanded="true">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter<span
+              class="tb-count"
+              aria-label="2 filters active"
+              >2</span
+            >
+          </button>
+          <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg>Advanced
+          </button>
+          <button class="tb-btn" aria-haspopup="menu" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-list-tree" /></svg>Tree<svg
+              class="caret"
+              viewBox="0 0 24 24"
+            >
+              <use href="#i-chevron-down" />
+            </svg>
+          </button>
+          <button class="tb-btn primary">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+          </button>
+
+          <!-- the facet popover (2.5.4, abbreviated) + the NEW upgrade footer -->
+          <div class="filter-pop" role="dialog" aria-label="Filter issues">
+            <div class="fp-head">
+              <span class="fp-title">Filter</span>
+              <button class="fp-clear">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear filters
+              </button>
+            </div>
+            <div class="fp-body">
+              <div class="fp-group-label">
+                Kind <span style="color: var(--el-text-muted)">· 1</span>
+              </div>
+              <div role="listbox" aria-label="Kind" aria-multiselectable="true">
+                <div class="opt" role="option" aria-selected="true">
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                  ><span class="lbl">Bug</span
+                  ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="opt" role="option" aria-selected="false">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                  ><span class="lbl">Story</span
+                  ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="opt" role="option" aria-selected="false">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                  ><span class="lbl">Task</span
+                  ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+              </div>
+            </div>
+            <div class="fp-foot">
+              <button class="fp-upgrade">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg>Edit in
+                Advanced
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="page-head">
+        <div>
+          <p class="sub" style="margin: 0">
+            …and the toolbar once the builder holds conditions facets can't express:
+          </p>
+        </div>
+        <div class="toolbar" style="margin-bottom: 64px">
+          <button
+            class="tb-btn is-superseded"
+            aria-haspopup="dialog"
+            aria-expanded="false"
+            aria-describedby="sup-tip"
+          >
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter<span
+              class="tb-sup"
+              aria-label="Managed in Advanced"
+              ><svg viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg
+            ></span>
+          </button>
+          <button class="tb-btn is-active" aria-haspopup="dialog" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg>Advanced<span
+              class="tb-count"
+              aria-label="4 conditions active"
+              >4</span
+            >
+          </button>
+          <button class="tb-btn" aria-haspopup="menu" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-list-tree" /></svg>Tree<svg
+              class="caret"
+              viewBox="0 0 24 24"
+            >
+              <use href="#i-chevron-down" />
+            </svg>
+          </button>
+          <button class="tb-btn primary">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+          </button>
+          <div class="tip" id="sup-tip" role="tooltip">
+            Managed in Advanced — this filter uses conditions the quick filter can't show. Open
+            Advanced to edit it.
+          </div>
+        </div>
+      </div>
+      <p class="row-note">
+        The upgrade is ONE-WAY (the mirror rule): "Edit in Advanced" carries every facet selection
+        in as rows losslessly; a builder state using OR / negation / comparisons never down-converts
+        to facets. While superseded, opening the facet popover shows it read-only with the same
+        "Edit in Advanced" hand-off.
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 1 — the builder OPEN, every editor kind ════════════ -->
+    <div class="panel-label">
+      1 · The builder — anchored under [Advanced]; "Match all/any" Segmented combinator; one
+      condition row per value-editor kind (the shipped 6.1.1 registry's full set); live-apply (no
+      Apply button — the 2.5.4 precedent). Badge = applied rows.
+    </div>
+    <div class="panel">
+      <div class="adv" role="dialog" aria-label="Advanced filter">
+        <div class="adv-head">
+          <span class="fp-title">Advanced filter</span>
+          <button class="fp-clear">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear all
+          </button>
+        </div>
+        <div class="adv-body">
+          <div class="adv-match">
+            <span>Match</span>
+            <div class="seg" role="group" aria-label="Combinator">
+              <button aria-pressed="true">all</button>
+              <button aria-pressed="false">any</button>
+            </div>
+            <span>of the following conditions:</span>
+          </div>
+
+          <!-- kind-select -->
+          <div class="cond" role="group" aria-label="Condition 1">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">Kind</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">is any of</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="msp-box">
+              <span class="chip"
+                ><span class="cg type-icon t-story"
+                  ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                >Story<button class="cx" aria-label="Remove Story">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+              ></span>
+              <span class="chip"
+                ><span class="cg type-icon t-bug"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                >Bug<button class="cx" aria-label="Remove Bug">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+              ></span>
+              <input class="msp-input" placeholder="Add…" aria-label="Kind values" />
+            </div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <!-- status-select -->
+          <div class="cond" role="group" aria-label="Condition 2">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">Status</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">is any of</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="msp-box">
+              <span class="chip"
+                ><span class="dot sd-todo"></span>To Do<button class="cx" aria-label="Remove To Do">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+              ></span>
+              <span class="chip"
+                ><span class="dot sd-inprogress"></span>In Progress<button
+                  class="cx"
+                  aria-label="Remove In Progress"
+                >
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+              ></span>
+              <input class="msp-input" placeholder="Add…" aria-label="Status values" />
+            </div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <!-- priority-select -->
+          <div class="cond" role="group" aria-label="Condition 3">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">Priority</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">is none of</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="msp-box">
+              <span class="chip"
+                ><svg class="cg pri-ic" viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg
+                >Lowest<button class="cx" aria-label="Remove Lowest">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+              ></span>
+              <input class="msp-input" placeholder="Add…" aria-label="Priority values" />
+            </div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <!-- none (empty-operator collapses the editor) -->
+          <div class="cond" role="group" aria-label="Condition 4">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">Assignee</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">is empty</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div></div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <!-- member-select -->
+          <div class="cond" role="group" aria-label="Condition 5">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">Reporter</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">is any of</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="msp-box">
+              <span class="chip"
+                ><span class="avatar cg">DK</span>Dana Kim<button
+                  class="cx"
+                  aria-label="Remove Dana Kim"
+                >
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+              ></span>
+              <input class="msp-input" placeholder="Add…" aria-label="Reporter values" />
+            </div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <!-- sprint-select (carries the Backlog empty-bucket sentinel) -->
+          <div class="cond" role="group" aria-label="Condition 6">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">Sprint</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">is none of</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="msp-box">
+              <span class="chip"
+                >Backlog<button class="cx" aria-label="Remove Backlog">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+              ></span>
+              <input class="msp-input" placeholder="Add…" aria-label="Sprint values" />
+            </div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <!-- text -->
+          <div class="cond" role="group" aria-label="Condition 7">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">Text</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">contains</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <input class="vin" type="text" value="oauth" aria-label="Text value" />
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <!-- number -->
+          <div class="cond" role="group" aria-label="Condition 8">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">Story points</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">&gt;</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="vwrap">
+              <input
+                class="vin num"
+                type="text"
+                inputmode="numeric"
+                value="5"
+                aria-label="Story points value"
+              />
+            </div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <!-- days (relative window) -->
+          <div class="cond" role="group" aria-label="Condition 9">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">Due</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">in the next</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="vwrap">
+              <input
+                class="vin num vdays"
+                type="text"
+                inputmode="numeric"
+                value="14"
+                aria-label="Day count"
+              />
+              <span class="joiner">days</span>
+            </div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <!-- date (single) -->
+          <div class="cond" role="group" aria-label="Condition 10">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">Updated</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">on or after</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="vwrap">
+              <button class="dp" aria-label="Pick a date">
+                <svg class="glyph" viewBox="0 0 24 24"><use href="#i-calendar" /></svg>Jun 1, 2026
+              </button>
+            </div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <!-- date-range -->
+          <div class="cond" role="group" aria-label="Condition 11">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">Created</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">is between</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="vwrap">
+              <button class="dp" aria-label="Pick a from date">
+                <svg class="glyph" viewBox="0 0 24 24"><use href="#i-calendar" /></svg>Apr 1, 2026
+              </button>
+              <span class="joiner">and</span>
+              <button class="dp" aria-label="Pick a to date">
+                <svg class="glyph" viewBox="0 0 24 24"><use href="#i-calendar" /></svg>Jun 30, 2026
+              </button>
+            </div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+        </div>
+        <div class="adv-foot">
+          <button class="add-btn">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>Add condition
+          </button>
+          <span class="foot-hint">11 of 20 conditions · applied live</span>
+        </div>
+      </div>
+      <p class="row-note">
+        Field + operator are Combobox triggers (--height-control); value editors are the shipped
+        Input / DatePicker / MultiSelectPicker (--height-input), centre-aligned — the primitives'
+        own heights, no new size variants. Choosing a field populates its operator menu from the
+        registry; the operator picks the editor; "is empty / is not empty" collapse the value slot.
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 2 — the pickers OPEN ════════════ -->
+    <div class="panel-label">
+      2 · The pickers — left: the FIELD menu (the registry's built-ins in menu order; the project's
+      dynamic Epic-5 entries grouped below with their 5.3.4 type glyphs). middle: the OPERATOR menu
+      (Due — the date set incl. the relative windows; current checked). right: an enum VALUE listbox
+      (status — the MultiSelectPicker menu; toggling never closes it).
+    </div>
+    <div class="panel">
+      <div class="float-row">
+        <div class="menu" role="listbox" aria-label="Field">
+          <div class="msearch">
+            <svg class="si" viewBox="0 0 24 24"><use href="#i-search" /></svg>
+            <input type="text" placeholder="Search fields…" aria-label="Search fields" />
+          </div>
+          <div class="mgroup">Fields</div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="lbl">Kind</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="true">
+            <span class="lbl">Status</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="lbl">Priority</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="lbl">Assignee</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="lbl">Reporter</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="lbl">Sprint</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="lbl">Text</span><span class="sec">title + description</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="lbl">Created</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="lbl">Updated</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="lbl">Due</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="lbl">Story points</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="lbl">Estimate</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="mgroup">Custom fields</div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="glyph"
+              ><svg viewBox="0 0 24 24"><use href="#i-square-chevron-down" /></svg></span
+            ><span class="lbl">Severity</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="glyph"
+              ><svg viewBox="0 0 24 24"><use href="#i-hash" /></svg></span
+            ><span class="lbl">Effort</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="glyph"
+              ><svg viewBox="0 0 24 24"><use href="#i-calendar" /></svg></span
+            ><span class="lbl">Review due</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="glyph"
+              ><svg viewBox="0 0 24 24"><use href="#i-circle-user" /></svg></span
+            ><span class="lbl">QA owner</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="glyph"
+              ><svg viewBox="0 0 24 24"><use href="#i-type" /></svg></span
+            ><span class="lbl">Spec link</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="mgroup">Other</div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="glyph"
+              ><svg viewBox="0 0 24 24"><use href="#i-tag" /></svg></span
+            ><span class="lbl">Label</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="glyph"
+              ><svg viewBox="0 0 24 24"><use href="#i-component" /></svg></span
+            ><span class="lbl">Component</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+        </div>
+
+        <div class="menu" style="width: 230px" role="listbox" aria-label="Operator">
+          <div class="opt" role="option" aria-selected="false">
+            <span class="lbl">on or before</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="lbl">on or after</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="lbl">is between</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="lbl">in the last … days</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="true">
+            <span class="lbl">in the next … days</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="lbl">is empty</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="lbl">is not empty</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+        </div>
+
+        <div
+          class="menu"
+          style="width: 240px"
+          role="listbox"
+          aria-label="Status values"
+          aria-multiselectable="true"
+        >
+          <div class="opt" role="option" aria-selected="true">
+            <span class="status-dot sd-todo"></span><span class="lbl">To Do</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="true">
+            <span class="status-dot sd-inprogress"></span><span class="lbl">In Progress</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="status-dot sd-todo"></span><span class="lbl">Blocked</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="status-dot sd-review"></span><span class="lbl">In Review</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="status-dot sd-done"></span><span class="lbl">Done</span
+            ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+        </div>
+      </div>
+      <p class="row-note">
+        The field menu RENDERS the registry: built-ins in registry order, then the project's dynamic
+        entries (custom fields with their 5.3.4 type glyphs, then Label / Component). The
+        member/sprint/label/component listboxes carry their owners' bounded reads + sub-search (the
+        5.4.6 vocabulary); the assignee list puts the Unassigned sentinel first, the sprint list
+        Backlog first.
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 3 — pending row + the row cap ════════════ -->
+    <div class="panel-label">
+      3 · Live-apply needs two pinned states — an INCOMPLETE row (value still empty) is drawn
+      pending: dashed boxes + the explicit "not applied" line; it is excluded from the badge count,
+      the URL, and the result set. At 20 rows, Add condition disables with the cap hint.
+    </div>
+    <div class="panel">
+      <div class="adv" role="dialog" aria-label="Advanced filter">
+        <div class="adv-head">
+          <span class="fp-title">Advanced filter</span>
+          <button class="fp-clear">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear all
+          </button>
+        </div>
+        <div class="adv-body">
+          <div class="adv-match">
+            <span>Match</span>
+            <div class="seg" role="group" aria-label="Combinator">
+              <button aria-pressed="true">all</button>
+              <button aria-pressed="false">any</button>
+            </div>
+            <span>of the following conditions:</span>
+          </div>
+          <div class="cond" role="group" aria-label="Condition 1">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">Status</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">is any of</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="msp-box">
+              <span class="chip"
+                ><span class="dot sd-inprogress"></span>In Progress<button
+                  class="cx"
+                  aria-label="Remove In Progress"
+                >
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+              ></span>
+              <input class="msp-input" placeholder="Add…" aria-label="Status values" />
+            </div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+          <div class="cond pending" role="group" aria-label="Condition 2 (incomplete)">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">Assignee</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">is any of</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="msp-box">
+              <input class="msp-input" placeholder="Pick members…" aria-label="Assignee values" />
+            </div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+            <p class="cond-note">Not applied yet — pick a value to activate this condition.</p>
+          </div>
+        </div>
+        <div class="adv-foot">
+          <button class="add-btn">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>Add condition
+          </button>
+          <span class="foot-hint">1 of 20 conditions · applied live</span>
+        </div>
+      </div>
+
+      <div class="adv" style="margin-top: 24px" role="dialog" aria-label="Advanced filter (at cap)">
+        <div class="adv-foot" style="border-top: 0">
+          <button class="add-btn" disabled>
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>Add condition
+          </button>
+          <span class="foot-hint">Condition limit reached (20) — remove one to add another.</span>
+        </div>
+      </div>
+      <p class="row-note">
+        (Bottom: the footer at the 20-row cap — the body rows are elided here.) The badge, the
+        <code>?filter=v1:</code> param, and the result set count only COMPLETE rows; deleting the
+        value of an applied row returns it to pending without dropping the row.
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 4 — Epic-5 rows (6.1.5) ════════════ -->
+    <div class="panel-label">
+      4 · Epic-5 conditions — custom fields (per-type editors, the 5.3.5 archived mark), a label row
+      (5.4.8 MultiSelectPicker with the name-hash tint), a component row (neutral chips + glyph).
+      Dynamic entries track the project's definitions.
+    </div>
+    <div class="panel">
+      <div class="adv" role="dialog" aria-label="Advanced filter">
+        <div class="adv-head">
+          <span class="fp-title">Advanced filter</span>
+          <button class="fp-clear">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear all
+          </button>
+        </div>
+        <div class="adv-body">
+          <div class="adv-match">
+            <span>Match</span>
+            <div class="seg" role="group" aria-label="Combinator">
+              <button aria-pressed="false">all</button>
+              <button aria-pressed="true">any</button>
+            </div>
+            <span>of the following conditions:</span>
+          </div>
+          <!-- CF select, incl. an archived option kept for historical matching -->
+          <div class="cond" role="group" aria-label="Condition 1">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="glyph"
+                ><svg viewBox="0 0 24 24"><use href="#i-square-chevron-down" /></svg></span
+              ><span class="lbl">Severity</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">is any of</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="msp-box">
+              <span class="chip"
+                >High<button class="cx" aria-label="Remove High">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+              ></span>
+              <span class="chip"
+                >Critical <span class="arch">(archived)</span
+                ><button class="cx" aria-label="Remove Critical">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+              ></span>
+              <input class="msp-input" placeholder="Add…" aria-label="Severity values" />
+            </div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+          <!-- CF number -->
+          <div class="cond" role="group" aria-label="Condition 2">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="glyph"
+                ><svg viewBox="0 0 24 24"><use href="#i-hash" /></svg></span
+              ><span class="lbl">Effort</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">≥</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="vwrap">
+              <input
+                class="vin num"
+                type="text"
+                inputmode="numeric"
+                value="3"
+                aria-label="Effort value"
+              />
+            </div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+          <!-- CF user -->
+          <div class="cond" role="group" aria-label="Condition 3">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="glyph"
+                ><svg viewBox="0 0 24 24"><use href="#i-circle-user" /></svg></span
+              ><span class="lbl">QA owner</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">is any of</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="msp-box">
+              <span class="chip"
+                ><span class="avatar cg">MO</span>Marco Ortiz<button
+                  class="cx"
+                  aria-label="Remove Marco Ortiz"
+                >
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+              ></span>
+              <input class="msp-input" placeholder="Add…" aria-label="QA owner values" />
+            </div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+          <!-- Label (tinted chips — the 5.4 name-hash tints) -->
+          <div class="cond" role="group" aria-label="Condition 4">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="glyph"
+                ><svg viewBox="0 0 24 24"><use href="#i-tag" /></svg></span
+              ><span class="lbl">Label</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">is none of</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="msp-box">
+              <span class="chip tinted" style="background: var(--el-tint-peach)"
+                >perf-q3<button class="cx" aria-label="Remove perf-q3">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+              ></span>
+              <span class="chip tinted" style="background: var(--el-tint-sky)"
+                >api<button class="cx" aria-label="Remove api">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+              ></span>
+              <input class="msp-input" placeholder="Add…" aria-label="Label values" />
+            </div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+          <!-- Component (neutral chips + glyph) -->
+          <div class="cond" role="group" aria-label="Condition 5">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="glyph"
+                ><svg viewBox="0 0 24 24"><use href="#i-component" /></svg></span
+              ><span class="lbl">Component</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">is any of</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="msp-box">
+              <span class="chip"
+                ><svg class="cg" viewBox="0 0 24 24" style="color: var(--el-text-muted)">
+                  <use href="#i-component" /></svg
+                >API<button class="cx" aria-label="Remove API">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+              ></span>
+              <input class="msp-input" placeholder="Add…" aria-label="Component values" />
+            </div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+        </div>
+        <div class="adv-foot">
+          <button class="add-btn">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>Add condition
+          </button>
+          <span class="foot-hint">5 of 20 conditions · applied live</span>
+        </div>
+      </div>
+      <p class="row-note">
+        CF rows carry their type glyph in the field trigger; select-CF value chips include archived
+        options with the 5.3.5 "(archived)" mark (historical matching). Label chips take the 5.4
+        name-hash tint with --el-text-strong text (finding #35); component chips stay neutral with
+        the component glyph. "Match any" is active here — the OR the facet bar can't express.
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 5 — applied state ════════════ -->
+    <div class="panel-label">
+      5 · Applied — the active [Advanced] trigger (ring + row-count badge, the 2.5.4 grammar), the
+      compact condition-chip readout under the toolbar, the live result count. Below: zero results
+      (the EmptyState grammar + Clear all).
+    </div>
+    <div class="panel">
+      <div class="page-head">
+        <div>
+          <h2>Issues</h2>
+          <p class="sub">All issues in Prodect — Q3 launch</p>
+        </div>
+        <div class="toolbar">
+          <button class="tb-btn is-superseded" aria-haspopup="dialog" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter<span
+              class="tb-sup"
+              aria-label="Managed in Advanced"
+              ><svg viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg
+            ></span>
+          </button>
+          <button class="tb-btn is-active" aria-haspopup="dialog" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg>Advanced<span
+              class="tb-count"
+              aria-label="3 conditions active"
+              >3</span
+            >
+          </button>
+          <button class="tb-btn" aria-haspopup="menu" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-list-tree" /></svg>List<svg
+              class="caret"
+              viewBox="0 0 24 24"
+            >
+              <use href="#i-chevron-down" />
+            </svg>
+          </button>
+          <button class="tb-btn primary">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+          </button>
+        </div>
+      </div>
+      <div class="summary" aria-label="Active conditions">
+        <span class="sum-chip any">Match any</span>
+        <span class="sum-chip"><strong>Status</strong> is any of To Do, In Progress</span>
+        <span class="sum-chip"><strong>Label</strong> is none of perf-q3</span>
+        <span class="sum-chip"><strong>Due</strong> in the next 14 days</span>
+      </div>
+      <p class="count-line" role="status">23 issues match</p>
+
+      <div class="empty">
+        <h3>No issues match this filter</h3>
+        <p>Try removing a condition, or clear the filter to see everything.</p>
+        <button class="tb-btn" style="margin: 0 auto">
+          <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear all
+        </button>
+      </div>
+      <p class="row-note">
+        The chip readout is read-only (clicking any chip — or the trigger — opens the builder); the
+        "Match any" chip appears only on OR. The count line is `role="status"` so screen readers
+        hear results track edits. The URL carries `?filter=v1:…` composing with ?view/?sort/?page.
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 6 — stale referent + invalid param ════════════ -->
+    <div class="panel-label">
+      6 · Durable-URL states — a condition whose referent was DELETED (a shared/saved URL outliving
+      the data) renders the Unknown-value chip + per-row notice and matches nothing; a malformed or
+      foreign ?filter= param renders the typed recoverable callout, never a crash.
+    </div>
+    <div class="panel">
+      <div class="adv" role="dialog" aria-label="Advanced filter">
+        <div class="adv-head">
+          <span class="fp-title">Advanced filter</span>
+          <button class="fp-clear">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear all
+          </button>
+        </div>
+        <div class="adv-body">
+          <div class="adv-match">
+            <span>Match</span>
+            <div class="seg" role="group" aria-label="Combinator">
+              <button aria-pressed="true">all</button>
+              <button aria-pressed="false">any</button>
+            </div>
+            <span>of the following conditions:</span>
+          </div>
+          <div class="cond" role="group" aria-label="Condition 1 (stale)">
+            <button class="cb" aria-haspopup="listbox">
+              <span class="glyph"
+                ><svg viewBox="0 0 24 24"><use href="#i-square-chevron-down" /></svg></span
+              ><span class="lbl">Severity</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="cb" aria-haspopup="listbox">
+              <span class="lbl">is any of</span
+              ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="msp-box">
+              <span class="chip stale"
+                ><svg class="cg" viewBox="0 0 24 24"><use href="#i-triangle-alert" /></svg>Unknown
+                value<button class="cx" aria-label="Remove unknown value">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+              ></span>
+              <input class="msp-input" placeholder="Add…" aria-label="Severity values" />
+            </div>
+            <button class="x-btn" aria-label="Remove condition">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+            <p class="stale-note" role="status">
+              <svg class="wi" viewBox="0 0 24 24"><use href="#i-triangle-alert" /></svg>
+              This value no longer exists in the project — this condition matches nothing.
+            </p>
+          </div>
+        </div>
+        <div class="adv-foot">
+          <button class="add-btn">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>Add condition
+          </button>
+          <span class="foot-hint">1 of 20 conditions · applied live</span>
+        </div>
+      </div>
+
+      <div class="callout" style="margin-top: 24px" role="alert">
+        <svg class="wi" viewBox="0 0 24 24"><use href="#i-triangle-alert" /></svg>
+        <div>
+          <h4>This filter link couldn't be read</h4>
+          <p>
+            The filter in this URL is invalid or from a newer version of Prodect, so no filter was
+            applied. Clear it to dismiss this message.
+          </p>
+          <button class="tb-btn">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear filter
+          </button>
+        </div>
+      </div>
+      <p class="row-note">
+        Stale referents (deleted field / option / label / component / member) keep the row visible
+        and editable — pick a real value or remove the row; the condition matches nothing meanwhile
+        (the 6.2 saved-filter durability rule). A field deleted while the builder is open degrades
+        its row to this same state. The invalid-param callout replaces nothing — the unfiltered list
+        renders beneath it.
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 7 — applied over both views ════════════ -->
+    <div class="panel-label">
+      7 · One compiled filter, both views — LEFT: the List (the navigator result: flat, sortable,
+      50/page + count, 2.5.8/2.5.12). RIGHT: the Tree (ancestor-retaining — non-matching ancestors
+      muted, the shipped 2.5.1 behaviour). Identical match sets.
+    </div>
+    <div class="panel">
+      <div class="float-row">
+        <div style="flex: 1 1 460px; min-width: 0">
+          <div class="tree-table" role="table" aria-label="Issues (list)">
+            <div class="tt-grid tt-head" role="row">
+              <div role="columnheader">Title</div>
+              <div role="columnheader">Assignee</div>
+              <div role="columnheader">Status</div>
+            </div>
+            <a class="tt-row tt-grid" role="row" href="#">
+              <div class="cell-title">
+                <span class="type-icon t-bug"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                ><span class="lr-id">PROD-49</span
+                ><span class="ttl">OAuth callback drops the `state` param on Safari</span>
+              </div>
+              <div class="cell-person">
+                <span class="avatar">DK</span><span class="nm">Dana Kim</span>
+              </div>
+              <div><span class="pill pill--inprogress">In Review</span></div>
+            </a>
+            <a class="tt-row tt-grid" role="row" href="#">
+              <div class="cell-title">
+                <span class="type-icon t-bug"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                ><span class="lr-id">PROD-77</span
+                ><span class="ttl">OAuth token refresh loops on expired token</span>
+              </div>
+              <div class="cell-person">
+                <span class="avatar unassigned"
+                  ><svg viewBox="0 0 24 24"><use href="#i-user-x" /></svg></span
+                ><span class="nm">Unassigned</span>
+              </div>
+              <div><span class="pill pill--inprogress">In Progress</span></div>
+            </a>
+            <div class="pgn">
+              <span>1–23 of 23 · 50 per page</span>
+              <span class="pg-btns">
+                <button class="pg-btn" disabled>Previous</button>
+                <button class="pg-btn" disabled>Next</button>
+              </span>
+            </div>
+          </div>
+        </div>
+        <div style="flex: 1 1 460px; min-width: 0">
+          <div class="tree-table" role="table" aria-label="Issues (tree)">
+            <div class="tt-grid tt-head" role="row">
+              <div role="columnheader">Title</div>
+              <div role="columnheader">Assignee</div>
+              <div role="columnheader">Status</div>
+            </div>
+            <a class="tt-row context tt-grid" role="row" href="#">
+              <div class="cell-title">
+                <span class="type-icon t-epic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg></span
+                ><span class="lr-id">PROD-12</span
+                ><span class="ttl">Q3 launch — Auth & sign-in</span>
+              </div>
+              <div class="cell-person"><span class="nm">Alice Chen</span></div>
+              <div><span class="pill pill--inprogress">In Progress</span></div>
+            </a>
+            <a class="tt-row tt-grid" role="row" href="#" style="padding-left: 36px">
+              <div class="cell-title">
+                <span class="type-icon t-bug"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                ><span class="lr-id">PROD-49</span
+                ><span class="ttl">OAuth callback drops the `state` param on Safari</span>
+              </div>
+              <div class="cell-person">
+                <span class="avatar">DK</span><span class="nm">Dana Kim</span>
+              </div>
+              <div><span class="pill pill--inprogress">In Review</span></div>
+            </a>
+            <a class="tt-row tt-grid" role="row" href="#" style="padding-left: 36px">
+              <div class="cell-title">
+                <span class="type-icon t-bug"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                ><span class="lr-id">PROD-77</span
+                ><span class="ttl">OAuth token refresh loops on expired token</span>
+              </div>
+              <div class="cell-person">
+                <span class="avatar unassigned"
+                  ><svg viewBox="0 0 24 24"><use href="#i-user-x" /></svg></span
+                ><span class="nm">Unassigned</span>
+              </div>
+              <div><span class="pill pill--inprogress">In Progress</span></div>
+            </a>
+          </div>
+        </div>
+      </div>
+      <p class="row-note">
+        Both views read the SAME compiled predicate — no view-specific query path. The List is the
+        navigator-faithful result (sortable headers, 50/page, count); the Tree keeps matches in
+        place under muted ancestors (drawn here only as the reference — the shipped 2.5.1 behaviour,
+        not redrawn).
+      </p>
+    </div>
+
+    <p class="legend">
+      <strong>Notes.</strong> The builder is a <code>Popover</code> (<code>role="dialog"</code>)
+      anchored under the <code>[Advanced]</code> <code>ToolbarButton</code>; the combinator is the
+      <code>Segmented</code> control read as a sentence; each condition row is a labelled
+      <code>role="group"</code> of two <code>Combobox</code> triggers (field · operator — the row
+      RENDERS the shipped 6.1.1 registry) + the operator's value editor — the
+      <code>MultiSelectPicker</code> for every enum field, <code>Input</code> for text/number/days,
+      the <code>DatePicker</code> trigger for dates — plus the remove ×. Colour flows only through
+      <code>--el-*</code> (count badge / selected rows / Check = <code>--el-accent</code>; stale =
+      <code>--el-warning</code> glyph + peach tint + strong text, never colour alone); shape via the
+      element-semantic tokens. Filters apply live to <code>?filter=v1:…</code> — no Apply button;
+      pending rows are excluded until complete.
+    </p>
+  </body>
+</html>
