@@ -42,6 +42,15 @@ import type { PlanStory } from '../types';
  * GitHub auto-redirects renamed repos, so a later move to bare `motir` stays
  * cheap if branding ever prefers it.
  *
+ * **Finding #83 (2026-06-11): the bare `motir` npm name is UNPUBLISHABLE** —
+ * the registry's typosquat guard 403s it ("too similar to existing package
+ * motion"); no ownership of domain/trademark overrides that. The CLI ships
+ * scoped as **`@motir/cli`** (bin stays `motir`) under the `@motir` scope,
+ * which Yue's npm username (`motir`) owns by construction — the standard
+ * branded-CLI shape (@anthropic-ai/claude-code, @openai/codex,
+ * @google/gemini-cli). Repo-naming reason (a) above weakens (there is no
+ * bare npm name to own); the suffixed-repo decision stands on reason (b).
+ *
  * **Rename method: classified sweep, not blind find-replace.** Every subtask
  * works from a case-insensitive `rg -i prodect` inventory of its surface and
  * classifies each hit: user-visible copy / technical identifier / historical
@@ -63,8 +72,8 @@ export const story_8_7: PlanStory = {
     'docs, comments, repo names `motir-core`/`motir-ai`/`motir-meta`), the plan-seed tenant ' +
     '(@motir.co users, project naming — the PROD key STAYS per the 6.8-verified decision), ' +
     'prodect-ai, the prodect-meta runbook (PRODECT.md → MOTIR.md), GitHub/Vercel infra renames, ' +
-    'and publishing the `motir` npm package (the 7.9 CLI — claim the name immediately, real ' +
-    'publish once the CLI ships). NOT here: the wordmark/logomark (8.3 design scope) and the ' +
+    'and publishing the `@motir/cli` npm package (the 7.9 CLI — name claimed 2026-06-11; the ' +
+    'bare `motir` name is registry-blocked, finding #83; real publish once the CLI ships). NOT here: the wordmark/logomark (8.3 design scope) and the ' +
     'production domain attach/SSL/email backend (8.5). Method: classified `rg -i prodect` ' +
     'sweeps — historical records keep the old name; everything forward-looking moves.',
   verificationRecipeMd:
@@ -79,7 +88,7 @@ export const story_8_7: PlanStory = {
     '(plan-seed history prose, notes.html, migration SQL) — the 8.7.10 sweep report lists them.\n' +
     '- Old GitHub URLs (github.com/…/prodect-core) redirect to motir-core; `git pull` in an ' +
     'un-updated local checkout still works; the Vercel project is renamed and deploys green.\n' +
-    '- `npm install -g motir` installs the CLI and `motir --version` runs (after 8.7.9).',
+    '- `npm install -g @motir/cli` installs the CLI and `motir --version` runs (after 8.7.9).',
   items: [
     {
       id: '8.7.1',
@@ -110,27 +119,32 @@ export const story_8_7: PlanStory = {
     },
     {
       id: '8.7.2',
-      title: 'Claim the `motir` npm name + provision the NPM_TOKEN publish secret',
-      status: 'planned',
+      title: 'Claim the `@motir/cli` npm name + provision the NPM_TOKEN publish secret',
+      status: 'done',
       type: 'manual',
       executor: 'human',
       estimateMinutes: 20,
       descriptionMd:
-        'npm has no reserve-without-publish, and the name is now public (domain + filing) — ' +
-        'claim it immediately, ahead of the real release: publish a minimal placeholder ' +
-        '(version `0.0.1`, a README pointing at the repo, no code) as `motir` from the ' +
-        "user's npm account, with 2FA enabled on the account. Then create an npm " +
-        '**automation** token and add it to the prodect-core GitHub repo as the ' +
-        '`NPM_TOKEN` Actions secret — the 8.7.9 release workflow consumes it. The real ' +
-        '0.1.0 publish (8.7.9) supersedes the placeholder.\n\n' +
+        'npm has no reserve-without-publish, and the name went public (domain + filing) — ' +
+        'claimed 2026-06-11. The bare `motir` name turned out to be UNPUBLISHABLE: the ' +
+        "registry's typosquat guard 403s it as too similar to `motion` (finding #83). " +
+        'Pivot (the standard branded-CLI shape — @anthropic-ai/claude-code, ' +
+        '@openai/codex): the placeholder published as **`@motir/cli`** `0.0.1` ' +
+        "(`--access=public`) under the `@motir` scope, which Yue's npm username " +
+        '(`motir`) owns by construction — no org creation needed, and the scope fences ' +
+        'the brand namespace on npm. The bin name stays `motir`. A granular automation ' +
+        'token (read/write on the `@motir` scope) is set as the `NPM_TOKEN` Actions ' +
+        'secret — the 8.7.9 release workflow consumes it. The real 0.1.0 publish ' +
+        '(8.7.9) supersedes the placeholder.\n\n' +
         '## Acceptance criteria\n\n' +
-        "- `npm view motir` resolves to the placeholder owned by the user's account; 2FA " +
-        'is on.\n' +
-        '- The `NPM_TOKEN` automation-token secret exists on the repo (Actions scope).\n' +
-        '- User confirmation — the manual-subtask done gate.\n\n' +
+        "- `npm view @motir/cli` resolves to the placeholder owned by the user's " +
+        'account; 2FA (passkey) is on. ✓\n' +
+        '- The `NPM_TOKEN` automation-token secret exists on the repo (Actions scope). ✓\n' +
+        '- User confirmation received (2026-06-11) — the manual-subtask done gate. ✓\n\n' +
         '## Context refs\n\n' +
         '- `packages/cli` / story 7.9 (the package that will own the name)\n' +
-        '- 8.7.9 (the release workflow consuming the secret)\n\n' +
+        '- 8.7.9 (the release workflow consuming the secret)\n' +
+        '- PRODECT_FINDINGS.md #83 (the bare-name block + the scoped pivot)\n\n' +
         'No PR — `type: manual`, dashboard/secret work (the 1.6.7 convention).',
       dependsOn: ['8.7.1'],
     },
@@ -182,8 +196,9 @@ export const story_8_7: PlanStory = {
       estimateMinutes: 45,
       descriptionMd:
         'The non-UI surface of the core repo, from the same classified inventory:\n\n' +
-        '- `package.json` `name`: `prodect-core` → `motir-core` (the bare `motir` name ' +
-        'belongs to the CLI package — the story-header repo-naming decision); `description` ' +
+        '- `package.json` `name`: `prodect-core` → `motir-core` (the CLI package owns the ' +
+        'npm presence as `@motir/cli` — finding #83 + the story-header repo-naming ' +
+        'decision); `description` ' +
         'reworded to Motir.\n' +
         '- `README.md` — title, pitch, clone URLs (the new `motir-core` repo path; GitHub ' +
         'redirects cover the interim), badges.\n' +
@@ -331,7 +346,7 @@ export const story_8_7: PlanStory = {
     },
     {
       id: '8.7.9',
-      title: 'Publish the `motir` npm package — release prep + tagged release workflow',
+      title: 'Publish the `@motir/cli` npm package — release prep + tagged release workflow',
       status: 'blocked',
       type: 'code',
       executor: 'coding_agent',
@@ -346,14 +361,14 @@ export const story_8_7: PlanStory = {
         '- `.github/workflows/release.yml`: on a `cli-v*` tag — build, run the CLI test ' +
         'lane, `npm publish --provenance` with the `NPM_TOKEN` secret (8.7.2). No ' +
         'publish-from-laptop path.\n' +
-        '- README install section: `npm install -g motir` replaces the in-repo ' +
-        '`pnpm --filter motir` instruction as the primary path (in-repo stays documented ' +
+        '- README install section: `npm install -g @motir/cli` replaces the in-repo ' +
+        '`pnpm --filter @motir/cli` instruction as the primary path (in-repo stays documented ' +
         'for contributors); cross-update `docs/cli.md` (7.9.6).\n\n' +
         '## Acceptance criteria\n\n' +
         '- A dry-run pack (`npm pack`) contains the binary + README and nothing stray.\n' +
         '- The release workflow is green on a test tag in CI (publish step skipped or ' +
         'dry-run without the secret) and publishes 0.1.0 on the real tag.\n' +
-        '- `npm install -g motir && motir --version` works against the published ' +
+        '- `npm install -g @motir/cli && motir --version` works against the published ' +
         'package.\n\n' +
         '## Context refs\n\n' +
         '- `packages/cli/package.json` (7.9.1 scaffold), `docs/cli.md` (7.9.6)\n' +
