@@ -304,4 +304,80 @@ describe('bug-inline-status-revert-on-second-edit — two rapid inline edits, ad
     expect((await workItemsService.getWorkItem(h.a.id, h.fx.ctx)).assigneeId).toBe(owner.userId);
     expect((await workItemsService.getWorkItem(h.b.id, h.fx.ctx)).assigneeId).toBe(owner.userId);
   });
+
+  // With no refresh on success, the row's served `updatedAt` prop goes stale
+  // after the first confirmed edit — a follow-up edit must submit the
+  // ACKNOWLEDGED token instead, or the real concurrency check rejects it (the
+  // regression the inline-assignee E2E caught: reassign succeeded, unassign
+  // submitted the pre-reassign token and died stale).
+  it('FOLLOW-UP same cell: unassign after reassign submits the acknowledged updatedAt and the real write accepts it', async () => {
+    const h = await makeHarness();
+    const owner = h.members[0]!;
+    const ownerOption = new RegExp(owner.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const initial = await h.snapshot();
+    render(h.table(initial));
+
+    // Reassign A — the FIRST submission carries the served prop (still fresh).
+    fireEvent.click(within(rowOf('Item A')).getByRole('button', { name: 'Edit Assignee' }));
+    fireEvent.click(screen.getByRole('option', { name: ownerOption }));
+    expect(updateCalls[0]!.input.expectedUpdatedAt).toBe(
+      initial.find((r) => r.id === h.a.id)!.updatedAt,
+    );
+    const aDto = await workItemsService.updateWorkItem(
+      h.a.id,
+      { assigneeId: owner.userId },
+      h.fx.ctx,
+      { expectedUpdatedAt: updateCalls[0]!.input.expectedUpdatedAt },
+    );
+    await deliver(updateCalls[0]!, { ok: true, updatedAt: aDto.updatedAt });
+
+    // Unassign immediately — NO rerender, so the served prop is now stale.
+    // The submission must carry the acknowledged token from the first edit…
+    fireEvent.click(within(rowOf('Item A')).getByRole('button', { name: 'Edit Assignee' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Unassigned' }));
+    expect(updateCalls).toHaveLength(2);
+    expect(updateCalls[1]!.input).toMatchObject({ id: h.a.id, assigneeId: null });
+    expect(updateCalls[1]!.input.expectedUpdatedAt).toBe(aDto.updatedAt);
+
+    // …and that token is ALIVE: the real concurrency-checked write accepts it.
+    const a2 = await workItemsService.updateWorkItem(h.a.id, { assigneeId: null }, h.fx.ctx, {
+      expectedUpdatedAt: updateCalls[1]!.input.expectedUpdatedAt,
+    });
+    await deliver(updateCalls[1]!, { ok: true, updatedAt: a2.updatedAt });
+    expect((await workItemsService.getWorkItem(h.a.id, h.fx.ctx)).assigneeId).toBeNull();
+    expect(refreshSpy).not.toHaveBeenCalled();
+    expect(toastSpy).not.toHaveBeenCalled();
+  });
+
+  it('FOLLOW-UP across cells: an assignee edit after a status change on the same row submits the status-bumped updatedAt', async () => {
+    const h = await makeHarness();
+    const owner = h.members[0]!;
+    const ownerOption = new RegExp(owner.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const initial = await h.snapshot();
+    render(h.table(initial));
+
+    // Status change first — it submits no token itself but bumps the row.
+    fireEvent.click(within(rowOf('Item A')).getByRole('button', { name: 'Edit Status' }));
+    fireEvent.click(screen.getByRole('option', { name: 'In Progress' }));
+    const aDto = await workItemsService.updateStatus(h.a.id, 'in_progress', h.fx.ctx);
+    await deliver(statusCalls[0]!, { ok: true, updatedAt: aDto.updatedAt });
+
+    // The assignee edit on the SAME row must submit the bumped token — the
+    // served prop predates the status write and would be rejected stale.
+    fireEvent.click(within(rowOf('Item A')).getByRole('button', { name: 'Edit Assignee' }));
+    fireEvent.click(screen.getByRole('option', { name: ownerOption }));
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0]!.input.expectedUpdatedAt).toBe(aDto.updatedAt);
+
+    const a2 = await workItemsService.updateWorkItem(
+      h.a.id,
+      { assigneeId: owner.userId },
+      h.fx.ctx,
+      { expectedUpdatedAt: updateCalls[0]!.input.expectedUpdatedAt },
+    );
+    await deliver(updateCalls[0]!, { ok: true, updatedAt: a2.updatedAt });
+    expect((await workItemsService.getWorkItem(h.a.id, h.fx.ctx)).assigneeId).toBe(owner.userId);
+    expect(refreshSpy).not.toHaveBeenCalled();
+    expect(toastSpy).not.toHaveBeenCalled();
+  });
 });

@@ -47,9 +47,30 @@ import type { IssueRowData } from './issueRows';
 // views (Tree + List) mount the provider, so the list and the detail page truly
 // share the controls (no parallel components).
 
+// The provider's per-row ledger of server-acknowledged `updatedAt` values.
+// With no refresh on success, `row.updatedAt` in server props stops advancing
+// after a confirmed edit — so a follow-up edit on the SAME row (unassign after
+// reassign; an assignee edit after a status change, which also bumps the row)
+// would submit the stale prop as `expectedUpdatedAt` and die on the
+// optimistic-concurrency check. Every confirmed action acknowledges its
+// returned `updatedAt`; submissions use the max of the ledger and the prop.
+// It lives on the PROVIDER (one per view mount) — above the cells, so it is
+// shared by all five editors of a row and survives cell remounts, yet resets
+// with the page where fresh server props make it moot. It only ever holds
+// values the server itself returned; max-merge keeps it monotonic, and a
+// fresher server prop (someone else's later edit) always wins the max. NOT
+// used for display convergence — useConvergingOverride must keep comparing
+// against the row's actually-served `updatedAt`, otherwise a confirmed cell
+// would yield to the still-stale prop value immediately.
+interface UpdatedAtLedger {
+  acknowledge(rowId: string, updatedAt: string): void;
+  latest(row: IssueRowData): string;
+}
+
 interface InlineEditContextValue {
   workflow: WorkflowDto;
   members: WorkspaceMemberDTO[];
+  ledger: UpdatedAtLedger;
 }
 
 const IssueInlineEditContext = createContext<InlineEditContextValue | null>(null);
@@ -69,10 +90,22 @@ export function IssueInlineEditProvider({
   // goes read-only without touching the three mount sites. Defaults to editable
   // when there's no ProjectAccessProvider (non-shell / test mounts).
   const { canEdit } = useProjectAccess();
-  const value = useMemo(
-    () => (canEdit ? { workflow, members } : null),
-    [canEdit, workflow, members],
-  );
+  const acknowledgedRef = useRef<Map<string, string>>(new Map());
+  const value = useMemo(() => {
+    if (!canEdit) return null;
+    const acked = acknowledgedRef.current;
+    const ledger: UpdatedAtLedger = {
+      acknowledge(rowId, updatedAt) {
+        const cur = acked.get(rowId);
+        if (cur === undefined || updatedAt > cur) acked.set(rowId, updatedAt);
+      },
+      latest(row) {
+        const a = acked.get(row.id);
+        return a !== undefined && a > row.updatedAt ? a : row.updatedAt;
+      },
+    };
+    return { workflow, members, ledger };
+  }, [canEdit, workflow, members]);
   return (
     <IssueInlineEditContext.Provider value={value}>{children}</IssueInlineEditContext.Provider>
   );
@@ -139,6 +172,9 @@ function useUpdateField(row: IssueRowData) {
   const router = useRouter();
   const { toast } = useToast();
   const t = useTranslations('issueViews');
+  // The editors only render inside an editable provider, so ctx is present;
+  // the prop fallback just keeps the hook total.
+  const ledger = useIssueInlineEdit()?.ledger;
   const [pending, startTransition] = useTransition();
   function run(
     patch: Omit<UpdateIssueInput, 'id' | 'expectedUpdatedAt'>,
@@ -147,10 +183,11 @@ function useUpdateField(row: IssueRowData) {
     startTransition(async () => {
       const res = await updateIssueAction({
         id: row.id,
-        expectedUpdatedAt: row.updatedAt,
+        expectedUpdatedAt: ledger ? ledger.latest(row) : row.updatedAt,
         ...patch,
       });
       if (res.ok) {
+        ledger?.acknowledge(row.id, res.updatedAt);
         handlers.onConfirm(res.updatedAt);
       } else if (res.stale) {
         handlers.onFail();
@@ -217,6 +254,7 @@ function EditSurface({ children }: { children: ReactNode }) {
 function InlineStatusEditor({ row, workflow }: { row: IssueRowData; workflow: WorkflowDto }) {
   const t = useTranslations('issueViews');
   const { toast } = useToast();
+  const ledger = useIssueInlineEdit()?.ledger;
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
   // Optimistic override: the just-picked key, confirmed by the action response
@@ -236,6 +274,9 @@ function InlineStatusEditor({ row, workflow }: { row: IssueRowData; workflow: Wo
     startTransition(async () => {
       const res = await changeStatusAction({ id: row.id, toStatusKey });
       if (res.ok) {
+        // A status change bumps the row's `updatedAt` even though it submits
+        // no token itself — later token-carrying edits on this row need it.
+        ledger?.acknowledge(row.id, res.updatedAt);
         status.confirm(token, res.updatedAt);
       } else {
         status.fail(token);
