@@ -1,6 +1,6 @@
 # Background jobs
 
-Prodect runs background work on [Inngest](https://www.inngest.com/) — durable,
+Motir runs background work on [Inngest](https://www.inngest.com/) — durable,
 event-driven functions with built-in retries and step memoization. This
 document covers the runtime landed in Subtask 1.6.2: the client, the
 `defineJob` / `sendEvent` wrappers, the `job_run` ledger, and how to add a job —
@@ -24,7 +24,9 @@ ledger: defineJob writes a job_run row: running ─▶ succeeded | failed (+ DLQ
   functions through. Exports `GET` (probe), `PUT` (registration), `POST`
   (invocation). It mounts the functions in `lib/jobs/registry.ts`.
 - **Client** — `lib/jobs/client.ts`. The one `new Inngest({ id: "prodect-core" })`
-  singleton. Everything composes `defineJob` / `sendEvent` on top of it.
+  singleton. Everything composes `defineJob` / `sendEvent` on top of it. (The
+  app id deliberately kept the pre-rebrand spelling — it identifies the synced
+  Inngest Cloud app; changing it needs a dashboard re-sync pass, not a rename.)
 - **The 4-layer rule still holds.** No file outside `lib/jobs/**` and
   `app/api/inngest/**` may import the `inngest` SDK directly (enforced by an
   ESLint `no-restricted-imports` rule). Routes/services emit events via
@@ -164,7 +166,7 @@ test harness. (`sendEvent`'s type excludes the `system.*` namespace.)
 ## Canonical job: `email.send`
 
 `email.send` (`lib/jobs/definitions/emailSend.ts`) is the first production job
-and the reference exemplar — every transactional email in prodect-core flows
+and the reference exemplar — every transactional email in motir-core flows
 through it.
 
 **Why it exists.** Password reset (`lib/auth/index.ts`) and workspace invites

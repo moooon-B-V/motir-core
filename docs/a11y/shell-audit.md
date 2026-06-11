@@ -1,6 +1,6 @@
 # App-shell accessibility audit
 
-This file is the running accessibility log for Prodect's app shell and the
+This file is the running accessibility log for Motir's app shell and the
 surfaces that render inside it. Automated coverage lives in
 `tests/e2e/shell-a11y.spec.ts` (axe-core, WCAG 2.1 AA) and
 `tests/e2e/shell-keyboard.spec.ts` (keyboard-only navigation); this document

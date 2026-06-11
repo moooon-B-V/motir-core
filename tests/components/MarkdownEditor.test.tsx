@@ -222,9 +222,9 @@ describe('Mention token round-trip (storage invariant, 5.1.4)', () => {
 
 describe('Mention picker (component, 5.1.4)', () => {
   const CANDIDATES = [
-    { id: 'user_bo', name: 'Bo Philips', email: 'bophilips@prodect.co' },
-    { id: 'user_eikooc', name: 'Eikooc', email: 'eikooc@prodect.co' },
-    { id: 'user_julian', name: 'Julian', email: 'julian@prodect.co' },
+    { id: 'user_bo', name: 'Bo Philips', email: 'bophilips@motir.co' },
+    { id: 'user_eikooc', name: 'Eikooc', email: 'eikooc@motir.co' },
+    { id: 'user_julian', name: 'Julian', email: 'julian@motir.co' },
   ];
 
   // The popup renders through ReactRenderer, which mounts via the editor's
@@ -278,7 +278,7 @@ describe('Mention picker (component, 5.1.4)', () => {
     const options = anchor.querySelectorAll('[role="option"]');
     expect(options.length).toBe(3);
     expect(options[0]?.textContent).toContain('Bo Philips');
-    expect(options[0]?.textContent).toContain('bophilips@prodect.co');
+    expect(options[0]?.textContent).toContain('bophilips@motir.co');
     expect(options[0]?.getAttribute('aria-selected')).toBe('true');
 
     // ↓ moves the active row (aria-activedescendant + aria-selected follow)…

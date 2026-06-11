@@ -434,7 +434,7 @@ describe('ActivitySection (5.5.4)', () => {
     items = within(screen.getByRole('list', { name: 'History' })).getAllByRole('listitem');
     expect(items[0]?.textContent).toContain('Priority');
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
-    expect(window.localStorage.getItem('prodect.issues.comments.sort')).toBe('desc');
+    expect(window.localStorage.getItem('motir.issues.comments.sort')).toBe('desc');
   });
 
   // ── the All stream ──

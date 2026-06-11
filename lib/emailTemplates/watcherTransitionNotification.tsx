@@ -116,7 +116,7 @@ function buildPlainText(p: WatcherTransitionNotificationEmailProps, t: T): strin
     '',
     t('reason', { identifier: p.workItemIdentifier }),
     '',
-    '— Prodect',
+    '— Motir',
   ].join('\n');
 }
 

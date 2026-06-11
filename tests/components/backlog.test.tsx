@@ -146,7 +146,7 @@ describe('BacklogContainer (4.2.3 read render)', () => {
       sprintIssues: { items: [], nextCursor: null, totalCount: 0 },
     });
 
-    render(<BacklogContainer workflow={workflow} members={members} projectName="prodect" />);
+    render(<BacklogContainer workflow={workflow} members={members} projectName="motir" />);
 
     expect(await screen.findByText('Sprint 24')).toBeTruthy();
     expect(screen.getByText('Sprint 25')).toBeTruthy();
@@ -167,7 +167,7 @@ describe('BacklogContainer (4.2.3 read render)', () => {
       sprintPoints: { committed: 21, completed: 8, remaining: 13 },
     });
 
-    render(<BacklogContainer workflow={workflow} members={members} projectName="prodect" />);
+    render(<BacklogContainer workflow={workflow} members={members} projectName="motir" />);
 
     // The committed-points slot shows the live committed · done · left figure
     // (Subtask 4.3.5 upgraded the 4.4.9 committed-only fill to the full design),
@@ -185,7 +185,7 @@ describe('BacklogContainer (4.2.3 read render)', () => {
       sprintPoints: { committed: 0, completed: 0, remaining: 0 },
     });
 
-    render(<BacklogContainer workflow={workflow} members={members} projectName="prodect" />);
+    render(<BacklogContainer workflow={workflow} members={members} projectName="motir" />);
 
     expect(await screen.findByText('Sprint 24')).toBeTruthy();
     expect(await screen.findByLabelText('Sprint has no estimated points')).toBeTruthy();
@@ -202,7 +202,7 @@ describe('BacklogContainer (4.2.3 read render)', () => {
       sprintIssues: { items: [], nextCursor: null, totalCount: 0 },
     });
 
-    render(<BacklogContainer workflow={workflow} members={members} projectName="prodect" />);
+    render(<BacklogContainer workflow={workflow} members={members} projectName="motir" />);
 
     // Header reflects the 1,284 aggregate even though only 2 rows are loaded.
     await waitFor(() => expect(screen.getByTestId('backlog-count').textContent).toContain('284'));
@@ -223,7 +223,7 @@ describe('BacklogContainer (4.2.3 read render)', () => {
       sprintIssues: { items: [], nextCursor: null, totalCount: 0 },
     });
 
-    render(<BacklogContainer workflow={workflow} members={members} projectName="prodect" />);
+    render(<BacklogContainer workflow={workflow} members={members} projectName="motir" />);
 
     expect(await screen.findByTestId('backlog-row-PROD-150')).toBeTruthy();
     // status key → workflow label; assignee id → member initial avatar (title).
@@ -238,7 +238,7 @@ describe('BacklogContainer (4.2.3 read render)', () => {
       sprintIssues: { items: [], nextCursor: null, totalCount: 0 },
     });
 
-    render(<BacklogContainer workflow={workflow} members={members} projectName="prodect" />);
+    render(<BacklogContainer workflow={workflow} members={members} projectName="motir" />);
 
     expect(await screen.findByText('Backlog is clear')).toBeTruthy();
   });
@@ -251,7 +251,7 @@ describe('BacklogContainer (4.2.3 read render)', () => {
       sprintIssues: { items: [], nextCursor: null, totalCount: 0 },
     });
 
-    render(<BacklogContainer workflow={workflow} members={members} projectName="prodect" />);
+    render(<BacklogContainer workflow={workflow} members={members} projectName="motir" />);
 
     expect(await screen.findByText("Couldn't load sprints")).toBeTruthy();
   });
@@ -263,7 +263,7 @@ describe('BacklogContainer (4.2.3 read render)', () => {
       sprintIssues: { items: [], nextCursor: null, totalCount: 0 },
     });
 
-    render(<BacklogContainer workflow={workflow} members={members} projectName="prodect" />);
+    render(<BacklogContainer workflow={workflow} members={members} projectName="motir" />);
     // Synchronous first paint: the fetch hasn't resolved yet.
     expect(screen.getByTestId('backlog-skeleton')).toBeTruthy();
   });
@@ -275,7 +275,7 @@ describe('BacklogContainer (4.2.3 read render)', () => {
       sprintIssues: { items: [], nextCursor: null, totalCount: 0 },
     });
 
-    render(<BacklogContainer workflow={workflow} members={members} projectName="prodect" />);
+    render(<BacklogContainer workflow={workflow} members={members} projectName="motir" />);
 
     const row = await screen.findByTestId('backlog-row-PROD-150');
     // `useSortable` marks the row a draggable item (aria-roledescription) inside

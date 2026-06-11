@@ -1,16 +1,16 @@
 // Email-sending abstraction.
 //
-// Every caller in prodect-core uses `sendEmail(...)` from this module. No
+// Every caller in motir-core uses `sendEmail(...)` from this module. No
 // caller imports a vendor SDK directly. That makes "which mailer to run in
 // production" a per-project planner decision (Layer 2 — pre-plan work for
-// each Prodect-planned project), not a starter-baked assumption (Layer 1).
+// each Motir-planned project), not a starter-baked assumption (Layer 1).
 //
-// v1 of prodect-core ships THREE dev-grade providers:
+// v1 of motir-core ships THREE dev-grade providers:
 //   - 'console' (default) — prints emails to stdout so dev/test flows can
 //     grep the reset link. Tests in tests/password-reset.test.ts capture
 //     it via a console.log spy.
 //   - 'file'              — appends each email as a JSON line to the file
-//     at EMAIL_OUTBOX_PATH (default /tmp/prodect-test-emails.jsonl). Used
+//     at EMAIL_OUTBOX_PATH (default /tmp/motir-test-emails.jsonl). Used
 //     by the Playwright E2E suite, which can't reliably tap the dev
 //     server's stdout from a separate test process. Dev/test only — the
 //     file is unauthenticated, so this MUST NOT be selected in
@@ -18,7 +18,7 @@
 //     load with a clear message.
 //   - 'resend' / 'postmark' — stubs that throw a loud not-yet-implemented
 //     error if selected. Real provider wiring is planner work for each
-//     Prodect-planned project's pre-plan phase.
+//     Motir-planned project's pre-plan phase.
 //
 // The provider is resolved eagerly at module-import time (see the
 // `sendEmail` export at the bottom). An unknown EMAIL_PROVIDER value
@@ -79,8 +79,8 @@ const consoleProvider: SendEmail = async (msg) => {
 function unimplementedProvider(name: string): SendEmail {
   return async () => {
     throw new Error(
-      `Email provider '${name}' is not yet implemented in prodect-core. ` +
-        `Production providers are planner work for each Prodect-planned project's ` +
+      `Email provider '${name}' is not yet implemented in motir-core. ` +
+        `Production providers are planner work for each Motir-planned project's ` +
         `pre-plan phase — see lib/email.ts and the Story 1.1 decisions log. ` +
         `Set EMAIL_PROVIDER=console for local dev.`,
     );
@@ -88,7 +88,7 @@ function unimplementedProvider(name: string): SendEmail {
 }
 
 // Dev-only file provider. Appends each email as a single JSON line to the
-// path in EMAIL_OUTBOX_PATH (defaults to /tmp/prodect-test-emails.jsonl).
+// path in EMAIL_OUTBOX_PATH (defaults to /tmp/motir-test-emails.jsonl).
 // Playwright E2E specs subscribe to this file to read the reset link —
 // the dev server's stdout isn't reliably tappable from a separate test
 // process, but a file on disk is.
@@ -114,7 +114,7 @@ function fileProvider(): SendEmail {
         `Set EMAIL_PROVIDER to a real provider (or 'console' for dev).`,
     );
   }
-  const path = process.env['EMAIL_OUTBOX_PATH'] ?? '/tmp/prodect-test-emails.jsonl';
+  const path = process.env['EMAIL_OUTBOX_PATH'] ?? '/tmp/motir-test-emails.jsonl';
   return async (msg) => {
     const line =
       JSON.stringify({

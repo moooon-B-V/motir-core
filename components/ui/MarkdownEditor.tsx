@@ -228,7 +228,7 @@ export function MarkdownEditor({
     content: value,
     editorProps: {
       attributes: {
-        class: 'prodect-prose',
+        class: 'motir-prose',
         role: 'textbox',
         'aria-multiline': 'true',
         'aria-label': label,

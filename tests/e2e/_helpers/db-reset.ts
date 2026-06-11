@@ -9,7 +9,7 @@ import { rmSync } from 'node:fs';
 import { db } from '@/lib/db';
 import { truncateAuthTables } from '@/tests/helpers/db';
 
-const EMAIL_OUTBOX_PATH = process.env['EMAIL_OUTBOX_PATH'] ?? '/tmp/prodect-test-emails.jsonl';
+const EMAIL_OUTBOX_PATH = process.env['EMAIL_OUTBOX_PATH'] ?? '/tmp/motir-test-emails.jsonl';
 
 /**
  * Truncates the auth-related tables (user, account, session, verification)

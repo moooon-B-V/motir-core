@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils/cn';
  *
  * @example
  * <Input label="Email" type="email" helperText="We'll never share it" />
- * <Input label="Domain" addonStart={<Globe />} addonEnd=".prodect.dev" />
+ * <Input label="Domain" addonStart={<Globe />} addonEnd=".motir.dev" />
  */
 export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'prefix'> {
   label?: string;

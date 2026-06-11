@@ -17,7 +17,7 @@ import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
 // "Story 1.5 will move project nav into a left sidebar" promise from the
 // 1.3.4 minimal form is now fulfilled, so the project switcher (and its
 // workspace-gated hairline divider) is gone from here. No wordmark slot
-// (brand-mark deferral, PRODECT.md).
+// (brand-mark deferral, MOTIR.md).
 
 export interface TopNavProps {
   workspaces: WorkspaceSummaryDTO[];

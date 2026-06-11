@@ -4,9 +4,9 @@ import { type ReactNode } from 'react';
  * Shared frame for the auth pages (sign-in, sign-up, reset-password,
  * reset-password/[token]). A white card centered on a tinted page
  * background — see design/auth/* for the original Story-1.1 mockups
- * and the v1.1.10 update note in PRODECT.md.
+ * and the v1.1.10 update note in MOTIR.md.
  *
- * Wordmark is intentionally absent. In a real Prodect-planned project,
+ * Wordmark is intentionally absent. In a real Motir-planned project,
  * the brand mark (wordmark + logomark) is scheduled as a late-Epic-4
  * Subtask (agent or human task) once the product has enough surface
  * for the brand decision to be informed. Until then we ship without

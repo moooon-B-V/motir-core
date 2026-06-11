@@ -99,7 +99,7 @@ test.describe('backlog — grooming session (4.2.6)', () => {
 
   test.beforeAll(async () => {
     await resetDatabase();
-    seed = await seedGroomingBacklog('backlog-groom-owner@prodect.dev');
+    seed = await seedGroomingBacklog('backlog-groom-owner@motir.dev');
   });
 
   test('renders the sprint container over the ranked backlog; the Backlog nav leads here', async ({
@@ -260,7 +260,7 @@ test.describe('backlog — at scale (finding #57, 4.2.6)', () => {
 
   test.beforeAll(async () => {
     await resetDatabase();
-    seed = await seedScaleBacklog('backlog-scale-owner@prodect.dev', TOTAL);
+    seed = await seedScaleBacklog('backlog-scale-owner@motir.dev', TOTAL);
   });
 
   test('renders a bounded count header + a virtualized list (DOM stays bounded)', async ({

@@ -47,7 +47,7 @@ import {
 import { sprintsService } from '@/lib/services/sprintsService';
 import type { BoardProjectionDto } from '@/lib/dto/boards';
 
-const OWNER_EMAIL = 'board-scrum-owner@prodect.dev';
+const OWNER_EMAIL = 'board-scrum-owner@motir.dev';
 
 /** GET /api/board?boardId= → a SPECIFIC board's projection (the 3.7.5 selection
  *  param) — the scrum board here is not the project default, so the bare

@@ -17,7 +17,7 @@
 
 import { rm, writeFile } from 'node:fs/promises';
 
-const EMAIL_FAULT_PATH = process.env['EMAIL_FAULT_PATH'] ?? '/tmp/prodect-test-email-fault';
+const EMAIL_FAULT_PATH = process.env['EMAIL_FAULT_PATH'] ?? '/tmp/motir-test-email-fault';
 
 /**
  * Arm the fault: any subsequent send whose recipient contains `recipientPattern`

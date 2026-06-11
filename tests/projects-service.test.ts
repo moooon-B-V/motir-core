@@ -68,7 +68,7 @@ describe('createProject — happy path', () => {
     const project = await projectsService.createProject({
       workspaceId: workspace.id,
       actorUserId: owner.id,
-      name: 'Prodect Core',
+      name: 'Motir Core',
     });
 
     // DTO shape: id / name / slug / identifier / archivedAt ONLY — never a
@@ -83,12 +83,12 @@ describe('createProject — happy path', () => {
       'name',
       'slug',
     ]);
-    expect(project.name).toBe('Prodect Core');
-    expect(project.slug).toBe('prodect-core');
+    expect(project.name).toBe('Motir Core');
+    expect(project.slug).toBe('motir-core');
     expect(project.archivedAt).toBeNull();
     expect(project.identifier).toMatch(/^[A-Z0-9]{3,5}$/);
-    // "Prodect Core" → strip non-alnum → "PRODECTCORE" → first 5 → "PRODE"
-    expect(project.identifier).toBe('PRODE');
+    // "Motir Core" → strip non-alnum → "MOTIRCORE" → first 5 → "MOTIR"
+    expect(project.identifier).toBe('MOTIR');
 
     // The row IS persisted with the bookkeeping fields, just not in the DTO.
     const persisted = await db.project.findUnique({ where: { id: project.id } });
@@ -125,8 +125,8 @@ describe('createProject — happy path', () => {
 
 describe('createProject — identifier collision retry', () => {
   it('appends a numeric suffix so the second project gets a distinct identifier in the same workspace', async () => {
-    // Use two DISTINCT names so the slugs differ ("prodect-core" vs
-    // "prodect-core-two"), then force the identifier to collide by passing
+    // Use two DISTINCT names so the slugs differ ("motir-core" vs
+    // "motir-core-two"), then force the identifier to collide by passing
     // the same override. Targeted at the identifier-retry path only — the
     // slug-retry path has its own test below.
     const { owner, workspace } = await makeWorkspace('owner@example.com', 'Acme');
@@ -134,13 +134,13 @@ describe('createProject — identifier collision retry', () => {
     const first = await projectsService.createProject({
       workspaceId: workspace.id,
       actorUserId: owner.id,
-      name: 'Prodect Core',
+      name: 'Motir Core',
       identifier: 'PRODE',
     });
     const second = await projectsService.createProject({
       workspaceId: workspace.id,
       actorUserId: owner.id,
-      name: 'Prodect Core Two',
+      name: 'Motir Core Two',
       identifier: 'PRODE',
     });
 

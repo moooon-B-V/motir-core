@@ -161,4 +161,4 @@ row races). Every RLS assertion binds its GUCs transaction-locally
 discarded at each transaction boundary — no cross-test GUC bleed. `beforeEach`
 truncates the touched tables (`tests/helpers/db.ts`), so row state never carries
 between cases. The only permitted `vi.mock` is `getSession()`; every DB/external
-call goes through the real path (`prodect-core/CLAUDE.md`).
+call goes through the real path (`motir-core/CLAUDE.md`).

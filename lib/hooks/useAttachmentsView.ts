@@ -10,10 +10,10 @@ import { useSyncExternalStore } from 'react';
  * strip default (the mockup's primary view) and the stored choice applies
  * right after hydration without a setState-in-effect.
  *
- * Persisted under `prodect.issues.attachments.view` in the `prodect.*`
+ * Persisted under `motir.issues.attachments.view` in the `motir.*`
  * namespace.
  */
-export const ATTACHMENTS_VIEW_STORAGE_KEY = 'prodect.issues.attachments.view';
+export const ATTACHMENTS_VIEW_STORAGE_KEY = 'motir.issues.attachments.view';
 
 export type AttachmentsView = 'strip' | 'list';
 

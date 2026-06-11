@@ -19,7 +19,7 @@ import {
 } from '@/lib/theme/types';
 
 /**
- * Theme context for Prodect's two-axis design system.
+ * Theme context for Motir's two-axis design system.
  *
  * `pattern` is what the user picked (system | light | dark).
  * `resolvedPattern` is what's currently applied (light | dark) — these

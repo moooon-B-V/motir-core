@@ -34,8 +34,8 @@ function component(over: Partial<ComponentWithCountDto> = {}): ComponentWithCoun
 }
 
 const members: WorkspaceMemberDTO[] = [
-  { userId: 'u-bob', name: 'Bo', email: 'bophilips@prodect.co', role: 'member' },
-  { userId: 'u-odie', name: 'Odie', email: 'odie@prodect.co', role: 'member' },
+  { userId: 'u-bob', name: 'Bo', email: 'bophilips@motir.co', role: 'member' },
+  { userId: 'u-odie', name: 'Odie', email: 'odie@motir.co', role: 'member' },
 ];
 
 function render(ui: ReactElement) {
@@ -81,7 +81,7 @@ describe('the populated admin list', () => {
         name: 'API',
         description: 'The public REST API and its background jobs.',
         defaultAssigneeId: 'u-bob',
-        defaultAssignee: { id: 'u-bob', name: 'Bo', email: 'bophilips@prodect.co' },
+        defaultAssignee: { id: 'u-bob', name: 'Bo', email: 'bophilips@motir.co' },
         itemCount: 12,
       }),
       component({ name: 'Web', itemCount: 7 }),
@@ -212,7 +212,7 @@ describe('edit', () => {
       name: 'API',
       description: 'Old gloss.',
       defaultAssigneeId: 'u-bob',
-      defaultAssignee: { id: 'u-bob', name: 'Bo', email: 'bophilips@prodect.co' },
+      defaultAssignee: { id: 'u-bob', name: 'Bo', email: 'bophilips@motir.co' },
       itemCount: 3,
     });
     stubFetch((url, init) => {

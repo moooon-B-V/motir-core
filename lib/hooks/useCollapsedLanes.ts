@@ -15,11 +15,11 @@ import { useCallback, useSyncExternalStore } from 'react';
  * `setState`. The snapshot is a cached, referentially-stable `Set` so React's
  * snapshot comparison doesn't loop.
  *
- * Persisted under `prodect.board.collapsedLanes.<boardId>` (a JSON array of the
- * collapsed lane keys), in the shared `prodect.*` namespace. Default: none
+ * Persisted under `motir.board.collapsedLanes.<boardId>` (a JSON array of the
+ * collapsed lane keys), in the shared `motir.*` namespace. Default: none
  * collapsed (every lane expanded).
  */
-export const COLLAPSED_LANES_STORAGE_PREFIX = 'prodect.board.collapsedLanes.';
+export const COLLAPSED_LANES_STORAGE_PREFIX = 'motir.board.collapsedLanes.';
 
 const EMPTY: ReadonlySet<string> = new Set();
 const listeners = new Set<() => void>();

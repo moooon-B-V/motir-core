@@ -18,10 +18,10 @@ import { useCallback, useSyncExternalStore } from 'react';
  *     primitive for subscribing to an external system (here, the store +
  *     the cross-tab `storage` event), instead of `useEffect` + `setState`.
  *
- * Persisted under `prodect.shell.sidebar.collapsed` in the same `prodect.*`
+ * Persisted under `motir.shell.sidebar.collapsed` in the same `motir.*`
  * namespace as the theme keys. Default `false` (expanded).
  */
-export const SIDEBAR_COLLAPSED_STORAGE_KEY = 'prodect.shell.sidebar.collapsed';
+export const SIDEBAR_COLLAPSED_STORAGE_KEY = 'motir.shell.sidebar.collapsed';
 
 const listeners = new Set<() => void>();
 

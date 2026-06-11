@@ -1,5 +1,5 @@
 // Parse a work item's context-file references out of its Markdown body
-// (Subtask 7.0.2). Prodect's plan model stores a work item's context refs as a
+// (Subtask 7.0.2). Motir's plan model stores a work item's context refs as a
 // `## Context refs` sub-section of `descriptionMd` (the body is `description` +
 // `## Acceptance criteria` + `## Context refs`, per `scripts/plan-seed/types.ts`)
 // — there is NO `contextRefs` column on `work_item` (finding #62; the 7.0.3

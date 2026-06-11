@@ -16,11 +16,11 @@ import { hash, verify } from './passwords';
 // policy lives in Better-Auth's `account.accountLinking` config (trustedProviders:
 // ['google']) — when a Google sign-in arrives with an email that matches an
 // existing User, Better-Auth links the new Account row to that User instead
-// of creating a duplicate. This is Story 1.1's decision (PRODECT.md "Current
+// of creating a duplicate. This is Story 1.1's decision (MOTIR.md "Current
 // state"); the security trade-off (Google-compromise → account takeover) is
 // acceptable for v1 because Google has already verified the email.
 //
-// Each Prodect-planned project supplies its own Google Cloud OAuth credentials
+// Each Motir-planned project supplies its own Google Cloud OAuth credentials
 // (per the planner-as-consumer principle, notes.html mistake #22): no shared
 // defaults ship. Missing creds → requiredEnv throws at module load, surfacing
 // the gap loudly instead of letting the Google button error mysteriously at
@@ -56,9 +56,9 @@ export const auth = betterAuth({
   //
   // Resolution order:
   //   1. BETTER_AUTH_URL — explicit override; set on production with the
-  //      canonical public URL (e.g. https://prodect-core.vercel.app).
+  //      canonical public URL (e.g. https://motir-core.vercel.app).
   //   2. VERCEL_BRANCH_URL — Vercel-injected, the stable branch-alias URL
-  //      (e.g. prodect-core-git-<branch>-<team>.vercel.app). This is the
+  //      (e.g. motir-core-git-<branch>-<team>.vercel.app). This is the
   //      URL browsers actually visit on preview deployments.
   //   3. VERCEL_URL — fallback to the per-deployment unique URL. Note:
   //      Vercel's docs warn this var "cannot be used in conjunction with

@@ -26,8 +26,8 @@ afterEach(() => {
 });
 
 const members: WorkspaceMemberDTO[] = [
-  { userId: 'u_bo', name: 'Bo Philips', email: 'bophilips@prodect.co', role: 'member' },
-  { userId: 'u_odie', name: 'Odie Park', email: 'odie@prodect.co', role: 'member' },
+  { userId: 'u_bo', name: 'Bo Philips', email: 'bophilips@motir.co', role: 'member' },
+  { userId: 'u_odie', name: 'Odie Park', email: 'odie@motir.co', role: 'member' },
 ];
 
 function makeField(overrides: Partial<CustomFieldWithValueDto> = {}): CustomFieldWithValueDto {

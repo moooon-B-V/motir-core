@@ -13,7 +13,7 @@
 // path seedActiveProject + the work-item integration tests use, and the path
 // `pnpm db:seed:large` (2.5.16) drives. Going through the services (not raw
 // inserts) keeps the kind-parent + key-allocation invariants intact, so the
-// seeded tree is exactly what Prodect itself would render.
+// seeded tree is exactly what Motir itself would render.
 
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';

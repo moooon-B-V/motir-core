@@ -1,13 +1,13 @@
-# prodect-core
+# motir-core
 
-Open-source PM substrate for **Prodect** — an AI-native project management tool
-for small startup teams. The user describes what they want to build; Prodect
+Open-source PM substrate for **Motir** — an AI-native project management tool
+for small startup teams. The user describes what they want to build; Motir
 produces a structured Epic → Story → Subtask tree; coding agents execute the
-Subtasks one at a time using prompts Prodect generates.
+Subtasks one at a time using prompts Motir generates.
 
 ## Open source
 
-`prodect-core` is **open source under the GPL-3.0 license** (see [LICENSE](LICENSE)).
+`motir-core` is **open source under the GPL-3.0 license** (see [LICENSE](LICENSE)).
 This repo is the **PM substrate**: Work Items, Stories, dependency graph,
 multi-tenant workspaces, projects, the tree-view UI, GitHub integration, the
 human-todo queue, the delivery agent. The kind of thing Jira and Linear are,
@@ -15,15 +15,22 @@ but open and AI-native.
 
 The **closed-source planning intelligence** — the planner agent, prompt
 generation, async-expansion loop, shared-context retrieval — ships separately
-as the proprietary [`prodect-ai`](https://github.com/moooon-B-V/prodect-ai) service.
-It runs headless and is called server-to-server by `prodect-core`. Browsers
-never talk to `prodect-ai` directly, so the user experience stays unified
+as the proprietary [`motir-ai`](https://github.com/moooon-B-V/motir-ai) service.
+It runs headless and is called server-to-server by `motir-core`. Browsers
+never talk to `motir-ai` directly, so the user experience stays unified
 (one app, one domain, one cookie) and the GPL boundary stays clean (a network
 service interface is not a derivative work).
 
 See `vision.html` principle #19 and `feasibility.html` ADR-008 in the planning
 docs for the open-core architecture rationale. This split follows the same
 playbook as GitLab, Sentry, Plane, and Mattermost.
+
+> **Rename interim**: these repos are being renamed from their pre-rebrand
+> `prodect-*` names to `motir-core` / `motir-ai`. GitHub redirects the old
+> repo URLs automatically, so existing clones, remotes, and links keep
+> working; update remotes with `git remote set-url` at leisure. (Vercel does
+> NOT redirect — the `*.vercel.app` URLs below apply once the Vercel project
+> rename lands.)
 
 ## Stack
 
@@ -40,7 +47,7 @@ playbook as GitLab, Sentry, Plane, and Mattermost.
 - **CI**: [GitHub Actions](https://docs.github.com/actions) — three parallel jobs (lint, typecheck, build) on every PR; build uses a Postgres service container
 
 This Stack section is the **authoritative reference** for every later coding-agent
-prompt. Prodect's planner (Epic 4) reads it verbatim into Subtask prompts so
+prompt. Motir's planner (Epic 4) reads it verbatim into Subtask prompts so
 generated code matches the project's actual stack.
 
 ## Local setup
@@ -56,7 +63,7 @@ pnpm install               # installs deps + sets up husky pre-commit hook
 pnpm dev                   # http://localhost:3000
 ```
 
-You should see a placeholder "Prodect" page on a dark theme — not the default
+You should see a placeholder "Motir" page on a dark theme — not the default
 `create-next-app` welcome page.
 
 ### Scripts
@@ -92,7 +99,7 @@ public/       Static assets
 
 ## Agent dispatch (BYOK)
 
-Prodect exposes a stable agent contract so you can drive your own coding agent
+Motir exposes a stable agent contract so you can drive your own coding agent
 (Claude Code / Cursor / Aider / your own script) against the project's ready
 set — the work items whose blockers have all landed, so they're safe to start:
 
@@ -131,12 +138,12 @@ integration, which auto-provisions an isolated database branch for each
 Vercel preview deploy.
 
 - **Production**: every push to `main` triggers a production deploy at
-  <https://prodect-core.vercel.app> (Vercel's auto-assigned default; a real
+  <https://motir-core.vercel.app> (Vercel's auto-assigned default; a real
   apex domain lands in Epic 5).
 - **Previews**: every PR triggers an isolated preview deploy. Vercel posts
   the preview URL as a PR comment. The preview URL follows the pattern
-  `prodect-core-git-<branch>-zhuyue11s-projects.vercel.app` (per-branch
-  stable) or `prodect-core-<hash>-zhuyue11s-projects.vercel.app` (per-deploy).
+  `motir-core-git-<branch>-zhuyue11s-projects.vercel.app` (per-branch
+  stable) or `motir-core-<hash>-zhuyue11s-projects.vercel.app` (per-deploy).
   Each preview gets its own Neon DB branch so PRs can safely run destructive
   migrations without affecting production.
 - **Rollback**: Vercel dashboard → Deployments → click any previous deploy
@@ -147,7 +154,7 @@ Vercel preview deploy.
   `lib/db.ts`) and `DATABASE_URL_UNPOOLED` (direct connection — used by
   `prisma migrate deploy`, since PgBouncer in transaction mode breaks
   migrations). The other env vars (`POSTGRES_URL`, `PGHOST`, etc.) are
-  unused by Prodect and can be ignored. Never commit secrets to git.
+  unused by Motir and can be ignored. Never commit secrets to git.
   `.env.example` documents what's needed locally.
 - **Build pipeline**: Vercel runs `pnpm install` (which triggers
   `postinstall: prisma generate` to refresh the Prisma client against the
@@ -174,6 +181,6 @@ Vercel preview deploy.
 ## License
 
 [GPL-3.0-only](LICENSE). The planning intelligence ships separately under a
-proprietary license in [`moooon-B-V/prodect-ai`](https://github.com/moooon-B-V/prodect-ai).
+proprietary license in [`moooon-B-V/motir-ai`](https://github.com/moooon-B-V/motir-ai).
 See `feasibility.html` ADR-008 in the planning docs for the open-core split
 rationale.

@@ -1,8 +1,8 @@
 {
-  "name": "prodect-core",
+  "name": "motir-core",
   "version": "0.0.0",
   "private": true,
-  "description": "Open-source PM substrate for Prodect — an AI-native project management tool. GPL-3.0.",
+  "description": "Open-source PM substrate for Motir — an AI-native project management tool. GPL-3.0.",
   "license": "GPL-3.0-only",
   "engines": {
     "node": ">=22"

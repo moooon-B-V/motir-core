@@ -52,7 +52,7 @@ for (const k of ['BOARD_ISSUE_CAP_OVERRIDE', 'DONE_AGE_WINDOW_DAYS_OVERRIDE']) {
 process.env['INNGEST_DEV'] ??= '1';
 
 /**
- * Playwright config for prodect-core's E2E auth smoke suite.
+ * Playwright config for motir-core's E2E auth smoke suite.
  *
  * Specs live in tests/e2e/. The webServer block spawns `pnpm dev` on
  * :3000 and waits for it to come up; in CI it's a fresh server per job,
@@ -60,7 +60,7 @@ process.env['INNGEST_DEV'] ??= '1';
  *
  * Email delivery during E2E uses the dev-only 'file' provider from
  * lib/email.ts (see EMAIL_PROVIDER + EMAIL_OUTBOX_PATH below). The
- * specs read /tmp/prodect-test-emails.jsonl to capture reset links.
+ * specs read /tmp/motir-test-emails.jsonl to capture reset links.
  *
  * Tagged-suite convention: tests in this Story carry an `@smoke` tag in
  * their describe/test titles. Playwright doesn't have first-class tag
@@ -129,7 +129,7 @@ export default defineConfig({
       stderr: 'pipe',
       env: {
         EMAIL_PROVIDER: 'file',
-        EMAIL_OUTBOX_PATH: path.resolve('/tmp/prodect-test-emails.jsonl'),
+        EMAIL_OUTBOX_PATH: path.resolve('/tmp/motir-test-emails.jsonl'),
         // E2E_TEST_OAUTH=1 makes instrumentation.ts install an undici
         // MockAgent that intercepts POSTs to oauth2.googleapis.com/token,
         // returning a synthetic id_token. See instrumentation.ts +
@@ -137,7 +137,7 @@ export default defineConfig({
         // (and any local dev where this var isn't set) leave the dispatcher
         // untouched.
         E2E_TEST_OAUTH: '1',
-        E2E_TEST_OAUTH_USER_PATH: path.resolve('/tmp/prodect-test-oauth-user.json'),
+        E2E_TEST_OAUTH_USER_PATH: path.resolve('/tmp/motir-test-oauth-user.json'),
         // PRODECT_FINDINGS #8: hand the dev server the same origin Playwright
         // drives. lib/auth/index.ts uses BETTER_AUTH_URL as both its baseURL and
         // a trustedOrigins entry, so this is what lets /api/auth/* POSTs pass the
@@ -159,7 +159,7 @@ export default defineConfig({
         // DLQ → replay path. The file is absent (fault disarmed) unless a spec
         // writes it via tests/e2e/_helpers/email-fault.ts; it is test-only and
         // refused in production.
-        EMAIL_FAULT_PATH: path.resolve('/tmp/prodect-test-email-fault'),
+        EMAIL_FAULT_PATH: path.resolve('/tmp/motir-test-email-fault'),
         // Subtask 1.5.6: hide the Next dev-tools indicator (a bottom-left
         // fixed portal) so it stops occluding the sidebar footer's collapse
         // toggle during the browser-driven shell-flows journey. next.config.ts

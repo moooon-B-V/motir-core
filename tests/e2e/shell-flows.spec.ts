@@ -205,7 +205,7 @@ test.describe('@smoke shell journeys', () => {
     // regardless of OS. setPattern writes localStorage SYNCHRONOUSLY, so the
     // persisted pattern is the race-free loop signal (the data-theme attribute
     // lands one React effect later — reading it inside the loop would race).
-    const readPattern = () => page.evaluate(() => localStorage.getItem('prodect.theme.pattern'));
+    const readPattern = () => page.evaluate(() => localStorage.getItem('motir.theme.pattern'));
     for (let i = 0; i < 4 && (await readPattern()) !== 'dark'; i++) {
       const palette = await openPalette(page, mod, 'theme');
       await expect(palette.getByRole('option', { name: 'Toggle theme' })).toBeVisible();

@@ -57,7 +57,7 @@ function makeJwt(payload: Record<string, unknown>): string {
 
 export function installGoogleTokenMock(): void {
   const TEST_USER_PATH =
-    process.env['E2E_TEST_OAUTH_USER_PATH'] ?? '/tmp/prodect-test-oauth-user.json';
+    process.env['E2E_TEST_OAUTH_USER_PATH'] ?? '/tmp/motir-test-oauth-user.json';
 
   const agent = new MockAgent();
   // Allow real network for everything we don't explicitly intercept (so

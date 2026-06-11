@@ -428,7 +428,7 @@ test.describe('@a11y shell accessibility', () => {
   // treegrid semantics (2.5.2) + the List's sortable-header `aria-sort` (2.5.8)
   // + the AA-safe Pills (#35) must all hold on the REAL route, not just the
   // /tokens specimen. Seeds server-side through workItemsService (the sanctioned
-  // test cross-layer reach) so the fixture is exactly what Prodect renders.
+  // test cross-layer reach) so the fixture is exactly what Motir renders.
   async function seedIssueTree(page: Page, email: string) {
     await signUp(page, email);
     await createFirstProject(page, 'Mobile App');

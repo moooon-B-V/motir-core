@@ -14,14 +14,14 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 const SELF = 'u-self';
 
 const members: ProjectMemberDTO[] = [
-  { userId: SELF, name: 'Zhu Yue', email: 'zhuyue@prodect.co', role: 'admin' },
-  { userId: 'u-bob', name: 'Bo Philips', email: 'bophilips@prodect.co', role: 'member' },
-  { userId: 'u-odie', name: 'Odie', email: 'odie@prodect.co', role: 'viewer' },
+  { userId: SELF, name: 'Zhu Yue', email: 'zhuyue@motir.co', role: 'admin' },
+  { userId: 'u-bob', name: 'Bo Philips', email: 'bophilips@motir.co', role: 'member' },
+  { userId: 'u-odie', name: 'Odie', email: 'odie@motir.co', role: 'viewer' },
 ];
 
 const workspaceMembers: WorkspaceMemberDTO[] = [
   ...members.map((m) => ({ userId: m.userId, name: m.name, email: m.email, role: 'member' })),
-  { userId: 'u-julian', name: 'Julian', email: 'julian@prodect.co', role: 'member' },
+  { userId: 'u-julian', name: 'Julian', email: 'julian@motir.co', role: 'member' },
 ];
 
 const fetchMock = vi.fn();
@@ -47,7 +47,7 @@ function renderAdmin(overrides: Partial<React.ComponentProps<typeof ProjectMembe
     <ToastProvider>
       <ProjectMembersSettings
         projectKey="PROD"
-        projectName="prodect"
+        projectName="motir"
         workspaceName="moooon"
         accessLevel="private"
         members={members}
@@ -81,7 +81,7 @@ describe('ProjectMembersSettings (6.4.5)', () => {
       ok: true,
       status: 201,
       json: async () => ({
-        member: { userId: 'u-julian', name: 'Julian', email: 'julian@prodect.co', role: 'member' },
+        member: { userId: 'u-julian', name: 'Julian', email: 'julian@motir.co', role: 'member' },
       }),
     });
     renderAdmin({ accessLevel: 'open', members });
@@ -153,7 +153,7 @@ describe('ProjectMembersSettings (6.4.5)', () => {
     // A project with two admins so both have a Remove button; reject the call.
     const twoAdmins: ProjectMemberDTO[] = [
       members[0]!,
-      { userId: 'u-bob', name: 'Bo Philips', email: 'bophilips@prodect.co', role: 'admin' },
+      { userId: 'u-bob', name: 'Bo Philips', email: 'bophilips@motir.co', role: 'admin' },
     ];
     renderAdmin({ members: twoAdmins });
 

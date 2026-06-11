@@ -11,7 +11,7 @@ import { resetDatabase, db } from './_helpers/db-reset';
 
 const PASSWORD = 'projects-flow-pass-123';
 const USER_EMAIL = 'e2e-projects@example.com';
-const SCREENSHOT_DIR = '/tmp/prodect-smoke';
+const SCREENSHOT_DIR = '/tmp/motir-smoke';
 
 test.beforeEach(async () => {
   await resetDatabase();

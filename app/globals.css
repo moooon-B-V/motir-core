@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 
 /*
- * Prodect design system — two-axis theme architecture.
+ * Motir design system — two-axis theme architecture.
  *
  * Axis 1 — COLOR
  *   data-theme="light|dark"   — light/dark base
@@ -25,7 +25,7 @@
  *     `npx getdesign@latest add notion` — full file in docs/inspiration/.
  *   - Figma's shape language (pill buttons via --radius-pill, generous
  *     letter-spacing, mono caption/eyebrow). Sourced via `add figma`.
- *   - Prodect's own typography: Inter (sans body) + Source Serif 4 (serif
+ *   - Motir's own typography: Inter (sans body) + Source Serif 4 (serif
  *     headlines) + JetBrains Mono (mono) loaded via next/font in
  *     app/layout.tsx.
  *

@@ -57,7 +57,7 @@ test.describe('sprint lifecycle (4.4.7)', () => {
 
   test.beforeAll(async () => {
     await resetDatabase();
-    seed = await seedSprintLifecycle('sprint-lifecycle-owner@prodect.dev');
+    seed = await seedSprintLifecycle('sprint-lifecycle-owner@motir.dev');
   });
 
   test('an empty planned sprint cannot be started; a sprint with issues can', async ({ page }) => {

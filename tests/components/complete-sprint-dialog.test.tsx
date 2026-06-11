@@ -161,7 +161,7 @@ function renderDialog(over: { sprint?: SprintDto; plannedSprints?: SprintDto[] }
         open
         onOpenChange={() => {}}
         sprint={over.sprint ?? sprint()}
-        projectName="prodect"
+        projectName="motir"
         plannedSprints={
           over.plannedSprints ?? [sprint({ id: 'sp7', name: 'Sprint 7', state: 'planned' })]
         }

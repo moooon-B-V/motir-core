@@ -125,11 +125,11 @@ Two parallel renders the implementation must ship: HTML (rendered in the
 recipient's email client) and plain-text (fallback for clients that
 strip HTML). Both shipped via `sendEmail({ html, text })` from `lib/email.ts`.
 
-- **Subject** (verbatim, both versions): `"You're invited to join {Workspace} on Prodect"`
+- **Subject** (verbatim, both versions): `"You're invited to join {Workspace} on Motir"`
 - **HTML body** (600px-wide table-friendly column for email clients):
-  - Plain-text "Prodect" header at top (no logo — brand-mark deferral).
+  - Plain-text "Motir" header at top (no logo — brand-mark deferral).
   - Greeting `"Hi,"`.
-  - Body line `"{Inviter name} invited you to join {Workspace} on Prodect."`
+  - Body line `"{Inviter name} invited you to join {Workspace} on Motir."`
   - Primary CTA button (full width inside the 600px column).
   - `"Or copy this link into your browser:"` followed by the URL as monospace text on its own line.
   - Hairline divider.
@@ -197,9 +197,9 @@ mockup stays the source of truth.
 | Invite-accept wrong-email subhead       | `"This invite is for {invited.email}. You're signed in as {current.email}. Sign in with the invited email to accept, or ask the inviter to re-send to your address."` |
 | Invite-accept wrong-email primary CTA   | `"Sign in with {invited.email}"`                                                                                                                                      |
 | Invite-accept wrong-email secondary CTA | `"Back to dashboard"`                                                                                                                                                 |
-| Invite email subject                    | `"You're invited to join {Workspace} on Prodect"`                                                                                                                     |
+| Invite email subject                    | `"You're invited to join {Workspace} on Motir"`                                                                                                                       |
 | Invite email greeting                   | `"Hi,"`                                                                                                                                                               |
-| Invite email body                       | `"{Inviter name} invited you to join {Workspace} on Prodect."`                                                                                                        |
+| Invite email body                       | `"{Inviter name} invited you to join {Workspace} on Motir."`                                                                                                          |
 | Invite email CTA                        | `"Accept invite"`                                                                                                                                                     |
 | Invite email copy-link prompt           | `"Or copy this link into your browser:"`                                                                                                                              |
 | Invite email expiry                     | `"This invite expires in 7 days."`                                                                                                                                    |
@@ -209,14 +209,14 @@ mockup stays the source of truth.
 
 ## Brand-mark deferral confirmation
 
-Per `PRODECT.md` "Brand-mark deferral principle": no placeholder wordmark
+Per `MOTIR.md` "Brand-mark deferral principle": no placeholder wordmark
 appears on any of these surfaces. Specifically:
 
 - The settings top-nav has NO logo slot — only the workspace switcher
   (left) + user-menu avatar (right).
 - The invite-acceptance card has NO header above the card (auth-layout
   parity with `/sign-in`, `/sign-up`, `/reset-password`).
-- The invite email's "Prodect" header is **plain text** in muted color,
+- The invite email's "Motir" header is **plain text** in muted color,
   not a logo slot. If/when a real wordmark lands in a late-Epic-4 Subtask,
   the email will replace this with the logomark; until then, plain text
   avoids the filler-element trap.

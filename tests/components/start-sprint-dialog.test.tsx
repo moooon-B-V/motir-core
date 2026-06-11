@@ -57,7 +57,7 @@ function renderDialog(over: { sprint?: SprintDto; activeSprint?: SprintDto | nul
         open
         onOpenChange={onOpenChange}
         sprint={over.sprint ?? sprint()}
-        projectName="prodect"
+        projectName="motir"
         activeSprint={over.activeSprint ?? null}
         onStarted={onStarted}
       />
@@ -198,7 +198,7 @@ describe('StartSprintDialog (4.4.5)', () => {
   it('proactively blocks + names the active sprint when the project already has one', () => {
     renderDialog({ activeSprint: sprint({ id: 'sp6', name: 'Sprint 6', state: 'active' }) });
     // The blocked alert (mock panel 3) shows up front, naming the active sprint…
-    expect(screen.getByText(/prodect already has an active sprint \(Sprint 6\)/)).toBeTruthy();
+    expect(screen.getByText(/motir already has an active sprint \(Sprint 6\)/)).toBeTruthy();
     // …and Start is disabled, so clicking issues no start request.
     expect(getStartButton().disabled).toBe(true);
     fireEvent.click(getStartButton());
@@ -214,7 +214,7 @@ describe('StartSprintDialog (4.4.5)', () => {
     // backstop that rejects the concurrent activation with the friendly 409.
     renderDialog();
     fireEvent.click(getStartButton());
-    expect(await screen.findByText(/prodect already has an active sprint\./)).toBeTruthy();
+    expect(await screen.findByText(/motir already has an active sprint\./)).toBeTruthy();
     expect(push).not.toHaveBeenCalled();
   });
 

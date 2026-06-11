@@ -79,7 +79,7 @@ function renderSection(
       canModerate={false}
       currentUserId={ME.id}
       currentUserName={ME.name}
-      mentionCandidates={[{ id: BO.id, name: BO.name, email: 'bophilips@prodect.co' }]}
+      mentionCandidates={[{ id: BO.id, name: BO.name, email: 'bophilips@motir.co' }]}
       initialPage={initialPage}
       {...props}
     />,
@@ -299,7 +299,7 @@ describe('CommentsSection (5.1.5)', () => {
       .getAllByText(/root$/)
       .map((node) => node.textContent);
     expect(textsAfter).toEqual(['newer root', 'older root']);
-    expect(window.localStorage.getItem('prodect.issues.comments.sort')).toBe('desc');
+    expect(window.localStorage.getItem('motir.issues.comments.sort')).toBe('desc');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

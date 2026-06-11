@@ -83,7 +83,7 @@ test.describe('estimation — estimate & roll-up session (4.3.7)', () => {
 
   test.beforeAll(async () => {
     await resetDatabase();
-    seed = await seedEstimationFixture('estimation-fn-owner@prodect.dev');
+    seed = await seedEstimationFixture('estimation-fn-owner@motir.dev');
   });
 
   test('estimate a backlog story via the inline picker — the badge updates and survives reload', async ({
@@ -208,7 +208,7 @@ test.describe('estimation — at scale (finding #57)', () => {
 
   test.beforeAll(async () => {
     await resetDatabase();
-    seed = await seedScaleEstimation('estimation-scale-owner@prodect.dev');
+    seed = await seedScaleEstimation('estimation-scale-owner@motir.dev');
   });
 
   test('the sprint + epic roll-ups come from one bounded aggregate each, and the backlog DOM stays bounded', async ({

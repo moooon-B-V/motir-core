@@ -70,7 +70,7 @@ import { watchersService } from '@/lib/services/watchersService';
 import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
 
 // ── The fixture tenant (fixed identifiers the helpers + specs key off) ──────
-export const SEED_COLLAB_OWNER_EMAIL = 'seed-collab@prodect.dev';
+export const SEED_COLLAB_OWNER_EMAIL = 'seed-collab@motir.dev';
 export const SEED_COLLAB_PASSWORD = 'seed-collab-pass-1!';
 export const SEED_COLLAB_WORKSPACE_NAME = 'Seed — Collab (Epic 5)';
 export const SEED_COLLAB_PROJECT_NAME = 'Collab heavy';
@@ -305,7 +305,7 @@ export async function seedCollabFixture(): Promise<CollabSeedManifest> {
   const memberIds: string[] = [owner.id];
   const nameById = new Map<string, string>([[owner.id, 'Sam Collab']]);
   for (let i = 0; i < sizes.members; i++) {
-    const email = `seed-collab-m${i + 1}@prodect.dev`;
+    const email = `seed-collab-m${i + 1}@motir.dev`;
     const name = MEMBER_NAMES[i % MEMBER_NAMES.length]!;
     const existing = await db.user.findUnique({ where: { email } });
     const user =

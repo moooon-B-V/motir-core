@@ -55,7 +55,7 @@ export type IssueType = (typeof ISSUE_TYPES)[number];
  * Note `bug` is NOT a leaf — a subtask may be parented to a bug. The single
  * leaf is `subtask` (nothing may parent to it). The matrix is intentionally
  * deeper than default Jira (it allows story→task, story→bug, task→bug) — a
- * justified deviation recorded in PRODECT_FINDINGS #41: Prodect is AI-native
+ * justified deviation recorded in PRODECT_FINDINGS #41: Motir is AI-native
  * and the work-item tree IS the execution DAG, so scoping finer work under
  * coarser work earns rollup + coding-agent context inheritance.
  */

@@ -23,7 +23,7 @@ import {
 // The execution-side email service (Story 1.6 · Subtask 1.6.3). This is the
 // ONE place a transactional email is rendered and handed to the provider:
 // it picks the template by the `template` discriminant, renders it, and
-// dispatches via `sendEmail`. Per prodect-core/CLAUDE.md ("Email templates
+// dispatches via `sendEmail`. Per motir-core/CLAUDE.md ("Email templates
 // live in lib/emailTemplates/, NOT in service code" + "lib/email.ts ... ONLY
 // services import this"), composition + dispatch belong to a service and the
 // template stays a pure render function.

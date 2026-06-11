@@ -34,9 +34,9 @@ afterEach(() => {
 });
 
 const candidates: WatchCandidate[] = [
-  { id: 'u_yue', name: 'Yue Zhu', email: 'zhuyue@prodect.co' },
-  { id: 'u_bo', name: 'Bo Philips', email: 'bophilips@prodect.co' },
-  { id: 'u_julian', name: 'Julian', email: 'julian@prodect.co' },
+  { id: 'u_yue', name: 'Yue Zhu', email: 'zhuyue@motir.co' },
+  { id: 'u_bo', name: 'Bo Philips', email: 'bophilips@motir.co' },
+  { id: 'u_julian', name: 'Julian', email: 'julian@motir.co' },
 ];
 
 function page(overrides: Partial<WatchersPageDto> = {}): WatchersPageDto {

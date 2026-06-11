@@ -184,7 +184,7 @@ would re-home it.
 
 ## Brand-mark deferral confirmation
 
-Per `PRODECT.md` "Brand-mark deferral principle": no placeholder wordmark
+Per `MOTIR.md` "Brand-mark deferral principle": no placeholder wordmark
 appears on any of these surfaces. The top-nav (empty-state and switcher
 frames) has NO logo slot — only the workspace switcher + project switcher
 (left) and the user-menu avatar (right), identical to the 1.2.1 top-nav.
@@ -258,7 +258,7 @@ Setting a project **private keeps the people who currently have access**
 (Jira seeds them as members) rather than emptying it and locking the owner
 out. Assignable users on a private project are scoped to **project members**.
 We mirror this three-level team-managed model (the simpler, more direct fit
-for Prodect's workspace→project shape).
+for Motir's workspace→project shape).
 
 **Migration defaults (no lockout):** existing projects default to **open** so
 every current workspace member keeps access on deploy; **workspace
@@ -562,7 +562,7 @@ components — a different product seam):
 
 **Recorded simplification:** Jira's five-way default-assignee enum (project
 default / project lead / component lead / unassigned / person) collapses to a
-**nullable user** — Prodect has no project-lead concept, and component _lead_
+**nullable user** — Motir has no project-lead concept, and component _lead_
 exists in Jira chiefly to feed that enum. Component lead = the documented
 extension.
 
