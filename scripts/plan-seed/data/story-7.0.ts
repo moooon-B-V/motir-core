@@ -17,8 +17,8 @@ import type { PlanStory } from '../types';
  *       Backward-only — passes the cross-epic dep audit.
  *
  *   (b) **Independently useful before any AI.** 7.0 ships the page + two
- *       endpoints that BYOK `prodect run` consumes RIGHT NOW. The dispatch
- *       surface unblocks Yue's own day-to-day dogfooding (`prodect run <id>`
+ *       endpoints that BYOK `motir run` consumes RIGHT NOW. The dispatch
+ *       surface unblocks Yue's own day-to-day dogfooding (`motir run <id>`
  *       fetches the next ready item from `/api/ready/next` instead of the
  *       planner reading the seed by hand), and unblocks any future agent the
  *       user wires up — without depending on any Epic-7 AI work.
@@ -33,11 +33,11 @@ import type { PlanStory } from '../types';
  * **Mirror product (rung 1, VERIFIED — not asserted).** Jira has no top-level
  * "Ready" nav. Its closest equivalent is filters/saved-searches ("My Open
  * Issues", "Assigned to me"). Linear ships **Inbox** / **My Issues** as
- * top-level surfaces — closer to what we want. Prodect ships an
+ * top-level surfaces — closer to what we want. Motir ships an
  * AI-coding-native dispatch surface that no mirror product has a direct
  * equivalent for (Jira/Linear don't dispatch to an agent CLI). So 7.0 is a
  * **justified deviation from the mirror** under the rung-1 escape clause:
- * concrete use case = the BYOK `prodect run` flow + a future native AI-coding
+ * concrete use case = the BYOK `motir run` flow + a future native AI-coding
  * extension. Justification recorded inline rather than reflexively mirroring.
  *
  * **Why a dedicated page + endpoint, not a `?ready=1` filter on /issues.** The
@@ -87,7 +87,7 @@ export const story_7_0: PlanStory = {
     'Ship the **agent dispatch surface**: a dedicated `/ready` page that lists every ready-to-' +
     'start work item in the active project, AND the two HTTP endpoints that back it — `GET ' +
     '/api/ready` (the page consumes this, browse the whole set, cursor-paginated) and `POST ' +
-    '/api/ready/next` (the BYOK `prodect run` CLI / a future AI coding agent consumes this, ' +
+    '/api/ready/next` (the BYOK `motir run` CLI / a future AI coding agent consumes this, ' +
     'dispatch ONE item with full prompt-ready payload). Same predicate underneath (readiness ' +
     'via the already-shipped `workItemsService.getReadinessForItems`, finding #21) — different ' +
     "DTOs per consumer. The page and the agent always agree on what's ready.\n\n" +
@@ -96,7 +96,7 @@ export const story_7_0: PlanStory = {
     'rule the 2.4.5 ReadinessBadge banner + the 3.1.4 board projection already enforce. 7.0 ' +
     'projects it as a list + an endpoint.\n\n' +
     '**Scope:** the service method (`listReady` + `getNextReady`), the two endpoints, the page, ' +
-    'a sidebar nav entry with a count badge, a per-row "Copy `prodect run PROD-<n>`" affordance ' +
+    'a sidebar nav entry with a count badge, a per-row "Copy `motir run PROD-<n>`" affordance ' +
     'for the BYOK CLI flow, the design mockup that defines all of the above, and the tests + ' +
     'verification recipe.\n\n' +
     '**Sort.** Deterministic: `(type asc, priority desc, key asc)` (type-primary precedence set ' +
@@ -123,11 +123,11 @@ export const story_7_0: PlanStory = {
     'should read) but does NOT itself read+inline those files. The prompt-quality moat stays ' +
     'in 7.5; 7.0 ships the ready set + the references, not the file payloads.\n' +
     '- **Multi-project aggregation.** Scoped to the active project, like every other ' +
-    'Prodect read (the established `getActiveProject` pattern). A cross-project ready view ' +
+    'Motir read (the established `getActiveProject` pattern). A cross-project ready view ' +
     'is a future addition; 6.4 project-level access gating must land first.\n' +
     "- **Native AI coding in-app.** This is the BYOK surface (the agent runs on the user's " +
     'machine and calls our endpoint). Native agent runs are a designed-for extension beyond ' +
-    'the planned epics (PRODECT.md § What Prodect is).',
+    'the planned epics (MOTIR.md § What Motir is).',
   verificationRecipeMd:
     '- Pull the Story branch, `pnpm install`, `pnpm prisma generate`, `pnpm db:seed`, `pnpm dev`.\n' +
     '- `pnpm test` — vitest covers: `listReady` predicate (every is_blocked_by terminal across ' +
@@ -137,10 +137,10 @@ export const story_7_0: PlanStory = {
     'endpoints, the 404-not-403 not-found contract on a cross-tenant `projectKey`, the ' +
     '`excludeIds` honor on `/next`, and the `ReadyItemDispatchDto` carrying `descriptionMd` + ' +
     '`contextRefs` + the resolved `dependsOn` keys.\n' +
-    '- `pnpm test:e2e` — Playwright covers: signed in as `zhuyue@prodect.co`, navigate to ' +
+    '- `pnpm test:e2e` — Playwright covers: signed in as `zhuyue@motir.co`, navigate to ' +
     '**Ready** in the sidebar; the rail shows a numeric badge equal to the rendered count. ' +
     'Click into a row → the issue detail opens via peek (existing pattern). Click "Copy ' +
-    '`prodect run PROD-<n>`" → the command lands on the clipboard verbatim. Mark a row\'s ' +
+    '`motir run PROD-<n>`" → the command lands on the clipboard verbatim. Mark a row\'s ' +
     'ONLY blocker `done` from the detail page → return to /ready → the formerly-blocked item ' +
     'has appeared in the list AND the sidebar badge increments (the live recompute matches the ' +
     "existing ReadinessBadge's per-project-terminal classification).\n" +
@@ -151,11 +151,11 @@ export const story_7_0: PlanStory = {
     '\'{"projectKey":"PROD","kinds":["subtask","task"]}\'` → returns a single ' +
     '`ReadyItemDispatchDto` with `descriptionMd`, `contextRefs`, resolved blocker keys.\n' +
     "- **Open-core check (the license-boundary review, this Epic's recurring posture).** " +
-    'Confirm `/api/ready` and `/api/ready/next` live entirely in `prodect-core` (the open ' +
-    "side); no `prodect-ai` import sneaks in. The endpoints are the AGENT'S contract — a " +
-    'future native AI-coding layer calls them OVER HTTP from `prodect-ai`, not by linking.\n' +
+    'Confirm `/api/ready` and `/api/ready/next` live entirely in `motir-core` (the open ' +
+    "side); no `motir-ai` import sneaks in. The endpoints are the AGENT'S contract — a " +
+    'future native AI-coding layer calls them OVER HTTP from `motir-ai`, not by linking.\n' +
     '- If every step holds, approve and merge the Story PR. If anything fails, comment with ' +
-    "what didn't work and Prodect will produce a follow-up Subtask under the same Story.",
+    "what didn't work and Motir will produce a follow-up Subtask under the same Story.",
   items: [
     {
       id: '7.0.1',
@@ -169,12 +169,12 @@ export const story_7_0: PlanStory = {
         'rule). Every UI-touching subtask in this Story depends on this one; without it the ' +
         '/ready page would be improvised, which is forbidden (notes.html #31).\n\n' +
         'Produce the design asset for the **Ready** surface under ' +
-        '`prodect-core/design/ready/`. Author it as a **`*.mock.html` mockup** built from the ' +
+        '`motir-core/design/ready/`. Author it as a **`*.mock.html` mockup** built from the ' +
         'real design system (the `components/ui/*` primitives + the `--el-*` tokens + the ' +
         '`[data-display-style]` shape tokens) — NOT a `.pen`. The HTML route is preferred when ' +
         'a coding agent produces the design (no Pencil→code translation gap; the reviewer ' +
         'sees the actual tokens). Render a PNG export for the board view if useful, but the ' +
-        '`.mock.html` is the source of truth (PRODECT.md § Design-reference rule).\n\n' +
+        '`.mock.html` is the source of truth (MOTIR.md § Design-reference rule).\n\n' +
         '**Surfaces to draw** (multi-panel board, EVERY panel — the multi-panel rule, ' +
         'mistake #31):\n\n' +
         '- **Panel 1 — populated /ready page.** Header ("Ready to start" + the active project ' +
@@ -182,7 +182,7 @@ export const story_7_0: PlanStory = {
         'first-time user). Below: a flat list of cards (NOT a kanban board — readiness is a ' +
         'flat set; a board would lie about its structure). Each row carries: ' +
         '`IssueTypeIcon` (hued via `--el-type-*`), key (`PROD-<n>`), title, a ' +
-        '`Pill` for priority, assignee avatar, a "Copy `prodect run PROD-<n>`" icon-button on ' +
+        '`Pill` for priority, assignee avatar, a "Copy `motir run PROD-<n>`" icon-button on ' +
         'hover (its own `--el-*` tooltip-on-hover state — show the tooltip in a side panel ' +
         'too). The list virtualizes (reuse the `useRowWindow` primitive the tree view uses ' +
         'already).\n' +
@@ -195,36 +195,36 @@ export const story_7_0: PlanStory = {
         "every is_blocked_by link reaches its project's done category) and links to /issues " +
         "so the user can find work that's NOT ready.\n" +
         '- **Panel 4 — copy-affordance toast / confirmation.** When the user clicks the ' +
-        '"Copy `prodect run PROD-<n>`" icon, a small confirmation toast appears (the existing ' +
+        '"Copy `motir run PROD-<n>`" icon, a small confirmation toast appears (the existing ' +
         'toast primitive) — "Copied. Paste this into your terminal."\n\n' +
         'Also write **`design/ready/design-notes.md`** naming the exact primitives used per ' +
         'surface, the exact copy strings, the placement decisions, the per-`--el-*` colour ' +
         'role for each element, and a "primitives composed (no hand-rolling)" checklist (the ' +
         '`design-notes.md` convention 1.3.3 / 1.5.1 established).\n\n' +
         '**Branch.** `design/PROD-7.0.1-ready-surface`. The `design/*` prefix gate skips CI ' +
-        'E2E + the Vercel preview deploy (per PRODECT.md § Plan seed Workflow) — this PR ' +
+        'E2E + the Vercel preview deploy (per MOTIR.md § Plan seed Workflow) — this PR ' +
         'only edits `design/ready/**`, no app code.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- `prodect-core/design/ready/ready.mock.html` exists, renders the four panels above ' +
+        '- `motir-core/design/ready/ready.mock.html` exists, renders the four panels above ' +
         'side-by-side, references ONLY `--el-*` tokens (no Tier-0 `--color-*`, no hand-rolled ' +
-        'spacing — the rules in `prodect-core/CLAUDE.md` § colour / shape).\n' +
-        '- `prodect-core/design/ready/design-notes.md` exists, names every primitive composed + ' +
+        'spacing — the rules in `motir-core/CLAUDE.md` § colour / shape).\n' +
+        '- `motir-core/design/ready/design-notes.md` exists, names every primitive composed + ' +
         'every copy string + the per-element `--el-*` role.\n' +
         '- (Optional) a PNG export of the mockup for the board view.\n' +
         '- The mockup composes ONLY shipped primitives (`Card`, `Pill`, `IssueTypeIcon`, ' +
         '`Button`, `EmptyState`, etc.) — no new design system entries invented inside this ' +
         "Story (if one would be needed, that's a NEW `design/` subtask, not a code workaround).\n\n" +
         '## Context refs\n\n' +
-        '- `prodect-core/design/work-items/` — the closest existing area; mirror its layout ' +
+        '- `motir-core/design/work-items/` — the closest existing area; mirror its layout ' +
         'and `design-notes.md` shape.\n' +
-        '- `prodect-core/components/ui/ReadinessBadge.tsx` — the shipped readiness primitive ' +
+        '- `motir-core/components/ui/ReadinessBadge.tsx` — the shipped readiness primitive ' +
         "(2.4.5); the page list shouldn't re-render the banner itself, but the per-row " +
         '"ready" tone draws from the same `--el-success` family.\n' +
-        '- `prodect-core/components/ui/Pill.tsx` — the priority pill + the badge tone.\n' +
-        '- `prodect-core/components/ui/EmptyState.tsx` — Panel 3.\n' +
-        '- `prodect-core/components/issues/IssueTypeIcon.tsx` — per-kind icon + hue.\n' +
-        '- `prodect-core/app/(authed)/_components/SidebarNav.tsx` — the rail Panel 2 modifies.\n' +
-        '- `prodect-core/app/globals.css` — `--el-*` colour tokens + `[data-display-style]` ' +
+        '- `motir-core/components/ui/Pill.tsx` — the priority pill + the badge tone.\n' +
+        '- `motir-core/components/ui/EmptyState.tsx` — Panel 3.\n' +
+        '- `motir-core/components/issues/IssueTypeIcon.tsx` — per-kind icon + hue.\n' +
+        '- `motir-core/app/(authed)/_components/SidebarNav.tsx` — the rail Panel 2 modifies.\n' +
+        '- `motir-core/app/globals.css` — `--el-*` colour tokens + `[data-display-style]` ' +
         'shape tokens (the swap layer the mockup must reference).',
     },
     {
@@ -287,7 +287,7 @@ export const story_7_0: PlanStory = {
         '**Repository.** Add `workItemRepository.findReadyCandidates(projectId, filter, ' +
         'workspaceId)` — single Prisma `findMany` with the kind/assignee/priority/non-terminal ' +
         'predicates + the sort + the limit. Read-only, no `tx` needed (the 4-layer rule, ' +
-        '`prodect-core/CLAUDE.md`).\n\n' +
+        '`motir-core/CLAUDE.md`).\n\n' +
         '## Acceptance criteria\n\n' +
         '- `listReady` returns ONLY items whose `is_blocked_by` set is empty OR fully ' +
         'terminal-per-project (same predicate as `ReadinessBadge`).\n' +
@@ -305,15 +305,15 @@ export const story_7_0: PlanStory = {
         'routes; write-free → no `tx` plumbing.\n' +
         '- No N+1: at most two reads per call (candidate fetch + readiness batch).\n\n' +
         '## Context refs\n\n' +
-        '- `prodect-core/lib/services/workItemsService.ts` (#1095-1200) — `getReadiness`, ' +
+        '- `motir-core/lib/services/workItemsService.ts` (#1095-1200) — `getReadiness`, ' +
         '`getReadinessForItems`, the per-project terminal classification.\n' +
-        '- `prodect-core/lib/services/workflowsService.ts` — ' +
+        '- `motir-core/lib/services/workflowsService.ts` — ' +
         '`getTerminalStatusKeysByProjects`.\n' +
-        '- `prodect-core/lib/repositories/workItemRepository.ts` — the existing list/find ' +
+        '- `motir-core/lib/repositories/workItemRepository.ts` — the existing list/find ' +
         'methods to mirror.\n' +
-        '- `prodect-core/prisma/schema.prisma` — `WorkItemPriority` enum order (lowest → ' +
+        '- `motir-core/prisma/schema.prisma` — `WorkItemPriority` enum order (lowest → ' +
         'highest).\n' +
-        '- `prodect-core/CLAUDE.md` § 4-layer rule.',
+        '- `motir-core/CLAUDE.md` § 4-layer rule.',
       dependsOn: [],
     },
     {
@@ -344,7 +344,7 @@ export const story_7_0: PlanStory = {
         '  contextRefs: string[];                // file paths the agent should read\n' +
         "  blockerKeys: string[];                // resolved keys, for the agent's prompt\n" +
         '  parentKey: string | null;             // story/task/bug parent if any\n' +
-        '  runCommand: string;                   // "prodect run <key>" — convenience\n' +
+        '  runCommand: string;                   // "motir run <key>" — convenience\n' +
         '}\n' +
         '```\n\n' +
         '**Why two shapes, not one.** A list of 50 items rendered on the page should NOT ship ' +
@@ -362,7 +362,7 @@ export const story_7_0: PlanStory = {
         '**terminal** blockers (the dependency story for the agent: "these were the things ' +
         'that had to land first; they did"). Empty array when the item had no blockers at ' +
         'all.\n\n' +
-        '**`runCommand`** is `prodect run ${key}` verbatim. Server-side construction so the ' +
+        '**`runCommand`** is `motir run ${key}` verbatim. Server-side construction so the ' +
         'page + the CLI agree on the exact string; the page\'s "Copy" affordance copies ' +
         '`runCommand`, no string-templating in the client.\n\n' +
         '## Acceptance criteria\n\n' +
@@ -371,12 +371,12 @@ export const story_7_0: PlanStory = {
         '`toReadyItemDispatchDto(row, blockerRows, ...)` — pure, no DB calls.\n' +
         '- `descriptionExcerpt` strips markdown to plain text and truncates to ~200 chars ' +
         'on a word boundary, ellipsis appended only when truncated.\n' +
-        '- `runCommand` matches `^prodect run PROD-\\d+$`.\n' +
+        '- `runCommand` matches `^motir run PROD-\\d+$`.\n' +
         '- DTOs typecheck against an example row + blocker rows in a unit test (smoke).\n\n' +
         '## Context refs\n\n' +
-        '- `prodect-core/lib/dto/workItems.ts` — `WorkItemSummaryDto` shape to mirror.\n' +
-        '- `prodect-core/lib/mappers/workItemMappers.ts` — the established mapper convention.\n' +
-        '- `prodect-core/prisma/schema.prisma` — `contextRefs`, `assignee`, the work item row.',
+        '- `motir-core/lib/dto/workItems.ts` — `WorkItemSummaryDto` shape to mirror.\n' +
+        '- `motir-core/lib/mappers/workItemMappers.ts` — the established mapper convention.\n' +
+        '- `motir-core/prisma/schema.prisma` — `contextRefs`, `assignee`, the work item row.',
       dependsOn: [],
     },
     {
@@ -433,7 +433,7 @@ export const story_7_0: PlanStory = {
         '**Idempotency.** The endpoint is **read-only for now** (no claim row, no audit). A ' +
         'future Subtask under stub 7.6 (prompt generation + external-agent dispatch) wraps ' +
         "this with claim/audit semantics. 7.0 ships the read; that's enough for the BYOK " +
-        '`prodect run` flow today.\n\n' +
+        '`motir run` flow today.\n\n' +
         '**Why `204` not `200 { items: [] }`.** The semantic is "give me ONE thing; there is ' +
         'nothing." A `null` body would conflate "no project" with "empty ready set" against a ' +
         'real project. 204 is unambiguous.\n\n' +
@@ -493,12 +493,12 @@ export const story_7_0: PlanStory = {
         '## Acceptance criteria\n\n' +
         '- `/ready` renders the four panel-1 elements from the mockup, composed of the named ' +
         'primitives, references only `--el-*` colour + `[data-display-style]` shape tokens — ' +
-        'no Tier-0 utilities (the `prodect-core/CLAUDE.md` colour/shape rule).\n' +
+        'no Tier-0 utilities (the `motir-core/CLAUDE.md` colour/shape rule).\n' +
         '- Empty project renders panel-3 EmptyState verbatim.\n' +
         '- Sidebar shows "Ready" between Issues and Boards with a numeric badge matching the ' +
         'rendered count.\n' +
         '- Row click → peek opens (same pattern as /issues).\n' +
-        '- "Copy `prodect run PROD-<n>`" icon-button is keyboard-reachable, has an aria-label ' +
+        '- "Copy `motir run PROD-<n>`" icon-button is keyboard-reachable, has an aria-label ' +
         '("Copy run command for PROD-<n>"), and shows the panel-4 toast on click.\n' +
         '- The page typechecks against the existing Server Component conventions; no client ' +
         'component touches the service layer directly.\n' +
@@ -548,7 +548,7 @@ export const story_7_0: PlanStory = {
         '## Acceptance criteria\n\n' +
         '- `pnpm test` runs the new specs green over a real Postgres (the project convention).\n' +
         '- No mocks except `getSession()` (the single allowed exception per ' +
-        '`prodect-core/CLAUDE.md`).\n' +
+        '`motir-core/CLAUDE.md`).\n' +
         "- Coverage on `lib/services/workItemsService.ts`'s new methods + the two routes is " +
         'demonstrable; no untested branch in `listReady` / `getNextReady`.',
       dependsOn: ['7.0.4', '7.0.5'],
@@ -561,23 +561,23 @@ export const story_7_0: PlanStory = {
       executor: 'coding_agent',
       estimateMinutes: 30,
       descriptionMd:
-        'End-to-end browser test (`tests/e2e/ready.spec.ts`) over the seeded `moooon`/`prodect` ' +
+        'End-to-end browser test (`tests/e2e/ready.spec.ts`) over the seeded `moooon`/`motir` ' +
         "tenant. Closes the agent-dispatch promise from the user's perspective.\n\n" +
         '**The spec.**\n\n' +
-        '1. Sign in as `zhuyue@prodect.co` / `!QAZ1qaz` (the project manager).\n' +
+        '1. Sign in as `zhuyue@motir.co` / `!QAZ1qaz` (the project manager).\n' +
         '2. Confirm the sidebar shows "Ready" between Issues and Boards with a numeric badge ' +
         '> 0 (the seeded plan has ready items).\n' +
         '3. Click "Ready"; the /ready page renders the list. Assert the first row\'s priority ' +
         "pill is the highest among visible items (sort correctness from a real user's seat).\n" +
-        '4. Click the "Copy `prodect run`" icon on the first row. Read clipboard text; assert ' +
-        'it matches `^prodect run PROD-\\d+$`. Toast appears (panel-4 from the mockup).\n' +
+        '4. Click the "Copy `motir run`" icon on the first row. Read clipboard text; assert ' +
+        'it matches `^motir run PROD-\\d+$`. Toast appears (panel-4 from the mockup).\n' +
         "5. Open the first row's peek; close it. (Smoke that the row interaction matches " +
         '/issues — no full-page navigation.)\n' +
         "6. Pick any visible row — note its key. Navigate to that row's blockers (via peek " +
         '> Relationships panel, the shipped 2.4.5 pattern). Mark the LAST non-terminal ' +
         'blocker `done`. Return to /ready and assert the formerly-blocked item now appears.\n' +
         '7. Reload /ready; assert the sidebar badge updates to match the new count.\n' +
-        '8. Sign out; sign back in as `bophilips@prodect.co` (a workspace member, not the ' +
+        '8. Sign out; sign back in as `bophilips@motir.co` (a workspace member, not the ' +
         'PM); confirm /ready still renders correctly (the workspace-membership gate, NOT a ' +
         'PM-only surface).\n\n' +
         '**Empty-state branch** is covered in vitest (creating an empty-ready-set tenant in ' +
@@ -594,7 +594,7 @@ export const story_7_0: PlanStory = {
     },
     {
       id: '7.0.9',
-      title: 'BYOK doc — `prodect run` against `/api/ready/next` (the agent contract surfaced)',
+      title: 'BYOK doc — `motir run` against `/api/ready/next` (the agent contract surfaced)',
       status: 'done',
       type: 'content',
       executor: 'coding_agent',
@@ -603,10 +603,10 @@ export const story_7_0: PlanStory = {
         'Surface the agent contract in the project README so the BYOK flow is discoverable ' +
         'without reading the seed. This is the "tell users the endpoint exists" subtask — ' +
         'small but load-bearing for adoption.\n\n' +
-        'Add a new section to `prodect-core/README.md`:\n\n' +
+        'Add a new section to `motir-core/README.md`:\n\n' +
         '> ### Agent dispatch (BYOK)\n' +
         '> \n' +
-        '> Prodect exposes a stable agent contract so you can drive your own coding agent ' +
+        '> Motir exposes a stable agent contract so you can drive your own coding agent ' +
         "(Claude Code / Cursor / Aider / your own script) against the project's ready set:\n" +
         '> \n' +
         '> - `GET /api/ready?projectKey=PROD` — list every ready work item.\n' +
@@ -649,7 +649,7 @@ export const story_7_0: PlanStory = {
         'drops items with a non-terminal blocker (the finding #21 readiness predicate). There is ' +
         '**no has-children / leaf predicate** anywhere in that path, so a `todo` epic/story whose ' +
         'blockers are all terminal (or which has none) surfaces as "ready" and even renders a ' +
-        '`prodect run PROD-<n>` command — dispatching a container, which is wrong. The list AND ' +
+        '`motir run PROD-<n>` command — dispatching a container, which is wrong. The list AND ' +
         'the count both read the same `findReadyCandidates`, so a single predicate fixes both.\n\n' +
         '**Fix.** Add a "has no children" predicate to `findReadyCandidates`: exclude any ' +
         'epic/story for which a child work item exists (`NOT EXISTS (SELECT 1 FROM "work_item" c ' +
@@ -674,11 +674,11 @@ export const story_7_0: PlanStory = {
         'service suite).\n' +
         '- No N+1: the children check is part of the single `findReadyCandidates` query.\n\n' +
         '## Context refs\n\n' +
-        '- `prodect-core/lib/repositories/workItemRepository.ts` — `findReadyCandidates` (the ' +
+        '- `motir-core/lib/repositories/workItemRepository.ts` — `findReadyCandidates` (the ' +
         'predicate to extend).\n' +
-        '- `prodect-core/lib/services/workItemsService.ts` — `listReady` / `getNextReady` / ' +
+        '- `motir-core/lib/services/workItemsService.ts` — `listReady` / `getNextReady` / ' +
         '`countReady` (consumers; the single predicate flows to all three).\n' +
-        '- `prodect-core/lib/issues/parentRules.ts` — the kind-parent matrix (which kinds can have ' +
+        '- `motir-core/lib/issues/parentRules.ts` — the kind-parent matrix (which kinds can have ' +
         'children).\n' +
         '- Story 7.0 subtasks 7.0.2 (service) + 7.0.6 (page + badge).',
     },
@@ -724,12 +724,12 @@ export const story_7_0: PlanStory = {
         '- Vitest covers the type tiebreaker, priority-still-primary, subtask-first, and cursor ' +
         'paging across types (extends the 7.0.7 service suite).\n\n' +
         '## Context refs\n\n' +
-        '- `prodect-core/lib/workItems/readyFilter.ts` — the cursor codec + `READY_KIND_RANK`.\n' +
-        '- `prodect-core/lib/repositories/workItemRepository.ts` — `findReadyCandidates` ' +
+        '- `motir-core/lib/workItems/readyFilter.ts` — the cursor codec + `READY_KIND_RANK`.\n' +
+        '- `motir-core/lib/repositories/workItemRepository.ts` — `findReadyCandidates` ' +
         '(ORDER BY + seek-after).\n' +
-        '- `prodect-core/lib/services/workItemsService.ts` — `pageReadyCandidates` (cursor ' +
+        '- `motir-core/lib/services/workItemsService.ts` — `pageReadyCandidates` (cursor ' +
         'construction).\n' +
-        '- `prodect-core/prisma/schema.prisma` — `WorkItemKind` / `WorkItemPriority` enums.',
+        '- `motir-core/prisma/schema.prisma` — `WorkItemKind` / `WorkItemPriority` enums.',
     },
     {
       id: '7.0.12',
@@ -780,13 +780,13 @@ export const story_7_0: PlanStory = {
         'subtask-first across priorities, and cursor paging across both a priority boundary and ' +
         'a type boundary.\n\n' +
         '## Context refs\n\n' +
-        '- `prodect-core/lib/workItems/readyFilter.ts` — the cursor codec + `READY_KIND_RANK` + ' +
+        '- `motir-core/lib/workItems/readyFilter.ts` — the cursor codec + `READY_KIND_RANK` + ' +
         'the sort rationale comment.\n' +
-        '- `prodect-core/lib/repositories/workItemRepository.ts` — `findReadyCandidates` ' +
+        '- `motir-core/lib/repositories/workItemRepository.ts` — `findReadyCandidates` ' +
         '(ORDER BY + seek-after precedence).\n' +
-        '- `prodect-core/lib/services/workItemsService.ts` — `pageReadyCandidates` (cursor ' +
+        '- `motir-core/lib/services/workItemsService.ts` — `pageReadyCandidates` (cursor ' +
         'construction).\n' +
-        '- `prodect-core/scripts/plan-seed/data/story-7.0.ts` — the Story `Sort` note to update.\n' +
+        '- `motir-core/scripts/plan-seed/data/story-7.0.ts` — the Story `Sort` note to update.\n' +
         '- 7.0.11 (the prior sort change this supersedes).',
     },
   ],

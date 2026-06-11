@@ -20,7 +20,7 @@ export const story_2_1: PlanStory = {
     'constraints + depth limit. Story 1.3 ships projects + the per-project work-item-key counter. ' +
     'This Story does NOT re-create the schema — it adds the *product* layer (type metadata + ' +
     'service-layer rules + issue-key assignment) on top. All work follows ' +
-    "`prodect-core/CLAUDE.md`'s 4-layer architecture (Route → Service → Repository → Prisma).",
+    "`motir-core/CLAUDE.md`'s 4-layer architecture (Route → Service → Repository → Prisma).",
   verificationRecipeMd:
     '- Pull the Story branch, `pnpm install && pnpm prisma generate`.\n' +
     '- `pnpm test` — the 2.1.4 integration suite proves type metadata, validation (both layers), ' +
@@ -65,7 +65,7 @@ export const story_2_1: PlanStory = {
         '- Unit tests over `canParent` for every legal + illegal pair.\n\n' +
         '## Context refs\n\n' +
         '- `prisma/schema.prisma` — the `work_item` model + `kind` enum from Story 1.4\n' +
-        '- `prodect-core/CLAUDE.md` — 4-layer rule\n' +
+        '- `motir-core/CLAUDE.md` — 4-layer rule\n' +
         '- Design-system color tokens + icon set (Story 1.0.5)',
     },
     {
@@ -129,7 +129,7 @@ export const story_2_1: PlanStory = {
         "- Story 1.3's identifier generator / key counter\n" +
         '- `workspacesService.createWorkspace` — the existing atomic-multi-write + collision ' +
         'pattern to mirror\n' +
-        '- `prodect-core/CLAUDE.md` — transaction + FOR UPDATE rules',
+        '- `motir-core/CLAUDE.md` — transaction + FOR UPDATE rules',
     },
     {
       id: '2.1.4',

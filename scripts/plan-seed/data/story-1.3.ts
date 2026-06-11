@@ -48,7 +48,7 @@ export const story_1_3: PlanStory = {
     '- Project switcher in the top-nav (composed alongside the workspace switcher from 1.2.6): lists the' +
     ' workspace\'s projects with a check on the active one + a "Create project" entry. Selecting sets' +
     ' `activeProjectId` and re-renders.\n' +
-    '- 4-layer rule respected (per `prodect-core/CLAUDE.md`): route/Server-Action → service → repository' +
+    '- 4-layer rule respected (per `motir-core/CLAUDE.md`): route/Server-Action → service → repository' +
     ' → Prisma; writes go through repo methods requiring `tx`; services own transactions + DTO mapping.' +
     ' All quality gates green; multi-tenant isolation proven by E2E + direct-DB RLS test (1.3.6).',
   items: [
@@ -63,7 +63,7 @@ export const story_1_3: PlanStory = {
       dependsOn: ['1.2.2'],
       descriptionMd:
         'Add the `Project` model and the data layer that makes projects real, following ' +
-        'the 4-layer architecture from `prodect-core/CLAUDE.md`. This is the schema-only + ' +
+        'the 4-layer architecture from `motir-core/CLAUDE.md`. This is the schema-only + ' +
         'repository/service Subtask; RLS policies and the active-project resolution land in 1.3.2, the ' +
         'UI in 1.3.4.\n\n' +
         '**Schema (verbatim shape):** `Project { id String @id @default(cuid()), ' +
@@ -116,7 +116,7 @@ export const story_1_3: PlanStory = {
         '- All quality gates green: `pnpm prisma generate && typecheck && lint && format:check && build' +
         ' && test`. Existing suite stays green.\n\n' +
         '## Context refs\n\n' +
-        '- `prodect-core/CLAUDE.md` — the 4-layer contract (auto-loaded)\n' +
+        '- `motir-core/CLAUDE.md` — the 4-layer contract (auto-loaded)\n' +
         '- `prisma/schema.prisma` — current Workspace + WorkspaceMembership models\n' +
         '- `lib/services/workspacesService.ts` + `lib/repositories/workspace*Repository.ts` — the exact' +
         ' pattern to mirror (slug generation, collision retry, required-`tx` writes, DTO mapping)\n' +

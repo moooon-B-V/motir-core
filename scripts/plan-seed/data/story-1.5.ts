@@ -97,7 +97,7 @@ export const story_1_5: PlanStory = {
         '`?`, listing every shortcut the shell registers — ⌘K (palette), ⌘\\ (toggle sidebar), ' +
         '? (this dialog), g→i / g→b / g→r (g-prefix go-to navigation, Linear convention), esc, ' +
         'etc. Two columns: shortcut chip on the left, action label on the right.\n\n' +
-        '**Brand-mark deferral** (PRODECT.md): no wordmark / logomark anywhere in these mockups. ' +
+        '**Brand-mark deferral** (MOTIR.md): no wordmark / logomark anywhere in these mockups. ' +
         'The top-nav left edge sits empty where a logo would otherwise live; do not invent ' +
         'placeholder branding (mistake #19 + #26). Save `.pen` sources AND PNG exports for each ' +
         'surface.\n\n' +
@@ -126,7 +126,7 @@ export const story_1_5: PlanStory = {
         'primitives to compose from\n' +
         '- `/design/projects/*.pen` from Subtask 1.3.3 — switcher visual grammar\n' +
         '- `/design/work-items/*.pen` from Subtask 1.4.1 — the surfaces this shell will host\n' +
-        '- [PRODECT.md](../PRODECT.md) — brand-mark deferral principle, design-system tokens',
+        '- [MOTIR.md](../MOTIR.md) — brand-mark deferral principle, design-system tokens',
     },
     {
       id: '1.5.2',
@@ -144,7 +144,7 @@ export const story_1_5: PlanStory = {
         '- `<AppLayout topNav={...} sidebar={...}>{children}</AppLayout>` — CSS-grid two-column ' +
         'layout (sidebar · main) at ≥md, single-column with the sidebar off-canvas at <md. ' +
         'Persists the collapsed state via the standard localStorage key ' +
-        '(`prodect.shell.sidebar.collapsed` — mirrors the 1.0.5.2 theme key naming).\n' +
+        '(`motir.shell.sidebar.collapsed` — mirrors the 1.0.5.2 theme key naming).\n' +
         '- `<Sidebar header={...} sections={[...]} footer={...} />` — each section is ' +
         '`{ id, label, items: [{ icon, label, href, kbd?, active? }] }`. Renders nav semantics ' +
         '(`<nav aria-label="Primary">`), uses Radix\'s `Collapsible` for any section the ' +
@@ -172,7 +172,7 @@ export const story_1_5: PlanStory = {
         '`components/ui/SidebarDrawer.tsx` ship with the API above; all props strongly typed; ' +
         '`forwardRef` where the primitive wraps a focusable element.\n' +
         '- Sidebar persists its collapsed state via `localStorage` under ' +
-        '`prodect.shell.sidebar.collapsed`; reads the saved value via `useSyncExternalStore` + ' +
+        '`motir.shell.sidebar.collapsed`; reads the saved value via `useSyncExternalStore` + ' +
         'lazy `useState` initializer (React 19 set-state-in-effect rule, established in 1.0.5.2).\n' +
         '- Below the `md` breakpoint the sidebar mounts as a `SidebarDrawer` (off-canvas Dialog); ' +
         'above `md` it mounts as a persistent column.\n' +
@@ -188,7 +188,7 @@ export const story_1_5: PlanStory = {
         '- All quality gates green; existing tests + the existing `/tokens` route screenshot ' +
         'regression (if any) still pass.\n\n' +
         '## Context refs\n\n' +
-        '- `prodect-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
+        '- `motir-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
         '- `/design/shell/*.pen` + PNG exports from 1.5.1 — the visual contract\n' +
         '- `components/ui/Dialog.tsx` + `Tooltip.tsx` + `Popover.tsx` — primitives to compose from\n' +
         '- `lib/theme/` — the existing `useSyncExternalStore` + localStorage pattern (mirror it)\n' +
@@ -231,7 +231,7 @@ export const story_1_5: PlanStory = {
         '- Hairline divider\n' +
         '- "Settings" (deep-link to `/settings/project` if active project, else ' +
         '`/settings/workspace`), "Docs" (external link to ' +
-        '`https://github.com/moooon-B-V/prodect-core` — placeholder until a real /docs route ships).\n\n' +
+        '`https://github.com/moooon-B-V/motir-core` — placeholder until a real /docs route ships).\n\n' +
         'Active-item detection uses `usePathname()` via a thin client wrapper ' +
         '`(authed)/_components/SidebarNav.tsx` that takes the section list and renders it with ' +
         'the correct `active` flag per item.\n\n' +

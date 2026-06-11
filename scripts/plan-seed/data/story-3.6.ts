@@ -13,7 +13,7 @@ import type { PlanStory } from '../types';
  * real thing: a board-settings surface to manage columns (add / rename / reorder
  * / delete) and the column↔status mapping, plus rename the board.
  *
- * This is NOT a "v1 vs later" deferral being un-deferred — Prodect has no V1
+ * This is NOT a "v1 vs later" deferral being un-deferred — Motir has no V1
  * tier; the planned epics ARE the complete product, so an admin a complete
  * Jira-equivalent needs must live in a story. 3.6 gives the board-column admin
  * its home; the "board CRUD / column-remap admin (not v1)" notes in 3.1/3.2/3.3
@@ -52,7 +52,7 @@ export const story_3_6: PlanStory = {
     'to LATER status changes"; its acceptance test asserts a new status is "not dropped, **not ' +
     'auto-columned**"). The intended resolution was always an admin that maps it — but that admin ' +
     'was labelled "board CRUD / column-remap admin (not v1)" in 3.1/3.2/3.3 with **no owning ' +
-    'story**. Prodect has no V1 tier (the planned epics are the complete product), so a complete ' +
+    'story**. Motir has no V1 tier (the planned epics are the complete product), so a complete ' +
     'Jira-equivalent’s column manager must be planned: **this is its home.** Auto-columning ' +
     'stays rejected (it would reverse 3.1’s tested decision) — the user maps via this UI.\n\n' +
     '**Pure config over the shipped schema (no new table).** The `board` + `board_column` + ' +
@@ -82,7 +82,7 @@ export const story_3_6: PlanStory = {
     'switcher, per-board config (the board API already takes a `boardId`, 3.1). 3.6 configures the ' +
     'single default board only. Roles/permissions are Epic 6.4 (membership-gated now, `TODO(6.4)`).',
   verificationRecipeMd:
-    '- Pull the Story branch, `pnpm install`, `pnpm dev` (NO migration — pure config over the Story-3.1 schema). Sign in to the seeded `moooon` → `prodect` project as an owner.\n' +
+    '- Pull the Story branch, `pnpm install`, `pnpm dev` (NO migration — pure config over the Story-3.1 schema). Sign in to the seeded `moooon` → `motir` project as an owner.\n' +
     '- `pnpm test` — vitest covers the column-config service (add / rename / reorder / delete; map/unmap with the `@@unique([boardId, statusId])` move-not-duplicate behaviour; delete-column unmaps its statuses and never deletes work items; the membership + workspace gates) and the route layer (typed-error → status).\n' +
     '- `pnpm test:e2e --grep board-config` — Playwright drives the real resolution flow: add a custom status in **Workflow settings** → it appears in the board’s **unmapped-statuses tray** → open **Board settings** → map it to a column → it now shows as/in that column on `/boards`; the tray entry is gone.\n' +
     '- **Column CRUD check:** add a column, rename it, drag to reorder it (order persists on reload), delete an empty column — its previously-mapped statuses return to the unmapped tray, and no work items are lost.\n' +
@@ -191,7 +191,7 @@ export const story_3_6: PlanStory = {
         '- `lib/repositories/boardColumnRepository.ts` (`create` / `update` / `findById`) + `boardColumnStatusRepository.ts` (`create` / `deleteByColumn` / `deleteByStatus`) — the repos to reuse / extend (add column `delete`)\n' +
         '- `app/api/board/columns/[columnId]/route.ts` (PATCH wipLimit, 3.3.3) + `app/api/board/route.ts` (PATCH group-by) — the routes to extend\n' +
         '- Story 3.1.1 — the `board` / `board_column` / `board_column_status` schema + `@@unique([boardId, statusId])`; `lib/workflows/*` for the status source\n' +
-        '- `lib/services/workflowsService.ts` `createStatus` — the P2002-backstop + `assertProjectAdmin` precedent; `prodect-core/CLAUDE.md` (4-layer rules)',
+        '- `lib/services/workflowsService.ts` `createStatus` — the P2002-backstop + `assertProjectAdmin` precedent; `motir-core/CLAUDE.md` (4-layer rules)',
     },
     {
       id: '3.6.3',
@@ -231,7 +231,7 @@ export const story_3_6: PlanStory = {
         '- `app/(authed)/settings/project/workflow/page.tsx` + `_components/WorkflowEditor.tsx` (2.2.5) — the sibling settings page + client-editor pattern to mirror; the settings nav to extend\n' +
         '- `app/(authed)/boards/_components/UnmappedStatusesTray.tsx` (3.2.6) — the tray to repoint ("Manage statuses" → "Map columns"); `messages/en.json` + `zh.json` `boards.*`; `design/boards/design-notes.md` (the "CTA reality" note)\n' +
         '- `app/(authed)/boards/_components/BoardContainer.tsx` (3.2.4 dnd-kit setup to reuse) + `BoardColumn.tsx` (the `[⋯]` seam) — reuse, do not add a second DnD lib\n' +
-        '- Story 3.6.2 — the column-config service + API this consumes; `components/ui/*` (Pill, Button, Modal, Input); `prodect-core/CLAUDE.md` (`--el-*` + element-shape rules)',
+        '- Story 3.6.2 — the column-config service + API this consumes; `components/ui/*` (Pill, Button, Modal, Input); `motir-core/CLAUDE.md` (`--el-*` + element-shape rules)',
     },
     {
       id: '3.6.4',
@@ -263,7 +263,7 @@ export const story_3_6: PlanStory = {
         '## Context refs\n\n' +
         '- `tests/e2e/board-projection.spec.ts` (3.1.7) + `tests/e2e/board-ui.spec.ts` (3.2.7) — the board E2E patterns this builds on; `tests/helpers/db.ts` — real-Postgres truncation\n' +
         '- `tests/components/board-completeness.test.tsx` (3.2.6) — the unmapped-tray component test to extend for the repointed CTA\n' +
-        '- Story 3.6.2 / 3.6.3 — the service + UI under test; `prodect-core/CLAUDE.md` — test conventions (real Postgres, no mocks)',
+        '- Story 3.6.2 / 3.6.3 — the service + UI under test; `motir-core/CLAUDE.md` — test conventions (real Postgres, no mocks)',
     },
   ],
 };

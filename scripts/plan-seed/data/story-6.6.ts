@@ -98,7 +98,7 @@ import type { PlanStory } from '../types';
  * Cross-epic dependency audit: clean — every dep points at Epic ≤ 6
  * (6.1.x same-epic-earlier; 5.x backward; 1.6 + 6.4 are done substrate).
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 6.6`, on the standing
+ * Expanded from its `stubs.ts` entry per `motir plan 6.6`, on the standing
  * `seed/epic-5-plan` branch (Epic-5/6 planning). Matches the canonical style
  * of 5.1–5.6 / 6.1.
  */
@@ -149,7 +149,7 @@ export const story_6_6: PlanStory = {
     '**Out of scope (documented extension slots, each justified):** scheduled/cron triggers ' +
     '(need a saved-filter item-selection substrate — Story 6.2 ships it; revisit after); ' +
     'branches + smart values (where a rule engine becomes a scripting language); global / ' +
-    "multi-project rules (Jira gates these on site admins; prodect's admin substrate is " +
+    "multi-project rules (Jira gates these on site admins; Motir's admin substrate is " +
     'project-scoped today); the "Allow rule trigger" chaining opt-in (above); send-email / ' +
     'webhook / create-item actions (each drags a new surface — templates, outbound HTTP ' +
     'policy, kind-parent rules — additive registry entries when a use case lands); monthly ' +
@@ -162,7 +162,7 @@ export const story_6_6: PlanStory = {
     '- `pnpm test:coverage` — Vitest (real Postgres) over the registries, the engine ' +
     '(trigger × condition × action matrix, loop prevention, idempotency, auto-disable), ' +
     'and the CRUD service ≥90% per-file branch/fn/line.\n' +
-    '- **Author flow:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz` → project settings → ' +
+    '- **Author flow:** sign in as `zhuyue@motir.co` / `!QAZ1qaz` → project settings → ' +
     'Automation (matching `design/projects/automation.mock.html`). Create: "when an item ' +
     'transitions to Done, if Kind is any of (Bug), then add watcher Bo + comment ' +
     "'Verify the fix'\" — the editor builds when/if/then rows from the registries; the " +
@@ -248,7 +248,7 @@ export const story_6_6: PlanStory = {
         '- `lib/services/projectAccessService.ts` + the 6.4 role checks (the ' +
         'admin gate); `workflowsService` (status ids for transition configs)\n' +
         '- The verified Jira anatomy/scope/actor facts in the Story 6.6 description\n' +
-        '- `prodect-core/CLAUDE.md` (4-layer, FK-as-relation, required-tx)',
+        '- `motir-core/CLAUDE.md` (4-layer, FK-as-relation, required-tx)',
     },
     {
       id: '6.6.2',

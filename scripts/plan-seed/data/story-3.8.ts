@@ -74,7 +74,7 @@ export const story_3_8: PlanStory = {
     'unchanged — this story only swaps the load/paging mechanism); the issue list/tree pagination ' +
     '(finding #57, a different surface that correctly paginates — untouched).',
   verificationRecipeMd:
-    '- Pull the Story branch, `pnpm install`, `pnpm dev`, open `/boards` on the seeded `moooon` → `prodect` project.\n' +
+    '- Pull the Story branch, `pnpm install`, `pnpm dev`, open `/boards` on the seeded `moooon` → `motir` project.\n' +
     '- **No "Load more":** neither the flat board nor any swimlane shows a "Load more" button or footer; columns render their cards directly and scroll, virtualized (DOM row count stays bounded on a tall column).\n' +
     '- **Over-cap warning:** `pnpm db:seed:large` (a project seeded past the cap) → the board shows the "more than {cap} work items — refine the filter" banner; a normal-sized project shows NO banner.\n' +
     '- **Done-age window:** the Done/terminal column shows only recently-resolved items (the ~14-day window) with the full count still surfaced; older done items are not loaded.\n' +
@@ -153,7 +153,7 @@ export const story_3_8: PlanStory = {
         '- `lib/services/boardsService.ts` `getBoard` + `lib/dto/boards.ts` + `lib/mappers/boardMappers.ts` (3.1.4 / 3.3.4) — the projection this changes (add `truncated`/`cap`, drop `cursor`)\n' +
         '- `app/api/board/columns/[columnId]/cards/route.ts` (3.1.6) — the load-more route to retire\n' +
         '- `lib/repositories/workItemRepository.ts` — the column read + count; the Done-age filter\n' +
-        '- finding #57 (bounded, not load-all — the cap IS the bound); the verified Jira cap + 14-day Done window (rung 1); `notes.html` mistake #33; `prodect-core/CLAUDE.md` (4-layer + DTO mapping)',
+        '- finding #57 (bounded, not load-all — the cap IS the bound); the verified Jira cap + 14-day Done window (rung 1); `notes.html` mistake #33; `motir-core/CLAUDE.md` (4-layer + DTO mapping)',
     },
     {
       id: '3.8.3',
@@ -257,7 +257,7 @@ export const story_3_8: PlanStory = {
         '- This subtask OWNS the board load-model coverage and SUPERSEDES the retired per-column "Load more"/cursor-paging assertions in 3.2.7 (if 3.2.7 landed first, update its specs); 3.2.7 / 3.3.7 keep their drag / reducer / grouping / reassign / WIP coverage unchanged — they are NOT cancelled.\n\n' +
         '## Context refs\n\n' +
         '- `tests/e2e/board-ui.spec.ts` (3.2.7) + `tests/e2e/board-projection.spec.ts` (3.1.7) — the board E2E this extends\n' +
-        '- `tests/helpers/db.ts`; the 3.8.2 projection + 3.8.3/3.8.4/3.8.5 UI under test; `prodect-core/CLAUDE.md` (real Postgres, no mocks)',
+        '- `tests/helpers/db.ts`; the 3.8.2 projection + 3.8.3/3.8.4/3.8.5 UI under test; `motir-core/CLAUDE.md` (real Postgres, no mocks)',
     },
   ],
 };

@@ -41,7 +41,7 @@ import type { PlanStory } from '../types';
  * built, and the fixture needs every service to seed through (the
  * no-raw-inserts seed rule).
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 5.6`, on the standing
+ * Expanded from its `stubs.ts` entry per `motir plan 5.6`, on the standing
  * `seed/epic-5-plan` branch. Matches the canonical style of 4.7 / 5.1–5.5.
  */
 export const story_5_6: PlanStory = {
@@ -145,7 +145,7 @@ export const story_5_6: PlanStory = {
         '- The Epic-5 services (5.1.2 / 5.2.2 / 5.2.3 / 5.3.3 / 5.4.2-4) — the only write ' +
         'paths the seed may use\n' +
         '- The board-E2E memories (valid fractional keys; CI lane cap=40) + the ' +
-        'no-raw-inserts seed rule (PRODECT.md Plan seed §)\n' +
+        'no-raw-inserts seed rule (MOTIR.md Plan seed §)\n' +
         '- `tests/e2e/_helpers/` conventions',
     },
     {

@@ -6,14 +6,14 @@ import type { PlanStory } from '../types';
  * **Why (Yue's direction, 2026-06-10).** The user-facing form of the loop the
  * planner runs by hand today: `motir next` dispatches the next ready work
  * item to the user's own coding agent; `motir auto` keeps dispatching, one
- * by one, until the ready set drains. This productizes `prodect run` /
- * `prodect next` for every Prodect user — the BYOK execution path the plan
+ * by one, until the ready set drains. This productizes `motir run` /
+ * `motir next` for every Motir user — the BYOK execution path the plan
  * has promised since story 7.0 shipped `/api/ready/next` naming "the BYOK
- * `prodect run` CLI" as its consumer.
+ * `motir run` CLI" as its consumer.
  *
  * **Mirror status: justified deviation, same escape clause as 7.0.** Jira and
  * Linear ship no "run the next work item with your coding agent" CLI — this
- * is Prodect's AI-coding-native differentiator, not a mirrorable surface.
+ * is Motir's AI-coding-native differentiator, not a mirrorable surface.
  * The concrete use case is recorded (the dogfood loop Yue runs daily, then
  * every BYOK user); the precedent is story 7.0's recorded deviation for the
  * same surface family.
@@ -31,7 +31,7 @@ import type { PlanStory } from '../types';
  *
  * **Prompt generation is SERVER-side (stub 7.6), consumed here.** The
  * dispatch payload's `descriptionMd` + `contextRefs` is not the full
- * canonical agent prompt (PRODECT.md § Prompt structure: CONTEXT / WHAT TO
+ * canonical agent prompt (MOTIR.md § Prompt structure: CONTEXT / WHAT TO
  * DO / ACCEPTANCE CRITERIA / GIT WORKFLOW, per-type variants). 7.6 owns
  * generating that server-side — one source of truth for every dispatch
  * surface (web "copy prompt", CLI, the future native AI-coding layer). The
@@ -40,23 +40,23 @@ import type { PlanStory } from '../types';
  * subtask when 7.6 expands). Listing/auth/linking commands don't need 7.6.
  *
  * **Multi-repo projects are the NORM — and the link binds a FOLDER to a
- * PROJECT, not repos (Yue, 2026-06-10, two refinements).** A Prodect project
- * usually spans several repos (Prodect itself is `prodect-core` +
- * `prodect-ai`), AND a brand-new project starts from an EMPTY folder — the
- * plan's first work items are what CREATE the repos (Prodect's own 1.0.1
- * scaffolded prodect-core into an empty directory). So `motir link` does
+ * PROJECT, not repos (Yue, 2026-06-10, two refinements).** A Motir project
+ * usually spans several repos (Motir itself is `motir-core` +
+ * `motir-ai`), AND a brand-new project starts from an EMPTY folder — the
+ * plan's first work items are what CREATE the repos (Motir's own 1.0.1
+ * scaffolded motir-core into an empty directory). So `motir link` does
  * exactly one thing: bind the **workspace root** directory to a server +
  * workspace + project. **Repo paths are CONVENTION, not configuration:**
  * the item's `targetRepo` resolves to `<root>/<repoName>` by default — the
  * plan knows its repo names before the repos exist (planning names them,
- * e.g. "prodect-core", at plan time), so convention covers the new-project
+ * e.g. "motir-core", at plan time), so convention covers the new-project
  * flow from item one with NOTHING to link. `.motir.json` carries
  * `{ serverUrl, workspace, project }` plus an OPTIONAL `repos` override map
  * for the exceptions (a checkout living elsewhere / under a different
  * name): `motir link add <repo> <path>` / `remove` manage overrides only.
  * Running `link` in an empty folder is therefore first-class — bind and
  * go. Commands resolve `.motir.json` by walking UPWARD from cwd, so
- * invoking from inside `prodect-core/` still sees the whole root — ONE
+ * invoking from inside `motir-core/` still sees the whole root — ONE
  * `motir auto` loop serves the whole project, dispatching each item INTO
  * its target repo's checkout (cwd of the agent process). The item→repo
  * association comes from the dispatch payload's structured `targetRepo`
@@ -168,7 +168,7 @@ import type { PlanStory } from '../types';
  * **The sandbox container (unattended runs need walls, not vibes).**
  * `motir auto --agent "claude --dangerously-skip-permissions"` is the
  * natural unattended form — and it must NOT run on the user's host. 7.9.7
- * ships a reference container (the shape of the dev sandbox Prodect itself
+ * ships a reference container (the shape of the dev sandbox Motir itself
  * is built in): an image with node/git/gh + a mounted workspace root +
  * mount points for the user's agent credentials, so the
  * skip-permissions agent is confined to the project checkouts. Running
@@ -193,7 +193,7 @@ export const story_7_9: PlanStory = {
   status: 'planned',
   gitBranch: 'story/PROD-7.9-motir-cli',
   descriptionMd:
-    "The command-line tool that runs Prodect's execution loop from the terminal: `motir next` " +
+    "The command-line tool that runs Motir's execution loop from the terminal: `motir next` " +
     "dispatches the next ready work item to the user's own coding agent, `motir auto` keeps " +
     'dispatching one item at a time until the ready set drains. Full command set: `motir auth ' +
     'login|status|logout` (PAT), `motir link` (bind a WORKSPACE ROOT directory — possibly ' +
@@ -239,7 +239,7 @@ export const story_7_9: PlanStory = {
     'root, creates `./<repoName>` (per its prompt), and the CLI confirms the checkout now ' +
     'exists; the NEXT item targeting that repo dispatches with cwd INSIDE `./<repoName>` — ' +
     'nothing was ever linked by hand.\n' +
-    '- With two checkouts present (the prodect-core + prodect-ai shape), run `motir ready` ' +
+    '- With two checkouts present (the motir-core + motir-ai shape), run `motir ready` ' +
     'from INSIDE one repo — the upward `.motir.json` resolution finds the binding; dispatch ' +
     "an item that targets the OTHER repo and verify the agent runs in that repo's " +
     'directory.\n' +
@@ -403,7 +403,7 @@ export const story_7_9: PlanStory = {
         'first (running a blocked item requires `--force`, mirroring that readiness is ' +
         "dependency-only and the override is the human's call).\n\n" +
         "**`motir done <key>`** — the close-out: `transition_status` → the project's done " +
-        'status (the CLI analog of `prodect mark <id> done`, run after the human merges the ' +
+        'status (the CLI analog of `motir mark <id> done`, run after the human merges the ' +
         "PR in manual mode). Illegal transitions surface the service's allowed-targets " +
         'error verbatim. **`motir done --session <branch>`** — the bulk close-out for a ' +
         'merged SESSION PR: calls `complete_session` (7.8.11), flipping every item recorded ' +
@@ -419,7 +419,7 @@ export const story_7_9: PlanStory = {
         "the item's `targetRepo` from the dispatch payload (7.6 sources it; 7.7's repo " +
         'entity upgrades it later): an override from `.motir.json` if present, else the ' +
         'convention `<root>/<repoName>`. Path EXISTS → the agent runs with cwd = that ' +
-        'checkout (dispatching a prodect-ai item while standing in prodect-core works). ' +
+        'checkout (dispatching a motir-ai item while standing in motir-core works). ' +
         'Path MISSING → the bootstrap rule: the agent runs at the WORKSPACE ROOT (the ' +
         "scaffold prompt's GIT WORKFLOW creates the checkout — the empty-folder new-project " +
         'flow); after exit 0 the CLI verifies the path now exists and reports a suspect ' +
@@ -459,7 +459,7 @@ export const story_7_9: PlanStory = {
         '(`excludeIds`, `kinds`)\n' +
         '- story 7.6 (server-side prompt generation — the story-level dep; retarget to its ' +
         'concrete subtask on expansion)\n' +
-        '- `PRODECT.md` § Prompt structure (what the generated prompt must contain — ' +
+        '- `MOTIR.md` § Prompt structure (what the generated prompt must contain — ' +
         'asserted server-side in 7.6, consumed here)\n\n' +
         '**Branch.** `subtask/PROD-7.9.3-cli-dispatch`.',
       dependsOn: ['7.9.1', '7.8.5', '7.8.11', '7.6'],
@@ -556,7 +556,7 @@ export const story_7_9: PlanStory = {
         '## Context refs\n\n' +
         '- 7.9.3 (the single-dispatch pipeline this loops)\n' +
         '- story-7.0.ts (`next_ready` sort/exclude contract)\n' +
-        '- PRODECT.md `prodect run` (the readiness-is-dependency-only rule the loop ' +
+        '- MOTIR.md `motir run` (the readiness-is-dependency-only rule the loop ' +
         'mirrors)\n\n' +
         '**Branch.** `subtask/PROD-7.9.4-cli-auto-loop`.',
       dependsOn: ['7.9.3', '7.8.11'],
@@ -577,8 +577,8 @@ export const story_7_9: PlanStory = {
         'link error with guidance; `.motir.json` resolution from a subdirectory. TWO ' +
         'fixtures: (a) an EMPTY workspace root — link binds with no repo entries, the ' +
         'scaffold item dispatches at the root (fake agent creates `./<repo>`), the next ' +
-        'item routes INTO it by convention; (b) a two-checkout root (the prodect-core + ' +
-        'prodect-ai shape) — dispatch routes each item into its target checkout (the fake ' +
+        'item routes INTO it by convention; (b) a two-checkout root (the motir-core + ' +
+        'motir-ai shape) — dispatch routes each item into its target checkout (the fake ' +
         'agent records its cwd), and a failed bootstrap (agent exits 0 but creates ' +
         'nothing) is reported as suspect, asserted in both `next` and `auto`.\n' +
         '- **Read parity:** `motir ready --json` ≡ `list_ready` ≡ the /ready set for the ' +
@@ -654,7 +654,7 @@ export const story_7_9: PlanStory = {
       descriptionMd:
         'The walls for the unattended mode (the story-header sandbox decision): `motir ' +
         'auto --agent "claude --dangerously-skip-permissions"` must have a confined, ' +
-        'reproducible place to run — the shape of the dev sandbox Prodect itself is built ' +
+        'reproducible place to run — the shape of the dev sandbox Motir itself is built ' +
         "in — instead of a skip-permissions agent loose on the user's host. Running " +
         '`motir auto` directly in a normal console with a permission-prompting agent ' +
         'remains fully supported; the container is the RECOMMENDED path for unattended ' +
@@ -781,7 +781,7 @@ export const story_7_9: PlanStory = {
         'repo, hard-capped total size. **Consent is explicit:** the bundle MANIFEST ' +
         '(file list + byte counts) prints first and nothing uploads without ' +
         'confirmation (`--yes` for unattended; `--no-context` skips the bundle ' +
-        'entirely) — the code crosses into the closed prodect-ai layer, so the user ' +
+        'entirely) — the code crosses into the closed motir-ai layer, so the user ' +
         'sees exactly what leaves the machine; the server side treats it as ' +
         'REQUEST-SCOPED (the 7.5 code-access decision — never persisted). An EMPTY ' +
         'linked folder sends no bundle and plans from the description alone — the ' +

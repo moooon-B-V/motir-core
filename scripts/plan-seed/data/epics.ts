@@ -23,7 +23,7 @@ export const EPICS: EpicMeta[] = [
       {
         id: '1.7',
         kind: 'task',
-        title: 'Set up CLA Assistant + commit Apache ICLA on prodect-core',
+        title: 'Set up CLA Assistant + commit Apache ICLA on motir-core',
         status: 'planned',
         type: 'manual',
         executor: 'human',
@@ -41,7 +41,7 @@ export const EPICS: EpicMeta[] = [
           'should economics ever break (HashiCorp/Elastic/Redis/MongoDB all eventually exercised ' +
           'theirs, each one made possible by a CLA they had in place from earlier).\n\n' +
           '**Template chosen by the planner: Apache ICLA (a LICENSE, not an assignment).** Apache ' +
-          'ICLA grants Prodect Inc. a broad license to the contribution; the contributor retains ' +
+          'ICLA grants Motir Inc. a broad license to the contribution; the contributor retains ' +
           'their copyright. This is contributor-friendly (low friction, the de-facto industry ' +
           'standard for individual contributions) AND broad enough to permit a future ' +
           'BSL/SSPL/source-available relicense — the rights granted include sublicensing, which ' +
@@ -54,51 +54,51 @@ export const EPICS: EpicMeta[] = [
           "we're protecting. DCO solves a different problem (provenance) and is not a CLA " +
           'substitute for our purpose.\n\n' +
           '**What you do.** (1) Sign in to https://cla-assistant.io with GitHub. ' +
-          '(2) Authorize CLA Assistant on `moooon-B-V/prodect-core` (prodect-ai is private and ' +
+          '(2) Authorize CLA Assistant on `moooon-B-V/motir-core` (motir-ai is private and ' +
           "won't have outside contributors — skip it). (3) Paste the Apache ICLA text " +
           '(https://www.apache.org/licenses/icla.pdf — convert to plain text), modified to name ' +
-          '**"Prodect Inc."** as the receiving party in §1. Save. CLA Assistant now hooks every ' +
-          'PR on prodect-core: it comments asking outside contributors to sign, and adds a ' +
+          '**"Motir Inc."** as the receiving party in §1. Save. CLA Assistant now hooks every ' +
+          'PR on motir-core: it comments asking outside contributors to sign, and adds a ' +
           'required status check that turns green only once signed. (4) On a `seed/cla-setup` ' +
-          'branch in prodect-core, commit **`prodect-core/CLA.md`** (the Apache ICLA text + a ' +
-          "short preamble naming Prodect Inc. and linking to CLA Assistant's signing flow) AND " +
-          'either create `prodect-core/CONTRIBUTING.md` or amend the existing one with a short ' +
+          'branch in motir-core, commit **`motir-core/CLA.md`** (the Apache ICLA text + a ' +
+          "short preamble naming Motir Inc. and linking to CLA Assistant's signing flow) AND " +
+          'either create `motir-core/CONTRIBUTING.md` or amend the existing one with a short ' +
           'paragraph: *"By opening a PR, you\'ll be asked to sign our CLA via CLA Assistant. This ' +
           "grants us the rights we need to maintain the project's open-source license and to " +
           'potentially relicense the codebase in the future. You retain copyright of your ' +
           'contribution."* Open + merge that PR (the `seed/*` prefix skips E2E + Vercel preview ' +
-          'per PRODECT.md § Plan seed). (5) Open a throwaway PR from a second GitHub account ' +
+          'per MOTIR.md § Plan seed). (5) Open a throwaway PR from a second GitHub account ' +
           '(or any account without a signed CLA on file); confirm the bot comments + the status ' +
           'check appears red until signed. Close the throwaway PR. (6) Record the throwaway PR ' +
           "URL in the seed PR's body as the verification artifact (so future-me can audit that " +
           'the gate is live).\n\n' +
           '## Acceptance criteria\n\n' +
-          '- CLA Assistant is installed and active on `moooon-B-V/prodect-core` (visible in the ' +
+          '- CLA Assistant is installed and active on `moooon-B-V/motir-core` (visible in the ' +
           "repo's installed-apps list and in CLA Assistant's dashboard).\n" +
-          '- `prodect-core/CLA.md` exists at repo root, contains Apache ICLA text adapted to ' +
-          'name Prodect Inc. as the receiving party.\n' +
-          '- `prodect-core/CONTRIBUTING.md` carries a paragraph naming the CLA requirement and ' +
+          '- `motir-core/CLA.md` exists at repo root, contains Apache ICLA text adapted to ' +
+          'name Motir Inc. as the receiving party.\n' +
+          '- `motir-core/CONTRIBUTING.md` carries a paragraph naming the CLA requirement and ' +
           'pointing contributors at the signing flow.\n' +
           '- A throwaway PR from an unsigned account demonstrates the bot comments + the ' +
           'required status check, recorded in the seed PR body.\n' +
           '- This task flips to `done` only on user confirmation that steps 1–5 are complete ' +
           '(mirrors 1.6.7 — manual SaaS provisioning, no PR-of-code to gate on).\n\n' +
           '## Context refs\n\n' +
-          '- `PRODECT.md` § Source of truth (open-core architecture paragraph) — names the ' +
-          'GPL-3.0 / closed-source `prodect-ai` split this CLA underwrites.\n' +
+          '- `MOTIR.md` § Source of truth (open-core architecture paragraph) — names the ' +
+          'GPL-3.0 / closed-source `motir-ai` split this CLA underwrites.\n' +
           '- `notes.html` mistake #17 — open-core is an architectural shift, not a license toggle; ' +
           'the CLA is the legal half of that architecture.\n' +
           '- Apache ICLA template: https://www.apache.org/licenses/icla.pdf\n' +
           '- CLA Assistant: https://cla-assistant.io\n' +
-          '- Related: a follow-up task to land PRODECT.md "License boundary" + "Fork posture" ' +
+          '- Related: a follow-up task to land MOTIR.md "License boundary" + "Fork posture" ' +
           'doc edits (from the same legal-posture conversation) is out of scope here — separate ' +
-          '`seed/*` PR against prodect-meta. The trademark filing (~$500, ~12 months) is ALSO ' +
+          '`seed/*` PR against motir-meta. The trademark filing (~$500, ~12 months) is ALSO ' +
           'out of scope and tracked as a finding rather than a planned task (it has no software ' +
           'artifact and no dependency on the seed).',
         explanationMd:
           'The CLA is the legal floor under the open-core moat. The license boundary rule ' +
-          '(`prodect-core` GPL-3.0 calling `prodect-ai` closed over HTTP) survives only if ' +
-          'Prodect Inc. retains enough rights over `prodect-core` to relicense if the open-core ' +
+          '(`motir-core` GPL-3.0 calling `motir-ai` closed over HTTP) survives only if ' +
+          'Motir Inc. retains enough rights over `motir-core` to relicense if the open-core ' +
           'economics ever require it. Without a CLA, every outside contributor holds a copyright ' +
           'fragment we cannot unilaterally move — and the relicense option dies. With a CLA from ' +
           "day one, the option stays alive for the project's full lifetime at zero ongoing cost.",
@@ -110,7 +110,7 @@ export const EPICS: EpicMeta[] = [
     title: 'Issue tracking core',
     status: 'done',
     descriptionMd:
-      'The irreducible Jira core — the first epic of the PM substrate that makes Prodect a usable ' +
+      'The irreducible Jira core — the first epic of the PM substrate that makes Motir a usable ' +
       "standalone product. Built directly on Story 1.4's `work_item` model: issue types " +
       '(epic / story / task / bug), the issue detail view, create / edit, customizable per-project ' +
       'status **workflows**, assignees, and the issue list. After this epic a team can track real ' +
@@ -135,7 +135,7 @@ export const EPICS: EpicMeta[] = [
           'Resolution: add a project-settings sub-nav (Workflow / Archive / …) so every settings ' +
           'sub-page has an entry point. **Links:** *discovered in* Story 2.2 (subtask 2.2.5); ' +
           '*fix belongs to* Story 1.5 (app-shell / settings-nav). Not nested under either — linked.\n\n' +
-          '**Resolution (prodect-core `4bc4463`):** the `/settings/project` page now renders a ' +
+          '**Resolution (motir-core `4bc4463`):** the `/settings/project` page now renders a ' +
           '**Workflow navigation card** linking to the editor — the minimal fix, reusing the ' +
           'existing Card grammar (a single `<Link>` wrapping the card, no new settings-nav chrome ' +
           'invented). E2E in `tests/e2e/workflow-settings.spec.ts` asserts the editor is reachable ' +
@@ -473,7 +473,7 @@ export const EPICS: EpicMeta[] = [
           '- The chosen fix lands as one corrective migration that applies cleanly on a fresh DB ' +
           'and is idempotent; `attachment.uploader_user_id` integrity ends up in the intended state ' +
           '(FK kept-and-modeled, or intentionally dropped — whichever option is chosen).\n' +
-          '- A short note in `prodect-core/CLAUDE.md` (migration conventions) records the decision ' +
+          '- A short note in `motir-core/CLAUDE.md` (migration conventions) records the decision ' +
           'so the pattern is not reintroduced.\n\n' +
           '## Context refs\n\n' +
           '- `prisma/schema.prisma` — the `Attachment` model (`uploaderUserId` scalar, no relation) ' +
@@ -481,7 +481,7 @@ export const EPICS: EpicMeta[] = [
           '- `prisma/migrations/20260603120000_add_attachment_and_rls/migration.sql` — where the FK ' +
           'is created in raw SQL (Story 2.3.7)\n' +
           '- 3.3.2 feature PR — the curated migration whose header documents this drift; ' +
-          '`prodect-core/CLAUDE.md` — migration conventions',
+          '`motir-core/CLAUDE.md` — migration conventions',
       },
       {
         id: 'bug-swimlane-lane-header-not-spanning-scrolled-columns',
@@ -564,7 +564,7 @@ export const EPICS: EpicMeta[] = [
           '- `design/boards/swimlanes-wip.mock.html` + `design/boards/design-notes.md` (Subtask ' +
           '3.3.1) — the design source: a sticky-left `.lane-head` LABEL above its `.lane-cols` ' +
           'row, with the band intended to span the full track\n' +
-          '- `prodect-core/CLAUDE.md` — colour via `--el-*`, shape via element-shape tokens ' +
+          '- `motir-core/CLAUDE.md` — colour via `--el-*`, shape via element-shape tokens ' +
           '(applies to whatever new wrapper the fix introduces)\n' +
           '- `tests/e2e/board-swimlanes.spec.ts` — where the regression check belongs, mirroring ' +
           'the structural posture of the `bug-tree-header-misalignment` fix (measure rendered ' +
@@ -660,7 +660,7 @@ export const EPICS: EpicMeta[] = [
           '- `PRODECT_FINDINGS.md` #61 — the planner-side finding entry that surfaced this bug\n' +
           '- `tests/components/board-swimlanes-render.test.tsx` — where the missing collapsed-' +
           'state assertion belongs\n' +
-          '- `prodect-core/CLAUDE.md` — colour via `--el-*`, shape via element-shape tokens ' +
+          '- `motir-core/CLAUDE.md` — colour via `--el-*`, shape via element-shape tokens ' +
           '(applies to whatever new wrapper the fix introduces)\n\n' +
           '**Refactor signal (rule of three):** this is the SECOND occurrence of `min-w-max` ' +
           'open-coded on a swimlane row producing a width-establishment bug. If a third ' +
@@ -679,7 +679,7 @@ export const EPICS: EpicMeta[] = [
       'start / complete), **story-point estimation**, the **Scrum board** (the Epic-3 Kanban ' +
       "surface scoped to a board's active sprint, under a sprint header — Story 4.5, moved here " +
       'from Epic 3 per mistake #32 so it ships alongside the sprints it depends on), and the ' +
-      'velocity + burndown charts that make iteration measurable. Turns Prodect from an issue ' +
+      'velocity + burndown charts that make iteration measurable. Turns Motir from an issue ' +
       'tracker into a full agile-planning tool — the Scrum half of the Jira feature set, with ' +
       'the Scrum view sitting on the same board substrate Epic 3 already shipped.',
     items: [
@@ -901,7 +901,7 @@ export const EPICS: EpicMeta[] = [
     descriptionMd:
       'The tools that make the PM core enterprise-usable and complete the standalone Jira ' +
       'alternative: **search & filtering**, **dashboards & reports**, **roles & permissions**, ' +
-      'project admin, and **automation rules**. After this epic, prodect-core is a feature-complete ' +
+      'project admin, and **automation rules**. After this epic, motir-core is a feature-complete ' +
       'PM tool — ready for the AI Planning Layer (Epic 7) to sit on top.',
   },
   {
@@ -913,9 +913,9 @@ export const EPICS: EpicMeta[] = [
       'chat front door drafts discovery context, generates and augments the issue tree in the PM ' +
       'core (the former "pre-plan" + "build phase"), and an execution surface turns issues into ' +
       'agent-ready prompts dispatched to the user\'s own coding agent (the former "execution" ' +
-      'epic). This is the closed `prodect-ai` layer the open core calls into over a documented ' +
+      'epic). This is the closed `motir-ai` layer the open core calls into over a documented ' +
       'HTTP API. A team that never opens the chat box still has a full Jira alternative; this epic ' +
-      'makes Prodect AI-native on top of that.\n\n' +
+      'makes Motir AI-native on top of that.\n\n' +
       '**Story 7.0 ships early (justified deviation from linear epic order).** The AI dispatch ' +
       'surface — the `/ready` page + `GET /api/ready` + `POST /api/ready/next` — is the BYOK ' +
       "agent contract today and the future native AI-coding layer's contract tomorrow. It has no " +
@@ -934,6 +934,6 @@ export const EPICS: EpicMeta[] = [
       'site + the Motir brand mark, go-to-market strategy, the one-time Prodect → Motir rebrand ' +
       'cutover, ToS + privacy policy, transactional email, basic analytics, production deploy, ' +
       'domain + SSL, onboarding, and day-1 admin tools. Most of this is human subtasks ' +
-      "running through Prodect's own queue. (Formerly Epic 5.)",
+      "running through Motir's own queue. (Formerly Epic 5.)",
   },
 ];

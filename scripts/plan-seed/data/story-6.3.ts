@@ -71,7 +71,7 @@ import type { PlanStory } from '../types';
  * cross-project WIDGET-BY-WIDGET (each gadget names its own project/filter,
  * the verified Jira gadget pattern), never via a cross-project filter.
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 6.3`, on the standing
+ * Expanded from its `stubs.ts` entry per `motir plan 6.3`, on the standing
  * `seed/epic-5-plan` branch (Epic-5/6 planning). Matches the canonical style
  * of 5.1–5.6 and 6.1.
  */
@@ -147,14 +147,14 @@ export const story_6_3: PlanStory = {
     '- `pnpm test:coverage` — Vitest (real Postgres) over the widget registry, the ' +
     'aggregation reads (bucket/cumulative/group-by matrices), and the permission gates ≥90% ' +
     'per-file branch/fn/line.\n' +
-    '- **Dashboards flow:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz` → /dashboard ' +
+    '- **Dashboards flow:** sign in as `zhuyue@motir.co` / `!QAZ1qaz` → /dashboard ' +
     '(matching `design/reports/dashboard.mock.html`) → create "Team overview", access ' +
     'Workspace → add a **filter-results** widget over a 6.2 saved filter (rows paginate at ' +
     'the designed page size, ≤50), a **distribution** donut (Statistic type: Status — counts ' +
     '+ percentages in the legend), and a **created-vs-resolved** chart (Weekly, last 90 ' +
     'days; toggle Cumulative and watch the series re-shape) → switch the layout between ' +
     '1/2/3 columns and drag widgets between columns → reload: layout + positions persist.\n' +
-    '- **Sharing + permissions:** as `bophilips@prodect.co`, the Workspace dashboard is ' +
+    '- **Sharing + permissions:** as `bophilips@motir.co`, the Workspace dashboard is ' +
     'visible but not editable (no edit affordances); a Private dashboard is invisible. ' +
     "Point a widget at a 6.4-private project bophilips isn't a member of → bophilips sees " +
     'the no-access widget state, zhuyue sees the data (per-viewer gating).\n' +
@@ -242,7 +242,7 @@ export const story_6_3: PlanStory = {
         'enumeration this extends — its "6.3 widgets join in by FK later" line)\n' +
         '- `lib/workItems/positioning.ts` + the 3.2 move-service pattern (fractional ' +
         'index, server-computed)\n' +
-        '- `prodect-core/CLAUDE.md` (4-layer, required-`tx`, FK/migration rules); ' +
+        '- `motir-core/CLAUDE.md` (4-layer, required-`tx`, FK/migration rules); ' +
         'finding #26 (workspace gate); `lock-before-read-derived-update` (the move tx)\n' +
         '- The verified Jira dashboard facts in the Story 6.3 description (ownership/' +
         'sharing/layout/cap)',
@@ -446,7 +446,7 @@ export const story_6_3: PlanStory = {
         'chart specimen — the layer this grows\n' +
         '- `design/reports/dashboard.mock.html` + notes (6.3.3) — THE authority for ' +
         'both forms\n' +
-        '- `prodect-core/CLAUDE.md` (token tiers, the growth pattern); findings ' +
+        '- `motir-core/CLAUDE.md` (token tiers, the growth pattern); findings ' +
         '#35/#54\n' +
         '- The 4.6.1 chart a11y pattern (hidden data table)',
     },

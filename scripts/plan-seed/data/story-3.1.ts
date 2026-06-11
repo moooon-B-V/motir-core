@@ -11,7 +11,7 @@ import type { PlanStory } from '../types';
  * `design/boards/` mockup + its `type: design` subtask). 3.1 has no
  * UI-touching subtask, so it has no design subtask — by design, not omission.
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 3.1`. Matches the
+ * Expanded from its `stubs.ts` entry per `motir plan 3.1`. Matches the
  * canonical depth + string-literal style of the Epic-2 modules (e.g. 2.2).
  */
 export const story_3_1: PlanStory = {
@@ -55,7 +55,7 @@ export const story_3_1: PlanStory = {
     'in `status.position` order) + `project.workflow_policy_mode` + the transition validation the ' +
     'move path delegates to (2.2.4). Story 1.4 ships `work_item` with the `status` string + the ' +
     '`position` fractional index (finding #18) the within-column reorder writes. Story 2.5 ships the ' +
-    "paginated issue-read precedent (2.5.12). All work follows `prodect-core/CLAUDE.md`'s 4-layer " +
+    "paginated issue-read precedent (2.5.12). All work follows `motir-core/CLAUDE.md`'s 4-layer " +
     'architecture (Route → Service → Repository → Prisma); every new route carries an explicit ' +
     '`workspaceId` application-layer gate (finding #26 — RLS is the backstop, not the sole gate, ' +
     'because the dev/CI superuser bypasses RLS).',
@@ -130,7 +130,7 @@ export const story_3_1: PlanStory = {
         '- Story 2.2.1’s `workflow_status` migration — the canonical RLS + `app.system_admin` escape-hatch shape this Subtask mirrors\n' +
         '- Story 1.4.5’s `FORCE ROW LEVEL SECURITY` migration on `work_item`\n' +
         '- `tests/jobs/rls.test.ts` — the role-switch RLS-proof harness\n' +
-        '- `prodect-core/CLAUDE.md` — 4-layer rule, repo-write contract\n' +
+        '- `motir-core/CLAUDE.md` — 4-layer rule, repo-write contract\n' +
         '- Finding #18 — `Decimal(20,10)` position-column shape; finding #33 — GUC namespace',
     },
     {
@@ -180,7 +180,7 @@ export const story_3_1: PlanStory = {
         '- `lib/services/projectsService.ts` — the `createProject` transaction the board seed joins\n' +
         '- Story 2.2.2 — the default-workflow seed wired into `createProject` (the exact pattern this mirrors)\n' +
         '- `scripts/plan-seed/seed.ts` — how the tenant reseed runs services under the workspace GUC\n' +
-        '- `prodect-core/CLAUDE.md` — one-service-method-one-transaction; no raw inserts',
+        '- `motir-core/CLAUDE.md` — one-service-method-one-transaction; no raw inserts',
     },
     {
       id: '3.1.3',
@@ -222,7 +222,7 @@ export const story_3_1: PlanStory = {
         '## Context refs\n\n' +
         '- `lib/repositories/workflowsRepository.ts` — the exact shape (single-op, required-tx writes, batched reads) this mirrors\n' +
         '- `lib/repositories/workItemRepository.ts` — read-path / filter conventions\n' +
-        '- `prodect-core/CLAUDE.md` — Repository layer rules (single op, required tx, entity-named, leaves)',
+        '- `motir-core/CLAUDE.md` — Repository layer rules (single op, required tx, entity-named, leaves)',
     },
     {
       id: '3.1.4',
@@ -273,7 +273,7 @@ export const story_3_1: PlanStory = {
         '- `lib/dto/workItems.ts` — the card-field precedent for `BoardCardDto`\n' +
         '- Story 1.4 / finding #21 — the readiness predicate the blocked signal reuses\n' +
         '- Finding #57 — the bounded-projection (no load-all) scale rule; finding #26 — the workspace gate\n' +
-        '- `prodect-core/CLAUDE.md` — service owns DTO mapping; mappers in `lib/mappers/*`',
+        '- `motir-core/CLAUDE.md` — service owns DTO mapping; mappers in `lib/mappers/*`',
     },
     {
       id: '3.1.5',
@@ -322,7 +322,7 @@ export const story_3_1: PlanStory = {
         '- Story 2.2.4 — `issuesService.updateStatus` + `workflowsService.canTransition` (the validated transition path the move delegates to; do NOT re-implement transition validation)\n' +
         '- `lib/workItems/positioning.ts` — the fractional-index rank helper (finding #18) reused for in-column reorder\n' +
         '- `lib/services/workflowsService.ts` — policy mode + `canTransition`\n' +
-        '- `prodect-core/CLAUDE.md` — one-service-method-one-transaction; typed errors in `lib/<domain>/errors.ts`',
+        '- `motir-core/CLAUDE.md` — one-service-method-one-transaction; typed errors in `lib/<domain>/errors.ts`',
     },
     {
       id: '3.1.6',
@@ -361,7 +361,7 @@ export const story_3_1: PlanStory = {
         '- `app/api/projects/[key]/…` — the existing project-scoped route tree + key/workspace resolution pattern\n' +
         '- `lib/services/boardsService.ts` — `getBoard` / `loadColumnCards` / `moveCard` (3.1.4, 3.1.5)\n' +
         '- `lib/boards/errors.ts` — the typed errors the route maps to status codes\n' +
-        '- `prodect-core/CLAUDE.md` — Route layer rules (HTTP only, one service call, error→status mapping); finding #26 — explicit workspace gate',
+        '- `motir-core/CLAUDE.md` — Route layer rules (HTTP only, one service call, error→status mapping); finding #26 — explicit workspace gate',
     },
     {
       id: '3.1.7',

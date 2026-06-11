@@ -65,7 +65,7 @@ import type { PlanStory } from '../types';
  * the 1.6 harness. Blob store + token already provisioned (2.3 manual subtask,
  * done) — no new manual/human prerequisite.
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 5.2`, on the standing
+ * Expanded from its `stubs.ts` entry per `motir plan 5.2`, on the standing
  * `seed/epic-5-plan` branch. Matches the canonical depth + string-literal
  * style of Stories 4.6 / 5.1.
  */
@@ -140,7 +140,7 @@ export const story_5_2: PlanStory = {
     '(link/list/delete/permissions), the link-on-write parser, and the GC job stays ≥90% ' +
     'per-file branch/fn/line (the coverage gate); new repo methods carry direct ' +
     'empty-input-guard tests.\n' +
-    '- **Panel flow:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz`, open an issue → the ' +
+    '- **Panel flow:** sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open an issue → the ' +
     'Attachments panel (matching `design/work-items/attachments.mock.html`). Upload via the ' +
     'Attach button AND by dragging a file onto the panel → cards appear (image thumbnail / ' +
     'file-type glyph, name, date; list view adds size); download works; the count updates.\n' +
@@ -208,7 +208,7 @@ export const story_5_2: PlanStory = {
         'backfill verified; empty-input guards on every new repo method (the coverage gate).\n\n' +
         '## Context refs\n\n' +
         '- `prisma/schema.prisma` `Attachment` (the 2.3.7 model + its RLS migration) + ' +
-        '`WorkItem`; `prodect-core/CLAUDE.md` (FK-as-@relation rule, required-`tx` writes)\n' +
+        '`WorkItem`; `motir-core/CLAUDE.md` (FK-as-@relation rule, required-`tx` writes)\n' +
         "- `lib/repositories/attachmentRepository.ts` (2.3.7) — extend, don't fork\n" +
         '- Finding #52 — the reuse contract (rows deliberately unlinked until this story)\n' +
         '- Story 5.2 description — the SetNull-not-cascade lifecycle decision',

@@ -1,7 +1,7 @@
 /**
- * Typed shape of the Prodect build plan — the data the `pnpm db:seed` loader
- * (scripts/plan-seed/seed.ts) turns into the `moooon` / `prodect` work-item
- * tree. This is the NEW source of truth for planning (PRODECT.md): planning
+ * Typed shape of the Motir build plan — the data the `pnpm db:seed` loader
+ * (scripts/plan-seed/seed.ts) turns into the `moooon` / `motir` work-item
+ * tree. This is the NEW source of truth for planning (MOTIR.md): planning
  * edits the per-story modules under `data/`, NOT the frozen `prodect_plan/`
  * HTML archive.
  *
