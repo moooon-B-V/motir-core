@@ -152,3 +152,140 @@ mapping; the mockup's Toggle-dark confirms parity):
   here.
 - The at-scale combined Scrum journey that also exercises these charts — **Story
   4.7** (the Scrum analogue of 3.5).
+
+---
+
+# Dashboards + Reports — design notes (Story 6.3 · subtask 6.3.3)
+
+Design reference for the **dashboards surface + the Reports hub + the two
+built-in report pages** (Story 6.3). The 4.6.1 asset above designed only the
+chart visual language + the burndown/velocity; the dashboard grid, the two NEW
+chart forms (donut + two-series difference/area), and the Reports hub + report
+pages were undesigned — the design-gate "NONE exists" case — so 6.3.3 draws them
+here. The **"filter missing" degraded widget body is INHERITED** from
+`design/work-items/saved-filters.mock.html` panel 6 (6.2.2): referenced, not
+redrawn; we add only the in-grid `Choose a filter` reconfigure affordance.
+
+| Surface                  | Asset                                   | Notes                                                                                                                                                                                                                              |
+| ------------------------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dashboards + Reports** | **`dashboard.mock.html`** (HTML mockup) | 8 panels: new tokens · dashboards home (list/switcher/create/empty) · grid VIEW · grid EDIT (layouts/dnd/add-picker/cap) · widget config panels · widget states · Reports hub · the two report pages. Gates 6.3.4 / 6.3.5 / 6.3.6. |
+
+Built FROM the real design system (the 4.6.1 convention): the token block is
+copied 1:1 from `app/globals.css` (Tier-0 `--color-*` + Tier-3 `--el-*` + shape
+tokens), includes the 4.6.1 `--el-chart-*` series tokens, and EXTENDS Tier 3
+with the NEW tokens 6.3.4 must add (below). Shipped primitives only — `Card`,
+`Modal`, `Combobox` (menu + day/time-select vocabulary), `Segmented`,
+`FormField`/`Input`, `EmptyState`/`ErrorState`, `Pill` tones, the 6.4.1
+access-card radio grammar, the 2.5 issue-row vocabulary (`IssueTypeIcon` in the
+`--el-type-*` hues + the priority `Pill`), the 3.2 board `dnd-kit` drag grammar.
+`--el-*` only (no Tier-0 `--color-*` in markup); shape via element tokens;
+AA-safe; READ AS TEXT (legend + counts + percentages + a `<table>` fallback),
+never colour alone (finding #35). Render checklist + AA + dark parity confirmed
+(`dashboard.png`; toggle dark in the mockup).
+
+## NEW `--el-chart-*` tokens (6.3.4 adds these to globals.css Tier 3)
+
+Extend the 4.6.1 `--el-chart-*` set. Every donut/difference colour routes through
+one of these — never a raw `--color-*` (the per-component growth pattern,
+CLAUDE.md / mistake #20). They inherit the `[data-theme="dark"]` flip + a future
+`data-palette` via their `--color-*` mapping (the mockup's Toggle-dark confirms
+parity):
+
+| Token                 | Maps to               | Role                                                               |
+| --------------------- | --------------------- | ------------------------------------------------------------------ |
+| `--el-chart-cat-1`    | `--color-primary`     | distribution donut segment 1                                       |
+| `--el-chart-cat-2`    | `--color-info`        | segment 2                                                          |
+| `--el-chart-cat-3`    | `--color-success`     | segment 3                                                          |
+| `--el-chart-cat-4`    | `--color-warning`     | segment 4                                                          |
+| `--el-chart-cat-5`    | `--color-accent-teal` | segment 5                                                          |
+| `--el-chart-cat-6`    | `--color-accent`      | segment 6                                                          |
+| `--el-chart-cat-7`    | `--color-charcoal`    | segment 7 (ramp length; see overflow rule)                         |
+| `--el-chart-cat-none` | `--color-stone`       | the "None" / unset group — always last, neutral grey               |
+| `--el-chart-created`  | `--color-info`        | created-vs-resolved — the created series line                      |
+| `--el-chart-resolved` | `--color-success`     | created-vs-resolved — the resolved series line                     |
+| `--el-chart-deficit`  | `--color-destructive` | difference fill where **created > resolved** (~22% α, backlog ↑)   |
+| `--el-chart-surplus`  | `--color-success`     | difference fill where **resolved > created** (~22% α, catching up) |
+
+## The two chart forms 6.3.4 builds (INSIDE the 4.6.2 SVG layer — no library)
+
+- **Donut** — annular segments from `(label, count, percentage)` data, drawn as
+  SVG arc paths (`M outer A R R 0 large 1 outer L inner A r r 0 large 0 inner Z`;
+  `large = 1` when the segment angle > 180°), starting at top (−90°) clockwise.
+  Center hole shows the **total** + a noun ("80 issues"). Colour cycles the
+  `--el-chart-cat-1..7` ramp; the **None** group is always `--el-chart-cat-none`.
+  **Overflow:** beyond 7 segments the ramp would repeat, so cap visible segments
+  and roll the remainder into a **"+N more"** legend row (never indistinguishable
+  repeats). The **visible text legend** carries count + percentage per segment —
+  colour is never the sole signal (finding #35). The widget uses a compact
+  side-legend; the report page a larger one. Both ship the `<table>` data
+  fallback (the 4.6.1 a11y pattern). Zero data → the empty state (never `NaN`
+  geometry).
+- **Two-series difference/area** — created (`--el-chart-created`) vs resolved
+  (`--el-chart-resolved`) lines over day/week/month buckets, reusing the 4.6.2
+  axes/gridlines/ticks/legend. The **difference is shaded**: `--el-chart-deficit`
+  (red, ~22% α) where created sits above resolved (backlog growing),
+  `--el-chart-surplus` (green, ~22% α) where resolved sits above created
+  (catching up) — split at each crossover. The cumulative variant is just data
+  (running-sum), no separate form. Reinforced by which line is on top + the
+  legend labels, so it survives greyscale (finding #35). The report page ships
+  the `<table>` fallback.
+
+## Widget-type ↔ registry mapping (the 6.3.1 UI contract)
+
+The widget-type registry (6.3.1) is TOTAL over the three types; the UI renders
+its **editor kind** (config panel) + **renderer kind** (body) — it never
+hard-codes the type list, so a registry addition appears in the add-picker + as
+a config panel with **zero UI change** (asserted in 6.3.5 with a test-only
+registry entry).
+
+| Type                  | Source line / data source      | Config editor kind (panel 4)                                               | Renderer kind (body)                                                                                      |
+| --------------------- | ------------------------------ | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `filter_results`      | `savedFilterId` \| `projectId` | data-source XOR + rows-per-page stepper (≤50, the verified gadget cap)     | compact issue table (2.5 row vocab: key · type glyph · summary · priority Pill · assignee avatar) + pager |
+| `distribution`        | `savedFilterId` \| `projectId` | data-source XOR + statistic-type Combobox (the TOTAL statistic registry)   | the **donut** + text legend (count + %)                                                                   |
+| `created_vs_resolved` | `savedFilterId` \| `projectId` | data-source XOR + period Segmented + days-back stepper + cumulative Toggle | the **difference/area** form                                                                              |
+
+The **data-source XOR** is one shared control — a Segmented `Saved filter | Project`
+that swaps the Combobox below it, so exactly one of `savedFilterId` / `projectId`
+ever sets (the 6.3.1 422 on both/neither). The **report pages (6.3.6) reuse the
+SAME editor kinds at page level** — one control vocabulary, two hosts.
+
+## Widget states (per-widget isolation — one failure never breaks the grid)
+
+`loading` (skeleton in the body's shape) · `error` (`ErrorState` + Retry) ·
+`empty` (zero matching issues) · **`no-access`** (the 6.4 per-VIEWER gate — a
+locked card leaking no counts/rows/chart shape; a workspace-shared dashboard
+renders for everyone but each widget read is gated per viewer) · **`stale`** (the
+INHERITED 6.2.2 "Filter missing" body + the in-grid `Choose a filter` action).
+The dashboard caps at **20 widgets** (the grid shows the cap note + disables
+`Add widget`).
+
+## Access + sharing (the recorded narrowing)
+
+`access` is `private | workspace` with **owner-only edit** (create = any member;
+the create modal asks only name + access via the 6.4.1 access-card grammar). The
+dashboards home groups **My dashboards** (full edit) vs **Shared with the
+workspace** (a `View only` chip, overflow hidden). Site = the **workspace** (the
+shell's outer boundary, rung 2) at `/dashboard`.
+
+## Extension slots (documented, each justified — not built here)
+
+- The Jira **audience matrix** (user/group/role/public viewer + editor lists) —
+  the `access` enum grows into it; `private | workspace` ships.
+- **Default/system dashboard**, **starring**, **wallboard/slideshow** mode —
+  presentation-layer extensions.
+- **Per-gadget auto-refresh** — needs a polling story.
+- **More gadget types** (Assigned to Me, Activity Stream, Two-Dimensional
+  Statistics, Average Age, Resolution Time) + **more report types** — registry
+  additions (the add-picker + Reports hub both render from their registries).
+- **Column config** on filter-results (fixed sensible columns ship; a picker is
+  additive); **version overlays** on created-vs-resolved (no version entity).
+
+## Out of scope (built elsewhere, consumed here)
+
+- The widget/report **data reads** — `dashboardsService` CRUD/move (6.3.1) + the
+  `reportsService` aggregations (6.3.2: created-vs-resolved buckets, distribution
+  group-by, filter-results page, per-viewer gating). This asset is pure UI.
+- The **chart primitives** themselves — 6.3.4 builds the donut + difference/area
+  into the 4.6.2 layer from this spec.
+- The **agile report surfaces** the Reports hub links into (burndown / velocity /
+  sprint report) — shipped by 4.4–4.6; referenced greyed, never redrawn.
