@@ -11,6 +11,7 @@
 import type { WorkflowDto } from './workflows';
 import type { RelationshipKind } from './workItemLinks';
 import type { LabelDto } from './labels';
+import type { ComponentDto } from './components';
 import type { CustomFieldWithValueDto } from './customFieldValues';
 
 export type WorkItemKindDto = 'epic' | 'story' | 'task' | 'bug' | 'subtask';
@@ -135,6 +136,12 @@ export interface IssueDetailDto {
    * these as chips). Bounded in practice by the per-issue cap.
    */
   labels: LabelDto[];
+  /**
+   * The issue's components, name-ordered (Subtask 5.4.3 — rides the detail
+   * read's parallel fetch, one bounded query; the 5.4.8 rail card renders
+   * these as chips). Bounded by the project's admin-curated taxonomy.
+   */
+  components: ComponentDto[];
   /**
    * The project's custom-field definitions in position order, each with its
    * option set and THIS issue's resolved value (Subtask 5.3.3 — one bounded
@@ -384,6 +391,21 @@ export interface CreateWorkItemInput {
    * a plain create, unchanged from 1.4.4.
    */
   links?: CreateWorkItemLinkInput[];
+  /**
+   * Components to assign ATOMICALLY with the issue (Subtask 5.4.3 — the
+   * create modal's Components picker). Every id must resolve to a component
+   * of the SAME project (unknown / cross-workspace → 404 `ComponentNotFoundError`,
+   * another project's → `CrossProjectComponentError` 422), pre-checked before
+   * the create transaction so a denied create never burns a work-item key;
+   * the join rows are written inside the create transaction (issue +
+   * components commit or roll back together, the links rule). Carrying
+   * components also arms the verified at-create default-assignee rule: an
+   * issue created with components and NO assignee takes the default assignee
+   * of its first-alphabetical component that has one (create-time only —
+   * later component changes never touch the assignee). Omitted/empty → a
+   * plain create.
+   */
+  componentIds?: string[];
 }
 
 /**

@@ -666,3 +666,112 @@ describe('the 5.3.2 repository additions', () => {
     ).toEqual([]);
   });
 });
+
+describe('the 5.3.6 additions — description edit + per-option usage counts', () => {
+  it('updateFieldDescription sets, trims, and clears the description', async () => {
+    const fx = await makeWorkItemFixture();
+    const field = await createField(fx, 'Customer');
+    const base = { fieldId: field.id, actorUserId: fx.ownerId, ctx: fx.ctx };
+
+    const set = await customFieldsService.updateFieldDescription({
+      ...base,
+      description: '  Who reported it.  ',
+    });
+    expect(set.description).toBe('Who reported it.');
+    // The other definition columns are untouched.
+    expect(set.label).toBe('Customer');
+    expect(set.key).toBe('customer');
+
+    const cleared = await customFieldsService.updateFieldDescription({
+      ...base,
+      description: '   ',
+    });
+    expect(cleared.description).toBeNull();
+  });
+
+  it('updateFieldDescription is admin-gated and 404s unknown ids', async () => {
+    const fx = await makeWorkItemFixture();
+    const field = await createField(fx, 'Customer');
+
+    await expect(
+      customFieldsService.updateFieldDescription({
+        fieldId: 'missing',
+        actorUserId: fx.ownerId,
+        ctx: fx.ctx,
+        description: 'X',
+      }),
+    ).rejects.toBeInstanceOf(CustomFieldNotFoundError);
+
+    // A plain workspace member (no project-admin tier) is the canonical 403.
+    const member = await usersService.createUser({
+      email: 'desc-member@example.com',
+      password: 'hunter2hunter2',
+      name: 'desc-member@example.com',
+    });
+    await workspacesService.addMember({
+      userId: member.id,
+      workspaceId: fx.workspaceId,
+      role: 'member',
+    });
+    await expect(
+      customFieldsService.updateFieldDescription({
+        fieldId: field.id,
+        actorUserId: member.id,
+        ctx: { userId: member.id, workspaceId: fx.workspaceId },
+        description: 'X',
+      }),
+    ).rejects.toBeInstanceOf(NotProjectAdminError);
+  });
+
+  it('listFields and the option mutations carry per-option usage counts', async () => {
+    const fx = await makeWorkItemFixture();
+    const field = await createField(fx, 'Severity', 'select', { options: ['Low', 'High'] });
+    const issue = await createTestWorkItem(fx, { kind: 'task', title: 'Holder' });
+    await setOptionValue(fx, issue.id, field.id, field.options[0]!.id);
+
+    const [listed] = await customFieldsService.listFields(actorInput(fx));
+    expect(listed!.options.map((o) => ({ label: o.label, valueCount: o.valueCount }))).toEqual([
+      { label: 'Low', valueCount: 1 },
+      { label: 'High', valueCount: 0 },
+    ]);
+
+    // Mutation DTOs carry the count too (the archive flow keeps the gloss).
+    const archived = await customFieldsService.archiveOption({
+      optionId: field.options[0]!.id,
+      actorUserId: fx.ownerId,
+      ctx: fx.ctx,
+    });
+    expect(archived.valueCount).toBe(1);
+
+    const renamed = await customFieldsService.renameOption({
+      optionId: field.options[1]!.id,
+      actorUserId: fx.ownerId,
+      ctx: fx.ctx,
+      label: 'Critical',
+    });
+    expect(renamed.valueCount).toBe(0);
+  });
+
+  it('countGroupedByOption groups counts in one query and guards empty input', async () => {
+    const fx = await makeWorkItemFixture();
+    const field = await createField(fx, 'Severity', 'select', { options: ['Low', 'High'] });
+    const issue1 = await createTestWorkItem(fx, { kind: 'task', title: 'One' });
+    const issue2 = await createTestWorkItem(fx, { kind: 'task', title: 'Two' });
+    const otherField = await createField(fx, 'Env', 'select', { options: ['Prod'] });
+    await setOptionValue(fx, issue1.id, field.id, field.options[0]!.id);
+    await setOptionValue(fx, issue2.id, otherField.id, otherField.options[0]!.id);
+
+    expect(await customFieldValueRepository.countGroupedByOption([], fx.workspaceId)).toEqual([]);
+
+    const counts = await customFieldValueRepository.countGroupedByOption(
+      [field.options[0]!.id, field.options[1]!.id, otherField.options[0]!.id],
+      fx.workspaceId,
+    );
+    expect(new Map(counts.map((c) => [c.optionId, c.count]))).toEqual(
+      new Map([
+        [field.options[0]!.id, 1],
+        [otherField.options[0]!.id, 1],
+      ]),
+    );
+  });
+});

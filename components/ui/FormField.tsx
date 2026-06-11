@@ -11,6 +11,12 @@ export interface FormFieldProps {
   label?: string;
   /** Error message — overrides helperText when present. Sets aria-invalid. */
   error?: string;
+  /**
+   * How the error message renders: the default `text` is the quiet danger
+   * line; `box` is the rose-tint inline-error box (hue in the background,
+   * strong text — finding #35), the 2.4.9 grammar inline editors use.
+   */
+  errorVariant?: 'text' | 'box';
   /** Helper text rendered below the control. */
   helperText?: string;
   /** id of the control element — used to associate label + describedby. */
@@ -22,6 +28,7 @@ export interface FormFieldProps {
 export function FormField({
   label,
   error,
+  errorVariant = 'text',
   helperText,
   htmlFor,
   className,
@@ -40,8 +47,12 @@ export function FormField({
         <p
           id={describedById}
           role="alert"
-          className="font-sans text-xs"
-          style={{ color: 'var(--el-danger)' }}
+          className={cn(
+            'font-sans text-xs',
+            errorVariant === 'box' &&
+              'bg-(--el-tint-rose) text-(--el-text-strong) rounded-(--radius-control) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y)',
+          )}
+          style={errorVariant === 'box' ? undefined : { color: 'var(--el-danger)' }}
         >
           {error}
         </p>

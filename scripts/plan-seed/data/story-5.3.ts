@@ -445,7 +445,7 @@ export const story_5_3: PlanStory = {
       id: '5.3.6',
       title:
         'Fields admin UI — Project settings → Fields (list/reorder, create/edit, options editor, caps + delete-with-count confirm)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
@@ -490,7 +490,7 @@ export const story_5_3: PlanStory = {
       id: '5.3.7',
       title:
         'Detail-rail custom fields UI — per-type cards + inline editors + "Show more fields" disclosure',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
@@ -538,7 +538,7 @@ export const story_5_3: PlanStory = {
       id: '5.3.8',
       title:
         'Story tests — Vitest matrix (types × validation × permissions × lifecycle) + Playwright E2E (define → set → history → delete) + a11y sweep',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,

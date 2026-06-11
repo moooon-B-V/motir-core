@@ -517,7 +517,7 @@ describe('read-only contract', () => {
     // The append-only rule (verified Jira behaviour): nothing on the activity
     // service writes. A future method whose name implies mutation fails here.
     const methods = Object.keys(activityService);
-    expect(methods).toEqual(['listHistory']);
+    expect(methods).toEqual(['listHistory', 'listAll']);
     for (const m of methods) {
       expect(/^(create|update|delete|set|remove|edit)/i.test(m)).toBe(false);
     }

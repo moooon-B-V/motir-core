@@ -15,6 +15,13 @@ export interface CustomFieldOptionDTO {
    * issues that already hold them (the verified Jira team-managed split).
    */
   archived: boolean;
+  /**
+   * How many issues hold this option as their value — drives the admin
+   * page's per-option "used on N issues" gloss and the verified
+   * delete-only-when-unused affordance (5.3.6; in-use → disabled +
+   * "archive instead").
+   */
+  valueCount: number;
 }
 
 /**
