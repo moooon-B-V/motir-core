@@ -33,7 +33,10 @@ import {
   FILTER_BACKLOG_TOKEN,
   FILTER_ROW_CAP,
   FILTER_UNASSIGNED_TOKEN,
+  customFieldFilterFieldId,
+  customFieldIdOfFilterField,
   type FilterAst,
+  type FilterCombinator,
   type FilterCondition,
   type FilterConditionValue,
   type FilterFieldId,
@@ -49,19 +52,27 @@ import {
 
 export type FilterFieldType = 'enum' | 'text' | 'number' | 'date';
 
-/** What the builder renders for a condition's value slot (6.1.3/6.1.4). */
+/** What the builder renders for a condition's value slot (6.1.3/6.1.4; the
+ * Epic-5 kinds — label/component/CF-option pickers — are 6.1.5's rows). */
 export type FilterValueEditorKind =
   | 'kind-select'
   | 'status-select'
   | 'priority-select'
   | 'member-select'
   | 'sprint-select'
+  | 'label-select'
+  | 'component-select'
+  | 'cf-option-select'
   | 'text'
   | 'number'
   | 'date'
   | 'date-range'
   | 'days'
   | 'none';
+
+/** The five custom-field types (mirrors the Prisma `CustomFieldType` enum —
+ * restated here so this module stays Prisma-free and client-importable). */
+export type CustomFieldFilterType = 'text' | 'number' | 'date' | 'select' | 'user';
 
 const ENUM_LIST_OPERATORS = ['is_any_of', 'is_none_of'] as const;
 const EMPTY_OPERATORS = ['is_empty', 'is_not_empty'] as const;
@@ -90,6 +101,10 @@ export interface FilterFieldDef {
   /** The list-op value editor (enum fields only). */
   listEditor?: FilterValueEditorKind;
   operators: readonly FilterOperatorId[];
+  /** Set on the dynamic `cf:<fieldId>` entries (Subtask 6.1.2) — the
+   * definition the entry was built from; the compiler keys its
+   * `custom_field_value` join off this. */
+  customField?: { id: string; fieldType: CustomFieldFilterType };
 }
 
 function enumField(
@@ -148,6 +163,13 @@ export const FILTER_FIELDS: ReadonlyArray<FilterFieldDef> = [
   dateField('due', true),
   numberField('storyPoints'),
   numberField('estimate'),
+  // The Epic-5 join-backed fields (Subtask 6.1.2). Multi-valued joins, so
+  // "nullable" here means "an issue may carry none" — the empty pair compiles
+  // to NOT-EXISTS/EXISTS over the join rows (the 5.4.1 contract). Value ids
+  // are open (label/component cuids) — existence is the stale-referent
+  // resolution's job (`resolveFilterAst`), not a whitelist.
+  enumField('lbl', 'label-select', { nullable: true }),
+  enumField('cmp', 'component-select', { nullable: true }),
 ];
 
 const FIELDS_BY_ID: ReadonlyMap<string, FilterFieldDef> = new Map(
@@ -283,9 +305,203 @@ export function validateFilterCondition(condition: FilterCondition): FilterField
  * Validate a whole AST: structure, the row cap, and every condition. The
  * service read path runs this before the repository compiles (defence in
  * depth: the compiler re-runs it, so no unvalidated AST can reach SQL even
- * through a future second caller).
+ * through a future second caller). With Epic-5 conditions in play, pass the
+ * project's referents — this is `resolveFilterAst` minus the per-condition
+ * result (stale conditions are NOT errors; they compile to match-nothing).
  */
-export function validateFilterAst(ast: FilterAst): void {
+export function validateFilterAst(
+  ast: FilterAst,
+  referents: ProjectFilterReferents = EMPTY_PROJECT_FILTER_REFERENTS,
+): void {
+  resolveFilterAst(ast, referents);
+}
+
+// ---------------------------------------------------------------------------
+// The Epic-5 dynamic entries + the stale-referent resolution (Subtask 6.1.2)
+// ---------------------------------------------------------------------------
+
+/** The dynamic registry entry a custom-field definition contributes — keyed
+ * `cf:<fieldId>`, with the operator set of its type (the 6.1 story spec:
+ * select/user get enum semantics; number/date/text their built-in type sets).
+ * Every CF column is "nullable" in the filter sense: the typed-EAV substrate
+ * stores NO row for an empty value (the 5.3.1 contract — `is empty` compiles
+ * to NOT EXISTS), so every type offers the empty pair. */
+export function customFieldFilterDef(id: string, fieldType: CustomFieldFilterType): FilterFieldDef {
+  const customField = { id, fieldType };
+  const fieldId = customFieldFilterFieldId(id);
+  switch (fieldType) {
+    case 'select':
+      return {
+        id: fieldId,
+        fieldType: 'enum',
+        nullable: true,
+        listEditor: 'cf-option-select',
+        operators: [...ENUM_LIST_OPERATORS, ...EMPTY_OPERATORS],
+        customField,
+      };
+    case 'user':
+      return {
+        id: fieldId,
+        fieldType: 'enum',
+        nullable: true,
+        listEditor: 'member-select',
+        operators: [...ENUM_LIST_OPERATORS, ...EMPTY_OPERATORS],
+        customField,
+      };
+    case 'number':
+      return {
+        id: fieldId,
+        fieldType: 'number',
+        nullable: true,
+        operators: [...NUMBER_COMPARE_OPERATORS, ...EMPTY_OPERATORS],
+        customField,
+      };
+    case 'date':
+      return {
+        id: fieldId,
+        fieldType: 'date',
+        nullable: true,
+        operators: [...DATE_VALUE_OPERATORS, ...DATE_WINDOW_OPERATORS, ...EMPTY_OPERATORS],
+        customField,
+      };
+    case 'text':
+      return {
+        id: fieldId,
+        fieldType: 'text',
+        nullable: true,
+        operators: [...TEXT_OPERATORS, ...EMPTY_OPERATORS],
+        customField,
+      };
+  }
+}
+
+/** A referenced custom field's resolution data: its type + which of the
+ * filter's referenced option ids actually exist ON THIS FIELD (archived
+ * included — historical matching, the verified Jira rule). */
+export interface ProjectFilterCustomField {
+  fieldType: CustomFieldFilterType;
+  optionIds: ReadonlySet<string>;
+}
+
+/**
+ * The per-project referent set the Epic-5 conditions resolve against — built
+ * by the SERVICE from bounded reads over the ids the filter actually
+ * references (never load-all, finding #57), then carried into the repository
+ * compiler. An id absent here is a STALE REFERENT (a deleted
+ * field/option/label/component outliving a shared or saved URL): its
+ * condition degrades to the typed unknown-value state — matches nothing,
+ * surfaces a per-row notice, never errors the query (the durable behaviour
+ * Story 6.2 saved filters depend on).
+ */
+export interface ProjectFilterReferents {
+  customFields: ReadonlyMap<string, ProjectFilterCustomField>;
+  labelIds: ReadonlySet<string>;
+  componentIds: ReadonlySet<string>;
+}
+
+export const EMPTY_PROJECT_FILTER_REFERENTS: ProjectFilterReferents = {
+  customFields: new Map(),
+  labelIds: new Set(),
+  componentIds: new Set(),
+};
+
+/** Why a condition went stale (the per-row notice 6.1.5 renders). */
+export type FilterStaleReason = 'unknown-field' | 'unknown-value';
+
+export interface ResolvedFilterCondition {
+  condition: FilterCondition;
+  /** The registry entry the condition resolved to — null when stale. */
+  def: FilterFieldDef | null;
+  stale: FilterStaleReason | null;
+}
+
+export interface ResolvedFilterAst {
+  combinator: FilterCombinator;
+  conditions: ResolvedFilterCondition[];
+}
+
+/** True when the AST carries any Epic-5 condition (label / component /
+ * custom field) — the service's "do I need to load referents?" probe. */
+export function astHasEpic5Conditions(ast: FilterAst): boolean {
+  return ast.conditions.some(
+    (c) => c.field === 'lbl' || c.field === 'cmp' || customFieldIdOfFilterField(c.field) !== null,
+  );
+}
+
+/** The ids an AST references, for the service's bounded referent reads:
+ * custom-field definition ids, the string-list values of CF rows (candidate
+ * option ids — which are options is only knowable after the definitions
+ * load; non-option ids simply resolve to nothing), label ids, component
+ * ids. */
+export interface FilterReferentIds {
+  customFieldIds: string[];
+  customFieldValueIds: string[];
+  labelIds: string[];
+  componentIds: string[];
+}
+
+export function collectFilterReferentIds(ast: FilterAst): FilterReferentIds {
+  const customFieldIds = new Set<string>();
+  const customFieldValueIds = new Set<string>();
+  const labelIds = new Set<string>();
+  const componentIds = new Set<string>();
+  for (const { field, value } of ast.conditions) {
+    const values = Array.isArray(value) ? value.filter((v) => typeof v === 'string') : [];
+    const cfId = customFieldIdOfFilterField(field);
+    if (cfId !== null) {
+      customFieldIds.add(cfId);
+      for (const v of values) customFieldValueIds.add(v);
+    } else if (field === 'lbl') {
+      for (const v of values) labelIds.add(v);
+    } else if (field === 'cmp') {
+      for (const v of values) componentIds.add(v);
+    }
+  }
+  return {
+    customFieldIds: [...customFieldIds],
+    customFieldValueIds: [...customFieldValueIds],
+    labelIds: [...labelIds],
+    componentIds: [...componentIds],
+  };
+}
+
+/** The value ids a resolved enum condition must find among the referents —
+ * stale-checked sets only (CF select options, labels, components). Open id
+ * spaces (members for user-CF / built-in pickers) stay unchecked: a deleted
+ * user SetNulls values and simply matches nothing (the 2.5.4 rule). */
+function staleCheckedIdSet(def: FilterFieldDef, referents: ProjectFilterReferents) {
+  if (def.customField) {
+    return def.customField.fieldType === 'select'
+      ? referents.customFields.get(def.customField.id)?.optionIds
+      : undefined;
+  }
+  if (def.id === 'lbl') return referents.labelIds;
+  if (def.id === 'cmp') return referents.componentIds;
+  return undefined;
+}
+
+/**
+ * Resolve + validate an AST against the registry AND the project's referents
+ * (Subtask 6.1.2) — the single front door for any AST that may carry Epic-5
+ * conditions. Two distinct failure modes, deliberately split:
+ *
+ * - **Forgery is a typed throw** (→ 422): malformed structure, the row cap,
+ *   an unknown STATIC field id, an operator outside a resolved field's set,
+ *   a value failing its (field, operator) arity. Same contract as 6.1.1.
+ * - **A stale referent is a RESULT, not an error**: a `cf:<id>` whose
+ *   definition is gone resolves `stale: 'unknown-field'`; an enum condition
+ *   referencing a deleted option/label/component id resolves
+ *   `stale: 'unknown-value'`. The compiler turns stale conditions into
+ *   match-nothing (`FALSE`); the UI renders the per-row notice.
+ *
+ * A stale-FIELD condition's operator/value can't be checked (no definition
+ * to check against) — it is skipped, which is safe: stale conditions never
+ * reach SQL at all.
+ */
+export function resolveFilterAst(
+  ast: FilterAst,
+  referents: ProjectFilterReferents = EMPTY_PROJECT_FILTER_REFERENTS,
+): ResolvedFilterAst {
   if (ast.combinator !== 'and' && ast.combinator !== 'or') {
     throw new MalformedFilterError(`bad combinator: ${String(ast.combinator)}`);
   }
@@ -293,5 +509,28 @@ export function validateFilterAst(ast: FilterAst): void {
   if (ast.conditions.length > FILTER_ROW_CAP) {
     throw new FilterTooLargeError(ast.conditions.length, FILTER_ROW_CAP);
   }
-  for (const condition of ast.conditions) validateFilterCondition(condition);
+  const conditions = ast.conditions.map((condition): ResolvedFilterCondition => {
+    const cfId = customFieldIdOfFilterField(condition.field);
+    let def: FilterFieldDef;
+    if (cfId !== null) {
+      const cf = referents.customFields.get(cfId);
+      if (!cf) return { condition, def: null, stale: 'unknown-field' };
+      def = customFieldFilterDef(cfId, cf.fieldType);
+    } else {
+      def = filterFieldDef(condition.field);
+    }
+    if (!def.operators.includes(condition.operator)) {
+      throw new UnknownFilterOperatorError(condition.field, condition.operator);
+    }
+    const problem = valueProblem(def, condition.operator, condition.value);
+    if (problem) throw new InvalidFilterValueError(condition.field, condition.operator, problem);
+
+    const checked = staleCheckedIdSet(def, referents);
+    if (checked && Array.isArray(condition.value)) {
+      const missing = condition.value.some((v) => !checked.has(v));
+      if (missing) return { condition, def, stale: 'unknown-value' };
+    }
+    return { condition, def, stale: null };
+  });
+  return { combinator: ast.combinator, conditions };
 }

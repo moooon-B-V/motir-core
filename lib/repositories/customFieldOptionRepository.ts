@@ -112,6 +112,27 @@ export const customFieldOptionRepository = {
   },
 
   /**
+   * Bulk id resolution for the filter builder's stale-referent check
+   * (Subtask 6.1.2): which of the ids a `?filter=` AST references still
+   * exist, on which field — scoped to the project + workspace through the
+   * parent definition (finding #26; a cross-tenant id resolves to nothing
+   * and therefore reads as stale). Bounded by the filter's own value lists
+   * (≤50 values × 20 rows), never a load-all. Archived options ARE returned
+   * — they stay matchable for historical filtering (the verified Jira
+   * rule). Empty input is an empty result by contract (coverage gate).
+   */
+  async findByIds(
+    ids: string[],
+    projectId: string,
+    workspaceId: string,
+  ): Promise<CustomFieldOption[]> {
+    if (ids.length === 0) return [];
+    return db.customFieldOption.findMany({
+      where: { id: { in: ids }, field: { projectId, workspaceId } },
+    });
+  },
+
+  /**
    * How many options the field already has — the 55-cap guard read. Runs
    * inside the add-option transaction (pass `tx`) so concurrent adds can't
    * slip past the cap unobserved.
