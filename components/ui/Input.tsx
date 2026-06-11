@@ -17,6 +17,8 @@ import { cn } from '@/lib/utils/cn';
 export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'prefix'> {
   label?: string;
   error?: string;
+  /** Error presentation — `text` (default) or the rose-tint `box` (see FormField). */
+  errorVariant?: 'text' | 'box';
   helperText?: string;
   /** Rendered inside the input box on the left. */
   addonStart?: ReactNode;
@@ -25,7 +27,18 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { label, error, helperText, addonStart, addonEnd, id, className, disabled, ...rest },
+  {
+    label,
+    error,
+    errorVariant,
+    helperText,
+    addonStart,
+    addonEnd,
+    id,
+    className,
+    disabled,
+    ...rest
+  },
   ref,
 ) {
   const autoId = useId();
@@ -33,7 +46,13 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   const describedBy = describedById(inputId, error, helperText);
   const hasError = Boolean(error);
   return (
-    <FormField label={label} error={error} helperText={helperText} htmlFor={inputId}>
+    <FormField
+      label={label}
+      error={error}
+      errorVariant={errorVariant}
+      helperText={helperText}
+      htmlFor={inputId}
+    >
       <div
         className={cn(
           'flex h-(--height-input) w-full items-center gap-2 rounded-(--radius-input) border bg-(--el-page-bg)',

@@ -22,6 +22,12 @@ vi.mock('@/app/(authed)/issues/[key]/edit/actions', () => ({
 vi.mock('@/app/(authed)/issues/actions', () => ({
   listCandidateParentsAction: vi.fn().mockResolvedValue({ ok: true, candidates: [] }),
 }));
+// CoreFieldsPanel composes CustomFieldsSection (5.3.7), whose Server Action
+// would pull the real db module into this unit suite — stub it out (its own
+// behaviour is covered by custom-fields-section.test.tsx).
+vi.mock('@/app/(authed)/issues/[key]/customFieldActions', () => ({
+  setCustomFieldValueAction: vi.fn().mockResolvedValue({ ok: true }),
+}));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: refreshSpy }) }));
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ toast: toastSpy }) }));
 

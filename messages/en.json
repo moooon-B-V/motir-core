@@ -135,11 +135,11 @@
       "CUSTOM_FIELD_NOT_FOUND": "Custom field not found.",
       "VALUE_TYPE_MISMATCH": "The value does not match the field's type.",
       "TEXT_TOO_LONG": "Text values are capped at {max} characters.",
-      "INVALID_NUMBER": "Enter a valid number.",
+      "INVALID_NUMBER": "Enter a number — e.g. 12.5.",
       "INVALID_DATE": "Enter a valid date.",
       "OPTION_NOT_IN_FIELD": "This option does not belong to the field.",
-      "OPTION_ARCHIVED": "Archived options can't be selected.",
-      "USER_NOT_ASSIGNABLE": "This user can't be set on this project.",
+      "OPTION_ARCHIVED": "That option is archived — pick a current one.",
+      "USER_NOT_ASSIGNABLE": "That person can't view this project, so they can't hold this field.",
       "READ_ONLY": "You have read-only access to this project."
     }
   },
@@ -450,7 +450,18 @@
     "staleBanner": "This work item was edited by someone else. Refresh to see the latest.",
     "refresh": "Refresh",
     "reporterCreated": "Reporter: {reporter} · created {created}",
-    "issueSaved": "{identifier} saved"
+    "issueSaved": "{identifier} saved",
+    "customFields": {
+      "showMore": "Show more fields ({count})",
+      "showFewer": "Show fewer fields",
+      "archivedMark": "(archived)",
+      "selectOption": "Select an option…",
+      "searchOptions": "Search options…",
+      "noOptions": "No options",
+      "selectMember": "Select a member…",
+      "searchMembers": "Search members…",
+      "noMembers": "No members"
+    }
   },
   "comments": {
     "title": "Activity",

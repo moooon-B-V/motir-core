@@ -228,6 +228,7 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
               workflow={detail.workflow}
               parent={detail.parent}
               reporterIsSelf={item.reporterId === ctx.userId}
+              customFields={detail.customFields}
             />
             {/* The 2.4.3 parent breadcrumb lives in the header (per detail.png),
               not here. Epic 5: custom fields · attachments. */}

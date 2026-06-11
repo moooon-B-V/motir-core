@@ -135,11 +135,11 @@
       "CUSTOM_FIELD_NOT_FOUND": "未找到自定义字段。",
       "VALUE_TYPE_MISMATCH": "值与字段类型不匹配。",
       "TEXT_TOO_LONG": "文本最多{max}个字符。",
-      "INVALID_NUMBER": "请输入有效的数字。",
+      "INVALID_NUMBER": "请输入数字，例如 12.5。",
       "INVALID_DATE": "请输入有效的日期。",
       "OPTION_NOT_IN_FIELD": "该选项不属于此字段。",
-      "OPTION_ARCHIVED": "已归档的选项无法选择。",
-      "USER_NOT_ASSIGNABLE": "该用户无法设置到此项目。",
+      "OPTION_ARCHIVED": "该选项已归档，请选择一个现行选项。",
+      "USER_NOT_ASSIGNABLE": "该成员无法查看此项目，因此不能设置在此字段。",
       "READ_ONLY": "你对此项目仅有只读权限。"
     }
   },
@@ -450,7 +450,18 @@
     "staleBanner": "此工作项已被他人编辑。请刷新以查看最新内容。",
     "refresh": "刷新",
     "reporterCreated": "创建人：{reporter} · 创建于 {created}",
-    "issueSaved": "{identifier} 已保存"
+    "issueSaved": "{identifier} 已保存",
+    "customFields": {
+      "showMore": "显示更多字段（{count}）",
+      "showFewer": "收起字段",
+      "archivedMark": "（已归档）",
+      "selectOption": "选择选项…",
+      "searchOptions": "搜索选项…",
+      "noOptions": "没有选项",
+      "selectMember": "选择成员…",
+      "searchMembers": "搜索成员…",
+      "noMembers": "没有成员"
+    }
   },
   "comments": {
     "title": "动态",
