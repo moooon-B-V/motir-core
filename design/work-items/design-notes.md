@@ -1945,3 +1945,227 @@ badge`, `--spacing-control/input/chip/icon-btn/tooltip-*`,
   (ILIKE + trgm ships).
 - Filter chips editable in place (the readout is read-only; editing happens in
   the builder — one editing surface).
+
+---
+
+## Saved filters — save · apply · manage · subscribe (Story 6.2 · 6.2.2 → 6.2.3 / 6.2.4 / 6.2.5)
+
+`saved-filters.mock.html` designs every Story 6.2 surface:
+`filter-builder.mock.html` (6.1.3) designs ONLY the builder, so saving,
+applying, managing, sharing, and subscribing were the design-gate NONE-exists
+case. This asset closes it for code Subtasks **6.2.3** (save + apply UI on
+/issues), **6.2.4** (the filters directory), and **6.2.5** (subscriptions) —
+and pins the "Filter missing" widget state Story 6.3 inherits. Mirrors
+(verified in the Story 6.2 seed module, 2026-06-10): Jira's Save / Save-as
+ownership split, its Filters-directory columns (name / owner / visibility /
+popularity / actions), its starred-first filter menu, its delete-in-use
+warning, its preset-tier subscriptions, and its read-only system filters.
+A `saved-filters.png` light render accompanies the HTML for the board view;
+the HTML is the source of truth (toggle dark in it for token parity).
+
+### The seven panels
+
+| Panel | Surface                                                                                                                                                              |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | The /issues toolbar: the **[Saved]** ToolbarButton (bookmark glyph, right of [Advanced]) + the applied-filter **name chip**; clean vs dirty-owner vs dirty-non-owner |
+| 1     | The **save dialog** (Modal `size="md"`): name / description / visibility; the duplicate-name error; the viewer private-only state                                    |
+| 2     | The **[Saved] dropdown**: Starred → My filters → Project filters → Defaults, server search, per-row star, View-all footer; the empty-group states                    |
+| 3     | The **filters directory** at `/filters`: searchable paginated table, role-gated row actions, built-ins read-only, empty + no-access states                           |
+| 4     | The **visibility control** (Edit details) + the **delete-with-dependents** confirm                                                                                   |
+| 5     | The **subscription editor** (preset schedule) + the subscribed state + its mounts                                                                                    |
+| 6     | The **“Filter missing”** widget state (the 6.3 degraded card)                                                                                                        |
+
+### Entry + the applied state (panel 0 → 6.2.3)
+
+- **[Saved]** is a `ToolbarButton` (the `.tb-btn` grammar) with the lucide
+  `bookmark` glyph + caret, placed **immediately right of [Advanced]**
+  (6.1.3's builder trigger). Active state = the 2.5.4 grammar (accent ring +
+  lavender fill) while a saved filter is applied.
+- **The name chip** prepends the 6.1.3 summary-chip row: bookmark glyph
+  (`--el-accent`) + the filter name on the lavender tint with
+  `--el-text-strong` text (AA, finding #35), plus a visibility hint glyph
+  (`users` = project-shared, `lock` = private). Clicking it opens the [Saved]
+  dropdown. The 6.1.3 condition chips and count line stay unchanged.
+- **Dirty state** — the chip's URL-AST is compared to the saved envelope
+  (6.1.1 equality). When they diverge: the amber dot + the italic word
+  **"Edited"** (`role="status"`, never colour-only), and the action set by
+  ownership — **owner: [Save] [Save as] [Discard changes]** · **non-owner:
+  [Save as] only**, with the ink tooltip explaining why ("Only the owner can
+  overwrite this filter — Save as creates your own copy."). "Discard changes"
+  reloads the saved envelope into builder + URL. Save (owner overwrite) shows
+  NO dialog — it writes the current AST into the row in place.
+
+### The save dialog (panel 1 → 6.2.3)
+
+- `Modal` (`--radius-modal` / `--shadow-modal`), `FormField` grammar: **Name**
+  (required), **Description (optional)** `Textarea`, and **"Who can see this
+  filter?"** — two stacked radio cards in the 6.4.1 access-card grammar:
+  **Private** (lock on `--el-tint-lavender`: "Only you and project admins can
+  see it.") and **Project** (users on `--el-tint-sky`: "Everyone who can
+  browse this project can see and apply it."). Selected card = `--el-accent`
+  border + filled radio. **Default visibility: Private** (the Jira default
+  share; the safe choice).
+- **Duplicate name** — per-project case-insensitive (the 6.2.1 constraint):
+  inline `role="alert"` error under the field ("A filter named “…” already
+  exists in this project."), primary disabled until it clears.
+- **Viewer** — the Project card renders **visible-but-disabled** (the 6.4.6
+  affordance rule) under an `--el-tint-sky` info line: "Sharing needs the
+  **Member** role — as a viewer, your filters stay private to you."
+- "Save as" always opens this dialog (prefilled with the source filter's name
+  when forking an applied filter).
+
+### The dropdown (panel 2 → 6.2.3)
+
+- The Combobox menu vocabulary (320px, `--radius-card`, `--shadow-elevated`):
+  search field ("Find filters…", server-backed + debounced + bounded —
+  finding #57), then the fixed group order **Starred → My filters → Project
+  filters → Defaults**. A starred entry appears ONLY under Starred (no
+  duplicates).
+- Rows: a **star toggle** (a sibling focusable button inside the option row —
+  never nested in another control; starred = filled `--el-warning` amber star
+  - `aria-pressed`), the name, and the secondary hint — visibility glyph +
+    owner name for others' shared filters, "Private" + lock for mine,
+    "Built-in" for defaults. The APPLIED entry carries the `--el-accent` check
+    (`aria-selected`).
+- Footer: **"View all filters"** → the `/filters` directory. Per-group empty
+  lines: "No starred filters yet — star a filter to pin it here." / "You
+  haven't saved any filters yet." / "No filters shared with this project
+  yet."
+- Applying an entry resolves the stored envelope through the 6.2.1 read and
+  writes `?filter=v1:` — the URL stays the single state channel
+  (reload/share keep working; no new state surface).
+
+### The directory (panel 3 → 6.2.4)
+
+- **Route: `/filters`** — project-scoped, a sibling of `/issues` in the
+  authed shell. Entries: the dropdown's "View all filters" footer + the
+  command palette. **Deliberately NOT a primary sidebar item** — Jira's
+  "Filters" nav entry belongs to its site-global model; in Prodect's
+  project-contained model the /issues toolbar is the home of filtering, and
+  the sidebar stays lean (recorded deviation).
+- The table (the list-table grammar): **Name** (bookmark/lock glyph + linked
+  name — clicking applies the filter on /issues — + truncated description) ·
+  **Owner** (Avatar + name; built-ins "—") · **Visibility** (`Pill`:
+  Project = users glyph on `--el-tint-sky`; Private = lock, neutral tone;
+  Built-in = neutral) · **Stars** (my-star toggle + the SQL-aggregated
+  count) · **Actions** (the … menu). Server-searched + paginated (50/page,
+  the 2.5.12 footer) — never an unbounded fetch.
+- **Row actions by the 6.2.1 matrix**: owner → Edit details / Subscribe… /
+  Delete; project admin (and workspace owner/admin) additionally → Change
+  owner — on ANY project-shared filter (the mock shows an admin's menu on
+  another member's filter); non-owners on shared rows → Subscribe… only.
+  "Edit details" opens the panel-1 dialog prefilled; **"Change owner" reuses
+  the 6.4.1 add-member Combobox grammar** (referenced, not redrawn).
+- **Built-ins** (the eight expressible system filters: My open issues ·
+  Reported by me · All / Open / Done issues · Created / Updated / Resolved
+  recently) are listed read-only: no owner, no stars, no actions.
+  **Decision (recorded): built-ins are NOT starrable and NOT subscribable** —
+  they are non-persisted AST constants (6.2.1); there is no row to star or to
+  FK a subscription to, and they are already always present in the dropdown's
+  Defaults group. ("Viewed recently" omitted — no view-history substrate;
+  extension.)
+- States: the EmptyState ("No saved filters yet" + "Go to Issues" — creation
+  lives in the /issues builder, the directory manages) and the 6.4.6
+  ErrorState verbatim for a no-access deep link. Loading = the standard
+  table skeleton (the 2.5.8 grammar, not redrawn).
+
+### Visibility + deletion (panel 4 → 6.2.3 / 6.2.4)
+
+- **Edit details** carries the same visibility radio cards; flipping
+  Project → Private surfaces the info note naming the consequences ("hides it
+  from everyone else — their subscriptions stop delivering, and dashboard
+  widgets using it show “Filter missing”") — the quiet symmetric twin of the
+  delete warning.
+- **Delete** is a `role="alertdialog"` confirm that **names the dependents**
+  (the 6.2.1 enumeration read): "**1 subscription** will be removed (…)" and
+  the RESERVED 6.3 line "**N dashboard widgets** use this filter — they'll
+  show a “Filter missing” state." `Button` danger; consequences in text,
+  never colour-only. Deletion cascades subscriptions in one transaction;
+  widgets degrade to panel 6.
+
+### Subscriptions (panel 5 → 6.2.5)
+
+- The dialog: **Frequency** as the `Segmented` control (Daily / Weekdays /
+  Weekly), **Day** (Combobox, rendered only for Weekly) + **Time** (Combobox,
+  clock glyph, hour presets), and the explainer copy: "Emails you the first
+  50 results and the total count, on the workspace timezone. A report, not an
+  alert — it sends even when nothing matches."
+- The **subscribed state**: mint-tile bell card "Subscribed — daily at 09:00"
+  - the delivery line + **Unsubscribe** (ghost). In the row menus the
+    Subscribe item flips to "Subscribed…" with the schedule as its secondary.
+- **Mounts**: the directory row's … menu + the dropdown row's context action
+  — both open this dialog. Unsubscribe also lives in the email
+  (token-authenticated link, the shipped unsubscribe pattern).
+
+### The "Filter missing" widget state (panel 6 → 6.3)
+
+The degraded BODY a dashboard widget renders when its filter FK dangles (the
+verified Jira-gadget behaviour, designed here so 6.3 inherits it): the
+`triangle-alert` glyph in `--el-warning`, the serif headline "Filter
+missing", the one-line cause, and a single recovery action ("Choose a
+filter"). The widget chrome itself is 6.3's to design; never a crash, never
+a silent blank.
+
+### Copy strings
+
+`Saved` · `Find filters…` · `Starred` · `My filters` · `Project filters` ·
+`Defaults` · `Built-in` · `View all filters` · the three group-empty lines
+(above) · `Edited` · `Save` · `Save as` · `Discard changes` · `Save filter` ·
+`Name` · `Description (optional)` · `What is this filter for?` · `Who can see
+this filter?` · `Private` / `Only you and project admins can see it.` ·
+`Project` / `Everyone who can browse this project can see and apply it.` ·
+`A filter named “…” already exists in this project.` · `Sharing needs the
+Member role — as a viewer, your filters stay private to you.` · `Only the
+owner (…) can overwrite this filter — Save as creates your own copy.` ·
+`Filters` · `Saved filters for … Save new ones from Issues.` · `Search
+filters…` · `Name / Owner / Visibility / Stars` · `Edit details` · `Change
+owner` · `Subscribe…` · `Delete` · `No saved filters yet` / `Build a filter
+on Issues and save it to reuse and share it here.` / `Go to Issues` · `Edit
+filter details` · `Save changes` · the go-private note (above) · `Delete
+filter?` · `This permanently deletes “…” for everyone in this project.` ·
+`N subscription(s) will be removed (…)` · `N dashboard widgets use this
+filter — they'll show a “Filter missing” state.` · `Delete filter` ·
+`Subscribe to “…”` · `Frequency` · `Daily` / `Weekdays` / `Weekly` · `Day` ·
+`Time` · the subscription explainer (above) · `Subscribe` · `Subscribed —
+daily at 09:00` · `Unsubscribe` · `Filter missing` · `The saved filter this
+widget used was deleted, so it can't load results.` · `Choose a filter` ·
+`12 filters · page N of M`. All via next-intl in 6.2.3/6.2.4/6.2.5.
+
+### Tokens / a11y
+
+- Colour only via Tier-3 `--el-*`: the name chip + active triggers ride
+  `--el-tint-lavender` + `--el-accent`; visibility tiles/pills the lavender /
+  sky tints with `--el-text-strong` (AA, finding #35); the starred star is
+  filled `--el-warning` amber (+ `aria-pressed` — state never colour-only);
+  the dirty marker is the amber dot + the word "Edited"; the danger path
+  `--el-danger` / `--el-danger-text`; **no new token needed**.
+- Shape via element-semantic tokens only (`--radius-btn/card/input/modal/
+control/badge`, `--spacing-control/input/chip/icon-btn/tooltip/btn-*`,
+  `--height-control/input/btn-*`, `--shadow-subtle/elevated/modal`) — every
+  surface reshapes under `data-display-style`.
+- **No new primitive**: ToolbarButton + Modal + FormField + Input/Textarea +
+  Combobox (menus, day/time selects) + Segmented + Pill + the 6.4.1
+  access-card radio grammar + the list-table/pagination grammars +
+  EmptyState/ErrorState + Avatar + Tooltip cover every element.
+- A11y: the dropdown is a labelled `listbox` (options `aria-selected`; the
+  star a sibling focusable button with `aria-pressed`, value-specific
+  names); dialogs are focus-trapped `role="dialog"` / the delete confirm
+  `role="alertdialog"`; the dirty marker and result counts `role="status"`;
+  visibility radios a labelled `radiogroup` with full keyboard support; row
+  menus `role="menu"` keyboard-complete; the disabled Project card
+  `aria-disabled` with the reason visible in text. Light + dark parity via
+  the token flip (toggle in the mock).
+
+### Out of scope (documented extension slots)
+
+- Per-filter Viewers/Editors grant lists + group share scopes (no groups in
+  Prodect; the 6.4 roles draw the boundary — the Story 6.2 recorded
+  deviation).
+- Cross-project / workspace-global filters (follows the 6.1 scope deviation).
+- Filter-sourced boards (the company-managed shape; Prodect boards stay
+  status-mapped — 3.1/3.6).
+- Advanced cron subscriptions (the preset tier ships; cron is the power-user
+  extension).
+- "Viewed recently" (no view-history substrate).
+- A "Filters" primary sidebar item (the site-global Jira shape; revisit if a
+  use case lands).
