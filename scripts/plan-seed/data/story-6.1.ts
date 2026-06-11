@@ -242,7 +242,7 @@ export const story_6_1: PlanStory = {
       id: '6.1.2',
       title:
         'Epic-5 predicates — custom-field (per-type), label, and component conditions via the documented join contracts',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
