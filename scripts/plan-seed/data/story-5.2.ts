@@ -455,7 +455,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.6',
       title:
         'Preview lightbox — full-screen image/PDF preview modal from a panel card (download inside; non-previewable types download)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
@@ -543,7 +543,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.8',
       title:
         'Story tests — Vitest lifecycle/permission matrix + Playwright E2E (upload→panel→preview→delete, editor-sourced block, paged walk) + a11y sweep',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
