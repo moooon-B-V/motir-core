@@ -177,7 +177,7 @@ export const story_6_1: PlanStory = {
       id: '6.1.1',
       title:
         'FilterAST + TOTAL operator registry + safe compiler (built-in fields) + versioned URL serialization + the trgm text index',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
@@ -242,7 +242,7 @@ export const story_6_1: PlanStory = {
       id: '6.1.2',
       title:
         'Epic-5 predicates — custom-field (per-type), label, and component conditions via the documented join contracts',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
