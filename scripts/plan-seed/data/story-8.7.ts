@@ -286,7 +286,7 @@ export const story_8_7: PlanStory = {
     {
       id: '8.7.7',
       title: 'prodect-meta runbook — PRODECT.md → MOTIR.md + the `motir <command>` vocabulary',
-      status: 'planned',
+      status: 'in_progress',
       type: 'content',
       executor: 'coding_agent',
       estimateMinutes: 30,
