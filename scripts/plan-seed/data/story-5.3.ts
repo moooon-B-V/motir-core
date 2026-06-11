@@ -67,7 +67,7 @@ import type { PlanStory } from '../types';
 export const story_5_3: PlanStory = {
   id: '5.3',
   title: 'Custom fields (per-project definitions)',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The extensible-schema layer: project admins define **custom fields** — `text` · `number` · ' +
     '`date` · `select` (single, with managed options) · `user` — in the project settings area ' +
@@ -538,7 +538,7 @@ export const story_5_3: PlanStory = {
       id: '5.3.8',
       title:
         'Story tests — Vitest matrix (types × validation × permissions × lifecycle) + Playwright E2E (define → set → history → delete) + a11y sweep',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
