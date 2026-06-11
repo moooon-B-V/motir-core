@@ -131,3 +131,18 @@ export const canCreateAttachments: (i: ProjectAccessInputs) => boolean = canComm
  * "Delete own" — the service checks uploadership first).
  */
 export const canDeleteAllAttachments: (i: ProjectAccessInputs) => boolean = canModerateComments;
+
+/**
+ * Whether the actor may MANAGE WATCHERS — Jira's "Manage watchers" permission
+ * (Story 5.4): add/remove OTHER users to an issue's watcher list. Same tier as
+ * comment moderation — the project `admin` tier plus the workspace owner/admin
+ * always-pass rail — but kept as its own named predicate so the two permissions
+ * can diverge the way Jira's scheme allows. Watching YOURSELF needs only
+ * browse (watching is not editing — the verified split; even a `viewer` may
+ * watch), so the self paths never consult this.
+ */
+export function canManageWatchers(i: ProjectAccessInputs): boolean {
+  if (isWorkspaceManager(i.workspaceRole)) return true;
+  if (i.workspaceRole == null) return false;
+  return i.projectRole === 'admin';
+}

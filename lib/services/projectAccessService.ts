@@ -9,6 +9,7 @@ import {
   canCreateAttachments,
   canDeleteAllAttachments,
   canEdit,
+  canManageWatchers,
   canModerateComments,
   type ProjectAccessInputs,
 } from '@/lib/projects/access';
@@ -146,6 +147,24 @@ export const projectAccessService = {
       canCreate: canCreateAttachments(inputs),
       canDeleteAll: canDeleteAllAttachments(inputs),
     };
+  },
+
+  /**
+   * The actor's WATCHER-domain capabilities on a project (Story 5.4 · Subtask
+   * 5.4.4) — one `resolveInputs` round-trip feeding both watcher gates:
+   * `canBrowse` (may they see the issue at all — the 404 gate; browsing is
+   * ALL that self watch/unwatch needs, the verified "watching is not editing"
+   * split) and `canManageWatchers` (Jira's "Manage watchers" — add/remove
+   * OTHERS; project admin or workspace owner/admin). Throws only
+   * ProjectNotFoundError (cross-workspace project ids stay hidden).
+   */
+  async getWatcherCapabilities(
+    projectId: string,
+    ctx: AccessActorContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ canBrowse: boolean; canManageWatchers: boolean }> {
+    const inputs = await resolveInputs(projectId, ctx, tx);
+    return { canBrowse: canBrowse(inputs), canManageWatchers: canManageWatchers(inputs) };
   },
 
   /**

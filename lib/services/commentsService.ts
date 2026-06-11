@@ -8,6 +8,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { attachmentsService } from '@/lib/services/attachmentsService';
+import { watchersService } from '@/lib/services/watchersService';
 import { parseMentionIds } from '@/lib/mentions/parse';
 import {
   extractReferencedBlobUrls,
@@ -232,6 +233,12 @@ export const commentsService = {
         ctx.userId,
         tx,
       );
+
+      // Auto-watch (Subtask 5.4.4, the verified comment rule, constant-on):
+      // commenting watches the issue, in this SAME transaction. Idempotent by
+      // the watcher unique; no revision (watching is not a field change).
+      // Story 5.7's opt-out preference will live inside the hook, not here.
+      await watchersService.autoWatch(gate.item.id, ctx.userId, tx);
 
       return { row: created, storedMentionIds: stored };
     });

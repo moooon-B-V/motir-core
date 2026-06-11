@@ -6,6 +6,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { labelRepository } from '@/lib/repositories/labelRepository';
+import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { componentRepository } from '@/lib/repositories/componentRepository';
 import { workItemComponentRepository } from '@/lib/repositories/workItemComponentRepository';
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
@@ -14,6 +15,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
+import { watchersService } from '@/lib/services/watchersService';
 import { parseMentionIds } from '@/lib/mentions/parse';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { extractReferencedBlobUrlsFromBodies } from '@/lib/blob/referencedUrls';
@@ -623,6 +625,13 @@ export const workItemsService = {
           }
         }
       }
+
+      // Auto-watch (Subtask 5.4.4, the verified create rule, constant-on):
+      // the creator watches the issue they created, in this SAME transaction
+      // — born watched, or not born at all. Idempotent by the watcher unique;
+      // writes NO revision (watching is not a field change). Story 5.7's
+      // opt-out preference will live inside the hook, not here.
+      await watchersService.autoWatch(row.id, ctx.userId, tx);
 
       return { dto: toWorkItemDto(row), revisionId };
     });
@@ -1589,6 +1598,8 @@ export const workItemsService = {
       labelRows,
       componentRows,
       customFieldRows,
+      watcherCount,
+      viewerIsWatching,
     ] = await Promise.all([
       // The breadcrumb chain (root→self, item excluded) — one CTE, workspace-
       // scoped. The immediate parent is `ancestors`' last element; we surface it
@@ -1617,6 +1628,11 @@ export const workItemsService = {
         ctx.workspaceId,
         item.id,
       ),
+      // The header eye-count + the caller's own watch state (5.4.4) — two
+      // point reads riding the same fan-out, so the watch control renders
+      // from the detail read with no extra round-trip.
+      watcherRepository.countByWorkItem(item.id),
+      watcherRepository.existsFor(item.id, ctx.userId),
     ]);
 
     const [blockerRows, blockingRows, relatesRows, duplicatesRows, clonesRows, readiness] =
@@ -1650,6 +1666,8 @@ export const workItemsService = {
       labels: labelRows.map(toLabelDto),
       components: componentRows.map(toComponentDto),
       customFields: customFieldRows.map(toCustomFieldWithValueDto),
+      watcherCount,
+      viewerIsWatching,
     };
   },
 

@@ -18,11 +18,14 @@ export const userRepository = {
    * Batch-resolve users by id — the one round-trip the board swimlane
    * projection (Subtask 3.3.4) uses to label assignee lanes (id → name) without
    * an N+1 per lane. Order is unspecified; callers index by `id`. An empty id
-   * set short-circuits without a query.
+   * set short-circuits without a query. Optional `tx` for callers already
+   * inside a transaction (watchersService.addWatcher resolves the added
+   * target's display fields in the same snapshot the write rode — 5.4.4).
    */
-  async findByIds(ids: string[]): Promise<User[]> {
+  async findByIds(ids: string[], tx?: Prisma.TransactionClient): Promise<User[]> {
     if (ids.length === 0) return [];
-    return db.user.findMany({ where: { id: { in: ids } } });
+    const client = tx ?? db;
+    return client.user.findMany({ where: { id: { in: ids } } });
   },
 
   /**
