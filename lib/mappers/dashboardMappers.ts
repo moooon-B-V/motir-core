@@ -1,5 +1,5 @@
 import type { Dashboard, DashboardWidget } from '@prisma/client';
-import { classifyStoredSource, widgetDefinition } from '@/lib/dashboards/widgetRegistry';
+import { widgetDefinition } from '@/lib/dashboards/widgetRegistry';
 import type {
   DashboardDetailDto,
   DashboardSummaryDto,
@@ -45,20 +45,19 @@ export function toDashboardSummaryDto(
   };
 }
 
+/** The same classification as the registry's `classifyStoredSource`, read
+ * off the LOADED relations (an FK scalar and its same-query relation select
+ * are set-or-null together, so branching on the relation needs no dead
+ * `?? ''` fallback arms): both null can only be a SetNull-staled filter
+ * widget. */
 function toSourceDto(row: DashboardWidgetWithNames): DashboardWidgetSourceDto {
-  const descriptor = classifyStoredSource(row);
-  switch (descriptor.kind) {
-    case 'saved_filter':
-      return {
-        kind: 'saved_filter',
-        savedFilterId: descriptor.savedFilterId,
-        name: row.savedFilter?.name ?? '',
-      };
-    case 'project':
-      return { kind: 'project', projectId: descriptor.projectId, name: row.project?.name ?? '' };
-    case 'stale':
-      return { kind: 'stale' };
+  if (row.savedFilter) {
+    return { kind: 'saved_filter', savedFilterId: row.savedFilter.id, name: row.savedFilter.name };
   }
+  if (row.project) {
+    return { kind: 'project', projectId: row.project.id, name: row.project.name };
+  }
+  return { kind: 'stale' };
 }
 
 export function toDashboardWidgetDto(row: DashboardWidgetWithNames): DashboardWidgetDto {
