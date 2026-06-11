@@ -553,7 +553,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.8',
       title:
         '`MultiSelectPicker` primitive + Labels & Components rail cards (chips, create-row, caps; the Epic-6-reusable control)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
