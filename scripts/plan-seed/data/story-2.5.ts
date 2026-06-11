@@ -34,7 +34,7 @@ export const story_2_5: PlanStory = {
     'skeleton. Reuse the named primitives (`Card`, `Pill`, `Button`, ' +
     '`Combobox`, `Popover`, `EmptyState`, `Spinner`, ' +
     '`IssueTypeIcon`) and the `--el-*` element tokens (never Tier-0 `--color-*` / ' +
-    '`text-foreground` — `prodect-core/CLAUDE.md`); issue-type icons take their type hue ' +
+    '`text-foreground` — `motir-core/CLAUDE.md`); issue-type icons take their type hue ' +
     'via `IssueTypeIcon`, status goes through `Pill` tones (finding #35 AA-safe).\n\n' +
     '**Read-mostly & reconciled with shipped reality (decision-authority rung 2 > rung 3).** ' +
     'Story 1.4 already ships the reads this Story composes: `workItemRepository.findByProjectFiltered` ' +
@@ -125,7 +125,7 @@ export const story_2_5: PlanStory = {
         '- `workItemRepository.findSubtree` / `findAncestors` (1.4 / 2.4.3) — recursive-CTE + dual-side `workspaceId` pattern to mirror\n' +
         "- `findByProjectFiltered` + `listWorkItems` + `WorkItemSummaryDto` — the flat read this generalizes (reconcile, don't duplicate)\n" +
         '- `lib/mappers/workItemMappers.ts`, `lib/dto/workItems.ts`, `ProjectNotFoundError`\n' +
-        '- `prodect-core/CLAUDE.md` — 4-layer · single-op repo · finding-#26 workspace gate',
+        '- `motir-core/CLAUDE.md` — 4-layer · single-op repo · finding-#26 workspace gate',
     },
     {
       id: '2.5.2',
@@ -160,7 +160,7 @@ export const story_2_5: PlanStory = {
         '- `design/work-items/tree.png` (+ `tree.pen`) — layout / density / column captions (open it FIRST; inspect all 3 panels)\n' +
         '- `components/issues/ChildList.tsx` (2.4.3) + `ISSUE_TYPE_META` / `IssueTypeIcon` / `Pill` — the row vocabulary to reuse\n' +
         "- `components/ui/Combobox.tsx` (2.3.4) — the project's hand-rolled WAI-ARIA + roving-tabindex reference; `app/globals.css` `--el-*` tiers; `/tokens` route convention\n" +
-        '- `prodect-core/CLAUDE.md` — `--el-*` token rule',
+        '- `motir-core/CLAUDE.md` — `--el-*` token rule',
     },
     {
       id: '2.5.3',
@@ -197,7 +197,7 @@ export const story_2_5: PlanStory = {
         '- `design/work-items/tree.png` — all 3 panels (populated · empty · skeleton)\n' +
         '- `app/(authed)/issues/page.tsx` (the stub to replace) + `_components/ProjectStubPage`; `getActiveProject()`; the 2.4.1 `/issues/[key]` detail page as the sibling/route convention\n' +
         '- 2.3.3 `CreateIssueModal` / `CreateIssueProvider` / `CreateIssueTrigger`; `EmptyState` / `Button` / `Pill` / `IssueTypeIcon`; 2.5.2 `TreeTable`; 2.5.1 `getProjectTree`\n' +
-        '- `prodect-core/CLAUDE.md` — Server Component / 4-layer / `--el-*`',
+        '- `motir-core/CLAUDE.md` — Server Component / 4-layer / `--el-*`',
     },
     {
       id: '2.5.4',
@@ -263,7 +263,7 @@ export const story_2_5: PlanStory = {
         '## Context refs\n\n' +
         '- 2.4.4 `CoreFieldsPanel` inline pattern + `changeStatusAction` / `updateIssueAction` (`app/(authed)/issues/[key]/edit/actions.ts`) — reuse verbatim\n' +
         "- 2.3.6 `StatusPicker` / `AssigneePicker`; 2.5.2 `TreeTable` cell render-props; 2.5.1 node DTO (each row's status + workflow context)\n" +
-        '- `prodect-core/CLAUDE.md` — Server-Action gate / finding #26',
+        '- `motir-core/CLAUDE.md` — Server-Action gate / finding #26',
     },
     {
       id: '2.5.6',
@@ -390,7 +390,7 @@ export const story_2_5: PlanStory = {
         '- `design/work-items/list.mock.html` + `design-notes.md` (2.5.7) — the layout authority\n' +
         '- 2.5.3 `app/(authed)/issues/page.tsx` + `_components/IssueListToolbar` (the disabled `[Tree ▾]` to wire) + `IssueTreeTable` / `issueRows`\n' +
         "- 2.5.1 `getProjectTree` / `findProjectForest` (add the flat, sorted variant); 2.5.4's URL-param pattern; `components/ui/Popover` / `Combobox`\n" +
-        '- `prodect-core/CLAUDE.md` — 4-layer · `--el-*` tokens',
+        '- `motir-core/CLAUDE.md` — 4-layer · `--el-*` tokens',
     },
     {
       id: '2.5.9',
@@ -596,7 +596,7 @@ export const story_2_5: PlanStory = {
         'tsc/eslint/prettier clean.\n\n' +
         '## Context refs\n\n' +
         '- `lib/services/workItemsService.ts` `getProjectTree` + `lib/repositories/workItemRepository.ts` (the forest read to replace; `findProjectIssuesFlat` as the sort/gate reference)\n' +
-        '- `lib/issues/issueListView.ts` sort whitelist; `prodect-core/CLAUDE.md` 4-layer + finding #26 gate\n' +
+        '- `lib/issues/issueListView.ts` sort whitelist; `motir-core/CLAUDE.md` 4-layer + finding #26 gate\n' +
         '- The 2.5.11 design — the per-node page size + which columns sort',
     },
     {
@@ -738,7 +738,7 @@ export const story_2_5: PlanStory = {
         '`createWorkItem` directly (NOT product code); kept out of the prod bundle.\n\n' +
         '*(PR #117 merged 2026-06-05, merge commit `98f782f` — `scripts/seed-large.ts` + the `pnpm db:seed:large` ' +
         'package script (run via tsx). Seeds one self-contained demo tenant (fixed user ' +
-        '`seed-large@prodect.dev` / `hunter2hunter2` + workspace + project) and a ~2,000-issue tree through ' +
+        '`seed-large@motir.dev` / `hunter2hunter2` + workspace + project) and a ~2,000-issue tree through ' +
         'the SHIPPED create path (allocate-key + repo.create — valid against the kind-parent triggers): ' +
         '60 root epics (List spans many pages, roots paginate), epic #1 with 130 children (Tree "Load more ' +
         'children" at 50/page) + a deep 90-grandchild branch (nested load-more / virtualization), the rest ' +
@@ -913,7 +913,7 @@ export const story_2_5: PlanStory = {
         '- `design/work-items/quick-view.mock.html` + `design-notes.md` (2.5.18) — the layout authority\n' +
         "- 2.5.3 `app/(authed)/issues/page.tsx` (reads `searchParams`; render the modal here) + the shared row cells / `issueRows` + `IssueTreeTable` (where the trigger lands) + 2.5.8's flat List rows\n" +
         '- 2.4 `getIssueDetail(identifier, ctx)` / `IssueDetailDto` + `app/(authed)/issues/[key]/page.tsx` (the detail destination) + its field components to compose the condensed view\n' +
-        '- `components/ui/Modal` (the 2.3 `CreateIssueModal` open/close+URL precedent) · 2.5.4 / 2.5.8 URL-param pattern · `prodect-core/CLAUDE.md` — 4-layer · `--el-*` tokens',
+        '- `components/ui/Modal` (the 2.3 `CreateIssueModal` open/close+URL precedent) · 2.5.4 / 2.5.8 URL-param pattern · `motir-core/CLAUDE.md` — 4-layer · `--el-*` tokens',
     },
     {
       id: '2.5.20',
@@ -1019,7 +1019,7 @@ export const story_2_5: PlanStory = {
         '- `design/work-items/quick-view.mock.html` + `design-notes.md` (2.5.20) — the layout authority\n' +
         '- The 2.5.19 `IssueQuickView` modal (`app/(authed)/issues/_components/*`) — the surface to extend (where the badge mounts)\n' +
         '- `components/ui/ReadinessBadge.tsx` (2.4.5) + `app/(authed)/issues/[key]/page.tsx` (how the detail page feeds `detail.readiness` → `ReadinessBadge`, incl. the `openBlockers` → `{identifier, href}` mapping to reuse)\n' +
-        '- `lib/dto/workItems.ts` `ReadinessVerdictDto` / `IssueDetailDto.readiness`; `lib/services/workItemsService.ts` `getReadiness` (the read already wired into `getIssueDetail`); `prodect-core/CLAUDE.md` — `--el-*` tokens',
+        '- `lib/dto/workItems.ts` `ReadinessVerdictDto` / `IssueDetailDto.readiness`; `lib/services/workItemsService.ts` `getReadiness` (the read already wired into `getIssueDetail`); `motir-core/CLAUDE.md` — `--el-*` tokens',
     },
     {
       id: '2.5.22',
@@ -1107,7 +1107,7 @@ export const story_2_5: PlanStory = {
         '`tests/e2e/issue-list-flow.spec.ts` pass (the E2E grabs the **English** `Clear filters` ' +
         'button by name and must continue to work under default `en`).\n\n' +
         '## Context refs\n\n' +
-        '- **Finding #61** in `prodect-meta/prodect_plan/PRODECT_FINDINGS.md` (full root-cause + ' +
+        '- **Finding #61** in `motir-meta/prodect_plan/PRODECT_FINDINGS.md` (full root-cause + ' +
         'screenshot of the broken popover)\n' +
         '- `app/(authed)/issues/_components/IssueFilterBar.tsx` — the file to thread; ~L256 ' +
         '(`Clear filters`) · ~L271 (`Find by ID or title…` placeholder) · the section headings + Kind / ' +

@@ -34,7 +34,7 @@ import type { PlanStory } from '../types';
  *     Jira LANDS on Details when settings opens.
  *   • **Recorded deviations (justified — no complexity for nothing):** no
  *     **Features** toggle page (Jira's kanban-vs-scrum/feature flags axis is
- *     owned in Prodect by board TYPE — 3.7 multi-board CRUD + 4.5 Scrum
+ *     owned in Motir by board TYPE — 3.7 multi-board CRUD + 4.5 Scrum
  *     board — a per-project toggle would duplicate it); no project-level
  *     **Notifications** admin (notification preferences are per-USER in our
  *     event-driven model — the 5.7 surface; no stated use case for an
@@ -63,7 +63,7 @@ import type { PlanStory } from '../types';
  * settings-area.mock.html`); the UI code subtasks (6.5.2 / 6.5.3) carry it
  * in `dependsOn` and seed `'blocked'` (Principle #13).
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 6.5`, on the standing
+ * Expanded from its `stubs.ts` entry per `motir plan 6.5`, on the standing
  * `seed/epic-5-plan` branch (Epic-5/6 planning). Matches the canonical style
  * of 5.1–5.6 / 6.1.
  */
@@ -82,7 +82,7 @@ export const story_6_5: PlanStory = {
     'a dedicated sidebar AREA entered from the project nav: a grouped left nav of settings ' +
     'pages with a way back to the project, LANDING on **Details** — which owns project ' +
     'name/key/avatar and the danger zone. Adopted 1:1. Deviations, each justified: no Features ' +
-    'toggle page (board TYPE — 3.7 multi-board + 4.5 Scrum — owns that axis in Prodect); no ' +
+    'toggle page (board TYPE — 3.7 multi-board + 4.5 Scrum — owns that axis in Motir); no ' +
     'project-level Notifications admin (per-user preferences are the 5.7 surface; an ' +
     'admin-owned scheme has no stated use case); no Apps page (no marketplace). The 5.3 ' +
     'work-type-layout admin remains a documented extension with a reserved registry slot.\n\n' +
@@ -119,7 +119,7 @@ export const story_6_5: PlanStory = {
     'this story adds no schema).\n' +
     '- `pnpm test:coverage` — the registry totality + access-matrix suites green; all 6.5 ' +
     'files ≥90% branch/fn/line.\n' +
-    '- **The area:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz` → the app sidebar Settings ' +
+    '- **The area:** sign in as `zhuyue@motir.co` / `!QAZ1qaz` → the app sidebar Settings ' +
     'item → lands on **Details** at `/settings/project` (name, key PROD, avatar, workspace, ' +
     'created — read-only, with the "editing arrives with project-details editing" seam — ' +
     'plus the Archive danger zone), inside the grouped settings nav matching ' +
@@ -130,7 +130,7 @@ export const story_6_5: PlanStory = {
     'the area chrome, nav active-state tracks, the old back-crumbs are gone, and the page ' +
     'URLs are unchanged (open `/settings/project/workflow` directly in a new tab → same ' +
     'page, area chrome present).\n' +
-    '- **Roles:** as a non-admin member (`bophilips@prodect.co`) the nav shows the ' +
+    '- **Roles:** as a non-admin member (`bophilips@motir.co`) the nav shows the ' +
     'sections their role can open and admin-managed pages render their shipped read-only ' +
     'states; a user without browse access on a private project hits the 6.4.4 no-access ' +
     'state on direct nav (no settings nav leak).\n' +
@@ -318,7 +318,7 @@ export const story_6_5: PlanStory = {
         'enter from the app sidebar → land on Details (identity + danger zone) → walk ' +
         'every section via the nav asserting active states + unchanged URLs → open ' +
         '`/settings/project/workflow` directly in a fresh context (chrome present) → ' +
-        'as `bophilips@prodect.co` assert the member view (filtered nav + read-only ' +
+        'as `bophilips@motir.co` assert the member view (filtered nav + read-only ' +
         'pages, no danger zone) → command-palette deep-link into a section → the ' +
         'narrow-viewport nav behaviour. **a11y:** the strict axe sweep over the area ' +
         'chrome + Details + one re-housed page; keyboard-only traversal of the full ' +

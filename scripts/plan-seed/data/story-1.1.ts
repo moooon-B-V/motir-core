@@ -12,17 +12,17 @@ export const story_1_1: PlanStory = {
   descriptionMd:
     'Email + password sign-up, sign-in, sign-out, plus Google OAuth as a peer sign-in ' +
     'method. Password reset and session management. Foundation for everything else — ' +
-    'until this works, no user can save anything in Prodect. The Story closes by ' +
+    'until this works, no user can save anything in Motir. The Story closes by ' +
     'snapshotting the working auth code into both starter templates ' +
     '(`nextjs-prisma-vercel-starter` and `nextjs-prisma-vercel-starter-with-design`), ' +
-    'making auth a baseline feature of every future Prodect-planned project.\n\n' +
+    'making auth a baseline feature of every future Motir-planned project.\n\n' +
     '**Prerequisites:** [Story 1.0 (Project bootstrap)](story-1.0-project-bootstrap.html) ' +
     'must be complete — repo scaffold, Prisma, Postgres connection must exist before auth ' +
     'tables can be added. [Story 1.0.5 (Design system & brand)](story-1.0.5-design-system.html) ' +
     'must be complete before Subtask 1.1.5 (sign-up / sign-in pages) — those pages must use ' +
     'the canonical `Button`, `Input`, and `Card` primitives, not new components. The two ' +
     'backport Subtasks (1.1.8, 1.1.9) at the end of the Story snapshot the working auth code ' +
-    'into both starter templates, so all future Prodect-planned projects start with auth ' +
+    'into both starter templates, so all future Motir-planned projects start with auth ' +
     'wired in.',
   verificationRecipeMd:
     '- Pull the Story branch, run `git checkout story/PROD-1.1-auth` then `./scripts/db-up.sh`. ' +
@@ -61,7 +61,7 @@ export const story_1_1: PlanStory = {
     'https://github.com/moooon-B-V/nextjs-prisma-vercel-starter and confirm the latest commit ' +
     'on main is the auth snapshot; CI is green; "Use this template" button still works. Same ' +
     'for https://github.com/moooon-B-V/nextjs-prisma-vercel-starter-with-design. Spot-check ' +
-    'the auth files in each starter — no "Prodect" string left behind in any code or README.\n' +
+    'the auth files in each starter — no "Motir" string left behind in any code or README.\n' +
     '- Confirm CI is green on the Story PR (lint + typecheck + build + both E2E tests from 1.1.7).',
   items: [
     {
@@ -132,7 +132,7 @@ export const story_1_1: PlanStory = {
         'primitive (NextAuth treats it as the awkward custom-credentials path) and ' +
         'account-linking semantics are first-class as well, which Subtask 1.1.4 will rely on. ' +
         'OAuth providers are a one-line config-block add — equivalent ergonomics to NextAuth on ' +
-        'the OAuth side. Decision recorded in PRODECT.md "Current state".\n\n' +
+        'the OAuth side. Decision recorded in MOTIR.md "Current state".\n\n' +
         '**Why split this from 1.1.3 and 1.1.5:** Better-Auth wiring is mostly framework setup ' +
         'with little product surface. It can run in parallel with 1.1.1 (design mockup) and ' +
         "1.1.3 (user table), shaving a day off the Story's wall-clock time.\n\n" +
@@ -162,7 +162,7 @@ export const story_1_1: PlanStory = {
         '- `.env.example` — existing env vars to extend\n' +
         '- Better-Auth docs (fetched at prompt-gen time): Next.js integration, email/password ' +
         'method, middleware patterns\n' +
-        '- PRODECT.md — Better-Auth decision rationale',
+        '- MOTIR.md — Better-Auth decision rationale',
     },
     {
       id: '1.1.3',
@@ -247,13 +247,13 @@ export const story_1_1: PlanStory = {
         'into the same User row. No UI work in this subtask — the "Continue with Google" button ' +
         'on the sign-in/sign-up pages lands in 1.1.5, which depends on this.\n\n' +
         '**Why auto-link, not require-verification:** Decided in Story-1.1 planning conversation ' +
-        '(recorded in PRODECT.md). Same email → same user; both methods work afterward. ' +
+        '(recorded in MOTIR.md). Same email → same user; both methods work afterward. ' +
         'Lowest-friction UX; the security trade-off (Google-account compromise → full account ' +
         'takeover) is acceptable for v1 because Google already verified the email and most ' +
         'users use Google with 2FA on. If a future Story needs require-verification semantics ' +
         'for compliance reasons, swap the `accountLinking` Better-Auth option there.\n\n' +
         '**Why env-var-driven with no shipped defaults:** Per the planner-as-consumer principle ' +
-        '(PRODECT.md "Current state" + notes.html mistake #22), each Prodect-planned project ' +
+        '(MOTIR.md "Current state" + notes.html mistake #22), each Motir-planned project ' +
         'owns its own Google Cloud OAuth app. The starters ship `GOOGLE_CLIENT_ID` / ' +
         '`GOOGLE_CLIENT_SECRET` as required env vars with no defaults; the planner adds a ' +
         '"Set up Google Cloud OAuth credentials" Story in pre-plan for each project, parallel ' +
@@ -375,10 +375,10 @@ export const story_1_1: PlanStory = {
         'The UI half lives in 1.1.5; this subtask provides the endpoints those pages call ' +
         'plus the email abstraction those endpoints (and the email-verification flow) use.\n\n' +
         '**Why an abstraction, not a direct Resend/Postmark/SES call:** Per the ' +
-        'planner-as-consumer principle (PRODECT.md "Current state"), production email-provider ' +
-        "choice is planner work — each Prodect-planned project's planner decides which " +
+        'planner-as-consumer principle (MOTIR.md "Current state"), production email-provider ' +
+        "choice is planner work — each Motir-planned project's planner decides which " +
         'provider to use in pre-plan and adds a mandatory Story to wire it. The starter (and ' +
-        'prodect-core itself for v1) ships only the abstraction + a **dev console-logging ' +
+        'motir-core itself for v1) ships only the abstraction + a **dev console-logging ' +
         'provider** that prints reset links to stdout. Production wiring is deferred. This ' +
         'keeps the starter dependency-free of any specific email vendor while making the ' +
         "wiring point explicit (`lib/email.ts`'s `sendEmail()` export).\n\n" +
@@ -421,7 +421,7 @@ export const story_1_1: PlanStory = {
         '- `/lib/users/repo.ts` — user repository (from 1.1.3)\n' +
         '- `/lib/auth/passwords.ts` — hashing helper (from 1.1.3)\n' +
         '- `/prisma/schema.prisma` — current schema\n' +
-        '- PRODECT.md — planner-as-consumer principle; email-provider choice is planner work\n' +
+        '- MOTIR.md — planner-as-consumer principle; email-provider choice is planner work\n' +
         '- OWASP password-reset cheat-sheet (URL, fetched at prompt-gen)',
     },
     {
@@ -500,12 +500,12 @@ export const story_1_1: PlanStory = {
         '**Card-wrapped auth layout.** The Story-1.1.1 mockup was Clay-style (no card chrome, ' +
         'wordmark top-left). User asked mid-validation to flip to a more modern card-wrapped ' +
         'layout — a white card with soft shadow, centered on a tinted page background — and to ' +
-        'remove the placeholder “Prodect” wordmark entirely. The wordmark removal is the deeper ' +
-        'decision: in a real Prodect-planned project, the brand mark is a late-Epic-4 Subtask ' +
+        'remove the placeholder “Motir” wordmark entirely. The wordmark removal is the deeper ' +
+        'decision: in a real Motir-planned project, the brand mark is a late-Epic-4 Subtask ' +
         '(agent or human task) scheduled when the product has enough surface for the brand ' +
         'decision to be informed. Shipping UI Subtasks without placeholder branding avoids a ' +
         'filler element becoming load-bearing across every screen. Captured as a current-state ' +
-        'principle in PRODECT.md.\n\n' +
+        'principle in MOTIR.md.\n\n' +
         '**Vercel preview-cleanup workflow.** notes.html mistake #25 ("Vercel-Neon Marketplace ' +
         "integration auto-provisions Neon branches per preview but doesn't auto-tear them " +
         'down") had been tracked as unresolved operational debt with a "wait until cadence ' +
@@ -545,10 +545,10 @@ export const story_1_1: PlanStory = {
         'DELETEs each via the Vercel API. The Vercel-Managed Neon integration cascades the ' +
         'Neon-branch deletion.\n' +
         '- Workflow uses `secrets.VERCEL_TOKEN` (Vercel Access Token, team-scoped) and ' +
-        'hardcoded project/org IDs for prodect-core. For the starters (1.1.8 + 1.1.9), the ' +
+        'hardcoded project/org IDs for motir-core. For the starters (1.1.8 + 1.1.9), the ' +
         'same workflow is parameterized with GitHub repo `vars` instead of hardcoded IDs so ' +
         'each user wires their own.\n' +
-        '- PRODECT.md\'s "Current state" entry for the preview-branch debt flips from ' +
+        '- MOTIR.md\'s "Current state" entry for the preview-branch debt flips from ' +
         'UNRESOLVED to RESOLVED with a forward reference to this Subtask + the workflow file.\n' +
         '- notes.html mistake #25 gets a Resolution prompt-hint appended with the workflow ' +
         'reference + the "verify the fix\'s mechanism before shipping it" recursive-corrective ' +
@@ -573,16 +573,16 @@ export const story_1_1: PlanStory = {
       estimateMinutes: 22,
       dependsOn: ['1.1.7'],
       descriptionMd:
-        'Snapshot the auth code shipped in Story 1.1 from `prodect-core` into ' +
+        'Snapshot the auth code shipped in Story 1.1 from `motir-core` into ' +
         '[moooon-B-V/nextjs-prisma-vercel-starter](https://github.com/moooon-B-V/nextjs-prisma-vercel-starter) ' +
-        '(the bare starter), stripping anything Prodect-specific so the starter remains a ' +
+        '(the bare starter), stripping anything Motir-specific so the starter remains a ' +
         'generic baseline. Same pattern as Subtasks 1.0.6 and 1.0.5.6: this is a snapshot ' +
         'push to `main` of an existing repo, not a fork into a new repo. After this Subtask, ' +
-        'every future `"Use this template"` click on the bare starter (whether by the Prodect ' +
+        'every future `"Use this template"` click on the bare starter (whether by the Motir ' +
         'planner or an external user) yields a project with email/password + Google OAuth ' +
         'wired in by default.\n\n' +
         '**Why this is a Subtask of Story 1.1, not a separate Story:** The backport is ' +
-        'mechanical — copy the relevant files from `prodect-core`, run the strip, smoke-test, ' +
+        'mechanical — copy the relevant files from `motir-core`, run the strip, smoke-test, ' +
         "push. It depends on Story 1.1's auth code existing, so it belongs inside the Story; " +
         'making it a separate Story would just create coordination overhead. Same logic that ' +
         'put 1.0.5.6 inside Story 1.0.5.\n\n' +
@@ -590,14 +590,14 @@ export const story_1_1: PlanStory = {
         "1.1.7 (the E2E test passing); they touch separate repos and don't share files. " +
         'Running in parallel saves a day of wall-clock time. If a strip mistake surfaces in ' +
         'one starter, fix-forward in the other rather than serializing.\n\n' +
-        "**What you'll do:** Locally rsync the relevant files from `prodect-core/` into a " +
+        "**What you'll do:** Locally rsync the relevant files from `motir-core/` into a " +
         'sibling clone of the bare starter: `lib/auth/*`, `lib/users/repo.ts`, ' +
         '`lib/email.ts`, `app/api/auth/[...all]/route.ts`, `app/(auth)/*`, `middleware.ts`, ' +
         'the `User` + `OAuthAccount` + `PasswordResetToken` Prisma models (added to the bare ' +
         "starter's schema *alongside* the existing `MigrationMarker` placeholder — keep the " +
         "placeholder so the starter's initial migration story is preserved), and any new " +
         '`.env.example` keys (`BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID`, ' +
-        '`GOOGLE_CLIENT_SECRET`, `EMAIL_PROVIDER=console`). Strip out any Prodect-as-consumer ' +
+        '`GOOGLE_CLIENT_SECRET`, `EMAIL_PROVIDER=console`). Strip out any Motir-as-consumer ' +
         'references (mirror the 1.0.6 / 1.0.5.6 strip pattern). Generate a fresh migration ' +
         'for the new auth tables. Verify all 4 quality gates pass (lint, format:check, ' +
         'typecheck, build). Run the end-to-end "Use this template" smoke test: create ' +
@@ -612,9 +612,9 @@ export const story_1_1: PlanStory = {
         'Workspace/multi-tenancy), password-hash helper, user repo, sign-up / sign-in / ' +
         'reset-password pages (unstyled — the bare starter has no design system), email ' +
         'abstraction with dev console provider only.\n' +
-        '- All Prodect-as-consumer references stripped: no "Prodect" in app/page.tsx wordmark; ' +
-        'no "prodect-core" in README; no Story/Subtask references in comments; ' +
-        '`app.theme.*` not `prodect.theme.*` for any localStorage keys carried over.\n' +
+        '- All Motir-as-consumer references stripped: no "Motir" in app/page.tsx wordmark; ' +
+        'no "motir-core" in README; no Story/Subtask references in comments; ' +
+        '`app.theme.*` not `motir.theme.*` for any localStorage keys carried over.\n' +
         '- Fresh Prisma migration generated for the auth tables; applies cleanly to the bare ' +
         "starter's existing `MigrationMarker` table. `MigrationMarker` retained as the " +
         'placeholder convention.\n' +
@@ -631,16 +631,16 @@ export const story_1_1: PlanStory = {
         'sign-in works (with throwaway Google Cloud creds) → throwaway deleted.\n' +
         '- GitHub Actions CI green on the snapshot commit.\n\n' +
         '## Context refs\n\n' +
-        '- `prodect-core/lib/auth/*`, `prodect-core/lib/users/repo.ts`, ' +
-        '`prodect-core/lib/email.ts`, `prodect-core/app/api/auth/*`, ' +
-        '`prodect-core/app/(auth)/*`, `prodect-core/middleware.ts`, ' +
-        '`prodect-core/prisma/schema.prisma` — source files to snapshot\n' +
+        '- `motir-core/lib/auth/*`, `motir-core/lib/users/repo.ts`, ' +
+        '`motir-core/lib/email.ts`, `motir-core/app/api/auth/*`, ' +
+        '`motir-core/app/(auth)/*`, `motir-core/middleware.ts`, ' +
+        '`motir-core/prisma/schema.prisma` — source files to snapshot\n' +
         '- Local clone of [moooon-B-V/nextjs-prisma-vercel-starter]' +
         '(https://github.com/moooon-B-V/nextjs-prisma-vercel-starter) — destination\n' +
         "- Subtask 1.0.6's PR + commit — the precedent for the bare starter's strip pattern\n" +
-        "- Subtask 1.0.5.6's PR + commit — the precedent for the snapshot-from-prodect-core " +
+        "- Subtask 1.0.5.6's PR + commit — the precedent for the snapshot-from-motir-core " +
         'pattern (this one is conceptually identical but for auth instead of design)\n' +
-        '- PRODECT.md — planner-as-consumer principle (what to bake in vs. leave to the ' +
+        '- MOTIR.md — planner-as-consumer principle (what to bake in vs. leave to the ' +
         'planner)',
     },
     {
@@ -652,18 +652,18 @@ export const story_1_1: PlanStory = {
       estimateMinutes: 25,
       dependsOn: ['1.1.7'],
       descriptionMd:
-        'Snapshot the auth code shipped in Story 1.1 from `prodect-core` into ' +
+        'Snapshot the auth code shipped in Story 1.1 from `motir-core` into ' +
         '[moooon-B-V/nextjs-prisma-vercel-starter-with-design](https://github.com/moooon-B-V/nextjs-prisma-vercel-starter-with-design) ' +
-        '(the designed starter), stripping anything Prodect-specific so the starter remains a ' +
+        '(the designed starter), stripping anything Motir-specific so the starter remains a ' +
         'generic baseline. Functionally identical to 1.1.8 but for the designed starter — the ' +
         'extra work is that the sign-up / sign-in / reset-password pages ship **styled with the ' +
         'design system already in this starter**, not unstyled. This is the higher-value of the ' +
-        'two backports because most Prodect-planned projects will use the designed starter (per ' +
+        'two backports because most Motir-planned projects will use the designed starter (per ' +
         'the design-wizard "skip-all" path).\n\n' +
         "**Why a separate Subtask from 1.1.8:** The designed starter's auth pages must compose " +
         '`Button`, `Input`, `Card` from `components/ui/` (already present in this starter) ' +
         'instead of plain HTML — so the snapshot is not a pure file copy. The pages from ' +
-        "`prodect-core`'s `app/(auth)/*` are already styled this way (1.1.5 used the design " +
+        "`motir-core`'s `app/(auth)/*` are already styled this way (1.1.5 used the design " +
         'system primitives), so the work is mostly verifying the imports resolve in the ' +
         "designed starter's `tsconfig` paths and the Tailwind tokens render correctly. But " +
         "it's distinct enough that it deserves its own Subtask, parallel with 1.1.8.\n\n" +
@@ -691,7 +691,7 @@ export const story_1_1: PlanStory = {
         'convention from 1.1.1.\n' +
         '- `/tokens` route still renders the full design system specimen page; theme + ' +
         'display-style toggles still work; auth pages still work after toggle.\n' +
-        '- All Prodect-as-consumer references stripped: same coverage as 1.1.8.\n' +
+        '- All Motir-as-consumer references stripped: same coverage as 1.1.8.\n' +
         '- Fresh Prisma migration generated; applies cleanly.\n' +
         '- `.env.example` documents the same new env vars as 1.1.8.\n' +
         '- README updated to position this starter as "everything in the bare starter, plus ' +
@@ -702,7 +702,7 @@ export const story_1_1: PlanStory = {
         'sign-in works → `/tokens` still works → theme/display-style toggles still work → ' +
         'throwaway deleted.\n\n' +
         '## Context refs\n\n' +
-        '- Same source files from `prodect-core/` as 1.1.8\n' +
+        '- Same source files from `motir-core/` as 1.1.8\n' +
         '- Local clone of [moooon-B-V/nextjs-prisma-vercel-starter-with-design]' +
         '(https://github.com/moooon-B-V/nextjs-prisma-vercel-starter-with-design) — ' +
         'destination\n' +
@@ -710,7 +710,7 @@ export const story_1_1: PlanStory = {
         'pattern\n' +
         '- Subtask 1.1.8 (running in parallel) — same agent run, same shape, different ' +
         'destination\n' +
-        '- PRODECT.md — planner-as-consumer principle',
+        '- MOTIR.md — planner-as-consumer principle',
     },
     {
       id: '1.1.11',
@@ -724,7 +724,7 @@ export const story_1_1: PlanStory = {
         'Follow-up Subtask added post-1.1.9 to resolve ' +
         '[PRODECT_FINDINGS.md finding #2](PRODECT_FINDINGS.md): Next.js 16 deprecates the ' +
         '`middleware.ts` file convention in favour of `proxy.ts`. The deprecation warning fires ' +
-        'on every `pnpm dev` boot across all three repos (prodect-core + both starters, all ' +
+        'on every `pnpm dev` boot across all three repos (motir-core + both starters, all ' +
         'carrying the same `middleware.ts` verbatim) and will become a hard failure in a future ' +
         'Next major.\n\n' +
         '**Why one Subtask, three PRs:** the same mechanical change shipped into three repos in ' +
@@ -746,19 +746,19 @@ export const story_1_1: PlanStory = {
         '`pnpm lint`, `pnpm format:check`, `pnpm test`, `pnpm build`, `pnpm test:e2e` all ' +
         'green in each repo; `pnpm dev` boots with no deprecation warning. Shipped 2026-05-27 ' +
         'across three PRs: ' +
-        '[prodect-core PR #21](https://github.com/moooon-B-V/prodect-core/pull/21) ' +
+        '[motir-core PR #21](https://github.com/moooon-B-V/motir-core/pull/21) ' +
         '(merge commit `c031893`); ' +
         '[bare starter PR #2](https://github.com/moooon-B-V/nextjs-prisma-vercel-starter/pull/2) ' +
         '(merge commit `a386d38`); ' +
         '[designed starter PR #2](https://github.com/moooon-B-V/nextjs-prisma-vercel-starter-with-design/pull/2) ' +
         '(merge commit `3d8bbbf`). Post-merge, finding #2 in `PRODECT_FINDINGS.md` received ' +
         'a "Resolved" block matching finding #1\'s pattern. In the same pass, ' +
-        '`PRODECT_FINDINGS.md` was moved from `prodect-core/` (where it originated when ' +
-        'prodect-core was the first concrete repo) to `prodect_plan/` (its natural home ' +
-        'alongside other planner-workflow artifacts like `PRODECT.md` and `notes.html`), ' +
+        '`PRODECT_FINDINGS.md` was moved from `motir-core/` (where it originated when ' +
+        'motir-core was the first concrete repo) to `prodect_plan/` (its natural home ' +
+        'alongside other planner-workflow artifacts like `MOTIR.md` and `notes.html`), ' +
         'since findings now span multiple repos. Move shipped as ' +
-        '[prodect-core PR #22](https://github.com/moooon-B-V/prodect-core/pull/22) ' +
-        '(merge commit `7fc9831`), with the protocol wording in `PRODECT.md` and `notes.html` ' +
+        '[motir-core PR #22](https://github.com/moooon-B-V/motir-core/pull/22) ' +
+        '(merge commit `7fc9831`), with the protocol wording in `MOTIR.md` and `notes.html` ' +
         'updated to point at the new path.\n\n' +
         '## Acceptance criteria\n\n' +
         '- All three repos no longer print the `middleware-to-proxy` deprecation warning on ' +

@@ -50,10 +50,10 @@ import type { PlanStory } from '../types';
  *     slot as 6.1's workspace-wide search.
  *   • **Two visibilities (private / project), owner+admin editing.** Jira's
  *     six share scopes + per-filter Viewers/Editors lists presuppose
- *     site-global filters and groups, which Prodect doesn't have; project
+ *     site-global filters and groups, which Motir doesn't have; project
  *     containment + the shipped 6.4 roles already draw the boundary. The
  *     per-filter editor-grant list is the documented extension.
- *   • **Boards stay status-mapped, not filter-sourced.** Prodect mirrors
+ *   • **Boards stay status-mapped, not filter-sourced.** Motir mirrors
  *     the team-managed family (the 3.1/3.6 tested decision; 6.4 made the
  *     same family choice) — so "filters as board sources" is the
  *     company-managed shape we deviate from (documented extension); the
@@ -64,7 +64,7 @@ import type { PlanStory } from '../types';
  *     power-user surface with no stated use case yet (extension).
  *   • **System filters: the expressible subset.** Built-ins compile to
  *     FilterAST over shipped fields; "Viewed recently" needs a view-history
- *     substrate Prodect doesn't carry (extension), so it's omitted.
+ *     substrate Motir doesn't carry (extension), so it's omitted.
  *
  * ⚠️ Design gate (planning-time). `filter-builder.mock.html` (6.1.3)
  * designs ONLY the builder — every 6.2 surface (save affordance + dirty
@@ -73,7 +73,7 @@ import type { PlanStory } from '../types';
  * `type: design` subtask; every UI code subtask carries it in `dependsOn`
  * and seeds `'blocked'` (Principle #13).
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 6.2`, on the standing
+ * Expanded from its `stubs.ts` entry per `motir plan 6.2`, on the standing
  * `seed/epic-5-plan` branch (Epic-5/6 planning). Matches the canonical style
  * of 5.1–5.6 / 6.1.
  */
@@ -128,7 +128,7 @@ export const story_6_2: PlanStory = {
     'metadata (name, owner, visibility) — plus the usage seam: consumers reference filters by ' +
     'FK, the delete warning enumerates them, and a widget whose filter was deleted renders a ' +
     'designed "filter missing" state (the verified Cloud gadget behaviour), never a crash. ' +
-    '**Boards stay status-mapped** — Prodect mirrors the team-managed family (3.1/3.6 tested ' +
+    '**Boards stay status-mapped** — Motir mirrors the team-managed family (3.1/3.6 tested ' +
     'decision, the same family 6.4 chose), so filter-sourced boards (a company-managed shape) ' +
     'are the documented extension; the stub\'s "boards" consumer resolves to this contract.\n\n' +
     '**Bounded + complete (finding #57).** Directory and dropdown reads are paginated/bounded ' +
@@ -138,7 +138,7 @@ export const story_6_2: PlanStory = {
     "team's filters never leak into another's.\n\n" +
     '**Out of scope (documented extension slots, each justified):** cross-project / ' +
     'workspace-global filters (follows the 6.1 scope deviation); per-filter Viewers/Editors ' +
-    'grant lists + group scopes (no groups in Prodect; 6.4 roles draw the boundary); ' +
+    'grant lists + group scopes (no groups in Motir; 6.4 roles draw the boundary); ' +
     'filter-sourced boards (company-managed shape; ours are team-managed-style status boards); ' +
     'advanced cron subscriptions; "Viewed recently" (no view-history substrate); public/' +
     'anonymous sharing (no anonymous surface exists — rung 2).',
@@ -148,17 +148,17 @@ export const story_6_2: PlanStory = {
     '`pnpm db:seed`, `pnpm dev`.\n' +
     '- `pnpm test:coverage` — Vitest (real Postgres) over the service/permission matrix, the ' +
     'persist→resolve round-trip, and the subscription scheduler ≥90% per-file branch/fn/line.\n' +
-    '- **Save flow:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz` → /issues → build a filter ' +
+    '- **Save flow:** sign in as `zhuyue@motir.co` / `!QAZ1qaz` → /issues → build a filter ' +
     '(Status is any of (To do) AND Priority is none of (Lowest)) → **Save as** → name it ' +
     '"Sprint blockers", visibility **Project** → the toolbar shows the applied filter\'s name; ' +
     'edit a row → the dirty state appears with **Save** + **Save as** (you own it); a second ' +
-    'account (`bophilips@prodect.co`) applying the same filter and editing a row sees **Save ' +
+    'account (`bophilips@motir.co`) applying the same filter and editing a row sees **Save ' +
     "as only** (the mirror's non-owner rule).\n" +
     '- **Apply + star:** the dropdown lists starred first, then My filters / Project filters / ' +
     'Defaults; starring "Sprint blockers" floats it to the top; applying any entry loads its ' +
     'rows into the builder and writes the `?filter=v1:` URL (shareable; reload-safe); the ' +
     'built-in defaults (My open issues, Reported by me, …) apply but expose no edit/delete.\n' +
-    '- **Visibility + permissions:** a private filter is invisible to `bophilips@prodect.co` ' +
+    '- **Visibility + permissions:** a private filter is invisible to `bophilips@motir.co` ' +
     '(dropdown + directory + direct id); flipping it to Project makes it appear; a project ' +
     '**viewer** can create/star private filters but gets no Project-visibility option; a ' +
     "project **admin** can rename/delete/change-owner on a member's shared filter.\n" +
@@ -225,7 +225,7 @@ export const story_6_2: PlanStory = {
         '- 6.1.1 `lib/filters/ast.ts` (the envelope + codec — the single source of the ' +
         'stored shape) + the 6.1.2 stale-referent rule\n' +
         '- Story 6.4 roles/gates (`ProjectMembership`, access levels) — the permission ' +
-        'substrate; `prodect-core/CLAUDE.md` (4-layer, required-`tx`, FK `@relation` rule)\n' +
+        'substrate; `motir-core/CLAUDE.md` (4-layer, required-`tx`, FK `@relation` rule)\n' +
         '- The verified Jira facts in the Story 6.2 description (Save/Save-as ownership, ' +
         'admin powers, system-filter immutability)\n' +
         '- finding #57 (bounded reads)',
@@ -234,7 +234,7 @@ export const story_6_2: PlanStory = {
       id: '6.2.2',
       title:
         'Design — saved-filter surfaces (`design/work-items/saved-filters.mock.html`: save + dirty state, dropdown, directory, visibility, delete warning, subscription editor)',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 40,
@@ -337,7 +337,7 @@ export const story_6_2: PlanStory = {
       id: '6.2.4',
       title:
         'Filters directory — the project-level manage surface (search, pagination, actions by role, built-ins, delete-with-dependents warning)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -416,7 +416,7 @@ export const story_6_2: PlanStory = {
         '## Context refs\n\n' +
         '- `lib/jobs/` (defineJob/registry/retries/DLQ) + ' +
         '`lib/jobs/definitions/dailyHealthCheck.ts` — the cron precedent\n' +
-        '- `lib/emailTemplates/` contract in `prodect-core/CLAUDE.md` (pure templates, ' +
+        '- `lib/emailTemplates/` contract in `motir-core/CLAUDE.md` (pure templates, ' +
         'hand-written plain text) + `lib/email.ts`\n' +
         '- 6.2.1 resolve-as-user read; `design/work-items/saved-filters.mock.html` (the ' +
         'subscription editor panels)\n' +

@@ -1,5 +1,8 @@
 import { Prisma, type WorkItemRevision } from '@prisma/client';
 import { db } from '@/lib/db';
+import type { FilterAst } from '@/lib/filters/ast';
+import type { ProjectFilterReferents } from '@/lib/filters/registry';
+import { compileFilterConditionsSql } from '@/lib/repositories/workItemRepository';
 
 // Work-item-revision repository — single Prisma operations on the
 // `work_item_revision` table (Subtask 1.4.6). The audit-trail leaf the
@@ -212,6 +215,71 @@ export const workItemRevisionRepository = {
               OR (r."diff" -> 'sprintId' ->> 'to') = ${sprintId}
               OR (r."diff" -> 'sprintId' ->> 'from') = ${sprintId}
             )
+      GROUP BY 1
+      ORDER BY 1
+    `;
+  },
+
+  /**
+   * The RESOLVED series of the created-vs-resolved report (Story 6.3 ·
+   * Subtask 6.3.2): per `date_trunc(period, changedAt)` bucket, the NET
+   * count of status transitions into a `done`-CATEGORY status — `+1` for a
+   * transition INTO done (from a non-done status), `-1` for a transition OUT
+   * of done (a reopen inside the window subtracts, the card's net rule) — in
+   * ONE bounded grouped `$queryRaw` over the 1.4.6 trail (the 4.6.3 pattern;
+   * finding #57 — never an all-revisions load + JS reduce; the result is
+   * bounded by the bucket cap the service validates).
+   *
+   * "Done" resolves exactly like `aggregateSprintBurndownByDay`: join
+   * `workflow_status` on the diff's from/to status KEYS and read
+   * `category = 'done'` — the SAME predicate `getTerminalStatusKeys` / the
+   * burndown / velocity / rollups resolve (the recorded deviation: our
+   * "resolution" IS the done category), so every report agrees on "done".
+   * `period` is a closed `day|week|month` union bound as a parameter. The
+   * optional compiled FilterAST (the 6.1.1 compiler over the joined
+   * `work_item` alias `w`; stale referents → match-nothing per 6.1.2)
+   * narrows to the saved-filter scope; archived items are excluded (matching
+   * the created series + the /issues parity basis). `workspaceId` gates the
+   * read (finding #26). Buckets with no events return no row (the service
+   * fills the axis). Read-only path → `db` singleton.
+   */
+  async aggregateNetResolvedByBucket(
+    projectId: string,
+    workspaceId: string,
+    period: 'day' | 'week' | 'month',
+    window: { start: Date; end: Date },
+    filter?: { ast?: FilterAst; referents?: ProjectFilterReferents },
+  ): Promise<Array<{ bucket: string; resolved: number }>> {
+    const astSql = filter?.ast
+      ? compileFilterConditionsSql(filter.ast, filter.referents)
+      : Prisma.sql`TRUE`;
+    return db.$queryRaw<Array<{ bucket: string; resolved: number }>>`
+      SELECT
+        to_char(date_trunc(${period}, r."changedAt"), 'YYYY-MM-DD') AS "bucket",
+        COALESCE(SUM(
+          CASE
+            WHEN ts."category" = 'done' AND (fs."category" IS NULL OR fs."category" <> 'done') THEN 1
+            WHEN (ts."category" IS NULL OR ts."category" <> 'done') AND fs."category" = 'done' THEN -1
+            ELSE 0
+          END
+        ), 0)::int AS "resolved"
+      FROM "work_item_revision" r
+      JOIN "work_item" w
+        ON w."id" = r."workItemId"
+       AND w."projectId" = ${projectId}
+       AND w."workspaceId" = ${workspaceId}
+       AND w."archivedAt" IS NULL
+       AND (${astSql})
+      LEFT JOIN "workflow_status" fs
+        ON fs."project_id" = w."projectId"
+       AND fs."key" = (r."diff" -> 'status' ->> 'from')
+      LEFT JOIN "workflow_status" ts
+        ON ts."project_id" = w."projectId"
+       AND ts."key" = (r."diff" -> 'status' ->> 'to')
+      WHERE r."changeKind" = 'updated'
+        AND r."diff" -> 'status' IS NOT NULL
+        AND r."changedAt" >= ${window.start}
+        AND r."changedAt" <= ${window.end}
       GROUP BY 1
       ORDER BY 1
     `;

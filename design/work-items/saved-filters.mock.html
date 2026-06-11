@@ -1,0 +1,2525 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Saved filters — save, apply, manage, subscribe (Story 6.2 · 6.2.2 → 6.2.3 /
+      6.2.4 / 6.2.5)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the SAVED-FILTER surfaces — everything
+      Story 6.2 builds on top of the 6.1.3 filter builder, which designs ONLY
+      the builder itself (the design-gate NONE-exists case for save/manage/
+      share/subscribe). Without this asset, 6.2.3/6.2.4/6.2.5 would be
+      improvising UI.
+
+      Built FROM the real design system: token values copied 1:1 from
+      app/globals.css (Tier-0 --color-* + Tier-3 --el-* + shape tokens), and
+      the markup composes the SHIPPED primitives only — the toolbar
+      ToolbarButton (.tb-btn, list.mock/filter-builder.mock), the Combobox
+      menu/option vocabulary, Modal (radius-modal + shadow-modal, the shipped
+      Modal.tsx chrome), Pill tones, Input/Textarea + FormField, the Segmented
+      control (3.3.5), the 6.4.1 access-card radio grammar (visibility), the
+      6.1.3 summary-chip row (the applied state this extends), EmptyState /
+      ErrorState, the 2.5.12 pagination footer, Avatar, and the ink Tooltip.
+      NO new primitive.
+
+      Mirrors (verified in the Story 6.2 module, 2026-06-10): Jira's
+      Save / Save as ownership split (owner of a modified filter: Save +
+      Save as; non-owner: Save as only), its Filters-directory columns
+      (name / owner / visibility / popularity=stars / actions), its
+      starred-first filter menu, its delete-in-use warning naming dependents,
+      its per-filter email subscriptions (preset tier), and its read-only
+      system filters. Recorded deviations ride the story module: filters are
+      PROJECT-contained with two visibilities (private / project), built-in
+      defaults are non-persisted constants (not starrable, not subscribable —
+      a subscription is a row FK-ed to a saved_filter row, and a built-in has
+      no row), and boards stay status-mapped (the 6.3 data-source contract is
+      the consumer surface).
+
+      Covers (multi-panel): (0) the /issues toolbar with the [Saved] dropdown
+      trigger + the applied-filter NAME CHIP, clean vs dirty — owner (Save +
+      Save as + Discard changes) vs non-owner (Save as only) · (1) the save
+      dialog (name / description / visibility) + the duplicate-name error +
+      the viewer private-only state · (2) the filter dropdown — Starred →
+      My filters → Project filters → Defaults, server search, per-row star
+      toggle, View-all footer; plus the empty-group states · (3) the filters
+      DIRECTORY at /filters — searchable, paginated table with role-gated row
+      actions, built-ins read-only, empty + no-access states · (4) the
+      visibility control (the 6.4.1 access-card grammar) + the
+      delete-with-dependents warning · (5) the subscription editor (preset
+      schedule) + the subscribed state · (6) the "Filter missing" widget
+      state Story 6.3 inherits. Toggle dark mode to confirm token parity.
+      See design-notes.md ("Saved filters") for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 10px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-icon-btn: 4px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+        --height-input: 44px;
+        --focus-ring-width: 2px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-info: var(--color-info);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1100px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 36px auto 10px;
+        padding-left: 2px;
+        max-width: 1100px;
+      }
+      .float-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 24px;
+      }
+      .row-note {
+        margin: 10px 2px 0;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        font-style: italic;
+      }
+      .legend {
+        max-width: 1100px;
+        margin: 10px auto 0;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.7;
+      }
+      .legend code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+
+      /* ── Page shell — header + toolbar (mirrors app/(authed)/issues/page.tsx) ─ */
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin: 4px 0 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        position: relative;
+      }
+      /* Toolbar button — the shipped ToolbarButton shape (h-control) */
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        position: relative;
+      }
+      .tb-btn .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn .caret {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn.primary {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+      }
+      .tb-btn.primary .ic {
+        color: var(--el-accent-text);
+      }
+      .tb-btn.is-active {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+      }
+      .tb-btn.is-active .ic {
+        color: var(--el-accent);
+      }
+      .tb-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 11px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      /* Tooltip — the ink tooltip grammar (shape: --spacing-tooltip-*) */
+      .tip {
+        position: absolute;
+        top: calc(var(--height-control) + 8px);
+        left: 0;
+        z-index: 30;
+        width: 250px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 12px;
+        line-height: 1.5;
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        border-radius: var(--radius-control);
+        box-shadow: var(--shadow-elevated);
+      }
+
+      /* ── Applied-state summary row (6.1.3 grammar) + the NAME CHIP ────────── */
+      .summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin: -12px 0 8px;
+      }
+      .sum-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .sum-chip strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      /* The applied-filter NAME CHIP — bookmark glyph on the lavender tint;
+         clicking it opens the [Saved] dropdown (one editing surface). */
+      .name-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        border: 1px solid transparent;
+        background: var(--el-tint-lavender);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .name-chip .ng {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        color: var(--el-accent);
+      }
+      .name-chip .vg {
+        width: 12px;
+        height: 12px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      /* Dirty marker — never colour-only: the dot glyph + the word "Edited" */
+      .dirty {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        font-style: italic;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .dirty .dd {
+        width: 7px;
+        height: 7px;
+        border-radius: 9999px;
+        background: var(--el-warning);
+        flex: none;
+      }
+      .count-line {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        margin: 0 0 12px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ── Buttons (the shipped Button: primary / secondary / ghost / danger) ── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        border: 1px solid transparent;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn.sm {
+        height: var(--height-btn-sm);
+        font-size: 13px;
+      }
+      .btn.secondary {
+        background: var(--el-page-bg);
+        border-color: var(--el-border);
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .btn.ghost {
+        background: none;
+        border-color: transparent;
+        color: var(--el-text-secondary);
+        font-weight: 500;
+      }
+      .btn.ghost:hover {
+        background: var(--el-surface);
+      }
+      .btn.danger {
+        background: var(--el-danger);
+        color: #ffffff;
+      }
+      .btn[disabled] {
+        opacity: 0.55;
+        cursor: default;
+      }
+      .btn .ic {
+        width: 15px;
+        height: 15px;
+        flex: none;
+      }
+      .link-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: none;
+        border: 0;
+        padding: 2px 4px;
+        margin: -2px -4px;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .link-btn:hover {
+        text-decoration: underline;
+      }
+      .link-btn .ic {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+
+      /* ── The [Saved] dropdown — Combobox menu vocabulary (6.1.3 verbatim) ──── */
+      .menu {
+        width: 320px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .menu.anchored {
+        position: absolute;
+        top: calc(var(--height-control) + 6px);
+        left: 0;
+        z-index: 20;
+      }
+      .menu .msearch {
+        position: relative;
+        margin: 2px 2px 4px;
+      }
+      .menu .msearch .si {
+        position: absolute;
+        left: 9px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+        pointer-events: none;
+      }
+      .menu .msearch input {
+        width: 100%;
+        height: 32px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 0 10px 0 30px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .menu .msearch input::placeholder {
+        color: var(--el-text-muted);
+      }
+      .menu .mgroup {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding: 6px 8px 2px;
+      }
+      .menu .mempty {
+        padding: 4px 8px 6px;
+        font-size: 12px;
+        font-style: italic;
+        color: var(--el-text-faint);
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .opt:hover,
+      .opt.is-active {
+        background: var(--el-surface);
+      }
+      .opt[aria-selected='true'] {
+        background: var(--el-surface);
+      }
+      .opt .lbl {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .opt .sec {
+        flex: none;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .opt .check {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-accent);
+        opacity: 0;
+      }
+      .opt[aria-selected='true'] .check {
+        opacity: 1;
+      }
+      .opt .sec .vg {
+        width: 12px;
+        height: 12px;
+        vertical-align: -1.5px;
+      }
+      .opt.danger {
+        color: var(--el-danger-text);
+      }
+      .opt.danger .og {
+        color: var(--el-danger);
+      }
+      .opt .og {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      /* The star toggle — a SIBLING focusable button inside the row (the row
+         itself is the option; star never nests inside another button). */
+      .star-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: none;
+        color: var(--el-text-faint);
+        cursor: pointer;
+        flex: none;
+      }
+      .star-btn:hover {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      .star-btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .star-btn.starred {
+        color: var(--el-warning);
+      }
+      .star-btn.starred svg {
+        fill: currentColor;
+      }
+      .menu .mfoot {
+        border-top: 1px solid var(--el-border);
+        margin-top: 4px;
+        padding: 8px 10px 6px;
+      }
+
+      /* ── Modal — the shipped Modal.tsx chrome (radius-modal + shadow-modal) ── */
+      .modal {
+        position: relative;
+        width: 448px; /* size="md" — max-w-[28rem] */
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+        flex: none;
+      }
+      .modal-title {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0 0 16px;
+      }
+      .modal-close {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: none;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .modal-close:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .modal-close svg {
+        width: 16px;
+        height: 16px;
+      }
+      .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 20px;
+      }
+      .modal p.mdesc {
+        margin: -8px 0 16px;
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.55;
+      }
+
+      /* FormField — label + control + help/error (the shipped grammar) */
+      .ff {
+        margin-bottom: 14px;
+      }
+      .ff label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        margin-bottom: 6px;
+      }
+      .ff .hint {
+        font-weight: 400;
+        color: var(--el-text-muted);
+      }
+      .ff input[type='text'],
+      .ff textarea {
+        width: 100%;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+      }
+      .ff input[type='text'] {
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+      }
+      .ff textarea {
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        resize: vertical;
+        min-height: 64px;
+      }
+      .ff input::placeholder,
+      .ff textarea::placeholder {
+        color: var(--el-text-muted);
+      }
+      .ff.has-error input[type='text'] {
+        border-color: var(--el-danger);
+      }
+      .ff .err {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 6px;
+        font-size: 12.5px;
+        color: var(--el-danger-text);
+      }
+      .ff .err svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+
+      /* Visibility control — the 6.4.1 access-card radio grammar, two levels */
+      .vis-card {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        cursor: pointer;
+        margin-bottom: 8px;
+      }
+      .vis-card.is-selected {
+        border-color: var(--el-accent);
+      }
+      .vis-card.is-disabled {
+        opacity: 0.55;
+        cursor: default;
+        position: relative;
+      }
+      .vis-tile {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius-control);
+        flex: none;
+      }
+      .vis-tile svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-strong);
+      }
+      .vis-tile.lavender {
+        background: var(--el-tint-lavender);
+      }
+      .vis-tile.sky {
+        background: var(--el-tint-sky);
+      }
+      .vis-meta {
+        flex: 1;
+        min-width: 0;
+      }
+      .vis-meta h5 {
+        margin: 0 0 2px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .vis-meta p {
+        margin: 0;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.45;
+      }
+      .radio {
+        width: 16px;
+        height: 16px;
+        border-radius: 9999px;
+        border: 1.5px solid var(--el-border);
+        flex: none;
+        margin-top: 2px;
+      }
+      .vis-card.is-selected .radio {
+        border-color: var(--el-accent);
+        border-width: 5px;
+      }
+      /* The viewer note — info callout line inside the dialog */
+      .note-line {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 10px 12px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-sky);
+        font-size: 12.5px;
+        color: var(--el-text-strong);
+        line-height: 1.5;
+        margin-bottom: 14px;
+      }
+      .note-line svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin-top: 2px;
+        color: var(--el-info);
+      }
+
+      /* ── Directory table — list.mock tt-* vocabulary, directory columns ───── */
+      .dir-table {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: visible;
+        background: var(--el-page-bg);
+      }
+      .dt-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 170px 120px 76px 44px;
+        align-items: center;
+        column-gap: 16px;
+        padding: 0 12px 0 16px;
+      }
+      .dt-head {
+        height: 40px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+        border-radius: var(--radius-card) var(--radius-card) 0 0;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .dt-row {
+        height: 48px;
+        border-bottom: 1px solid var(--el-border);
+        position: relative;
+      }
+      .dt-row:last-child {
+        border-bottom: 0;
+      }
+      .dt-row:hover {
+        background: var(--el-surface);
+      }
+      .dt-name {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .dt-name .ng {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .dt-name .nm {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .dt-name .nm:hover {
+        text-decoration: underline;
+      }
+      .dt-name .desc {
+        flex: none;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 220px;
+        white-space: nowrap;
+      }
+      .dt-owner {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .dt-owner .nm {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .dt-stars {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+      /* Search input on the directory toolbar (h-control, like the menu search) */
+      .dir-search {
+        position: relative;
+        width: 260px;
+      }
+      .dir-search .si {
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+        pointer-events: none;
+      }
+      .dir-search input {
+        width: 100%;
+        height: var(--height-control);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 0 10px 0 32px;
+        font-family: var(--font-sans);
+        font-size: 13.5px;
+        color: var(--el-text);
+      }
+      .dir-search input::placeholder {
+        color: var(--el-text-muted);
+      }
+
+      /* Pills — the shipped Pill tones (hue in the tint bg, strong text) */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: 2px 10px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill svg {
+        width: 11px;
+        height: 11px;
+        flex: none;
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill--sky {
+        background: var(--el-tint-sky);
+      }
+      .pill--mint {
+        background: var(--el-tint-mint);
+      }
+      .pill--yellow {
+        background: var(--el-tint-yellow);
+      }
+
+      /* Row-action … menu (icon button + the elevated menu) */
+      .x-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: none;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .x-btn:hover {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      .x-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .row-menu {
+        position: absolute;
+        right: 8px;
+        top: 42px;
+        z-index: 25;
+        width: 200px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+
+      /* Pagination footer (2.5.12 grammar, abbreviated) */
+      .pgn {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 16px;
+        border-top: 1px solid var(--el-border);
+        font-size: 13px;
+        color: var(--el-text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .pgn .pg-btns {
+        display: flex;
+        gap: 6px;
+      }
+      .pg-btn {
+        height: 28px;
+        padding: 0 10px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .pg-btn[disabled] {
+        color: var(--el-text-faint);
+        cursor: default;
+      }
+
+      /* Empty / no-access states (EmptyState / ErrorState family) */
+      .empty {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 48px 24px;
+        text-align: center;
+        flex: 1 1 380px;
+      }
+      .empty .eg {
+        width: 28px;
+        height: 28px;
+        color: var(--el-text-faint);
+        margin: 0 auto 10px;
+      }
+      .empty h3 {
+        font-family: var(--font-serif);
+        font-size: 17px;
+        font-weight: 600;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 0 0 16px;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+
+      /* Delete-confirm dependents list */
+      .dep-list {
+        margin: 0 0 4px;
+        padding: 0;
+        list-style: none;
+      }
+      .dep-list li {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 8px 10px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        line-height: 1.45;
+        margin-bottom: 6px;
+      }
+      .dep-list li svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-warning);
+      }
+      .dep-list li strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+
+      /* Segmented control (3.3.5) — the subscription frequency */
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        padding: 2px;
+      }
+      .seg button {
+        display: inline-flex;
+        align-items: center;
+        height: 28px;
+        padding: 0 var(--spacing-control-x);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .seg button[aria-pressed='true'] {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+
+      /* Combobox trigger (day / hour selects) */
+      .cb {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        text-align: left;
+      }
+      .cb .lbl {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cb .glyph {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .cb .caret {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+
+      /* Subscribed state card (in-menu / in-dialog confirmation) */
+      .sub-state {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        width: 384px;
+      }
+      .sub-state .sg {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-mint);
+        flex: none;
+      }
+      .sub-state .sg svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-strong);
+      }
+      .sub-state .sm {
+        flex: 1;
+        min-width: 0;
+      }
+      .sub-state .sm h5 {
+        margin: 0 0 1px;
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .sub-state .sm p {
+        margin: 0;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+
+      /* ── The 6.3 widget card + its "Filter missing" degraded state ────────── */
+      .widget {
+        width: 384px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-subtle);
+        flex: none;
+      }
+      .widget .wh {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .widget .wh .wg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .widget .wh h4 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+        flex: 1;
+        min-width: 0;
+      }
+      .widget .wb {
+        padding: 28px 24px;
+        text-align: center;
+      }
+      .widget .wb .wi {
+        width: 24px;
+        height: 24px;
+        color: var(--el-warning);
+        margin: 0 auto 8px;
+      }
+      .widget .wb h5 {
+        font-family: var(--font-serif);
+        font-size: 15.5px;
+        font-weight: 600;
+        margin: 0 0 4px;
+        color: var(--el-text);
+      }
+      .widget .wb p {
+        margin: 0 0 14px;
+        font-size: 13px;
+        color: var(--el-text-muted);
+        line-height: 1.5;
+      }
+
+      /* Avatar — the shipped ink circle (AA-guaranteed) */
+      .avatar {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Saved filters — save · apply · manage · subscribe</h1>
+        <p>
+          Story 6.2 · design for 6.2.3 / 6.2.4 / 6.2.5 (the surfaces filter-builder.mock.html leaves
+          undesigned). Composes shipped primitives only — no new primitive.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke, used by <use>) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-sliders"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="21" x2="14" y1="4" y2="4" />
+          <line x1="10" x2="3" y1="4" y2="4" />
+          <line x1="21" x2="12" y1="12" y2="12" />
+          <line x1="8" x2="3" y1="12" y2="12" />
+          <line x1="21" x2="16" y1="20" y2="20" />
+          <line x1="12" x2="3" y1="20" y2="20" />
+          <line x1="14" x2="14" y1="2" y2="6" />
+          <line x1="8" x2="8" y1="10" y2="14" />
+          <line x1="16" x2="16" y1="18" y2="22" />
+        </g>
+        <g
+          id="i-funnel-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M13.354 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14v6a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341l1.218-1.348"
+          />
+          <path d="M16 6h6" />
+          <path d="M19 3v6" />
+        </g>
+        <g
+          id="i-list-tree"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12h-8" />
+          <path d="M21 6H8" />
+          <path d="M21 18h-8" />
+          <path d="M3 6v4c0 1.1.9 2 2 2h3" />
+          <path d="M3 10v6c0 1.1.9 2 2 2h3" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-chevrons-up-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m7 15 5 5 5-5" />
+          <path d="m7 9 5-5 5 5" />
+        </g>
+        <g
+          id="i-bookmark"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
+        </g>
+        <g
+          id="i-star"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polygon
+            points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+          />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-users"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </g>
+        <g
+          id="i-bell"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+          <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+        </g>
+        <g
+          id="i-mail"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="16" x="2" y="4" rx="2" />
+          <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+        </g>
+        <g
+          id="i-ellipsis"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+          <circle cx="5" cy="12" r="1" />
+        </g>
+        <g
+          id="i-pencil"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          />
+          <path d="m15 5 4 4" />
+        </g>
+        <g
+          id="i-trash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 6h18" />
+          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+          <line x1="10" x2="10" y1="11" y2="17" />
+          <line x1="14" x2="14" y1="11" y2="17" />
+        </g>
+        <g
+          id="i-user-cog"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="18" cy="15" r="3" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M10 15H6a4 4 0 0 0-4 4v2" />
+          <path d="m21.7 16.4-.9-.3" />
+          <path d="m15.2 13.9-.9-.3" />
+          <path d="m16.6 18.7.3-.9" />
+          <path d="m19.1 12.2.3-.9" />
+          <path d="m19.6 18.7-.4-1" />
+          <path d="m16.8 12.3-.4-1" />
+          <path d="m14.3 16.6 1-.4" />
+          <path d="m20.7 13.8 1-.4" />
+        </g>
+        <g
+          id="i-clock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </g>
+        <g
+          id="i-triangle-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-layout-dashboard"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="7" height="9" x="3" y="3" rx="1" />
+          <rect width="7" height="5" x="14" y="3" rx="1" />
+          <rect width="7" height="9" x="14" y="12" rx="1" />
+          <rect width="7" height="5" x="3" y="12" rx="1" />
+        </g>
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════ PANEL 0 — save affordance + dirty state on /issues ════════════ -->
+    <div class="panel-label">
+      0 · Save affordance + dirty state — the [Saved] ToolbarButton sits right of [Advanced] (the
+      6.1.3 builder trigger). An applied saved filter shows its NAME CHIP at the head of the 6.1.3
+      summary row. Top: applied + clean. Middle: the OWNER edits a condition — dirty marker + Save
+      (overwrite) + Save as + Discard changes. Bottom: a NON-OWNER edits — Save as only (the
+      verified Jira ownership rule).
+    </div>
+    <div class="panel">
+      <!-- A · applied, clean -->
+      <div class="page-head">
+        <div>
+          <h2>Issues</h2>
+          <p class="sub">All issues in Prodect — Q3 launch</p>
+        </div>
+        <div class="toolbar">
+          <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter
+          </button>
+          <button class="tb-btn is-active" aria-haspopup="dialog" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg>Advanced<span
+              class="tb-count"
+              aria-label="2 conditions active"
+              >2</span
+            >
+          </button>
+          <button class="tb-btn is-active" aria-haspopup="listbox" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>Saved<svg
+              class="caret"
+              viewBox="0 0 24 24"
+            >
+              <use href="#i-chevron-down" />
+            </svg>
+          </button>
+          <button class="tb-btn" aria-haspopup="menu" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-list-tree" /></svg>Tree<svg
+              class="caret"
+              viewBox="0 0 24 24"
+            >
+              <use href="#i-chevron-down" />
+            </svg>
+          </button>
+          <button class="tb-btn primary">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+          </button>
+        </div>
+      </div>
+      <div class="summary">
+        <button
+          class="name-chip"
+          aria-haspopup="listbox"
+          aria-label="Applied filter: Sprint blockers (shared with project) — open saved filters"
+        >
+          <svg class="ng" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>Sprint blockers<svg
+            class="vg"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <use href="#i-users" />
+          </svg>
+        </button>
+        <span class="sum-chip"><strong>Status</strong>&nbsp;is any of&nbsp;To do</span>
+        <span class="sum-chip"><strong>Priority</strong>&nbsp;is none of&nbsp;Lowest</span>
+      </div>
+      <p class="count-line" role="status">42 issues match</p>
+
+      <!-- B · dirty, OWNER -->
+      <div class="page-head" style="margin-top: 8px; margin-bottom: 0">
+        <div>
+          <p class="sub" style="margin: 0">…the owner edits a condition (URL ≠ saved envelope):</p>
+        </div>
+      </div>
+      <div class="summary" style="margin-top: 10px">
+        <button
+          class="name-chip"
+          aria-haspopup="listbox"
+          aria-label="Applied filter: Sprint blockers, edited — open saved filters"
+        >
+          <svg class="ng" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>Sprint blockers<svg
+            class="vg"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <use href="#i-users" />
+          </svg>
+        </button>
+        <span class="dirty" role="status"><span class="dd" aria-hidden="true"></span>Edited</span>
+        <span class="sum-chip"><strong>Status</strong>&nbsp;is any of&nbsp;To do, In progress</span>
+        <span class="sum-chip"><strong>Priority</strong>&nbsp;is none of&nbsp;Lowest</span>
+        <span style="flex: none; display: inline-flex; gap: 6px; margin-left: 6px">
+          <button class="btn sm">Save</button>
+          <button class="btn sm secondary">Save as</button>
+          <button class="btn sm ghost">Discard changes</button>
+        </span>
+      </div>
+      <p class="count-line" role="status">57 issues match</p>
+
+      <!-- C · dirty, NON-owner -->
+      <div class="page-head" style="margin-top: 8px; margin-bottom: 0">
+        <div>
+          <p class="sub" style="margin: 0">
+            …a non-owner edits the same applied filter — <strong>Save as only</strong>:
+          </p>
+        </div>
+      </div>
+      <div class="summary" style="margin-top: 10px; margin-bottom: 104px; position: relative">
+        <button
+          class="name-chip"
+          aria-haspopup="listbox"
+          aria-label="Applied filter: Sprint blockers by Zhu Yue, edited — open saved filters"
+        >
+          <svg class="ng" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>Sprint blockers<svg
+            class="vg"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <use href="#i-users" />
+          </svg>
+        </button>
+        <span class="dirty" role="status"><span class="dd" aria-hidden="true"></span>Edited</span>
+        <span class="sum-chip"><strong>Status</strong>&nbsp;is any of&nbsp;To do, Blocked</span>
+        <span
+          style="flex: none; display: inline-flex; gap: 6px; margin-left: 6px; position: relative"
+        >
+          <button class="btn sm secondary" aria-describedby="own-tip">Save as</button>
+          <span class="tip" id="own-tip" role="tooltip" style="top: 36px; width: 270px">
+            Only the owner (Zhu Yue) can overwrite this filter — Save as creates your own copy.
+          </span>
+        </span>
+      </div>
+      <p class="row-note">
+        The chip is the applied-state anchor: bookmark glyph + name + the visibility hint (users =
+        shared with project; lock = private). Clicking it opens the [Saved] dropdown. The dirty
+        check is URL-AST ≠ saved envelope (6.1.1 equality); the marker is the amber dot + the word
+        "Edited" (never colour alone). "Discard changes" reloads the saved envelope into builder +
+        URL. The 6.1.3 condition chips stay; the name chip prepends.
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 1 — the save dialog ════════════ -->
+    <div class="panel-label">
+      1 · The save dialog (Modal size=md) — Save as from a member account; the duplicate-name error;
+      the VIEWER state (private-only — sharing requires role ≥ member). Save (overwrite) by the
+      owner shows no dialog at all: it writes the current AST into the envelope in place.
+    </div>
+    <div class="panel">
+      <div class="float-row">
+        <!-- A · member saves -->
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="sv-t">
+          <h3 class="modal-title" id="sv-t">Save filter</h3>
+          <button class="modal-close" aria-label="Close">
+            <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <div class="ff">
+            <label for="sv-name">Name</label>
+            <input type="text" id="sv-name" value="Sprint blockers" />
+          </div>
+          <div class="ff">
+            <label for="sv-desc">Description <span class="hint">(optional)</span></label>
+            <textarea id="sv-desc" placeholder="What is this filter for?"></textarea>
+          </div>
+          <div class="ff" style="margin-bottom: 0">
+            <label id="sv-vis">Who can see this filter?</label>
+            <div role="radiogroup" aria-labelledby="sv-vis">
+              <div class="vis-card" role="radio" aria-checked="false" tabindex="0">
+                <span class="vis-tile lavender" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>
+                </span>
+                <span class="vis-meta">
+                  <h5>Private</h5>
+                  <p>Only you and project admins can see it.</p>
+                </span>
+                <span class="radio" aria-hidden="true"></span>
+              </div>
+              <div class="vis-card is-selected" role="radio" aria-checked="true" tabindex="0">
+                <span class="vis-tile sky" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>
+                </span>
+                <span class="vis-meta">
+                  <h5>Project</h5>
+                  <p>Everyone who can browse this project can see and apply it.</p>
+                </span>
+                <span class="radio" aria-hidden="true"></span>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn secondary">Cancel</button>
+            <button class="btn">Save filter</button>
+          </div>
+        </div>
+
+        <!-- B · duplicate name -->
+        <div
+          class="modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dup-t"
+          style="width: 380px"
+        >
+          <h3 class="modal-title" id="dup-t">Save filter</h3>
+          <button class="modal-close" aria-label="Close">
+            <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <div class="ff has-error">
+            <label for="dup-name">Name</label>
+            <input
+              type="text"
+              id="dup-name"
+              value="Sprint blockers"
+              aria-invalid="true"
+              aria-describedby="dup-err"
+            />
+            <p class="err" id="dup-err" role="alert">
+              <svg viewBox="0 0 24 24"><use href="#i-triangle-alert" /></svg>
+              A filter named “Sprint blockers” already exists in this project.
+            </p>
+          </div>
+          <div class="modal-footer" style="margin-top: 12px">
+            <button class="btn secondary">Cancel</button>
+            <button class="btn" disabled>Save filter</button>
+          </div>
+        </div>
+
+        <!-- C · viewer — private only -->
+        <div
+          class="modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="vw-t"
+          style="width: 380px"
+        >
+          <h3 class="modal-title" id="vw-t">Save filter</h3>
+          <button class="modal-close" aria-label="Close">
+            <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <div class="ff">
+            <label for="vw-name">Name</label>
+            <input type="text" id="vw-name" value="My watched bugs" />
+          </div>
+          <div class="note-line">
+            <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+            <span>
+              Sharing needs the <strong>Member</strong> role — as a viewer, your filters stay
+              private to you.
+            </span>
+          </div>
+          <div class="ff" style="margin-bottom: 0">
+            <label id="vw-vis">Who can see this filter?</label>
+            <div role="radiogroup" aria-labelledby="vw-vis">
+              <div class="vis-card is-selected" role="radio" aria-checked="true" tabindex="0">
+                <span class="vis-tile lavender" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>
+                </span>
+                <span class="vis-meta">
+                  <h5>Private</h5>
+                  <p>Only you and project admins can see it.</p>
+                </span>
+                <span class="radio" aria-hidden="true"></span>
+              </div>
+              <div
+                class="vis-card is-disabled"
+                role="radio"
+                aria-checked="false"
+                aria-disabled="true"
+              >
+                <span class="vis-tile sky" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>
+                </span>
+                <span class="vis-meta">
+                  <h5>Project</h5>
+                  <p>Everyone who can browse this project can see and apply it.</p>
+                </span>
+                <span class="radio" aria-hidden="true"></span>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn secondary">Cancel</button>
+            <button class="btn">Save filter</button>
+          </div>
+        </div>
+      </div>
+      <p class="row-note">
+        Save as ALWAYS opens this dialog (a new row, prefilled with the applied filter's name when
+        forking). Default visibility is Private (the safe default; the Jira default share is
+        private). The duplicate-name check is per-project, case-insensitive (the 6.2.1 constraint) —
+        the error is inline, the primary disabled until it clears. The viewer's Project card is
+        visible-but-disabled (the 6.4.6 affordance rule: show that sharing exists and that the role
+        lacks it), with the info line saying why.
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 2 — the [Saved] filter dropdown ════════════ -->
+    <div class="panel-label">
+      2 · The [Saved] dropdown — Starred first, then My filters / Project filters / Defaults;
+      server-backed search; per-row star toggle + owner/visibility hint; the applied entry carries
+      the check; "View all filters" foots to the /filters directory. Right: the empty-group states.
+    </div>
+    <div class="panel">
+      <div class="float-row" style="margin-bottom: 8px">
+        <!-- A · populated -->
+        <div class="menu" role="listbox" aria-label="Saved filters">
+          <div class="msearch">
+            <svg class="si" viewBox="0 0 24 24"><use href="#i-search" /></svg>
+            <input type="text" placeholder="Find filters…" aria-label="Find filters" />
+          </div>
+          <div class="mgroup">Starred</div>
+          <div class="opt" role="option" aria-selected="true">
+            <button
+              class="star-btn starred"
+              aria-label="Unstar Sprint blockers"
+              aria-pressed="true"
+            >
+              <svg viewBox="0 0 24 24"><use href="#i-star" /></svg>
+            </button>
+            <span class="lbl">Sprint blockers</span>
+            <span class="sec"
+              ><svg class="vg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users" /></svg>
+              Zhu Yue</span
+            >
+            <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="mgroup">My filters</div>
+          <div class="opt" role="option" aria-selected="false">
+            <button class="star-btn" aria-label="Star My open reviews" aria-pressed="false">
+              <svg viewBox="0 0 24 24"><use href="#i-star" /></svg>
+            </button>
+            <span class="lbl">My open reviews</span>
+            <span class="sec"
+              ><svg class="vg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg>
+              Private</span
+            >
+            <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <button class="star-btn" aria-label="Star Unestimated stories" aria-pressed="false">
+              <svg viewBox="0 0 24 24"><use href="#i-star" /></svg>
+            </button>
+            <span class="lbl">Unestimated stories</span>
+            <span class="sec"
+              ><svg class="vg" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users" /></svg
+            ></span>
+            <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="mgroup">Project filters</div>
+          <div class="opt" role="option" aria-selected="false">
+            <button class="star-btn" aria-label="Star Design backlog" aria-pressed="false">
+              <svg viewBox="0 0 24 24"><use href="#i-star" /></svg>
+            </button>
+            <span class="lbl">Design backlog</span>
+            <span class="sec">Bo Philips</span>
+            <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <button class="star-btn" aria-label="Star Overdue this sprint" aria-pressed="false">
+              <svg viewBox="0 0 24 24"><use href="#i-star" /></svg>
+            </button>
+            <span class="lbl">Overdue this sprint</span>
+            <span class="sec">Julian</span>
+            <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="mgroup">Defaults</div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="og" style="width: 24px; text-align: center" aria-hidden="true"></span>
+            <span class="lbl">My open issues</span>
+            <span class="sec">Built-in</span>
+            <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="og" style="width: 24px" aria-hidden="true"></span>
+            <span class="lbl">Reported by me</span>
+            <span class="sec">Built-in</span>
+            <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="og" style="width: 24px" aria-hidden="true"></span>
+            <span class="lbl">Updated recently</span>
+            <span class="sec">Built-in</span>
+            <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="mfoot">
+            <button class="link-btn">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>View all filters
+            </button>
+          </div>
+        </div>
+
+        <!-- B · empty groups -->
+        <div class="menu" role="listbox" aria-label="Saved filters">
+          <div class="msearch">
+            <svg class="si" viewBox="0 0 24 24"><use href="#i-search" /></svg>
+            <input type="text" placeholder="Find filters…" aria-label="Find filters" />
+          </div>
+          <div class="mgroup">Starred</div>
+          <div class="mempty">No starred filters yet — star a filter to pin it here.</div>
+          <div class="mgroup">My filters</div>
+          <div class="mempty">You haven't saved any filters yet.</div>
+          <div class="mgroup">Project filters</div>
+          <div class="mempty">No filters shared with this project yet.</div>
+          <div class="mgroup">Defaults</div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="og" style="width: 24px" aria-hidden="true"></span>
+            <span class="lbl">My open issues</span>
+            <span class="sec">Built-in</span>
+            <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="og" style="width: 24px" aria-hidden="true"></span>
+            <span class="lbl">All issues</span>
+            <span class="sec">Built-in</span>
+            <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+          </div>
+          <div class="mfoot">
+            <button class="link-btn">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>View all filters
+            </button>
+          </div>
+        </div>
+      </div>
+      <p class="row-note">
+        Group order is fixed: Starred → My filters → Project filters → Defaults (starred entries
+        appear ONLY in Starred — no duplicates). Search is server-backed + debounced over the
+        user-visible set (bounded reads — a project with 500 filters never ships them all; finding
+        #57). Applying an entry resolves the envelope into the builder and writes
+        <code>?filter=v1:</code> — the URL stays the only state channel. The star is a sibling
+        focusable button inside the option row (never nested in another button); starred = filled
+        amber star + <code>aria-pressed</code>. Defaults are the eight expressible built-ins (My
+        open issues · Reported by me · All / Open / Done issues · Created / Updated / Resolved
+        recently): non-editable, non-deletable, NOT starrable and NOT subscribable — they are
+        non-persisted AST constants with no row to star or FK a subscription to.
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 3 — the filters directory at /filters ════════════ -->
+    <div class="panel-label">
+      3 · The filters directory — route /filters (project-scoped, sibling of /issues; entered from
+      the dropdown's "View all filters" + the command palette — not a primary sidebar item).
+      Searchable + paginated table; name applies on /issues; row actions gated by the matrix (the
+      open … menu is an ADMIN's view of another member's shared filter). Below: empty + no-access.
+    </div>
+    <div class="panel">
+      <div class="page-head">
+        <div>
+          <h2>Filters</h2>
+          <p class="sub">Saved filters for Prodect — Q3 launch. Save new ones from Issues.</p>
+        </div>
+        <div class="toolbar">
+          <div class="dir-search">
+            <svg class="si" viewBox="0 0 24 24"><use href="#i-search" /></svg>
+            <input type="text" placeholder="Search filters…" aria-label="Search filters" />
+          </div>
+        </div>
+      </div>
+
+      <div class="dir-table" style="margin-bottom: 24px">
+        <div class="dt-grid dt-head">
+          <span>Name</span><span>Owner</span><span>Visibility</span><span>Stars</span><span></span>
+        </div>
+        <div class="dt-grid dt-row">
+          <span class="dt-name">
+            <svg class="ng" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>
+            <span class="nm">Sprint blockers</span>
+            <span class="desc">Unresolved blockers for the active sprint</span>
+          </span>
+          <span class="dt-owner"
+            ><span class="avatar">ZY</span><span class="nm">Zhu Yue</span></span
+          >
+          <span
+            ><span class="pill pill--sky"
+              ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Project</span
+            ></span
+          >
+          <span class="dt-stars">
+            <button
+              class="star-btn starred"
+              aria-label="Unstar Sprint blockers"
+              aria-pressed="true"
+            >
+              <svg viewBox="0 0 24 24"><use href="#i-star" /></svg></button
+            >3
+          </span>
+          <span></span>
+        </div>
+        <div class="dt-grid dt-row" style="background: var(--el-surface)">
+          <span class="dt-name">
+            <svg class="ng" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>
+            <span class="nm">Design backlog</span>
+          </span>
+          <span class="dt-owner"
+            ><span class="avatar">BP</span><span class="nm">Bo Philips</span></span
+          >
+          <span
+            ><span class="pill pill--sky"
+              ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Project</span
+            ></span
+          >
+          <span class="dt-stars">
+            <button class="star-btn" aria-label="Star Design backlog" aria-pressed="false">
+              <svg viewBox="0 0 24 24"><use href="#i-star" /></svg></button
+            >1
+          </span>
+          <span>
+            <button
+              class="x-btn"
+              aria-haspopup="menu"
+              aria-expanded="true"
+              aria-label="Actions for Design backlog"
+            >
+              <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+            </button>
+          </span>
+          <!-- the admin's row menu, open -->
+          <div class="row-menu" role="menu" aria-label="Actions for Design backlog">
+            <div class="opt" role="menuitem">
+              <svg class="og" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+              <span class="lbl">Edit details</span>
+            </div>
+            <div class="opt" role="menuitem">
+              <svg class="og" viewBox="0 0 24 24"><use href="#i-user-cog" /></svg>
+              <span class="lbl">Change owner</span>
+            </div>
+            <div class="opt" role="menuitem">
+              <svg class="og" viewBox="0 0 24 24"><use href="#i-bell" /></svg>
+              <span class="lbl">Subscribe…</span>
+            </div>
+            <div class="opt danger" role="menuitem">
+              <svg class="og" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+              <span class="lbl">Delete</span>
+            </div>
+          </div>
+        </div>
+        <div class="dt-grid dt-row">
+          <span class="dt-name">
+            <svg class="ng" viewBox="0 0 24 24"><use href="#i-lock" /></svg>
+            <span class="nm">My open reviews</span>
+          </span>
+          <span class="dt-owner"
+            ><span class="avatar">ZY</span><span class="nm">Zhu Yue</span></span
+          >
+          <span
+            ><span class="pill pill--neutral"
+              ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Private</span
+            ></span
+          >
+          <span class="dt-stars">
+            <button class="star-btn" aria-label="Star My open reviews" aria-pressed="false">
+              <svg viewBox="0 0 24 24"><use href="#i-star" /></svg></button
+            >0
+          </span>
+          <span>
+            <button
+              class="x-btn"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              aria-label="Actions for My open reviews"
+            >
+              <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+            </button>
+          </span>
+        </div>
+        <div class="dt-grid dt-row">
+          <span class="dt-name">
+            <svg class="ng" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>
+            <span class="nm">My open issues</span>
+          </span>
+          <span class="dt-owner"
+            ><span class="nm" style="color: var(--el-text-faint)">—</span></span
+          >
+          <span><span class="pill pill--neutral">Built-in</span></span>
+          <span class="dt-stars" style="color: var(--el-text-faint)">—</span>
+          <span></span>
+        </div>
+        <div class="dt-grid dt-row">
+          <span class="dt-name">
+            <svg class="ng" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>
+            <span class="nm">Updated recently</span>
+          </span>
+          <span class="dt-owner"
+            ><span class="nm" style="color: var(--el-text-faint)">—</span></span
+          >
+          <span><span class="pill pill--neutral">Built-in</span></span>
+          <span class="dt-stars" style="color: var(--el-text-faint)">—</span>
+          <span></span>
+        </div>
+        <div class="pgn">
+          <span>12 filters · page 1 of 2</span>
+          <span class="pg-btns">
+            <button class="pg-btn" disabled>Previous</button>
+            <button class="pg-btn">Next</button>
+          </span>
+        </div>
+      </div>
+
+      <div class="float-row">
+        <div class="empty">
+          <svg class="eg" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>
+          <h3>No saved filters yet</h3>
+          <p>Build a filter on Issues and save it to reuse and share it here.</p>
+          <button class="btn secondary sm">Go to Issues</button>
+        </div>
+        <div class="empty">
+          <svg class="eg" viewBox="0 0 24 24"><use href="#i-lock" /></svg>
+          <h3>You don't have access to this project</h3>
+          <p>Ask a project admin for access, or head back to your projects.</p>
+          <button class="btn secondary sm">Back to projects</button>
+        </div>
+      </div>
+      <p class="row-note">
+        Columns mirror Jira's directory: name / owner / viewers≈visibility / popularity=stars /
+        actions. Clicking a name applies the filter on /issues (writes
+        <code>?filter=v1:</code> and navigates). The list is server-searched + paginated (50/page,
+        the 2.5.12 grammar — never an unbounded fetch); the star count is an SQL aggregate. Row
+        actions by the matrix: owner = edit details / subscribe / delete; project admin additionally
+        = change owner (the … menu shown open is an admin on Bo's shared filter); everyone else sees
+        only Subscribe (shared rows) or nothing. "Edit details" opens the panel-1 dialog prefilled
+        (name, description, visibility); "Change owner" reuses the 6.4.1 member-Combobox grammar —
+        referenced, not redrawn. Built-ins: no owner, no stars, no actions — listed for
+        discoverability, read-only by the mirror rule. The no-access state is the 6.4.6 ErrorState
+        verbatim (a /filters deep link into a private project).
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 4 — visibility control + delete-with-dependents ════════════ -->
+    <div class="panel-label">
+      4 · Visibility + deletion. Left: the visibility control as it appears in Edit details (the
+      6.4.1 access-card grammar, two levels — the go-shared note names what changes). Right: the
+      delete confirm — a Cloud-style warning that NAMES the dependents (subscriptions now; the 6.3
+      widget line reserved) before cascading.
+    </div>
+    <div class="panel">
+      <div class="float-row">
+        <!-- A · edit details (visibility focus) -->
+        <div
+          class="modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ed-t"
+          style="width: 420px"
+        >
+          <h3 class="modal-title" id="ed-t">Edit filter details</h3>
+          <button class="modal-close" aria-label="Close">
+            <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <div class="ff">
+            <label for="ed-name">Name</label>
+            <input type="text" id="ed-name" value="My open reviews" />
+          </div>
+          <div class="ff" style="margin-bottom: 0">
+            <label id="ed-vis">Who can see this filter?</label>
+            <div role="radiogroup" aria-labelledby="ed-vis">
+              <div class="vis-card" role="radio" aria-checked="false" tabindex="0">
+                <span class="vis-tile lavender" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>
+                </span>
+                <span class="vis-meta">
+                  <h5>Private</h5>
+                  <p>Only you and project admins can see it.</p>
+                </span>
+                <span class="radio" aria-hidden="true"></span>
+              </div>
+              <div class="vis-card is-selected" role="radio" aria-checked="true" tabindex="0">
+                <span class="vis-tile sky" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>
+                </span>
+                <span class="vis-meta">
+                  <h5>Project</h5>
+                  <p>Everyone who can browse this project can see and apply it.</p>
+                </span>
+                <span class="radio" aria-hidden="true"></span>
+              </div>
+            </div>
+            <div class="note-line" style="margin: 8px 0 0">
+              <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+              <span>
+                Going from Project back to <strong>Private</strong> hides it from everyone else —
+                their subscriptions stop delivering, and dashboard widgets using it show “Filter
+                missing”.
+              </span>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn secondary">Cancel</button>
+            <button class="btn">Save changes</button>
+          </div>
+        </div>
+
+        <!-- B · delete confirm with dependents -->
+        <div
+          class="modal"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="del-t"
+          aria-describedby="del-d"
+          style="width: 420px"
+        >
+          <h3 class="modal-title" id="del-t">Delete filter?</h3>
+          <button class="modal-close" aria-label="Close">
+            <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <p class="mdesc" id="del-d">
+            This permanently deletes <strong>“Sprint blockers”</strong> for everyone in this
+            project. Anyone using it right now keeps their current results until they change the
+            filter.
+          </p>
+          <ul class="dep-list">
+            <li>
+              <svg viewBox="0 0 24 24"><use href="#i-bell" /></svg>
+              <span
+                ><strong>1 subscription</strong> will be removed (Bo Philips · daily at
+                09:00).</span
+              >
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24"><use href="#i-layout-dashboard" /></svg>
+              <span>
+                <strong>2 dashboard widgets</strong> use this filter — they'll show a “Filter
+                missing” state.
+              </span>
+            </li>
+          </ul>
+          <div class="modal-footer">
+            <button class="btn secondary">Cancel</button>
+            <button class="btn danger">Delete filter</button>
+          </div>
+        </div>
+      </div>
+      <p class="row-note">
+        The dependents read is the 6.2.1 enumeration (subscriptions today; 6.3 widgets join in by FK
+        — the second list row is the RESERVED line, drawn now so 6.3 inherits the grammar). Deletion
+        cascades subscriptions in the same transaction; widgets degrade to the panel-6 state. The
+        confirm is a real <code>role="alertdialog"</code>; consequences are named in text, never
+        colour-only. The go-private note in Edit details is the symmetric warning — same
+        information, before the quieter action.
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 5 — the subscription editor ════════════ -->
+    <div class="panel-label">
+      5 · Subscriptions — per-user, per-filter email on a preset schedule (daily / weekdays / weekly
+      + hour; Jira's preset tier — advanced cron is the documented extension). Left: the subscribe
+      dialog (Weekly selected → the Day select appears). Right: the subscribed state + where the
+      control mounts.
+    </div>
+    <div class="panel">
+      <div class="float-row">
+        <!-- A · the subscribe dialog -->
+        <div
+          class="modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sb-t"
+          style="width: 420px"
+        >
+          <h3 class="modal-title" id="sb-t">Subscribe to “Sprint blockers”</h3>
+          <button class="modal-close" aria-label="Close">
+            <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <p class="mdesc">
+            Emails you the first 50 results and the total count, on the workspace timezone. A
+            report, not an alert — it sends even when nothing matches.
+          </p>
+          <div class="ff">
+            <label id="sb-freq">Frequency</label>
+            <div class="seg" role="group" aria-labelledby="sb-freq">
+              <button aria-pressed="false">Daily</button>
+              <button aria-pressed="false">Weekdays</button>
+              <button aria-pressed="true">Weekly</button>
+            </div>
+          </div>
+          <div class="ff" style="display: flex; gap: 12px; margin-bottom: 0">
+            <span style="flex: 1">
+              <label for="sb-day" style="display: block">Day</label>
+              <button class="cb" id="sb-day" aria-haspopup="listbox" style="width: 100%">
+                <span class="lbl">Monday</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevrons-up-down" /></svg>
+              </button>
+            </span>
+            <span style="flex: 1">
+              <label for="sb-time" style="display: block">Time</label>
+              <button class="cb" id="sb-time" aria-haspopup="listbox" style="width: 100%">
+                <svg class="glyph" viewBox="0 0 24 24"><use href="#i-clock" /></svg>
+                <span class="lbl">09:00</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevrons-up-down" /></svg>
+              </button>
+            </span>
+          </div>
+          <div class="modal-footer">
+            <button class="btn secondary">Cancel</button>
+            <button class="btn">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-mail" /></svg>Subscribe
+            </button>
+          </div>
+        </div>
+
+        <!-- B · subscribed state -->
+        <div>
+          <div class="sub-state" style="margin-bottom: 12px">
+            <span class="sg" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><use href="#i-bell" /></svg>
+            </span>
+            <span class="sm">
+              <h5>Subscribed — daily at 09:00</h5>
+              <p>First 50 results + total count, to zhuyue@prodect.co</p>
+            </span>
+            <button class="btn sm ghost">Unsubscribe</button>
+          </div>
+          <div
+            class="menu"
+            style="width: 224px"
+            role="menu"
+            aria-label="Actions for Sprint blockers"
+          >
+            <div class="opt" role="menuitem">
+              <svg class="og" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+              <span class="lbl">Edit details</span>
+            </div>
+            <div class="opt" role="menuitem" aria-describedby="sub-on">
+              <svg class="og" viewBox="0 0 24 24"><use href="#i-bell" /></svg>
+              <span class="lbl">Subscribed…</span>
+              <span class="sec" id="sub-on">daily · 09:00</span>
+            </div>
+            <div class="opt danger" role="menuitem">
+              <svg class="og" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+              <span class="lbl">Delete</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="row-note">
+        Mounts: the directory … menu (shown — the row reflects an active subscription with its
+        schedule as the secondary) and the dropdown rows' context action; both open this dialog. Day
+        renders only for Weekly (Daily/Weekdays collapse it). The email is
+        <code>lib/emailTemplates/filterSubscription.tsx</code>: name, ≤50 rows (identifier + title +
+        status), total count, a deep link to the applied <code>?filter=v1:</code> URL, and the
+        unsubscribe link (token-authenticated — also live right here as the in-app Unsubscribe).
+        Delivery resolves AS the subscriber: lose browse access or the filter goes private → no mail
+        (the 6.2.5 permission rule).
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 6 — the "Filter missing" widget state (6.3 inherits) ════════════ -->
+    <div class="panel-label">
+      6 · The “Filter missing” widget state — the designed degraded card a 6.3 dashboard widget
+      renders when its referenced filter was deleted (the verified Jira-gadget behaviour, drawn here
+      so 6.3 inherits it). Never a crash, never a silent blank.
+    </div>
+    <div class="panel">
+      <div class="float-row">
+        <div class="widget">
+          <div class="wh">
+            <svg class="wg" viewBox="0 0 24 24"><use href="#i-layout-dashboard" /></svg>
+            <h4>Open bugs by assignee</h4>
+            <button
+              class="x-btn"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              aria-label="Widget options"
+            >
+              <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+            </button>
+          </div>
+          <div class="wb">
+            <svg class="wi" viewBox="0 0 24 24"><use href="#i-triangle-alert" /></svg>
+            <h5>Filter missing</h5>
+            <p>The saved filter this widget used was deleted, so it can't load results.</p>
+            <button class="btn secondary sm">Choose a filter</button>
+          </div>
+        </div>
+      </div>
+      <p class="row-note">
+        The widget chrome is whatever 6.3 designs; THIS panel pins only the degraded BODY: warning
+        glyph (<code>--el-warning</code> — state also carried by the headline text), serif headline,
+        one-line cause, and the single recovery action. The 6.2.1 resolve returns the typed
+        not-found for a dangling FK; widgets map it to this state.
+      </p>
+    </div>
+
+    <div class="legend">
+      <strong>Vocabulary.</strong> Every element composes shipped primitives: the toolbar
+      <code>ToolbarButton</code> (+ the 2.5.4 active grammar), the 6.1.3 summary-chip row (the name
+      chip prepends it, lavender tint + <code>--el-text-strong</code> — AA per finding #35),
+      <code>Modal</code> (<code>--radius-modal</code> / <code>--shadow-modal</code>),
+      <code>FormField</code> + <code>Input</code>/<code>Textarea</code>, the 6.4.1 access-card radio
+      grammar (visibility), the Combobox menu/option vocabulary (dropdown + row menus + day/time
+      selects), <code>Segmented</code> (frequency), <code>Pill</code> tones (visibility + Built-in),
+      the list-table + 2.5.12 pagination grammar (directory),
+      <code>EmptyState</code>/<code>ErrorState</code>, <code>Avatar</code>, and the ink
+      <code>Tooltip</code>. Colour rides Tier-3 <code>--el-*</code> only; shape rides the
+      element-semantic tokens (<code>--radius-btn/card/input/modal/control/badge</code>,
+      <code>--spacing-control/input/chip/icon-btn/tooltip/btn-*</code>,
+      <code>--height-control/input/btn-*</code>, <code>--shadow-subtle/elevated/modal</code>) so
+      <code>data-display-style</code> reshapes everything. The starred star is the one
+      non-grey/primary accent beyond the tints: filled <code>--el-warning</code> amber +
+      <code>aria-pressed</code> (state never colour-only). Toggle dark for token parity.
+    </div>
+  </body>
+</html>

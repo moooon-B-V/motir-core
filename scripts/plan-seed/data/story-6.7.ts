@@ -70,7 +70,7 @@ import type { PlanStory } from '../types';
  * `scripts/seed-reporting.ts`, touches timestamps only, and is asserted by
  * the fixture self-check.
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 6.7`, on the standing
+ * Expanded from its `stubs.ts` entry per `motir plan 6.7`, on the standing
  * `seed/epic-5-plan` branch (Epic-5/6 planning). Matches the canonical style
  * of 5.6 / 6.1.
  */
@@ -197,7 +197,7 @@ export const story_6_7: PlanStory = {
         '- The Epic-6 services as they land (6.2 saved filters, 6.3 dashboards, 6.6 rules) ' +
         '— the only write paths besides the timestamp pass\n' +
         '- 5.3.3 / 5.4.2 (custom-field + label write paths for the predicate spread)\n' +
-        '- The no-raw-inserts seed rule (PRODECT.md Plan seed §) + the recorded deviation ' +
+        '- The no-raw-inserts seed rule (MOTIR.md Plan seed §) + the recorded deviation ' +
         'in the Story 6.7 header',
     },
     {

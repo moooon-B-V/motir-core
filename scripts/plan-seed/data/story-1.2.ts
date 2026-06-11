@@ -10,7 +10,7 @@ export const story_1_2: PlanStory = {
   status: 'done',
   gitBranch: 'story/PROD-1.2-workspaces',
   descriptionMd:
-    'Each user belongs to one or more workspaces. All Prodect data — projects, work items, ' +
+    'Each user belongs to one or more workspaces. All Motir data — projects, work items, ' +
     'revisions — is scoped to a workspace via foreign key. Multi-tenancy is enforced at the ' +
     'schema layer (Postgres Row-Level Security) *and* in the application layer (request-scoped ' +
     'middleware), so a leak requires bypassing both gates. Users invite teammates by email through ' +
@@ -68,7 +68,7 @@ export const story_1_2: PlanStory = {
     '- Confirm CI is green on the Story PR (all 4 gates plus the existing Vitest suite from 1.1 ' +
     'plus the new isolation tests from 1.2.7).\n' +
     '- If all flows work, approve and merge the PR. If anything breaks, add a comment describing ' +
-    'what failed and Prodect will produce a follow-up Subtask under this Story to fix it.',
+    'what failed and Motir will produce a follow-up Subtask under this Story to fix it.',
   items: [
     {
       id: '1.2.1',
@@ -128,7 +128,7 @@ export const story_1_2: PlanStory = {
         'you to join {workspace.name}" subhead, single Accept Button. Includes an error variant ' +
         'for "This invite has expired" matching the structure of 1.1.6\'s reset-link-expired screen.\n' +
         '- Invite email mockup shows: subject line, greeting, "{inviter.name} invited you to join ' +
-        '{workspace.name} on Prodect", accept link, expiry note ("This link expires in 7 days"). ' +
+        '{workspace.name} on Motir", accept link, expiry note ("This link expires in 7 days"). ' +
         'HTML and plain-text bodies both designed; the link MUST be visible unredacted in the ' +
         "plain-text body so dev/test flows can grep it (mirroring the password-reset email's " +
         'dev-console contract from 1.1.6).\n' +
@@ -143,7 +143,7 @@ export const story_1_2: PlanStory = {
         'auth-adjacent surfaces (invite-acceptance reuses this card frame)\n' +
         '- `/design/auth/email-templates.png` from Subtask 1.1.6 — password-reset email shape ' +
         '(the invite email follows the same dev-console-readable contract)\n' +
-        '- PRODECT.md — brand-mark deferral principle (no placeholder wordmark; the minimal ' +
+        '- MOTIR.md — brand-mark deferral principle (no placeholder wordmark; the minimal ' +
         'top-nav this Subtask designs reflects that)',
     },
     {
@@ -403,7 +403,7 @@ export const story_1_2: PlanStory = {
         'refactor.)\n' +
         '- `lib/workspaces/index.ts` + `lib/workspaces/middleware.ts` — `getWorkspaceContext()` ' +
         'and the resolver this Subtask hooks the backfill into\n' +
-        '- `prodect-core/CLAUDE.md` — the 4-layer Route→Service→Repository→Prisma contract the ' +
+        '- `motir-core/CLAUDE.md` — the 4-layer Route→Service→Repository→Prisma contract the ' +
         'new endpoint + service method must follow\n' +
         '- `tests/e2e/auth-credentials.spec.ts` + ' +
         '`tests/e2e/_helpers/{db-reset,email-capture}.ts` — the spec this Subtask extends and its ' +
@@ -440,7 +440,7 @@ export const story_1_2: PlanStory = {
         'OAuth from 1.1, plus magic-link only used for invites). Account-needed acceptance reuses ' +
         "Story 1.1's complete auth surface: the invitee signs in (or signs up) through the " +
         'existing flows, then lands on a one-click "Accept invite" screen. Decision recorded in ' +
-        'PRODECT.md "Story 1.2 decisions baked in" (added in this Subtask\'s deepening pass).\n\n' +
+        'MOTIR.md "Story 1.2 decisions baked in" (added in this Subtask\'s deepening pass).\n\n' +
         '**Why 7-day expiry:** matches the Linear / Slack / GitHub norm (longer than ' +
         'password-reset\'s 1-hour because invites have legitimate "I\'ll get to it later" delay; ' +
         'shorter than indefinite because expired tokens still need to be garbage-collected by the ' +
@@ -475,7 +475,7 @@ export const story_1_2: PlanStory = {
         "`JSON.stringify({ workspaceId, email: lowercased, role: 'member' })`, expiresAt now + " +
         '7 days.\n' +
         "- Email sent via `lib/email.ts`'s `sendEmail()` — subject " +
-        '"You\'re invited to join {Workspace} on Prodect", plain-text body containing the accept ' +
+        '"You\'re invited to join {Workspace} on Motir", plain-text body containing the accept ' +
         "link unredacted (mirroring the password-reset email's dev-console-readable contract from " +
         "1.1.6), HTML body matching 1.2.1's mockup.\n" +
         '- Accept endpoint requires an authenticated session whose `user.email` matches the ' +

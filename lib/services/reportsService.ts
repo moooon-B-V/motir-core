@@ -1,16 +1,48 @@
 import type { EstimationStatistic, Sprint } from '@prisma/client';
+import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { savedFilterRepository } from '@/lib/repositories/savedFilterRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { estimationService } from '@/lib/services/estimationService';
-import { toBurndownSeriesDto, toVelocityDto } from '@/lib/mappers/reportsMappers';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { projectAccessService } from '@/lib/services/projectAccessService';
+import { savedFiltersService } from '@/lib/services/savedFiltersService';
+import { loadFilterReferents, workItemsService } from '@/lib/services/workItemsService';
+import {
+  toBurndownSeriesDto,
+  toCreatedVsResolvedDto,
+  toDistributionDto,
+  toVelocityDto,
+} from '@/lib/mappers/reportsMappers';
+import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import { SavedFilterNotFoundError } from '@/lib/savedFilters/errors';
 import { SprintNotFoundError, SprintNotStartedError } from '@/lib/sprints/errors';
+import { UnknownStatisticTypeError } from '@/lib/reports/errors';
+import {
+  isDistributionCfFieldType,
+  parseStatisticType,
+  type DistributionGroupBy,
+} from '@/lib/reports/statisticTypes';
+import {
+  bucketAxis,
+  reportWindow,
+  validateReportWindow,
+  type ReportPeriod,
+} from '@/lib/reports/buckets';
+import { DEFAULT_SORT } from '@/lib/issues/issueListView';
+import type { FilterAst } from '@/lib/filters/ast';
+import type { ProjectFilterReferents } from '@/lib/filters/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { EstimationStatisticDto } from '@/lib/dto/estimation';
+import type { PagedIssueListDto } from '@/lib/dto/workItems';
 import type {
   BurndownSeriesDto,
   BurndownStatisticDto,
+  CreatedVsResolvedDto,
+  DistributionDto,
+  ReportScopeDto,
+  ReportWidgetResultDto,
   VelocityDto,
   VelocitySprintDto,
 } from '@/lib/dto/reports';
@@ -198,7 +230,257 @@ export const reportsService = {
       anchorRemaining,
     });
   },
+
+  /**
+   * The CREATED-VS-RESOLVED read (Story 6.3 · Subtask 6.3.2) — the two-series
+   * difference/area chart behind the report page (6.3.6) and the dashboard
+   * widget (6.3.5). Scope = a project or a 6.2 saved filter (the verified
+   * gadget pattern; resolved per-VIEWER — see {@link resolveReportScope}).
+   * The CREATED series buckets `createdAt`; the RESOLVED series is the NET
+   * count of transitions into a `done`-CATEGORY status derived from the
+   * 1.4.6 revision trail in ONE bounded grouped query (the 4.6.3 pattern —
+   * a reopen inside the window subtracts; the recorded deviation: our
+   * "resolution" IS the done category, the SAME predicate the burndown /
+   * velocity / rollups use). The bucket axis is generated in full (event-less
+   * buckets at 0); `cumulative` running-sums both series within the window
+   * server-side.
+   *
+   * Bounded (finding #57): two grouped aggregates over a validated window
+   * (≤ 366 days, ≤ 120 buckets — `InvalidReportWindowError` → 422 beyond).
+   * Degraded scopes return the typed widget states, never partial data.
+   */
+  async getCreatedVsResolved(
+    scope: ReportScopeDto,
+    config: { period: ReportPeriod; daysBack: number; cumulative: boolean },
+    ctx: ServiceContext,
+  ): Promise<ReportWidgetResultDto<CreatedVsResolvedDto>> {
+    // Config validation FIRST (a malformed window is a 422 regardless of
+    // scope state — it leaks nothing and the widget editor needs the error).
+    validateReportWindow(config.period, config.daysBack);
+
+    const resolved = await resolveReportScope(scope, ctx);
+    if (resolved.state !== 'ok') return resolved;
+
+    const { start, end } = reportWindow(new Date(), config.daysBack);
+    const axis = bucketAxis(config.period, start, end);
+    const filter = await scopeAstFilter(resolved, ctx);
+    const [created, resolvedRows] = await Promise.all([
+      workItemRepository.aggregateCreatedByBucket(
+        resolved.projectId,
+        ctx.workspaceId,
+        config.period,
+        { start, end },
+        filter,
+      ),
+      workItemRevisionRepository.aggregateNetResolvedByBucket(
+        resolved.projectId,
+        ctx.workspaceId,
+        config.period,
+        { start, end },
+        filter,
+      ),
+    ]);
+
+    return {
+      state: 'ok',
+      data: toCreatedVsResolvedDto({
+        period: config.period,
+        daysBack: config.daysBack,
+        cumulative: config.cumulative,
+        windowStart: start,
+        windowEnd: end,
+        axis,
+        created,
+        resolved: resolvedRows,
+      }),
+    };
+  },
+
+  /**
+   * The DISTRIBUTION read (Story 6.3 · Subtask 6.3.2) — the donut behind the
+   * status-distribution report page (6.3.6) and widget (6.3.5). ONE bounded
+   * GROUP-BY count over the scoped items (finding #57), through the TOTAL
+   * statistic-type registry (`lib/reports/statisticTypes.ts` — the verified
+   * Jira "Statistic Type" vocabulary: the finite-value fields). An id outside
+   * the vocabulary, or a custom field whose type is not enum-ish
+   * (select/user), is the typed 422 (`UnknownStatisticTypeError` — mistake
+   * #29); a DELETED / out-of-project custom field is the typed STALE state
+   * (`statistic_missing` — the 6.1.2 unknown-value precedent, data not
+   * error). Segments come back count-descending with counts + percentages
+   * (the legend's figures); the NULL group is the designed "None" segment.
+   */
+  async getDistribution(
+    scope: ReportScopeDto,
+    statistic: string,
+    ctx: ServiceContext,
+  ): Promise<ReportWidgetResultDto<DistributionDto>> {
+    // Statistic-id FORM validation first (typed 422; existence of a cf
+    // referent is a data question, resolved after the scope below).
+    const parsed = parseStatisticType(statistic);
+
+    const resolved = await resolveReportScope(scope, ctx);
+    if (resolved.state !== 'ok') return resolved;
+
+    let groupBy: DistributionGroupBy;
+    if (parsed.kind === 'builtin') {
+      groupBy = parsed.def.groupBy;
+    } else {
+      const def = await customFieldDefinitionRepository.findById(parsed.fieldId, ctx.workspaceId);
+      // A deleted — or cross-project, indistinguishable to this scope — field
+      // is a stale referent: the widget degrades, the dashboard survives.
+      if (!def || def.projectId !== resolved.projectId) {
+        return { state: 'stale', reason: 'statistic_missing' };
+      }
+      if (!isDistributionCfFieldType(def.fieldType)) {
+        throw new UnknownStatisticTypeError(
+          statistic,
+          `a ${def.fieldType} field has no finite value set to group by`,
+        );
+      }
+      groupBy = { kind: 'customField', fieldId: def.id, fieldType: def.fieldType };
+    }
+
+    const filter = await scopeAstFilter(resolved, ctx);
+    const rows = await workItemRepository.aggregateDistribution(
+      resolved.projectId,
+      ctx.workspaceId,
+      groupBy,
+      filter,
+    );
+    return { state: 'ok', data: toDistributionDto(statistic, rows) };
+  },
+
+  /**
+   * The FILTER-RESULTS page read (Story 6.3 · Subtask 6.3.2) — the paginated
+   * issue table widget. Rides the EXISTING 2.5.8/2.5.12 list read + count
+   * (`workItemsService.getProjectIssuesList` with the resolved filter's
+   * compiled AST — no second query path, so a widget page exactly matches
+   * the /issues List for the same filter), at the default sort and the
+   * verified ≤ 50/page gadget cap (clamped server-side by the list read).
+   * Scope and access resolve per-VIEWER like every widget read.
+   */
+  async getFilterResultsPage(
+    scope: ReportScopeDto,
+    params: { page?: number; pageSize?: number },
+    ctx: ServiceContext,
+  ): Promise<ReportWidgetResultDto<PagedIssueListDto>> {
+    const resolved = await resolveReportScope(scope, ctx);
+    if (resolved.state !== 'ok') return resolved;
+    try {
+      const page = await workItemsService.getProjectIssuesList(
+        resolved.projectId,
+        {
+          sort: DEFAULT_SORT,
+          filter: resolved.ast ? { ast: resolved.ast } : undefined,
+          page: params.page,
+          pageSize: params.pageSize,
+        },
+        ctx,
+      );
+      return { state: 'ok', data: page };
+    } catch (err) {
+      // The list read re-runs the browse gate (defence in depth); a race
+      // between the scope resolve and the read (project deleted / access
+      // revoked mid-request) degrades to the widget state, never errors.
+      /* istanbul ignore next -- defensive: only a mid-request access race reaches this */
+      if (err instanceof ProjectNotFoundError || err instanceof ProjectAccessDeniedError) {
+        return { state: 'no_access' };
+      }
+      /* istanbul ignore next -- defensive: non-access errors propagate to the route */
+      throw err;
+    }
+  },
 };
+
+// ---------------------------------------------------------------------------
+// Story 6.3 · Subtask 6.3.2 — scope resolution (the per-VIEWER 6.4 seam)
+// ---------------------------------------------------------------------------
+
+/** A resolved widget scope: the single project the read runs over (saved
+ * filters are project-contained — the 6.2 recorded deviation) plus the
+ * filter's AST when filter-sourced; or the typed degraded state. */
+type ResolvedReportScope =
+  | { state: 'ok'; projectId: string; ast: FilterAst | null }
+  | { state: 'no_access' }
+  | { state: 'stale'; reason: 'filter_missing' | 'filter_invalid' };
+
+/**
+ * Resolve a widget data source for the REQUESTING user (never the dashboard
+ * owner — the 6.4 per-VIEWER rule):
+ *
+ *   • `{ projectId }` — the 6.4 browse gate decides. A missing /
+ *     cross-workspace project collapses into `no_access` exactly like a
+ *     non-browsable one (finding #44 — no existence leak).
+ *   • `{ savedFilterId }` — rides THE 6.2.1 resolve-by-id contract
+ *     (`savedFiltersService.resolve`: decode + registry-validate on every
+ *     resolve, never trust-and-compile; already behind the browse gate +
+ *     filter visibility for the CALLER). A deleted / cross-workspace /
+ *     invisible filter (finding #44: the latter two are indistinguishable
+ *     from deleted) → `stale: filter_missing` (the 6.2.2 "filter missing"
+ *     card); a filter over a project the viewer can't browse →
+ *     `no_access` (the locked card — the story's private-project rule); a
+ *     stored envelope that no longer decodes/validates →
+ *     `stale: filter_invalid` (the 6.2.1 astError state). A returned AST is
+ *     guaranteed registry-valid; stale OPEN referents inside it match
+ *     nothing downstream (the 6.1.2 unknown-value rule).
+ */
+async function resolveReportScope(
+  scope: ReportScopeDto,
+  ctx: ServiceContext,
+): Promise<ResolvedReportScope> {
+  if ('projectId' in scope) {
+    try {
+      const caps = await projectAccessService.getCapabilities(scope.projectId, ctx);
+      if (!caps.canBrowse) return { state: 'no_access' };
+    } catch (err) {
+      /* istanbul ignore else -- defensive: getCapabilities throws nothing else */
+      if (err instanceof ProjectNotFoundError) return { state: 'no_access' };
+      /* istanbul ignore next -- defensive: see above */
+      throw err;
+    }
+    return { state: 'ok', projectId: scope.projectId, ast: null };
+  }
+
+  // The filter row locates its project (filters are addressed per-project in
+  // 6.2's routes; a widget holds only the id). A missing or cross-workspace
+  // row reads as deleted — the stale card, no cross-tenant leak.
+  const row = await savedFilterRepository.findByIdWithStars(scope.savedFilterId, ctx.userId);
+  if (!row) return { state: 'stale', reason: 'filter_missing' };
+  const project = await projectRepository.findById(row.projectId);
+  if (!project || project.workspaceId !== ctx.workspaceId) {
+    return { state: 'stale', reason: 'filter_missing' };
+  }
+
+  let resolvedFilter;
+  try {
+    resolvedFilter = await savedFiltersService.resolve(
+      project.identifier,
+      scope.savedFilterId,
+      ctx,
+    );
+  } catch (err) {
+    if (err instanceof ProjectNotFoundError) return { state: 'no_access' };
+    /* istanbul ignore else -- defensive: the 6.2.1 resolve throws nothing else */
+    if (err instanceof SavedFilterNotFoundError)
+      return { state: 'stale', reason: 'filter_missing' };
+    /* istanbul ignore next -- defensive: see above */
+    throw err;
+  }
+  if (!resolvedFilter.ast) return { state: 'stale', reason: 'filter_invalid' };
+  return { state: 'ok', projectId: project.id, ast: resolvedFilter.ast };
+}
+
+/** Load the Epic-5 referents a filter-scoped read's AST needs (bounded reads
+ * over only the ids the filter references — `loadFilterReferents`), shaped
+ * for the repository aggregates. A project scope (no AST) spends no reads. */
+async function scopeAstFilter(
+  resolved: { projectId: string; ast: FilterAst | null },
+  ctx: ServiceContext,
+): Promise<{ ast: FilterAst; referents?: ProjectFilterReferents } | undefined> {
+  if (!resolved.ast) return undefined;
+  const referents = await loadFilterReferents(resolved.projectId, ctx.workspaceId, resolved.ast);
+  return { ast: resolved.ast, referents };
+}
 
 /**
  * Resolve a sprint's committed baseline in the configured statistic. The

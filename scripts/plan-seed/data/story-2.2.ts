@@ -24,7 +24,7 @@ export const story_2_2: PlanStory = {
     "`'todo'` default; this Story does NOT change its type (kept as a string for portability) " +
     'but adds the typed-status integrity layer via service-layer validation + an RLS-scoped lookup ' +
     "table. Story 2.1 ships the `issuesService` that this Story's transition validation " +
-    "hangs off. All work follows `prodect-core/CLAUDE.md`'s 4-layer architecture " +
+    "hangs off. All work follows `motir-core/CLAUDE.md`'s 4-layer architecture " +
     '(Route → Service → Repository → Prisma). Per finding #26, every new route in this Story carries ' +
     'an explicit `workspaceId` gate at the application layer — RLS is the backstop, not the ' +
     'sole gate, because the dev/CI superuser bypasses RLS.',
@@ -92,7 +92,7 @@ export const story_2_2: PlanStory = {
         "- Story 1.6.4's migration `add_job_run_dlq_and_rls` — the canonical RLS + `app.system_admin` escape-hatch shape\n" +
         "- Story 1.4.5's `FORCE ROW LEVEL SECURITY` migration on `work_item`\n" +
         '- `tests/jobs/rls.test.ts` — the role-switch RLS-proof harness this Subtask mirrors\n' +
-        '- `prodect-core/CLAUDE.md` — 4-layer rule, repo-write contract\n' +
+        '- `motir-core/CLAUDE.md` — 4-layer rule, repo-write contract\n' +
         '- Finding #18 — `Decimal(20,10)` position-column shape; finding #33 — GUC namespace',
     },
     {
@@ -150,7 +150,7 @@ export const story_2_2: PlanStory = {
         "- `lib/services/projectsService.ts` + `lib/repositories/projectsRepository.ts` — Story 1.3's createProject\n" +
         '- `lib/workspaces/insertWorkspaceWithOwner.ts` — the existing service-seed pattern this mirrors\n' +
         "- Story 1.4's fractional-indexing helpers (`lib/workItems/positioning.ts` or equivalent) — for `workflow_status.position`\n" +
-        '- `prodect-core/CLAUDE.md` — transaction-client passing rule (write repos require `tx`)\n' +
+        '- `motir-core/CLAUDE.md` — transaction-client passing rule (write repos require `tx`)\n' +
         "- Finding #21 — terminal status generalizes from `'done'` to `category = 'done'`",
     },
     {
@@ -191,7 +191,7 @@ export const story_2_2: PlanStory = {
         "- Story 1.4's `workItemsService` + `workItemRepository` — the 4-layer + explicit-`workspaceId` shape this mirrors\n" +
         "- Story 1.6.5's `jobsDashboardService.listByWorkspace` — the explicit-`workspaceId`-filter precedent\n" +
         '- Finding #26 — explicit application-layer tenant gate; finding #21 — terminal-status set surface\n' +
-        '- `prodect-core/CLAUDE.md` — DTO mapping owned by service; repos are single-op leaves',
+        '- `motir-core/CLAUDE.md` — DTO mapping owned by service; repos are single-op leaves',
     },
     {
       id: '2.2.4',

@@ -9,7 +9,7 @@ export const story_1_4: PlanStory = {
   title: 'Work-item (issue) data model',
   status: 'done',
   descriptionMd:
-    "The `work_item` table — the unit of tracked work in Prodect's PM core. Every " +
+    "The `work_item` table — the unit of tracked work in Motir's PM core. Every " +
     'epic, story, task, bug, and subtask a team plans in a project is a row in this table. ' +
     'Self-referencing tree (`parent_id`) with DB-level kind-parent rules and a depth ' +
     'limit. Carries the two user-visible content axes — `descriptionMd` ' +
@@ -31,7 +31,7 @@ export const story_1_4: PlanStory = {
     'pattern is the structural model this Story copies. [Story 1.0.5 (Design system)](story-1.0.5-design-system.html) ' +
     'must be complete before 1.4.1 (mockup) — the issue-detail view composes the canonical ' +
     '`Button`, `Input`, `Textarea`, `Select`, `Card`, `Avatar`, `Badge` primitives. All code follows ' +
-    "`prodect-core/CLAUDE.md`'s 4-layer rule (Route → Service → Repository → Prisma).",
+    "`motir-core/CLAUDE.md`'s 4-layer rule (Route → Service → Repository → Prisma).",
   verificationRecipeMd:
     'Functional verification — run the data layer end-to-end through the test endpoint added in ' +
     "1.4.8. No production UI yet (that's Epic 2); this recipe exercises the service via HTTP + " +
@@ -134,13 +134,13 @@ export const story_1_4: PlanStory = {
         "- Create modal's parent Select demonstrates the allowed-children rule (illegal parents are disabled with a tooltip explaining why).\n" +
         '- All surfaces compose only existing primitives — no new design tokens or component shapes introduced.\n' +
         '- The mockups reveal no missing v1 schema fields (or, if they do, the Subtask raises a finding in [PRODECT_FINDINGS.md](PRODECT_FINDINGS.md) before merging — per [notes.html mistake #27](../notes.html)).\n' +
-        '- Mockups respect the brand-mark deferral principle — no wordmark / logomark anywhere on these surfaces (per PRODECT.md decision).\n\n' +
+        '- Mockups respect the brand-mark deferral principle — no wordmark / logomark anywhere on these surfaces (per MOTIR.md decision).\n\n' +
         '## Context refs\n\n' +
         '- `/docs/design-system.md` — canonical visual reference\n' +
         '- `/components/ui/Button.tsx, Input.tsx, Textarea.tsx, Select.tsx, Card.tsx, Avatar.tsx, Badge.tsx, Dialog.tsx` — primitives to compose from\n' +
         '- `/design/workspaces/settings.pen` from Subtask 1.2.1 — the visual grammar for two-column layouts with a sidebar (the detail view mirrors this shape)\n' +
         '- `/design/projects/*.pen` from Subtask 1.3.3 — the tree-view affordances Story 1.3 established\n' +
-        '- [PRODECT.md](../PRODECT.md) — brand-mark deferral principle, design-system tokens\n' +
+        '- [MOTIR.md](../MOTIR.md) — brand-mark deferral principle, design-system tokens\n' +
         '- This Story page (Story 1.4) — the schema fields the detail view must surface',
     },
     {
@@ -221,7 +221,7 @@ export const story_1_4: PlanStory = {
         '- No `db.*` / `$transaction` outside the repository layer (no service layer exists yet).\n' +
         '- All quality gates green: `pnpm prisma generate && typecheck && lint && format:check && build && test`. Existing suite stays green.\n\n' +
         '## Context refs\n\n' +
-        '- `prodect-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
+        '- `motir-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
         '- `prisma/schema.prisma` — current Workspace / WorkspaceMembership / Project models\n' +
         "- `lib/repositories/projectRepository.ts` — the single-op + required-`tx` pattern; `allocateWorkItemNumber` is the method this Story's service layer will consume (in 1.4.4)\n" +
         '- `lib/repositories/workspaceRepository.ts` — error-translation pattern (Prisma error → typed error at the repository edge)\n' +
@@ -288,7 +288,7 @@ export const story_1_4: PlanStory = {
         'INSERT/UPDATE as the structural backstop).\n\n' +
         '**Cross-project links allowed, cross-workspace links forbidden.** ' +
         'Real teams have epics whose stories live in sibling projects (e.g., a ' +
-        '`prodect-ai` epic blocks a `prodect-core` story — same ' +
+        '`motir-ai` epic blocks a `motir-core` story — same ' +
         'workspace, different projects). The RLS policy gates by workspace only. The project ' +
         'GUC, when set, narrows reads of *work items* but not of *links* — a ' +
         'link query against a project context returns links where either endpoint matches the ' +
@@ -332,7 +332,7 @@ export const story_1_4: PlanStory = {
         '- No `db.*` / `$transaction` calls inside the repository (4-layer rule).\n' +
         '- All quality gates green: `pnpm prisma generate && typecheck && lint && format:check && build && test`. Existing suite stays green.\n\n' +
         '## Context refs\n\n' +
-        '- `prodect-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
+        '- `motir-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
         '- `prisma/schema.prisma` — current `WorkItem` model from 1.4.2 (this Subtask adds back-relations)\n' +
         '- `prisma/sql/work_item_triggers.sql` from 1.4.2 — the trigger-writing pattern (cycle-check recursive CTE shape, SQLSTATE 23514 + message markers)\n' +
         '- `lib/repositories/workItemRepository.ts` + `lib/workItems/errors.ts` from 1.4.2 — the repository pattern + error-translation pattern to mirror\n' +
@@ -350,7 +350,7 @@ export const story_1_4: PlanStory = {
       descriptionMd:
         'Add `lib/services/workItemsService.ts` — the layer that owns transactions, ' +
         'calls the repository, validates business rules, and returns DTOs. This is the surface ' +
-        "Epic 2's route handlers will call. Per `prodect-core/CLAUDE.md`: services " +
+        "Epic 2's route handlers will call. Per `motir-core/CLAUDE.md`: services " +
         'own `$transaction`; repositories never call `db.*` without a ' +
         'passed-in `tx`; routes are HTTP-only and call services with mapped inputs.\n\n' +
         '**Method set:**\n\n' +
@@ -441,7 +441,7 @@ export const story_1_4: PlanStory = {
         '- No `db.*` or `$transaction` calls inside `workItemRepository` or `workItemLinkRepository`. No repository methods called without a passed-in `tx` on writes.\n' +
         '- All quality gates green; existing suite stays green.\n\n' +
         '## Context refs\n\n' +
-        '- `prodect-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
+        '- `motir-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
         '- `lib/services/projectsService.ts` + `lib/services/workspacesService.ts` — the exact transactional pattern to mirror\n' +
         '- `lib/repositories/workItemRepository.ts` (from 1.4.2) + `lib/repositories/projectRepository.ts` + `lib/repositories/workItemLinkRepository.ts` (from 1.4.3)\n' +
         '- `lib/dto/workItems.ts` + `lib/dto/workItemLinks.ts` + `lib/workItems/errors.ts` + `lib/workItems/linkErrors.ts` + `lib/workItems/positioning.ts`\n' +
@@ -558,7 +558,7 @@ export const story_1_4: PlanStory = {
         "- Service-layer tests cover: revision-on-create has changeKind='created' + the full initial state; revision-on-update has only the changed fields; revision-on-archive has changeKind='archived'.\n" +
         '- All quality gates green; existing suite stays green.\n\n' +
         '## Context refs\n\n' +
-        '- `prodect-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
+        '- `motir-core/CLAUDE.md` — 4-layer rule (auto-loaded)\n' +
         '- `lib/services/workItemsService.ts` (from 1.4.4) — the existing transactional skeleton this Subtask extends\n' +
         '- `lib/repositories/workItemRepository.ts` (from 1.4.2) — the repository pattern to mirror\n' +
         '- `prisma/migrations/.../work_item_rls/migration.sql` (from 1.4.5) — confirm the revisions RLS policy is in scope of that migration or add here\n' +

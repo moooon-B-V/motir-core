@@ -23,7 +23,7 @@ import type { PlanStory } from '../types';
  *     (open suggestion JRACLOUD-23656 asks for project scoping; the global
  *     pool leaks across projects). The stub pins **project-scoped** labels —
  *     a justified deviation WITH the concrete use case: the deviation is
- *     exactly what the mirror's users ask for, and Prodect's workspace/
+ *     exactly what the mirror's users ask for, and Motir's workspace/
  *     project tenancy makes scoping the natural shape. Folksonomy mechanics
  *     mirrored: created by typing in the field, NO admin UI (rename/merge is
  *     Jira's documented gap — out of scope, same as the mirror), unused
@@ -45,7 +45,7 @@ import type { PlanStory } from '../types';
  *     first-alphabetically on conflict. Simplification recorded: Jira's
  *     five-way default-assignee enum (project default / project lead /
  *     component lead / unassigned / person) collapses to `defaultAssigneeId:
- *     userId | null` — Prodect has no project-lead concept and component
+ *     userId | null` — Motir has no project-lead concept and component
  *     *lead* exists in Jira chiefly to feed that enum; the lead field is the
  *     documented extension. **Delete with issues = the verified move-or-
  *     remove choice** (issues untouched either way).
@@ -81,14 +81,14 @@ import type { PlanStory } from '../types';
  * 5.4.9/5.4.10) carry their design in `dependsOn` and seed `'blocked'`
  * (Principle #13).
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 5.4`, on the standing
+ * Expanded from its `stubs.ts` entry per `motir plan 5.4`, on the standing
  * `seed/epic-5-plan` branch. Matches the canonical depth + string-literal
  * style of Stories 5.1 / 5.2 / 5.3.
  */
 export const story_5_4: PlanStory = {
   id: '5.4',
   title: 'Labels, components, watchers',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The issue-organisation layer: **labels** (a project-scoped folksonomy — type to create, ' +
     'multi-valued, no admin ceremony), **components** (an admin-managed taxonomy with default ' +
@@ -107,7 +107,7 @@ export const story_5_4: PlanStory = {
     '(unused labels disappear, the verified behaviour). One wart-fix: **case-insensitive ' +
     "uniqueness** per project (the filed 'Performance'/'performance' duplicate complaint), " +
     'first-typed casing displayed. **Second justified deviation — label chips are COLOURED** ' +
-    "(product owner, 2026-06-10): Jira's labels are colourless-enterprise; Prodect is " +
+    "(product owner, 2026-06-10): Jira's labels are colourless-enterprise; Motir is " +
     'deliberately more colourful. The tint is **auto-assigned deterministically from the label ' +
     'name** (FNV-1a over `nameLower`, mod 6 — the seed-loader hash family) into the existing ' +
     '`--el-tint-{peach,rose,mint,lavender,sky,yellow}` pastels with `--el-text-strong` text ' +
@@ -166,7 +166,7 @@ export const story_5_4: PlanStory = {
     '- `pnpm test:coverage` — Vitest (real Postgres) over the three services (folksonomy ' +
     'lifecycle, component CRUD + default-assignee + move-or-remove, watcher permissions + ' +
     'auto-watch) ≥90% per-file branch/fn/line; empty-input guards on new repo methods.\n' +
-    '- **Labels flow:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz`, open an issue → the Labels ' +
+    '- **Labels flow:** sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open an issue → the Labels ' +
     'rail card (matching `design/work-items/labels-components-watch.mock.html`). Type `perf-q3` ' +
     '→ the "Create" row adds it as a chip; type `PERF-Q3` on another issue → autocomplete offers ' +
     'the SAME label (case-insensitive, original casing shown); a label with a space is rejected ' +
@@ -179,7 +179,7 @@ export const story_5_4: PlanStory = {
     '"API" while in use → the dialog forces move-to-"Web" or remove, counts shown, issues ' +
     'survive. Non-admin member: the admin page is read-only.\n' +
     '- **Watchers flow:** the eye + count sits in the detail header; click (or press `W`) → you ' +
-    'watch, count bumps; the popover lists watchers; as project admin add `odie@prodect.co` → ' +
+    'watch, count bumps; the popover lists watchers; as project admin add `odie@motir.co` → ' +
     'listed; adding a user who cannot view a private-project issue is rejected with the inline ' +
     'error (not silently dropped); creating an issue auto-watches you; commenting auto-watches ' +
     'you; a `viewer` can watch themselves but sees no manage affordances.\n' +
@@ -242,7 +242,7 @@ export const story_5_4: PlanStory = {
         '(coverage gate).\n\n' +
         '## Context refs\n\n' +
         '- `prisma/schema.prisma` conventions + the 5.3.1 contract-comment pattern; ' +
-        '`prodect-core/CLAUDE.md` (FK rule, required-`tx`)\n' +
+        '`motir-core/CLAUDE.md` (FK rule, required-`tx`)\n' +
         '- The verified mirror semantics in the Story 5.4 description (folksonomy ' +
         'delete-on-last-use; move-or-remove; watcher view-access)\n' +
         '- `lib/repositories/` conventions (workItemRepository paging shapes)',
@@ -686,7 +686,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.11',
       title:
         'Story tests — Vitest matrix (folksonomy × components × watchers × notifications) + Playwright E2E + a11y sweep',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 32,

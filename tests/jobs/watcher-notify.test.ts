@@ -6,6 +6,7 @@ import {
   watcherNotifyOnCommentCreated,
   watcherNotifyOnTransitioned,
 } from '@/lib/jobs/definitions/watcherNotify';
+import { EMAIL_SEND_IDEMPOTENCY } from '@/lib/jobs/definitions/emailSend';
 import { jobFunctions } from '@/lib/jobs/registry';
 import { watcherNotificationsService } from '@/lib/services/watcherNotificationsService';
 import { watcherCommentNotificationEmail } from '@/lib/emailTemplates/watcherCommentNotification';
@@ -495,6 +496,79 @@ describe('watcherNotify jobs — in-process runs', () => {
     });
     expect(runs).toHaveLength(1);
     expect(runs[0]!.status).toBe('succeeded');
+  });
+});
+
+// The replay cell of the Story-5.4 matrix (Subtask 5.4.11). A replayed /
+// retried fan-out event re-runs the whole job — the dedupe lives one hop
+// DOWNSTREAM: the re-emitted `email.send` events carry byte-identical
+// idempotency keys, and the email.send job's event-level idempotency
+// (`event.data.idempotencyKey` — the finding-#40-proven mechanism) drops the
+// duplicates. So the contract under test is key STABILITY across runs, plus
+// the seam binding: the fan-out writes its key at the exact path email.send
+// dedups on.
+describe('replay idempotency — a re-run fan-out re-emits identical keys', () => {
+  it('binds the seam: the fan-out keys land at the path email.send dedups on', () => {
+    expect(EMAIL_SEND_IDEMPOTENCY).toBe('event.data.idempotencyKey');
+  });
+
+  it('replaying the comment event emits the same recipients and the same keys', async () => {
+    const s = await buildScenario();
+    const capture = captureEmailEvents();
+    const comment = await commentsService.addComment(s.issueId, { bodyMd: 'Replay me.' }, s.fx.ctx);
+    capture.events.length = 0;
+
+    const data: WorkItemCommentCreatedData = {
+      workspaceId: s.fx.workspaceId,
+      workItemId: s.issueId,
+      commentId: comment.id,
+      authorId: s.fx.ownerId,
+      mentionedUserIds: [],
+    };
+    const run = async () => {
+      const engine = new InngestTestEngine({
+        function: watcherNotifyOnCommentCreated,
+        events: [{ name: 'work-item/comment.created', data }],
+      });
+      const { result } = await engine.execute();
+      const keys = capture.events.map((e) => e.data.idempotencyKey);
+      capture.events.length = 0;
+      return { result, keys };
+    };
+
+    const first = await run();
+    const second = await run();
+
+    expect(first.keys).toEqual([`watcher-comment:${comment.id}:${s.watcher.id}`]);
+    expect(second.keys).toEqual(first.keys);
+    expect(second.result).toEqual(first.result);
+  });
+
+  it('replaying the transitioned event emits the same keys', async () => {
+    const s = await buildScenario();
+    const capture = captureEmailEvents();
+
+    const data: WorkItemTransitionedData = {
+      workspaceId: s.fx.workspaceId,
+      workItemId: s.issueId,
+      actorId: s.fx.ownerId,
+      fromStatusKey: 'todo',
+      toStatusKey: 'in_progress',
+      revisionId: 'rev-replay',
+    };
+    const run = async () => {
+      const engine = new InngestTestEngine({
+        function: watcherNotifyOnTransitioned,
+        events: [{ name: 'work-item/transitioned', data }],
+      });
+      await engine.execute();
+      const keys = capture.events.map((e) => e.data.idempotencyKey);
+      capture.events.length = 0;
+      return keys;
+    };
+
+    expect(await run()).toEqual([`watcher-transition:rev-replay:${s.watcher.id}`]);
+    expect(await run()).toEqual([`watcher-transition:rev-replay:${s.watcher.id}`]);
   });
 });
 

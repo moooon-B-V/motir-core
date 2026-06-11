@@ -10,7 +10,7 @@ export const story_1_0: PlanStory = {
   status: 'done',
   descriptionMd:
     'Stand up the empty Next.js + TypeScript + Postgres + Prisma + Tailwind scaffold that every ' +
-    'subsequent Story builds on. Without this, the very first `prodect next` call would ' +
+    'subsequent Story builds on. Without this, the very first `motir next` call would ' +
     'hand an agent an empty directory with no tooling, no config, and no clue what stack to use. ' +
     'This Story exists so that all later prompts can assume "the project is set up the standard way."\n\n' +
     '**Prerequisite for everything else.** Story 1.0 must complete before Story 1.0.5 ' +
@@ -19,71 +19,71 @@ export const story_1_0: PlanStory = {
     'in every Subtask prompt.\n\n' +
     '**This version is the Next.js variant.** The Subtasks below assume the user picked ' +
     "Next.js + Postgres + Prisma + Tailwind in Epic 2's *stack discovery* Story (2.1.5). When " +
-    "Prodect's real planner generates this Story for an arbitrary user project, it must produce a " +
+    "Motir's real planner generates this Story for an arbitrary user project, it must produce a " +
     '*stack-appropriate* variant: Spring Boot for a Java user, FastAPI for a Python user, ' +
     'Rails for a Ruby user, etc. The shape of the Story (bootstrap, dev runner, CI, deploy) stays ' +
     'the same; the specific Subtasks change per stack.',
   verificationRecipeMd:
     '- Verify the two repos exist on GitHub:\n' +
-    '  - https://github.com/moooon-B-V/prodect-core (PUBLIC, GPL-3.0)\n' +
-    '  - https://github.com/moooon-B-V/prodect-ai   (PRIVATE, proprietary)\n' +
-    '- Open prodect-core in a terminal and run:\n' +
+    '  - https://github.com/moooon-B-V/motir-core (PUBLIC, GPL-3.0)\n' +
+    '  - https://github.com/moooon-B-V/motir-ai   (PRIVATE, proprietary)\n' +
+    '- Open motir-core in a terminal and run:\n' +
     '  `git checkout story/PROD-1.0-bootstrap`, `./scripts/db-up.sh`, `pnpm install`, `pnpm dev`.\n' +
     '  Open http://localhost:3000 in your browser. You should see a placeholder\n' +
-    '  "Prodect" page rendered in the dark theme — not the default Next.js welcome page.\n' +
-    '- Open prodect-ai in a second terminal and run:\n' +
+    '  "Motir" page rendered in the dark theme — not the default Next.js welcome page.\n' +
+    '- Open motir-ai in a second terminal and run:\n' +
     '  `pnpm install`, `pnpm dev`.\n' +
     '  Open http://localhost:8001/health in your browser (or curl it). You should see `{"status": "ok"}`.\n' +
-    "- In prodect-core's repo on GitHub, confirm:\n" +
+    "- In motir-core's repo on GitHub, confirm:\n" +
     '  - LICENSE file at the root is the canonical GPL-3.0 text.\n' +
-    '  - README.md mentions "GPL-3.0" and links to prodect-ai as the closed-source companion.\n' +
-    "- In prodect-ai's repo on GitHub, confirm:\n" +
-    '  - LICENSE file says "Copyright © Prodect Inc. All rights reserved." (proprietary, NOT GPL).\n' +
-    '  - README.md is short and points back at prodect-core.\n' +
-    '- Visit the prodect-core Vercel deployment URL (provided in the PR description). Same placeholder page should render there too.\n' +
-    '- Confirm CI is green on the Story PR for prodect-core (all 3 jobs: lint, typecheck, build).\n' +
+    '  - README.md mentions "GPL-3.0" and links to motir-ai as the closed-source companion.\n' +
+    "- In motir-ai's repo on GitHub, confirm:\n" +
+    '  - LICENSE file says "Copyright © Motir Inc. All rights reserved." (proprietary, NOT GPL).\n' +
+    '  - README.md is short and points back at motir-core.\n' +
+    '- Visit the motir-core Vercel deployment URL (provided in the PR description). Same placeholder page should render there too.\n' +
+    '- Confirm CI is green on the Story PR for motir-core (all 3 jobs: lint, typecheck, build).\n' +
     '- If all seven checks pass, approve and merge the PR. If anything fails, add a comment explaining what ' +
-    "didn't work and Prodect will produce a follow-up Subtask to fix it.",
+    "didn't work and Motir will produce a follow-up Subtask to fix it.",
   items: [
     {
       id: '1.0.0',
-      title: 'Scaffold `prodect-ai` repo (the closed-source AI service stub)',
+      title: 'Scaffold `motir-ai` repo (the closed-source AI service stub)',
       status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 6,
       descriptionMd:
-        "Create the second repo of Prodect's open-core architecture: `prodect-ai`, " +
+        "Create the second repo of Motir's open-core architecture: `motir-ai`, " +
         'closed-source, commercial, and **headless** — a backend service with no ' +
         'UI. It will eventually hold the planning agent, prompt-generation agent, async expansion ' +
         "loop, and shared-context retrieval. For now it's a minimal stub — just enough to have a " +
-        'deployable HTTP service that `prodect-core` can call into server-to-server ' +
+        'deployable HTTP service that `motir-core` can call into server-to-server ' +
         'via the API contract defined in Epic 7 Story 7.1 (Core ↔ AI API contract).\n\n' +
         '**Why headless (no UI):** all user-facing UI lives in ' +
-        '`prodect-core`. The browser never talks to `prodect-ai` directly; ' +
-        "only `prodect-core`'s server-side handlers do. This is what keeps the user " +
+        '`motir-core`. The browser never talks to `motir-ai` directly; ' +
+        "only `motir-core`'s server-side handlers do. This is what keeps the user " +
         'experience unified (one app, one domain, one cookie) while preserving the GPL boundary ' +
         '(clean network service interface, not a derivative work).\n\n' +
         '**Why a separate repo from day one (not "split later"):** see ' +
         'feasibility.html ADR-008. Splitting a mature codebase ' +
         'retroactively is expensive and rarely happens cleanly. Two repos from the start enforce ' +
         'the GPL boundary and give each codebase its own CI, deploy, and version pipeline.\n\n' +
-        "**What you'll do:** Create the `prodect-ai` repo on GitHub " +
+        "**What you'll do:** Create the `motir-ai` repo on GitHub " +
         '**as private** (not public — this code is closed-source). Add a minimal ' +
         '**backend-only** service: Hono or Express with a single `GET /health` ' +
         'endpoint returning `{ "status": "ok" }`. **No React, no Next.js, no ' +
         'UI dependencies** — this is server code only. Add `package.json` ' +
         'with start script, `.env.example` documenting `ANTHROPIC_API_KEY` ' +
         '(used later), `.gitignore`, and a **proprietary LICENSE notice** ' +
-        'at the repo root saying "Copyright © Prodect Inc. All rights reserved. This software ' +
+        'at the repo root saying "Copyright © Motir Inc. All rights reserved. This software ' +
         'is proprietary and confidential." Add a README naming the repo\'s purpose ("headless AI ' +
-        'backend, no UI, called server-to-server from `prodect-core`") and explicitly ' +
-        'pointing at `prodect-core` for the open-source PM substrate and all UI.\n\n' +
+        'backend, no UI, called server-to-server from `motir-core`") and explicitly ' +
+        'pointing at `motir-core` for the open-source PM substrate and all UI.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- GitHub repo `prodect/prodect-ai` exists, **private** (visibility = private).\n' +
-        '- A LICENSE file is at the repo root with a proprietary notice: *"Copyright © Prodect Inc. All rights reserved. This software is proprietary and confidential."* — explicitly NOT GPL or any open-source license.\n' +
-        '- A README.md exists, naming the repo\'s purpose ("closed-source AI service for Prodect\'s planning intelligence"), pointing at `prodect-core` as the companion open-source repo, and saying clearly: "this repo is intentionally not open-source — see `prodect-core` for the GPL-3.0 PM substrate."\n' +
-        "- Minimal Node service exists: `pnpm dev` starts a server on `localhost:8001` (different port from `prodect-core`'s 3000) and `GET /health` returns `200 OK` with a JSON body.\n" +
+        '- GitHub repo `moooon-B-V/motir-ai` exists, **private** (visibility = private).\n' +
+        '- A LICENSE file is at the repo root with a proprietary notice: *"Copyright © Motir Inc. All rights reserved. This software is proprietary and confidential."* — explicitly NOT GPL or any open-source license.\n' +
+        '- A README.md exists, naming the repo\'s purpose ("closed-source AI service for Motir\'s planning intelligence"), pointing at `motir-core` as the companion open-source repo, and saying clearly: "this repo is intentionally not open-source — see `motir-core` for the GPL-3.0 PM substrate."\n' +
+        "- Minimal Node service exists: `pnpm dev` starts a server on `localhost:8001` (different port from `motir-core`'s 3000) and `GET /health` returns `200 OK` with a JSON body.\n" +
         '- TypeScript strict mode configured.\n' +
         '- `.env.example` has `ANTHROPIC_API_KEY` and `PORT=8001`.\n' +
         '- `.gitignore` excludes `node_modules`, `.env`, and build output.\n' +
@@ -95,13 +95,13 @@ export const story_1_0: PlanStory = {
     },
     {
       id: '1.0.1',
-      title: '`create-next-app` + Tailwind + TypeScript strict + folder layout (in `prodect-core`)',
+      title: '`create-next-app` + Tailwind + TypeScript strict + folder layout (in `motir-core`)',
       status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 5,
       descriptionMd:
-        'Initialize **`prodect-core`** — the **open-source ' +
+        'Initialize **`motir-core`** — the **open-source ' +
         '(GPL-3.0)** repository that holds the PM substrate — with Next.js 15+ (App Router), ' +
         'TypeScript strict mode, and Tailwind CSS. This is the literal entry point for every ' +
         "other Subtask that ships in core; until this runs, the repo doesn't exist as a runnable " +
@@ -116,28 +116,28 @@ export const story_1_0: PlanStory = {
         'feasibility.html ADR-008. Short version: GPL-3.0 gives ' +
         'enterprise buyers full source-code transparency for audit while preventing competitors ' +
         'from closed-sourcing forks. AGPL was rejected because enterprises blacklist it.\n\n' +
-        "**What you'll do:** Create the GitHub repo at `prodect/prodect-core` " +
+        "**What you'll do:** Create the GitHub repo at `moooon-B-V/motir-core` " +
         '**as public** (this is the open-source side). Run ' +
         '`pnpm create next-app@latest .` with flags for App Router + Tailwind + ' +
         'TypeScript. Add `"strict": true` (with all sub-flags) to ' +
         '`tsconfig.json`. Create the folder layout: `/app` (routes), ' +
         '`/lib` (server logic), `/components` (React), `/prisma` ' +
         '(added in 1.0.2), `/tests` (Playwright + Vitest), `/docs` (project ' +
-        'docs). Add a placeholder `app/page.tsx` showing "Prodect" with the dark ' +
+        'docs). Add a placeholder `app/page.tsx` showing "Motir" with the dark ' +
         'theme. **Add the GPL-3.0 LICENSE file at the repo root** ' +
         '(verbatim from gnu.org/licenses/gpl-3.0.txt), ' +
         'plus a COPYRIGHT header at the top of each source file: ' +
-        '`// Copyright (C) 2026 Prodect contributors. Licensed under GPL-3.0-only.`\n\n' +
+        '`// Copyright (C) 2026 Motir contributors. Licensed under GPL-3.0-only.`\n\n' +
         '## Acceptance criteria\n\n' +
-        '- GitHub repo `prodect/prodect-core` exists, **public** (visibility = public).\n' +
+        '- GitHub repo `moooon-B-V/motir-core` exists, **public** (visibility = public).\n' +
         '- **GPL-3.0 LICENSE file exists at repo root**, verbatim copy of the canonical GPL-3.0 text from gnu.org. `package.json` has `"license": "GPL-3.0-only"`.\n' +
-        '- README.md exists at repo root with: title, one-line pitch, a clear "Open source under GPL-3.0" line in the first paragraph, and a pointer to the companion closed-source `prodect-ai` repo (saying "the planning intelligence ships separately; see vision.html principle #19").\n' +
+        '- README.md exists at repo root with: title, one-line pitch, a clear "Open source under GPL-3.0" line in the first paragraph, and a pointer to the companion closed-source `motir-ai` repo (saying "the planning intelligence ships separately; see vision.html principle #19").\n' +
         '- Source files have a one-line copyright header (a lint rule can be added later to enforce; not required in this Subtask).\n' +
         '- Repo exists with `package.json`, `tsconfig.json`, `next.config.mjs`, `tailwind.config.ts`, `postcss.config.js`.\n' +
         '- Next.js version is ≥15 and App Router is enabled.\n' +
         '- TypeScript `strict: true` with `noUncheckedIndexedAccess` and `noImplicitAny`.\n' +
         '- Folder layout exists: `/app`, `/lib`, `/components`, `/tests`, `/docs`.\n' +
-        '- `pnpm dev` starts the app on `localhost:3000` showing a placeholder "Prodect" page.\n' +
+        '- `pnpm dev` starts the app on `localhost:3000` showing a placeholder "Motir" page.\n' +
         '- `pnpm build` succeeds with zero errors and zero warnings.\n' +
         '- `pnpm typecheck` exists as a script and exits 0.\n' +
         '- First commit is small and clean: scaffold output + strict-mode tweaks + folder placeholders + LICENSE + README.\n\n' +
@@ -239,43 +239,43 @@ export const story_1_0: PlanStory = {
       estimateMinutes: 15,
       dependsOn: ['1.0.2', '1.0.3'],
       descriptionMd:
-        'Set up GitHub Actions CI **in both repos** (`prodect-core` ' +
-        'and `prodect-ai`) so every pull request gets a green check (or fails fast). ' +
-        'For `prodect-core`: three jobs (lint, typecheck, build). For ' +
-        '`prodect-ai`: a smaller two-job setup (lint, build) since the service is ' +
+        'Set up GitHub Actions CI **in both repos** (`motir-core` ' +
+        'and `motir-ai`) so every pull request gets a green check (or fails fast). ' +
+        'For `motir-core`: three jobs (lint, typecheck, build). For ' +
+        '`motir-ai`: a smaller two-job setup (lint, build) since the service is ' +
         'minimal until Epic 4. Plus write the canonical READMEs.\n\n' +
-        "**Why a real README matters more than usual:** Prodect's planner agent " +
+        "**Why a real README matters more than usual:** Motir's planner agent " +
         '(Epic 4) will *inject README.md as context* into every subtask prompt. A vague ' +
         'README ("a web app") produces vague output. A specific README ("Next.js 15 App Router + ' +
         'Prisma + Postgres + Tailwind + tRPC v11 + NextAuth v5") gives the coding agent everything ' +
         'it needs to make stack-appropriate choices.\n\n' +
-        "**The open-source pitch goes in `prodect-core`'s README:** " +
-        '"Prodect is the open-source PM substrate for AI-native project management. GPL-3.0 ' +
-        'licensed. Companion to the closed-source `prodect-ai` planning service." ' +
+        "**The open-source pitch goes in `motir-core`'s README:** " +
+        '"Motir is the open-source PM substrate for AI-native project management. GPL-3.0 ' +
+        'licensed. Companion to the closed-source `motir-ai` planning service." ' +
         'This is the first thing a security-cautious enterprise will read; it should be specific ' +
         "about what's open and what isn't, and link to vision.html principle #19 for the rationale.\n\n" +
-        "**What you'll do:** In `prodect-core`, create " +
+        "**What you'll do:** In `motir-core`, create " +
         '`.github/workflows/ci.yml` with three jobs running in parallel ' +
         '(`lint`, `typecheck`, `build`); all need Node 20+, ' +
         'pnpm, and the pnpm cache action; build also needs a Postgres service container. Write ' +
-        '`prodect-core/README.md` with the structure below (acceptance criteria). ' +
-        'In `prodect-ai`, create a smaller CI workflow with two jobs (lint, build) — ' +
-        "no DB needed yet. Write `prodect-ai/README.md` declaring it's closed-source, " +
-        'companion to `prodect-core`.\n\n' +
+        '`motir-core/README.md` with the structure below (acceptance criteria). ' +
+        'In `motir-ai`, create a smaller CI workflow with two jobs (lint, build) — ' +
+        "no DB needed yet. Write `motir-ai/README.md` declaring it's closed-source, " +
+        'companion to `motir-core`.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- **prodect-core**: `.github/workflows/ci.yml` exists; runs on every PR + push to `main`; three jobs (`lint`, `typecheck`, `build`) in parallel; Node 20 LTS + pnpm cache; `build` job has a Postgres service container.\n' +
-        '- **prodect-ai**: `.github/workflows/ci.yml` exists with two jobs (`lint`, `build`); no DB service needed yet.\n' +
+        '- **motir-core**: `.github/workflows/ci.yml` exists; runs on every PR + push to `main`; three jobs (`lint`, `typecheck`, `build`) in parallel; Node 20 LTS + pnpm cache; `build` job has a Postgres service container.\n' +
+        '- **motir-ai**: `.github/workflows/ci.yml` exists with two jobs (`lint`, `build`); no DB service needed yet.\n' +
         '- Both repos: CI completes in <3 min on a fresh clone.\n' +
-        '- **prodect-core README.md** has these sections in order:\n' +
+        '- **motir-core README.md** has these sections in order:\n' +
         '  - Title + 1-line pitch.\n' +
-        '  - **Open source** — explicit "GPL-3.0; this is the PM substrate. The closed-source planning intelligence ships separately as `prodect-ai`" — with a link to vision.html principle #19.\n' +
+        '  - **Open source** — explicit "GPL-3.0; this is the PM substrate. The closed-source planning intelligence ships separately as `motir-ai`" — with a link to vision.html principle #19.\n' +
         '  - Stack (bulleted: framework, runtime, DB, ORM, auth, styling, tests, deploy).\n' +
         '  - Local setup (3 commands: `pnpm install`, `./scripts/db-up.sh`, `pnpm dev`).\n' +
         '  - Project layout.\n' +
         '  - Testing.\n' +
         '  - Docs (links to `/docs` and the discovery tier docs in this very planning corpus).\n' +
         '  - License — name GPL-3.0, link to LICENSE file.\n' +
-        '- **prodect-ai README.md** is short: title, "closed-source AI service — see `prodect-core` for the open-source companion", proprietary license notice, dev-setup commands.\n' +
+        '- **motir-ai README.md** is short: title, "closed-source AI service — see `motir-core` for the open-source companion", proprietary license notice, dev-setup commands.\n' +
         "- README's Stack section is the authoritative reference for every later prompt. Keep it short, specific, link-rich.\n" +
         '- Open a placeholder PR in each repo; verify CI passes.\n\n' +
         '## Context refs\n\n' +
@@ -336,29 +336,29 @@ export const story_1_0: PlanStory = {
       estimateMinutes: 15,
       dependsOn: ['1.0.5'],
       descriptionMd:
-        'Snapshot `prodect-core` at the end of Story 1.0 into a brand-new public ' +
+        'Snapshot `motir-core` at the end of Story 1.0 into a brand-new public ' +
         'GitHub Template repo at `moooon-B-V/nextjs-prisma-vercel-starter`. Strip ' +
-        'Prodect-specific wording (wordmark, README references to `prodect-ai` and ' +
-        'Prodect-the-product, planning-doc links) and re-license under **MIT** ' +
+        'Motir-specific wording (wordmark, README references to `motir-ai` and ' +
+        'Motir-the-product, planning-doc links) and re-license under **MIT** ' +
         '(not GPL-3.0 — see "License" below). Mark the new repo as a GitHub Template via ' +
         '`is_template: true` so downstream users see the "Use this template" button.\n\n' +
         '**Why now (last Subtask of Story 1.0):** at this commit, ' +
-        '`prodect-core` contains exactly the generic Next.js + Prisma + Tailwind + ' +
-        'ESLint/Prettier + Vercel + Neon scaffolding — and *nothing* Prodect-specific (no ' +
+        '`motir-core` contains exactly the generic Next.js + Prisma + Tailwind + ' +
+        'ESLint/Prettier + Vercel + Neon scaffolding — and *nothing* Motir-specific (no ' +
         'User model yet, no workspace tables, no work-item schema). Forking now means minimal ' +
         "stripping. If we waited until Stories 1.1 / 1.2 / 1.4 land, we'd have to surgically " +
-        'remove Prodect-specific code from the starter, which is harder and easier to get wrong. ' +
+        'remove Motir-specific code from the starter, which is harder and easier to get wrong. ' +
         'This is a semantic-ordering constraint: **1.0.6 must close before Subtask 1.1.3 ' +
-        "(User schema) merges to `prodect-core`'s main.**\n\n" +
+        "(User schema) merges to `motir-core`'s main.**\n\n" +
         '**Mechanism: manual copy + new repo + mark as Template** (NOT a GitHub ' +
         'fork). GitHub Templates create a new repo with a clean single-commit history when ' +
-        'downstream users click "Use this template" — no inherited Prodect git history, no ' +
+        'downstream users click "Use this template" — no inherited Motir git history, no ' +
         '"forked from" badge. This is what create-t3-app, shadcn/ui, and Vercel\'s own templates ' +
         'do. A raw fork would carry our Story 1.0 planning commits forever and make the ' +
-        'template look like "a fork of Prodect" to anyone browsing the repo.\n\n' +
+        'template look like "a fork of Motir" to anyone browsing the repo.\n\n' +
         "**License: MIT**, not GPL-3.0. Templates ship under MIT because GPL's " +
         "copyleft requirement repels would-be forkers (they'd have to GPL their derivative " +
-        'work). MIT maximizes adoption. `prodect-core` stays GPL-3.0; the starter is ' +
+        'work). MIT maximizes adoption. `motir-core` stays GPL-3.0; the starter is ' +
         'independent and MIT-licensed.\n\n' +
         "**Value proposition (for the README pitch):** the starter's " +
         "differentiator isn't novel scaffolding — it's *discovered gotchas baked in*. " +
@@ -371,7 +371,7 @@ export const story_1_0: PlanStory = {
         'should sell these as the value prop, not novel features.\n\n' +
         "**What you'll do:**\n" +
         '- Create the empty public repo: `gh repo create moooon-B-V/nextjs-prisma-vercel-starter --public`\n' +
-        '- Locally: copy the entire `prodect-core` tree (sans `.git`, `node_modules`, `.next`) into a new sibling directory.\n' +
+        '- Locally: copy the entire `motir-core` tree (sans `.git`, `node_modules`, `.next`) into a new sibling directory.\n' +
         '- `git init`, set the remote to the new repo, single initial commit.\n' +
         '- Apply the strip/genericize edits (see Acceptance criteria for the full list).\n' +
         '- Push to main as the initial commit. Verify all four quality gates pass.\n' +
@@ -381,30 +381,30 @@ export const story_1_0: PlanStory = {
         '**Repo + GitHub setup:**\n' +
         '- GitHub repo `moooon-B-V/nextjs-prisma-vercel-starter` exists, **public**, **MIT**-licensed.\n' +
         '- Repo is marked as a GitHub Template (`is_template: true`) — the "Use this template" button is visible on the repo page.\n' +
-        '- Single initial commit; no inherited Prodect git history.\n\n' +
+        '- Single initial commit; no inherited Motir git history.\n\n' +
         '**License + branding strip:**\n' +
         '- `LICENSE` is the canonical MIT text (e.g., opensource.org/license/mit), copyright "© 2026 moooon B.V." or similar.\n' +
-        '- `package.json`\'s `"license": "MIT"`, `"name": "nextjs-prisma-vercel-starter"`, generic `"description"` (no Prodect mention).\n' +
-        '- `app/page.tsx` is a generic placeholder (e.g., "Next.js + Prisma starter"); NO "Prodect" wordmark.\n' +
-        '- `app/layout.tsx` metadata uses generic title and description (no Prodect mention).\n' +
-        '- README does NOT reference Prodect, `prodect-ai`, `prodect-core`, `vision.html`, `feasibility.html`, `notes.html`, or any planning docs.\n' +
+        '- `package.json`\'s `"license": "MIT"`, `"name": "nextjs-prisma-vercel-starter"`, generic `"description"` (no Motir mention).\n' +
+        '- `app/page.tsx` is a generic placeholder (e.g., "Next.js + Prisma starter"); NO "Motir" wordmark.\n' +
+        '- `app/layout.tsx` metadata uses generic title and description (no Motir mention).\n' +
+        '- README does NOT reference Motir, `motir-ai`, `motir-core`, `vision.html`, `feasibility.html`, `notes.html`, or any planning docs.\n' +
         "- README's value proposition leads with the discovered gotchas (postinstall fix, DATABASE_URL_UNPOOLED, conditional Prisma config, Node 22+) — that's what makes this template differentiated from `create-next-app` defaults.\n\n" +
         '**DB naming convention:**\n' +
         '- DB user/password/name in `docker-compose.yml`, `.env.example`, `scripts/db-up.sh`, and `.github/workflows/ci.yml` all use `nextjs_prisma_vercel_starter` (snake_case for Postgres identifier rules).\n' +
         '- Docker container name is `nextjs-prisma-vercel-starter-postgres` (hyphens fine for Docker).\n' +
         '- Volume name is `nextjs-prisma-vercel-starter-pg-data`.\n\n' +
         '**Schema:**\n' +
-        '- `prisma/schema.prisma`: drop the "Prodect — prodect-core schema" comment; keep the placeholder model but rename `MigrationMarker` → `Marker` (or remove entirely if you prefer; flag the trade-off in PR description). Update the migration file accordingly.\n\n' +
+        '- `prisma/schema.prisma`: drop the "Motir — motir-core schema" comment; keep the placeholder model but rename `MigrationMarker` → `Marker` (or remove entirely if you prefer; flag the trade-off in PR description). Update the migration file accordingly.\n\n' +
         '**Quality gates:**\n' +
         '- All four quality gates pass on the starter repo: `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, `pnpm build`.\n' +
         '- GitHub Actions CI runs on the initial commit and goes green (3 jobs: lint, typecheck, build with Postgres service container).\n\n' +
         '**End-to-end smoke test (the load-bearing AC):**\n' +
         '- Click "Use this template" in the GitHub UI; create a throwaway test repo (e.g., `moooon-B-V/_starter-smoke-test`); clone it; run `pnpm install && ./scripts/db-up.sh && pnpm dev`; confirm `localhost:3000` renders the generic placeholder; confirm `pnpm prisma migrate dev --name init` works; delete the throwaway repo.\n\n' +
         '**Reference to planning docs:**\n' +
-        '- Captures the lesson from notes.html mistake #20: future Prodect-planned projects on this stack default to "Use this template" rather than re-deriving the bootstrap from scratch.\n\n' +
+        '- Captures the lesson from notes.html mistake #20: future Motir-planned projects on this stack default to "Use this template" rather than re-deriving the bootstrap from scratch.\n\n' +
         '## Context refs\n\n' +
         '- notes.html mistake #20 — the lesson driving this Subtask\n' +
-        "- `prodect-core`'s current tree at the end of Story 1.0 — the source to fork from\n" +
+        "- `motir-core`'s current tree at the end of Story 1.0 — the source to fork from\n" +
         '- GitHub\'s "Creating a template repository" docs\n' +
         '- create-t3-app — reference starter for comparison (README shape, scope of what goes in)',
     },

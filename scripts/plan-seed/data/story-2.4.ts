@@ -30,7 +30,7 @@ export const story_2_4: PlanStory = {
     ' `/issues/[key]/edit` route (2.3.6) the detail page\'s "Edit" button targets. **This' +
     " Story is read-first**: it adds NO new mutation primitives — the two inline controls reuse 2.2.4's" +
     " gated `updateStatus` and 2.3.6's now-status-free `updateWorkItem` (for assignee)." +
-    " All routes follow `prodect-core/CLAUDE.md`'s 4-layer architecture and carry an explicit" +
+    " All routes follow `motir-core/CLAUDE.md`'s 4-layer architecture and carry an explicit" +
     ' `workspaceId` gate at the application layer (finding #26 — RLS is defense-in-depth, inert' +
     ' under the dev/CI superuser until the Epic-8 cutover). **Route reconciliation (rung 2 > rung' +
     ' 3):** issue routes live under the shipped active-project shell at `app/(authed)/issues/[key]/`' +
@@ -117,7 +117,7 @@ export const story_2_4: PlanStory = {
         '- `lib/dto/workItems.ts` + `lib/mappers/workItemMappers.ts` — DTO + mapper conventions' +
         ' (no `@prisma/client` leak)\n' +
         "- Story 1.5 authed shell + 1.5.5 shell-a11y sweep — extend, don't duplicate\n" +
-        '- `prodect-core/CLAUDE.md` — 4-layer, one-service-call-per-page, entity-naming',
+        '- `motir-core/CLAUDE.md` — 4-layer, one-service-call-per-page, entity-naming',
     },
     {
       id: '2.4.2',
@@ -251,7 +251,7 @@ export const story_2_4: PlanStory = {
         ' the gated paths\n' +
         "- 2.4.1's `IssueDetailDto` workflow context (statuses + legal transitions) — the picker's" +
         ' option source\n' +
-        '- `prodect-core/CLAUDE.md` — Server Action / 4-layer / workspaceId-gate rules',
+        '- `motir-core/CLAUDE.md` — Server Action / 4-layer / workspaceId-gate rules',
     },
     {
       id: '2.4.5',
@@ -385,7 +385,7 @@ export const story_2_4: PlanStory = {
         ' `detail.pen` specifies the issue-detail page (Description / Explanation / Activity +' +
         ' the core-fields rail) but **does NOT specify any relationships / dependency / linked-issues' +
         ' surface or a readiness signal** — so that element is unspecified == no design == this' +
-        " subtask. Produces an **HTML mockup** (per PRODECT.md's accepted design-asset" +
+        " subtask. Produces an **HTML mockup** (per MOTIR.md's accepted design-asset" +
         " formats) built from the real design system — the shipped `components/ui/*` primitives'" +
         ' markup + the `globals.css` `--el-*` tokens — so there is no Pencil→code' +
         ' translation gap and 2.4.5 composes the same primitives.\n\n' +
@@ -667,7 +667,7 @@ export const story_2_4: PlanStory = {
         ' `CoreFieldsPanel` (2.4.2): all hold an ISO `YYYY-MM-DD` string today;' +
         ' `lib/utils/datetime.ts` `formatDate`\n' +
         '- `tests/e2e/shell-a11y.spec.ts` + the `/tokens` route convention;' +
-        ' `prodect-core/CLAUDE.md` — `--el-*` tokens',
+        ' `motir-core/CLAUDE.md` — `--el-*` tokens',
     },
   ],
 };

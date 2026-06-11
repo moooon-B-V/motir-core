@@ -113,7 +113,7 @@ function cmpDotted(a: string, b: string): number {
 }
 
 /**
- * The full Prodect v1 plan tree — the source of truth `pnpm db:seed` loads.
+ * The full Motir v1 plan tree — the source of truth `pnpm db:seed` loads.
  * Each epic's stories are gathered by id prefix and ordered naturally.
  */
 export const PLAN: PlanEpic[] = EPICS.map((epic) => ({

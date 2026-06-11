@@ -333,7 +333,10 @@ function ComponentRow({
           >
             {component.defaultAssignee?.name ?? t('noneName')}
           </span>
-          <span className="text-(--el-text-faint) block font-sans text-[11px]">
+          {/* --el-text-muted, not -faint: 11px text on the page bg needs the
+              AA-passing sublabel token (the 5.3.6 fields-row grammar) — the
+              faint tier sits at 2.6:1 here (5.4.11's strict axe sweep). */}
+          <span className="text-(--el-text-muted) block font-sans text-[11px]">
             {t('defaultAssigneeSublabel')}
           </span>
         </span>
@@ -419,7 +422,7 @@ function DefaultAssigneePicker({
           disabled={disabled}
         />
       </FormField>
-      <p className="text-(--el-text-faint) font-sans text-xs">{t('pickerScopeNote')}</p>
+      <p className="text-(--el-text-muted) font-sans text-xs">{t('pickerScopeNote')}</p>
     </div>
   );
 }

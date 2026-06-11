@@ -63,13 +63,13 @@ import type { PlanStory } from '../types';
  * grammar), so it seeds `'blocked'`; the UI code subtask (5.5.4) carries it
  * + the 5.1.5 section seam in `dependsOn` (Principle #13).
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 5.5`, on the standing
+ * Expanded from its `stubs.ts` entry per `motir plan 5.5`, on the standing
  * `seed/epic-5-plan` branch. Matches the canonical style of 5.1–5.4.
  */
 export const story_5_5: PlanStory = {
   id: '5.5',
   title: 'Activity history feed',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The per-issue **History** feed: every field change, transition, link/label/component/' +
     'attachment change, sprint move, and comment deletion — rendered chronologically from the ' +
@@ -127,7 +127,7 @@ export const story_5_5: PlanStory = {
     'story adds no write model; "No difference detected"), `pnpm db:seed`, `pnpm dev`.\n' +
     '- `pnpm test:coverage` — Vitest (real Postgres) over the activity read service (registry ' +
     'totality, batching, merge cursor) ≥90% per-file branch/fn/line.\n' +
-    '- **History flow:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz`, open an issue with a ' +
+    '- **History flow:** sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open an issue with a ' +
     'history (edit title, change status, assign, link an issue, set a custom field, add+delete ' +
     'a comment first) → Activity → **History** (matching the 5.5.3 design): entries read as ' +
     'sentences with actor avatar + name + "changed the <Field>" + old → new (empty side ' +
@@ -375,7 +375,7 @@ export const story_5_5: PlanStory = {
       id: '5.5.5',
       title:
         'Story tests — Vitest (registry totality, merge properties) + Playwright E2E (history journey, All interleave, scale) + a11y sweep',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 28,

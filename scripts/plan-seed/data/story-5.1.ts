@@ -66,13 +66,13 @@ import type { PlanStory } from '../types';
  * Out-of-scope justifications (justified-deviation rule, recorded inline):
  * per-comment visibility restriction (Jira's padlock) needs the role/group
  * taxonomy of company-managed permission schemes — Jira's team-managed
- * projects (the small-team shape Prodect targets) do NOT support it; documented
+ * projects (the small-team shape Motir targets) do NOT support it; documented
  * extension slot for Epic 6 admin. Realtime/live comment updates: the codebase
  * is Server Components + Server Actions with no realtime substrate; comments
  * refresh on navigation/action like every other surface — a realtime channel
  * is a product-wide decision, not something to improvise inside one story.
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 5.1`. Matches the
+ * Expanded from its `stubs.ts` entry per `motir plan 5.1`. Matches the
  * canonical depth + string-literal style of Stories 4.5 / 4.6 / 4.7.
  */
 export const story_5_1: PlanStory = {
@@ -139,7 +139,7 @@ export const story_5_1: PlanStory = {
     'target degrading gracefully. All drawn by 5.1.3, asserted in 5.1.7.\n\n' +
     '**Out of scope (documented extension slots, each justified):** per-comment **visibility ' +
     "restriction** (Jira's padlock — needs the company-managed role/group substrate; Jira's " +
-    'team-managed projects, the shape Prodect mirrors for small teams, do not support it; Epic-6 ' +
+    'team-managed projects, the shape Motir mirrors for small teams, do not support it; Epic-6 ' +
     'admin territory); **realtime** live-updating comments (no realtime substrate in the codebase; ' +
     'a product-wide decision, not a story-local improvisation); the **in-app notification center** ' +
     '(Story 5.7 — added as a stub in this same planning pass); **watcher** notifications on every ' +
@@ -155,7 +155,7 @@ export const story_5_1: PlanStory = {
     '`commentsService` (add/edit/delete/list/permissions/mention parsing) stays ≥90% per-file ' +
     'branch/fn/line on the new service/repo files (the CI coverage gate); every new repo method ' +
     'has a direct empty-input-guard test.\n' +
-    '- **Comment flow:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz`, open any issue → the ' +
+    '- **Comment flow:** sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open any issue → the ' +
     'Activity section shows the comment thread + composer (matching ' +
     '`design/work-items/comments.mock.html`). Add a comment → it appears with your avatar + ' +
     'relative time. Edit it → the "Edited" tag shows. Reply to it → the reply nests one level; ' +
@@ -163,11 +163,11 @@ export const story_5_1: PlanStory = {
     'root → the confirm names the reply count; the thread disappears (hard delete) and the ' +
     'revision trail records the deletion.\n' +
     "- **Mention flow:** type `@` in the composer → the member picker opens over the project's " +
-    'viewable members; pick `bophilips@prodect.co` → the chip renders in the posted comment; the ' +
+    'viewable members; pick `bophilips@motir.co` → the chip renders in the posted comment; the ' +
     'dev email console (`[EMAIL]` line) shows the mention notification to Bo (subject naming you ' +
     'and the issue identifier) — and NO email when you mention yourself. A mention in the issue ' +
     'DESCRIPTION (edit form) notifies the same way.\n' +
-    '- **Permission checks:** as `eikooc@prodect.co` (member) — can add, can edit/delete OWN ' +
+    '- **Permission checks:** as `eikooc@motir.co` (member) — can add, can edit/delete OWN ' +
     "comment only (no edit/delete affordance on others'); as a project `viewer` — thread visible, " +
     "no composer; as project admin / workspace owner — can delete anyone's comment.\n" +
     '- **Scale check (finding #57):** seed an issue with 100+ comments (`pnpm db:seed:large` or ' +
@@ -234,7 +234,7 @@ export const story_5_1: PlanStory = {
         '## Context refs\n\n' +
         '- `prisma/schema.prisma` — `WorkItem` / `User` / `Workspace` models + the existing ' +
         'index/naming conventions; the `Attachment` model as the recent FK-relation exemplar\n' +
-        '- `prodect-core/CLAUDE.md` — the 4-layer contract (required-`tx` writes; single-op repos) ' +
+        '- `motir-core/CLAUDE.md` — the 4-layer contract (required-`tx` writes; single-op repos) ' +
         '+ the FK-as-@relation migration rule (the 2.3.7 drift lesson)\n' +
         '- `lib/repositories/workItemRepository.ts` — repository shape + cursor/paging precedent\n' +
         '- Story plan: single-level threading + hard delete + the mention substrate are the ' +
@@ -310,7 +310,7 @@ export const story_5_1: PlanStory = {
         '- `lib/services/workItemRevisionsService.ts` (1.4.6) — the revision-trail write for the ' +
         'deletion record\n' +
         '- `lib/jobs/sendEvent.ts` + `lib/jobs/types.ts` (1.6) — typed event emission (extend ' +
-        '`JobEventDataMap`); `prodect-core/CLAUDE.md` — one service method = one transaction\n' +
+        '`JobEventDataMap`); `motir-core/CLAUDE.md` — one service method = one transaction\n' +
         '- Story 5.1 description — the Jira-verified permission set, threading, hard-delete + ' +
         'History-trace semantics',
     },

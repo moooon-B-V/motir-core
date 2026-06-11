@@ -73,7 +73,7 @@ export const story_3_7: PlanStory = {
     '/ cross-project boards (Epic 6); board sharing / favourites (Jira has them; no stated need → ' +
     'deferred).',
   verificationRecipeMd:
-    '- Pull the Story branch, `pnpm install`, `pnpm prisma migrate dev`, `pnpm db:seed`, `pnpm dev`; open `/boards` on the seeded `moooon` → `prodect` project.\n' +
+    '- Pull the Story branch, `pnpm install`, `pnpm prisma migrate dev`, `pnpm db:seed`, `pnpm dev`; open `/boards` on the seeded `moooon` → `motir` project.\n' +
     '- **Create:** use the switcher’s “New board” → name it (e.g. "Triage") → it’s created with default columns and becomes the active board; the switcher now lists both.\n' +
     '- **Switch:** pick the other board in the switcher → the board re-lays from that board’s projection + config (its own group-by / WIP / columns); the URL carries `?board=<id>` and a reload keeps it.\n' +
     '- **Per-board config is independent:** set group-by Assignee + a WIP limit on board A; board B is unaffected (each board’s config is its own).\n' +
@@ -132,7 +132,7 @@ export const story_3_7: PlanStory = {
         '- A vitest (real Postgres) asserts the one-default invariant (a second `isDefault=true` for the same project is rejected) and the backfill.\n\n' +
         '## Context refs\n\n' +
         '- `prisma/schema.prisma` `Board` (3.1.1 — the non-unique `@@index([projectId])` + RLS) ; the fractional-index `position` convention used on `work_item` / `board_column`\n' +
-        '- `prodect-core/CLAUDE.md` — one migration, application-seeded data, partial indexes',
+        '- `motir-core/CLAUDE.md` — one migration, application-seeded data, partial indexes',
     },
     {
       id: '3.7.3',
@@ -165,7 +165,7 @@ export const story_3_7: PlanStory = {
         '- Vitest (real Postgres): create-with-columns, rename, set-default (invariant holds), delete (issues survive), the last-board + promote-default guards, cross-workspace denial.\n\n' +
         '## Context refs\n\n' +
         '- `lib/services/boardsService.ts` + `lib/repositories/boardRepository.ts` (3.1.3) — the service/repo to extend; the 3.1 board-bootstrap (auto-seed columns) helper to reuse for `createBoard`\n' +
-        '- `lib/services/workflowsService.ts` (2.2.5) — the membership-gate + "RBAC later" precedent; `lib/dto/boards.ts` / `boardMappers.ts`; `prodect-core/CLAUDE.md` (4-layer)',
+        '- `lib/services/workflowsService.ts` (2.2.5) — the membership-gate + "RBAC later" precedent; `lib/dto/boards.ts` / `boardMappers.ts`; `motir-core/CLAUDE.md` (4-layer)',
     },
     {
       id: '3.7.4',
@@ -243,7 +243,7 @@ export const story_3_7: PlanStory = {
         '- `pnpm test:e2e --grep board-crud` runs green: create/switch/rename/set-default/delete, per-board config isolation, the `?board=` URL + reload, the last-board guard, AND per-board settings (the manage-menu “Board settings” opens the selected board’s config).\n' +
         '- Reuses `tests/helpers/db.ts` truncation + the seeded project; no mocks beyond `getSession`.\n\n' +
         '## Context refs\n\n' +
-        '- `tests/e2e/board-ui.spec.ts` (3.2.7) + the board projection tests (3.1.7) — the board E2E this builds on; the 3.7.2–3.7.5 surfaces under test; `prodect-core/CLAUDE.md` (real Postgres, no mocks)',
+        '- `tests/e2e/board-ui.spec.ts` (3.2.7) + the board projection tests (3.1.7) — the board E2E this builds on; the 3.7.2–3.7.5 surfaces under test; `motir-core/CLAUDE.md` (real Postgres, no mocks)',
     },
     {
       id: '3.7.7',

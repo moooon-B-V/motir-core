@@ -29,6 +29,16 @@ const USING_CUSTOM_ORIGIN = Boolean(process.env['E2E_BASE_URL']) || Boolean(proc
 const BASE_URL = process.env['E2E_BASE_URL'] ?? `http://localhost:${process.env['PORT'] ?? '3000'}`;
 const PORT = new URL(BASE_URL).port || '3000';
 
+// The Inngest dev server's port (Subtask 5.4.11 — the per-run port the :8288
+// note below asked for). :8288 was fixed, so two concurrent E2E runs (sibling
+// worktrees) collided on the executor even with distinct app PORTs. Setting
+// INNGEST_PORT gives this run its own executor: the cli gets `-p`, and the
+// Next server + the runner get INNGEST_BASE_URL (the SDK env override for the
+// dev-server origin — INNGEST_DEV=1 alone targets the :8288 default). Unset →
+// :8288, so existing invocations are unchanged.
+const INNGEST_PORT = process.env['INNGEST_PORT'] ?? '8288';
+const INNGEST_BASE_URL = `http://localhost:${INNGEST_PORT}`;
+
 // Subtask 3.5.1 board load-model test seam: forward the cap / Done-age overrides
 // to the dev server ONLY when the run sets them, so a targeted
 // `BOARD_ISSUE_CAP_OVERRIDE=… pnpm test:e2e --grep board-at-scale` run can reach
@@ -50,6 +60,7 @@ for (const k of ['BOARD_ISSUE_CAP_OVERRIDE', 'DONE_AGE_WINDOW_DAYS_OVERRIDE']) {
 // instead of throwing "no event key". Config-module scope runs in the main
 // runner process before workers fork, and workers inherit its env.
 process.env['INNGEST_DEV'] ??= '1';
+process.env['INNGEST_BASE_URL'] ??= INNGEST_BASE_URL;
 
 /**
  * Playwright config for motir-core's E2E auth smoke suite.
@@ -152,7 +163,10 @@ export default defineConfig({
         // Story 1.6.3: route enqueued email.send events to the local Inngest
         // dev server (below), so the job runs and writes the outbox. Without
         // this the SDK targets cloud and no E2E email is ever delivered.
+        // INNGEST_BASE_URL points the SDK at THIS run's executor port
+        // (Subtask 5.4.11 — a no-op at the :8288 default).
         INNGEST_DEV: '1',
+        INNGEST_BASE_URL,
         // Subtask 1.6.6: arm-able deterministic email-fault injector. lib/email.ts
         // reads this file on every send and throws when the recipient matches the
         // armed substring, so the jobs-flow spec can drive the real failure →
@@ -173,13 +187,12 @@ export default defineConfig({
     {
       // The Inngest dev server = the executor. It discovers this app's
       // functions by syncing the serve route (-u), then invokes `email.send`
-      // whenever the Next server publishes an event. It listens on :8288 (the
-      // default the SDK's dev mode targets). NOTE: :8288 is fixed, so two
-      // concurrent E2E runs on different app ports would collide here — fine
-      // for CI (one run) + single local runs; a future improvement is a
-      // per-run dev-server port threaded through INNGEST_DEV as a URL.
-      command: `npx --yes inngest-cli@latest dev -u http://localhost:${PORT}/api/inngest --no-discovery`,
-      url: 'http://localhost:8288',
+      // whenever the Next server publishes an event. It listens on
+      // INNGEST_PORT (default :8288 — the SDK dev-mode default); a sibling
+      // worktree run sets its own INNGEST_PORT so concurrent E2E runs no
+      // longer collide on the executor (Subtask 5.4.11).
+      command: `npx --yes inngest-cli@latest dev -u http://localhost:${PORT}/api/inngest --no-discovery -p ${INNGEST_PORT}`,
+      url: INNGEST_BASE_URL,
       reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
       timeout: 120_000,
       stdout: 'pipe',

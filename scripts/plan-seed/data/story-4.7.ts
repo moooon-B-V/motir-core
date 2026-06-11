@@ -237,7 +237,7 @@ export const story_4_7: PlanStory = {
         '- `lib/services/boardsService.ts` — `BOARD_ISSUE_CAP` / `DONE_AGE_WINDOW_DAYS` / the 3.5.1 ' +
         'env seam + the 4.5.2 scrum-scoped `getBoard` the seed feeds\n' +
         '- `tests/e2e/_helpers/board.ts` (3.5.1 at-scale helpers) + `tests/e2e/_helpers/{workflow,' +
-        'shell-session,db-reset}.ts`; `tests/helpers/db.ts`; `prodect-core/CLAUDE.md` (real Postgres, ' +
+        'shell-session,db-reset}.ts`; `tests/helpers/db.ts`; `motir-core/CLAUDE.md` (real Postgres, ' +
         'no mocks, service-routed seeds)',
     },
     {

@@ -60,7 +60,7 @@ import type { PlanStory } from '../types';
  * The UI code subtasks (5.3.6 admin, 5.3.7 rail) carry their design in
  * `dependsOn` and seed `'blocked'` (Principle #13).
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 5.3`, on the standing
+ * Expanded from its `stubs.ts` entry per `motir plan 5.3`, on the standing
  * `seed/epic-5-plan` branch. Matches the canonical depth + string-literal
  * style of Stories 5.1 / 5.2.
  */
@@ -126,12 +126,12 @@ export const story_5_3: PlanStory = {
     '- `pnpm test:coverage` — Vitest (real Postgres) over the definitions + values services ' +
     '(CRUD, caps, per-type validation, option archive/delete rules, permission gates) ≥90% ' +
     'per-file branch/fn/line; new repo methods carry empty-input-guard tests.\n' +
-    '- **Admin flow:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz` (project admin) → Project ' +
+    '- **Admin flow:** sign in as `zhuyue@motir.co` / `!QAZ1qaz` (project admin) → Project ' +
     'settings → Fields (matching `design/projects/fields.mock.html`). Create one field of each ' +
     'type (Severity/select with 3 options, Customer/text, Effort/number, Go-live/date, ' +
     'Stakeholder/user) → all list in order; rename + reorder a select option; archive an in-use ' +
     'option (stays rendered on issues, gone from new pickers); delete an unused option; delete ' +
-    'a field → the confirm names the value count and values vanish. As `eikooc@prodect.co` ' +
+    'a field → the confirm names the value count and values vanish. As `eikooc@motir.co` ' +
     '(member, not project admin) → the Fields page is read-only/forbidden.\n' +
     '- **Rail flow:** open an issue → defined fields with values render as rail cards below the ' +
     'built-ins (matching `design/work-items/custom-fields.mock.html`); empty ones sit behind ' +
@@ -206,7 +206,7 @@ export const story_5_3: PlanStory = {
         'gate).\n\n' +
         '## Context refs\n\n' +
         '- `prisma/schema.prisma` — `WorkflowStatus` (the project-scoped-config precedent: ' +
-        'key/label/position) + `WorkItem`/`User`; `prodect-core/CLAUDE.md` (FK rule, ' +
+        'key/label/position) + `WorkItem`/`User`; `motir-core/CLAUDE.md` (FK rule, ' +
         'required-`tx`)\n' +
         "- Jira's `customfieldvalue` typed-EAV schema (the verified storage precedent in the " +
         'Story 5.3 description)\n' +

@@ -32,7 +32,7 @@ export const story_2_3: PlanStory = {
     '(also 2.2.4 + 2.2.2) and the workflow-management UI 2.3.1 extends. Issue-key assignment is\n' +
     'NOT re-built here — Story 2.1.3 already verified the atomic monotonic-counter path; this Story\n' +
     'just consumes `createWorkItem` as-is. All work follows\n' +
-    "`prodect-core/CLAUDE.md`'s 4-layer architecture (Route/Server-Action → Service →\n" +
+    "`motir-core/CLAUDE.md`'s 4-layer architecture (Route/Server-Action → Service →\n" +
     'Repository → Prisma). Per finding #26, every new route + Server Action carries an explicit\n' +
     '`workspaceId` gate at the application layer — RLS is defense-in-depth, not the sole\n' +
     'gate (the dev/CI superuser bypasses RLS until the Epic-8 runtime cutover).',
@@ -294,7 +294,7 @@ export const story_2_3: PlanStory = {
         ' issue" command\n' +
         '- Top-nav "+" slot from 1.5.3\'s shell — wire to open the modal\n' +
         '- Existing Story-1.5.5 axe sweep — extend, do not duplicate\n' +
-        '- `prodect-core/CLAUDE.md` — Server Action / 4-layer rules',
+        '- `motir-core/CLAUDE.md` — Server Action / 4-layer rules',
     },
     {
       id: '2.3.4',
@@ -357,7 +357,7 @@ export const story_2_3: PlanStory = {
         ' the entity-naming pattern, the workspaceId-filter convention\n' +
         '- `components/ui/Combobox.tsx` or equivalent (1.0.5 design system) — the primitive to' +
         ' compose\n' +
-        '- `prodect-core/CLAUDE.md` — 4-layer, entity-naming, workspaceId-filter rules',
+        '- `motir-core/CLAUDE.md` — 4-layer, entity-naming, workspaceId-filter rules',
     },
     {
       id: '2.3.5',
@@ -430,7 +430,7 @@ export const story_2_3: PlanStory = {
         ' there may already be a `MarkdownView`-like component to consolidate)\n' +
         "- 1.0.5's `ThemeProvider` + `data-color-mode` contract — how the editor picks up light/dark\n" +
         "- 1.5.5's STRICT axe sweep + Pill-tone fixes — the editor's buttons must use AA-safe tones\n" +
-        '- `prodect-core/CLAUDE.md` — DTOs stay shipped reality (no leaked `@uiw/*` types in the' +
+        '- `motir-core/CLAUDE.md` — DTOs stay shipped reality (no leaked `@uiw/*` types in the' +
         " wrapper's public surface)\n" +
         '- `@uiw/react-md-editor` README — confirm the SSR + dark-mode + image-paste hooks before' +
         ' committing to the wiring',
@@ -537,7 +537,7 @@ export const story_2_3: PlanStory = {
       descriptionMd:
         'Plugs a real file-upload pipeline into the description editor so paste/drop actually\n' +
         'persists. **GitHub-comment model** (finding #52, decision-authority rung 1 —\n' +
-        'Prodect is a dev-oriented Markdown tool): paste/drop **any allowed file**;\n' +
+        'Motir is a dev-oriented Markdown tool): paste/drop **any allowed file**;\n' +
         'an **image embeds inline** (`![alt](url)`, it renders in the\n' +
         'Markdown body), any **other file inserts as a link**\n' +
         '(`[filename](url)`) — because Markdown only renders images inline, a non-image\n' +
@@ -554,7 +554,7 @@ export const story_2_3: PlanStory = {
         'now an explicit planned subtask per notes.html mistake #30 (plan ALL subtask types, not\n' +
         'just code).\n\n' +
         '**Why Vercel Blob, not S3.** Decision-authority ladder rung 1 (the\n' +
-        "mirror product context): we're already on Vercel + Neon (PRODECT.md lines 549–574); adding\n" +
+        "mirror product context): we're already on Vercel + Neon (MOTIR.md lines 549–574); adding\n" +
         'an S3 bucket means a new IAM principal, a new env-var matrix, and a separate per-PR\n' +
         'preview-cleanup story. Blob is in the same Vercel-managed lifecycle as the rest of the\n' +
         'stack — provisioned via the Marketplace, env vars auto-wired, per-preview-deploy cleanup\n' +
@@ -638,7 +638,7 @@ export const story_2_3: PlanStory = {
         '- `@vercel/blob` client-direct-upload docs — verify the exact `handleUpload` shape at' +
         ' execution time (the API is stable but evolves)\n' +
         "- 1.1.10's `cleanup-preview-deployments.yml` — the per-PR cleanup workflow to extend\n" +
-        '- `prodect-core/CLAUDE.md` — 4-layer + entity-naming + tx-required-on-writes',
+        '- `motir-core/CLAUDE.md` — 4-layer + entity-naming + tx-required-on-writes',
     },
     {
       id: '2.3.8',
@@ -712,9 +712,9 @@ export const story_2_3: PlanStory = {
         "The non-code prerequisite 2.3.7's *live* upload path needs — a coding agent can't\n" +
         'do dashboard / SaaS provisioning (mirrors **1.6.7**, the Inngest-cloud +\n' +
         'Vercel wiring). Logged proactively at plan time per notes.html\n' +
-        'mistake #30 (Prodect must plan ALL subtask types, not just code).\n\n' +
+        'mistake #30 (Motir must plan ALL subtask types, not just code).\n\n' +
         '**Steps (Yue, in the Vercel dashboard):** Storage → create a **Blob**\n' +
-        'store via the Marketplace; connect it to the `prodect-core` project so\n' +
+        'store via the Marketplace; connect it to the `motir-core` project so\n' +
         '`BLOB_READ_WRITE_TOKEN` is auto-wired into Production + Preview env; confirm the\n' +
         'token reaches the CI workflow (a real value for the preview, placeholder OK for build-only).\n' +
         "Verify per-preview-deploy cleanup is handled by Vercel's lifecycle (else 2.3.7's\n" +
@@ -723,10 +723,10 @@ export const story_2_3: PlanStory = {
         'green, Blob SDK mocked in tests) — but the feature only works *live* once this is\n' +
         "done. Marked done on Yue's confirmation, no PR (it's secret/dashboard config, no code).\n\n" +
         'Done: Yue provisioned the Blob store 2026-06-03 (BLOB_READ_WRITE_TOKEN + BLOB_STORE_ID +' +
-        ' BLOB_WEBHOOK_PUBLIC_KEY auto-wired to prodect-core Prod/Preview/Dev). Live-upload AC' +
+        ' BLOB_WEBHOOK_PUBLIC_KEY auto-wired to motir-core Prod/Preview/Dev). Live-upload AC' +
         ' verifies once 2.3.7 ships.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- A Vercel Blob store exists + is connected to `prodect-core`; `BLOB_READ_WRITE_TOKEN`' +
+        '- A Vercel Blob store exists + is connected to `motir-core`; `BLOB_READ_WRITE_TOKEN`' +
         ' present in Production + Preview env.\n' +
         '- An image pasted into a description on the Vercel *preview* uploads + renders inline (the' +
         ' 2.3.7 path works end to end).\n' +
@@ -854,7 +854,7 @@ export const story_2_3: PlanStory = {
       dependsOn: ['2.4.11'],
       descriptionMd:
         'Resolves **finding #56** (Yue: "yes, mirror Jira"). Jira\'s create-issue dialog\n' +
-        "collects a **Due date**; Prodect's create modal (2.3.3) does not, and its design\n" +
+        "collects a **Due date**; Motir's create modal (2.3.3) does not, and its design\n" +
         '(`create.pen`) **omits** a Due-date field — so adding one is UI the\n' +
         "create-modal design doesn't specify. The planning-time **design gate** therefore\n" +
         'requires this design pass BEFORE the code (2.3.12); 2.3.12 is blocked on it.\n\n' +

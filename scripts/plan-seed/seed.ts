@@ -1,18 +1,18 @@
 /**
- * `pnpm db:seed` — seed the REAL Prodect build plan into a real tenant so the
- * plan can be browsed inside Prodect itself, and so the seed is the single
- * source of truth for planning (PRODECT.md; `prodect_plan/` is now a frozen
+ * `pnpm db:seed` — seed the REAL Motir build plan into a real tenant so the
+ * plan can be browsed inside Motir itself, and so the seed is the single
+ * source of truth for planning (MOTIR.md; `prodect_plan/` is now a frozen
  * archive). The plan tree lives in `./data/` (one typed module per story);
  * this loader walks it and writes the work-item tree + dependency links.
  *
- * Tenant (fixed): the `moooon` workspace + `prodect` project owned by
- * **zhuyue@prodect.co** (the project manager), with a small **team** of members
+ * Tenant (fixed): the `moooon` workspace + `motir` project owned by
+ * **zhuyue@motir.co** (the project manager), with a small **team** of members
  * (see SEED_USERS). Every work item gets a **reporter + assignee drawn from the
  * team** and a **varied priority** — deterministically (a hash of the plan id),
  * so reseeds are stable and the board/list show real people + a spread of
  * priorities rather than one owner + all-medium. The team is also enrolled in the
- * `prodect` **project** (Story 6.4 added project-level access gating): every seed
- * user gets a `ProjectMembership` — **zhuyue@prodect.co is the project `admin`**
+ * `motir` **project** (Story 6.4 added project-level access gating): every seed
+ * user gets a `ProjectMembership` — **zhuyue@motir.co is the project `admin`**
  * (manages members + access), **everyone else is a `member`** (can edit, can't
  * manage) — and the project's `accessLevel` is set explicitly to **`open`** so the
  * demo tenant stays browsable by every workspace member (flip to `private` here to
@@ -48,21 +48,21 @@ import { PLAN_STATUS_MAP, type PlanItem } from './types';
 
 const SEED_PASSWORD = '!QAZ1qaz';
 const SEED_WORKSPACE_NAME = 'moooon';
-const SEED_PROJECT_NAME = 'prodect';
+const SEED_PROJECT_NAME = 'motir';
 const SEED_PROJECT_IDENTIFIER = 'PROD';
 
 /**
- * The seed team. The first entry (zhuyue@prodect.co) is the workspace OWNER +
+ * The seed team. The first entry (zhuyue@motir.co) is the workspace OWNER +
  * project manager; the rest are members. Reporters + assignees are drawn from
  * this whole pool. All passwords are SEED_PASSWORD.
  */
 const SEED_USERS: ReadonlyArray<{ email: string; name: string }> = [
-  { email: 'zhuyue@prodect.co', name: 'Zhu Yue' }, // [0] owner / project manager
-  { email: 'bophilips@prodect.co', name: 'Bo Philips' },
-  { email: 'odie@prodect.co', name: 'Odie' },
-  { email: 'mo@prodect.co', name: 'Mo' },
-  { email: 'julian@prodect.co', name: 'Julian' },
-  { email: 'eikooc@prodect.co', name: 'Eikooc' },
+  { email: 'zhuyue@motir.co', name: 'Zhu Yue' }, // [0] owner / project manager
+  { email: 'bophilips@motir.co', name: 'Bo Philips' },
+  { email: 'odie@motir.co', name: 'Odie' },
+  { email: 'mo@motir.co', name: 'Mo' },
+  { email: 'julian@motir.co', name: 'Julian' },
+  { email: 'eikooc@motir.co', name: 'Eikooc' },
 ];
 const OWNER_EMAIL = SEED_USERS[0]!.email;
 /** Removed by this seed (the old single-owner tenant account). */
@@ -131,7 +131,7 @@ async function main() {
     if (legacy) await db.user.delete({ where: { id: legacy.id } });
   }
 
-  // ── Team: create (or reuse) each user; zhuyue@prodect.co owns the workspace ─
+  // ── Team: create (or reuse) each user; zhuyue@motir.co owns the workspace ─
   const userIdByEmail = new Map<string, string>();
   for (const u of SEED_USERS) {
     const existing = await db.user.findUnique({ where: { email: u.email } });
@@ -163,18 +163,18 @@ async function main() {
     workspaceId: workspace.id,
     actorUserId: ownerId,
   });
-  // Point every member's active project at `prodect` so they all land on it
+  // Point every member's active project at `motir` so they all land on it
   // (this is just the convenience default for where they land on sign-in).
   await db.workspaceMembership.updateMany({
     where: { workspaceId: workspace.id },
     data: { activeProjectId: project.id },
   });
 
-  // ── Project membership: enroll the team in `prodect` (Story 6.4.7) ──────────
+  // ── Project membership: enroll the team in `motir` (Story 6.4.7) ──────────
   // Project-level access gating landed in Story 6.4; now that ProjectMembership
   // exists, enroll the team in the project itself — the project half of the
   // original "add the team to the workspace AND the project" ask (the workspace
-  // half is the addMember loop above). zhuyue@prodect.co is the project `admin`
+  // half is the addMember loop above). zhuyue@motir.co is the project `admin`
   // (manages members + access); everyone else is a `member` (can edit, can't
   // manage). The project keeps accessLevel `open` (set explicitly here, though it
   // is also the schema default) so the demo tenant stays browsable by every

@@ -23,7 +23,7 @@ import type { PlanStory } from '../types';
  * the asset in Context-refs. A board code subtask never reaches the ready set
  * before its design asset exists (Principle #13: design before code).
  *
- * Expanded from its `stubs.ts` entry per `prodect plan 3.2`. Matches the
+ * Expanded from its `stubs.ts` entry per `motir plan 3.2`. Matches the
  * canonical depth + string-literal style of Story 3.1 and the Epic-2 modules.
  */
 export const story_3_2: PlanStory = {
@@ -93,7 +93,7 @@ export const story_3_2: PlanStory = {
     '- Pull the Story branch, `pnpm install` (picks up the new `@dnd-kit/*` deps), `pnpm prisma migrate dev`, `pnpm db:seed`, `pnpm dev`.\n' +
     '- `pnpm test` — vitest covers the optimistic-move / snapback reducer (move applied → confirmed on 200; reverted on 409/422), the `BoardCard` / `BoardColumn` render (type hue, readiness, count), and the column lazy-load page-append logic.\n' +
     '- `pnpm test:e2e --grep board-ui` — Playwright drives the real board: drag a card across columns (status persists), an illegal move snaps back (409), in-column reorder changes only rank, and the keyboard-DnD path moves a card end-to-end.\n' +
-    '- **Visual / design check:** open `/boards` on the seeded `moooon` → `prodect` project. The board matches `design/boards/board.mock.html` — columns in workflow order with a card count each, cards showing type icon + key + title + assignee + priority + a blocked indicator where applicable, colour via `--el-*` (not grey-only, finding #54).\n' +
+    '- **Visual / design check:** open `/boards` on the seeded `moooon` → `motir` project. The board matches `design/boards/board.mock.html` — columns in workflow order with a card count each, cards showing type icon + key + title + assignee + priority + a blocked indicator where applicable, colour via `--el-*` (not grey-only, finding #54).\n' +
     '- **Move = transition check:** drag a card from To Do → In Progress → the card lands, the count updates, and re-opening the issue (or the quick view) shows the new status. Attempt an illegal move under a `restricted` workflow (e.g. To Do → Done with no such transition) → the card **animates back** to its origin column and a toast explains the rejection; the issue status is unchanged.\n' +
     '- **In-column reorder check:** drag a card up/down within a column → it stays in the column, no status change, the order persists on reload (rank only).\n' +
     '- **Keyboard-DnD check:** focus a card, press the pick-up key (Space/Enter), arrow to another column, drop → the move happens with an `aria-live` announcement; Escape mid-drag cancels with the card returning home. Verify with the keyboard alone (no mouse).\n' +
@@ -216,7 +216,7 @@ export const story_3_2: PlanStory = {
         '- `app/(authed)/issues/page.tsx` + `_components/*` — the active-project resolution + client-fetch + Suspense/skeleton precedent to mirror\n' +
         '- Story 3.1.6 — the `GET /api/projects/[key]/board` route + `BoardProjectionDto`/`lib/dto/boards.ts` shape this consumes\n' +
         '- `components/ui/Spinner` / `ErrorState` / `EmptyState`; `design/boards/board.mock.html` + `design-notes.md` (3.2.1)\n' +
-        '- `prodect-core/CLAUDE.md` — `--el-*` colour rule, element-shape rule (this is client UI, no service/repo work)',
+        '- `motir-core/CLAUDE.md` — `--el-*` colour rule, element-shape rule (this is client UI, no service/repo work)',
     },
     {
       id: '3.2.3',
@@ -260,7 +260,7 @@ export const story_3_2: PlanStory = {
         '- `app/(authed)/issues/_components/issueCellPrimitives.tsx` + `issueColumns.tsx` + `IssueTypeIcon` — the card primitives to reuse/extract\n' +
         '- `components/ui/Pill` / `ReadinessBadge` / `Tooltip`; `app/(authed)/issues/_components/IssueQuickView*.tsx` — the quick view a card opens\n' +
         '- Story 3.1.4 — `BoardCardDto` (`lib/dto/boards.ts`) the card binds to (incl. the finding-#21 readiness signal)\n' +
-        '- `design/boards/board.mock.html` + `design-notes.md` (3.2.1) — the column/card spec; `prodect-core/CLAUDE.md` — `--el-*` + element-shape rules',
+        '- `design/boards/board.mock.html` + `design-notes.md` (3.2.1) — the column/card spec; `motir-core/CLAUDE.md` — `--el-*` + element-shape rules',
     },
     {
       id: '3.2.4',
@@ -313,7 +313,7 @@ export const story_3_2: PlanStory = {
         '- Story 3.1.5 / 3.1.6 — `boardsService.moveCard` semantics + `POST …/board/move` + the `IllegalBoardMoveError` (409) / `UnmappedColumnTargetError` (422) typed errors this branches on\n' +
         '- `components/ui/Toast` — the rejection feedback; `app/(authed)/issues/_components/IssueInlineEdit.tsx` — an existing optimistic-update precedent to mirror\n' +
         '- dnd-kit docs (`DndContext`, `useSortable`, `DragOverlay`, keyboard sensor, `announcements`); `design/boards/design-notes.md` (3.2.1) — drag states + announcement copy\n' +
-        '- finding #35 (not colour-alone); `prodect-core/CLAUDE.md` — `--el-*` + element-shape rules',
+        '- finding #35 (not colour-alone); `motir-core/CLAUDE.md` — `--el-*` + element-shape rules',
     },
     {
       id: '3.2.5',
@@ -352,7 +352,7 @@ export const story_3_2: PlanStory = {
         '- Story 3.1.4 / 3.1.6 — the per-column `cursor`/`total` + `loadColumnCards` / `GET …/columns/[id]/cards` this consumes\n' +
         '- Story 2.5.15 — the virtualization/windowing primitive to reuse; `design/work-items/tree-scale.mock.html` — the load-more affordance language\n' +
         '- `design/boards/board.mock.html` + `design-notes.md` (3.2.1) — the column count + load-more design; finding #57 — bounded, no load-all\n' +
-        '- dnd-kit + virtualization integration notes; `prodect-core/CLAUDE.md` — token rules',
+        '- dnd-kit + virtualization integration notes; `motir-core/CLAUDE.md` — token rules',
     },
     {
       id: '3.2.6',
@@ -392,7 +392,7 @@ export const story_3_2: PlanStory = {
         '- `components/ui/EmptyState`; `app/(authed)/_components/CreateIssueButton.tsx` / `CreateIssueModal.tsx` — the create flow to reuse\n' +
         '- Story 3.1.4 — the `unmappedStatuses` field on `BoardProjectionDto`; Story 2.2.5 — the workflow editor the tray links to (interim); Story 3.6 — the column↔status mapping admin that resolves an unmapped status (3.6.3 repoints this tray)\n' +
         '- `design/boards/board.mock.html` + `design-notes.md` (3.2.1) — the empty + unmapped-tray + responsive specs\n' +
-        '- finding #57 (completeness/states in scope); `prodect-core/CLAUDE.md` — token rules',
+        '- finding #57 (completeness/states in scope); `motir-core/CLAUDE.md` — token rules',
     },
     {
       id: '3.2.7',
@@ -435,7 +435,7 @@ export const story_3_2: PlanStory = {
         '## Context refs\n\n' +
         '- `tests/e2e/board-projection.spec.ts` (Story 3.1.7) — the API-level board E2E this builds the UI E2E on top of; `tests/e2e/workflow-flow.spec.ts` — the closing-E2E pattern\n' +
         '- `tests/helpers/db.ts` — real-Postgres truncation; the dnd-kit testing notes for driving keyboard/pointer DnD in Playwright\n' +
-        '- Story 3.5 — the Epic-3 test story this defers WIP/swimlane/scale journeys to; `prodect-core/CLAUDE.md` — test conventions (real Postgres, no mocks)',
+        '- Story 3.5 — the Epic-3 test story this defers WIP/swimlane/scale journeys to; `motir-core/CLAUDE.md` — test conventions (real Postgres, no mocks)',
     },
     {
       id: '3.2.8',
@@ -497,7 +497,7 @@ export const story_3_2: PlanStory = {
         '- `app/(authed)/boards/_components/BoardContainer.tsx` — the `loadMore`/`paging` wiring (unchanged contract)\n' +
         '- `design/boards/board.mock.html` (scale + states panels) + `design/boards/design-notes.md` (scale section) — the asset to update\n' +
         '- `messages/en.json` + `zh.json` `boards.*` (`loadMore`/`virtNote` to remove); `tests/i18n-catalog.test.ts` — parity gate\n' +
-        '- `tests/components/board-column.test.tsx` / `board-completeness.test.tsx` — the component tests to update; `prodect-core/CLAUDE.md` — `--el-*` + element-shape rules',
+        '- `tests/components/board-column.test.tsx` / `board-completeness.test.tsx` — the component tests to update; `motir-core/CLAUDE.md` — `--el-*` + element-shape rules',
     },
   ],
 };

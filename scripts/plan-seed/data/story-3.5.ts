@@ -187,7 +187,7 @@ export const story_3_5: PlanStory = {
         '- `tests/e2e/_helpers/board.ts` (`getBoard` / `moveCard` / `columnByStatus` / `cardIdsIn`) ' +
         '+ `tests/e2e/_helpers/{workflow,shell-session,db-reset}.ts`; `tests/helpers/db.ts`\n' +
         '- `lib/repositories/workItemRepository.ts` (the bounded board read, 3.8.2) — the ' +
-        'distribution the seed must populate; `prodect-core/CLAUDE.md` (real Postgres, no mocks)',
+        'distribution the seed must populate; `motir-core/CLAUDE.md` (real Postgres, no mocks)',
     },
     {
       id: '3.5.2',

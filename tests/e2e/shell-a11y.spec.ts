@@ -616,6 +616,121 @@ test.describe('@a11y shell accessibility', () => {
     ).toEqual([]);
   });
 
+  // The issue detail route's POPULATED Activity History + All tabs (Subtask
+  // 5.5.5 — the Story-5.5 a11y closer, extending the 5.1.7 sweep above).
+  // Seeds a history covering the varied row grammars (scalar struck/emphasised
+  // values, the status Pill pair, a user form, a link identifier, an
+  // attachment chip, a comment-deletion gloss, a generic fallback) plus one
+  // live comment so the All tab interleaves both grammars. Both states are
+  // swept STRICT with zero exclusions: the History tab is read-only (no
+  // third-party editor anywhere), and on the All tab the composer sits at
+  // REST (no `.ProseMirror` in the DOM).
+  test('the issue detail Activity History + All tabs are axe-clean populated (WCAG 2.1 AA; strict)', async ({
+    page,
+  }) => {
+    const email = 'e2e-activity-a11y@example.com';
+    await signUp(page, email);
+    await createFirstProject(page, 'Mobile App');
+
+    const user = (await db.user.findFirst({ where: { email } }))!;
+    const local = email.split('@')[0]!;
+    const ws = (await db.workspace.findFirst({ where: { name: `${local}'s Workspace` } }))!;
+    const project = (await db.project.findFirst({ where: { workspaceId: ws.id } }))!;
+    const ctx = { userId: user.id, workspaceId: ws.id };
+    const issue = await workItemsService.createWorkItem(
+      { projectId: project.id, kind: 'task', title: 'Audited task' },
+      ctx,
+    );
+    const blocker = await workItemsService.createWorkItem(
+      { projectId: project.id, kind: 'task', title: 'Linked blocker' },
+      ctx,
+    );
+    // Real-path history: a scalar+user+date edit, a workflow transition and
+    // a link add (the forms with Pills / avatars / mono identifiers).
+    await workItemsService.updateWorkItem(
+      issue.id,
+      { priority: 'high', assigneeId: user.id, dueDate: '2026-07-01T00:00:00.000Z' },
+      ctx,
+    );
+    await workItemsService.updateStatus(issue.id, 'in_progress', ctx);
+    await workItemsService.linkWorkItems(
+      { fromId: issue.id, toId: blocker.id, kind: 'is_blocked_by' },
+      ctx,
+    );
+    // Injected rows for the remaining grammars (attachment chip, the
+    // comment-deletion gloss, the designed generic-fallback state).
+    await db.workItemRevision.create({
+      data: {
+        workItemId: issue.id,
+        changedById: user.id,
+        changeKind: 'updated',
+        diff: {
+          attachments: { added: [{ attachmentId: 'att_a11y', name: 'spec.pdf', source: 'panel' }] },
+        },
+      },
+    });
+    await db.workItemRevision.create({
+      data: {
+        workItemId: issue.id,
+        changedById: user.id,
+        changeKind: 'comment_deleted',
+        diff: {
+          comment: { from: { commentId: 'cm_a11y', authorId: user.id, replyCount: 2 }, to: null },
+        },
+      },
+    });
+    await db.workItemRevision.create({
+      data: {
+        workItemId: issue.id,
+        changedById: user.id,
+        changeKind: 'updated',
+        diff: { riskScore: { from: 3, to: 7 } },
+      },
+    });
+    // One live comment so the All tab interleaves both grammars.
+    await db.comment.create({
+      data: {
+        workspaceId: ws.id,
+        workItemId: issue.id,
+        authorId: user.id,
+        bodyMd: 'a live comment among the history rows',
+      },
+    });
+
+    // 1. The History tab, populated — strict, zero exclusions.
+    await page.goto(`/issues/${issue.identifier}?activity=history`);
+    await expect(page.getByRole('heading', { name: 'Audited task', level: 1 })).toBeVisible();
+    const history = page.getByRole('list', { name: 'History' });
+    await expect(history).toBeVisible();
+    await expect(history.getByText(/created the issue/)).toBeVisible();
+    await expect(history.getByText(/deleted a comment/)).toBeVisible();
+
+    const historyResults = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    expect(
+      historyResults.violations,
+      formatViolations(
+        '/issues/[key]?activity=history (populated)',
+        historyResults.violations as AxeViolation[],
+      ),
+    ).toEqual([]);
+
+    // 2. The All tab, interleaved, composer at rest — strict, zero exclusions.
+    await page.goto(`/issues/${issue.identifier}?activity=all`);
+    const all = page.getByRole('list', { name: 'All activity' });
+    await expect(all).toBeVisible();
+    await expect(all.getByText('a live comment among the history rows')).toBeVisible();
+    await expect(all.getByText(/created the issue/)).toBeVisible();
+
+    const allResults = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    expect(
+      allResults.violations,
+      formatViolations(
+        '/issues/[key]?activity=all (populated)',
+        allResults.violations as AxeViolation[],
+      ),
+    ).toEqual([]);
+  });
+
   // Structural aria assertions — the contract every shell surface inherits.
   // Kept here (not only in the keyboard spec) so the invariants are asserted
   // even if the journey spec is skipped/filtered.
