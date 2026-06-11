@@ -25,7 +25,7 @@ import type { WorkItemKindDto, WorkItemPriorityDto } from './workItems';
  * The core work-item DTOs (`WorkItemSummaryDto` etc.) carry BOTH `key: number`
  * (the per-project sequence) and `identifier: string` (the `PROD-<n>` display
  * string). The Ready surface is the AGENT contract: the agent only ever wants
- * the dispatchable `PROD-<n>` string — it builds `prodect run PROD-7`, it reads
+ * the dispatchable `PROD-<n>` string — it builds `motir run PROD-7`, it reads
  * `blockerKeys: ["PROD-3"]`. So this DTO collapses to a single `key: string`
  * holding the identifier, and uses "key" consistently for every such field
  * (`key`, `blockerKeys`, `parentKey`). This is the vocabulary Story 7.0's prose
@@ -80,7 +80,7 @@ export interface ReadyItemDispatchDto extends ReadyItemDto {
   blockerKeys: string[];
   /** The story/task/bug parent's `PROD-<n>` key, or null for a top-level item. */
   parentKey: string | null;
-  /** `prodect run <key>` — built server-side so the page's "Copy" affordance and
-   *  the CLI agree on the exact string. Always matches `^prodect run PROD-\d+$`. */
+  /** `motir run <key>` — built server-side so the page's "Copy" affordance and
+   *  the CLI agree on the exact string. Always matches `^motir run PROD-\d+$`. */
   runCommand: string;
 }

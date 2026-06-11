@@ -320,7 +320,7 @@ export default function TokensPage() {
             letterSpacing: '0.08em',
           }}
         >
-          Prodect design system
+          Motir design system
         </p>
         <h1 className="font-serif text-4xl font-semibold tracking-tight">Tokens</h1>
         <p
@@ -399,7 +399,7 @@ export default function TokensPage() {
                 <div className="font-mono text-xs" style={{ color: 'var(--el-page-text-muted)' }}>
                   {t.label}
                 </div>
-                <div style={{ fontSize: `var(${t.token})`, lineHeight: 1.2 }}>Prodect</div>
+                <div style={{ fontSize: `var(${t.token})`, lineHeight: 1.2 }}>Motir</div>
               </div>
             ))}
           </div>
@@ -630,7 +630,7 @@ export default function TokensPage() {
           <Input label="Error state" placeholder="bad value" error="That email isn't valid." />
           <Input
             label="With addons"
-            placeholder="prodect"
+            placeholder="motir"
             addonStart={<span className="font-mono text-xs">https://</span>}
             addonEnd={<span className="font-mono text-xs">.dev</span>}
           />

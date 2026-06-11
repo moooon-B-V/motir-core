@@ -46,7 +46,7 @@ export default function SignUpPage() {
 function SignUpShell() {
   const t = useTranslations('auth');
   return (
-    <AuthShell headline={t('welcomeToProdect')} subhead={t('signUpSubhead')}>
+    <AuthShell headline={t('welcomeToMotir')} subhead={t('signUpSubhead')}>
       <div className="flex flex-col gap-5" aria-hidden />
     </AuthShell>
   );
@@ -133,7 +133,7 @@ function SignUpForm() {
   }
 
   return (
-    <AuthShell headline={t('welcomeToProdect')} subhead={t('signUpSubhead')}>
+    <AuthShell headline={t('welcomeToMotir')} subhead={t('signUpSubhead')}>
       {pageError ? <FormAlert>{pageError}</FormAlert> : null}
 
       {step === 'identity' ? (

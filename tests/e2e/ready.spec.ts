@@ -1,7 +1,7 @@
 // E2E: the Story-7.0 ready / dispatch surface (Subtask 7.0.8), driving the real
 // shell. Closes the agent-dispatch promise from the user's seat — everything the
 // `/ready` page (7.0.6) projects from `workItemsService.listReady` + `countReady`
-// and the per-row "Copy `prodect run`" affordance the BYOK CLI flow depends on:
+// and the per-row "Copy `motir run`" affordance the BYOK CLI flow depends on:
 //
 //   - the sidebar "Ready" entry (between Issues and Boards) + its live count badge;
 //   - the flat dispatch list, ordered `(type asc, priority desc, key asc)` —
@@ -10,7 +10,7 @@
 //     HIGHEST priority within that bucket (sort correctness from a user's seat;
 //     7.0.10 leaf-only + 7.0.11/7.0.12 type-primary already shipped, so a childed
 //     container never appears);
-//   - the per-row copy affordance → the exact `prodect run PROD-<n>` command on the
+//   - the per-row copy affordance → the exact `motir run PROD-<n>` command on the
 //     clipboard + the "Copied" toast;
 //   - the row → peek interaction (the shipped IssueQuickView, NOT a full-page nav);
 //   - the LIVE recompute: marking a blocked item's only blocker done makes it
@@ -145,7 +145,7 @@ test('@smoke /ready: badge · highest-first sort · copy command · peek · live
   await expect(rows.first()).toContainText(aHigh.identifier);
   await expect(rows.first()).toContainText('Highest');
 
-  // (4) The per-row copy affordance puts `prodect run RDY-<n>` on the clipboard +
+  // (4) The per-row copy affordance puts `motir run RDY-<n>` on the clipboard +
   // raises the "Copied" toast (panel-4 of the mockup).
   await rows.first().hover();
   await rows
@@ -154,8 +154,8 @@ test('@smoke /ready: badge · highest-first sort · copy command · peek · live
     .click();
   await expect(page.getByText('Copied', { exact: true })).toBeVisible();
   const clip = await page.evaluate(() => navigator.clipboard.readText());
-  expect(clip).toMatch(/^prodect run RDY-\d+$/);
-  expect(clip).toBe(`prodect run ${aHigh.identifier}`);
+  expect(clip).toMatch(/^motir run RDY-\d+$/);
+  expect(clip).toBe(`motir run ${aHigh.identifier}`);
 
   // (5) Row → peek opens the shipped IssueQuickView (?peek=<key>), NOT a full-page
   // navigation; Esc closes it and we stay on /ready.

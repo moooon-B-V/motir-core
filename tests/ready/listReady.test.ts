@@ -493,8 +493,8 @@ describe('getNextReady — single dispatch', () => {
     expect(dto?.contextRefs).toEqual(['lib/services/workItemsService.ts', 'prisma/schema.prisma']);
     expect(dto?.blockerKeys).toEqual([blocker.identifier]);
     expect(dto?.parentKey).toBe(parent.identifier);
-    expect(dto?.runCommand).toBe(`prodect run ${item.identifier}`);
-    expect(dto?.runCommand).toMatch(/^prodect run PROD-\d+$/);
+    expect(dto?.runCommand).toBe(`motir run ${item.identifier}`);
+    expect(dto?.runCommand).toMatch(/^motir run PROD-\d+$/);
   });
 
   it('an item with no blockers and no parent dispatches with empty refs/blockers and null parent', async () => {

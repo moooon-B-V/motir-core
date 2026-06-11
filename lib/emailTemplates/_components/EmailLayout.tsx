@@ -1,10 +1,10 @@
 import { Body, Container, Head, Hr, Html, Preview, Text } from '@react-email/components';
 import type { ReactNode } from 'react';
 
-// Shared chrome for every Prodect transactional email. Each template
+// Shared chrome for every Motir transactional email. Each template
 // wraps its content in <EmailLayout preview="…">…</EmailLayout> so
 // the outer styling (max-width, padding, header, footer divider,
-// "— Prodect" sign-off) stays consistent.
+// "— Motir" sign-off) stays consistent.
 //
 // `preview` is the inbox snippet text — the first thing users see in
 // Gmail / Outlook list views. Always pass a one-line summary of the
@@ -14,7 +14,7 @@ import type { ReactNode } from 'react';
 export interface EmailLayoutProps {
   preview: string;
   children: ReactNode;
-  // The footer is rendered above the "— Prodect" line. Templates that
+  // The footer is rendered above the "— Motir" line. Templates that
   // need a per-email caveat ("This invite expires in 7 days." / "If
   // you didn't request this, you can ignore this email.") pass it
   // here; the line break + small grey treatment is consistent.
@@ -67,7 +67,7 @@ export function EmailLayout({ preview, children, footer }: EmailLayoutProps) {
       <Preview>{preview}</Preview>
       <Body style={main}>
         <Container style={container}>
-          <Text style={brandRow}>Prodect</Text>
+          <Text style={brandRow}>Motir</Text>
           {children}
           {footer ? (
             <>
@@ -75,7 +75,7 @@ export function EmailLayout({ preview, children, footer }: EmailLayoutProps) {
               <Text style={footerText}>{footer}</Text>
             </>
           ) : null}
-          <Text style={signOff}>— Prodect</Text>
+          <Text style={signOff}>— Motir</Text>
         </Container>
       </Body>
     </Html>

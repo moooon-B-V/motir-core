@@ -247,8 +247,8 @@ describe('POST /api/ready/next — dispatch endpoint (Subtask 7.0.5)', () => {
     expect(dto.descriptionMd).toBe(descriptionMd);
     expect(dto.contextRefs).toEqual(['lib/services/workItemsService.ts']);
     expect(dto.parentKey).toBe(parent.identifier);
-    expect(dto.runCommand).toBe(`prodect run ${top.identifier}`);
-    expect(dto.runCommand).toMatch(/^prodect run PROD-\d+$/);
+    expect(dto.runCommand).toBe(`motir run ${top.identifier}`);
+    expect(dto.runCommand).toMatch(/^motir run PROD-\d+$/);
     expect(Array.isArray(dto.blockerKeys)).toBe(true);
   });
 

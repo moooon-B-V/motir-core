@@ -165,20 +165,20 @@
   },
   "email": {
     "invite": {
-      "subject": "邀请你加入Prodect上的 {workspace}",
-      "preview": "{inviter} 邀请你加入Prodect上的 {workspace}",
+      "subject": "邀请你加入Motir上的 {workspace}",
+      "preview": "{inviter} 邀请你加入Motir上的 {workspace}",
       "greeting": "你好，",
-      "lede": "{inviter} 邀请你加入Prodect上的 {workspace}。",
+      "lede": "{inviter} 邀请你加入Motir上的 {workspace}。",
       "accept": "接受邀请",
       "fallback": "或将此链接复制到浏览器中打开：",
       "expires": "此邀请将在7天后过期。",
       "ignore": "不认识 {inviter}？你可以放心忽略此邮件。"
     },
     "passwordReset": {
-      "subject": "重置你的Prodect密码",
-      "preview": "重置你的Prodect密码",
+      "subject": "重置你的Motir密码",
+      "preview": "重置你的Motir密码",
       "greeting": "你好，{name}：",
-      "lede": "我们收到了重置你Prodect密码的请求。",
+      "lede": "我们收到了重置你Motir密码的请求。",
       "reset": "重置密码",
       "fallback": "或将此链接复制到浏览器中打开：",
       "expires": "此链接将在1小时后过期。如果这不是你本人的操作，可以忽略此邮件。"
@@ -213,7 +213,7 @@
   },
   "auth": {
     "welcomeBack": "欢迎回来！",
-    "signInSubhead": "用Prodect把任何产品创意变为现实。",
+    "signInSubhead": "用Motir把任何产品创意变为现实。",
     "checking": "检查中…",
     "continue": "继续",
     "signingIn": "登录中…",
@@ -229,7 +229,7 @@
     "hidePassword": "隐藏密码",
     "dontHaveAccount": "还没有账户？",
     "signUp": "注册",
-    "welcomeToProdect": "欢迎来到Prodect！",
+    "welcomeToMotir": "欢迎来到Motir！",
     "signUpSubhead": "注册以把任何产品创意变为现实。",
     "accountExists": "该邮箱已注册账户。",
     "emailHelper": "登录时将使用此邮箱。",
@@ -1179,7 +1179,7 @@
       "subtitle": "管理你的个人偏好。",
       "language": {
         "heading": "语言",
-        "helper": "选择Prodect界面使用的语言。",
+        "helper": "选择Motir界面使用的语言。",
         "label": "语言"
       }
     }
@@ -1282,7 +1282,7 @@
     "deleteBoardTitle": "删除“{name}”？",
     "deleteBoardBody": "此操作会删除该看板及其列与泳道配置。",
     "deleteBoardCalloutLead": "工作项不会被删除。",
-    "deleteBoardCalloutBody": "工作项属于项目，而非看板——它们仍保留在Prodect中，并可在其他看板上查看。",
+    "deleteBoardCalloutBody": "工作项属于项目，而非看板——它们仍保留在Motir中，并可在其他看板上查看。",
     "deleteBoardConfirm": "删除看板",
     "boardCreatedAnnounce": "已创建看板“{name}”，现已切换至该看板。",
     "boardRenamedAnnounce": "看板已重命名为“{name}”。",
@@ -1333,7 +1333,7 @@
     "popover": {
       "title": "什么是「就绪」？",
       "body1": "当阻塞某个工作项的所有工作项都已完成时，它即为<strong>就绪</strong>——它没有未完成的阻塞项，现在就可以开始。",
-      "body2": "点击任意行的 <code>复制</code>，即可将其 <code>prodect run PROD-…</code> 命令复制到剪贴板，然后粘贴到你自己的编码代理中来派发工作。"
+      "body2": "点击任意行的 <code>复制</code>，即可将其 <code>motir run PROD-…</code> 命令复制到剪贴板，然后粘贴到你自己的编码代理中来派发工作。"
     },
     "empty": {
       "title": "暂无可开始的工作项",

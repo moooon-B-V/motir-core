@@ -96,7 +96,7 @@ function buildPlainText(props: WorkspaceInviteEmailProps, t: T): string {
     '',
     t('ignore', { inviter: props.inviterName }),
     '',
-    '— Prodect',
+    '— Motir',
   ].join('\n');
 }
 

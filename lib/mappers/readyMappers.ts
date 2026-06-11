@@ -84,6 +84,6 @@ export function toReadyItemDispatchDto(
     contextRefs: ctx.contextRefs,
     blockerKeys: blockerRows.map((b) => b.identifier),
     parentKey: ctx.parent?.identifier ?? null,
-    runCommand: `prodect run ${row.identifier}`,
+    runCommand: `motir run ${row.identifier}`,
   };
 }
