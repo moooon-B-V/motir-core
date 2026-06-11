@@ -108,6 +108,13 @@ model User {
   // deleting the user clears the field value, never blocks the delete —
   // the assignee semantics, not the reporter ones).
   customFieldValues         CustomFieldValue[]
+  // Back-relations for SavedFilter + SavedFilterStar (Subtask 6.2.1). A user
+  // owns many saved filters (Cascade — the uploadedAttachments semantics;
+  // admins change owner first when a shared filter must survive a departure)
+  // and stars many (Cascade: preference substrate, not audit — the watchers
+  // pattern).
+  savedFilters              SavedFilter[]         @relation("SavedFilterOwner")
+  savedFilterStars          SavedFilterStar[]     @relation("SavedFilterStarUser")
 
   @@map("user")
 }
@@ -206,6 +213,7 @@ model Workspace {
   components             Component[]
   customFieldDefinitions CustomFieldDefinition[]
   customFieldValues      CustomFieldValue[]
+  savedFilters           SavedFilter[]
 
   @@map("workspace")
 }
@@ -294,6 +302,9 @@ model Project {
   // Per-project custom-field definitions (Story 5.3). Cascades: deleting a
   // project removes its field definitions (and, through them, options/values).
   customFieldDefinitions CustomFieldDefinition[]
+  // Saved filters (Story 6.2) — project-contained (the recorded deviation
+  // from Jira's site-global filters). Cascades with the project.
+  savedFilters           SavedFilter[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -1579,4 +1590,86 @@ model CustomFieldValue {
   @@index([fieldId, valueUserId])
   @@index([workspaceId])
   @@map("custom_field_value")
+}
+
+/// Saved-filter visibility (Story 6.2). Two levels — `private` (the owner +
+/// project/workspace admins, who can SEE every filter but manage only shared
+/// ones) and `project` (everyone who can browse the project, riding the 6.4
+/// gate). Jira Cloud's six share scopes + per-filter Viewers/Editors grant
+/// lists presuppose site-global filters and groups, which Prodect doesn't
+/// have — the recorded two-visibility deviation; the grant list is the
+/// documented extension.
+enum SavedFilterVisibility {
+  private
+  project
+
+  @@map("saved_filter_visibility")
+}
+
+/// A saved filter (Story 6.2 · Subtask 6.2.1) — a named, owned, shareable
+/// row carrying the SAME versioned FilterAST envelope the `?filter=v1:` URL
+/// codec serializes (one codec, two carriers — see lib/filters/ast.ts
+/// encode/decodeFilterEnvelope). `astEnvelope` stores the compact wire form
+/// PLUS the version field (`{ v, c, f }`); every read decodes +
+/// registry-validates it (never trust-and-compile), so a malformed or
+/// future-versioned envelope degrades to a typed recoverable state and a
+/// stale open referent (deleted member/sprint/status) falls under the 6.1.2
+/// match-nothing rule.
+///
+/// Project-contained, not site-global (the recorded 6.2 deviation: the AST's
+/// referents and the whole search substrate are project-scoped); name is
+/// case-insensitively unique per project via the `name`/`nameLower` split
+/// (the `label` mechanic — two "Sprint blockers" in one shared dropdown is
+/// ambiguity nobody wants). Owner Cascade mirrors `uploadedAttachments`
+/// (admins change owner FIRST when a filter must survive a departure —
+/// Jira's admin power, project-sized).
+model SavedFilter {
+  id          String                @id @default(cuid())
+  workspaceId String                @map("workspace_id")
+  projectId   String                @map("project_id")
+  ownerId     String                @map("owner_id")
+  name        String
+  nameLower   String                @map("name_lower")
+  description String?               @db.Text
+  visibility  SavedFilterVisibility @default(private)
+  astEnvelope Json                  @map("ast_envelope")
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner     User              @relation("SavedFilterOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  stars     SavedFilterStar[]
+
+  // Case-insensitive uniqueness per project; doubles as the directory /
+  // dropdown search index (list reads walk projectId = ? AND name_lower
+  // LIKE/ILIKE, bounded + cursor-paged in name_lower order).
+  @@unique([projectId, nameLower])
+  // The "my filters" view (ownerId = ? within a project read).
+  @@index([projectId, ownerId])
+  @@index([workspaceId])
+  @@map("saved_filter")
+}
+
+/// Saved-filter star (Story 6.2) — the per-user pin that floats a filter to
+/// the top of the dropdown (Jira's starred-first Filters menu). Pure
+/// preference substrate, not audit: both FKs Cascade (the `watcher`
+/// precedent). Star counts aggregate in SQL over the `@@unique` left prefix
+/// (the directory's popularity column — finding #57: never a JS count over
+/// all rows). No `workspaceId` by design (the work_item_label pattern —
+/// denormalized tenancy on a child row could lie); the RLS policy joins
+/// through the parent `saved_filter` instead.
+model SavedFilterStar {
+  id            String   @id @default(cuid())
+  savedFilterId String   @map("saved_filter_id")
+  userId        String   @map("user_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  savedFilter SavedFilter @relation(fields: [savedFilterId], references: [id], onDelete: Cascade)
+  user        User        @relation("SavedFilterStarUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([savedFilterId, userId])
+  // The "starred" dropdown group ("filters I starred" within a project read).
+  @@index([userId])
+  @@map("saved_filter_star")
 }

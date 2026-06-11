@@ -15,6 +15,10 @@ import {
 } from '@/lib/projects/access';
 import { isWorkspaceManager } from '@/lib/projects/roles';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  savedFilterCapabilities,
+  type SavedFilterProjectCapabilities,
+} from '@/lib/savedFilters/access';
 
 // projectAccessService — the ENFORCEMENT half of the Story 6.4 access model
 // (Subtask 6.4.3). It resolves the three policy inputs (the project's access
@@ -165,6 +169,26 @@ export const projectAccessService = {
   ): Promise<{ canBrowse: boolean; canManageWatchers: boolean }> {
     const inputs = await resolveInputs(projectId, ctx, tx);
     return { canBrowse: canBrowse(inputs), canManageWatchers: canManageWatchers(inputs) };
+  },
+
+  /**
+   * The actor's SAVED-FILTER-domain tier on a project (Story 6.2 · Subtask
+   * 6.2.1) — one `resolveInputs` round-trip feeding the three saved-filter
+   * gates (the getCommentCapabilities pattern): `canBrowse` (the 404 gate;
+   * browsing is all that creating/starring PRIVATE filters needs — filters
+   * are a read-layer construct, viewers included), `canShare` (role ≥ member
+   * — may publish at visibility `project`), `isAdmin` (project admin or
+   * workspace owner/admin — sees every row, manages the shared ones). The
+   * per-row predicates live in lib/savedFilters/access.ts. Throws only
+   * ProjectNotFoundError (cross-workspace project ids stay hidden).
+   */
+  async getSavedFilterCapabilities(
+    projectId: string,
+    ctx: AccessActorContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<SavedFilterProjectCapabilities> {
+    const inputs = await resolveInputs(projectId, ctx, tx);
+    return savedFilterCapabilities(inputs);
   },
 
   /**

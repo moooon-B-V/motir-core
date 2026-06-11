@@ -106,6 +106,15 @@ export default defineConfig({
         'lib/services/attachmentsService.ts',
         'lib/repositories/attachmentRepository.ts',
         'lib/mappers/attachmentMappers.ts',
+        // Story 6.2 (saved filters): the persistence + permission layer
+        // (Subtask 6.2.1) gates from day one — the matrix, the envelope
+        // round-trip, and the degraded-state branches are the contract.
+        'lib/services/savedFiltersService.ts',
+        'lib/repositories/savedFilterRepository.ts',
+        'lib/repositories/savedFilterStarRepository.ts',
+        'lib/mappers/savedFilterMappers.ts',
+        'lib/savedFilters/access.ts',
+        'lib/savedFilters/builtins.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -188,6 +197,17 @@ export default defineConfig({
         'lib/services/attachmentsService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/attachmentRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mappers/attachmentMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 6.2 (saved filters): the 6.2.1 persistence + permission layer.
+        'lib/services/savedFiltersService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/savedFilterRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/savedFilterStarRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/mappers/savedFilterMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/savedFilters/access.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/savedFilters/builtins.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },
