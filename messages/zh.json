@@ -530,6 +530,38 @@
       "generic": "操作失败，请重试。"
     }
   },
+  "attachments": {
+    "title": "附件",
+    "viewAria": "附件视图",
+    "viewStrip": "缩略图",
+    "viewList": "列表",
+    "attach": "添加附件",
+    "listAria": "附件",
+    "showMore": "显示更多（{count}）",
+    "dropTitle": "拖放文件以添加附件",
+    "dropSub": "单个文件最大10 MB",
+    "uploading": "上传中…",
+    "uploadingAria": "正在上传{name}",
+    "cancelUploadAria": "取消上传{name}",
+    "dismissErrorAria": "关闭{name}的错误提示",
+    "sourceChip": "嵌入",
+    "sourceTooltip": "该文件添加自描述或评论，请在原处移除后即可删除",
+    "downloadAria": "下载{name}",
+    "deleteAria": "删除{name}",
+    "deleteDisabledAria": "无法删除{name}——该文件添加自编辑器",
+    "deleteConfirm": "确定删除{name}？附件删除后无法恢复。",
+    "delete": "删除",
+    "empty": "还没有附件——添加文件或拖放到此处",
+    "emptyReadOnly": "还没有附件",
+    "errorTitle": "附件加载失败",
+    "errorDescription": "获取文件时出了点问题。",
+    "errors": {
+      "notFound": "该附件不存在或已被删除。",
+      "forbidden": "你没有权限执行此操作。",
+      "editorSourced": "该文件添加自描述或评论，请在原处移除。",
+      "generic": "操作失败，请重试。"
+    }
+  },
   "ui": {
     "typePicker": {
       "label": "类型"

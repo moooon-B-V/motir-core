@@ -7,6 +7,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { commentsService } from '@/lib/services/commentsService';
+import { attachmentsService } from '@/lib/services/attachmentsService';
 import { estimationService } from '@/lib/services/estimationService';
 import { componentsService } from '@/lib/services/componentsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
@@ -27,8 +28,10 @@ import { IssueExplanation } from './_components/IssueExplanation';
 import { ParentBreadcrumb } from './_components/ParentBreadcrumb';
 import { ChildList } from './_components/ChildList';
 import { CommentsSection } from './_components/CommentsSection';
+import { AttachmentsPanel } from './_components/AttachmentsPanel';
 import { RelationshipsPanel } from './_components/RelationshipsPanel';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
+import type { AttachmentsPageDTO } from '@/lib/dto/attachments';
 
 // The issue DETAIL route (Story 2.4 · Subtask 2.4.1). Server Component:
 // resolves the active project (the shipped active-project model — finding #50,
@@ -112,6 +115,26 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
     );
   } catch {
     initialComments = null;
+  }
+
+  // Attachments (Story 5.2 · 5.2.5): the caller's attachment capabilities
+  // (the Jira three-permission split on the 6.4 roles — create / delete own /
+  // delete all; viewers read only) + the first cursor page (the newest 50;
+  // the panel's "Show more (N)" extends backward — finding #57, never
+  // load-all). A failed read renders the panel's ErrorState + retry.
+  const attachmentCaps = await projectAccessService.getAttachmentCapabilities(ctx.projectId, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+  let initialAttachments: AttachmentsPageDTO | null = null;
+  try {
+    initialAttachments = await attachmentsService.listForWorkItem(
+      item.id,
+      {},
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+  } catch {
+    initialAttachments = null;
   }
 
   // Labels + components (Story 5.4 · Subtask 5.4.8): the issue's rows ride the
@@ -228,6 +251,17 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
             />
             {/* 2.4.3: direct children (a leaf renders nothing). */}
             <ChildList items={detail.children} workflow={detail.workflow} members={members} />
+            {/* 5.2.5: the Attachments panel — after Children, before Activity
+              (the reserved Epic-5 slot, per the attachments mockup's panel 0;
+              content-width and multi-row, so the left column — the rail is
+              for scalars). */}
+            <AttachmentsPanel
+              workItemId={item.id}
+              canCreate={attachmentCaps.canCreate}
+              canDeleteAll={attachmentCaps.canDeleteAll}
+              currentUserId={ctx.userId}
+              initialPage={initialAttachments}
+            />
             {/* 5.1.5: the Activity section — the comments stream + composer in
               the slot the page reserved for Epic 5 (after Relationships and
               Children, per the comments mockup's panel 0). */}

@@ -530,6 +530,38 @@
       "generic": "Something went wrong — please try again."
     }
   },
+  "attachments": {
+    "title": "Attachments",
+    "viewAria": "Attachments view",
+    "viewStrip": "Strip",
+    "viewList": "List",
+    "attach": "Attach",
+    "listAria": "Attachments",
+    "showMore": "Show more ({count})",
+    "dropTitle": "Drop files to attach",
+    "dropSub": "Up to 10 MB each",
+    "uploading": "Uploading…",
+    "uploadingAria": "Uploading {name}",
+    "cancelUploadAria": "Cancel uploading {name}",
+    "dismissErrorAria": "Dismiss error for {name}",
+    "sourceChip": "Embedded",
+    "sourceTooltip": "Added in the description or a comment — remove it there to delete it",
+    "downloadAria": "Download {name}",
+    "deleteAria": "Delete {name}",
+    "deleteDisabledAria": "Delete {name} — unavailable, added in the editor",
+    "deleteConfirm": "Delete {name}? Attachments can't be restored.",
+    "delete": "Delete",
+    "empty": "No attachments yet — attach a file or drop one here",
+    "emptyReadOnly": "No attachments yet",
+    "errorTitle": "Couldn't load attachments",
+    "errorDescription": "Something went wrong fetching the files.",
+    "errors": {
+      "notFound": "This attachment no longer exists.",
+      "forbidden": "You don't have permission to do that.",
+      "editorSourced": "This file was added in the description or a comment — remove it there to delete it.",
+      "generic": "Something went wrong — please try again."
+    }
+  },
   "ui": {
     "typePicker": {
       "label": "Type"
