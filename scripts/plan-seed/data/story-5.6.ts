@@ -152,7 +152,7 @@ export const story_5_6: PlanStory = {
       id: '5.6.2',
       title:
         'The combined collaboration journey E2E — one issue through every Epic-5 feature, the cross-story seams asserted end-to-end',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 35,
@@ -205,7 +205,7 @@ export const story_5_6: PlanStory = {
       id: '5.6.3',
       title:
         'The loaded issue at scale — bounded-read + bounded-DOM specs and the full-page strict a11y sweep over every Epic-5 surface at once',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
