@@ -1,5 +1,6 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { inngest } from '@/lib/jobs/client';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -33,6 +34,14 @@ beforeEach(async () => {
   await truncateAuthTables();
   session.current = null;
   activeCtx.current = null;
+  // Stub the Inngest publish: a cross-column move now emits
+  // `work-item/transitioned` post-commit (Subtask 5.4.5), and the test env
+  // has no Inngest key (the comments-suite pattern).
+  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 afterAll(async () => {

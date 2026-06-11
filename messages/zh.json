@@ -191,6 +191,24 @@
       "ledeDescription": "{author}在{identifier}（{title}）的描述中提到了你。",
       "view": "查看工作项",
       "fallback": "或将此链接复制到浏览器中打开："
+    },
+    "watcherCommentNotification": {
+      "subject": "{author}在{identifier}中发表了评论：{title}",
+      "preview": "{author}在{identifier}中发表了评论",
+      "greeting": "你好，{name}：",
+      "lede": "{author}在{identifier}（{title}）中发表了评论。",
+      "view": "查看工作项",
+      "fallback": "或将此链接复制到浏览器中打开：",
+      "reason": "你收到此邮件是因为你正在关注{identifier}。"
+    },
+    "watcherTransitionNotification": {
+      "subject": "{actor}将{identifier}移至{status}",
+      "preview": "{actor}将{identifier}移至{status}",
+      "greeting": "你好，{name}：",
+      "lede": "{actor}将{identifier}（{title}）移至「{status}」。",
+      "view": "查看工作项",
+      "fallback": "或将此链接复制到浏览器中打开：",
+      "reason": "你收到此邮件是因为你正在关注{identifier}。"
     }
   },
   "auth": {

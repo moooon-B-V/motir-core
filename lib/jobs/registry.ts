@@ -4,6 +4,10 @@ import {
   mentionNotifyOnCommentCreated,
   mentionNotifyOnWorkItemMentioned,
 } from './definitions/mentionNotify';
+import {
+  watcherNotifyOnCommentCreated,
+  watcherNotifyOnTransitioned,
+} from './definitions/watcherNotify';
 import { attachmentGc } from './definitions/attachmentGc';
 
 // The list of registered Inngest functions the serve route mounts (Story 1.6 ·
@@ -15,5 +19,7 @@ export const jobFunctions = [
   emailSend,
   mentionNotifyOnCommentCreated,
   mentionNotifyOnWorkItemMentioned,
+  watcherNotifyOnCommentCreated,
+  watcherNotifyOnTransitioned,
   attachmentGc,
 ];

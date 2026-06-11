@@ -68,3 +68,27 @@ export function captureConsoleEmails(): { lines: string[]; restore: () => void }
   });
   return { lines, restore: () => spy.mockRestore() };
 }
+
+/** Any event published through the Inngest client — name + raw payload. */
+export interface CapturedJobEvent {
+  name: string;
+  data: unknown;
+}
+
+/**
+ * Like {@link captureEmailEvents}, but collects EVERY event `sendEvent()`
+ * publishes — the 5.4.5 emit-seam assertions read `work-item/transitioned`
+ * off the same spy that stops the publish from hitting the network.
+ */
+export function captureJobEvents(): { events: CapturedJobEvent[]; restore: () => void } {
+  const events: CapturedJobEvent[] = [];
+  const spy = vi.spyOn(inngest, 'send').mockImplementation((async (payload: unknown) => {
+    const list = Array.isArray(payload) ? payload : [payload];
+    for (const entry of list) {
+      const evt = entry as { name?: string; data?: unknown };
+      if (evt?.name) events.push({ name: evt.name, data: evt.data });
+    }
+    return { ids: [] as string[] };
+  }) as typeof inngest.send);
+  return { events, restore: () => spy.mockRestore() };
+}

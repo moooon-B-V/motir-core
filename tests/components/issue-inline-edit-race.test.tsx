@@ -60,6 +60,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ toast: toastSpy }) }));
 
 import { db } from '@/lib/db';
+import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
@@ -89,6 +90,10 @@ beforeEach(async () => {
   await truncateAuthTables();
   statusCalls.length = 0;
   updateCalls.length = 0;
+  // Stub the Inngest publish: the REAL workItemsService.updateStatus this
+  // suite drives now emits `work-item/transitioned` post-commit (Subtask
+  // 5.4.5), and the test env has no Inngest key.
+  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
 });
 
 afterEach(() => {

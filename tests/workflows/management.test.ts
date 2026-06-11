@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
@@ -17,6 +17,7 @@ import {
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { inngest } from '@/lib/jobs/client';
 
 // Workflow management writes (Story 2.2 · Subtask 2.2.5). Real Postgres. The
 // fixture owner can manage; a member can't. Projects come from createTestProject
@@ -24,7 +25,15 @@ import { truncateAuthTables } from '../helpers/db';
 // done/cancelled, with done + cancelled both category=done).
 
 beforeEach(async () => {
+  // Stub the Inngest publish: the status-transition paths now emit
+  // `work-item/transitioned` post-commit (Subtask 5.4.5), and the test env
+  // has no Inngest key (the comments-suite pattern).
+  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
   await truncateAuthTables();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 afterAll(async () => {

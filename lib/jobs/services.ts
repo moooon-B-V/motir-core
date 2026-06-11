@@ -5,6 +5,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
 import { emailService } from '@/lib/services/emailService';
 import { mentionNotificationsService } from '@/lib/services/mentionNotificationsService';
+import { watcherNotificationsService } from '@/lib/services/watcherNotificationsService';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 
 // The service-layer injection bag handed to every job handler as its 2nd arg
@@ -26,6 +27,7 @@ export const jobServices = {
   users: usersService,
   email: emailService,
   mentionNotifications: mentionNotificationsService,
+  watcherNotifications: watcherNotificationsService,
   attachments: attachmentsService,
 };
 

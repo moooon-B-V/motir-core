@@ -101,11 +101,42 @@ export interface WorkItemMentionedData {
 }
 
 /**
- * Map of event-name → payload. Each key is simultaneously a job id and the
- * event name that triggers it. Grows one entry per job. (An event MAY land
- * before its consuming job does — `work-item/comment.created` ships with
- * 5.1.2 while the mention-notification job consuming it is 5.1.6; publishing
- * to an event no function subscribes to is a no-op on Inngest's side.)
+ * The `work-item/transitioned` event payload (Story 5.4 · Subtask 5.4.5) —
+ * emitted AFTER a status transition commits (never inside the transaction: a
+ * rollback must not have notified anyone — the 5.1.2 rule), from BOTH paths
+ * that route through `workItemsService.applyStatusTransition`: the direct
+ * `updateStatus` entry point and the board move (`boardsService.moveCard`,
+ * the most common way a status changes in practice). A no-op move (same
+ * status) emits nothing. Channel-agnostic like its `work-item/*` siblings —
+ * the 5.4.5 watcher-email job consumes it today, Story 5.7's in-app bell
+ * fans in off the same event later.
+ *
+ * `revisionId` is the `work_item_revision` row written atomically with the
+ * status change — the consumer's idempotency scope (revision × user), the
+ * same role `commentId` / `revisionId` play on the mention events.
+ */
+export interface WorkItemTransitionedData {
+  workspaceId: string;
+  workItemId: string;
+  /** The actor who moved the status — never self-notified. */
+  actorId: string;
+  fromStatusKey: string;
+  toStatusKey: string;
+  /** The revision row recording the transition. */
+  revisionId: string;
+}
+
+/**
+ * Map of event-name → payload. Each key is a job id and the event name that
+ * triggers it; for an event's FIRST consumer the two are the same string (the
+ * 1:1 convention). An event with MULTIPLE consumers (e.g.
+ * `work-item/comment.created`, consumed by the 5.1.6 mention job AND the
+ * 5.4.5 watcher job) registers each additional consumer under its own
+ * distinct id with an explicit `trigger` (see `defineJob`). Grows one entry
+ * per event. (An event MAY land before its consuming job does —
+ * `work-item/comment.created` ships with 5.1.2 while the mention-notification
+ * job consuming it is 5.1.6; publishing to an event no function subscribes to
+ * is a no-op on Inngest's side.)
  */
 export interface JobEventDataMap {
   'system.daily-health-check': SystemScheduledData;
@@ -113,6 +144,7 @@ export interface JobEventDataMap {
   'email.send': EmailSendData;
   'work-item/comment.created': WorkItemCommentCreatedData;
   'work-item/mentioned': WorkItemMentionedData;
+  'work-item/transitioned': WorkItemTransitionedData;
 }
 
 /** Every registered event/job name. */

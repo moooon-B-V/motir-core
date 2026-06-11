@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
@@ -13,6 +13,7 @@ import {
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { inngest } from '@/lib/jobs/client';
 
 // Transition validation + the gated work_item.status write (Story 2.2 ·
 // Subtask 2.2.4). Real Postgres — runs in CI. Projects come from
@@ -21,7 +22,15 @@ import { truncateAuthTables } from '../helpers/db';
 // initial status + the legal/illegal transitions are the default seed's.
 
 beforeEach(async () => {
+  // Stub the Inngest publish: the status-transition paths now emit
+  // `work-item/transitioned` post-commit (Subtask 5.4.5), and the test env
+  // has no Inngest key (the comments-suite pattern).
+  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
   await truncateAuthTables();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 afterAll(async () => {
