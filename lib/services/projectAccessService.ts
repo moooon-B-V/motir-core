@@ -6,6 +6,8 @@ import type { Project } from '@prisma/client';
 import {
   canBrowse,
   canComment,
+  canCreateAttachments,
+  canDeleteAllAttachments,
   canEdit,
   canManageWatchers,
   canModerateComments,
@@ -120,6 +122,30 @@ export const projectAccessService = {
       canComment: canComment(inputs),
       canModerate: canModerateComments(inputs),
       accessLevel: inputs.accessLevel,
+    };
+  },
+
+  /**
+   * The actor's ATTACHMENT-domain capabilities on a project (Story 5.2 ·
+   * Subtask 5.2.2) — one `resolveInputs` round-trip feeding the three
+   * attachment gates, mirroring `getCommentCapabilities`: `canBrowse` (may
+   * they see the issue at all — the 404 gate; browsing implies seeing +
+   * downloading its attachments), `canCreate` (Jira's "Create attachments"),
+   * `canDeleteAll` (Jira's "Delete all attachments" — project admin or
+   * workspace owner/admin; uploaders delete their OWN regardless, checked by
+   * the service). Throws only ProjectNotFoundError (cross-workspace project
+   * ids stay hidden).
+   */
+  async getAttachmentCapabilities(
+    projectId: string,
+    ctx: AccessActorContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ canBrowse: boolean; canCreate: boolean; canDeleteAll: boolean }> {
+    const inputs = await resolveInputs(projectId, ctx, tx);
+    return {
+      canBrowse: canBrowse(inputs),
+      canCreate: canCreateAttachments(inputs),
+      canDeleteAll: canDeleteAllAttachments(inputs),
     };
   },
 

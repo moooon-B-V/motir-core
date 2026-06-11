@@ -18,9 +18,24 @@ const EMAIL_OUTBOX_PATH = process.env['EMAIL_OUTBOX_PATH'] ?? '/tmp/prodect-test
  * test's reset link leak into the next test's `waitForEmail` call.
  *
  * Safe to call from a Playwright `test.beforeEach`. Idempotent.
+ *
+ * Retries on Postgres deadlock (40P01): the PREVIOUS test can leave Inngest
+ * jobs still querying through the dev server (e.g. the 5.1 mention fan-out
+ * trailing the comments journey), and TRUNCATE deadlocking against those
+ * in-flight transactions is a transient ordering collision, not a test
+ * failure — the job finishes within moments and the retry succeeds.
  */
 export async function resetDatabase(): Promise<void> {
-  await truncateAuthTables();
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await truncateAuthTables();
+      break;
+    } catch (err) {
+      const deadlock = err instanceof Error && /40P01|deadlock/i.test(err.message);
+      if (!deadlock || attempt >= 3) throw err;
+      await new Promise((r) => setTimeout(r, 500 * attempt));
+    }
+  }
   rmSync(EMAIL_OUTBOX_PATH, { force: true });
 }
 

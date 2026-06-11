@@ -46,3 +46,13 @@ export function isAllowedUploadType(mime: string): boolean {
 export function isImageType(mime: string): boolean {
   return ALLOWED_IMAGE_TYPES.includes(mime);
 }
+
+/**
+ * True for PDFs — with {@link isImageType} this drives the 5.2.6 preview
+ * split (the Jira-verified contract: images + PDF open the lightbox, every
+ * other type downloads). Carried on the AttachmentDTO so the panel never
+ * re-derives the policy client-side.
+ */
+export function isPdfType(mime: string): boolean {
+  return mime === 'application/pdf';
+}

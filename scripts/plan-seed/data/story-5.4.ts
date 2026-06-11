@@ -294,7 +294,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.3',
       title:
         '`componentsService` — admin CRUD + default-assignee-at-create (first-alphabetical) + move-or-remove delete + per-issue assignment, revision diffs',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -345,7 +345,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.4',
       title:
         '`watchersService` — self watch/unwatch + admin manage-others + view-access validation + auto-watch hooks (create, comment)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 26,
@@ -506,7 +506,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.7',
       title:
         'Design — Components admin page (`design/projects/components.mock.html`: list + create/edit + default assignee + move-or-remove delete)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 35,

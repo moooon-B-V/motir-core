@@ -141,7 +141,18 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
             </span>
             <span className="truncate">{item.name}</span>
             {item.email ? (
-              <span className="text-(--el-text-muted) ml-auto truncate text-xs">{item.email}</span>
+              // The active row sits on the --el-surface tint, where muted text
+              // drops under WCAG AA (4.17:1) — step up to secondary there
+              // (6.2:1); inactive rows stay muted on the page bg (4.54:1).
+              // Caught by the 5.1.7 strict axe sweep (picker open).
+              <span
+                className={cn(
+                  'ml-auto truncate text-xs',
+                  index === active ? 'text-(--el-text-secondary)' : 'text-(--el-text-muted)',
+                )}
+              >
+                {item.email}
+              </span>
             ) : null}
           </div>
         ))
