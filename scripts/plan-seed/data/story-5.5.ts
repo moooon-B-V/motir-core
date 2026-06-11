@@ -227,7 +227,7 @@ export const story_5_5: PlanStory = {
       id: '5.5.2',
       title:
         'The "All" merged stream — comments + history interleaved by composite cursor (bounded two-source merge)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
@@ -329,7 +329,7 @@ export const story_5_5: PlanStory = {
       id: '5.5.4',
       title:
         'History + All tabs UI — activate the Activity section seam (feed rows, Show more, the cross-tab sort toggle)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
