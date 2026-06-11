@@ -320,7 +320,7 @@ export const story_6_3: PlanStory = {
       id: '6.3.3',
       title:
         'Design — dashboards + reports hub (`design/reports/dashboard.mock.html`: grid, widget chrome, add/config panels, donut + diff-area charts, report pages)',
-      status: 'blocked',
+      status: 'planned',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 40,
