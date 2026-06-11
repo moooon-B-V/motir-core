@@ -292,7 +292,7 @@ export const story_6_1: PlanStory = {
       id: '6.1.3',
       title:
         'Design — the filter builder (`design/work-items/filter-builder.mock.html`: rows, combinator, operator menus, per-type editors, applied state)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 38,
