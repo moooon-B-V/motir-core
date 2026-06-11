@@ -328,6 +328,19 @@ export async function loadFilterReferents(
   };
 }
 
+/**
+ * Clamp a requested list page size to `[1, ISSUE_LIST_PAGE_SIZE]`, defaulting
+ * a missing / non-finite value to the full `ISSUE_LIST_PAGE_SIZE` (the
+ * `clampLastN` convention — bad input degrades to the sensible bound, the cap
+ * itself is never exceeded; the 6.3.2 filter-results widget's ≤50/page rule).
+ */
+function clampIssuePageSize(pageSize: number | undefined): number {
+  if (pageSize === undefined || !Number.isFinite(pageSize) || pageSize < 1) {
+    return ISSUE_LIST_PAGE_SIZE;
+  }
+  return Math.min(Math.floor(pageSize), ISSUE_LIST_PAGE_SIZE);
+}
+
 /** True when the repo filter constrains at least one axis (drives forest pruning). */
 function repoFilterIsActive(f: RepoIssueFilter): boolean {
   return (
@@ -1311,10 +1324,16 @@ export const workItemsService = {
    * by the active `sort` — the read does the `ORDER BY` (no JS re-nesting). An
    * empty project → `[]`. Returns wire-safe `WorkItemListItemDto`s; the route
    * shapes them into the same `IssueRowData` the tree row uses.
+   *
+   * `pageSize` (Story 6.3 · Subtask 6.3.2 — the filter-results widget rides
+   * THIS read, no second query path) defaults to the List's
+   * {@link ISSUE_LIST_PAGE_SIZE} and is clamped to `[1, ISSUE_LIST_PAGE_SIZE]`
+   * server-side — the verified 50/page gadget cap (a deliberate Cloud
+   * performance bound, not raisable by the caller).
    */
   async getProjectIssuesList(
     projectId: string,
-    params: { sort: IssueSort; filter?: ProjectTreeFilter; page?: number },
+    params: { sort: IssueSort; filter?: ProjectTreeFilter; page?: number; pageSize?: number },
     ctx: ServiceContext,
   ): Promise<PagedIssueListDto> {
     const project = await projectRepository.findById(projectId);
@@ -1327,7 +1346,7 @@ export const workItemsService = {
       ? await loadFilterReferents(projectId, project.workspaceId, params.filter.ast)
       : undefined;
     const repoFilter = buildRepoFilter(params.filter ?? {}, referents);
-    const pageSize = ISSUE_LIST_PAGE_SIZE;
+    const pageSize = clampIssuePageSize(params.pageSize);
 
     // Count the filtered set first so an out-of-range ?page CLAMPS to the last
     // page (the 2.5.10 edge spec) instead of fetching an empty offset window.
