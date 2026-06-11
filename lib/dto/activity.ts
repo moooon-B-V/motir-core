@@ -6,6 +6,8 @@
 // discriminated value forms — so the UI owns wording via next-intl and the
 // 5.5.3 design owns the row grammar.
 
+import type { CommentThreadDTO } from '@/lib/dto/comments';
+
 /**
  * One side of a change, resolved to its display form. Discriminated by
  * `type` so the UI picks the right rendering (Pill for statuses, Avatar +
@@ -70,6 +72,42 @@ export interface ActivityListOptions {
   cursor?: string;
   /** `desc` (newest first — the default) or `asc`. */
   order?: ActivityOrder;
+}
+
+/**
+ * One entry of the **All** merged stream (Subtask 5.5.2) — the two sources
+ * keep their NATIVE wire shapes under a discriminated `type` (the 5.5.3
+ * design renders each in its own row grammar: conversation loud, telemetry
+ * quiet). A comment entry is the 5.1 thread DTO whole — the root carries its
+ * single-level replies, and the thread interleaves at the ROOT's timestamp; a
+ * history entry is the 5.5.1 entry unchanged. A deleted comment appears
+ * exactly once, as history (`commentDeleted` is a revision, not a comment);
+ * live comments never duplicate into history — the verified
+ * comment-adds-not-in-History rule holds by construction.
+ */
+export type ActivityAllEntryDto =
+  | { type: 'comment'; thread: CommentThreadDTO }
+  | { type: 'history'; entry: ActivityEntryDto };
+
+/**
+ * One page of the All stream: up to a page of entries merged from the two
+ * cursor-paged sources in true timestamp order, plus the composite
+ * continuation cursor (opaque — it carries BOTH sources' positions) and the
+ * per-source totals the section header renders ("12 comments · 34 changes").
+ */
+export interface ActivityAllPageDto {
+  entries: ActivityAllEntryDto[];
+  /**
+   * Opaque composite cursor for the next page, or null when both sources are
+   * exhausted. Like the History read, a page may come back SHORT with a
+   * non-null cursor when the bounded revision scan stopped early inside a
+   * noise stretch — "Show more" just continues from it.
+   */
+  nextCursor: string | null;
+  /** Every comment on the issue, replies included (the 5.1.2 count). */
+  totalComments: number;
+  /** Displayable revisions in the whole trail (the History count). */
+  totalChanges: number;
 }
 
 /** One page of the History feed. */
