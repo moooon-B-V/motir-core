@@ -292,7 +292,7 @@ export const story_6_1: PlanStory = {
       id: '6.1.3',
       title:
         'Design — the filter builder (`design/work-items/filter-builder.mock.html`: rows, combinator, operator menus, per-type editors, applied state)',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 38,
@@ -361,7 +361,7 @@ export const story_6_1: PlanStory = {
       id: '6.1.4',
       title:
         'Filter-builder UI on /issues — built-in fields (rows, combinator, live-apply URL state, facet upgrade, applied summary)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
