@@ -605,7 +605,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.9',
       title:
         'Watch control + watchers popover in the detail header (eye + count, `W` shortcut, admin manage-others)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
