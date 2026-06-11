@@ -329,7 +329,7 @@ export const story_5_5: PlanStory = {
       id: '5.5.4',
       title:
         'History + All tabs UI — activate the Activity section seam (feed rows, Show more, the cross-tab sort toggle)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -375,7 +375,7 @@ export const story_5_5: PlanStory = {
       id: '5.5.5',
       title:
         'Story tests — Vitest (registry totality, merge properties) + Playwright E2E (history journey, All interleave, scale) + a11y sweep',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 28,
