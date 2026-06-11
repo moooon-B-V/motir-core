@@ -391,7 +391,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.5',
       title:
         'Watcher notification job — `work-item/transitioned` event + fan-out on comment/transition (actor excluded, mention-dedupe, idempotent)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
