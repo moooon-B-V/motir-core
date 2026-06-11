@@ -7,6 +7,7 @@ import {
   BarChart3,
   CircleDot,
   Columns3,
+  Filter,
   Folder,
   LayoutDashboard,
   LayoutList,
@@ -157,6 +158,12 @@ export function AppCommandPalette({
         label: t('commandPalette.goToReports'),
         icon: <BarChart3 />,
         onSelect: () => go('/reports'),
+      },
+      {
+        id: 'nav-filters',
+        label: t('commandPalette.goToFilters'),
+        icon: <Filter />,
+        onSelect: () => go('/filters'),
       },
     );
   }

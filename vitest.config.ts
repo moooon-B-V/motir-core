@@ -115,6 +115,14 @@ export default defineConfig({
         'lib/mappers/savedFilterMappers.ts',
         'lib/savedFilters/access.ts',
         'lib/savedFilters/builtins.ts',
+        // Story 6.3 (dashboards): the grid substrate (Subtask 6.3.1) gates
+        // from day one — the TOTAL widget registry, the permission rule,
+        // the cap, and the move ordering are the contract.
+        'lib/services/dashboardsService.ts',
+        'lib/repositories/dashboardRepository.ts',
+        'lib/repositories/dashboardWidgetRepository.ts',
+        'lib/mappers/dashboardMappers.ts',
+        'lib/dashboards/widgetRegistry.ts',
         // Story 6.3 (dashboards & reports): the 6.3.2 widget/report data
         // reads — the statistic-type registry, the window/bucket math, and
         // the route param parsers gate from day one (the service / repo /
@@ -226,6 +234,16 @@ export default defineConfig({
         'lib/mappers/savedFilterMappers.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/savedFilters/access.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/savedFilters/builtins.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 6.3 (dashboards) — the 6.3.1 substrate.
+        'lib/services/dashboardsService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/dashboardRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/dashboardWidgetRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/mappers/dashboardMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/dashboards/widgetRegistry.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 6.3 (dashboards & reports): the 6.3.2 read substrate.
         'lib/reports/statisticTypes.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/reports/buckets.ts': { branches: 90, functions: 90, lines: 90 },

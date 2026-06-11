@@ -731,6 +731,101 @@ test.describe('@a11y shell accessibility', () => {
     ).toEqual([]);
   });
 
+  // The issue detail route with a POPULATED attachments panel + the open
+  // preview lightbox (Subtask 5.2.8 — the Story-5.2 a11y closer, extending
+  // the 2.4.6/5.1.7 sweeps). Seeds the panel's real states server-side: an
+  // image card (the thumbnail/preview path), a non-previewable file (the
+  // glyph/download path), and an EDITOR-sourced row (the Embedded chip +
+  // disabled delete — the disabled control still needs an accessible name).
+  // Two swept states:
+  //   1. the populated panel, strip view — STRICT, zero exclusions (no
+  //      third-party editor in the detail DOM);
+  //   2. the preview lightbox OPEN — scoped to the dialog itself (the 5.1.7
+  //      delete-confirm precedent: sweep 1 already held the page beneath to
+  //      AA, and axe mis-resolves the background of elements the full-screen
+  //      scrim geometrically overlaps, reporting them as color-contrast
+  //      violations rather than incompletes). The dialog is labelled by the
+  //      filename (srTitle), the image carries the filename as alt, and the
+  //      white-on-scrim header controls are real labelled buttons.
+  // The blob host is fulfilled with a tiny PNG so the lightbox audits a
+  // loaded image, not a broken one (the URLs are the test-blob-mock shape;
+  // nothing leaves localhost).
+  test('the issue detail route is axe-clean with a populated attachments panel + open lightbox (WCAG 2.1 AA)', async ({
+    page,
+  }) => {
+    const email = 'e2e-attachments-a11y@example.com';
+    await signUp(page, email);
+    await createFirstProject(page, 'Mobile App');
+
+    const user = (await db.user.findFirst({ where: { email } }))!;
+    const local = email.split('@')[0]!;
+    const ws = (await db.workspace.findFirst({ where: { name: `${local}'s Workspace` } }))!;
+    const project = (await db.project.findFirst({ where: { workspaceId: ws.id } }))!;
+    const issue = await workItemsService.createWorkItem(
+      { projectId: project.id, kind: 'task', title: 'Attached task' },
+      { userId: user.id, workspaceId: ws.id },
+    );
+    const blobHost = 'https://e2etest.public.blob.vercel-storage.com';
+    await db.attachment.createMany({
+      data: [
+        { originalFilename: 'shot.png', mimeType: 'image/png', source: 'panel' as const },
+        { originalFilename: 'archive.zip', mimeType: 'application/zip', source: 'panel' as const },
+        { originalFilename: 'embed.png', mimeType: 'image/png', source: 'editor' as const },
+      ].map((row, i) => ({
+        ...row,
+        workspaceId: ws.id,
+        workItemId: issue.id,
+        uploaderUserId: user.id,
+        blobUrl: `${blobHost}/a11y/${row.originalFilename}`,
+        sizeBytes: 64,
+        createdAt: new Date(Date.now() - (3 - i) * 1000),
+      })),
+    });
+    await page.route('**/*.public.blob.vercel-storage.com/**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'image/png',
+        body: Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5CYII=',
+          'base64',
+        ),
+      }),
+    );
+
+    await page.goto(`/issues/${issue.identifier}`);
+    await expect(page.getByRole('heading', { name: 'Attached task', level: 1 })).toBeVisible();
+    const list = page.getByRole('list', { name: 'Attachments' });
+    await expect(list.getByRole('listitem')).toHaveCount(3);
+    await expect(list.getByText('Embedded')).toBeVisible();
+
+    // 1. Populated panel — strict, zero exclusions.
+    const panelResults = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    expect(
+      panelResults.violations,
+      formatViolations(
+        '/issues/[key] (attachments panel)',
+        panelResults.violations as AxeViolation[],
+      ),
+    ).toEqual([]);
+
+    // 2. The preview lightbox open — scoped to the dialog (see above).
+    await list.getByRole('button', { name: 'Preview shot.png' }).click();
+    const lightbox = page.getByRole('dialog', { name: 'shot.png' });
+    await expect(lightbox).toBeVisible();
+    await expect(lightbox.getByRole('img', { name: 'shot.png' })).toBeVisible();
+    const lightboxResults = await new AxeBuilder({ page })
+      .withTags(WCAG_TAGS)
+      .include('[role="dialog"]')
+      .analyze();
+    expect(
+      lightboxResults.violations,
+      formatViolations(
+        '/issues/[key] (attachment lightbox)',
+        lightboxResults.violations as AxeViolation[],
+      ),
+    ).toEqual([]);
+  });
+
   // Structural aria assertions — the contract every shell surface inherits.
   // Kept here (not only in the keyboard spec) so the invariants are asserted
   // even if the journey spec is skipped/filtered.

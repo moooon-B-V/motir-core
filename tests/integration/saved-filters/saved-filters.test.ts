@@ -864,6 +864,7 @@ describe('dependents + delete — the warning seam and the cascade', () => {
     await savedFiltersService.star(t.key, doomed.id, t.otherCtx);
     expect(await savedFiltersService.getDependents(t.key, doomed.id, t.memberCtx)).toEqual({
       subscriptionCount: 0,
+      widgetCount: 0,
     });
     await savedFiltersService.delete(t.key, doomed.id, t.memberCtx);
     await expect(savedFiltersService.resolve(t.key, doomed.id, t.memberCtx)).rejects.toThrow(

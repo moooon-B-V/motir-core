@@ -183,7 +183,7 @@ export const story_6_3: PlanStory = {
       id: '6.3.1',
       title:
         'Dashboard + widget data model, services, and CRUD API (workspace-scoped, access private|workspace, TOTAL widget-type registry, 20-widget cap)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -320,7 +320,7 @@ export const story_6_3: PlanStory = {
       id: '6.3.3',
       title:
         'Design — dashboards + reports hub (`design/reports/dashboard.mock.html`: grid, widget chrome, add/config panels, donut + diff-area charts, report pages)',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 40,
@@ -405,7 +405,7 @@ export const story_6_3: PlanStory = {
       id: '6.3.4',
       title:
         'Chart primitives — donut + two-series difference/area forms in the 4.6.2 token-aware SVG layer (+ the categorical `--el-chart-*` ramp)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 26,

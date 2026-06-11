@@ -72,7 +72,7 @@ import type { PlanStory } from '../types';
 export const story_5_2: PlanStory = {
   id: '5.2',
   title: 'Attachments',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'First-class attachments: the managed, per-issue attachment panel on the detail page — strip ' +
     'of thumbnail cards / list toggle, upload (button + drag-drop), download, permission-gated ' +
@@ -543,7 +543,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.8',
       title:
         'Story tests — Vitest lifecycle/permission matrix + Playwright E2E (upload→panel→preview→delete, editor-sourced block, paged walk) + a11y sweep',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,

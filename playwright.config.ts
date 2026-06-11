@@ -149,6 +149,17 @@ export default defineConfig({
         // untouched.
         E2E_TEST_OAUTH: '1',
         E2E_TEST_OAUTH_USER_PATH: path.resolve('/tmp/motir-test-oauth-user.json'),
+        // Subtask 5.2.8: E2E_TEST_BLOB=1 makes instrumentation.ts mock the
+        // @vercel/blob API (see lib/test-blob-mock.ts), so the attachments
+        // journey uploads through the real route without a real blob store —
+        // CI deliberately has no real token ("no E2E performs a real
+        // upload", ci.yml). The placeholder token only has to PARSE (the SDK
+        // derives a store id from it); the network call it authorizes is
+        // intercepted before it leaves the process. Forced even when a real
+        // token is configured locally, so the suite never writes to (or
+        // depends on) a live store.
+        E2E_TEST_BLOB: '1',
+        BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_e2etest_playwright_only_placeholder',
         // PRODECT_FINDINGS #8: hand the dev server the same origin Playwright
         // drives. lib/auth/index.ts uses BETTER_AUTH_URL as both its baseURL and
         // a trustedOrigins entry, so this is what lets /api/auth/* POSTs pass the

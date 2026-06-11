@@ -266,7 +266,7 @@ export const story_8_7: PlanStory = {
     {
       id: '8.7.6',
       title: 'prodect-ai rename — package, README, comments',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 20,
@@ -286,7 +286,7 @@ export const story_8_7: PlanStory = {
     {
       id: '8.7.7',
       title: 'prodect-meta runbook — PRODECT.md → MOTIR.md + the `motir <command>` vocabulary',
-      status: 'in_progress',
+      status: 'done',
       type: 'content',
       executor: 'coding_agent',
       estimateMinutes: 30,

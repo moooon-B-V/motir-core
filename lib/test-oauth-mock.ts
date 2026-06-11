@@ -7,7 +7,9 @@
 // dormant.
 //
 // What the mock does:
-//   - Replaces the global undici dispatcher.
+//   - Adds its intercept to the SHARED MockAgent instrumentation.ts installs
+//     as the global undici dispatcher (shared with lib/test-blob-mock — a
+//     second setGlobalDispatcher would silently disconnect the first mock).
 //   - Intercepts POST https://oauth2.googleapis.com/token with a fixed
 //     synthetic token response. The id_token is a properly-formed JWT
 //     whose payload Better-Auth's google provider decodes (no signature
@@ -27,7 +29,7 @@
 //   intercept never fires. If a future Node upgrade bumps the bundled
 //   undici to v7+, bump this devDep in lockstep.
 
-import { MockAgent, setGlobalDispatcher } from 'undici';
+import type { MockAgent } from 'undici';
 import { readFile } from 'node:fs/promises';
 import { createHmac } from 'node:crypto';
 
@@ -55,16 +57,9 @@ function makeJwt(payload: Record<string, unknown>): string {
   return `${header}.${body}.${sig}`;
 }
 
-export function installGoogleTokenMock(): void {
+export function installGoogleTokenMock(agent: MockAgent): void {
   const TEST_USER_PATH =
     process.env['E2E_TEST_OAUTH_USER_PATH'] ?? '/tmp/motir-test-oauth-user.json';
-
-  const agent = new MockAgent();
-  // Allow real network for everything we don't explicitly intercept (so
-  // Prisma's TCP to Postgres still works). MockAgent's default is to
-  // disable net-connect once enableNetConnect() is unset; we call it
-  // explicitly to be unambiguous.
-  agent.enableNetConnect();
 
   const pool = agent.get('https://oauth2.googleapis.com');
   pool
@@ -103,6 +98,4 @@ export function installGoogleTokenMock(): void {
       { headers: { 'content-type': 'application/json' } },
     )
     .persist();
-
-  setGlobalDispatcher(agent);
 }
