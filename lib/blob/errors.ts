@@ -1,6 +1,7 @@
-// Typed errors for the attachment-upload domain (Subtask 2.3.7). The route maps
-// each `code` to an HTTP status, matching the `readonly code` convention the
-// other domains use.
+// Typed errors for the attachment domain (Subtask 2.3.7 upload trio; Subtask
+// 5.2.2 adds the management-surface set). The route maps each `code` to an
+// HTTP status via the AttachmentError base, matching the `readonly code`
+// convention the other domains use.
 
 export abstract class AttachmentError extends Error {
   abstract readonly code: string;
@@ -35,5 +36,51 @@ export class RateLimitError extends AttachmentError {
   constructor() {
     super('Too many uploads — please wait a moment and try again.');
     this.name = 'RateLimitError';
+  }
+}
+
+/**
+ * The attachment doesn't resolve for the caller (Subtask 5.2.2): missing id,
+ * a row in ANOTHER workspace, or a row not linked to any issue (an unlinked
+ * row is on no panel — it belongs to the 5.2.7 GC, not the management API).
+ * All three read identically as 404 — finding #44: "you can't see it" must be
+ * indistinguishable from "it doesn't exist".
+ */
+export class AttachmentNotFoundError extends AttachmentError {
+  readonly code = 'ATTACHMENT_NOT_FOUND' as const;
+  readonly status = 404;
+  constructor(id: string) {
+    super(`Attachment "${id}" was not found.`);
+    this.name = 'AttachmentNotFoundError';
+  }
+}
+
+/**
+ * The caller's role doesn't allow the attachment action (Subtask 5.2.2) —
+ * Jira's permission split mapped onto the 6.4 roles: `create` needs a
+ * non-viewer role on the issue's project; `delete` needs to be the uploader
+ * (own) or a moderator (project admin / workspace owner-admin — all). → 403.
+ */
+export class AttachmentForbiddenError extends AttachmentError {
+  readonly code = 'ATTACHMENT_FORBIDDEN' as const;
+  readonly status = 403;
+  constructor(action: 'create' | 'delete') {
+    super(`You don't have permission to ${action} attachments on this issue.`);
+    this.name = 'AttachmentForbiddenError';
+  }
+}
+
+/**
+ * The row entered through the description/comment editor, and editor-sourced
+ * files can't be panel-deleted (Subtask 5.2.2 — the Jira rule, and what
+ * prevents the broken-embed hole: deleting a file out from under a live embed).
+ * The fix is to remove the embed at its source; the panel points there. → 409.
+ */
+export class AttachmentEditorSourcedError extends AttachmentError {
+  readonly code = 'ATTACHMENT_EDITOR_SOURCED' as const;
+  readonly status = 409;
+  constructor() {
+    super('This file was added in the description or a comment — remove it there instead.');
+    this.name = 'AttachmentEditorSourcedError';
   }
 }

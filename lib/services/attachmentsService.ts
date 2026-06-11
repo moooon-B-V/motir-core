@@ -1,10 +1,25 @@
-import type { Attachment, Prisma } from '@prisma/client';
+import type { Attachment, Prisma, WorkItem } from '@prisma/client';
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { commentRepository } from '@/lib/repositories/commentRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { projectAccessService } from '@/lib/services/projectAccessService';
+import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { deleteAttachmentBlob, putAttachment } from '@/lib/blob/uploader';
 import { MAX_UPLOAD_BYTES, isAllowedUploadType, isImageType } from '@/lib/blob/allowlist';
-import { FileTooLargeError, RateLimitError, UnsupportedFileTypeError } from '@/lib/blob/errors';
+import {
+  AttachmentEditorSourcedError,
+  AttachmentForbiddenError,
+  AttachmentNotFoundError,
+  FileTooLargeError,
+  RateLimitError,
+  UnsupportedFileTypeError,
+} from '@/lib/blob/errors';
+import { WorkItemNotFoundError } from '@/lib/workItems/errors';
+import { toAttachmentDto } from '@/lib/mappers/attachmentMappers';
+import type { AttachmentDTO, AttachmentsPageDTO } from '@/lib/dto/attachments';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // Attachment upload (Subtask 2.3.7, finding #52). GENERAL — not image-only: the
 // same primitive serves the description editor's inline-image case AND Epic 5's
@@ -91,6 +106,54 @@ export interface OrphanSweepSummary {
   failed: number;
 }
 
+/**
+ * The panel's page size (Subtask 5.2.2) — the cursor-paged window behind
+ * "Show more (N)" (finding #57; the deliberate deviation from Jira's
+ * load-all-then-degrade, recorded in the Story 5.2 description).
+ */
+export const ATTACHMENT_PAGE_SIZE = 50;
+
+interface AttachmentGate {
+  item: WorkItem;
+  caps: { canBrowse: boolean; canCreate: boolean; canDeleteAll: boolean };
+}
+
+/**
+ * Resolve a work item AND the caller's attachment capabilities on its
+ * project, enforcing the two hide-gates (the commentsService pattern): a
+ * missing / cross-workspace item AND a non-browsable project both read as
+ * WorkItemNotFoundError (404 — finding #44; "you can't see it" must be
+ * indistinguishable from "it doesn't exist").
+ */
+async function resolveGatedWorkItem(
+  workItemId: string,
+  ctx: ServiceContext,
+  tx?: Prisma.TransactionClient,
+): Promise<AttachmentGate> {
+  const item = await workItemRepository.findById(workItemId, tx);
+  if (!item || item.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(workItemId);
+  const caps = await projectAccessService.getAttachmentCapabilities(item.projectId, ctx, tx);
+  if (!caps.canBrowse) throw new WorkItemNotFoundError(workItemId);
+  return { item, caps };
+}
+
+/**
+ * The `{ attachments: ... }` revision diff payload for ONE panel add/remove —
+ * the same {@link AttachmentsDiffCell} vocabulary the 5.2.3 link-on-write
+ * emits, so the History trail is uniform across both entry paths.
+ */
+function attachmentsDiffCell(
+  op: 'added' | 'removed',
+  row: Attachment,
+): { attachments: AttachmentsDiffCell } {
+  const item: AttachmentDiffItem = {
+    attachmentId: row.id,
+    name: row.originalFilename,
+    source: row.source,
+  };
+  return { attachments: { [op]: [item] } };
+}
+
 // Per-user rate limit — a simple in-memory sliding window. Per-instance only
 // (fine pre-Epic-8; a shared limiter is an Epic-8 concern). ~10 uploads / minute.
 const RATE_LIMIT = 10;
@@ -131,6 +194,165 @@ export const attachmentsService = {
     );
 
     return { url, mime: file.type, isImage: isImageType(file.type) };
+  },
+
+  /**
+   * The panel upload (Subtask 5.2.2): upload a file AND attach it to an issue
+   * in one user action. Permission-gated FIRST (view gate → 404; Jira's
+   * "Create attachments" role → 403) so a forbidden caller never spends a
+   * blob round-trip; then the 2.3.7 `uploadAttachment` primitive runs its own
+   * gates (size / MIME / rate — reused, NOT re-implemented) and writes the
+   * blob + the unlinked audit row; then ONE transaction links the row
+   * (`source: 'panel'`) and records the History entry (the `attachments`
+   * collection diff cell the 5.5.1 registry renders).
+   *
+   * Deliberately TWO transactions (upload's row insert, then link+revision) —
+   * the one-method-one-tx rule yields here like the GC documents below,
+   * because the blob network call must not run inside an open DB transaction.
+   * The failure mode is safe by construction: if the link step throws (issue
+   * deleted / hidden mid-flight), the fresh row stays UNLINKED — exactly the
+   * GC-eligible orphan shape 5.2.7 sweeps (blob included).
+   */
+  async attachToWorkItem(
+    workItemId: string,
+    file: File,
+    ctx: ServiceContext,
+  ): Promise<AttachmentDTO> {
+    const pre = await resolveGatedWorkItem(workItemId, ctx);
+    if (!pre.caps.canCreate) throw new AttachmentForbiddenError('create');
+
+    const uploaded = await this.uploadAttachment(file, ctx);
+
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        // Re-resolve inside the tx — the pre-gate read is stale by now; a
+        // throw here strands the just-written row unlinked (GC-eligible).
+        await resolveGatedWorkItem(workItemId, ctx, tx);
+        // Present by construction: uploadAttachment just inserted this row in
+        // THIS workspace, and addRandomSuffix makes the URL unique.
+        const created = (
+          await attachmentRepository.findManyByBlobUrls(ctx.workspaceId, [uploaded.url], tx)
+        )[0]!;
+        const linked: Attachment = { ...created, workItemId, source: 'panel' };
+        await attachmentRepository.linkToWorkItem([created.id], workItemId, 'panel', tx);
+        await workItemRevisionsService.recordRevision(
+          {
+            workItemId,
+            changedById: ctx.userId,
+            changeKind: 'updated',
+            diff: attachmentsDiffCell('added', linked),
+          },
+          tx,
+        );
+        return linked;
+      },
+    );
+
+    const uploaders = await userRepository.findByIds([row.uploaderUserId]);
+    return toAttachmentDto(row, new Map(uploaders.map((u) => [u.id, u])));
+  },
+
+  /**
+   * One cursor-paged window of an issue's attachments, newest first (Subtask
+   * 5.2.2; finding #57 — never a load-all): up to {@link ATTACHMENT_PAGE_SIZE}
+   * rows + the total count (the panel header + "Show more (N)" denominator).
+   * View-gated like every read; a hidden / cross-workspace issue reads 404.
+   */
+  async listForWorkItem(
+    workItemId: string,
+    options: { cursor?: string },
+    ctx: ServiceContext,
+  ): Promise<AttachmentsPageDTO> {
+    await resolveGatedWorkItem(workItemId, ctx);
+
+    // take+1 probes for a next page without a second count read.
+    const window = await attachmentRepository.listByWorkItem(workItemId, {
+      take: ATTACHMENT_PAGE_SIZE + 1,
+      cursor: options.cursor,
+    });
+    const rows = window.slice(0, ATTACHMENT_PAGE_SIZE);
+    const hasMore = window.length > ATTACHMENT_PAGE_SIZE;
+
+    const [uploaders, totalCount] = await Promise.all([
+      userRepository.findByIds([...new Set(rows.map((r) => r.uploaderUserId))]),
+      attachmentRepository.countByWorkItem(workItemId),
+    ]);
+    const uploadersById = new Map(uploaders.map((u) => [u.id, u]));
+
+    return {
+      attachments: rows.map((r) => toAttachmentDto(r, uploadersById)),
+      totalCount,
+      // hasMore ⇒ the window overflowed ⇒ the page is full — its last row exists.
+      nextCursor: hasMore ? rows[ATTACHMENT_PAGE_SIZE - 1]!.id : null,
+    };
+  },
+
+  /**
+   * Panel delete (Subtask 5.2.2) — permanent, no tombstone (the Jira-verified
+   * contract). The permission split: the UPLOADER deletes their own; project
+   * admin + workspace owner/admin delete all; nobody else. EDITOR-sourced
+   * rows are rejected with the typed 409 (the Jira rule — remove the embed at
+   * its source; the block is what prevents the broken-embed hole). Unlinked
+   * rows read as 404 (they're on no panel — the GC owns them).
+   *
+   * Order of operations — aligned with the SHIPPED 5.2.7 GC contract (the
+   * decision ladder's rung 2; the GC finds stranded blobs only through their
+   * surviving rows): ONE transaction records the revision
+   * attachment-removed entry and UNLINKS the row (panel-gone is atomic with
+   * the History trace); the BLOB delete runs post-commit, best-effort. On
+   * blob success the row is removed too (the hard delete completes); on blob
+   * failure the unlinked row SURVIVES as the GC's retry marker — the next
+   * sweep past the safety window removes blob + row (the 5.2.7 backstop).
+   * Either way the attachment is gone from the issue the moment the tx
+   * commits.
+   */
+  async deleteAttachment(attachmentId: string, ctx: ServiceContext): Promise<void> {
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const current = await attachmentRepository.findById(attachmentId, tx);
+        if (!current || current.workspaceId !== ctx.workspaceId) {
+          throw new AttachmentNotFoundError(attachmentId);
+        }
+        // An unlinked row is on no panel — not addressable here (finding #44:
+        // 404, indistinguishable from never-existed).
+        if (current.workItemId === null) throw new AttachmentNotFoundError(attachmentId);
+
+        const gate = await resolveGatedWorkItem(current.workItemId, ctx, tx);
+        if (current.source === 'editor') throw new AttachmentEditorSourcedError();
+        if (current.uploaderUserId !== ctx.userId && !gate.caps.canDeleteAll) {
+          throw new AttachmentForbiddenError('delete');
+        }
+
+        await workItemRevisionsService.recordRevision(
+          {
+            workItemId: current.workItemId,
+            changedById: ctx.userId,
+            changeKind: 'updated',
+            diff: attachmentsDiffCell('removed', current),
+          },
+          tx,
+        );
+        await attachmentRepository.unlinkFromWorkItem([current.id], tx);
+        return current;
+      },
+    );
+
+    // Post-commit, best-effort — a blob-store failure must not undo the
+    // delete; the surviving unlinked row is the GC's retry marker (5.2.7).
+    try {
+      await deleteAttachmentBlob(row.blobUrl);
+    } catch {
+      return;
+    }
+
+    // Blob gone → complete the hard delete. The idempotent form converges
+    // with a concurrent GC pass (the row was briefly an orphan): "already
+    // gone" is success, not an error.
+    await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
+      attachmentRepository.deleteIfExists(row.id, tx),
+    );
   },
 
   /**

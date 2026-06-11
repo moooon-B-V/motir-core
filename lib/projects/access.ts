@@ -110,3 +110,24 @@ export function canModerateComments(i: ProjectAccessInputs): boolean {
   if (i.workspaceRole == null) return false;
   return i.projectRole === 'admin';
 }
+
+/**
+ * Whether the actor may ADD attachments — Jira's "Create attachments"
+ * permission (Story 5.2 · Subtask 5.2.2). The Story 5.2 contract maps it onto
+ * EXACTLY the comment tiers ("admin/member add; read-only viewer neither" —
+ * the same 6.4 mapping 5.1 verified for comments), so the policy IS
+ * {@link canComment}, re-exported under the attachment name: call sites read
+ * as the permission they check, and the two permissions stay independently
+ * evolvable (they are distinct permissions in the mirror product) without
+ * duplicating the decision table today.
+ */
+export const canCreateAttachments: (i: ProjectAccessInputs) => boolean = canComment;
+
+/**
+ * Whether the actor may DELETE ANY attachment — Jira's "Delete all
+ * attachments" permission (Story 5.2 · Subtask 5.2.2): project admin +
+ * workspace owner/admin, i.e. exactly the {@link canModerateComments} tiers
+ * (the Story 5.2 mapping). Uploaders delete their OWN regardless (Jira's
+ * "Delete own" — the service checks uploadership first).
+ */
+export const canDeleteAllAttachments: (i: ProjectAccessInputs) => boolean = canModerateComments;
