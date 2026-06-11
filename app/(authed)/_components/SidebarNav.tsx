@@ -39,7 +39,7 @@ import { SidebarHeader } from './SidebarHeader';
 // its own close affordance).
 
 // Docs is an external link (no in-app docs route yet); points at the repo.
-const DOCS_URL = 'https://github.com/moooon-B-V/prodect-core#readme';
+const DOCS_URL = 'https://github.com/moooon-B-V/motir-core#readme';
 
 export interface SidebarNavProps {
   activeProject: ProjectDTO | null;

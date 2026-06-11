@@ -158,7 +158,7 @@ describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
       await runEmailSendJob(event.data);
       expect(emails.lines).toHaveLength(1);
       expect(emails.lines[0]).toContain('To: newbie@example.com');
-      expect(emails.lines[0]).toContain("You're invited to join Acme Co. on Prodect");
+      expect(emails.lines[0]).toContain("You're invited to join Acme Co. on Motir");
       expect(emails.lines[0]).toMatch(/Accept invite: https?:\/\/[^\s]+\/invite\/accept\?token=/);
     } finally {
       emails.restore();

@@ -165,20 +165,20 @@
   },
   "email": {
     "invite": {
-      "subject": "You're invited to join {workspace} on Prodect",
-      "preview": "{inviter} invited you to join {workspace} on Prodect",
+      "subject": "You're invited to join {workspace} on Motir",
+      "preview": "{inviter} invited you to join {workspace} on Motir",
       "greeting": "Hi,",
-      "lede": "{inviter} invited you to join {workspace} on Prodect.",
+      "lede": "{inviter} invited you to join {workspace} on Motir.",
       "accept": "Accept invite",
       "fallback": "Or copy this link into your browser:",
       "expires": "This invite expires in 7 days.",
       "ignore": "Don't know {inviter}? You can safely ignore this email."
     },
     "passwordReset": {
-      "subject": "Reset your Prodect password",
-      "preview": "Reset your Prodect password",
+      "subject": "Reset your Motir password",
+      "preview": "Reset your Motir password",
       "greeting": "Hi {name},",
-      "lede": "We received a request to reset your Prodect password.",
+      "lede": "We received a request to reset your Motir password.",
       "reset": "Reset your password",
       "fallback": "Or copy this link into your browser:",
       "expires": "This link expires in 1 hour. If you didn't request this, you can ignore this email."
@@ -195,7 +195,7 @@
   },
   "auth": {
     "welcomeBack": "Welcome back!",
-    "signInSubhead": "Use Prodect to turn any product idea into reality.",
+    "signInSubhead": "Use Motir to turn any product idea into reality.",
     "checking": "Checking…",
     "continue": "Continue",
     "signingIn": "Signing in…",
@@ -211,7 +211,7 @@
     "hidePassword": "Hide password",
     "dontHaveAccount": "Don't have an account?",
     "signUp": "Sign up",
-    "welcomeToProdect": "Welcome to Prodect!",
+    "welcomeToMotir": "Welcome to Motir!",
     "signUpSubhead": "Sign up to turn any product idea into reality.",
     "accountExists": "An account with this email already exists.",
     "emailHelper": "We'll use this to sign you in.",
@@ -1097,7 +1097,7 @@
       "subtitle": "Manage your personal preferences.",
       "language": {
         "heading": "Language",
-        "helper": "Choose the language for the Prodect interface.",
+        "helper": "Choose the language for the Motir interface.",
         "label": "Language"
       }
     }
@@ -1200,7 +1200,7 @@
     "deleteBoardTitle": "Delete “{name}”?",
     "deleteBoardBody": "This removes the board and its column & swimlane configuration.",
     "deleteBoardCalloutLead": "Work items are not deleted.",
-    "deleteBoardCalloutBody": "Issues belong to the project, not a board — they stay on Prodect and remain visible on your other boards.",
+    "deleteBoardCalloutBody": "Issues belong to the project, not a board — they stay on Motir and remain visible on your other boards.",
     "deleteBoardConfirm": "Delete board",
     "boardCreatedAnnounce": "Board “{name}” created. Now viewing it.",
     "boardRenamedAnnounce": "Board renamed to “{name}”.",
@@ -1251,7 +1251,7 @@
     "popover": {
       "title": "What is \"ready\"?",
       "body1": "A work item is <strong>ready</strong> when every issue blocking it has been completed — so it has no unfinished blockers and can be started right now.",
-      "body2": "Click <code>Copy</code> on any row to put its <code>prodect run PROD-…</code> command on your clipboard, then paste it into your own coding agent to dispatch the work."
+      "body2": "Click <code>Copy</code> on any row to put its <code>motir run PROD-…</code> command on your clipboard, then paste it into your own coding agent to dispatch the work."
     },
     "empty": {
       "title": "Nothing's ready right now",

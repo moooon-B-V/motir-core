@@ -38,7 +38,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Prodect',
+  title: 'Motir',
   description: 'AI-native project management — open-source PM substrate.',
 };
 

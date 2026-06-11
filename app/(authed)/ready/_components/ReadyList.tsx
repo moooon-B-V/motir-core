@@ -138,7 +138,7 @@ function ReadyRow({ item }: { item: ReadyItemDto }) {
   const t = useTranslations('ready');
   const openPeek = usePeekOpen();
   const { toast } = useToast();
-  const command = `prodect run ${item.key}`;
+  const command = `motir run ${item.key}`;
 
   const copy = useCallback(
     async (e: React.MouseEvent) => {

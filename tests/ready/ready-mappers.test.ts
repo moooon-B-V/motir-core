@@ -120,8 +120,8 @@ describe('toReadyItemDispatchDto', () => {
     expect(dto.contextRefs).toEqual(['lib/dto/ready.ts', 'lib/mappers/readyMappers.ts']);
     expect(dto.blockerKeys).toEqual(['PROD-3', 'PROD-5']);
     expect(dto.parentKey).toBe('PROD-1');
-    expect(dto.runCommand).toBe('prodect run PROD-7');
-    expect(dto.runCommand).toMatch(/^prodect run PROD-\d+$/);
+    expect(dto.runCommand).toBe('motir run PROD-7');
+    expect(dto.runCommand).toMatch(/^motir run PROD-\d+$/);
   });
 
   it('no blockers → empty blockerKeys; no parent → null parentKey', () => {

@@ -10,7 +10,7 @@ import { Popover } from '@/components/ui/Popover';
 // A first-run popover that explains the readiness predicate to a user who's never
 // seen the dispatch surface. Composes the shipped Popover (card container) + a
 // ghost Button trigger; copy comes from the `ready` namespace, with the
-// `<strong>` emphasis and the `prodect run` / Copy code chips rendered via
+// `<strong>` emphasis and the `motir run` / Copy code chips rendered via
 // next-intl rich text so they stay translatable as one phrase.
 export function ReadyHelpPopover() {
   const t = useTranslations('ready');

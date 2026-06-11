@@ -60,7 +60,7 @@ describe('email.send job — handler', () => {
     // subject, the recipient, and the (unredacted) reset link.
     expect(emails.lines).toHaveLength(1);
     expect(emails.lines[0]).toContain('To: reset@example.com');
-    expect(emails.lines[0]).toContain('Reset your Prodect password');
+    expect(emails.lines[0]).toContain('Reset your Motir password');
     expect(emails.lines[0]).toContain(RESET_URL);
 
     const runs = await db.jobRun.findMany();
@@ -100,7 +100,7 @@ describe('email.send job — handler', () => {
 
     expect(emails.lines).toHaveLength(1);
     expect(emails.lines[0]).toContain('To: newbie@example.com');
-    expect(emails.lines[0]).toContain("You're invited to join Acme Co. on Prodect");
+    expect(emails.lines[0]).toContain("You're invited to join Acme Co. on Motir");
     expect(emails.lines[0]).toContain(acceptUrl);
 
     const run = (await db.jobRun.findMany())[0]!;

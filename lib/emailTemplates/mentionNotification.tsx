@@ -114,7 +114,7 @@ function buildPlainText(p: MentionNotificationEmailProps, t: T): string {
     // grep contract — never auto-derived `label (url)` form).
     `${t('view')}: ${p.issueUrl}`,
     '',
-    '— Prodect',
+    '— Motir',
   ].join('\n');
 }
 

@@ -34,10 +34,10 @@ const answer = 42;
 // Mention specimen (Subtask 5.1.4): the @-picker over static candidates + the
 // rendered chip for the durable token format.
 const MENTION_CANDIDATES = [
-  { id: 'specimen_bo', name: 'Bo Philips', email: 'bophilips@prodect.co' },
-  { id: 'specimen_eikooc', name: 'Eikooc', email: 'eikooc@prodect.co' },
-  { id: 'specimen_julian', name: 'Julian', email: 'julian@prodect.co' },
-  { id: 'specimen_mo', name: 'Mo', email: 'mo@prodect.co' },
+  { id: 'specimen_bo', name: 'Bo Philips', email: 'bophilips@motir.co' },
+  { id: 'specimen_eikooc', name: 'Eikooc', email: 'eikooc@motir.co' },
+  { id: 'specimen_julian', name: 'Julian', email: 'julian@motir.co' },
+  { id: 'specimen_mo', name: 'Mo', email: 'mo@motir.co' },
 ];
 
 const MENTION_SAMPLE =

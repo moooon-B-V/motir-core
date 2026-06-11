@@ -77,7 +77,7 @@ function buildPlainText(props: PasswordResetEmailProps, t: T): string {
     '',
     t('expires'),
     '',
-    '— Prodect',
+    '— Motir',
   ].join('\n');
 }
 
