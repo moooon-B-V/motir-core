@@ -14,6 +14,7 @@ import {
   type ProjectFilterReferents,
 } from '@/lib/filters/registry';
 import { UnknownFilterOperatorError } from '@/lib/filters/errors';
+import type { DistributionGroupBy } from '@/lib/reports/statisticTypes';
 import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
 import { READY_KIND_RANK, type ReadyCursor } from '@/lib/workItems/readyFilter';
 import {
@@ -1038,6 +1039,87 @@ export const workItemRepository = {
   },
 
   /**
+   * The CREATED series of the created-vs-resolved report (Story 6.3 · Subtask
+   * 6.3.2): non-archived items whose `createdAt` falls inside the inclusive
+   * window, COUNTed per `date_trunc(period, createdAt)` bucket in ONE grouped
+   * query (finding #57 — never a row load + JS reduce; the result is bounded
+   * by the bucket cap the service validates). `period` is a closed
+   * `day|week|month` union bound as a parameter (never SQL text). The
+   * optional compiled FilterAST (the 6.2 saved-filter scope — Subtask 6.1.1's
+   * compiler over alias `w`, stale referents → match-nothing per 6.1.2)
+   * narrows the set; a project scope passes none. `workspaceId` gates the
+   * read (finding #26). Buckets with no events return no row (the service
+   * fills the axis). Read-only path → `db` singleton.
+   */
+  async aggregateCreatedByBucket(
+    projectId: string,
+    workspaceId: string,
+    period: 'day' | 'week' | 'month',
+    window: { start: Date; end: Date },
+    filter?: { ast?: FilterAst; referents?: ProjectFilterReferents },
+  ): Promise<Array<{ bucket: string; count: number }>> {
+    const astSql = filter?.ast
+      ? compileFilterConditionsSql(filter.ast, filter.referents)
+      : Prisma.sql`TRUE`;
+    return db.$queryRaw<Array<{ bucket: string; count: number }>>`
+      SELECT
+        to_char(date_trunc(${period}, w."createdAt"), 'YYYY-MM-DD') AS "bucket",
+        COUNT(*)::int AS "count"
+      FROM "work_item" w
+      WHERE w."projectId" = ${projectId}
+        AND w."workspaceId" = ${workspaceId}
+        AND w."archivedAt" IS NULL
+        AND w."createdAt" >= ${window.start}
+        AND w."createdAt" <= ${window.end}
+        AND (${astSql})
+      GROUP BY 1
+      ORDER BY 1`;
+  },
+
+  /**
+   * The DISTRIBUTION (donut) aggregate (Story 6.3 · Subtask 6.3.2): one
+   * bounded GROUP-BY count over the scoped non-archived items, per the TOTAL
+   * `DistributionGroupBy` descriptor (`lib/reports/statisticTypes.ts` —
+   * mistake #29: the switch below is total over every descriptor the
+   * registry can emit; descriptors select FIXED SQL literals, only values
+   * bind). Strategies:
+   *   • `column` — a `work_item` scalar (kind/status/priority/assignee/
+   *     reporter/sprint), labelled via its referent table where one exists
+   *     (workflow_status label, user/sprint name; enum ids self-describe).
+   *   • `join` — the 5.4.1 label/component join: one row per (item, join
+   *     row), so a multi-labelled item lands in multiple segments (the
+   *     verified Jira behaviour) and a no-label item falls into the NULL
+   *     ("None") segment via LEFT JOIN.
+   *   • `customField` — the 5.3.1 typed-EAV probe on the `[workItemId,
+   *     fieldId]` unique / `[fieldId, value*]` indexes, narrowed to the
+   *     enum-ish value columns (select-option / user).
+   * The optional compiled FilterAST narrows the item set (the saved-filter
+   * scope). The result is bounded by the statistic's value vocabulary —
+   * segments, never items (finding #57). Read-only path → `db` singleton.
+   */
+  async aggregateDistribution(
+    projectId: string,
+    workspaceId: string,
+    groupBy: DistributionGroupBy,
+    filter?: { ast?: FilterAst; referents?: ProjectFilterReferents },
+  ): Promise<Array<{ id: string | null; label: string | null; count: number }>> {
+    const astSql = filter?.ast
+      ? compileFilterConditionsSql(filter.ast, filter.referents)
+      : Prisma.sql`TRUE`;
+    const { idExpr, labelExpr, joinSql } = distributionGroupBySql(groupBy);
+    return db.$queryRaw<Array<{ id: string | null; label: string | null; count: number }>>`
+      SELECT ${idExpr} AS "id", ${labelExpr} AS "label", COUNT(*)::int AS "count"
+      FROM "work_item" w
+      ${joinSql}
+      WHERE w."projectId" = ${projectId}
+        AND w."workspaceId" = ${workspaceId}
+        AND w."archivedAt" IS NULL
+        AND (${astSql})
+      GROUP BY 1, 2
+      ORDER BY 3 DESC, 2 ASC NULLS LAST, 1 ASC NULLS LAST`;
+  },
+
+  /**
    * Resolve the nearest ANCESTOR-EPIC id for each of `itemIds` (the loaded
    * board page) — the per-card half of the epic group-by, so the client never
    * re-derives lane membership. Same upward recursive walk as
@@ -1882,6 +1964,104 @@ export function compileFilterConditionsSql(
       : Prisma.sql`(${compileConditionSql(rc.condition, rc.def)})`,
   );
   return Prisma.join(fragments, ast.combinator === 'or' ? ' OR ' : ' AND ');
+}
+
+// ---------------------------------------------------------------------------
+// The distribution group-by fragments (Story 6.3 · Subtask 6.3.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Map a TOTAL `DistributionGroupBy` descriptor to its fixed SQL fragments —
+ * the id/label projections and the (LEFT) joins they read through. Table and
+ * column names are FIXED LITERALS selected by the closed switches below
+ * (the `FILTER_FIELD_COLUMN_SQL` rule — descriptor ids never reach SQL
+ * text); the only bound value is the custom-field id. LEFT joins everywhere
+ * so the empty bucket (no assignee / no sprint / no label / no value row)
+ * groups under NULL — the designed "None" segment. The label/component join
+ * rides the 5.4.1 reverse-edge indexes; the custom-field probe rides the
+ * 5.3.1 `[workItemId, fieldId]` unique.
+ */
+/** The `column`-strategy fragments — `work_item` scalars, labelled through
+ * their referent table where one exists. Status keys label through the
+ * project's `workflow_status` rows (one project per scope — saved filters
+ * are project-contained); enum columns (kind/priority) self-describe, the
+ * UI translates. */
+function columnGroupBySql(
+  column: 'kind' | 'status' | 'priority' | 'assignee' | 'reporter' | 'sprint',
+): { idExpr: Prisma.Sql; labelExpr: Prisma.Sql; joinSql: Prisma.Sql } {
+  switch (column) {
+    case 'kind':
+      return {
+        idExpr: Prisma.sql`w."kind"::text`,
+        labelExpr: Prisma.sql`NULL::text`,
+        joinSql: Prisma.empty,
+      };
+    case 'priority':
+      return {
+        idExpr: Prisma.sql`w."priority"::text`,
+        labelExpr: Prisma.sql`NULL::text`,
+        joinSql: Prisma.empty,
+      };
+    case 'status':
+      return {
+        idExpr: Prisma.sql`w."status"`,
+        labelExpr: Prisma.sql`st."label"`,
+        joinSql: Prisma.sql`LEFT JOIN "workflow_status" st ON st."project_id" = w."projectId" AND st."key" = w."status"`,
+      };
+    case 'assignee':
+      return {
+        idExpr: Prisma.sql`w."assigneeId"`,
+        labelExpr: Prisma.sql`au."name"`,
+        joinSql: Prisma.sql`LEFT JOIN "user" au ON au."id" = w."assigneeId"`,
+      };
+    case 'reporter':
+      return {
+        idExpr: Prisma.sql`w."reporterId"`,
+        labelExpr: Prisma.sql`ru."name"`,
+        joinSql: Prisma.sql`LEFT JOIN "user" ru ON ru."id" = w."reporterId"`,
+      };
+    case 'sprint':
+      return {
+        idExpr: Prisma.sql`w."sprintId"`,
+        labelExpr: Prisma.sql`sp."name"`,
+        joinSql: Prisma.sql`LEFT JOIN "sprint" sp ON sp."id" = w."sprintId"`,
+      };
+  }
+}
+
+function distributionGroupBySql(groupBy: DistributionGroupBy): {
+  idExpr: Prisma.Sql;
+  labelExpr: Prisma.Sql;
+  joinSql: Prisma.Sql;
+} {
+  switch (groupBy.kind) {
+    case 'column':
+      return columnGroupBySql(groupBy.column);
+    case 'join':
+      return groupBy.entity === 'label'
+        ? {
+            idExpr: Prisma.sql`l."id"`,
+            labelExpr: Prisma.sql`l."name"`,
+            joinSql: Prisma.sql`LEFT JOIN "work_item_label" jl ON jl."work_item_id" = w."id" LEFT JOIN "label" l ON l."id" = jl."label_id"`,
+          }
+        : {
+            idExpr: Prisma.sql`c."id"`,
+            labelExpr: Prisma.sql`c."name"`,
+            joinSql: Prisma.sql`LEFT JOIN "work_item_component" jc ON jc."work_item_id" = w."id" LEFT JOIN "component" c ON c."id" = jc."component_id"`,
+          };
+    case 'customField':
+      return groupBy.fieldType === 'select'
+        ? {
+            idExpr: Prisma.sql`v."value_option_id"`,
+            labelExpr: Prisma.sql`o."label"`,
+            joinSql: Prisma.sql`LEFT JOIN "custom_field_value" v ON v."work_item_id" = w."id" AND v."field_id" = ${groupBy.fieldId} LEFT JOIN "custom_field_option" o ON o."id" = v."value_option_id"`,
+          }
+        : {
+            idExpr: Prisma.sql`v."value_user_id"`,
+            labelExpr: Prisma.sql`vu."name"`,
+            joinSql: Prisma.sql`LEFT JOIN "custom_field_value" v ON v."work_item_id" = w."id" AND v."field_id" = ${groupBy.fieldId} LEFT JOIN "user" vu ON vu."id" = v."value_user_id"`,
+          };
+  }
 }
 
 /**

@@ -115,6 +115,13 @@ export default defineConfig({
         'lib/mappers/savedFilterMappers.ts',
         'lib/savedFilters/access.ts',
         'lib/savedFilters/builtins.ts',
+        // Story 6.3 (dashboards & reports): the 6.3.2 widget/report data
+        // reads — the statistic-type registry, the window/bucket math, and
+        // the route param parsers gate from day one (the service / repo /
+        // mapper halves extend already-gated files above).
+        'lib/reports/statisticTypes.ts',
+        'lib/reports/buckets.ts',
+        'lib/reports/params.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -208,6 +215,10 @@ export default defineConfig({
         'lib/mappers/savedFilterMappers.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/savedFilters/access.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/savedFilters/builtins.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 6.3 (dashboards & reports): the 6.3.2 read substrate.
+        'lib/reports/statisticTypes.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/reports/buckets.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/reports/params.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },
