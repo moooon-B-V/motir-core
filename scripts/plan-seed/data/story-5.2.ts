@@ -217,7 +217,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.2',
       title:
         '`attachmentsService` management surface — attach-to-issue, paged list, permission-gated delete w/ blob cleanup + revision trail, routes',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -403,7 +403,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.5',
       title:
         'Attachments panel UI on the issue detail page — strip/list, upload (button + drag-drop), download, gated delete, "Show more" paging',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
