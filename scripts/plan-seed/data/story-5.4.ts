@@ -650,7 +650,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.10',
       title:
         'Components admin UI — Project settings → Components (list, create/edit w/ default assignee, move-or-remove delete)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
