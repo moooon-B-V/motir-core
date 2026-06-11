@@ -266,7 +266,7 @@ export const story_8_7: PlanStory = {
     {
       id: '8.7.6',
       title: 'prodect-ai rename — package, README, comments',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 20,
