@@ -47,24 +47,47 @@ import type { IssueRowData } from './issueRows';
 // views (Tree + List) mount the provider, so the list and the detail page truly
 // share the controls (no parallel components).
 
-// The provider's per-row ledger of server-acknowledged `updatedAt` values.
-// With no refresh on success, `row.updatedAt` in server props stops advancing
-// after a confirmed edit — so a follow-up edit on the SAME row (unassign after
-// reassign; an assignee edit after a status change, which also bumps the row)
-// would submit the stale prop as `expectedUpdatedAt` and die on the
-// optimistic-concurrency check. Every confirmed action acknowledges its
+// The provider's per-row ledger of server-acknowledged edits. Two registers:
+//
+// `updatedAt` — with no refresh on success, `row.updatedAt` in server props
+// stops advancing after a confirmed edit, so a follow-up edit on the SAME row
+// (unassign after reassign; an assignee edit after a status change, which also
+// bumps the row) would submit the stale prop as `expectedUpdatedAt` and die on
+// the optimistic-concurrency check. Every confirmed action acknowledges its
 // returned `updatedAt`; submissions use the max of the ledger and the prop.
-// It lives on the PROVIDER (one per view mount) — above the cells, so it is
-// shared by all five editors of a row and survives cell remounts, yet resets
-// with the page where fresh server props make it moot. It only ever holds
-// values the server itself returned; max-merge keeps it monotonic, and a
-// fresher server prop (someone else's later edit) always wins the max. NOT
-// used for display convergence — useConvergingOverride must keep comparing
-// against the row's actually-served `updatedAt`, otherwise a confirmed cell
-// would yield to the still-stale prop value immediately.
+//
+// Confirmed FIELD VALUES — the cells' converging overrides are component
+// state, and the row components UNMOUNT: TreeTable virtualizes (2.5.15), so
+// scrolling a row out of the window destroys its overrides, and the Tree's
+// `levels` client cache — which inline edits never write into — re-renders the
+// OLD value on remount (the post-#640 recurrence of
+// bug-inline-status-revert-on-second-edit; collapse→re-expand does the same to
+// cached child levels). So every confirmed edit also records (rowId, field) →
+// {value, confirmedUpdatedAt} here, and a remounting cell re-reads it; the
+// same convergence rule applies (the entry yields once the served
+// `row.updatedAt` reaches the acknowledged write).
+//
+// The ledger lives on the PROVIDER (one per view mount) — above the cells, so
+// it is shared by all five editors of a row and survives row unmounts, yet
+// resets with the page where fresh server props make it moot. It only ever
+// holds values the server itself confirmed; per-key newest-write-wins keeps
+// both registers monotonic, and a fresher server prop (someone else's later
+// edit) always wins the comparisons. The `updatedAt` register is NOT used for
+// display convergence — value resolution must keep comparing against the
+// row's actually-served `updatedAt`, otherwise a confirmed cell would yield
+// to the still-stale prop value immediately.
+type InlineFieldKey = 'status' | 'assigneeId' | 'priority' | 'dueDate' | 'estimateMinutes';
+
+interface ConfirmedFieldEntry {
+  value: unknown;
+  confirmedUpdatedAt: string;
+}
+
 interface UpdatedAtLedger {
   acknowledge(rowId: string, updatedAt: string): void;
   latest(row: IssueRowData): string;
+  confirmField(rowId: string, field: InlineFieldKey, value: unknown, updatedAt: string): void;
+  readField(rowId: string, field: InlineFieldKey): ConfirmedFieldEntry | undefined;
 }
 
 interface InlineEditContextValue {
@@ -91,9 +114,11 @@ export function IssueInlineEditProvider({
   // when there's no ProjectAccessProvider (non-shell / test mounts).
   const { canEdit } = useProjectAccess();
   const acknowledgedRef = useRef<Map<string, string>>(new Map());
+  const confirmedFieldsRef = useRef<Map<string, ConfirmedFieldEntry>>(new Map());
   const value = useMemo(() => {
     if (!canEdit) return null;
     const acked = acknowledgedRef.current;
+    const fields = confirmedFieldsRef.current;
     const ledger: UpdatedAtLedger = {
       acknowledge(rowId, updatedAt) {
         const cur = acked.get(rowId);
@@ -102,6 +127,16 @@ export function IssueInlineEditProvider({
       latest(row) {
         const a = acked.get(row.id);
         return a !== undefined && a > row.updatedAt ? a : row.updatedAt;
+      },
+      confirmField(rowId, field, value, updatedAt) {
+        const key = `${rowId}:${field}`;
+        const cur = fields.get(key);
+        if (cur === undefined || updatedAt > cur.confirmedUpdatedAt) {
+          fields.set(key, { value, confirmedUpdatedAt: updatedAt });
+        }
+      },
+      readField(rowId, field) {
+        return fields.get(`${rowId}:${field}`);
       },
     };
     return { workflow, members, ledger };
@@ -133,25 +168,53 @@ function useIssueInlineEdit() {
 // missing our committed write, so the override keeps rendering; a snapshot
 // at/after it includes the write (per-row `updatedAt` is monotonic), so the
 // server value wins — which also lets a genuinely later edit by someone else
-// show through. No remount, no setState-in-effect; a follow-up edit on the
-// same cell replaces the override (the token keeps a superseded action's
-// confirm/fail from clobbering it).
-function useConvergingOverride<T>(serverValue: T, serverUpdatedAt: string) {
+// show through. No setState-in-effect; a follow-up edit on the same cell
+// replaces the override (the token keeps a superseded action's confirm/fail
+// from clobbering it).
+//
+// The local override alone is NOT enough: the row component unmounts when it
+// scrolls out of TreeTable's virtualization window (2.5.15) or its parent
+// collapses, and the Tree re-renders it from the `levels` client cache, which
+// inline edits never write into — so the old value came back on remount (the
+// post-#640 recurrence of the bug). Confirmed values therefore also go into
+// the provider's ledger, which outlives the cell; on remount the resolution
+// is local override (an edit in THIS mount) → ledger entry (an edit confirmed
+// before an unmount) → server value, with the same catch-up rule deciding
+// when the server wins. Reading the ledger ref during render is safe here:
+// entries only change inside this hook's own confirm path, which re-renders
+// this cell via setOverride, and a remounting cell renders fresh.
+function useConvergingOverride<T>(row: IssueRowData, field: InlineFieldKey, serverValue: T) {
+  const ledger = useIssueInlineEdit()?.ledger;
+  const serverUpdatedAt = row.updatedAt;
   const [override, setOverride] = useState<{ value: T; confirmedUpdatedAt?: string } | null>(null);
   const tokenRef = useRef(0);
+  // The value handed to begin(), kept for confirm() to write into the ledger
+  // (the override state may not have flushed when the action resolves).
+  const begunRef = useRef<{ token: number; value: T } | null>(null);
 
-  const serverCaughtUp =
+  const persisted = ledger?.readField(row.id, field);
+  const overrideCaughtUp =
     override?.confirmedUpdatedAt !== undefined && serverUpdatedAt >= override.confirmedUpdatedAt;
-  const value = override !== null && !serverCaughtUp ? override.value : serverValue;
+  const persistedCaughtUp =
+    persisted !== undefined && serverUpdatedAt >= persisted.confirmedUpdatedAt;
+  const value =
+    override !== null && !overrideCaughtUp
+      ? override.value
+      : persisted !== undefined && !persistedCaughtUp
+        ? (persisted.value as T)
+        : serverValue;
 
   function begin(next: T): number {
     const token = ++tokenRef.current;
+    begunRef.current = { token, value: next };
     setOverride({ value: next });
     return token;
   }
   function confirm(token: number, updatedAt: string) {
     if (tokenRef.current !== token) return;
     setOverride((o) => (o === null ? o : { ...o, confirmedUpdatedAt: updatedAt }));
+    const begun = begunRef.current;
+    if (begun?.token === token) ledger?.confirmField(row.id, field, begun.value, updatedAt);
   }
   function fail(token: number) {
     if (tokenRef.current !== token) return;
@@ -260,7 +323,7 @@ function InlineStatusEditor({ row, workflow }: { row: IssueRowData; workflow: Wo
   // Optimistic override: the just-picked key, confirmed by the action response
   // (see useConvergingOverride — the success response IS the confirmation; no
   // refresh follows). On failure the override is dropped and the cell reverts.
-  const status = useConvergingOverride(row.status, row.updatedAt);
+  const status = useConvergingOverride(row, 'status', row.status);
 
   const statusKey = status.value;
   const meta = workflow.statuses.find((s) => s.key === statusKey);
@@ -325,7 +388,7 @@ function InlineAssigneeEditor({
   const [editing, setEditing] = useState(false);
   // Converging override (the value may be null for an unassign) — held until
   // the server's row catches up with the acknowledged write.
-  const assignee = useConvergingOverride(row.assigneeId, row.updatedAt);
+  const assignee = useConvergingOverride(row, 'assigneeId', row.assigneeId);
 
   const assigneeId = assignee.value;
   const member = assigneeId ? members.find((m) => m.userId === assigneeId) : undefined;
@@ -374,7 +437,7 @@ function InlinePriorityEditor({ row }: { row: IssueRowData }) {
   const t = useTranslations('issueViews');
   const { run, pending } = useUpdateField(row);
   const [editing, setEditing] = useState(false);
-  const priorityField = useConvergingOverride(row.priority, row.updatedAt);
+  const priorityField = useConvergingOverride(row, 'priority', row.priority);
 
   const priority = priorityField.value;
 
@@ -422,7 +485,7 @@ function InlineDueEditor({ row }: { row: IssueRowData }) {
   const { run, pending } = useUpdateField(row);
   const [editing, setEditing] = useState(false);
   // Converging override over the ISO value (or null for a cleared date).
-  const due = useConvergingOverride(row.dueDate, row.updatedAt);
+  const due = useConvergingOverride(row, 'dueDate', row.dueDate);
 
   const dueIso = due.value;
   const label = dueIso ? formatDate(dueIso, locale) : null;
@@ -480,7 +543,7 @@ function InlineEstimateEditor({ row }: { row: IssueRowData }) {
   const t = useTranslations('issueViews');
   const { run, pending } = useUpdateField(row);
   const [editing, setEditing] = useState(false);
-  const estimateField = useConvergingOverride(row.estimateMinutes, row.updatedAt);
+  const estimateField = useConvergingOverride(row, 'estimateMinutes', row.estimateMinutes);
   // The free-text draft, seeded from the shown value each time the editor
   // opens (the cell no longer remounts on a server change, so a mount-time
   // seed would go stale).
@@ -563,7 +626,9 @@ function InlineEstimateEditor({ row }: { row: IssueRowData }) {
 // which let a stale refresh payload, applied after the fresh one, revert a
 // row another in-flight edit had already committed. Reconciliation now lives
 // in useConvergingOverride (the override yields only once the row's
-// `updatedAt` reaches the acknowledged write).
+// `updatedAt` reaches the acknowledged write), and confirmed values survive
+// row unmounts (virtualization scroll-out, parent collapse) via the
+// provider's ledger.
 
 /** STATUS cell — inline-editable inside a provider, else the read-only pill. */
 export function InlineStatusCell({ row }: { row: IssueRowData }) {
