@@ -163,6 +163,32 @@ export const customFieldValueRepository = {
   },
 
   /**
+   * Per-option value counts for MANY options in ONE query (groupBy
+   * valueOptionId) — the admin-list read (5.3.6) names each option's usage
+   * ("used on N issues" / delete-when-unused affordance) without a
+   * per-option round-trip (no N+1; the option set is ≤ the 55 cap per
+   * field). Options with no values are absent from the result (count 0 to
+   * the caller). Empty-input guard: an empty id set short-circuits to []
+   * with no query. Served by [fieldId, valueOptionId]'s second column.
+   */
+  async countGroupedByOption(
+    optionIds: string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ optionId: string; count: number }[]> {
+    if (optionIds.length === 0) return [];
+    const client = tx ?? db;
+    const grouped = await client.customFieldValue.groupBy({
+      by: ['valueOptionId'],
+      where: { valueOptionId: { in: optionIds }, workspaceId },
+      _count: { _all: true },
+    });
+    return grouped
+      .filter((g): g is typeof g & { valueOptionId: string } => g.valueOptionId !== null)
+      .map((g) => ({ optionId: g.valueOptionId, count: g._count._all }));
+  },
+
+  /**
    * How many values hold this option — the only-when-unused delete rule's
    * guard read (0 → delete legal; >0 → typed OptionInUseError, archive
    * offered instead). Run inside the option-delete transaction (pass `tx`);

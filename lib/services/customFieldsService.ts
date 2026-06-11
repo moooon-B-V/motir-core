@@ -220,7 +220,26 @@ async function readFieldDTO(
       ? await customFieldOptionRepository.listByField(field.id, ctx.workspaceId, tx)
       : [];
   const valueCount = await customFieldValueRepository.countByField(field.id, ctx.workspaceId, tx);
-  return toCustomFieldDefinitionDTO(field, options, valueCount);
+  const optionCounts = new Map(
+    (
+      await customFieldValueRepository.countGroupedByOption(
+        options.map((o) => o.id),
+        ctx.workspaceId,
+        tx,
+      )
+    ).map((c) => [c.optionId, c.count]),
+  );
+  return toCustomFieldDefinitionDTO(field, options, valueCount, optionCounts);
+}
+
+/** Read one option's usage count (the per-option gloss / delete affordance). */
+async function optionDTOWithCount(
+  option: Parameters<typeof toCustomFieldOptionDTO>[0],
+  ctx: WorkspaceContext,
+  tx: Prisma.TransactionClient,
+): Promise<CustomFieldOptionDTO> {
+  const count = await customFieldValueRepository.countByOption(option.id, ctx.workspaceId, tx);
+  return toCustomFieldOptionDTO(option, count);
 }
 
 export interface ActorScopedInput {
@@ -248,8 +267,9 @@ export const customFieldsService = {
    * order, each with its option set + its issue-value count (the number the
    * delete confirm names). Browse-gated (any member who can see the project
    * — viewers included — can read definitions; the rail needs them), and
-   * BOUNDED: ≤50 definitions (the cap), three queries total (definitions,
-   * options-by-project, grouped value counts — no N+1, finding #57).
+   * BOUNDED: ≤50 definitions (the cap), four queries total (definitions,
+   * options-by-project, grouped value counts by field AND by option — no
+   * N+1, finding #57).
    */
   async listFields(input: ActorScopedInput): Promise<CustomFieldDefinitionDTO[]> {
     return withWorkspaceContext(input.ctx, async (tx) => {
@@ -271,6 +291,15 @@ export const customFieldsService = {
         input.ctx.workspaceId,
         tx,
       );
+      const optionCounts = new Map(
+        (
+          await customFieldValueRepository.countGroupedByOption(
+            options.map((o) => o.id),
+            input.ctx.workspaceId,
+            tx,
+          )
+        ).map((c) => [c.optionId, c.count]),
+      );
 
       const optionsByField = new Map<string, typeof options>();
       for (const option of options) {
@@ -281,7 +310,12 @@ export const customFieldsService = {
       const countByField = new Map(counts.map((c) => [c.fieldId, c.count]));
 
       return definitions.map((d) =>
-        toCustomFieldDefinitionDTO(d, optionsByField.get(d.id) ?? [], countByField.get(d.id) ?? 0),
+        toCustomFieldDefinitionDTO(
+          d,
+          optionsByField.get(d.id) ?? [],
+          countByField.get(d.id) ?? 0,
+          optionCounts,
+        ),
       );
     });
   },
@@ -389,6 +423,27 @@ export const customFieldsService = {
   },
 
   /**
+   * Update a field's description (project-admin-gated) — the edit-modal
+   * Description input (Subtask 5.3.6; the 5.3.4 mockup's edit panel, and the
+   * mirror: Jira team-managed field descriptions stay editable). Trimmed;
+   * an empty string clears to null (the createField convention).
+   */
+  async updateFieldDescription(
+    input: FieldScopedInput & { description: string | null },
+  ): Promise<CustomFieldDefinitionDTO> {
+    const description = input.description?.trim() || null;
+    return withWorkspaceContext(input.ctx, async (tx) => {
+      await resolveFieldForManage(input.fieldId, input.actorUserId, input.ctx, tx);
+      const updated = await customFieldDefinitionRepository.update(
+        input.fieldId,
+        { description },
+        tx,
+      );
+      return readFieldDTO(updated, input.ctx, tx);
+    });
+  },
+
+  /**
    * Reorder a field (project-admin-gated) — a single-row fractional-index
    * write (the board-settings precedent: the client mints the key between
    * its new neighbours; no renumber sweeps).
@@ -452,7 +507,8 @@ export const customFieldsService = {
         { fieldId: field.id, label, position },
         tx,
       );
-      return toCustomFieldOptionDTO(option);
+      // A just-created option has zero usage by construction.
+      return toCustomFieldOptionDTO(option, 0);
     });
   },
 
@@ -462,7 +518,7 @@ export const customFieldsService = {
     return withWorkspaceContext(input.ctx, async (tx) => {
       await resolveOptionForManage(input.optionId, input.actorUserId, input.ctx, tx);
       const updated = await customFieldOptionRepository.update(input.optionId, { label }, tx);
-      return toCustomFieldOptionDTO(updated);
+      return optionDTOWithCount(updated, input.ctx, tx);
     });
   },
 
@@ -477,7 +533,7 @@ export const customFieldsService = {
     return withWorkspaceContext(input.ctx, async (tx) => {
       await resolveOptionForManage(input.optionId, input.actorUserId, input.ctx, tx);
       const updated = await customFieldOptionRepository.update(input.optionId, { position }, tx);
-      return toCustomFieldOptionDTO(updated);
+      return optionDTOWithCount(updated, input.ctx, tx);
     });
   },
 
@@ -494,7 +550,7 @@ export const customFieldsService = {
         { archived: true },
         tx,
       );
-      return toCustomFieldOptionDTO(updated);
+      return optionDTOWithCount(updated, input.ctx, tx);
     });
   },
 
@@ -507,7 +563,7 @@ export const customFieldsService = {
         { archived: false },
         tx,
       );
-      return toCustomFieldOptionDTO(updated);
+      return optionDTOWithCount(updated, input.ctx, tx);
     });
   },
 
@@ -544,7 +600,8 @@ export const customFieldsService = {
         /* istanbul ignore next -- rethrow of the non-P2003 branch above */
         throw err;
       }
-      return toCustomFieldOptionDTO(option);
+      // Deleted only when unused — the receipt's count is zero by the rule.
+      return toCustomFieldOptionDTO(option, 0);
     });
   },
 };

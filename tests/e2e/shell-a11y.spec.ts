@@ -77,6 +77,15 @@ const SHELL_ROUTES: { path: string; ready: (page: Page) => Promise<void> }[] = [
       expect(page.getByRole('heading', { name: 'Workflow', exact: true })).toBeVisible(),
   },
   {
+    // Custom-fields admin (Subtask 5.3.6). Swept in its EMPTY state (a fresh
+    // project defines no custom fields) — STRICT, zero exclusions: the
+    // EmptyState CTA is a real button, the page heading is the h1, and the
+    // populated list's editors are covered by the 5.3.8 story sweep.
+    path: '/settings/project/fields',
+    ready: async (page) =>
+      expect(page.getByRole('heading', { name: 'Fields', exact: true })).toBeVisible(),
+  },
+  {
     // Operator dashboard (Subtask 1.6.5). Swept in its EMPTY state (a fresh
     // workspace has no job runs). Stays in the STRICT sweep with zero rule
     // exclusions, like every other shell route — and now that the colored Pill
