@@ -538,7 +538,7 @@ export const story_5_3: PlanStory = {
       id: '5.3.8',
       title:
         'Story tests — Vitest matrix (types × validation × permissions × lifecycle) + Playwright E2E (define → set → history → delete) + a11y sweep',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
