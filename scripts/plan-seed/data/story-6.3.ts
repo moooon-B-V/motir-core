@@ -183,7 +183,7 @@ export const story_6_3: PlanStory = {
       id: '6.3.1',
       title:
         'Dashboard + widget data model, services, and CRUD API (workspace-scoped, access private|workspace, TOTAL widget-type registry, 20-widget cap)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
