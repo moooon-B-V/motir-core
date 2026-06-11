@@ -122,6 +122,17 @@ export default defineConfig({
         'lib/reports/statisticTypes.ts',
         'lib/reports/buckets.ts',
         'lib/reports/params.ts',
+        // Story 6.6 (automation rules): the 6.6.1 schema/registry/service
+        // backend gates from day one — the TOTAL trigger/action registries,
+        // the admin-gated CRUD + caps, the stored-envelope round-trip, and the
+        // condition degraded-state branch are the contract (no engine yet —
+        // 6.6.2).
+        'lib/automation/registry.ts',
+        'lib/automation/fields.ts',
+        'lib/automation/constants.ts',
+        'lib/services/automationRulesService.ts',
+        'lib/repositories/automationRuleRepository.ts',
+        'lib/mappers/automationRuleMappers.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -219,6 +230,13 @@ export default defineConfig({
         'lib/reports/statisticTypes.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/reports/buckets.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/reports/params.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 6.6 (automation rules): the 6.6.1 backend.
+        'lib/automation/registry.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/automation/fields.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/automation/constants.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/automationRulesService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/automationRuleRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mappers/automationRuleMappers.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },
