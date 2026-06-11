@@ -229,7 +229,7 @@ export const story_8_7: PlanStory = {
     {
       id: '8.7.5',
       title: 'Plan-seed tenant rename — @motir.co users, project naming; history stays',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
