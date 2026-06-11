@@ -2040,7 +2040,7 @@ the HTML is the source of truth (toggle dark in it for token parity).
 - **Route: `/filters`** — project-scoped, a sibling of `/issues` in the
   authed shell. Entries: the dropdown's "View all filters" footer + the
   command palette. **Deliberately NOT a primary sidebar item** — Jira's
-  "Filters" nav entry belongs to its site-global model; in Prodect's
+  "Filters" nav entry belongs to its site-global model; in Motir's
   project-contained model the /issues toolbar is the home of filtering, and
   the sidebar stays lean (recorded deviation).
 - The table (the list-table grammar): **Name** (bookmark/lock glyph + linked
@@ -2159,10 +2159,10 @@ control/badge`, `--spacing-control/input/chip/icon-btn/tooltip/btn-*`,
 ### Out of scope (documented extension slots)
 
 - Per-filter Viewers/Editors grant lists + group share scopes (no groups in
-  Prodect; the 6.4 roles draw the boundary — the Story 6.2 recorded
+  Motir; the 6.4 roles draw the boundary — the Story 6.2 recorded
   deviation).
 - Cross-project / workspace-global filters (follows the 6.1 scope deviation).
-- Filter-sourced boards (the company-managed shape; Prodect boards stay
+- Filter-sourced boards (the company-managed shape; Motir boards stay
   status-mapped — 3.1/3.6).
 - Advanced cron subscriptions (the preset tier ships; cron is the power-user
   extension).
