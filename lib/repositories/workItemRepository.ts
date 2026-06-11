@@ -6,6 +6,9 @@ import {
   type WorkItemPriority,
 } from '@prisma/client';
 import { db } from '@/lib/db';
+import type { FilterAst, FilterCondition, FilterFieldId } from '@/lib/filters/ast';
+import { filterFieldDef, validateFilterAst } from '@/lib/filters/registry';
+import { UnknownFilterOperatorError } from '@/lib/filters/errors';
 import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
 import { READY_KIND_RANK, type ReadyCursor } from '@/lib/workItems/readyFilter';
 import {
@@ -618,9 +621,23 @@ export const workItemRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemForestRow[]> {
     const client = tx ?? db;
-    // The filter axes, as a bound-param predicate over the forest alias `f`
-    // (shared with the flat List read — see buildIssueFilterSql).
-    const matched = buildIssueFilterSql(filter, 'f');
+    // The facet axes, as a bound-param predicate over the forest alias `f`
+    // (shared with the flat List read — see buildIssueFilterSql). The 6.1.1
+    // AST axis is stripped here and compiled over a joined full `work_item`
+    // row instead: the CTE's fixed projection lacks the columns the builder
+    // can reference (`sprintId` / `createdAt` / `descriptionMd`), and
+    // re-projecting Markdown blobs through the recursion would bloat it.
+    const { ast, ...facetAxes } = filter;
+    const facetMatched = buildIssueFilterSql(facetAxes, 'f');
+    const hasAst = ast !== undefined && ast.conditions.length > 0;
+    // COALESCE the combined expression: unlike a WHERE (where NULL means
+    // unmatched for free), this is PROJECTED as the `matched` boolean column,
+    // and AST arms over nullable columns (text contains, number comparisons)
+    // can yield SQL NULL — which must surface as `false`, not a null DTO field.
+    const matched = hasAst
+      ? Prisma.sql`COALESCE((${facetMatched}) AND (${compileFilterConditionsSql(ast)}), FALSE)`
+      : facetMatched;
+    const astJoin = hasAst ? Prisma.sql`JOIN "work_item" w ON w."id" = f."id"` : Prisma.empty;
 
     return client.$queryRaw<WorkItemForestRow[]>`
       WITH RECURSIVE forest AS (
@@ -659,6 +676,7 @@ export const workItemRepository = {
              f.depth::int         AS "depth",
              (${matched})         AS "matched"
         FROM forest f
+        ${astJoin}
         ORDER BY f.depth ASC, f."key" ASC`;
   },
 
@@ -1559,6 +1577,155 @@ export interface RepoIssueFilter {
    * issue tree) never do.
    */
   sprintId?: string;
+  /**
+   * The advanced filter builder's compiled axis (Story 6.1 · 6.1.1) — a
+   * validated {@link FilterAst}, AND-ed with the facet axes above (the facet
+   * shape REMAINS as the degenerate all-AND quick path; this is the
+   * superseding rich shape). Compiled over the full `work_item` row (alias
+   * `w`) by {@link compileFilterConditionsSql}; the forest read satisfies
+   * that by joining `work_item` back onto the CTE for the `matched` flag (the
+   * CTE's fixed projection lacks `sprintId` / `createdAt` / `descriptionMd`).
+   */
+  ast?: FilterAst;
+}
+
+// ---------------------------------------------------------------------------
+// The FilterAST compiler (Subtask 6.1.1) — AST → parameterized WHERE fragment
+// ---------------------------------------------------------------------------
+
+/**
+ * Fixed column references for the registered built-in fields, over the full
+ * `work_item` alias `w`. Field/operator ids NEVER reach SQL text — they
+ * resolve through this map (and the operator switch below) to fixed literals;
+ * every user VALUE binds as a `Prisma.sql` parameter. Enum columns cast
+ * `::text` so bound text arrays compare text-to-text (the
+ * `buildIssueFilterSql` convention).
+ */
+const FILTER_FIELD_COLUMN_SQL: Record<Exclude<FilterFieldId, 'text'>, Prisma.Sql> = {
+  kind: Prisma.sql`w."kind"::text`,
+  status: Prisma.sql`w."status"`,
+  priority: Prisma.sql`w."priority"::text`,
+  assignee: Prisma.sql`w."assigneeId"`,
+  reporter: Prisma.sql`w."reporterId"`,
+  sprint: Prisma.sql`w."sprintId"`,
+  created: Prisma.sql`w."createdAt"`,
+  updated: Prisma.sql`w."updatedAt"`,
+  due: Prisma.sql`w."dueDate"`,
+  storyPoints: Prisma.sql`w."storyPoints"`,
+  estimate: Prisma.sql`w."estimateMinutes"`,
+};
+
+/**
+ * Enum-list membership — `col = ANY(values)` OR-ed with `IS NULL` when the
+ * list carries the field's empty-bucket sentinel ("Unassigned" / "Backlog"),
+ * COALESCE-d to a clean boolean (NULL-safe three-valued logic, the
+ * buildIssueFilterSql assignee precedent). `is_none_of` is its negation —
+ * which, on a nullable column WITHOUT the sentinel in the list, includes the
+ * empty bucket (an unassigned issue is assigned to "none of" any member
+ * list), and excludes it when the sentinel IS listed.
+ */
+function enumListSql(
+  column: Prisma.Sql,
+  values: string[],
+  sentinel: string | undefined,
+  negate: boolean,
+): Prisma.Sql {
+  const includeEmpty = sentinel !== undefined && values.includes(sentinel);
+  const ids = sentinel === undefined ? values : values.filter((v) => v !== sentinel);
+  const terms: Prisma.Sql[] = [];
+  if (ids.length > 0) terms.push(Prisma.sql`${column} = ANY(${ids})`);
+  if (includeEmpty) terms.push(Prisma.sql`${column} IS NULL`);
+  /* istanbul ignore next -- defensive: validation requires ≥1 value, so terms is never empty */
+  if (terms.length === 0) return Prisma.sql`FALSE`;
+  const membership = Prisma.sql`COALESCE((${Prisma.join(terms, ' OR ')}), FALSE)`;
+  return negate ? Prisma.sql`NOT (${membership})` : membership;
+}
+
+/** The free-text contains-match — title OR description (the story's scope),
+ * pattern-escaped, ILIKE backed by the pg_trgm GIN index this subtask's
+ * migration adds (finding #57). The positive form stays a PLAIN two-arm OR:
+ * wrapping the nullable-description arm in COALESCE defeats the index
+ * (BitmapOr needs directly-indexable clauses), and WHERE treats the NULL it
+ * can yield as unmatched anyway; the projection site that needs a clean
+ * boolean (the forest's `matched` column) COALESCEs the WHOLE fragment. The
+ * negation keeps the inner COALESCE — `NOT` must not turn a NULL description
+ * into a dropped row, and a NOT-ILIKE can't use the index regardless. */
+function textMatchSql(value: string, negate: boolean): Prisma.Sql {
+  const pattern = `%${escapeLikePattern(value.trim())}%`;
+  if (negate) {
+    return Prisma.sql`NOT (w."title" ILIKE ${pattern} OR COALESCE(w."descriptionMd" ILIKE ${pattern}, FALSE))`;
+  }
+  return Prisma.sql`(w."title" ILIKE ${pattern} OR w."descriptionMd" ILIKE ${pattern})`;
+}
+
+const NUMBER_COMPARE_SQL: Record<'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte', Prisma.Sql> = {
+  eq: Prisma.sql`=`,
+  ne: Prisma.sql`<>`,
+  lt: Prisma.sql`<`,
+  lte: Prisma.sql`<=`,
+  gt: Prisma.sql`>`,
+  gte: Prisma.sql`>=`,
+};
+
+/** One validated condition → its parenthesized predicate fragment. */
+function compileConditionSql(condition: FilterCondition): Prisma.Sql {
+  const { field, operator, value } = condition;
+  if (field === 'text') {
+    // Validation pinned the text ops + a string value.
+    return textMatchSql(value as string, operator === 'not_contains');
+  }
+  const column = FILTER_FIELD_COLUMN_SQL[field];
+  switch (operator) {
+    case 'is_any_of':
+    case 'is_none_of': {
+      const def = filterFieldDef(field);
+      return enumListSql(column, value as string[], def.emptySentinel, operator === 'is_none_of');
+    }
+    case 'is_empty':
+      return Prisma.sql`${column} IS NULL`;
+    case 'is_not_empty':
+      return Prisma.sql`${column} IS NOT NULL`;
+    case 'eq':
+    case 'ne':
+    case 'lt':
+    case 'lte':
+    case 'gt':
+    case 'gte':
+      // `ne` deliberately excludes the empty bucket (NULL <> v is NULL →
+      // unmatched) — the documented JQL `!=` rule the registry mirrors.
+      return Prisma.sql`${column} ${NUMBER_COMPARE_SQL[operator]} ${value as number}`;
+    case 'on_or_before':
+      return Prisma.sql`${column}::date <= (${value as string})::date`;
+    case 'on_or_after':
+      return Prisma.sql`${column}::date >= (${value as string})::date`;
+    case 'between': {
+      const [from, to] = value as [string, string];
+      return Prisma.sql`${column}::date BETWEEN (${from})::date AND (${to})::date`;
+    }
+    case 'in_last_days':
+      return Prisma.sql`${column}::date >= CURRENT_DATE - (${value as number})::int AND ${column}::date <= CURRENT_DATE`;
+    case 'in_next_days':
+      return Prisma.sql`${column}::date >= CURRENT_DATE AND ${column}::date <= CURRENT_DATE + (${value as number})::int`;
+    /* istanbul ignore next -- defensive: validateFilterAst rejects text ops on non-text fields before this switch */
+    case 'contains':
+    case 'not_contains':
+      throw new UnknownFilterOperatorError(field, operator);
+  }
+}
+
+/**
+ * Compile a FilterAST into one parameterized predicate over the `work_item`
+ * alias `w` (Subtask 6.1.1). Re-validates against the registry first (defence
+ * in depth — typed 422s, mistake #29: no unvalidated AST can reach SQL even
+ * through a future second caller), then joins the per-condition fragments
+ * under the AND/OR combinator. An empty row set compiles to `TRUE` (match
+ * all). Exported for the injection/operator test matrix.
+ */
+export function compileFilterConditionsSql(ast: FilterAst): Prisma.Sql {
+  validateFilterAst(ast);
+  if (ast.conditions.length === 0) return Prisma.sql`TRUE`;
+  const fragments = ast.conditions.map((c) => Prisma.sql`(${compileConditionSql(c)})`);
+  return Prisma.join(fragments, ast.combinator === 'or' ? ' OR ' : ' AND ');
 }
 
 /**
@@ -1604,6 +1771,16 @@ function buildIssueFilterSql(filter: RepoIssueFilter, alias: 'f' | 'w'): Prisma.
     predicates.push(
       Prisma.sql`(${t}."identifier" ILIKE ${pattern} OR ${t}."title" ILIKE ${pattern})`,
     );
+  }
+  if (filter.ast && filter.ast.conditions.length > 0) {
+    // The advanced-builder axis (6.1.1). Compiled over the FULL `work_item`
+    // alias `w` — callers on the fixed-projection forest alias `f` must strip
+    // it and compose the fragment over a joined `w` instead (findProjectForest
+    // does); reaching here with alias `f` is a programming error, not input.
+    if (alias !== 'w') {
+      throw new Error('RepoIssueFilter.ast requires the full work_item alias (w)');
+    }
+    predicates.push(Prisma.sql`(${compileFilterConditionsSql(filter.ast)})`);
   }
   return predicates.length ? Prisma.join(predicates, ' AND ') : Prisma.sql`TRUE`;
 }

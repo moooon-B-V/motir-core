@@ -1,5 +1,6 @@
 import { Prisma, type WorkItem } from '@prisma/client';
 import { db } from '@/lib/db';
+import { validateFilterAst } from '@/lib/filters/registry';
 import { assertValidParent, allowedParentKinds, type IssueType } from '@/lib/issues/parentRules';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -249,6 +250,15 @@ function buildRepoFilter(filter: ProjectTreeFilter): RepoIssueFilter {
   if (filter.includeUnassigned) repoFilter.includeUnassigned = true;
   const text = filter.text?.trim();
   if (text) repoFilter.text = text;
+  // The advanced-builder axis (Story 6.1 · 6.1.1): validate at the service
+  // boundary — typed FilterValidationErrors (→ 422 at the HTTP layer) on an
+  // unknown field/operator id or a bad value; the repo compiler re-validates
+  // (defence in depth). An empty row set constrains nothing and is dropped so
+  // it never activates tree pruning.
+  if (filter.ast) {
+    validateFilterAst(filter.ast);
+    if (filter.ast.conditions.length > 0) repoFilter.ast = filter.ast;
+  }
   return repoFilter;
 }
 
@@ -259,7 +269,8 @@ function repoFilterIsActive(f: RepoIssueFilter): boolean {
     f.statuses !== undefined ||
     f.assigneeIds !== undefined ||
     f.includeUnassigned === true ||
-    f.text !== undefined
+    f.text !== undefined ||
+    f.ast !== undefined
   );
 }
 
