@@ -22,6 +22,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { CoreFieldsPanel } from './_components/CoreFieldsPanel';
+import { WatchControl } from './_components/WatchControl';
 import { ContentSectionCard } from './_components/ContentSectionCard';
 import { IssueExplanation } from './_components/IssueExplanation';
 import { ParentBreadcrumb } from './_components/ParentBreadcrumb';
@@ -176,6 +177,21 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ ke
                   variant="header"
                 />
               ) : null}
+              {/* 5.4.9: the watch control + watchers popover — BEFORE Edit,
+                beside the roll-up badge (the labels-components-watch mockup's
+                panel-0 placement). Every viewer gets it: watching is not
+                editing (the verified permission split). */}
+              <WatchControl
+                workItemId={item.id}
+                initialCount={detail.watcherCount}
+                initialWatching={detail.viewerIsWatching}
+                currentUserId={ctx.userId}
+                candidates={members.map((m) => ({
+                  id: m.userId,
+                  name: m.name,
+                  email: m.email,
+                }))}
+              />
               {canEdit ? (
                 <Link
                   href={`/issues/${item.identifier}/edit`}
