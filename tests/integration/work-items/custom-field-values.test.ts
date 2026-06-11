@@ -536,3 +536,85 @@ describe('lifecycle — field delete destroys values', () => {
     expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
   });
 });
+
+// ── the 5.3.8 story matrix — the remaining clear / re-set cells ──────────────
+//
+// The Story-5.3 closer (Subtask 5.3.8) asserts the full five-types ×
+// (valid set / invalid set / clear / re-set) grid. The set/invalid cells and
+// text/number clear+re-set landed with 5.3.3 above; these are the cells that
+// grid still left open: clear + re-set for date, select, and user.
+
+describe('the 5.3.8 story matrix — clear + re-set for date / select / user', () => {
+  it('date: re-set to another day diffs instant→instant; clear deletes the row and diffs to null', async () => {
+    const fx = await makeWorkItemFixture();
+    const field = await makeField(fx, { fieldType: 'date', key: 'golive' });
+    const itemId = await makeIssue(fx);
+
+    await customFieldValuesService.setValue(itemId, field.id, '2026-07-01', fx.ctx);
+    const dto = await customFieldValuesService.setValue(itemId, field.id, '2026-08-15', fx.ctx);
+    expect(dto?.date).toBe('2026-08-15T00:00:00.000Z');
+
+    const cleared = await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx);
+    expect(cleared).toBeNull();
+    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+
+    // listByWorkItem returns revisions newest-first.
+    const revs = await valueRevisions(itemId);
+    expect(revs.map((r) => r.diff)).toEqual([
+      { 'customFields.golive': { from: '2026-08-15T00:00:00.000Z', to: null } },
+      {
+        'customFields.golive': {
+          from: '2026-07-01T00:00:00.000Z',
+          to: '2026-08-15T00:00:00.000Z',
+        },
+      },
+      { 'customFields.golive': { from: null, to: '2026-07-01T00:00:00.000Z' } },
+    ]);
+  });
+
+  it('select: clear deletes the row and diffs the LABEL to null; clearing again is a no-op', async () => {
+    const fx = await makeWorkItemFixture();
+    const field = await makeField(fx, { fieldType: 'select', key: 'severity' });
+    const high = await makeOption(field, 'High');
+    const itemId = await makeIssue(fx);
+    await customFieldValuesService.setValue(itemId, field.id, high.id, fx.ctx);
+
+    const cleared = await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx);
+    expect(cleared).toBeNull();
+    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+
+    // Clearing an already-clear field writes nothing — no row, no revision.
+    await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx);
+
+    // listByWorkItem returns revisions newest-first → the clear is revs[0].
+    const revs = await valueRevisions(itemId);
+    expect(revs).toHaveLength(2);
+    expect(revs[0]!.diff).toEqual({ 'customFields.severity': { from: 'High', to: null } });
+  });
+
+  it('user: re-set to another member diffs id→id; clear deletes the row and diffs to null', async () => {
+    const fx = await makeWorkItemFixture();
+    const field = await makeField(fx, { fieldType: 'user', key: 'stakeholder' });
+    const alice = await createTestUser({ email: 'alice@ex.com', name: 'Alice' });
+    const bob = await createTestUser({ email: 'bob@ex.com', name: 'Bob' });
+    await workspacesService.addMember({ userId: alice.id, workspaceId: fx.workspaceId });
+    await workspacesService.addMember({ userId: bob.id, workspaceId: fx.workspaceId });
+    const itemId = await makeIssue(fx);
+
+    await customFieldValuesService.setValue(itemId, field.id, alice.id, fx.ctx);
+    const dto = await customFieldValuesService.setValue(itemId, field.id, bob.id, fx.ctx);
+    expect(dto?.user).toEqual({ id: bob.id, name: 'Bob', image: null });
+
+    const cleared = await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx);
+    expect(cleared).toBeNull();
+    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+
+    // listByWorkItem returns revisions newest-first.
+    const revs = await valueRevisions(itemId);
+    expect(revs.map((r) => r.diff)).toEqual([
+      { 'customFields.stakeholder': { from: bob.id, to: null } },
+      { 'customFields.stakeholder': { from: alice.id, to: bob.id } },
+      { 'customFields.stakeholder': { from: null, to: alice.id } },
+    ]);
+  });
+});
