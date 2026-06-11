@@ -147,7 +147,7 @@ export const story_6_5: PlanStory = {
       id: '6.5.1',
       title:
         'Design — the project-settings area (`design/projects/settings-area.mock.html`: grouped nav, area chrome, Details landing, role + responsive states)',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 38,
@@ -207,7 +207,7 @@ export const story_6_5: PlanStory = {
       id: '6.5.2',
       title:
         'Settings-nav registry + area layout — re-house Workflow / Boards / Estimation / Members / Fields / Components under one chrome',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
