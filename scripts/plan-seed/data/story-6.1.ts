@@ -361,7 +361,7 @@ export const story_6_1: PlanStory = {
       id: '6.1.4',
       title:
         'Filter-builder UI on /issues — built-in fields (rows, combinator, live-apply URL state, facet upgrade, applied summary)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
