@@ -190,7 +190,7 @@ export const story_8_7: PlanStory = {
     {
       id: '8.7.4',
       title: 'prodect-core technical rename — package name, README, docs, comments, notices',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 45,
