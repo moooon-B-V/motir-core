@@ -319,7 +319,7 @@ export const story_8_7: PlanStory = {
     {
       id: '8.7.8',
       title: 'Infra renames — GitHub repos, Vercel project, local remotes',
-      status: 'blocked',
+      status: 'done',
       type: 'manual',
       executor: 'human',
       estimateMinutes: 30,
@@ -379,7 +379,7 @@ export const story_8_7: PlanStory = {
     {
       id: '8.7.10',
       title: 'Post-rename sweep — cross-repo residue audit + live smoke',
-      status: 'blocked',
+      status: 'planned',
       type: 'review',
       executor: 'coding_agent',
       estimateMinutes: 20,
