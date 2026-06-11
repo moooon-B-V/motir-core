@@ -244,7 +244,8 @@ export const STUB_STORIES: PlanStory[] = [
       'user runs the prompt in their own agent. THE seam the future native AI-coding layer ' +
       "extends. (Former Epic 4 §4.1, §4.2.) Contract recorded by 7.9 (Motir CLI): the prompt's " +
       'GIT WORKFLOW block is a DISPATCH-TIME template parameter — TWO variants (per-item PR ' +
-      'for `next` / session-branch <name> for `auto`; an auto-merge-to-main variant was ' +
+      'for `next` and `batch` (7.9.10 reuses it unchanged) / session-branch <name> for `auto`; ' +
+      'an auto-merge-to-main variant was ' +
       'REJECTED as dangerous, main only moves through a human-merged PR), selected by the ' +
       'dispatch request; also a structured `targetRepo` field AND the inherited ' +
       '`sessionBranch` (7.8.11 — when an item is ready via an integrated-awaiting-review ' +
@@ -281,7 +282,7 @@ export const STUB_STORIES: PlanStory[] = [
   // 7.9 (Motir CLI — `motir next` / `motir auto` terminal dispatch) is fully
   // expanded — data/story-7.9.ts. Added 2026-06-10 on Yue's direction: the
   // productized `prodect run` loop (auth/link/ready/status/next/run/done/
-  // auto/open/plan), built as an MCP CLIENT of the 7.8 server (one agent surface,
+  // auto/batch/open/plan), built as an MCP CLIENT of the 7.8 server (one agent surface,
   // one PAT auth path), consuming 7.6's server-side prompt generation;
   // packages/cli workspace package, binary `motir`; npm publish is Epic-8
   // work (name securing gates it — no forward dep).

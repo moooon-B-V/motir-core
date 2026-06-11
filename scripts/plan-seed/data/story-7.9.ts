@@ -134,6 +134,21 @@ import type { PlanStory } from '../types';
  *      items honestly in `in_review` — flip them back to in_progress (or
  *      re-dispatch) and the field clears with the new outcome. Statuses
  *      never claim main has work it doesn't have.
+ *   3. **`motir batch` (snapshot mode — per-item PRs to main, NO session
+ *      branch; Yue, 2026-06-10):** the complement of `auto`. Freeze a
+ *      SNAPSHOT of the ready set NOW and implement exactly those items,
+ *      one at a time; items that become ready DURING the run are
+ *      deliberately NOT picked up (re-run, or use `auto`). No session
+ *      branch is needed because a strictly-ready snapshot is MUTUALLY
+ *      INDEPENDENT by construction — every item's deps are already done
+ *      on main, so no snapshot item can depend on another (it would not
+ *      be ready otherwise). Each item therefore rides mode 1's per-item
+ *      flow: its own branch off origin/main, its own PR targeting main,
+ *      item stays in_progress until the human merges and runs
+ *      `motir done <key>`. The snapshot takes STRICT main-readiness only
+ *      — an item ready via a 7.8.11 integrated-awaiting-review dep is
+ *      excluded (its dep's code is not on main; that lineage belongs to
+ *      `auto`'s session mode). 7.9.10.
  * **REJECTED: `--auto-merge` (Yue, 2026-06-10 — same day, retracted).** A
  * mode where the agent merges its own per-item PRs straight to main was
  * considered and REJECTED as dangerous: an unattended loop must never
@@ -196,6 +211,10 @@ export const story_7_9: PlanStory = {
     '(7.8.11) so dependents cascade mid-run and their prompts build against that branch; ONE ' +
     'end-of-run PR per repo; auto-merging to main was rejected as dangerous — main only moves ' +
     'through a human-merged PR), ' +
+    '`motir batch` (the snapshot complement of auto — freeze the ready set NOW and implement ' +
+    'exactly those items one by one, each as its OWN per-item PR to main with NO session ' +
+    'branch: a strictly-ready snapshot is mutually independent by construction, every dep ' +
+    'already done on main; mid-run unlocks wait for the next run — 7.9.10), ' +
     '`motir open <key>` (jump to the browser), and `motir plan "<description>"` / `motir plan ' +
     '<KEY>` (terminal planning — generate/augment the tree or expand a stub via the async ' +
     '7.3/7.4 engine, pushing a consent-gated local code-context bundle so the planner sees the ' +
@@ -249,6 +268,10 @@ export const story_7_9: PlanStory = {
     'prints the new children; `motir plan "<description>"` first prints the code-context ' +
     'bundle manifest and uploads NOTHING until you confirm — decline and verify no code left ' +
     'the machine, confirm and verify the tree lands in the live project.\n' +
+    '- `motir batch --agent "./fake-agent.sh"` on a fixture where finishing item A unlocks ' +
+    'item B: the snapshot is printed up front, every snapshot item lands its OWN PR ' +
+    'targeting main (no session branch exists anywhere), and B is NOT dispatched — the ' +
+    'summary counts it as "became ready during the run".\n' +
     '- Revoke the PAT → every command fails with the auth error and a re-login hint.',
   items: [
     {
@@ -782,6 +805,63 @@ export const story_7_9: PlanStory = {
         '- `.motir.json` / `motir link` (the checkouts the bundle walks)\n\n' +
         '**Branch.** `subtask/PROD-7.9.9-cli-plan-command`.',
       dependsOn: ['7.9.1', '7.9.8', '7.3', '7.4'],
+    },
+    {
+      id: '7.9.10',
+      title:
+        '`motir batch` — snapshot the ready set, implement one by one, per-item PRs to main (no session branch)',
+      status: 'blocked',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 35,
+      descriptionMd:
+        "The snapshot complement of `motir auto` (Yue's spec, 2026-06-10). `auto` is a live " +
+        'while loop — the ready set changes during the run and the loop follows it. `batch` ' +
+        'deliberately does the opposite: **freeze a SNAPSHOT of the ready set NOW and ' +
+        'implement exactly those items, one at a time.** Items that become ready DURING the ' +
+        'run are NOT picked up — the summary counts them ("N became ready during the run — ' +
+        're-run `motir batch`, or use `motir auto`").\n\n' +
+        '**Why no session branch (the soundness argument, story header mode 3).** A ' +
+        'strictly-ready snapshot is MUTUALLY INDEPENDENT by construction: ready = every dep ' +
+        'done on main, so no snapshot item can depend on another snapshot item (it would not ' +
+        'be ready). Each item therefore rides the 7.9.3 / `next` per-item flow unchanged — ' +
+        "its own worktree/branch off origin/main IN ITS TARGET REPO (the prompt's standard " +
+        'GIT WORKFLOW; the 7.6 per-item-PR variant, no new prompt variant), its own PR ' +
+        'targeting main, item stays in_progress with the PR open. The human reviews each PR ' +
+        'and closes out per item with `motir done <key>` — manual merge mode unchanged, main ' +
+        'only moves through human-merged PRs. Two snapshot items in the SAME repo simply ' +
+        'open two independent PRs off origin/main.\n\n' +
+        '**Snapshot filter: STRICT main-readiness.** The snapshot takes `list_ready` items ' +
+        'whose deps are ALL done — an item that is ready only via a 7.8.11 ' +
+        "integrated-awaiting-review dep is EXCLUDED (its dep's code is not on main, so a " +
+        "per-item PR to main could not even build; that lineage is `auto`'s session " +
+        'territory) and named in the summary. An unexpanded epic/story in the snapshot is ' +
+        'skipped + reported "needs planning" (the 7.9.4 rule); there is NO ' +
+        "`--include-planning` here — an expansion's output could never join a frozen " +
+        'snapshot, so the flag stays `auto`-only.\n\n' +
+        '**Shared loop mechanics (7.9.4):** requires `--agent`/config `agentCommand`; halt ' +
+        'on first agent failure by default, `--keep-going` to continue (failed item stays ' +
+        'in_progress and is named, the rest of the snapshot proceeds); `--kinds` / `--max`; ' +
+        'Ctrl-C exits with the summary-so-far (already-opened PRs stand). Cross-update ' +
+        '`docs/cli.md` (7.9.6 ships before this): the batch section + an `auto` vs `batch` ' +
+        'comparison table (live loop / session PR vs frozen snapshot / per-item PRs).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- On a fixture where finishing item A makes item B ready: `motir batch` prints the ' +
+        'snapshot up front, dispatches ONLY the snapshot items, and B is never dispatched ' +
+        '(the inverse of the 7.9.4 re-query proof) — the summary counts it as newly ready.\n' +
+        '- Every snapshot item lands its own PR targeting main from its own branch; NO ' +
+        'session branch is created anywhere in the run; two same-repo items open two ' +
+        'independent PRs off origin/main; no `mark_integrated` call is made.\n' +
+        '- An integrated-dep-ready item and an unexpanded story are excluded/skipped and ' +
+        'named in the summary; failure policy, `--kinds`/`--max`, and Ctrl-C behave as in ' +
+        '7.9.4; a read-only PAT cannot dispatch.\n' +
+        '- `docs/cli.md` documents batch incl. the auto-vs-batch table.\n\n' +
+        '## Context refs\n\n' +
+        '- 7.9.3 (the per-item dispatch flow this loops over a frozen list)\n' +
+        '- 7.9.4 (shared loop mechanics + the skip rule; the contrast this complements)\n' +
+        '- story-7.0.ts (`GET /api/ready` — the snapshot source contract)\n\n' +
+        '**Branch.** `subtask/PROD-7.9.10-cli-batch`.',
+      dependsOn: ['7.9.3', '7.9.4'],
     },
   ],
 };
