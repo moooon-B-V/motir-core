@@ -213,11 +213,14 @@ test('at scale the read stays cursor-paged: 20 + "Show more", sort flips without
   const items = list.locator('> li');
   await expect(items.nth(1)).toContainText('comment 66');
 
-  // The sort toggle re-orders the loaded window without a refetch.
+  // The sort toggle re-orders the loaded window without a refetch. (5.5.4
+  // activated the Activity seam: the ONE toggle now governs every tab, so its
+  // accessible name is the section-wide form the 5.5.3 design pins — "Sort
+  // activity, …"; the flip behaviour under test is unchanged.)
   const fetchesBeforeFlip = pageSizes.length;
-  await page.getByRole('button', { name: 'Sort comments, oldest first' }).click();
+  await page.getByRole('button', { name: 'Sort activity, oldest first' }).click();
   await expect(items.first()).toContainText('comment 105');
-  await expect(page.getByRole('button', { name: 'Sort comments, newest first' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sort activity, newest first' })).toBeVisible();
   expect(pageSizes.length).toBe(fetchesBeforeFlip);
 
   // Every network read stayed within the page size — the load-all read the
