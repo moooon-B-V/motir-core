@@ -11,13 +11,18 @@ import type { IssueActionResult } from '@/app/(authed)/issues/[key]/edit/actions
 // Repro for bug-inline-status-revert-on-second-edit: inline-edit item A's
 // status on /issues, then item B's — intermittently A's cell flips back to its
 // OLD status although the DB row holds the NEW one (display-only; Yue verified
-// the backend). The race this test makes DETERMINISTIC: two rapid edits put two
-// PATCHes + two router.refresh()es in flight; refresh #1 (fired when B's action
-// resolved, BEFORE A's slower write committed) carries a payload in which A is
-// still old, and when its response is applied AFTER refresh #2's fresh payload
-// (out-of-order arrival), the pre-fix cell — whose optimistic override was
-// already discarded by the fresh payload's keyed remount — re-renders A from
-// the stale server props.
+// the backend). Root cause: every inline edit refreshed the WHOLE tree
+// (revalidatePath in the action + router.refresh() in the cell), so two rapid
+// edits raced multiple full-page snapshots and a stale one applying last
+// re-rendered A from old server props. The fix removes the refresh fan-out —
+// a successful action response IS the confirmation, nothing repaints — so
+// this suite locks in BOTH halves of the contract:
+//   1. a successful inline edit fires NO router.refresh() at all;
+//   2. if stale server props DO arrive anyway (a sibling cell's stale-conflict
+//      refresh, a navigation payload — simulated here by rerendering with a
+//      pre-write DB snapshot AFTER the fresh one), the confirmed cell still
+//      does not revert (useConvergingOverride yields only once the row's
+//      updatedAt catches up with the acknowledged write).
 //
 // Per the card (and the reproduce-before-diagnosing rule) this drives the REAL
 // workItemsService against the real test Postgres for every write and for both
@@ -208,30 +213,33 @@ describe('bug-inline-status-revert-on-second-edit — two rapid inline edits, ad
     expect(statusCalls).toHaveLength(2);
     expect(statusCalls[1]!.input).toEqual({ id: h.b.id, toStatusKey: 'in_progress' });
 
-    // B's (faster) write commits first and its action resolves → the component
-    // fires refresh #1. Its payload is the DB as of NOW: A still 'todo'.
+    // B's (faster) write commits first and its action resolves. A pre-A-write
+    // DB snapshot taken NOW (A still 'todo') is the stale payload some OTHER
+    // surface could still hand the table later.
     const bDto = await workItemsService.updateStatus(h.b.id, 'in_progress', h.fx.ctx);
     await deliver(statusCalls[1]!, { ok: true, updatedAt: bDto.updatedAt });
     const stalePayload = await h.snapshot();
     expect(stalePayload.find((r) => r.id === h.a.id)!.status).toBe('todo'); // not yet written
     expect(stalePayload.find((r) => r.id === h.b.id)!.status).toBe('in_progress');
 
-    // A's write commits and its action resolves → refresh #2. From here on the
-    // DB row holds A's NEW status — the backend-correct fact the card scopes to.
+    // A's write commits and its action resolves. From here on the DB row holds
+    // A's NEW status — the backend-correct fact the card scopes to.
     const aDto = await workItemsService.updateStatus(h.a.id, 'in_progress', h.fx.ctx);
     expect((await workItemsService.getWorkItem(h.a.id, h.fx.ctx)).status).toBe('in_progress');
     await deliver(statusCalls[0]!, { ok: true, updatedAt: aDto.updatedAt });
     const freshPayload = await h.snapshot();
     expect(freshPayload.map((r) => r.status)).toEqual(['in_progress', 'in_progress']);
-    expect(refreshSpy).toHaveBeenCalledTimes(2);
+    // Contract half 1: success = confirmed, full stop — NO whole-tree refresh.
+    expect(refreshSpy).not.toHaveBeenCalled();
 
-    // Adversarial arrival order: refresh #2's FRESH payload applies first…
+    // Contract half 2: even if payloads DO arrive, in adversarial order — the
+    // FRESH snapshot applies first…
     rerender(h.table(freshPayload));
     expect(within(rowOf('Item A')).getByRole('button', { name: 'Edit Status' }).textContent).toBe(
       'In Progress',
     );
-    // …then refresh #1's STALE payload lands last. The cell must NOT revert:
-    // the DB (asserted above and again below) has held 'in_progress' all along.
+    // …then the STALE snapshot lands last. The cell must NOT revert: the DB
+    // (asserted above and again below) has held 'in_progress' all along.
     rerender(h.table(stalePayload));
     expect(within(rowOf('Item A')).getByRole('button', { name: 'Edit Status' }).textContent).toBe(
       'In Progress',
@@ -263,7 +271,7 @@ describe('bug-inline-status-revert-on-second-edit — two rapid inline edits, ad
     expect(updateCalls[0]!.input).toMatchObject({ id: h.a.id, assigneeId: owner.userId });
     expect(updateCalls[1]!.input).toMatchObject({ id: h.b.id, assigneeId: owner.userId });
 
-    // B's write commits + resolves first → refresh #1 snapshots A unassigned.
+    // B's write commits + resolves first; a pre-A-write snapshot has A unassigned.
     const bDto = await workItemsService.updateWorkItem(
       h.b.id,
       { assigneeId: owner.userId },
@@ -274,7 +282,7 @@ describe('bug-inline-status-revert-on-second-edit — two rapid inline edits, ad
     const stalePayload = await h.snapshot();
     expect(stalePayload.find((r) => r.id === h.a.id)!.assigneeId).toBeNull();
 
-    // A's write commits + resolves → refresh #2.
+    // A's write commits + resolves.
     const aDto = await workItemsService.updateWorkItem(
       h.a.id,
       { assigneeId: owner.userId },
@@ -284,6 +292,8 @@ describe('bug-inline-status-revert-on-second-edit — two rapid inline edits, ad
     await deliver(updateCalls[0]!, { ok: true, updatedAt: aDto.updatedAt });
     const freshPayload = await h.snapshot();
     expect(freshPayload.map((r) => r.assigneeId)).toEqual([owner.userId, owner.userId]);
+    // Success = confirmed, full stop — NO whole-tree refresh.
+    expect(refreshSpy).not.toHaveBeenCalled();
 
     // Fresh payload first, stale payload last — A must keep its new assignee.
     rerender(h.table(freshPayload));
