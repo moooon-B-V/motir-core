@@ -455,7 +455,7 @@ export const story_5_2: PlanStory = {
       id: '5.2.6',
       title:
         'Preview lightbox — full-screen image/PDF preview modal from a panel card (download inside; non-previewable types download)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
