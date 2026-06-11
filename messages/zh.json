@@ -394,7 +394,8 @@
       "goToSettings": "前往设置",
       "switchTo": "切换到 {name}",
       "current": "当前",
-      "goToBacklog": "前往待办列表"
+      "goToBacklog": "前往待办列表",
+      "goToFilters": "前往筛选器"
     },
     "shortcuts": {
       "title": "键盘快捷键",
@@ -1564,6 +1565,99 @@
       "filledAria": "点数：已承诺 {committed}，已完成 {completed}，剩余 {remaining}",
       "committedAria": "点数：已承诺 {committed}",
       "emptyAria": "本Sprint无已估算点数"
+    }
+  },
+  "savedFilters": {
+    "heading": "筛选器",
+    "subtitle": "{project} 的已保存筛选器。在「工作项」中保存新的筛选器。",
+    "searchLabel": "搜索筛选器",
+    "searchPlaceholder": "搜索筛选器…",
+    "columns": {
+      "name": "名称",
+      "owner": "拥有者",
+      "visibility": "可见性",
+      "stars": "收藏",
+      "actions": "操作"
+    },
+    "visibility": {
+      "private": "私有",
+      "project": "项目",
+      "builtin": "内置"
+    },
+    "visibilityHint": {
+      "private": "仅你和项目管理员可见。",
+      "project": "所有能浏览此项目的人都可查看并应用。"
+    },
+    "ownerNone": "—",
+    "builtinOwner": "—",
+    "star": "收藏 {name}",
+    "unstar": "取消收藏 {name}",
+    "starCount": "{count, plural, other {# 次收藏}}",
+    "rowActions": "{name} 的操作",
+    "apply": "在「工作项」中应用 {name}",
+    "editDetails": "编辑详情",
+    "changeOwner": "变更拥有者",
+    "delete": "删除",
+    "applyError": "无法应用此筛选器——其保存的条件已失效。",
+    "starError": "无法更新收藏，请重试。",
+    "pager": {
+      "summary": "{count, plural, other {# 个筛选器}} · 第 {page} 页，共 {pages} 页",
+      "prev": "上一页",
+      "next": "下一页"
+    },
+    "empty": {
+      "title": "尚无已保存的筛选器",
+      "description": "在「工作项」中构建筛选器并保存，即可在此重复使用和共享。",
+      "action": "前往工作项"
+    },
+    "noMatches": {
+      "title": "没有与“{query}”匹配的筛选器",
+      "description": "请尝试其他搜索词。"
+    },
+    "error": {
+      "title": "无法加载筛选器",
+      "description": "加载此项目的筛选器时出错。",
+      "retry": "重试"
+    },
+    "loading": "正在加载筛选器…",
+    "edit": {
+      "title": "编辑筛选器详情",
+      "nameLabel": "名称",
+      "namePlaceholder": "筛选器名称",
+      "descriptionLabel": "描述（可选）",
+      "descriptionPlaceholder": "此筛选器用于什么？",
+      "visibilityLegend": "谁可以看到此筛选器？",
+      "viewerNote": "共享需要成员角色——作为查看者，你的筛选器仅对你自己私有可见。",
+      "goPrivateNote": "设为私有会对其他人隐藏——他们的订阅将停止发送，使用它的仪表盘小组件将显示“筛选器缺失”。",
+      "duplicateName": "此项目中已存在名为“{name}”的筛选器。",
+      "save": "保存更改",
+      "cancel": "取消",
+      "savedToast": "筛选器已更新",
+      "errorTitle": "无法保存筛选器",
+      "errorGeneric": "出了点问题，请重试。"
+    },
+    "changeOwnerDialog": {
+      "title": "变更“{name}”的拥有者",
+      "description": "新拥有者必须能够浏览此项目。",
+      "pickerLabel": "新拥有者",
+      "pickerPlaceholder": "选择一位项目成员",
+      "save": "变更拥有者",
+      "cancel": "取消",
+      "savedToast": "拥有者已变更为 {name}",
+      "errorTitle": "无法变更拥有者",
+      "errorInvalidOwner": "该成员无法浏览此项目。",
+      "errorGeneric": "出了点问题，请重试。"
+    },
+    "deleteDialog": {
+      "title": "删除筛选器？",
+      "body": "这将为此项目中的所有人永久删除“{name}”。",
+      "subscriptions": "{count, plural, other {将移除 # 个订阅}}。",
+      "noDependents": "没有订阅依赖此筛选器。",
+      "confirm": "删除筛选器",
+      "cancel": "取消",
+      "deletedToast": "筛选器已删除",
+      "errorTitle": "无法删除筛选器",
+      "errorGeneric": "出了点问题，请重试。"
     }
   }
 }
