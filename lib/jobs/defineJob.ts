@@ -71,9 +71,30 @@ export interface FailureHandlerArgs {
   step: JobContext['step'];
 }
 
-export interface DefineJobOptions<N extends JobEventName> {
-  /** The job id. Also the triggering event name (1:1 convention). */
-  id: N;
+/**
+ * The id/trigger pairing. An event's FIRST consumer uses the 1:1 convention
+ * (the id IS the triggering event name). An event can only carry ONE function
+ * per id, so an ADDITIONAL consumer of an already-consumed event (e.g. the
+ * 5.4.5 watcher job joining the 5.1.6 mention job on
+ * `work-item/comment.created`) declares a distinct id plus an explicit
+ * `trigger` naming the shared event. The trigger stays pinned to
+ * `JobEventName` either way — that's the type-safety the 1:1 convention
+ * existed to give.
+ */
+export type JobIdAndTrigger<N extends JobEventName> =
+  | {
+      /** The job id. Also the triggering event name (1:1 convention). */
+      id: N;
+      trigger?: undefined;
+    }
+  | {
+      /** A distinct function id — this job is an ADDITIONAL consumer of `trigger`. */
+      id: string;
+      /** The (already-consumed) event this function subscribes to. */
+      trigger: N;
+    };
+
+export type DefineJobOptions<N extends JobEventName> = JobIdAndTrigger<N> & {
   /**
    * Named retry policy (1.6.4) — the preferred way to declare retry INTENT.
    * `transient` (3 attempts), `idempotent` (5 attempts), `none` (1 attempt).
@@ -99,7 +120,7 @@ export interface DefineJobOptions<N extends JobEventName> {
    * treats scheduled + event-triggered runs uniformly.
    */
   cron?: string;
-}
+};
 
 /** Serialize an unknown thrown value into the JobRunFailure wire shape. */
 function serializeFailure(err: unknown): JobRunFailure {
@@ -118,6 +139,9 @@ export function defineJob<N extends JobEventName>(
   handler: JobHandler,
 ) {
   const { id, concurrency, idempotency, cron } = options;
+  // The event this function subscribes to: the id itself (1:1 convention) or
+  // the explicit `trigger` of an additional consumer.
+  const triggerEvent = options.trigger ?? id;
   // Resolve the retry budget once (throws if both retryPolicy and retries are
   // given). Used BOTH for Inngest's config and for the final-attempt check below.
   const maxRetries = resolveRetries(options);
@@ -138,7 +162,7 @@ export function defineJob<N extends JobEventName>(
   const onFailure = async (args: FailureHandlerArgs) => {
     const original = args.event.data.event;
     const payload = (original.data ?? {}) as { workspaceId?: string | null };
-    const eventName = cron !== undefined ? `scheduled.${id}` : (original.name ?? id);
+    const eventName = cron !== undefined ? `scheduled.${id}` : (original.name ?? triggerEvent);
     // Mirror the main handler's eventId logic so correlation lines up: prefer the
     // event id, fall back to the run id (cron / harness events carry no id).
     const eventId = original.id ?? args.event.data.run_id;
@@ -156,8 +180,9 @@ export function defineJob<N extends JobEventName>(
     );
   };
 
-  // event name === id (the 1:1 convention) for event-triggered jobs; a cron job
-  // uses a `{ cron }` trigger instead. 2-arg createFunction form: triggers live
+  // The trigger is `triggerEvent` (the id under the 1:1 convention, or the
+  // explicit `trigger` of an additional consumer); a cron job uses a `{ cron }`
+  // trigger instead. 2-arg createFunction form: triggers live
   // in the options object, NOT a third argument (the legacy 3-arg form throws at
   // import in inngest@4.5 — finding #30 sharp edge #1). The cast pins
   // `retries: number` into Inngest's 0..20 literal union; our public API stays a
@@ -166,7 +191,7 @@ export function defineJob<N extends JobEventName>(
   const config = {
     id,
     retries: maxRetries,
-    triggers: cron !== undefined ? [{ cron }] : [{ event: id }],
+    triggers: cron !== undefined ? [{ cron }] : [{ event: triggerEvent }],
     onFailure,
     ...(concurrency !== undefined ? { concurrency: { limit: concurrency } } : {}),
     ...(idempotency !== undefined ? { idempotency } : {}),

@@ -14,6 +14,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { estimationService } from '@/lib/services/estimationService';
 import { keyBetween, keyForAppend } from '@/lib/workItems/positioning';
+import { sendEvent } from '@/lib/jobs/sendEvent';
 import { isOwnerRole } from '@/lib/workspaces/roles';
 import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
 import {
@@ -417,7 +418,7 @@ export const boardsService = {
     target: MoveCardTarget,
     ctx: ServiceContext,
   ): Promise<MoveCardResultDto> {
-    const { row, appliedStatus, columnName, swimlaneGroupBy } = await db.$transaction(
+    const { row, appliedStatus, transition, columnName, swimlaneGroupBy } = await db.$transaction(
       async (tx) => {
         // Lock the card up front — serialize the status + rank writes against a
         // concurrent move of the same card (lost-update guard, like updateStatus).
@@ -472,12 +473,20 @@ export const boardsService = {
         // target status is the column's mapped status ordered FIRST by
         // `status.position` (Jira's multi-status rule).
         let appliedStatus = item.status;
+        let transition: { fromStatusKey: string; toStatusKey: string; revisionId: string } | null =
+          null;
         if (!mappedKeys.has(item.status)) {
           const targetStatus = [...mappedStatuses].sort((a, b) =>
             a.position < b.position ? -1 : a.position > b.position ? 1 : 0,
           )[0]!;
           try {
-            await workItemsService.applyStatusTransition(workItemId, targetStatus.key, ctx, tx);
+            const applied = await workItemsService.applyStatusTransition(
+              workItemId,
+              targetStatus.key,
+              ctx,
+              tx,
+            );
+            transition = applied.transition;
           } catch (err) {
             // Re-raise an illegal transition as the board-shaped 409 (snapback).
             if (err instanceof IllegalTransitionError) {
@@ -503,11 +512,29 @@ export const boardsService = {
         return {
           row,
           appliedStatus,
+          transition,
           columnName: column.name,
           swimlaneGroupBy: board.swimlaneGroupBy,
         };
       },
     );
+
+    // A cross-column move IS a status transition — emit the same
+    // `work-item/transitioned` event the direct updateStatus path emits
+    // (Subtask 5.4.5: the board drag is how most transitions actually happen;
+    // watchers are notified regardless of which surface moved the card).
+    // Post-commit, never inside the tx (a rollback must not have notified);
+    // a within-column re-rank attempted no transition and emits nothing.
+    if (transition) {
+      await sendEvent('work-item/transitioned', {
+        workspaceId: ctx.workspaceId,
+        workItemId,
+        actorId: ctx.userId,
+        fromStatusKey: transition.fromStatusKey,
+        toStatusKey: transition.toStatusKey,
+        revisionId: transition.revisionId,
+      });
+    }
 
     // Readiness (finding #21) is independent of THIS card's own move (it depends
     // on the card's blockers, which the move doesn't touch) — compute it after

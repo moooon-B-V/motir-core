@@ -187,6 +187,24 @@
       "ledeDescription": "{author} mentioned you in the description of {identifier}: {title}.",
       "view": "View work item",
       "fallback": "Or copy this link into your browser:"
+    },
+    "watcherCommentNotification": {
+      "subject": "{author} commented on {identifier}: {title}",
+      "preview": "{author} commented on {identifier}",
+      "greeting": "Hi {name},",
+      "lede": "{author} commented on {identifier}: {title}.",
+      "view": "View work item",
+      "fallback": "Or copy this link into your browser:",
+      "reason": "You're receiving this because you watch {identifier}."
+    },
+    "watcherTransitionNotification": {
+      "subject": "{actor} moved {identifier} to {status}",
+      "preview": "{actor} moved {identifier} to {status}",
+      "greeting": "Hi {name},",
+      "lede": "{actor} moved {identifier}: {title} to {status}.",
+      "view": "View work item",
+      "fallback": "Or copy this link into your browser:",
+      "reason": "You're receiving this because you watch {identifier}."
     }
   },
   "auth": {

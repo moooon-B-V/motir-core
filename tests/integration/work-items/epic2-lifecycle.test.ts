@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkItemRevision } from '@prisma/client';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -13,6 +13,7 @@ import type { WorkItemDto } from '@/lib/dto/workItems';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import { truncateAuthTables } from '../../helpers/db';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { inngest } from '@/lib/jobs/client';
 
 // Subtask 2.6.3 — the SINGLE cross-story Epic-2 lifecycle scenario.
 //
@@ -55,7 +56,15 @@ async function truncateAll(): Promise<void> {
 }
 
 beforeEach(async () => {
+  // Stub the Inngest publish: the status-transition paths now emit
+  // `work-item/transitioned` post-commit (Subtask 5.4.5), and the test env
+  // has no Inngest key (the comments-suite pattern).
+  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
   await truncateAll();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 afterAll(async () => {

@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
@@ -14,6 +14,7 @@ import {
 } from '@/lib/workflows/errors';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { inngest } from '@/lib/jobs/client';
 
 // Delete-with-reassign (Story 2.3 · Subtask 2.3.1), real Postgres. Deleting an
 // in-use CUSTOM status migrates every referencing work item (incl. archived) to
@@ -22,7 +23,15 @@ import { truncateAuthTables } from '../helpers/db';
 // ever runs for custom statuses; the initial/last-terminal guards still fire.
 
 beforeEach(async () => {
+  // Stub the Inngest publish: the status-transition paths now emit
+  // `work-item/transitioned` post-commit (Subtask 5.4.5), and the test env
+  // has no Inngest key (the comments-suite pattern).
+  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
   await truncateAuthTables();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 afterAll(async () => {

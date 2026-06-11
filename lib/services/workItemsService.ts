@@ -931,9 +931,23 @@ export const workItemsService = {
     toStatusKey: string,
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    return db.$transaction((tx) =>
+    const { dto, transition } = await db.$transaction((tx) =>
       workItemsService.applyStatusTransition(workItemId, toStatusKey, ctx, tx),
     );
+    // Post-commit, never inside the tx — a rollback must not have notified
+    // (the 5.1.2 rule). A no-op move carries no transition, so it emits
+    // nothing. The 5.4.5 watcher job consumes this; 5.7's bell fans in later.
+    if (transition) {
+      await sendEvent('work-item/transitioned', {
+        workspaceId: ctx.workspaceId,
+        workItemId: dto.id,
+        actorId: ctx.userId,
+        fromStatusKey: transition.fromStatusKey,
+        toStatusKey: transition.toStatusKey,
+        revisionId: transition.revisionId,
+      });
+    }
+    return dto;
   },
 
   /**
@@ -948,13 +962,22 @@ export const workItemsService = {
    * method `FOR UPDATE`-locks). Either caller runs the SAME validated path; the
    * transition validation is defined once here, never re-implemented at the
    * board layer. `tx` is REQUIRED — this method never opens a transaction.
+   *
+   * Returns the updated DTO plus the applied transition's metadata (from/to
+   * keys + the revision row id) — `null` on the no-op move — so each caller
+   * can emit `work-item/transitioned` AFTER its own transaction commits
+   * (Subtask 5.4.5; the emit can never live HERE, inside the tx, because a
+   * rollback must not have notified anyone).
    */
   async applyStatusTransition(
     workItemId: string,
     toStatusKey: string,
     ctx: ServiceContext,
     tx: Prisma.TransactionClient,
-  ): Promise<WorkItemDto> {
+  ): Promise<{
+    dto: WorkItemDto;
+    transition: { fromStatusKey: string; toStatusKey: string; revisionId: string } | null;
+  }> {
     const locked = await workItemRepository.lockById(workItemId, tx);
     if (!locked) throw new WorkItemNotFoundError(workItemId);
     const current = await workItemRepository.findById(workItemId, tx);
@@ -971,8 +994,9 @@ export const workItemsService = {
     await projectAccessService.assertCanEdit(current.projectId, ctx, tx);
 
     const fromKey = current.status;
-    // No-op move: succeed without writing a revision (idempotent).
-    if (fromKey === toStatusKey) return toWorkItemDto(current);
+    // No-op move: succeed without writing a revision (idempotent) — and with
+    // no transition for the caller to emit.
+    if (fromKey === toStatusKey) return { dto: toWorkItemDto(current), transition: null };
 
     const target = await workflowsService.getStatusByKey(
       current.projectId,
@@ -990,7 +1014,7 @@ export const workItemsService = {
     if (!legal) throw new IllegalTransitionError(fromKey, toStatusKey);
 
     const row = await workItemRepository.update(workItemId, { status: toStatusKey }, tx);
-    await workItemRevisionsService.recordRevision(
+    const revisionId = await workItemRevisionsService.recordRevision(
       {
         workItemId,
         changedById: ctx.userId,
@@ -999,7 +1023,10 @@ export const workItemsService = {
       },
       tx,
     );
-    return toWorkItemDto(row);
+    return {
+      dto: toWorkItemDto(row),
+      transition: { fromStatusKey: fromKey, toStatusKey, revisionId },
+    };
   },
 
   /**

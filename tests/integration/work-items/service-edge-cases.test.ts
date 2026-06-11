@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import {
@@ -18,6 +18,7 @@ import {
   makeWorkItemFixture,
   type WorkItemFixture,
 } from '../../fixtures';
+import { inngest } from '@/lib/jobs/client';
 
 // Subtask 1.4.7 — the error-path + edge-branch coverage for workItemsService.
 // The happy-path and concurrency behaviour lives in service.test.ts; this file
@@ -36,7 +37,15 @@ async function truncateAll(): Promise<void> {
 }
 
 beforeEach(async () => {
+  // Stub the Inngest publish: the status-transition paths now emit
+  // `work-item/transitioned` post-commit (Subtask 5.4.5), and the test env
+  // has no Inngest key (the comments-suite pattern).
+  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
   await truncateAll();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 afterAll(async () => {
