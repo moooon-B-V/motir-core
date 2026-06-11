@@ -345,7 +345,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.4',
       title:
         '`watchersService` — self watch/unwatch + admin manage-others + view-access validation + auto-watch hooks (create, comment)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 26,
@@ -391,7 +391,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.5',
       title:
         'Watcher notification job — `work-item/transitioned` event + fan-out on comment/transition (actor excluded, mention-dedupe, idempotent)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -605,7 +605,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.9',
       title:
         'Watch control + watchers popover in the detail header (eye + count, `W` shortcut, admin manage-others)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
