@@ -506,7 +506,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.7',
       title:
         'Design — Components admin page (`design/projects/components.mock.html`: list + create/edit + default assignee + move-or-remove delete)',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 35,
