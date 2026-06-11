@@ -143,6 +143,14 @@ export interface IssueDetailDto {
    * rail collapses those behind "Show more fields".
    */
   customFields: CustomFieldWithValueDto[];
+  /**
+   * How many people watch this issue — the header eye-count (Subtask 5.4.4;
+   * two point reads riding the detail read's parallel fetch, no extra
+   * round-trip). The full roster stays behind the paged watchers route.
+   */
+  watcherCount: number;
+  /** Whether the CALLER watches it — the eye control's filled/outline state. */
+  viewerIsWatching: boolean;
 }
 
 /**
