@@ -88,7 +88,7 @@ import type { PlanStory } from '../types';
 export const story_5_4: PlanStory = {
   id: '5.4',
   title: 'Labels, components, watchers',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The issue-organisation layer: **labels** (a project-scoped folksonomy — type to create, ' +
     'multi-valued, no admin ceremony), **components** (an admin-managed taxonomy with default ' +
@@ -686,7 +686,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.11',
       title:
         'Story tests — Vitest matrix (folksonomy × components × watchers × notifications) + Playwright E2E + a11y sweep',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 32,
