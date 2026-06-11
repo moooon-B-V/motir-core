@@ -294,7 +294,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.3',
       title:
         '`componentsService` — admin CRUD + default-assignee-at-create (first-alphabetical) + move-or-remove delete + per-issue assignment, revision diffs',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -553,7 +553,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.8',
       title:
         '`MultiSelectPicker` primitive + Labels & Components rail cards (chips, create-row, caps; the Epic-6-reusable control)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
@@ -650,7 +650,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.10',
       title:
         'Components admin UI — Project settings → Components (list, create/edit w/ default assignee, move-or-remove delete)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
