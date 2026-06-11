@@ -391,7 +391,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.5',
       title:
         'Watcher notification job — `work-item/transitioned` event + fan-out on comment/transition (actor excluded, mention-dedupe, idempotent)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -686,7 +686,7 @@ export const story_5_4: PlanStory = {
       id: '5.4.11',
       title:
         'Story tests — Vitest matrix (folksonomy × components × watchers × notifications) + Playwright E2E + a11y sweep',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 32,
