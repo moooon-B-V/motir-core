@@ -157,6 +157,10 @@
       "CROSS_PROJECT_COMPONENT": "该组件属于其他项目。",
       "NOT_PROJECT_ADMIN": "只有项目管理员才能管理组件。",
       "READ_ONLY": "你没有编辑组件的权限。"
+    },
+    "watchers": {
+      "WATCHERS_FORBIDDEN": "你没有权限管理此工作项的关注者。",
+      "WATCHER_CANNOT_VIEW": "{name}无法查看此工作项，因此无法关注。"
     }
   },
   "email": {
@@ -393,6 +397,19 @@
     "componentsNoneDefined": "尚未定义组件",
     "componentsManageLink": "前往项目设置管理组件 →",
     "noComponents": "暂无组件",
+    "watchAria": "关注（{count}人正在关注）",
+    "stopWatchingAria": "取消关注（{count}人正在关注）",
+    "watchTooltip": "关注",
+    "stopWatchingTooltip": "取消关注",
+    "watchersDialogLabel": "关注者",
+    "watchersHeading": "关注者 · {count}",
+    "watchersAddPlaceholder": "添加关注者…",
+    "watchersYou": "你",
+    "watchersRemove": "将{name}移出关注者",
+    "watchersShowMore": "显示更多（还有{count}人）",
+    "watchersNoMatches": "没有匹配的成员。",
+    "watchersLoadError": "无法加载关注者。",
+    "watchToggleFailedTitle": "无法更新关注状态",
     "noProjectTitle": "未选择项目",
     "noProjectListDescription": "从切换器中选择或创建一个项目，以跟踪其工作项。",
     "noProjectDetailDescription": "从切换器中选择一个项目，以查看其工作项。",

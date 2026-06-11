@@ -157,6 +157,10 @@
       "CROSS_PROJECT_COMPONENT": "That component belongs to another project.",
       "NOT_PROJECT_ADMIN": "Only a project admin can manage components.",
       "READ_ONLY": "You don’t have permission to edit components."
+    },
+    "watchers": {
+      "WATCHERS_FORBIDDEN": "You don’t have permission to manage watchers on this issue.",
+      "WATCHER_CANNOT_VIEW": "{name} can’t view this issue, so they can’t watch it."
     }
   },
   "email": {
@@ -393,6 +397,19 @@
     "componentsNoneDefined": "No components defined",
     "componentsManageLink": "Manage components in Project settings →",
     "noComponents": "No components",
+    "watchAria": "Watch — {count} watching",
+    "stopWatchingAria": "Stop watching — {count} watching",
+    "watchTooltip": "Watch",
+    "stopWatchingTooltip": "Stop watching",
+    "watchersDialogLabel": "Watchers",
+    "watchersHeading": "Watchers · {count}",
+    "watchersAddPlaceholder": "Add a watcher…",
+    "watchersYou": "You",
+    "watchersRemove": "Remove {name} from watchers",
+    "watchersShowMore": "Show more ({count} more)",
+    "watchersNoMatches": "No matching members.",
+    "watchersLoadError": "Couldn’t load watchers.",
+    "watchToggleFailedTitle": "Couldn’t update watching",
     "noProjectTitle": "No project selected",
     "noProjectListDescription": "Pick or create a project from the switcher to track its work items.",
     "noProjectDetailDescription": "Pick a project from the switcher to view its work items.",
