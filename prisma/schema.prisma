@@ -115,6 +115,9 @@ model User {
   // pattern).
   savedFilters              SavedFilter[]         @relation("SavedFilterOwner")
   savedFilterStars          SavedFilterStar[]     @relation("SavedFilterStarUser")
+  // Dashboards (Story 6.3) — owned grids ride the SavedFilter owner
+  // semantics (Cascade; change-owner is the recorded extension).
+  dashboards                Dashboard[]           @relation("DashboardOwner")
 
   @@map("user")
 }
@@ -214,6 +217,8 @@ model Workspace {
   customFieldDefinitions CustomFieldDefinition[]
   customFieldValues      CustomFieldValue[]
   savedFilters           SavedFilter[]
+  // Dashboards (Story 6.3) — workspace-scoped widget grids. Cascade.
+  dashboards             Dashboard[]
 
   @@map("workspace")
 }
@@ -305,6 +310,9 @@ model Project {
   // Saved filters (Story 6.2) — project-contained (the recorded deviation
   // from Jira's site-global filters). Cascades with the project.
   savedFilters           SavedFilter[]
+  // Project-sourced dashboard widgets (Story 6.3). Cascade: a deleted
+  // project takes its widgets (no meaningful stale state).
+  dashboardWidgets       DashboardWidget[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -1636,10 +1644,14 @@ model SavedFilter {
   createdAt   DateTime              @default(now()) @map("created_at")
   updatedAt   DateTime              @updatedAt @map("updated_at")
 
-  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  owner     User              @relation("SavedFilterOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  stars     SavedFilterStar[]
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner            User              @relation("SavedFilterOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  stars            SavedFilterStar[]
+  // Filter-sourced dashboard widgets (Story 6.3). SetNull: a deleted
+  // filter STALES the widget (the designed "filter missing" card) — the
+  // verified Cloud gadget behaviour the 6.2.1 dependents read counts.
+  dashboardWidgets DashboardWidget[]
 
   // Case-insensitive uniqueness per project; doubles as the directory /
   // dropdown search index (list reads walk projectId = ? AND name_lower
@@ -1672,4 +1684,105 @@ model SavedFilterStar {
   // The "starred" dropdown group ("filters I starred" within a project read).
   @@index([userId])
   @@map("saved_filter_star")
+}
+
+/// Dashboard access (Story 6.3) — who may SEE a dashboard. `private` =
+/// owner-only; `workspace` = every workspace member (read-only; edit stays
+/// owner-only). Jira's richer audience matrix (user/group/project-role/
+/// public viewer + editor lists) is the documented extension this enum
+/// grows into — the recorded 6.3 deviation.
+enum DashboardAccess {
+  private
+  workspace
+
+  @@map("dashboard_access")
+}
+
+/// Dashboard column layout (Story 6.3) — the Jira edit-mode column count.
+enum DashboardLayout {
+  one
+  two
+  three
+
+  @@map("dashboard_layout")
+}
+
+/// The TOTAL widget-type vocabulary (Story 6.3). Every value MUST have a
+/// `lib/dashboards/widgetRegistry.ts` entry (config schema + data-source
+/// resolver + renderer/editor kinds) — the registry enumeration test fails
+/// on any gap (mistake #29). More gadget types (Assigned to Me, Activity
+/// Stream, …) are registry + enum additions, the documented extension.
+enum DashboardWidgetType {
+  filter_results
+  distribution
+  created_vs_resolved
+
+  @@map("dashboard_widget_type")
+}
+
+/// Dashboard (Story 6.3) — a named, shareable widget grid, scoped to the
+/// WORKSPACE (our "site" — the recorded deviation from Jira's site-level
+/// dashboards; the shell's outer boundary). Any member creates; the owner
+/// alone mutates (rename / relayout / access / delete / widget edits).
+/// Owner FK cascades (the SavedFilter owner semantics — change owner is a
+/// future extension; today a departing user takes their dashboards).
+model Dashboard {
+  id          String          @id @default(cuid())
+  workspaceId String          @map("workspace_id")
+  ownerId     String          @map("owner_id")
+  name        String
+  access      DashboardAccess @default(private)
+  layout      DashboardLayout @default(two)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner     User              @relation("DashboardOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  widgets   DashboardWidget[]
+
+  // The list read (mine + workspace-shared within the active workspace).
+  @@index([workspaceId])
+  @@map("dashboard")
+}
+
+/// Dashboard widget (Story 6.3) — one gadget on a dashboard. The data
+/// source is EXACTLY ONE of `savedFilterId` / `projectId` (the verified
+/// Jira gadget pattern), enforced by the widget registry at the service
+/// boundary; the FK split is deliberate:
+///   * `savedFilterId` — `SetNull`: deleting a filter STALES the widget
+///     (the designed "filter missing" card), never deletes it — the
+///     verified Cloud gadget behaviour. The 6.2.1 delete-dependents
+///     enumeration counts these rows before the delete.
+///   * `projectId` — `Cascade`: a deleted project takes its widgets (no
+///     meaningful stale state — the workspace no longer contains the data).
+/// `position` is the shipped base-62 fractional index
+/// (`lib/workItems/positioning.ts`) within `column`, so drag-reorder is a
+/// one-field write (the board precedent). `config` holds the per-type
+/// settings the registry's schema validates (page size / statistic type /
+/// period + days-back + cumulative). No `workspaceId` by design (the
+/// saved_filter_star pattern — denormalized tenancy on a child row could
+/// lie); RLS joins through the parent dashboard.
+model DashboardWidget {
+  id            String              @id @default(cuid())
+  dashboardId   String              @map("dashboard_id")
+  type          DashboardWidgetType
+  column        Int
+  position      String
+  config        Json
+  savedFilterId String?             @map("saved_filter_id")
+  projectId     String?             @map("project_id")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+
+  dashboard   Dashboard    @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  savedFilter SavedFilter? @relation(fields: [savedFilterId], references: [id], onDelete: SetNull)
+  project     Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // The getDashboard read: widgets in render order.
+  @@index([dashboardId, column, position])
+  // The 6.2.1 delete-dependents count + the SetNull fan-out.
+  @@index([savedFilterId])
+  // The project-delete cascade fan-out.
+  @@index([projectId])
+  @@map("dashboard_widget")
 }
