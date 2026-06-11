@@ -147,7 +147,7 @@ export const story_6_5: PlanStory = {
       id: '6.5.1',
       title:
         'Design — the project-settings area (`design/projects/settings-area.mock.html`: grouped nav, area chrome, Details landing, role + responsive states)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 38,
