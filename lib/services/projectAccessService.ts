@@ -9,12 +9,17 @@ import {
   canCreateAttachments,
   canDeleteAllAttachments,
   canEdit,
+  canManageProject,
   canManageWatchers,
   canModerateComments,
   type ProjectAccessInputs,
 } from '@/lib/projects/access';
 import { isWorkspaceManager } from '@/lib/projects/roles';
-import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  NotProjectAdminError,
+  ProjectAccessDeniedError,
+  ProjectNotFoundError,
+} from '@/lib/projects/errors';
 import {
   savedFilterCapabilities,
   type SavedFilterProjectCapabilities,
@@ -268,5 +273,40 @@ export const projectAccessService = {
     const inputs = await resolveInputs(projectId, ctx, tx);
     if (!canBrowse(inputs)) throw new ProjectAccessDeniedError(projectId, 'browse');
     if (!canEdit(inputs)) throw new ProjectAccessDeniedError(projectId, 'edit');
+  },
+
+  /**
+   * The actor's project-ADMIN capability — `{ canBrowse, canManage }`. The
+   * non-throwing form, for the admin-only settings surfaces (automation rules,
+   * Story 6.6) that render their nav entry + page only when `canManage`. Throws
+   * only ProjectNotFoundError (the project must resolve; a non-browser still
+   * reads as 404 so the surface stays hidden, never "exists but you can't").
+   */
+  async getManageCapabilities(
+    projectId: string,
+    ctx: AccessActorContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ canBrowse: boolean; canManage: boolean }> {
+    const inputs = await resolveInputs(projectId, ctx, tx);
+    return { canBrowse: canBrowse(inputs), canManage: canManageProject(inputs) };
+  },
+
+  /**
+   * Assert the actor may ADMINISTER the project — gate the project-settings
+   * write paths (automation CRUD in Story 6.6). A non-browser is rejected as
+   * ProjectNotFoundError FIRST (→ 404, the project stays hidden — the same
+   * no-existence-leak rule `assertCanEdit` follows, but a settings surface a
+   * viewer can't even see must look missing, not forbidden); a browser who is
+   * not an admin is rejected as NotProjectAdminError (→ 403). One resolve, both
+   * checks.
+   */
+  async assertCanManage(
+    projectId: string,
+    ctx: AccessActorContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const inputs = await resolveInputs(projectId, ctx, tx);
+    if (!canBrowse(inputs)) throw new ProjectNotFoundError(projectId);
+    if (!canManageProject(inputs)) throw new NotProjectAdminError(projectId);
   },
 };

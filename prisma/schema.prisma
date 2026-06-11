@@ -115,6 +115,11 @@ model User {
   // pattern).
   savedFilters              SavedFilter[]         @relation("SavedFilterOwner")
   savedFilterStars          SavedFilterStar[]     @relation("SavedFilterStarUser")
+  // Automation rules this user owns (Subtask 6.6.1) — the rule actor (the
+  // recorded 6.6 deviation: rule actions run as the owner). Cascade with the
+  // user, the savedFilters semantics: a departing admin's rules go with them
+  // (an admin reassigns the owner first if a rule must survive).
+  automationRules           AutomationRule[]      @relation("AutomationRuleOwner")
   // Dashboards (Story 6.3) — owned grids ride the SavedFilter owner
   // semantics (Cascade; change-owner is the recorded extension).
   dashboards                Dashboard[]           @relation("DashboardOwner")
@@ -217,6 +222,7 @@ model Workspace {
   customFieldDefinitions CustomFieldDefinition[]
   customFieldValues      CustomFieldValue[]
   savedFilters           SavedFilter[]
+  automationRules        AutomationRule[]
   // Dashboards (Story 6.3) — workspace-scoped widget grids. Cascade.
   dashboards             Dashboard[]
 
@@ -310,6 +316,10 @@ model Project {
   // Saved filters (Story 6.2) — project-contained (the recorded deviation
   // from Jira's site-global filters). Cascades with the project.
   savedFilters           SavedFilter[]
+  // Automation rules (Story 6.6) — project-scoped (the stub's scope; the
+  // global/multi-project tier is the documented extension). Cascades with the
+  // project (deleting a project removes its rules + their execution logs).
+  automationRules        AutomationRule[]
   // Project-sourced dashboard widgets (Story 6.3). Cascade: a deleted
   // project takes its widgets (no meaningful stale state).
   dashboardWidgets       DashboardWidget[]
@@ -564,6 +574,11 @@ model WorkItem {
   // Custom-field values (Story 5.3). One row per (issue, field) pair; the FK
   // cascades so deleting an issue takes its custom values with it.
   customFieldValues CustomFieldValue[]
+  // Automation execution audit rows that name this issue as the trigger
+  // (Story 6.6). SetNull, not Cascade: the audit log outlives the work item
+  // (the rule's history is kept; the deleted item renders a tombstone), so the
+  // FK nulls rather than deleting the execution row.
+  automationExecutions AutomationRuleExecution[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -1684,6 +1699,98 @@ model SavedFilterStar {
   // The "starred" dropdown group ("filters I starred" within a project read).
   @@index([userId])
   @@map("saved_filter_star")
+}
+
+/// The trigger event an automation rule fires on (Story 6.6 · Subtask 6.6.1) —
+/// Jira's four most-used issue-event triggers (rung-1 verified). Stored as a
+/// column (not only inside `triggerConfig`) so the engine loads a project's
+/// matching rules with an indexed `project_id, trigger_type, enabled` read
+/// rather than scanning + JSON-probing. The registry in lib/automation/registry.ts
+/// is the matching TOTAL source of truth for the per-type config shape; these
+/// identifiers are byte-identical to the registry's trigger-type ids.
+enum AutomationTriggerType {
+  created
+  transitioned
+  field_changed
+  commented
+
+  @@map("automation_trigger_type")
+}
+
+/// The outcome of one rule execution (Story 6.6 · Subtask 6.6.2 writes these;
+/// 6.6.1 ships the table). `success` = the action list ran; `failure` = an
+/// action threw (the typed error is recorded); `no_actions` = the condition
+/// group gated the rule out (a matched trigger whose conditions didn't hold —
+/// distinct from a failure, the verified Jira "no actions performed" outcome).
+enum AutomationExecutionStatus {
+  success
+  failure
+  no_actions
+
+  @@map("automation_execution_status")
+}
+
+/// An automation rule (Story 6.6 · Subtask 6.6.1) — project-scoped
+/// when/then: ONE trigger (`triggerType` + typed `triggerConfig`) → one flat
+/// condition group (`conditionAst`, the 6.1 FilterAST envelope shape,
+/// row-capped 20) → an ordered `actions` list (max 10). Actions run as the
+/// `owner` (the recorded 6.6 deviation: the rule actor is the admin who
+/// created it, not a synthetic app user). `consecutiveFailureCount` drives the
+/// verified auto-disable-at-10 (the engine, 6.6.2, increments it; enabling a
+/// rule resets it). The three JSON columns are validated by the TOTAL
+/// trigger/action registries + the 6.1 condition validation at the service
+/// layer — never trust-and-execute; a stale referent (deleted status/field)
+/// degrades typed, the 6.1 rule.
+model AutomationRule {
+  id                      String                @id @default(cuid())
+  workspaceId             String                @map("workspace_id")
+  projectId               String                @map("project_id")
+  ownerId                 String                @map("owner_id")
+  name                    String
+  enabled                 Boolean               @default(true)
+  triggerType             AutomationTriggerType @map("trigger_type")
+  triggerConfig           Json                  @map("trigger_config")
+  conditionAst            Json                  @map("condition_ast")
+  actions                 Json
+  consecutiveFailureCount Int                   @default(0) @map("consecutive_failure_count")
+  createdAt               DateTime              @default(now()) @map("created_at")
+  updatedAt               DateTime              @updatedAt @map("updated_at")
+
+  workspace  Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project    Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner      User                      @relation("AutomationRuleOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  // The execution audit log cascades with the rule (deleting a rule clears its
+  // history — the per-rule log has no meaning without the rule).
+  executions AutomationRuleExecution[]
+
+  // The engine's hot read: a project's enabled rules for a given trigger.
+  @@index([projectId, triggerType, enabled])
+  @@index([workspaceId])
+  @@map("automation_rule")
+}
+
+/// One execution-audit row (Story 6.6 · Subtask 6.6.2 writes them; 6.6.1 ships
+/// the table + relations). `workItemId` is NULLABLE and SetNull on the work
+/// item's delete: the audit log outlives the triggering issue (its history is
+/// kept; the UI renders a tombstone for the gone item — 6.6.6). No
+/// `workspace_id` by design (the saved_filter_star pattern: denormalised
+/// tenancy on a child row could lie) — the RLS policy joins through the parent
+/// `automation_rule`. Indexed `[ruleId, createdAt]` for the paged per-rule log
+/// (6.6.6) and the 90-day retention sweep (6.6.2).
+model AutomationRuleExecution {
+  id         String                    @id @default(cuid())
+  ruleId     String                    @map("rule_id")
+  status     AutomationExecutionStatus
+  workItemId String?                   @map("work_item_id")
+  error      String?                   @db.Text
+  durationMs Int?                      @map("duration_ms")
+  createdAt  DateTime                  @default(now()) @map("created_at")
+
+  rule     AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  workItem WorkItem?      @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+
+  @@index([ruleId, createdAt])
+  @@map("automation_rule_execution")
 }
 
 /// Dashboard access (Story 6.3) — who may SEE a dashboard. `private` =

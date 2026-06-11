@@ -146,3 +146,19 @@ export function canManageWatchers(i: ProjectAccessInputs): boolean {
   if (i.workspaceRole == null) return false;
   return i.projectRole === 'admin';
 }
+
+/**
+ * Whether the actor may ADMINISTER the project — the "manage project" tier
+ * Jira gates project settings on (members/roles/access in Story 6.4, and the
+ * automation rules of Story 6.6). The project `admin` role, plus the workspace
+ * owner/admin always-pass rail; a plain member or `viewer` never qualifies.
+ * This is the same decision `projectMembersService.assertCanManage` already
+ * enforces inline (add/remove member, set role/access) — lifted here as the
+ * shared, unit-testable predicate so every admin-gated settings surface reads
+ * the one policy instead of re-deriving it.
+ */
+export function canManageProject(i: ProjectAccessInputs): boolean {
+  if (isWorkspaceManager(i.workspaceRole)) return true;
+  if (i.workspaceRole == null) return false;
+  return i.projectRole === 'admin';
+}
