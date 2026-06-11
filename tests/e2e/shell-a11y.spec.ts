@@ -18,6 +18,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp, createFirstProject } from './_helpers/shell-session';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { usersService } from '@/lib/services/usersService';
+import { workspacesService } from '@/lib/services/workspacesService';
 
 const USER_EMAIL = 'e2e-shell-a11y@example.com';
 
@@ -481,6 +483,127 @@ test.describe('@a11y shell accessibility', () => {
     expect(
       results.violations,
       formatViolations('/issues (list, populated)', results.violations as AxeViolation[]),
+    ).toEqual([]);
+  });
+
+  // The issue detail route with a POPULATED, mention-bearing comment thread
+  // (Subtask 5.1.7 — the Story-5.1 a11y closer, extending the 2.4.6 sweeps).
+  // Seeds the comments surface into its real states server-side (the
+  // sanctioned test cross-layer reach): a root with a rendered mention CHIP
+  // (its tint background + strong text is the AA cell finding #35 settled),
+  // an "Edited" tag, and enough replies that the "Show N more replies"
+  // collapse affordance renders. Three swept states:
+  //   1. the populated thread, composer at REST — STRICT, zero exclusions
+  //      (no third-party editor in the DOM at rest);
+  //   2. the delete-confirm popover OPEN (the reply-count-naming confirm) —
+  //      scoped to the popover dialog itself (the /tokens Pill-matrix
+  //      `.include()` precedent): sweep 1 already held the page beneath to
+  //      AA, and axe cannot resolve the background of elements the floating
+  //      panel geometrically overlaps (it reports them as color-contrast
+  //      violations rather than incompletes), so the page-wide re-sweep
+  //      would only re-test what sweep 1 proved, with overlap artifacts;
+  //   3. the composer EXPANDED with the @mention picker OPEN (the
+  //      aria-activedescendant listbox the keyboard path drives) — only the
+  //      third-party `.ProseMirror` contenteditable excluded, same basis as
+  //      the create/edit sweeps above.
+  test('the issue detail route is axe-clean with a populated comment thread + mention picker (WCAG 2.1 AA)', async ({
+    page,
+  }) => {
+    const email = 'e2e-comments-a11y@example.com';
+    await signUp(page, email);
+    await createFirstProject(page, 'Mobile App');
+
+    const user = (await db.user.findFirst({ where: { email } }))!;
+    const local = email.split('@')[0]!;
+    const ws = (await db.workspace.findFirst({ where: { name: `${local}'s Workspace` } }))!;
+    const project = (await db.project.findFirst({ where: { workspaceId: ws.id } }))!;
+    const ctx = { userId: user.id, workspaceId: ws.id };
+    // A second member so the thread carries a real mention chip and the
+    // picker has a non-self candidate.
+    const bo = await usersService.createUser({
+      email: 'e2e-comments-a11y-bo@example.com',
+      password: 'comments-a11y-pass-123',
+      name: 'Bo Philips',
+    });
+    await workspacesService.addMember({ userId: bo.id, workspaceId: ws.id });
+    const issue = await workItemsService.createWorkItem(
+      { projectId: project.id, kind: 'task', title: 'Commented task' },
+      ctx,
+    );
+    // The thread: a mention-bearing, edited root + 5 replies (over the
+    // collapse threshold, so "Show N more replies" is in the swept DOM).
+    const base = Date.now() - 60_000;
+    const root = await db.comment.create({
+      data: {
+        workspaceId: ws.id,
+        workItemId: issue.id,
+        authorId: user.id,
+        bodyMd: `Looping in [@Bo Philips](mention:${bo.id}) on this.`,
+        editedAt: new Date(base + 30_000),
+        createdAt: new Date(base),
+      },
+    });
+    await db.comment.createMany({
+      data: Array.from({ length: 5 }, (_, i) => ({
+        workspaceId: ws.id,
+        workItemId: issue.id,
+        authorId: i % 2 === 0 ? bo.id : user.id,
+        parentCommentId: root.id,
+        bodyMd: `reply ${i + 1}`,
+        createdAt: new Date(base + (i + 1) * 1000),
+      })),
+    });
+
+    await page.goto(`/issues/${issue.identifier}`);
+    await expect(page.getByRole('heading', { name: 'Commented task', level: 1 })).toBeVisible();
+    const list = page.getByRole('list', { name: 'Comments' });
+    await expect(list.locator('.mention-chip')).toBeVisible();
+    await expect(list.getByText('· Edited')).toBeVisible();
+    await expect(list.getByRole('button', { name: 'Show 4 more replies' })).toBeVisible();
+
+    // 1. Populated thread, composer at rest — strict, zero exclusions.
+    const threadResults = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    expect(
+      threadResults.violations,
+      formatViolations(
+        '/issues/[key] (comment thread)',
+        threadResults.violations as AxeViolation[],
+      ),
+    ).toEqual([]);
+
+    // 2. The delete-confirm popover open — scoped to the dialog (see above).
+    await list.getByRole('button', { name: 'Delete', exact: true }).first().click();
+    await expect(page.getByRole('dialog').getByText(/Also deletes 5 replies/)).toBeVisible();
+    const confirmResults = await new AxeBuilder({ page })
+      .withTags(WCAG_TAGS)
+      .include('[role="dialog"]')
+      .analyze();
+    expect(
+      confirmResults.violations,
+      formatViolations(
+        '/issues/[key] (delete-comment confirm)',
+        confirmResults.violations as AxeViolation[],
+      ),
+    ).toEqual([]);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // 3. Composer expanded, mention picker open — third-party editor excluded.
+    await page.getByRole('button', { name: 'Add a comment…' }).click();
+    await expect(page.locator('.ProseMirror')).toBeVisible();
+    await page.locator('.ProseMirror').click();
+    await page.keyboard.type('@Bo');
+    await expect(page.getByRole('listbox', { name: 'Mention a member' })).toBeVisible();
+    const pickerResults = await new AxeBuilder({ page })
+      .withTags(WCAG_TAGS)
+      .exclude('.ProseMirror')
+      .analyze();
+    expect(
+      pickerResults.violations,
+      formatViolations(
+        '/issues/[key] (mention picker open)',
+        pickerResults.violations as AxeViolation[],
+      ),
     ).toEqual([]);
   });
 

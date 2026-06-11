@@ -389,6 +389,21 @@ describe('commentsService.editComment', () => {
     expect(byOwner.bodyMd).toBe('owner pass');
   });
 
+  it('rejects a NON-AUTHOR plain member — edit-own never grants edit-all (5.1.7 matrix cell)', async () => {
+    const s = await buildScenario();
+    captureCommentEvents();
+    const created = await commentsService.addComment(s.issue.id, { bodyMd: 'mine' }, s.memberCtx);
+
+    // `mentionee` is a plain workspace member with no project role — exactly
+    // the "member" row of the Jira five-permission matrix. They can ADD, but
+    // editing ANOTHER member's comment needs the moderation tier.
+    const peerCtx: ServiceContext = { userId: s.mentionee.id, workspaceId: s.fx.workspaceId };
+    await expect(
+      commentsService.editComment(created.id, { bodyMd: 'hijack' }, peerCtx),
+    ).rejects.toBeInstanceOf(CommentForbiddenError);
+    expect((await commentRepository.findById(created.id))?.bodyMd).toBe('mine');
+  });
+
   it('rejects empty bodies and unknown / cross-workspace comment ids', async () => {
     const s = await buildScenario();
     captureCommentEvents();
@@ -482,6 +497,32 @@ describe('commentsService.deleteComment', () => {
       CommentNotFoundError,
     );
     expect(await commentRepository.countByWorkItem(s.issue.id)).toBe(1);
+  });
+
+  it('rejects the read-only viewer even on delete (no comment, no delete — 5.1.7 matrix cell)', async () => {
+    const s = await buildScenario();
+    captureCommentEvents();
+    const created = await commentsService.addComment(s.issue.id, { bodyMd: 'keep' }, s.memberCtx);
+
+    await expect(commentsService.deleteComment(created.id, s.viewerCtx)).rejects.toBeInstanceOf(
+      CommentForbiddenError,
+    );
+    expect(await commentRepository.countByWorkItem(s.issue.id)).toBe(1);
+  });
+
+  it("lets the WORKSPACE owner hard-delete another author's comment (delete-all — 5.1.7 matrix cell)", async () => {
+    const s = await buildScenario();
+    captureCommentEvents();
+    const created = await commentsService.addComment(s.issue.id, { bodyMd: 'gone' }, s.memberCtx);
+
+    await commentsService.deleteComment(created.id, s.ownerCtx);
+
+    expect(await commentRepository.countByWorkItem(s.issue.id)).toBe(0);
+    const revisions = await db.workItemRevision.findMany({
+      where: { workItemId: s.issue.id, changeKind: 'comment_deleted' },
+    });
+    expect(revisions).toHaveLength(1);
+    expect(revisions[0]?.changedById).toBe(s.fx.ownerId);
   });
 });
 

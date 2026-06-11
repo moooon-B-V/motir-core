@@ -76,6 +76,18 @@ export async function waitForEmail(
 }
 
 /**
+ * Every outbox email sent to `to` (case-insensitive). Unlike waitForEmail
+ * this does NOT poll — it's the negative-assertion read ("no mention email
+ * went to the author themselves", Subtask 5.1.7). The outbox file persists
+ * across tests in a run, so callers scope the assertion further (subject
+ * substring) rather than expecting an empty array.
+ */
+export async function emailsTo(to: string): Promise<CapturedEmail[]> {
+  const all = await readOutbox();
+  return all.filter((e) => e.to.toLowerCase() === to.toLowerCase());
+}
+
+/**
  * Pulls the first http(s):// URL out of an email body. Reset emails from
  * Better-Auth put the link in both the text and html bodies; we read it
  * from text because text comes through unescaped and we don't have to
