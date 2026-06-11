@@ -47,9 +47,30 @@ import type { IssueRowData } from './issueRows';
 // views (Tree + List) mount the provider, so the list and the detail page truly
 // share the controls (no parallel components).
 
+// The provider's per-row ledger of server-acknowledged `updatedAt` values.
+// With no refresh on success, `row.updatedAt` in server props stops advancing
+// after a confirmed edit — so a follow-up edit on the SAME row (unassign after
+// reassign; an assignee edit after a status change, which also bumps the row)
+// would submit the stale prop as `expectedUpdatedAt` and die on the
+// optimistic-concurrency check. Every confirmed action acknowledges its
+// returned `updatedAt`; submissions use the max of the ledger and the prop.
+// It lives on the PROVIDER (one per view mount) — above the cells, so it is
+// shared by all five editors of a row and survives cell remounts, yet resets
+// with the page where fresh server props make it moot. It only ever holds
+// values the server itself returned; max-merge keeps it monotonic, and a
+// fresher server prop (someone else's later edit) always wins the max. NOT
+// used for display convergence — useConvergingOverride must keep comparing
+// against the row's actually-served `updatedAt`, otherwise a confirmed cell
+// would yield to the still-stale prop value immediately.
+interface UpdatedAtLedger {
+  acknowledge(rowId: string, updatedAt: string): void;
+  latest(row: IssueRowData): string;
+}
+
 interface InlineEditContextValue {
   workflow: WorkflowDto;
   members: WorkspaceMemberDTO[];
+  ledger: UpdatedAtLedger;
 }
 
 const IssueInlineEditContext = createContext<InlineEditContextValue | null>(null);
@@ -69,10 +90,22 @@ export function IssueInlineEditProvider({
   // goes read-only without touching the three mount sites. Defaults to editable
   // when there's no ProjectAccessProvider (non-shell / test mounts).
   const { canEdit } = useProjectAccess();
-  const value = useMemo(
-    () => (canEdit ? { workflow, members } : null),
-    [canEdit, workflow, members],
-  );
+  const acknowledgedRef = useRef<Map<string, string>>(new Map());
+  const value = useMemo(() => {
+    if (!canEdit) return null;
+    const acked = acknowledgedRef.current;
+    const ledger: UpdatedAtLedger = {
+      acknowledge(rowId, updatedAt) {
+        const cur = acked.get(rowId);
+        if (cur === undefined || updatedAt > cur) acked.set(rowId, updatedAt);
+      },
+      latest(row) {
+        const a = acked.get(row.id);
+        return a !== undefined && a > row.updatedAt ? a : row.updatedAt;
+      },
+    };
+    return { workflow, members, ledger };
+  }, [canEdit, workflow, members]);
   return (
     <IssueInlineEditContext.Provider value={value}>{children}</IssueInlineEditContext.Provider>
   );
@@ -82,26 +115,27 @@ function useIssueInlineEdit() {
   return useContext(IssueInlineEditContext);
 }
 
-// The optimistic value for one inline cell, converging on the server's
-// ACKNOWLEDGEMENT rather than on the first re-render that changes the prop
-// (bug-inline-status-revert-on-second-edit). Two rapid edits on different rows
-// put two action calls + two `router.refresh()`es in flight; a refresh that
-// snapshotted the DB before this row's write committed can apply AFTER the
-// fresh one, handing the cell stale server props. The old mechanic — key the
-// cell by the authoritative value so any server change remounts it and drops
-// the override — trusted whatever payload arrived last, so that stale payload
-// re-rendered the row's OLD value (display-only; the DB held the new one).
+// The optimistic value for one inline cell. A successful action response IS
+// the confirmation (bug-inline-status-revert-on-second-edit): the cell shows
+// the picked value immediately, marks it confirmed when the action returns
+// the row's new `updatedAt`, and that's it — no `router.refresh()`, no
+// revalidate, no whole-tree repaint on success. The refresh fan-out was the
+// bug's cause: every inline edit shipped full-page RSC snapshots, so two
+// quick edits on different rows raced multiple snapshots and a stale one
+// applying last re-rendered the first row's OLD value (display-only; the DB
+// held the new one).
 //
-// Instead the override carries the `updatedAt` the action returned for the
-// row once the write is acknowledged, and yields to the server only when the
-// row's `updatedAt` has caught up (`>=`, lexicographic — both sides are
-// same-format UTC ISO-8601). An older snapshot is by definition missing our
-// committed write, so the override keeps rendering; a snapshot at/after it
-// includes the write (per-row `updatedAt` is monotonic), so the server value
-// wins — which also lets a genuinely later edit by someone else show through.
-// No remount, no setState-in-effect; a follow-up edit on the same cell
-// replaces the override (the token keeps a superseded action's confirm/fail
-// from clobbering it).
+// Server props CAN still change under the cell — a sibling cell's stale-
+// conflict refresh, a navigation, a future live-update surface — so the
+// confirmed override yields to the server only when the row's `updatedAt`
+// has caught up with the acknowledged write (`>=`, lexicographic — both
+// sides are same-format UTC ISO-8601). An older snapshot is by definition
+// missing our committed write, so the override keeps rendering; a snapshot
+// at/after it includes the write (per-row `updatedAt` is monotonic), so the
+// server value wins — which also lets a genuinely later edit by someone else
+// show through. No remount, no setState-in-effect; a follow-up edit on the
+// same cell replaces the override (the token keeps a superseded action's
+// confirm/fail from clobbering it).
 function useConvergingOverride<T>(serverValue: T, serverUpdatedAt: string) {
   const [override, setOverride] = useState<{ value: T; confirmedUpdatedAt?: string } | null>(null);
   const tokenRef = useRef(0);
@@ -129,13 +163,18 @@ function useConvergingOverride<T>(serverValue: T, serverUpdatedAt: string) {
 // The shared commit path for the `updateIssueAction` fields (assignee / priority
 // / due / estimate). Optimistic: the caller begins a converging override, then
 // `run` fires the gated action with the row's `expectedUpdatedAt`; on success
-// `onConfirm` receives the acknowledged `updatedAt` (the override's converge
-// point) before the route revalidates; on a stale / error result `onFail` drops
-// the override and a toast surfaces the typed message.
+// `onConfirm` receives the acknowledged `updatedAt` and the cell is done — no
+// refresh. Only a STALE conflict refreshes: the row genuinely needs re-reading
+// (the override was dropped, and the next attempt needs a fresh concurrency
+// token). On any failure `onFail` drops the override and a toast surfaces the
+// typed message.
 function useUpdateField(row: IssueRowData) {
   const router = useRouter();
   const { toast } = useToast();
   const t = useTranslations('issueViews');
+  // The editors only render inside an editable provider, so ctx is present;
+  // the prop fallback just keeps the hook total.
+  const ledger = useIssueInlineEdit()?.ledger;
   const [pending, startTransition] = useTransition();
   function run(
     patch: Omit<UpdateIssueInput, 'id' | 'expectedUpdatedAt'>,
@@ -144,12 +183,12 @@ function useUpdateField(row: IssueRowData) {
     startTransition(async () => {
       const res = await updateIssueAction({
         id: row.id,
-        expectedUpdatedAt: row.updatedAt,
+        expectedUpdatedAt: ledger ? ledger.latest(row) : row.updatedAt,
         ...patch,
       });
       if (res.ok) {
+        ledger?.acknowledge(row.id, res.updatedAt);
         handlers.onConfirm(res.updatedAt);
-        router.refresh();
       } else if (res.stale) {
         handlers.onFail();
         toast({ variant: 'error', title: t('changedElsewhereRefreshing') });
@@ -214,14 +253,13 @@ function EditSurface({ children }: { children: ReactNode }) {
 
 function InlineStatusEditor({ row, workflow }: { row: IssueRowData; workflow: WorkflowDto }) {
   const t = useTranslations('issueViews');
-  const router = useRouter();
   const { toast } = useToast();
+  const ledger = useIssueInlineEdit()?.ledger;
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
-  // Optimistic override: the just-picked key, held until the server's row
-  // catches up with the acknowledged write (see useConvergingOverride — a
-  // stale refresh payload must not revert the cell). On failure the override
-  // is dropped and the cell reverts.
+  // Optimistic override: the just-picked key, confirmed by the action response
+  // (see useConvergingOverride — the success response IS the confirmation; no
+  // refresh follows). On failure the override is dropped and the cell reverts.
   const status = useConvergingOverride(row.status, row.updatedAt);
 
   const statusKey = status.value;
@@ -236,8 +274,10 @@ function InlineStatusEditor({ row, workflow }: { row: IssueRowData; workflow: Wo
     startTransition(async () => {
       const res = await changeStatusAction({ id: row.id, toStatusKey });
       if (res.ok) {
+        // A status change bumps the row's `updatedAt` even though it submits
+        // no token itself — later token-carrying edits on this row need it.
+        ledger?.acknowledge(row.id, res.updatedAt);
         status.confirm(token, res.updatedAt);
-        router.refresh();
       } else {
         status.fail(token);
         toast({ variant: 'error', title: res.error });
