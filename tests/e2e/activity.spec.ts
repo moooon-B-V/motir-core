@@ -59,6 +59,26 @@ async function switchTab(page: Page, tab: 'All' | 'Comments' | 'History') {
     .click();
 }
 
+/**
+ * Click a feed's "Show more" edge and wait for the next-count edge to render.
+ *
+ * Retries the click: the detail page's relative-time stamps can mismatch
+ * between SSR and client (finding #89 — the next-intl ENVIRONMENT_FALLBACK),
+ * which hydration-fails the page and makes React REGENERATE the client tree;
+ * a click dispatched into the pre-regeneration DOM is silently dropped (this
+ * is exactly how the at-scale pass died in CI while green locally). The loop
+ * re-clicks only while the old edge is still showing, so a click that DID
+ * land (old edge gone, fetch in flight) is never doubled.
+ */
+async function extendFeed(page: Page, fromName: string, toName: string) {
+  const from = page.getByRole('button', { name: fromName });
+  const to = page.getByRole('button', { name: toName });
+  await expect(async () => {
+    if (await from.isVisible()) await from.click();
+    await expect(to).toBeVisible({ timeout: 2_500 });
+  }).toPass({ timeout: 20_000 });
+}
+
 /** Post a root comment through the real composer (the 5.1.5 surface). */
 async function postComment(page: Page, text: string) {
   await page.getByRole('button', { name: 'Add a comment…' }).click();
@@ -245,13 +265,11 @@ test('at scale each tab stays cursor-paged: one page + "Show more", bounded read
   // edge — never in the DOM.
   await expect(feed.getByText('pass 220', { exact: true })).toBeVisible();
   await expect(feed.getByText('pass 150', { exact: true })).toHaveCount(0);
-  const showMoreChanges = page.getByRole('button', { name: 'Show more changes (201 older)' });
-  await expect(showMoreChanges).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show more changes (201 older)' })).toBeVisible();
 
-  // Extend one cursor page backward.
-  await showMoreChanges.click();
+  // Extend one cursor page backward (click-retried — finding #89).
+  await extendFeed(page, 'Show more changes (201 older)', 'Show more changes (181 older)');
   await expect(feed.getByText('pass 182', { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Show more changes (181 older)' })).toBeVisible();
 
   // ── All: both sources interleave on page ONE, paging the composite cursor ──
   await page.goto(`/issues/${fx.issue.identifier}?activity=all`);
@@ -263,11 +281,11 @@ test('at scale each tab stays cursor-paged: one page + "Show more", bounded read
   // interleave is real, not segregated.
   await expect(all.getByText('pass 220', { exact: true })).toBeVisible();
   await expect(all.getByText('comment 50', { exact: true })).toBeVisible();
-  const showMoreActivity = page.getByRole('button', { name: 'Show more activity (251 older)' });
-  await expect(showMoreActivity).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show more activity (251 older)' })).toBeVisible();
 
-  await showMoreActivity.click();
-  await expect(page.getByRole('button', { name: 'Show more activity (231 older)' })).toBeVisible();
+  // Extend the merged stream one composite-cursor page (click-retried —
+  // finding #89: this exact click was hydration-swallowed in CI).
+  await extendFeed(page, 'Show more activity (251 older)', 'Show more activity (231 older)');
 
   // Every network read stayed within the page size — the load-all read the
   // finding-#57 rule forbids never fired, on either endpoint.
