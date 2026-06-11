@@ -331,7 +331,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           "Issue list: inline status edit — the first item's status sometimes reverts after editing a second item",
-        status: 'done',
+        status: 'in_progress',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 2 · **Surface:** issue list inline cell editing ' +
@@ -390,7 +390,21 @@ export const EPICS: EpicMeta[] = [
           'repro test must assert\n' +
           '- `tests/components/issue-inline-edit.test.tsx` — the existing suite the repro ' +
           'extends\n' +
-          '- notes.html (reproduce-before-diagnosing; the twice-wrong filter check-mark bug)',
+          '- notes.html (reproduce-before-diagnosing; the twice-wrong filter check-mark bug)\n\n' +
+          '## Re-opened (Yue, 2026-06-10) — PR #619 did not fix it\n\n' +
+          'The merged fix (`useConvergingOverride`, PR #619) defended each cell against stale ' +
+          'full-tree payloads but KEPT the refresh fan-out that creates them — ' +
+          "`revalidatePath('/issues')` in the field actions plus `router.refresh()` per cell " +
+          'put up to four whole-page RSC snapshots in flight for two quick edits, and the ' +
+          'defense only lives in mounted component state. Yue verified the revert still ' +
+          'happens in the live app and set the correct contract: **a successful action ' +
+          'response IS the confirmation** — call the endpoint, confirm the optimistic value ' +
+          'when it returns, no whole-tree refresh on success. Re-fix in PR #640: actions no ' +
+          'longer revalidate, cells no longer refresh on success (only the optimistic-' +
+          'concurrency STALE conflict still refreshes), so there are no payloads left to ' +
+          'race. The detail page `CoreFieldsPanel` shares the refresh-on-success mechanic ' +
+          'but is owned by open PR #633 — logged as a finding for a follow-up, not touched ' +
+          'in #640.',
       },
     ],
   },
