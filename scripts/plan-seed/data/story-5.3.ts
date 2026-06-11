@@ -490,7 +490,7 @@ export const story_5_3: PlanStory = {
       id: '5.3.7',
       title:
         'Detail-rail custom fields UI — per-type cards + inline editors + "Show more fields" disclosure',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
