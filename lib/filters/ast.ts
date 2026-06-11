@@ -168,29 +168,14 @@ function isWireValue(v: unknown): v is FilterConditionValue {
 }
 
 /**
- * Parse a `?filter=` param value. Structure + version only — field/operator
- * ids and value SHAPES are checked just enough to type the rows (`string` ids,
- * a wire-representable value); whether the ids exist and the values satisfy
- * their (field, operator) arity is the registry's `validateFilterAst`, which
- * the read path runs next and whose typed errors the caller maps to the same
- * recoverable "invalid filter" state.
+ * Type the compact wire form (`{ c, f }`) into an AST — the structural half
+ * both carriers share (the URL param after base64/JSON peeling, the stored
+ * envelope after its version check). Field/operator ids and value SHAPES are
+ * checked just enough to type the rows (`string` ids, a wire-representable
+ * value); whether the ids exist and the values satisfy their (field,
+ * operator) arity is the registry's `validateFilterAst`.
  */
-export function decodeFilterParam(raw: string): FilterDecodeResult {
-  const sep = raw.indexOf(':');
-  if (sep < 0) return { ok: false, reason: 'malformed', detail: 'missing version prefix' };
-  const version = raw.slice(0, sep);
-  if (version !== FILTER_PARAM_VERSION) {
-    return { ok: false, reason: 'unsupported-version', detail: version };
-  }
-  const json = fromBase64Url(raw.slice(sep + 1));
-  if (json === null) return { ok: false, reason: 'malformed', detail: 'not base64url' };
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json);
-  } catch {
-    return { ok: false, reason: 'malformed', detail: 'not JSON' };
-  }
+function decodeCompactForm(parsed: unknown): FilterDecodeResult {
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     return { ok: false, reason: 'invalid', detail: 'not an object' };
   }
@@ -217,6 +202,78 @@ export function decodeFilterParam(raw: string): FilterDecodeResult {
     });
   }
   return { ok: true, ast: { combinator: c, conditions } };
+}
+
+/**
+ * Parse a `?filter=` param value. Structure + version only — deep validation
+ * against the registry (operator sets, value arity) is `validateFilterAst`'s
+ * job, which the read path runs next and whose typed errors the caller maps
+ * to the same recoverable "invalid filter" state.
+ */
+export function decodeFilterParam(raw: string): FilterDecodeResult {
+  const sep = raw.indexOf(':');
+  if (sep < 0) return { ok: false, reason: 'malformed', detail: 'missing version prefix' };
+  const version = raw.slice(0, sep);
+  if (version !== FILTER_PARAM_VERSION) {
+    return { ok: false, reason: 'unsupported-version', detail: version };
+  }
+  const json = fromBase64Url(raw.slice(sep + 1));
+  if (json === null) return { ok: false, reason: 'malformed', detail: 'not base64url' };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return { ok: false, reason: 'malformed', detail: 'not JSON' };
+  }
+  return decodeCompactForm(parsed);
+}
+
+// ---------------------------------------------------------------------------
+// The stored-envelope codec — the SECOND carrier (Story 6.2 saved filters)
+// ---------------------------------------------------------------------------
+//
+// A saved filter persists the SAME compact wire form the URL param carries,
+// as JSONB instead of base64url: `{ v: 'v1', c, f }` — the version moves from
+// the string prefix into a field, everything else is byte-for-byte the
+// codec's shape ("one codec, two carriers"). Decoding NEVER throws: a
+// hand-corrupted or future-versioned stored envelope yields the same typed,
+// recoverable FilterDecodeResult the URL path yields, which the resolve read
+// surfaces as a designed degraded state instead of a crash.
+
+/** The JSONB shape a `saved_filter.ast_envelope` column stores. */
+export interface FilterEnvelope {
+  v: string;
+  c: FilterCombinator;
+  f: Array<[string, string, FilterConditionValue]>;
+}
+
+/** Serialize an AST into the stored-envelope JSON (the `?filter=` param's
+ * compact form with the version as a field). */
+export function encodeFilterEnvelope(ast: FilterAst): FilterEnvelope {
+  return {
+    v: FILTER_PARAM_VERSION,
+    c: ast.combinator,
+    f: ast.conditions.map((row) => [row.field, row.operator, row.value]),
+  };
+}
+
+/**
+ * Parse a stored envelope (an `unknown` straight from JSONB). Structure +
+ * version only, exactly like {@link decodeFilterParam} — the caller runs
+ * `validateFilterAst` next and maps its typed errors to the same recoverable
+ * state.
+ */
+export function decodeFilterEnvelope(raw: unknown): FilterDecodeResult {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return { ok: false, reason: 'malformed', detail: 'not an object' };
+  }
+  const { v, ...compact } = raw as { v?: unknown; c?: unknown; f?: unknown };
+  if (typeof v !== 'string') return { ok: false, reason: 'malformed', detail: 'missing version' };
+  if (v !== FILTER_PARAM_VERSION) {
+    return { ok: false, reason: 'unsupported-version', detail: v };
+  }
+  return decodeCompactForm(compact);
 }
 
 // ---------------------------------------------------------------------------
