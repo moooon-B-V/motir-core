@@ -177,7 +177,7 @@ export const story_6_1: PlanStory = {
       id: '6.1.1',
       title:
         'FilterAST + TOTAL operator registry + safe compiler (built-in fields) + versioned URL serialization + the trgm text index',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
