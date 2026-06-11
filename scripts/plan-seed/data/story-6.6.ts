@@ -196,7 +196,7 @@ export const story_6_6: PlanStory = {
       id: '6.6.1',
       title:
         'Schema + TOTAL trigger/action registries + `automationRulesService` CRUD (admin-gated, enable/disable, caps) + routes',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
@@ -254,7 +254,7 @@ export const story_6_6: PlanStory = {
       id: '6.6.2',
       title:
         'Execution engine — `work-item/created` + `work-item/field.changed` events, the rule-run Inngest job (match → conditions → actions-as-owner), loop prevention, audit writes, auto-disable + owner error email, retention sweep',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 38,
