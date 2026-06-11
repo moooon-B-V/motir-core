@@ -71,10 +71,13 @@ export interface ResolvedSavedFilterDto {
 
 /**
  * The delete-impact enumeration behind the Cloud-style warning dialog
- * ("N subscriptions will be removed"). Subscriptions land in 6.2.5 (their
- * table FK-cascades off `saved_filter`); 6.3 widget usages join in by FK
- * later — both additive to this DTO.
+ * ("N subscriptions will be removed · N dashboard widgets will lose this
+ * filter"). Subscriptions land in 6.2.5 (their table FK-cascades off
+ * `saved_filter`); `widgetCount` (Subtask 6.3.1) counts the dashboard
+ * widgets whose `saved_filter_id` FK the delete would SetNull — those
+ * widgets go STALE (the designed "filter missing" card), never away.
  */
 export interface SavedFilterDependentsDto {
   subscriptionCount: number;
+  widgetCount: number;
 }

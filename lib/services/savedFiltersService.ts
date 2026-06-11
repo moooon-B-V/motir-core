@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { savedFilterRepository } from '@/lib/repositories/savedFilterRepository';
 import type { SavedFilterListView } from '@/lib/repositories/savedFilterRepository';
 import { savedFilterStarRepository } from '@/lib/repositories/savedFilterStarRepository';
+import { dashboardWidgetRepository } from '@/lib/repositories/dashboardWidgetRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -495,7 +496,9 @@ export const savedFiltersService = {
   /**
    * Delete — owner or (on project-shared filters) the admin tier. Stars die
    * with the row (FK Cascade); 6.2.5 subscriptions FK-cascade the same way,
-   * so the whole removal is one transaction. The UI warns FIRST via
+   * so the whole removal is one transaction. Dashboard widgets (6.3.1) do
+   * NOT die — their `saved_filter_id` SetNulls and the widget goes STALE
+   * (the verified Cloud gadget behaviour). The UI warns FIRST via
    * {@link savedFiltersService.getDependents} (the Cloud-style dialog).
    */
   async delete(projectKey: string, filterId: string, ctx: ServiceContext): Promise<void> {
@@ -513,9 +516,12 @@ export const savedFiltersService = {
 
   /**
    * Enumerate what a delete would take with it — the read behind the
-   * Cloud-style warning ("N subscriptions will be removed"). THE SEAM:
-   * subscriptions land in 6.2.5 (their count joins in here); Story 6.3
-   * widget usages join in by FK later. Both are additive to the DTO, so the
+   * Cloud-style warning ("N subscriptions will be removed · N dashboard
+   * widgets will lose this filter"). `widgetCount` (Subtask 6.3.1) counts
+   * the dashboard widgets whose `saved_filter_id` the delete would SetNull
+   * — they go STALE (the designed "filter missing" card), never away (the
+   * verified Cloud gadget behaviour). THE REMAINING SEAM: subscriptions
+   * land in 6.2.5 (their count joins in here), additive to the DTO, so the
    * 6.2.2-designed dialog wires against this read today.
    */
   async getDependents(
@@ -525,8 +531,9 @@ export const savedFiltersService = {
   ): Promise<SavedFilterDependentsDto> {
     if (isBuiltinFilterId(filterId)) throw new BuiltinSavedFilterImmutableError();
     const pc = await resolveProjectAndCaps(projectKey, ctx);
-    await getVisibleFilter(filterId, pc, ctx);
-    return { subscriptionCount: 0 };
+    const row = await getVisibleFilter(filterId, pc, ctx);
+    const widgetCount = await dashboardWidgetRepository.countBySavedFilter(row.id);
+    return { subscriptionCount: 0, widgetCount };
   },
 
   /**
