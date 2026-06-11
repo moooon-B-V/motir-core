@@ -251,7 +251,7 @@ export const story_6_3: PlanStory = {
       id: '6.3.2',
       title:
         'Report + widget data reads — created-vs-resolved buckets, distribution group-by (TOTAL statistic registry), filter-results page; per-VIEWER 6.4 gating',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
