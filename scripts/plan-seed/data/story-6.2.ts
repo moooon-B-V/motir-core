@@ -337,7 +337,7 @@ export const story_6_2: PlanStory = {
       id: '6.2.4',
       title:
         'Filters directory — the project-level manage surface (search, pagination, actions by role, built-ins, delete-with-dependents warning)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
