@@ -227,7 +227,7 @@ export const story_5_5: PlanStory = {
       id: '5.5.2',
       title:
         'The "All" merged stream — comments + history interleaved by composite cursor (bounded two-source merge)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
