@@ -893,6 +893,77 @@ export const EPICS: EpicMeta[] = [
       '**@mentions**, **attachments**, **custom fields**, labels / components, assignees / ' +
       'watchers, and a per-issue **activity history**. The collaboration depth users expect from ' +
       "Jira before they'll switch.",
+    items: [
+      {
+        id: 'bug-settings-modal-input-focus-ring-clipped',
+        kind: 'bug',
+        title:
+          'Settings create/edit modals: input focus ring is clipped by the scrollable modal body',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 5 (current epic — discovered during Epic 5 work) · ' +
+          '**Code surface owned by:** subtask 5.4.10 (components admin UI) + subtask 5.3.6 ' +
+          '(fields admin UI), both sitting on the shared `Modal` / `Input` primitives · ' +
+          '**Status:** open · **Reported by:** Yue.\n\n' +
+          'In **Project settings → Components → 创建组件** (`CreateComponentModal`), the focused ' +
+          "name input's focus ring renders visibly **cut off** — flat/clipped at the left and " +
+          'right edges instead of fully rounded on all four sides. The identical defect shows in ' +
+          '**Project settings → Fields → 创建字段** (the create-field modal): the same clipped ' +
+          'ring around the 名称 input. One root cause, multiple surfaces — the edit variants of ' +
+          'both modals share the same body wrapper and clip the same way.\n\n' +
+          '**Repro:** sign in as `zhuyue@prodect.co` / `!QAZ1qaz`, open any project → Project ' +
+          'settings → Components → 创建组件 (the name input autofocuses — the clipped ring is ' +
+          'immediate). Same in Project settings → Fields → 创建字段. Locale-independent (zh ' +
+          'screenshots; nothing locale-specific in the layout).\n\n' +
+          '**Root cause (verified in code, confirm in the fix).** `components/ui/Input.tsx` draws ' +
+          'its focus ring as `focus-within:ring-2 … ring-offset-2` — a box-shadow extending ~4px ' +
+          "OUTSIDE the field's border box. Both modals wrap their form body in " +
+          '`<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">` ' +
+          '(`ComponentsSettingsEditor.tsx` create ≈line 530 / edit modal; `FieldsSettingsEditor.tsx` ' +
+          '≈lines 606 + 793). Per the CSS spec, `overflow-y: auto` forces the computed ' +
+          '`overflow-x` from `visible` to `auto`, so the body becomes a clip/scroll box on BOTH ' +
+          "axes — and since the Input stretches to the container's full content width, the " +
+          "ring's horizontal overhang is painted outside the clip box and cut. Rings are " +
+          'box-shadows: they never grow the layout box, so nothing scrolls — the paint is just ' +
+          "silently clipped. The recipe is sanctioned by the primitive itself (`Modal.tsx`'s " +
+          'comment: consumer "can give its body `flex-1 overflow-y-auto` and pin a footer"), so ' +
+          'every current and future modal following the documented pattern inherits the clip — ' +
+          'this is a **primitive-layer bug**, not a per-screen one.\n\n' +
+          '**Fix shape (durable, primitive-level — never per-modal padding hacks).** Add a ' +
+          '`Modal.Body` sub-component to `components/ui/Modal.tsx` that owns the scroll recipe ' +
+          'once and makes it ring-safe (the standard inset-compensation pattern: horizontal ' +
+          'padding ≥ the ring overhang inside the scroll container, paired with an equal ' +
+          'negative margin so the visual gutter does not shift), update the `Modal.tsx` comment ' +
+          'to prescribe `Modal.Body`, and migrate the consumers (create + edit × components / ' +
+          'fields, plus every other modal body the sweep finds). Footer pinning must keep ' +
+          'working.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- In 创建组件 / edit component and 创建字段 / edit field, the focus ring of every ' +
+          'focusable field renders fully on all four sides (no flat/clipped edge), in zh and en.\n' +
+          '- The fix lands in the shared `Modal` primitive (a `Modal.Body` or equivalent) and the ' +
+          'consumers adopt it — no one-off padding patch inside a single modal.\n' +
+          '- Repo-wide sweep: every other modal body using the `overflow-y-auto` recipe is ' +
+          'migrated in the same fix (grep `overflow-y-auto` across modal-rendering components).\n' +
+          '- Scroll behaviour is preserved: a long body still scrolls within the `max-h-[90vh]` ' +
+          "panel, the footer stays pinned, and the fields' visual alignment with the modal " +
+          'title/footer is unchanged (the inset compensation must not narrow the body).\n' +
+          '- A regression test covers `Modal.Body` (renders children, applies the ring-safe ' +
+          'scroll classes); existing components/fields settings tests stay green.\n\n' +
+          '## Context refs\n\n' +
+          '- `components/ui/Modal.tsx` — the primitive (the `overflow-hidden` panel + the comment ' +
+          'prescribing the consumer-side `overflow-y-auto` body recipe); the fix site\n' +
+          '- `components/ui/Input.tsx` — `focus-within:ring-2 … ring-offset-2` (the ~4px overhang ' +
+          'that gets clipped)\n' +
+          '- `app/(authed)/settings/project/components/_components/ComponentsSettingsEditor.tsx` — ' +
+          'CreateComponentModal / EditComponentModal bodies\n' +
+          '- `app/(authed)/settings/project/fields/_components/FieldsSettingsEditor.tsx` — ' +
+          'create/edit field modal bodies\n' +
+          '- Subtasks 5.4.10 + 5.3.6 — the owning admin-UI subtasks\n' +
+          '- `bug-inline-edit-clipped-when-table-short` (Epic 2) — precedent for the ' +
+          '"focus/popover clipped by an overflow container" bug family.',
+      },
+    ],
   },
   {
     id: '6',
