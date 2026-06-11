@@ -120,6 +120,7 @@ describe('IssueFilterBar — trigger', () => {
       statuses: ['in_progress', 'done'],
       assigneeIds: [],
       includeUnassigned: true,
+      advanced: null,
       text: null,
     });
     // 1 kind + 2 statuses + Unassigned = 4

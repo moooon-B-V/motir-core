@@ -38,6 +38,7 @@ describe('parseIssueFilter', () => {
       assigneeIds: ['u1'],
       includeUnassigned: false,
       text: 'oauth',
+      advanced: null,
     });
   });
 
@@ -76,6 +77,7 @@ describe('appendFilterParams (URL serialization) round-trips through parse', () 
       kinds: ['task', 'bug'],
       statuses: ['done', 'in_progress'],
       assigneeIds: ['u1'],
+      advanced: null,
       includeUnassigned: true,
       text: 'oauth',
     };
@@ -108,6 +110,7 @@ describe('countActiveFilters + isFilterActive', () => {
       kinds: ['bug'],
       statuses: ['in_progress', 'done'],
       assigneeIds: ['u1'],
+      advanced: null,
       includeUnassigned: true,
       text: 'oauth',
     };
@@ -132,6 +135,7 @@ describe('toProjectTreeFilter (→ service read DTO)', () => {
         kinds: ['bug'],
         statuses: [],
         assigneeIds: ['u1'],
+        advanced: null,
         includeUnassigned: true,
         text: 'x',
       }),

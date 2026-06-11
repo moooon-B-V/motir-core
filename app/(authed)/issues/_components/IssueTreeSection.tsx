@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { Locale } from '@/lib/i18n/locales';
@@ -6,12 +7,20 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { estimationService } from '@/lib/services/estimationService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
-import { type IssueListView, type IssueSort, serializeSort } from '@/lib/issues/issueListView';
 import {
+  buildIssueListHref,
+  type IssueListView,
+  type IssueSort,
+  serializeSort,
+} from '@/lib/issues/issueListView';
+import {
+  EMPTY_FILTER,
   toProjectTreeFilter,
   isFilterActive,
   type IssueFilter,
 } from '@/lib/issues/issueListFilter';
+import type { FilterAst } from '@/lib/filters/ast';
+import type { WorkItemTreeNodeDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { toIssueRows, toIssueListRows } from './issueRows';
@@ -40,6 +49,10 @@ export interface IssueTreeSectionProps {
   sort: IssueSort;
   /** The active filter (Subtask 2.5.4); applied to BOTH views. */
   filter: IssueFilter;
+  /** The decoded advanced-builder AST (Subtask 6.1.4), already validated by
+   * the page — composed into the same repo filter, so BOTH views read one
+   * compiled predicate (no view-specific query code). Null = none/invalid. */
+  ast: FilterAst | null;
   /** The requested List page (Subtask 2.5.12); the service clamps out-of-range. Tree ignores it. */
   page: number;
   /** Pre-read by the page (the toolbar's filter facets need them up front). */
@@ -54,13 +67,15 @@ export async function IssueTreeSection({
   view,
   sort,
   filter,
+  ast,
   page,
   workflow,
   members,
 }: IssueTreeSectionProps) {
   const ctx = { userId, workspaceId };
   const repoFilter = toProjectTreeFilter(filter);
-  const filtered = isFilterActive(filter);
+  if (ast !== null) repoFilter.ast = ast;
+  const filtered = isFilterActive(filter) || ast !== null;
   const t = await getTranslations('issueViews');
   const locale = (await getLocale()) as Locale;
 
@@ -78,15 +93,41 @@ export async function IssueTreeSection({
 
   // A filter that matches nothing is distinct from an empty project: don't tell
   // the user to "create your first issue" when they've simply over-narrowed.
-  const empty = filtered ? (
-    <EmptyState title={t('noMatchingTitle')} description={t('noMatchingDescription')} />
-  ) : (
-    <EmptyState
-      title={t('noIssuesTitle')}
-      description={t('noIssuesDescription')}
-      action={<NewIssueButton />}
-    />
-  );
+  // With the BUILDER active the drawn zero-state speaks its vocabulary —
+  // remove a condition / clear — and offers the Clear-all action (an href to
+  // the canonical unfiltered URL, view + sort preserved; mock panel 5).
+  const empty =
+    ast !== null ? (
+      <EmptyState
+        title={t('advancedNoMatchTitle')}
+        description={t('advancedNoMatchDescription')}
+        action={
+          <Link
+            href={buildIssueListHref('/issues', { view, sort, filter: EMPTY_FILTER })}
+            className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-(--el-border) px-3 font-sans text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          >
+            {t('advancedClearAll')}
+          </Link>
+        }
+      />
+    ) : filtered ? (
+      <EmptyState title={t('noMatchingTitle')} description={t('noMatchingDescription')} />
+    ) : (
+      <EmptyState
+        title={t('noIssuesTitle')}
+        description={t('noIssuesDescription')}
+        action={<NewIssueButton />}
+      />
+    );
+
+  // The live result-count line (mock panel 5, `role="status"`) — rendered
+  // whenever the builder constrains the read, above whichever view.
+  const countLine = (count: number) =>
+    ast !== null ? (
+      <p role="status" className="text-[13px] text-(--el-text-muted) tabular-nums">
+        {t('advancedCountLine', { count })}
+      </p>
+    ) : null;
 
   if (view === 'list') {
     const {
@@ -101,14 +142,17 @@ export async function IssueTreeSection({
     );
     if (items.length === 0) return empty;
     return withEstimation(
-      <IssueListTable
-        rows={toIssueListRows(items, workflow, members, locale)}
-        sort={sort}
-        filter={filter}
-        pagination={{ total, page: clampedPage, pageSize }}
-        workflow={workflow}
-        members={members}
-      />,
+      <div className="flex flex-col gap-3">
+        {countLine(total)}
+        <IssueListTable
+          rows={toIssueListRows(items, workflow, members, locale)}
+          sort={sort}
+          filter={filter}
+          pagination={{ total, page: clampedPage, pageSize }}
+          workflow={workflow}
+          members={members}
+        />
+      </div>,
     );
   }
 
@@ -119,11 +163,14 @@ export async function IssueTreeSection({
     const tree = await workItemsService.getProjectTree(projectId, repoFilter, ctx);
     if (tree.length === 0) return empty;
     return withEstimation(
-      <IssueTreeStaticTable
-        rows={toIssueRows(tree, workflow, members, locale)}
-        workflow={workflow}
-        members={members}
-      />,
+      <div className="flex flex-col gap-3">
+        {countLine(countMatchedNodes(tree))}
+        <IssueTreeStaticTable
+          rows={toIssueRows(tree, workflow, members, locale)}
+          workflow={workflow}
+          members={members}
+        />
+      </div>,
     );
   }
 
@@ -142,4 +189,15 @@ export async function IssueTreeSection({
       members={members}
     />,
   );
+}
+
+/** The Tree view's match count — MATCHED nodes only (retained muted ancestors
+ * don't count), so the figure agrees with the List view's filtered total. */
+function countMatchedNodes(nodes: WorkItemTreeNodeDto[]): number {
+  let count = 0;
+  for (const node of nodes) {
+    if (node.matched) count += 1;
+    count += countMatchedNodes(node.children);
+  }
+  return count;
 }

@@ -71,6 +71,9 @@ export interface MultiSelectPickerProps {
   error?: string | null;
   /** Disables the whole control (a pending action). */
   disabled?: boolean;
+  /** Extra classes for the chip-input BOX (the bordered element) — e.g. the
+   * filter builder's dashed pending-row treatment (Subtask 6.1.4). */
+  className?: string;
 }
 
 // Static class maps — Tailwind needs literal class strings per tint.
@@ -160,6 +163,7 @@ export function MultiSelectPicker({
   hint,
   error,
   disabled,
+  className,
 }: MultiSelectPickerProps) {
   const baseId = useId();
   const listId = `${baseId}-listbox`;
@@ -207,7 +211,13 @@ export function MultiSelectPicker({
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Escape') {
       if (open) {
+        // Consume the Esc that closes OUR listbox (stopPropagation included):
+        // inside an enclosing dismissable layer (the 6.1.4 filter builder's
+        // Radix Popover) the same keydown would otherwise also close the
+        // whole dialog. With the listbox already closed, Esc passes through
+        // to the container — the layered-dismiss order users expect.
         e.preventDefault();
+        e.stopPropagation();
         setOpen(false);
       }
       return;
@@ -235,7 +245,12 @@ export function MultiSelectPicker({
   }
 
   return (
-    <div ref={rootRef} className="relative font-sans">
+    // `data-inner-dismiss` (set while the listbox is open) lets an enclosing
+    // Radix layer's `onEscapeKeyDown` defer to us: Radix listens for Escape
+    // in the CAPTURE phase at the document, so our own bubble-phase handler
+    // alone can't stop it from dismissing the whole popover/dialog first
+    // (the 6.1.4 filter builder hit exactly this).
+    <div ref={rootRef} data-inner-dismiss={open ? true : undefined} className="relative font-sans">
       {/* The box — input-shaped (mock panel 1): chips + the filter input. A
           click anywhere focuses the input; at the cap the box goes quiet but
           chips stay removable. */}
@@ -245,6 +260,7 @@ export function MultiSelectPicker({
           'flex min-h-(--height-input) cursor-text flex-wrap items-center gap-1.5 rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y)',
           'focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:ring-offset-1',
           inputDisabled && 'cursor-not-allowed bg-(--el-surface-soft)',
+          className,
         )}
       >
         {values.map((v) => (

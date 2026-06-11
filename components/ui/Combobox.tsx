@@ -388,7 +388,10 @@ export function Combobox<T extends string>({
   );
 
   return (
-    <div ref={containerRef} className="relative">
+    // `data-inner-dismiss` while the menu is open — see MultiSelectPicker:
+    // an enclosing Radix layer's onEscapeKeyDown checks it so Esc closes the
+    // MENU (our own handler) instead of dismissing the whole layer.
+    <div ref={containerRef} data-inner-dismiss={open ? true : undefined} className="relative">
       <button
         ref={triggerRef}
         type="button"
