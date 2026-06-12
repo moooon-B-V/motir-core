@@ -149,23 +149,23 @@ export const STUB_STORIES: PlanStory[] = [
   // backend (6.8.1/6.8.2) is independent. This is the capability the 8.7
   // rebrand cutover consumes — PROD-vs-NIF becomes a reversible setting.
 
-  // 6.9 (Organization root-account tier + org admin) — data/story-6.9.ts.
+  // 6.10 (Organization root-account tier + org admin) — data/story-6.10.ts.
   // Added 2026-06-12. `Organization` (≠ Better-Auth `Account`) above Workspace,
   // the BILLING ENTITY credits/usage roll up to; org membership + admin.
-  // 6.10 (Triage inbox — bug/feature intake → promote) — data/story-6.10.ts.
+  // 6.11 (Triage inbox — bug/feature intake → promote) — data/story-6.11.ts.
   // Added 2026-06-12. A work_item in a `triage` state EXCLUDED from every
   // normal tree/board/list read; intake (in-app + portal) → promote to
   // backlog/sprint/epic/story (the Linear Triage mirror).
 
-  // 6.11 (Public projects — "open project management") — data/story-6.11.ts.
+  // 6.12 (Public projects — "open project management") — data/story-6.12.ts.
   // Added 2026-06-12. A 4th `ProjectAccessLevel` = `public`: any signed-in
   // Motir account reads the project cross-org, read-only; the only write is
-  // submit-to-triage (6.10) + upvote + comment + dedupe (the Canny shape) +
+  // submit-to-triage (6.11) + upvote + comment + dedupe (the Canny shape) +
   // a public roadmap. Extends 6.4's access model.
-  // 6.12 (Project square — system-level public project directory) —
-  // data/story-6.12.ts. Added 2026-06-12. The cross-org discovery gallery of
+  // 6.13 (Project square — system-level public project directory) —
+  // data/story-6.13.ts. Added 2026-06-12. The cross-org discovery gallery of
   // ALL public projects (cards + search + category/tag filters + trending/
-  // popular/recent rank tabs, paginated), each linking to its 6.11 public
+  // popular/recent rank tabs, paginated), each linking to its 6.12 public
   // view. Mirror: GitHub/GitLab Explore.
 
   // ── Epic 7: AI Planning Layer ─────────────────────────────────────────────

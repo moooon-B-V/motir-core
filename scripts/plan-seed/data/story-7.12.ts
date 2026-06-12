@@ -10,13 +10,13 @@ import type { PlanStory } from '../types';
  * ledger DATA lands here.
  *
  * **The customer-facing cost view is ORG-LEVEL (Yue, locked 2026-06-12).** The
- * Organization (Story 6.9) is the billing entity, so it is ALSO the home of every
+ * Organization (Story 6.10) is the billing entity, so it is ALSO the home of every
  * cost-related view + setting: the token-cost dashboard lives in the ORG ADMIN
- * area (6.9), not on a per-project page. The org admin is the MAIN view for token
+ * area (6.10), not on a per-project page. The org admin is the MAIN view for token
  * cost — the org balance + tier + total/monthly spend + per-model breakdown —
  * and the SAME view DRILLS DOWN org → workspace → project (the 7.12.2 metering
  * grain carries project+workspace so the rollup is real). Access is role-aware:
- * the org admin (gated by 6.9.4) sees the full org-wide cost + all drill-downs;
+ * the org admin (gated by 6.10.4) sees the full org-wide cost + all drill-downs;
  * a non-admin member sees only their own project's slice, read-only. The
  * `CreditLedger`/tier are already org-keyed (7.12.3); 7.12.5 is the per-org
  * CUSTOMER cost view that reads them, distinct from 10.1.5's PLATFORM-staff
@@ -58,7 +58,7 @@ import type { PlanStory } from '../types';
  * lessons 7.10, code graph 7.5). This SHARPENS the open-core line exactly as the
  * other 7.x stores do: motir-core stays a complete PM tool with zero billing
  * tables; the credit machinery is closed-side. motir-core only DISPLAYS the
- * org balance/usage over the 7.1 boundary (7.12.5, in the 6.9 org-admin area) —
+ * org balance/usage over the 7.1 boundary (7.12.5, in the 6.10 org-admin area) —
  * it never holds the ledger.
  *
  * **Metering rides the 7.1.4 job substrate (supports A/B across models).** Every
@@ -89,20 +89,20 @@ import type { PlanStory } from '../types';
  * on backward/sideways ids — 7.1.3 (motir-ai's DB foundation the stores hang off),
  * 7.1.4 (the job substrate metering hooks into), 7.1.5 (the core→ai client the
  * display reads over), plus the Epic-6 org tier it builds the cost view on top of
- * (6.9.3 the org ledger-key for 7.12.3, 6.9.4 the org-admin gating for 7.12.5 —
+ * (6.10.3 the org ledger-key for 7.12.3, 6.10.4 the org-admin gating for 7.12.5 —
  * both Epic 6, backward, no forward dep) — plus same-story 7.12.x cards and the
  * design gate (7.12.1) it ships itself. No forward-pointing dep on Epic 8 (the
  * deferral is a SCOPE boundary recorded in prose + the content card, not a dep) and
  * none on Epic 10 (the cross-org platform rollup 10.1.5 is a SEPARATE concept).
  * Statuses follow the rule: the design subtask (`dependsOn: []`) is `planned`;
- * everything chained behind it or behind any not-yet-done 7.1.x / 6.9.x id is
+ * everything chained behind it or behind any not-yet-done 7.1.x / 6.10.x id is
  * `blocked`.
  *
  * **The design gate fires (Principle #13).** 7.12 ships a real user-facing
  * surface — the ORG-LEVEL cost dashboard (org balance/tier/spend + the
- * org → workspace → project drill-down), in motir-core's 6.9 org-admin area. So
+ * org → workspace → project drill-down), in motir-core's 6.10 org-admin area. So
  * the FIRST subtask (7.12.1) is a `design` card producing
- * `design/ai-usage/*.mock.html` + `design-notes.md` (composing into the 6.9
+ * `design/ai-usage/*.mock.html` + `design-notes.md` (composing into the 6.10
  * org-admin surface), and the UI-touching code subtask (7.12.5) depends on it and
  * is `blocked` behind it. The gate is scoped to the cost VIEW only — the
  * checkout/pricing surface is Epic 8 and explicitly out of this design area.
@@ -119,7 +119,7 @@ export const story_7_12: PlanStory = {
     '× margin, each debit/top-up lands in a per-tenant ledger, and when a ' +
     'tenant runs out of credits planning is refused with a typed error. The ' +
     'org balance/usage is DISPLAYED in motir-core over the 7.1 boundary — as an ' +
-    'ORG-LEVEL cost dashboard in the 6.9 org-admin area (org admin primary, with ' +
+    'ORG-LEVEL cost dashboard in the 6.10 org-admin area (org admin primary, with ' +
     'an org → workspace → project drill-down) — but the buy / upgrade / pricing / ' +
     'checkout flow is **Epic 8 (Stripe billing)**; only the metering + ledger ' +
     'DATA lands now.\n\n' +
@@ -141,7 +141,7 @@ export const story_7_12: PlanStory = {
     '`OutOfCreditsError`.\n' +
     '- **The data lives in motir-ai** (its own DB, the 7.1.3 foundation), ' +
     'hanging off the `AiProject` spine — motir-core stays a clean PM tool with ' +
-    'zero billing tables and only DISPLAYS the org balance over 7.1 (in the 6.9 ' +
+    'zero billing tables and only DISPLAYS the org balance over 7.1 (in the 6.10 ' +
     'org-admin area).\n\n' +
     '**Scope:** the balance/usage display design (7.12.1); the metering store ' +
     '— `PlanningRun` + `PlanningTurn` + monthly aggregation, recorded by the ' +
@@ -151,7 +151,7 @@ export const story_7_12: PlanStory = {
     'the per-turn debit (7.12.3); the enforcement / `OutOfCreditsError` (7.12.4); ' +
     'the motir-core ORG-LEVEL cost view API + display — the org cost dashboard ' +
     '(balance/tier/spend/per-model) with an org → workspace → project drill-down, ' +
-    'in the 6.9 org-admin area, org-admin-gated (7.12.5); vitest (7.12.6); and ' +
+    'in the 6.10 org-admin area, org-admin-gated (7.12.5); vitest (7.12.6); and ' +
     'the credit-model doc / Epic-8 data contract (7.12.7).\n\n' +
     '**Out of scope (named so they land in their own story / epic, not here):** ' +
     'the buy / upgrade / checkout / pricing UI + the Stripe integration ' +
@@ -182,7 +182,7 @@ export const story_7_12: PlanStory = {
     'LLM call is made, and the ledger is unchanged. There is NO upgrade/buy ' +
     'prompt wired (that is Epic 8) — the refusal is the boundary 7.12 ships.\n' +
     '- **The org cost dashboard (motir-core over 7.1).** As an ORG ADMIN, open ' +
-    'the org-level cost view in the org-admin area (6.9): it shows the org ' +
+    'the org-level cost view in the org-admin area (6.10): it shows the org ' +
     'credit balance, the tier, total + this-month spend (with a monthly history / ' +
     'trend), and a per-model breakdown — fetched over the 7.1 boundary (motir-core ' +
     'never holds the ledger). DRILL DOWN org → workspace → project and confirm the ' +
@@ -220,7 +220,7 @@ export const story_7_12: PlanStory = {
         '— the org admin’s home for token cost (Yue, locked 2026-06-12: all ' +
         'cost views/settings live at the ORG level, not the workspace). The ' +
         'design area can stay `motir-core/design/ai-usage/`, but it COMPOSES INTO ' +
-        'the 6.9 org-admin / org-settings surface (note this in the design-notes — ' +
+        'the 6.10 org-admin / org-settings surface (note this in the design-notes — ' +
         'it is an org-admin panel, not a standalone per-project page). Author it ' +
         'as a **`*.mock.html` ' +
         'mockup** built from the real design system (the shipped ' +
@@ -275,7 +275,7 @@ export const story_7_12: PlanStory = {
         'runs — no “load all rows”, the at-scale rule). Scoped to the active ' +
         'drill level.\n' +
         '- **Panel 5 — the limited member view.** The NON-admin member view of ' +
-        'the same surface: a member who is not an org admin (6.9.4) sees only ' +
+        'the same surface: a member who is not an org admin (6.10.4) sees only ' +
         'THEIR OWN project’s cost slice (read-only) — no org-wide total, no ' +
         'cross-workspace drill-up. Draw what a member sees vs the full org-admin ' +
         'view so the role gating is visible in the design.\n' +
@@ -312,7 +312,7 @@ export const story_7_12: PlanStory = {
         '- `motir-core/design/ai-usage/design-notes.md` exists, names every ' +
         'primitive composed + every copy string + the per-element `--el-*` ' +
         'role, STATES that this is the ORG-LEVEL cost view composing into the ' +
-        '6.9 org-admin surface (org admin primary), and STATES that ' +
+        '6.10 org-admin surface (org admin primary), and STATES that ' +
         'checkout/pricing/upgrade is Epic 8 and out of scope (only a passive ' +
         'out-of-credits placeholder appears).\n' +
         '- The org cost summary (balance/tier/total+monthly spend with a history ' +
@@ -320,7 +320,7 @@ export const story_7_12: PlanStory = {
         'breakdown, and the per-run activity log are all drawn, with the activity ' +
         'log shown paginated/lazy (at-scale, not load-all).\n' +
         '- The limited NON-admin member view (own-project slice, read-only) is ' +
-        'drawn distinct from the full org-admin view, so the 6.9.4 role gating is ' +
+        'drawn distinct from the full org-admin view, so the 6.10.4 role gating is ' +
         'visible in the design.\n' +
         '- Credits are labelled as an internal unit, never as currency; the ' +
         'low-balance + out-of-credits states are drawn with NO active ' +
@@ -330,13 +330,13 @@ export const story_7_12: PlanStory = {
         'if a genuinely new primitive is needed, that is a NEW `design/` ' +
         'subtask, not a code workaround.\n\n' +
         '## Context refs\n\n' +
-        '- `motir-core/design/org-admin/` (6.9.1) — the org-admin surface this ' +
+        '- `motir-core/design/org-admin/` (6.10.1) — the org-admin surface this ' +
         'cost dashboard COMPOSES INTO (the org admin / org settings area); mirror ' +
         'its layout + `design-notes.md` shape and slot the cost view alongside it.\n' +
         '- `motir-core/design/ready/` (7.0.1) + `motir-core/design/ai-planning/` ' +
         '(7.3.1) — the closest existing design areas; mirror their layout + ' +
         '`design-notes.md` shape.\n' +
-        '- 6.9.4 — the org-admin access gating that decides the full org-wide ' +
+        '- 6.10.4 — the org-admin access gating that decides the full org-wide ' +
         'view (admin) vs the limited own-project member view.\n' +
         '- `motir-core/components/ui/Pill.tsx`, `Card.tsx`, `Button.tsx`, ' +
         '`EmptyState.tsx` — the composable surface.\n' +
@@ -440,7 +440,7 @@ export const story_7_12: PlanStory = {
         'DEBITS the ledger per turn. Credits are an INTERNAL unit (header), ' +
         'normalized across models + carrying Motir’s margin.\n\n' +
         '**Billing entity (updated 2026-06-12): the `CreditLedger` keys to the ' +
-        '`Organization`** — the Story 6.9 root-account billing entity (ONE balance ' +
+        '`Organization`** — the Story 6.10 root-account billing entity (ONE balance ' +
         'per org; its N workspaces/projects roll up into it), NOT per-`AiProject`. ' +
         'The 7.12.2 metering rows keep the project/workspace grain so Story 10.1.5 ' +
         'can roll usage up project→workspace→org→platform, but the BALANCE + tier ' +
@@ -519,7 +519,7 @@ export const story_7_12: PlanStory = {
         'margin (the human-readable side of this math).\n' +
         '- Story 8 (stub) — the Epic-8 billing that WRITES `top_up` transactions ' +
         'via checkout (7.12 ships only the row shape).',
-      dependsOn: ['7.12.2', '6.9.3'],
+      dependsOn: ['7.12.2', '6.10.3'],
     },
     {
       id: '7.12.4',
@@ -585,7 +585,7 @@ export const story_7_12: PlanStory = {
     {
       id: '7.12.5',
       title:
-        'Org cost dashboard API + display (motir-core) — org-level token cost in the 6.9 org-admin area, org → workspace → project drill-down, org-admin-gated',
+        'Org cost dashboard API + display (motir-core) — org-level token cost in the 6.10 org-admin area, org → workspace → project drill-down, org-admin-gated',
       status: 'blocked',
       type: 'code',
       executor: 'coding_agent',
@@ -594,7 +594,7 @@ export const story_7_12: PlanStory = {
         'The motir-core side: the API + the UI for the ORG-LEVEL token-cost ' +
         'dashboard — fetching the metering aggregates + the org ledger balance ' +
         'from motir-ai over the 7.1 boundary and rendering the 7.12.1 design IN ' +
-        'THE 6.9 ORG-ADMIN AREA. The org admin is the MAIN view for token cost ' +
+        'THE 6.10 ORG-ADMIN AREA. The org admin is the MAIN view for token cost ' +
         '(Yue, locked 2026-06-12): all cost views/settings live at the ORG level, ' +
         'and the cost DRILLS DOWN org → workspace → project. motir-core never ' +
         'holds the ledger; it reads it. **No checkout / pricing UI — that is ' +
@@ -602,8 +602,8 @@ export const story_7_12: PlanStory = {
         '**The PRIMARY view is the org cost dashboard (org-admin area, NOT a ' +
         'per-project page).** The org admin’s home for token cost: the org ' +
         'balance + tier + total spend + monthly history/trend + per-model ' +
-        'breakdown, rendered inside the 6.9 org-admin / org-settings surface — ' +
-        'because the Organization (6.9) is the billing entity and the home of all ' +
+        'breakdown, rendered inside the 6.10 org-admin / org-settings surface — ' +
+        'because the Organization (6.10) is the billing entity and the home of all ' +
         'cost-related views (the `CreditLedger` + tier are already org-keyed in ' +
         '7.12.3). This is the per-org CUSTOMER cost view, distinct from 10.1.5’s ' +
         'PLATFORM-staff cross-ALL-orgs rollup (leave that alone).\n\n' +
@@ -612,10 +612,10 @@ export const story_7_12: PlanStory = {
         'metering rows carry the project/workspace grain, so each level’s token ' +
         'cost is real, not synthesized. The drill scope is a request parameter ' +
         '(below), so one endpoint + one view serve all three levels.\n\n' +
-        '**Role-aware access (6.9.4).** An ORG ADMIN sees the full org-wide cost ' +
+        '**Role-aware access (6.10.4).** An ORG ADMIN sees the full org-wide cost ' +
         '+ every drill-down (org / workspace / project). A NON-admin member sees ' +
         'only their OWN project’s cost slice, read-only — cost is an org-admin ' +
-        'concern by default. The gating reuses the 6.9.4 org-admin access check ' +
+        'concern by default. The gating reuses the 6.10.4 org-admin access check ' +
         '(do NOT invent a parallel one); a member’s request is narrowed to their ' +
         'project scope server-side (never trust a client-sent scope).\n\n' +
         '**A new read over the 7.1 boundary (org-scoped).** The metering + ' +
@@ -632,20 +632,20 @@ export const story_7_12: PlanStory = {
         '- **`GET /api/org/[orgKey]/usage`** (session auth, org-admin-gated) with ' +
         'a `?scope=org|workspace|project&id=…` drill-down param — the route ' +
         'parses + calls ONE `aiUsageService` method; the service enforces the ' +
-        '6.9.4 org-admin gate (full org view for an admin; a member is narrowed ' +
+        '6.10.4 org-admin gate (full org view for an admin; a member is narrowed ' +
         'to their own project scope), resolves the requested scope, calls the ' +
         '7.1.5 client’s org-scoped usage read, and maps the result to a DTO. No ' +
         '`motir-ai` import, no Prisma-for-billing in the route — the cost data is ' +
         'remote (over HTTP), so there is no motir-core billing repository/table ' +
         'here (this is a READ-THROUGH service, the email.ts-style leaf-client ' +
-        'pattern; it MAY read org membership/role via the 6.9 org service to gate, ' +
+        'pattern; it MAY read org membership/role via the 6.10 org service to gate, ' +
         'but never holds a ledger).\n' +
         '- The route is org-scoped (404-not-403 for a non-member of the org, the ' +
         'standing cross-tenant guard) and session-gated (401 without a session); ' +
         'a non-admin member requesting an org/workspace scope is narrowed or ' +
         'refused (their slice only).\n\n' +
         '**The UI (renders 7.12.1 verbatim, in the org-admin area).** The ' +
-        'org-level cost dashboard rendered inside the 6.9 org-admin / org-settings ' +
+        'org-level cost dashboard rendered inside the 6.10 org-admin / org-settings ' +
         'surface, with the panels: the org cost summary (org balance + tier + ' +
         'total + monthly spend with a history trend, internal-credit-labelled), ' +
         'the org → workspace → project drill-down, the per-model breakdown (at the ' +
@@ -666,12 +666,12 @@ export const story_7_12: PlanStory = {
         'monthly history + per-model breakdown + paginated recent runs; ' +
         'motir-core’s `GET /api/org/[orgKey]/usage` reads it via the 7.1.5 client ' +
         '(no `motir-ai` import; no billing Prisma in the route — read-through).\n' +
-        '- The PRIMARY view is the ORG cost dashboard rendered in the 6.9 ' +
+        '- The PRIMARY view is the ORG cost dashboard rendered in the 6.10 ' +
         'org-admin area (org balance + tier + total + monthly trend + per-model), ' +
         'NOT a per-project page; the org → workspace → project drill-down narrows ' +
         'the cost to the chosen level and the per-model breakdown + run log follow ' +
         'the active scope.\n' +
-        '- Access is role-aware via the 6.9.4 gate: an org admin sees the full ' +
+        '- Access is role-aware via the 6.10.4 gate: an org admin sees the full ' +
         'org-wide cost + all drill-downs; a non-admin member sees only their own ' +
         'project slice (read-only), and a member requesting an org/workspace scope ' +
         'is narrowed or refused server-side (never trust a client-sent scope).\n' +
@@ -690,10 +690,10 @@ export const story_7_12: PlanStory = {
         '## Context refs\n\n' +
         '- 7.12.1 — the design asset (the org cost dashboard + drill-down + ' +
         'member view this implements verbatim).\n' +
-        '- 6.9.4 — the org-admin services + access gate this REUSES (full org ' +
+        '- 6.10.4 — the org-admin services + access gate this REUSES (full org ' +
         'view for an admin; member narrowed to their own project) and the ' +
         'org-admin area this dashboard renders inside.\n' +
-        '- 6.9.5 — the org-admin UI surface (org settings / org-admin area) the ' +
+        '- 6.10.5 — the org-admin UI surface (org settings / org-admin area) the ' +
         'cost dashboard slots into.\n' +
         '- 7.12.2 / 7.12.3 — the metering aggregates (carrying the ' +
         'project/workspace grain that powers the drill-down) + the org-keyed ' +
@@ -705,7 +705,7 @@ export const story_7_12: PlanStory = {
         'service calls (the read-through pattern, like `lib/email.ts`).\n' +
         '- `motir-core/CLAUDE.md` § 4-layer + § colour/shape tokens.\n' +
         '- `motir-core/app/globals.css` — the `--el-*` + shape tokens.',
-      dependsOn: ['7.12.1', '7.12.3', '6.9.4'],
+      dependsOn: ['7.12.1', '7.12.3', '6.10.4'],
     },
     {
       id: '7.12.6',
@@ -759,7 +759,7 @@ export const story_7_12: PlanStory = {
         'client read (the client boundary is the stub; the service/route/DTO ' +
         'mapping is real); 401 without session; 404 for a non-member of the org ' +
         '(cross-tenant); an org admin gets the full org view while a non-admin ' +
-        'member is narrowed to their own project slice (the 6.9.4 gate).\n\n' +
+        'member is narrowed to their own project slice (the 6.10.4 gate).\n\n' +
         '## Acceptance criteria\n\n' +
         '- The above cases pass on both sides; motir-core over real Postgres ' +
         '(only `getSession()` mocked), motir-ai over its real Postgres with only ' +

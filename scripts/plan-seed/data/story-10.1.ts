@@ -13,8 +13,8 @@ import type { PlanStory } from '../types';
  *
  * **This is a DIFFERENT kind of admin from everything before it.** Up to Epic 9,
  * every "admin" surface in Motir is TENANT admin — a workspace owner managing
- * their own workspace (6.4 roles), an org owner managing their own org (6.9). The
- * 6.4 `MemberRole` and the 6.9 org owner/admin role are CUSTOMER roles, scoped to
+ * their own workspace (6.4 roles), an org owner managing their own org (6.10). The
+ * 6.4 `MemberRole` and the 6.10 org owner/admin role are CUSTOMER roles, scoped to
  * ONE tenant, and the 404-not-403 cross-tenant guard is the load-bearing
  * isolation rule everywhere. 10.1 introduces the FIRST surface that deliberately
  * reads ACROSS that boundary — the Motir operator looking at all customers at
@@ -23,7 +23,7 @@ import type { PlanStory } from '../types';
  *
  * **The platform-staff auth model (the keystone, locked here as the contract
  * every Epic-10 story inherits).** A SUPERADMIN / platform-staff capability is a
- * concept SEPARATE from tenant `MemberRole` and the 6.9 org roles — a flag /
+ * concept SEPARATE from tenant `MemberRole` and the 6.10 org roles — a flag /
  * `PlatformRole` on the `User` (Motir employees only), checked by a dedicated
  * gate that is NOT reachable by any tenant-role escalation. The cross-tenant
  * reads BYPASS the standard tenant scoping (the operator legitimately sees other
@@ -86,14 +86,14 @@ import type { PlanStory } from '../types';
  * **Cross-story dep audit (notes.html #32): PASSES — no forward-pointing deps.**
  * Every 10.1 leaf depends only on backward/sideways ids whose story number is ≤
  * 10.1: same-story 10.1.x cards (incl. the design gate 10.1.1 it ships itself),
- * 6.9.3 (the `Organization` model + `Workspace.organizationId` the rollup
+ * 6.10.3 (the `Organization` model + `Workspace.organizationId` the rollup
  * hierarchy and the overview counts read — Epic 6 < 10), 7.12.2 (the planning
  * metering store the usage rollup aggregates — Epic 7 < 10), and 9.0.5 (the
  * authoritative gateway spend meter the cost rollup aggregates — Epic 9 < 10).
  * No dep points forward to 10.2 / 10.3 or beyond. Statuses follow the rule:
  * 10.1.1 (design, `dependsOn: []`) and 10.1.2 (decision, `dependsOn: []`) are
  * `planned`; everything chained behind them or behind any not-yet-done upstream
- * id (6.9.3 / 7.12.2 / 9.0.5 / 10.1.x) is `blocked`.
+ * id (6.10.3 / 7.12.2 / 9.0.5 / 10.1.x) is `blocked`.
  *
  * **The design gate fires (Principle #13).** 10.1 ships a real user-facing
  * surface — the operator console (overview + rollup views + drill-down). So the
@@ -130,7 +130,7 @@ export const story_10_1: PlanStory = {
     '**The platform-staff model (locked — see the module header for the full ' +
     'rationale + the cited security posture):**\n\n' +
     '- **Superadmin is a SEPARATE concept from tenant `MemberRole`** (and from ' +
-    'the 6.9 org owner/admin role): a `PlatformRole` / flag on the `User` for ' +
+    'the 6.10 org owner/admin role): a `PlatformRole` / flag on the `User` for ' +
     'Motir employees only, gated by a dedicated check NOT reachable by any ' +
     'tenant-role escalation. This is the "highly controlled super-admin" the ' +
     'multi-tenant-RBAC literature carves out — the ONLY role that legitimately ' +
@@ -172,7 +172,7 @@ export const story_10_1: PlanStory = {
   verificationRecipeMd:
     '- Pull the Story branch; bring up motir-core on `:3000` + motir-ai on its ' +
     'dev port (each pointed at the other), with at least one org spanning ' +
-    'multiple workspaces/projects seeded (6.9 backfill) and some planning + ' +
+    'multiple workspaces/projects seeded (6.10 backfill) and some planning + ' +
     'gateway metering present (7.12 + 9.0 runs — the 7.1.7 `noop` and a gateway ' +
     'request are enough to populate the rollup).\n' +
     '- **Platform-staff gating (the security boundary).** As a NORMAL user ' +
@@ -360,7 +360,7 @@ export const story_10_1: PlanStory = {
         '1. **Superadmin is SEPARATE from every tenant role.** Decide the ' +
         'representation — a `PlatformRole` enum / a boolean flag on the `User` ' +
         '(Motir employees only), distinct from tenant `MemberRole` (6.4) and the ' +
-        '6.9 org owner/admin role. It MUST NOT be reachable by any tenant-role ' +
+        '6.10 org owner/admin role. It MUST NOT be reachable by any tenant-role ' +
         'escalation (no "org owner ⇒ platform staff" path). Justify the choice ' +
         '(a `PlatformRole` enum if degrees of staff access are foreseen — e.g. ' +
         'read-only-staff vs full-ops for the 10.3 destructive actions — else a ' +
@@ -397,7 +397,7 @@ export const story_10_1: PlanStory = {
         '`requirePlatformStaff()` gate contract, the cross-tenant-read service ' +
         'pattern + the `PlatformAuditLog` record shape, the `/admin` placement, ' +
         'and the read-over-7.1 posture.\n' +
-        '- The separation from tenant `MemberRole` + the 6.9 org role is stated ' +
+        '- The separation from tenant `MemberRole` + the 6.10 org role is stated ' +
         'explicitly, with the "no tenant-role escalation path" invariant called ' +
         'out as load-bearing.\n' +
         '- The cited multi-tenant security posture (highly-controlled super-admin ' +
@@ -410,7 +410,7 @@ export const story_10_1: PlanStory = {
         '## Context refs\n\n' +
         '- This module header (the locked platform-staff model + the cited ' +
         'mirror/security posture).\n' +
-        '- 6.4 (the tenant `MemberRole` this is SEPARATE from) + 6.9.x (the ' +
+        '- 6.4 (the tenant `MemberRole` this is SEPARATE from) + 6.10.x (the ' +
         '`Organization` + org owner/admin role it is ALSO separate from — the ' +
         'rollup hierarchy’s top tier).\n' +
         '- `motir-core/lib/auth/` — the Better-Auth session wiring the gate sits ' +
@@ -513,7 +513,7 @@ export const story_10_1: PlanStory = {
         'count queries (or a small maintained rollup), NOT by loading the rows: ' +
         '`count(orgs)`, `count(workspaces)`, `count(projects)`, `count(users)` — ' +
         'each a single indexed count, with the org/workspace/project hierarchy ' +
-        'from 6.9.3 (`Workspace.organizationId`) so the counts can also be sliced ' +
+        'from 6.10.3 (`Workspace.organizationId`) so the counts can also be sliced ' +
         'per org later. A "new this week/month" delta per count is a cheap ' +
         'windowed count, not a scan.\n\n' +
         '**The activity feed (paginated, at-scale).** A recent-activity slice — ' +
@@ -535,7 +535,7 @@ export const story_10_1: PlanStory = {
         '## Acceptance criteria\n\n' +
         '- The overview shows estate counts (orgs/workspaces/projects/users) from ' +
         'covered count queries (NOT row loads) + a "new this period" delta per ' +
-        'count; the org/workspace/project hierarchy uses 6.9.3’s ' +
+        'count; the org/workspace/project hierarchy uses 6.10.3’s ' +
         '`Workspace.organizationId`.\n' +
         '- The recent-activity feed is paginated (cursor/keyset, newest first), ' +
         'never load-all; the metering-sourced job activity is read over the 7.1 ' +
@@ -549,12 +549,12 @@ export const story_10_1: PlanStory = {
         '- 10.1.1 — the overview panel design this implements.\n' +
         '- 10.1.3 — the `platformReadService` + the audited cross-tenant read + ' +
         'the gate.\n' +
-        '- 6.9.3 — the `Organization` + `Workspace.organizationId` the counts + ' +
+        '- 6.10.3 — the `Organization` + `Workspace.organizationId` the counts + ' +
         'the hierarchy read (the rollup’s top tiers).\n' +
         '- 7.1.5 — the motir-core → motir-ai client the metering-sourced activity ' +
         'is read over.\n' +
         '- `motir-core/CLAUDE.md` § 4-layer + § colour/shape tokens.',
-      dependsOn: ['10.1.3', '6.9.3'],
+      dependsOn: ['10.1.3', '6.10.3'],
     },
     {
       id: '10.1.5',
@@ -662,7 +662,7 @@ export const story_10_1: PlanStory = {
         'cross-tenant and AUDITED.\n\n' +
         '**The three drill levels (org / workspace / project).** An ORG detail ' +
         'shows its workspaces/projects, its usage rollup (the 10.1.5 slice scoped ' +
-        'to this org), its recent jobs, its members (cross-workspace, from 6.9), ' +
+        'to this org), its recent jobs, its members (cross-workspace, from 6.10), ' +
         'and its status (active / suspended — the suspend ACTION is 10.3; here we ' +
         'only DISPLAY the status). A WORKSPACE detail scopes to its projects + ' +
         'members; a PROJECT detail to its work + recent jobs. Each reuses the ' +
@@ -700,7 +700,7 @@ export const story_10_1: PlanStory = {
         '- 10.1.5 — the rollup the per-entity usage slice filters (the multi-' +
         'level rollup makes the scoped read cheap).\n' +
         '- 10.1.3 — the audited cross-tenant `platformReadService` + the gate.\n' +
-        '- 6.9.x — the `Organization` + cross-workspace membership the org detail ' +
+        '- 6.10.x — the `Organization` + cross-workspace membership the org detail ' +
         'shows (members + the workspace/project children).\n' +
         '- Story 10.3 (stub) — the governance ACTIONS (suspend / impersonate / ' +
         'grant) the drill-down’s status display defers to.',
@@ -723,7 +723,7 @@ export const story_10_1: PlanStory = {
         'metering seeded as fixtures (no live LLM/gateway in CI).\n\n' +
         '**Gating (the security boundary — 10.1.3):**\n\n' +
         '- A NON-staff principal (no role, a tenant member, AND a tenant ' +
-        'owner/admin, AND a 6.9 org owner) is DENIED `/admin` + every ' +
+        'owner/admin, AND a 6.10 org owner) is DENIED `/admin` + every ' +
         'platform-scoped service method — a 404 (surface absent), via ' +
         '`requirePlatformStaff()`; only the platform `PlatformRole`/flag passes. ' +
         'Assert NO tenant-role escalation reaches it.\n' +
@@ -796,7 +796,7 @@ export const story_10_1: PlanStory = {
         'audit-log itself is 10.3’s view; here we assert the affordance + ' +
         'that the drill works.)\n\n' +
         'Use the seeded estate (a `moooon`-style org over multiple workspaces ' +
-        'with some planning + gateway metering — 6.9 + 7.12 + 9.0 seed) so the ' +
+        'with some planning + gateway metering — 6.10 + 7.12 + 9.0 seed) so the ' +
         'rollup + drill have real data. Mind the known E2E selector gotchas ' +
         '(heading exact/level, combobox option = label + secondary) per the ' +
         'project’s e2e conventions.\n\n' +
@@ -817,7 +817,7 @@ export const story_10_1: PlanStory = {
         '- 10.1.3 — the gate the denied/allowed split proves.\n' +
         '- `motir-core` Playwright e2e setup + the project’s e2e selector ' +
         'conventions (heading exact/level; combobox option = label + secondary).\n' +
-        '- 6.9 + 7.12 + 9.0 seed — the multi-tenant estate + metering the flow ' +
+        '- 6.10 + 7.12 + 9.0 seed — the multi-tenant estate + metering the flow ' +
         'runs over.',
       dependsOn: ['10.1.6'],
     },

@@ -1,912 +1,639 @@
 import type { PlanStory } from '../types';
 
 /**
- * Story 6.11 (Epic 6) — Public projects (open project management). A project can
- * be made **public**: open for read-only VIEW to ANY signed-in Motir account
- * (across orgs/workspaces), where a viewer can change NOTHING except **add bugs
- * / feature requests** (through the 6.10 Triage), **upvote** existing requests,
- * and **comment** on them. This is the marketing-grade "open source project
- * management" / public-feedback-portal concept (Yue), built as a pure motir-core
- * per-project capability with zero AI boundary and zero forward dependency.
+ * Story 6.11 (Epic 6) — Triage inbox (bug/feature intake → promote). The
+ * incoming-work front door for the PM core: a place where bug reports and
+ * feature requests LAND — from a team member's in-app "report a bug / request a
+ * feature" widget OR from an external person via a shareable portal form —
+ * WITHOUT polluting the planned tree, where an admin then triages each one
+ * (accept / promote / decline / mark-duplicate / merge / snooze) into the real
+ * backlog. This is a pure motir-core, per-project feature; it touches no AI
+ * boundary and carries zero forward dependencies.
  *
- * **The locked model (Yue, 2026-06-12): `public` is a 4th `ProjectAccessLevel`,
- * and it is the ONLY access level that crosses the org boundary for READ.**
- * Story 6.4 (DONE) shipped `ProjectAccessLevel` open/limited/private + the
- * `projectAccessService` `canBrowse`/`canEdit` policy; 6.11 adds a fourth level
- * `public` and EXTENDS that exact policy — it does not fork a parallel one. The
- * openness ladder is **public > open > limited > private**:
- *   - **private** → only project members (6.4).
- *   - **limited** → any WORKSPACE member, view + comment, no edit (6.4).
- *   - **open** → any WORKSPACE member, view + edit (6.4).
- *   - **public** → any AUTHENTICATED Motir account, ACROSS orgs/workspaces,
- *     read-only VIEW; the only writes are triage-submit + upvote + comment.
- * Every level except `public` is org/workspace-bounded; `public` is the single
- * deliberate exception where 6.4's `canBrowse` returns true for a user with NO
- * org/workspace membership at all (bypassing the 6.9 org gate for READ on public
- * projects ONLY). Every WRITE stays gated: a public viewer is NOT a member, so
- * 6.4 `canEdit` is false for everything; the three permitted writes
- * (triage-submit, upvote, comment) are NEW narrow grants checked explicitly, not
- * a relaxation of `canEdit`. The existing 404-not-403 posture is untouched for
- * NON-public projects (a non-public project a cross-org user hits is still
- * not-found, never forbidden).
+ * **The locked model (Yue, 2026-06-12): a triage submission IS a `work_item`,
+ * in a `triage` STATE that excludes it from EVERY normal read.** We do NOT add
+ * a second "submissions" table that later has to be promoted/copied into a
+ * work_item — a submission is born a real `work_item` (kind `bug` or `task`,
+ * the request grammar) the moment it is created, but it carries a `triage`
+ * marker that makes it invisible to every tree / board / list / ready-set /
+ * search read. The triage-queue read is the ONE read that includes only those
+ * items. Promotion is therefore not a copy — it is clearing the triage marker
+ * and setting parent + position (backlog rank), through the SHIPPED
+ * `workItemsService` write authority, so the same item simply appears in the
+ * tree. Decline cancels it; mark-duplicate/merge folds it into a canonical
+ * item; snooze hides it from the queue until a chosen time or new activity.
  *
- * **Account-required, NOT anonymous (locked).** A viewer must be a signed-in
- * Motir account (any org). Anonymous/logged-out public access is explicitly
- * FUTURE (named out of scope, not silently dropped) — it would need abuse
- * controls + an anonymous-identity model this story does not build. This is the
- * deliberate narrowing: GitHub-public-repo "anyone can read" semantics, gated to
- * "any authenticated user" so every submit/upvote/comment carries a real account
- * for attribution + rate-limiting.
+ * **The verified mirror — Linear Triage (rung 1, verified not asserted).**
+ * Linear's docs are explicit on every load-bearing decision here:
+ *   - **Triage is a state outside the normal workflow, excluded from all
+ *     reads.** "By default, we exclude triage issues from all views since
+ *     triage is considered to be outside the normal workflow" — you must
+ *     explicitly add a status filter to even SEE them. That is exactly 6.11.3's
+ *     read-exclusion invariant: triage items are absent from tree/board/list/
+ *     ready/search until promoted. (https://linear.app/docs/triage)
+ *   - **What lands in triage:** issues "created through an integration (e.g.
+ *     Slack, Sentry), created when inside of the Triage view, or if members
+ *     outside of your specific team create the issue" — plus external people
+ *     via **Linear Asks** / support-tool connections (Intercom, Front,
+ *     Zendesk). Motir's analogue: the in-app report widget + the shareable
+ *     public portal form (6.11.4/6.11.7). (https://linear.app/docs/triage)
+ *   - **The action set (the exact verbs we mirror):** Accept (`1`) "will offer
+ *     the option to leave a comment and then move the issue to your team's
+ *     default status"; Mark as Duplicate (`2`) merges into an existing issue
+ *     and the new one "is updated to a Canceled status type" (attachments +
+ *     customer requests move to the canonical issue); Decline (`3`) "will
+ *     update the issue to a Canceled status type and present the option of
+ *     adding a comment"; Snooze (`H`) "will hide the issue from the triage
+ *     queue to return at a time of your choosing, or when there's new activity
+ *     on that issue: whichever comes first." 6.11.5 implements accept→backlog,
+ *     promote→sprint/epic/story, decline, mark-duplicate/merge, snooze against
+ *     this exact taxonomy. (https://linear.app/docs/triage)
  *
- * **What is VISIBLE vs HIDDEN on the public view (locked).** A public viewer
- * sees the read-only board / issue list and the public ROADMAP (status-grouped
- * public-facing items). They do NOT see internal-only fields — **assignees,
- * estimates, and internal comments are HIDDEN** (the decision 6.11.2 fixes the
- * exact set; the durable shape is a public PROJECTION that strips internal
- * fields at the read layer, not a UI that merely hides them). There are NO edit
- * affordances anywhere on the public surface (no create/move/assign/status
- * controls) — the only interactive elements are Submit-a-request, Upvote, and
- * Comment.
+ * **Secondary mirror — Jira Product Discovery / JSM intake (cited):** the
+ * standard Atlassian pattern routes external submissions through a JSM request
+ * type / Confluence form into a staging area, and an agent only promotes a
+ * submission into the real JPD idea once it is "triaged" (a triaged checkbox
+ * gates idea creation) — i.e. external intake + a deliberate human promote
+ * step, never auto-injecting raw requests into the planned backlog. That
+ * confirms the in-app + shareable-portal intake split and the promote-gate.
+ * (https://community.atlassian.com/forums/Jira-Product-Discovery-articles/How-to-Creating-an-idea-intake-process-with-JPD-and-JSM/ba-p/2777882,
+ * https://www.atlassian.com/software/jira/product-discovery)
  *
- * **The proven feature set beyond bare view+submit (mirror-driven — adopt, not
- * gold-plate).** The established public-project / public-feedback-portal pattern
- * pairs (a) public roadmap visibility with (b) a feedback portal, and every
- * rung-1 portal ships the SAME four behaviours, so they are in scope:
- *   1. **Upvoting** — the demand signal. Canny "processes millions of upvotes
- *      annually"; users "vote on what to build next"; the triage queue (6.10)
- *      sorts by this signal. A vote model + the cross-account vote (one vote per
- *      account per item).
- *   2. **Automatic duplicate detection on submit** — Canny's core behaviour:
- *      "Canny automatically detects if a requested feature already exists … the
- *      customer can add their upvote and leave comments on the existing request"
- *      (teams report a "35% reduction in duplicate feature requests"). 6.11.5
- *      surfaces existing matching requests BEFORE creating a new triage item so
- *      the submitter upvotes the existing one instead of creating a dupe.
- *   3. **Comments** on public requests — discussion on the request (Canny:
- *      "leave comments on the existing request").
- *   4. **A public roadmap with status tracking** — submitted → planned →
- *      in_progress → done, the column-by-status shape Canny / Productboard /
- *      Featurebase / Linear public roadmaps all use (Canny: "items organized by
- *      status columns … with vote counts visible").
+ * **Why the work_item-with-triage-state shape is the durable one (no
+ * shortcut).** A separate submissions table would force a copy-on-promote that
+ * loses the submission's comments/attachments/history and duplicates the
+ * grammar; modelling the submission AS the work_item from birth means promotion
+ * is a metadata edit (clear triage + set parent/rank), the full comment/
+ * attachment thread carries over for free (mirroring Linear moving attachments
+ * to the canonical issue on merge), and there is ONE source of truth. The cost
+ * — every normal read must exclude triage — is paid once, centrally, in the
+ * repository read layer (6.11.3), and locked by tests that assert exclusion at
+ * EVERY read (tree, board, list, ready, search) so a future read can't
+ * accidentally leak triage items.
  *
- * **The verified mirror (rung 1, cited not asserted — checked 2026-06-12).**
- *   - **Public project / roadmap visibility.** OpenProject ships an explicit
- *     PUBLIC project visibility + a public roadmap as its "Open Source Project
- *     Management" posture; Plane (open-source Jira/Linear alternative) ships a
- *     transparent public roadmap + Intake; GitHub public repos are the
- *     "anyone-can-read, only-collaborators-write" baseline; Linear exposes
- *     public-link / public-roadmap sharing (and customer-request portals via
- *     Productlane/Featurebase that sync status back). (github.com/makeplane/plane,
- *     plane.so/open-source, openproject.org/roadmap,
- *     blog.feedvote.app/how-to-build-a-public-roadmap-in-linear-2026-guide)
- *   - **Public feedback portals.** Canny / Productboard / Featurebase are the
- *     verified portal mirror for the submit + upvote + comment + status-roadmap
- *     set, incl. Canny's automatic duplicate detection and vote-on-the-existing
- *     behaviour, and Productboard's "Share > Publish > copy link" public portal +
- *     status roadmap. (canny.io/use-cases/feature-request-management,
- *     support.productboard.com — Use the Portal to share your plans and collect
- *     feedback at scale, linear.app/integrations/featurebase)
+ * **Scale (finding #57).** The triage queue is an unbounded inbox (a public
+ * form can produce many submissions), so the queue read is paginated/cursor'd
+ * and the public form is rate-limited + abuse-guarded — never a load-all list.
  *
- * **This EXTENDS 6.10 (the Triage) and 6.4 (access levels), never re-implements
- * them.** A public submission lands in the SAME triage queue 6.10 built — born a
- * `work_item` in the `triage` state, excluded from every normal read, attributed
- * to the submitting (cross-org) account, promoted/declined/merged by the project
- * admin through the same 6.10 actions. 6.11 reuses 6.10.4's intake creation path
- * (adding cross-org-account submit + the dedupe pre-check) and 6.10.3's queue
- * (adding the vote-count sort key); it adds NO second submissions table and NO
- * second access policy.
+ * **Design gate.** Two distinct UI surfaces ship here — the admin triage inbox
+ * (queue + detail + actions) and the submission surfaces (in-app widget + the
+ * public portal form). Both are gated behind the FIRST subtask, a `design`
+ * card that produces the multi-panel mock + design-notes under
+ * `design/triage/`, composing only shipped `components/ui/*` primitives +
+ * `--el-*` / `[data-display-style]` tokens. Every UI code subtask
+ * (6.11.6/6.11.7) depends on it and is `blocked`.
  *
- * **Scale (finding #57).** A public project is an unbounded, internet-facing
- * read surface: the public board/issue list, the roadmap columns, and the
- * request list are ALL paginated / cursor'd (never load-all), the submit path is
- * rate-limited + abuse-guarded per the 6.10 precedent, and one-vote-per-account
- * is enforced server-side (not a client toggle).
- *
- * **Design gate.** New user-facing surfaces ship here — the public read-only
- * project view (board/issues), the public roadmap, the public submission +
- * upvote + comment surfaces, and the "make public" toggle + share-link in
- * project settings. So the FIRST subtask (6.11.1) is a `design` card producing
- * the multi-panel mock + design-notes under `design/public-projects/`, composing
- * only shipped `components/ui/*` primitives + `--el-*` / `[data-display-style]`
- * tokens. Every UI code subtask (6.11.4/6.11.6/6.11.7/6.11.8) depends on it and
- * is `blocked`.
- *
- * **Cross-story dep audit (notes.html #32): PASSES — NO forward deps.** Every
- * `dependsOn` id's story number is ≤ 6.11: same-story 6.11.x, or backward to
- * 6.10.x (Triage — its intake 6.10.4 + its queue 6.10.3) and 6.4.x (access
- * levels — DONE/shipped). 6.4 is DONE so its deps are satisfied; 6.10 is being
- * planned (not done) so anything chained behind a 6.10.x id is `blocked`.
- * 6.11.1 (design) and 6.11.2 (decision) have `dependsOn: []` → `planned`;
- * everything chained behind them or behind 6.10.x → `blocked`.
+ * **Cross-story dep audit: PASSES.** Every `dependsOn` id is same-story
+ * (6.11.x) or an already-SHIPPED motir-core service (`workItemsService`, the
+ * 6.1.1 FilterAST search) — no forward-pointing dependency, no dependency on an
+ * unbuilt higher-numbered story. 6.11.1 (design) and 6.11.2 (decision) have
+ * empty deps → `planned`; everything chained behind them → `blocked`.
  */
 export const story_6_11: PlanStory = {
   id: '6.11',
-  title: 'Public projects (open project management)',
+  title: 'Triage inbox (bug/feature intake → promote)',
   status: 'planned',
-  gitBranch: 'feat/PROD-6.11-public-projects',
+  gitBranch: 'feat/PROD-6.11-triage-inbox',
   descriptionMd:
-    'Make a project **public** — open for read-only VIEW to ANY signed-in ' +
-    'Motir account, ACROSS orgs and workspaces — where a viewer can change ' +
-    'NOTHING except **submit a bug / feature request** (into the 6.10 ' +
-    'Triage), **upvote** an existing request, and **comment** on it. This is ' +
-    'the "open source project management" / public-feedback-portal posture: a ' +
-    'public roadmap + a public intake, gated to authenticated accounts. A pure ' +
-    'motir-core, per-project capability — no AI boundary, no forward ' +
-    'dependency.\n\n' +
-    '**The model (locked — see the module header for the full rationale + the ' +
-    'verified mirror):**\n\n' +
-    '- **`public` is a 4th `ProjectAccessLevel`, extending 6.4.** Today ' +
-    'open / limited / private (6.4, DONE); 6.11 adds **public**. The openness ' +
-    'ladder is **public > open > limited > private**. `public` is the ONLY ' +
-    'level that crosses the org boundary for READ — 6.4’s `canBrowse` returns ' +
-    'true for ANY authenticated account on a public project (bypassing the ' +
-    'org/workspace gate for READ on public projects only); every other level ' +
-    'stays org/workspace-bounded and the 404-not-403 posture for non-public ' +
-    'projects is untouched.\n' +
-    '- **Account-required, not anonymous.** A viewer must be a signed-in ' +
-    'Motir account (any org). Anonymous/logged-out access is explicitly FUTURE ' +
-    '(out of scope) so every submit/upvote/comment carries a real account for ' +
-    'attribution + rate-limiting.\n' +
-    '- **The only writes a public viewer can do** are triage-submit + upvote ' +
-    '+ comment — three NEW narrow grants checked explicitly, NOT a relaxation ' +
-    'of 6.4 `canEdit` (a public viewer is not a member, so `canEdit` is false ' +
-    'for every normal write). No create/move/assign/status affordance appears ' +
-    'on the public surface.\n' +
-    '- **Visible vs hidden.** The public view shows the read-only board / ' +
-    'issue list + the public ROADMAP (status-grouped). Internal-only fields — ' +
-    '**assignees, estimates, internal comments** — are HIDDEN via a public ' +
-    'PROJECTION that strips them at the read layer (not merely a hidden UI).\n' +
-    '- **The proven portal set (adopted from the mirror).** Beyond view + ' +
-    'submit: **upvoting** (the demand signal the triage queue sorts by), ' +
-    '**automatic duplicate detection** on submit (surface an existing matching ' +
-    'request so the user upvotes it instead of creating a dupe — Canny’s core ' +
-    'behaviour), **comments** on public requests, and a **public roadmap** ' +
-    'with status tracking (submitted → planned → in progress → done).\n\n' +
-    '**This EXTENDS 6.10 (Triage) + 6.4 (access levels), never re-implements ' +
-    'them.** A public submission lands in the SAME triage queue (born a ' +
-    '`work_item` in the `triage` state, excluded from every normal read), ' +
-    'reusing 6.10.4’s intake path (adding cross-org-account submit + the dedupe ' +
-    'pre-check) and 6.10.3’s queue (adding the vote-count sort); it adds no ' +
-    'second submissions table and no second access policy.\n\n' +
-    '**Scope:** the public-surface design (6.11.1); the `public`-access-level ' +
-    'semantics decision (6.11.2); the schema + access-check extension + ' +
-    'migration (6.11.3); the public read-only project view, internal fields ' +
-    'hidden (6.11.4); cross-account submit-to-triage + duplicate detection ' +
-    '(6.11.5); upvoting + comments on public requests (6.11.6); the public ' +
-    'roadmap view with status tracking (6.11.7); the "make public" toggle + ' +
-    'the shareable public link in project settings (6.11.8); the access + ' +
-    'dedupe + voting tests (6.11.9); the cross-org e2e (6.11.10).\n\n' +
-    '**Out of scope (named so they land in their own story, not here):** ' +
-    'ANONYMOUS / logged-out public access (a future story — needs ' +
-    'anonymous-identity + heavier abuse controls); a fully custom-branded / ' +
-    'white-label public portal domain (this ships the in-app authenticated ' +
-    'public surface, not a separate marketing site); AI-assisted dedupe ' +
-    'suggestion beyond the deterministic match (an Epic-7 planner enhancement); ' +
-    'public analytics / vote-trend dashboards; and email digests of public ' +
-    'activity.',
+    'The incoming-work front door for a project. Bug reports and feature ' +
+    'requests arrive — from a team member through an in-app "report a bug / ' +
+    'request a feature" widget, or from anyone through a shareable public ' +
+    'portal form — and land in a **triage inbox**, a staging queue that is ' +
+    'EXCLUDED from the planned tree until an admin acts on it. The admin ' +
+    'triages each item: **accept** it into the backlog, **promote** it under ' +
+    'a sprint / epic / story (set parent + position), **decline** it, ' +
+    '**mark it duplicate / merge** it into a canonical item, or **snooze** ' +
+    'it. This is a pure motir-core, per-project feature — no AI boundary, no ' +
+    'forward dependency.\n\n' +
+    '**The locked model (mirrors Linear Triage):** a submission IS a ' +
+    '`work_item` (kind `bug` or `task`) from the moment it is created, but it ' +
+    'carries a **`triage` state** that makes it invisible to EVERY normal ' +
+    'read — the tree, every board, every list, the ready set, and search all ' +
+    'exclude it (Linear: "we exclude triage issues from all views since ' +
+    'triage is considered to be outside the normal workflow"). The ' +
+    'triage-queue read is the single read that returns ONLY triage items. ' +
+    '**Promotion is not a copy** — it clears the triage marker and sets ' +
+    'parent + backlog rank through the shipped `workItemsService`, so the ' +
+    'same item (with its comments, attachments, and history intact) simply ' +
+    'appears in the tree.\n\n' +
+    '**Scope:** the design of both surfaces (6.11.1); the triage-model ' +
+    'decision (6.11.2); the schema + the read-exclusion-everywhere invariant ' +
+    '(6.11.3); the intake path — in-app submit + the rate-limited public ' +
+    'portal form (6.11.4); the triage-actions service — accept / promote / ' +
+    'decline / mark-duplicate-merge / snooze (6.11.5); the admin triage ' +
+    'inbox UI (6.11.6); the submission form UI — widget + portal (6.11.7); ' +
+    'the read-exclusion + actions tests (6.11.8); and the submit→triage→' +
+    'promote e2e (6.11.9).\n\n' +
+    '**Out of scope (named so they are not silently lost):** AI-assisted ' +
+    'auto-triage / dedupe-suggestion (an Epic-7 planner enhancement, not ' +
+    'this story); triage-responsibility on-call scheduling (Linear ' +
+    'Business-tier; a later 6.x setting); SLA / response-time tracking on ' +
+    'submissions; and email/Slack ingestion channels (this story ships the ' +
+    'in-app + public-form channels; integration channels reuse the same ' +
+    'triage-item creation path later).',
   verificationRecipeMd:
-    '- Pull the Story branch; run the migration + `pnpm db:seed` against the ' +
-    'local Postgres (`localhost:5433`); `pnpm dev`.\n' +
-    '- **Make-public + the share link.** As the `motir` project admin, open ' +
-    'project settings → set the project **public** → a shareable public link ' +
-    'appears (and can be disabled/rotated). Confirm the access level now reads ' +
-    '`public` and the four-level control shows public > open > limited > ' +
-    'private.\n' +
-    '- **Cross-org read (the load-bearing check).** Sign in as a SECOND Motir ' +
-    'account in a DIFFERENT org with NO membership in the public project’s org/' +
-    'workspace. Open the public link → the read-only board / issue list + the ' +
-    'public roadmap render; there are NO edit affordances (no create / move / ' +
-    'assign / status controls); **assignees, estimates, and internal comments ' +
-    'are absent** from every issue. Confirm the SAME second account hitting a ' +
-    'NON-public project of that org gets 404-not-403 (not forbidden), proving ' +
-    'public is the only cross-org read exception.\n' +
-    '- **Submit + duplicate detection.** As the second account, submit a ' +
-    'feature request whose title matches an existing public request → the ' +
-    'dedupe surfaces the existing matching request(s) and offers to **upvote** ' +
-    'it instead of creating a dupe; upvoting it increments the count (and the ' +
-    'item is NOT duplicated). Then submit a genuinely-new request → it lands in ' +
-    'the project’s triage queue (6.10) with cross-org-account attribution, ' +
-    'invisible to the normal tree until an admin promotes it.\n' +
-    '- **Upvote + comment.** As the second account, upvote a public request ' +
-    '(a second upvote from the same account is a no-op / toggle, never a double ' +
-    'count) and add a comment; confirm the comment shows on the public request ' +
-    'and the vote raises the request’s position in the project admin’s triage ' +
-    'queue (the demand signal).\n' +
-    '- **The public roadmap.** Confirm the roadmap groups public-facing items ' +
-    'by status (submitted → planned → in progress → done) with vote counts, ' +
-    'paginated (no load-all), and reflects an item’s status as the admin ' +
-    'advances it.\n' +
-    '- `pnpm test` (6.11.9) covers: the access matrix (a cross-org account ' +
-    'READS a public project but every normal write is blocked; the three ' +
-    'permitted writes — submit / upvote / comment — succeed; a non-public ' +
-    'project is 404 cross-org), the duplicate-detection match, and ' +
-    'one-vote-per-account, all on a real Postgres respecting the per-file ' +
-    'coverage gate.\n' +
-    '- **4-layer + token review.** No raw Prisma in any route; the public read ' +
-    'goes through the public projection in the service/repository layer; every ' +
-    'write (submit/upvote/comment) routes through a service → ' +
-    '`workItemsService` where it mutates a work_item; the public surfaces ' +
-    'reference only `--el-*` / `[data-display-style]` tokens + shipped ' +
-    '`components/ui/*`.\n' +
-    '- **Dep audit.** Confirm no 6.11 subtask references any id > 6.11 (deps ' +
-    'are 6.11.x / 6.10.x / 6.4.x only).\n' +
-    '- If every step holds, approve and merge the Story PR. If anything fails, ' +
-    'comment with what didn’t work and Motir will produce a follow-up Subtask ' +
-    'under the same Story.',
+    '- **The exclusion invariant (the load-bearing one).** Submit a bug via ' +
+    'the in-app widget for the `PROD` project. Confirm it appears in the ' +
+    'triage inbox AND is absent from: the issue tree, every board column, ' +
+    'every saved/default list, the ready set, and a search that would ' +
+    'otherwise match it (e.g. by its title). Then promote it to the backlog ' +
+    '→ confirm it now appears in the tree/list/search and is gone from the ' +
+    'triage queue.\n' +
+    '- **The public portal form.** Open the shareable form URL ' +
+    'unauthenticated, submit a feature request → it lands in the same triage ' +
+    'inbox with external-submitter attribution; submitting many in quick ' +
+    'succession is rate-limited (the abuse guard fires, not a 500).\n' +
+    '- **The action set.** From the inbox: accept an item (→ backlog, ' +
+    'default status, optional comment); promote another under a chosen epic/' +
+    'story (parent + position set); decline one (→ canceled, optional ' +
+    'comment); mark one a duplicate of a canonical item (the duplicate is ' +
+    'canceled and its attachments/comments fold into the canonical item); ' +
+    'snooze one (it leaves the queue and returns at the chosen time / on new ' +
+    'activity).\n' +
+    '- `pnpm test` (motir-core) — 6.11.8 covers the exclusion at EVERY read ' +
+    '(tree/board/list/ready/search), the queue-only read, and each action ' +
+    '(promote re-parents + ranks via `workItemsService`, decline cancels, ' +
+    'merge folds + cancels, snooze hides/returns), all on a real Postgres per ' +
+    'the standing rule, respecting the per-file coverage gate.\n' +
+    '- **4-layer + token review.** No raw Prisma in any route; every triage ' +
+    'write goes through a service → `workItemsService`; the inbox + form UIs ' +
+    'reference only `--el-*` / `[data-display-style]` tokens and shipped ' +
+    '`components/ui/*` primitives.\n' +
+    '- If every step holds, approve and merge the Story PR. If anything ' +
+    "fails, comment with what didn't work and Motir will produce a follow-up " +
+    'Subtask under the same Story.',
   items: [
     {
       id: '6.11.1',
-      title:
-        'Design — the public project view + public roadmap + submit/upvote/comment surfaces + the make-public toggle',
+      title: 'Design — the triage inbox + the submission surfaces (widget + portal form)',
       status: 'planned',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 55,
       descriptionMd:
         '**Type:** design (THE design gate — produced FIRST; every UI code ' +
-        'subtask here — 6.11.4, 6.11.6, 6.11.7, 6.11.8 — depends on this card ' +
-        'and is `blocked` until it lands). Produce the surface design assets ' +
-        'under `motir-core/design/public-projects/`, composing ONLY shipped ' +
-        '`components/ui/*` primitives + `--el-*` colour tokens + ' +
+        'subtask here, 6.11.6 and 6.11.7, depends on this card and is ' +
+        '`blocked` until it lands). Produce the surface design assets for ' +
+        'BOTH UI surfaces under `motir-core/design/triage/`, composing ONLY ' +
+        'shipped `components/ui/*` primitives + `--el-*` colour tokens + ' +
         '`[data-display-style]` shape tokens (NO Tier-0 `--color-*`, no ' +
-        'hand-rolled spacing/radius), mirroring 7.0.1’s multi-panel design-card ' +
-        'shape.\n\n' +
-        'The surfaces to draw (every panel — the multi-panel rule, mistake ' +
-        '#31):\n\n' +
-        '- **Panel 1 — the public read-only project view (board / issues).** ' +
-        'The board columns + issue list as a NON-member sees them: read-only, ' +
-        'with NO edit affordances (no create / move / assign / status control, ' +
-        'no drag handles). INTERNAL fields are absent — draw an issue card / ' +
-        'row WITHOUT assignee, WITHOUT estimate, and note that internal ' +
-        'comments are not shown. Make the "you are viewing a public project" ' +
-        'framing explicit (a banner / chip), and show the signed-in ' +
-        'cross-org viewer’s identity (they ARE authenticated).\n' +
-        '- **Panel 2 — the public roadmap.** Status-grouped columns ' +
-        '(submitted → planned → in progress → done) of public-facing items, ' +
-        'each with its **vote count** + a link to the request; paginated / ' +
-        'lazy (the at-scale rule — NOT load-all). Mirror the Canny / ' +
-        'Productboard status-column roadmap.\n' +
-        '- **Panel 3 — submit a request + DUPLICATE DETECTION.** The submit ' +
-        'form (type toggle bug | feature, title, description) AND the ' +
-        'duplicate-detection state: as the title is entered, surface matching ' +
-        'existing request(s) with an **"Upvote this instead"** affordance (the ' +
-        'Canny behaviour) so the user joins the existing request rather than ' +
-        'creating a dupe; plus the "submit as new" path + the "thanks, we got ' +
-        'it" confirmation.\n' +
-        '- **Panel 4 — a public request detail with upvote + comments.** The ' +
-        'request body, its **upvote control + count** (showing the ' +
-        'already-voted state), and the **comment thread + a comment composer** ' +
-        '— the only interactive elements on the public surface besides submit.\n' +
-        '- **Panel 5 — project settings: the make-public toggle + share ' +
-        'link.** The four-level Access control extended to ' +
-        '**public > open > limited > private** (with one-line copy for each, ' +
-        'and a clear "public = any signed-in Motir account, across orgs, can ' +
-        'view + submit/upvote/comment" explanation), plus the **shareable ' +
-        'public link** (copy, disable, rotate) and the ' +
-        'account-required-not-anonymous note.\n' +
-        '- **Panel 6 — empty / loading / error / permission states.** The ' +
-        'empty roadmap + empty request list, the paginated loading skeleton, ' +
-        'the fetch-error state, and the rate-limited submit state (graceful, ' +
-        'not a raw 500).\n\n' +
-        'Write **`design/public-projects/design-notes.md`** naming every ' +
-        'primitive composed (e.g. `IssueTypeIcon` for the kind hue, `Pill` for ' +
-        'status/vote tone, `Combobox`/picker reuse, the EmptyState/ErrorState ' +
-        'family, the skeleton/loader), the EXACT copy for each Access-level ' +
-        'line + each action + each empty/confirmation/error state, the ' +
-        'per-`--el-*` colour role for every element (use the palette, not ' +
-        'grey-only — finding #54; e.g. the public-banner tint, the upvote ' +
-        'accent, the roadmap status tones), and a "primitives composed (no ' +
-        'hand-rolling)" checklist. It MUST state, in writing, that internal ' +
-        'fields (assignees / estimates / internal comments) are ABSENT from the ' +
-        'public view, that the public surface has NO edit affordances, and that ' +
-        'access is account-required (anonymous is future).\n\n' +
+        'hand-rolled spacing/radius), mirroring 7.0.1’s multi-panel ' +
+        'design-card shape.\n\n' +
+        'Two surfaces, each a panel in the mock:\n\n' +
+        '1. **The admin triage inbox** — a paginated QUEUE list (each row: ' +
+        'kind icon via `IssueTypeIcon`, title, submitter [member avatar OR ' +
+        '"external" chip], age, a snippet) + a DETAIL pane (full submission ' +
+        'body, comments, attachments, submitter attribution) + the ACTION ' +
+        'bar: Accept, Promote (a picker for backlog / sprint / epic / story ' +
+        'parent + position), Decline, Mark duplicate / Merge (a canonical-' +
+        'item picker), Snooze (a time picker). Mirror Linear Triage’s ' +
+        'queue+detail+action shape.\n' +
+        '2. **The submission surfaces** — (a) the in-app "report a bug / ' +
+        'request a feature" widget (a compact modal/popover: type toggle, ' +
+        'title, description, optional attachment), and (b) the shareable ' +
+        '**public portal form** (an unauthenticated, branded, single-column ' +
+        'form; a "thanks, we got it" confirmation state; the rate-limit / ' +
+        'error states).\n\n' +
+        '`design-notes.md` MUST name every primitive used, the exact copy for ' +
+        'each action + the empty-queue state, and the `--el-*` role for every ' +
+        'colour (e.g. the "external" chip tint, the kind hue, the destructive ' +
+        '`--el-danger` for Decline). Call out the empty state ("No items to ' +
+        'triage") and the loading/error states for the public form.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- `design/public-projects/*.mock.html` renders the six panels above, ' +
-        'referencing ONLY `--el-*` + `[data-display-style]` tokens (no Tier-0 ' +
-        '`--color-*`, no hand-rolled spacing/radius) + shipped ' +
-        '`components/ui/*`.\n' +
-        '- The public board/issue panel shows NO edit affordances and NO ' +
-        'internal fields (assignee / estimate / internal comments absent); the ' +
-        'public-project framing (banner/chip) is drawn.\n' +
-        '- The roadmap is drawn status-grouped (submitted → planned → in ' +
-        'progress → done) with vote counts, paginated/lazy; the submit panel ' +
-        'draws the duplicate-detection "upvote this instead" state; the request ' +
-        'detail draws upvote + comments.\n' +
-        '- The Access control is drawn with all FOUR levels ' +
-        '(public > open > limited > private) + copy, the shareable link ' +
-        '(copy/disable/rotate), and the account-required note.\n' +
-        '- `design-notes.md` names every primitive + copy + per-element ' +
-        '`--el-*` role, and states the hidden-internal-fields + ' +
-        'no-edit-affordances + account-required invariants; AA contrast holds ' +
-        'for the public banner + the upvote/roadmap tints.\n\n' +
+        '- `design/triage/*.mock.html` renders the inbox (queue + detail + ' +
+        'actions) AND both submission surfaces (widget + public form, incl. ' +
+        'its confirmation + rate-limit states) as panels, composing only ' +
+        'shipped `components/ui/*` + `--el-*` + `[data-display-style]` ' +
+        'tokens.\n' +
+        '- `design/triage/design-notes.md` names every primitive + the copy ' +
+        'for every action and empty/confirmation/error state, with the ' +
+        '`--el-*` role for each colour; no Tier-0 `--color-*` and no raw ' +
+        'spacing/radius anywhere.\n' +
+        '- The promote picker design shows the four targets (backlog / sprint ' +
+        '/ epic / story) and where position/rank is chosen.\n' +
+        '- AA contrast holds for the external chip and the destructive ' +
+        'action (tint background + `--el-text-strong`).\n\n' +
         '## Context refs\n\n' +
-        '- `scripts/plan-seed/data/story-7.0.ts` § 7.0.1 — the multi-panel ' +
-        'design-card shape to mirror.\n' +
-        '- `scripts/plan-seed/data/story-6.10.ts` § 6.10.1 — the triage ' +
-        'submission-surface design this composes with (the submit form reuses ' +
-        'its shape).\n' +
-        '- Canny (https://canny.io/use-cases/feature-request-management) — the ' +
-        'status-column roadmap + vote count + "upvote the existing request" ' +
-        'surface being mirrored.\n' +
-        '- Productboard portal ' +
-        '(https://support.productboard.com/hc/en-us/articles/360056315454) — ' +
-        'the public portal + share-link + status roadmap shape.\n' +
+        '- `scripts/plan-seed/data/story-7.0.ts` § 7.0.1 — the ' +
+        'multi-panel design-card shape to mirror.\n' +
+        '- Linear Triage (https://linear.app/docs/triage) — the queue + ' +
+        'detail + action-set surface being mirrored.\n' +
         '- `motir-core/components/ui/*`, `app/globals.css` (the `--el-*` + ' +
-        '`[data-display-style]` token layers), `motir-core/CLAUDE.md` § colour ' +
-        '+ shape tokens; `IssueTypeIcon` / `Pill` (the kind-hue + tone ' +
-        'primitives).',
+        '`[data-display-style]` token layers), `motir-core/CLAUDE.md` ' +
+        '§ colour + shape tokens.\n' +
+        '- `IssueTypeIcon` / `Pill` — the kind-hue + tone primitives the rows ' +
+        'use.',
       dependsOn: [],
     },
     {
       id: '6.11.2',
       title:
-        'Decision — the `public` access-level semantics: cross-org read, write-grants, visible-vs-hidden, the openness ladder',
+        'Decision — the triage model: work_item + `triage` state, read-exclusion, promote/decline/merge semantics',
       status: 'planned',
       type: 'decision',
       executor: 'coding_agent',
       estimateMinutes: 45,
       descriptionMd:
-        '**Type:** decision (the keystone ADR the schema + access cards ' +
-        '[6.11.3+] build against; no app behavior ships, but the shapes it ' +
-        'fixes are load-bearing). Write ' +
-        '`motir-core/docs/decisions/public-projects.md`, EXTENDING (not ' +
-        'forking) 6.4’s access-level ADR. It MUST fix:\n\n' +
-        '1. **`public` extends `ProjectAccessLevel` (open / limited / private ' +
-        '/ public).** Add `public` to the existing 6.4 enum; the openness ' +
-        'ladder is **public > open > limited > private**. State that this is a ' +
-        'one-value extension of the 6.4 model + the SAME ' +
-        '`projectAccessService` policy — NOT a parallel access system.\n' +
-        '2. **`public` = any AUTHENTICATED Motir account reads CROSS-ORG ' +
-        '(the single exception).** Decide precisely: 6.4’s `canBrowse` returns ' +
-        'true for ANY signed-in user when the project is `public`, BYPASSING ' +
-        'the 6.9 org/workspace membership gate FOR READ ON PUBLIC PROJECTS ' +
-        'ONLY. Every other level stays org/workspace-bounded; the 404-not-403 ' +
-        'cross-tenant posture is preserved for non-public projects (a cross-org ' +
-        'user hitting a non-public project is still not-found, never ' +
-        'forbidden). Fix WHERE this exception lives so it is a single, auditable ' +
-        'branch in the access policy (not scattered).\n' +
-        '3. **Writes limited to triage-submit + upvote + comment — explicit ' +
-        'grants, NOT a `canEdit` relaxation.** A public viewer is not a ' +
-        'member, so 6.4 `canEdit` is FALSE for every normal write ' +
-        '(create/move/assign/status/field-edit). The three permitted writes ' +
-        'are NEW narrow capabilities checked explicitly: `canSubmitToTriage`, ' +
-        '`canUpvotePublicRequest`, `canCommentPublicRequest` — each true for ' +
-        'any authenticated account on a public project, each independent of ' +
-        '`canEdit`. State that no other write path may ever key off "is on a ' +
-        'public project".\n' +
-        '4. **Visible vs HIDDEN — the public projection.** Decide the EXACT ' +
-        'set of internal-only fields stripped from the public read: ' +
-        '**assignees, estimates, and internal comments are HIDDEN** ' +
-        '(decide explicitly which comments are "internal" vs ' +
-        'public-request comments — the public-request comment thread from ' +
-        '6.11.6 IS public; the issue’s internal discussion is not). Fix that ' +
-        'the stripping is a PUBLIC PROJECTION at the read layer (a dedicated ' +
-        'read shape / DTO that never includes the hidden fields), NOT a UI that ' +
-        'fetches everything and hides it (which would leak over the wire). ' +
-        'Enumerate what IS visible: issue key/title/kind/status/description, ' +
-        'board columns, the public roadmap, vote counts, public-request ' +
-        'comments.\n' +
-        '5. **Account-required, not anonymous.** Fix that a viewer MUST be a ' +
-        'signed-in Motir account (any org); anonymous access is out of scope ' +
-        '(future). Every submit/upvote/comment is attributed to that account ' +
-        'and rate-limited by it. State the share-link is an entry pointer to ' +
-        'the public project (it still requires sign-in), NOT an ' +
-        'unauthenticated bypass.\n' +
-        '6. **Submission + dedupe + vote model semantics.** A public ' +
-        'submission reuses 6.10’s intake (born a triage `work_item`), ' +
-        'attributed to the cross-org account. Fix the duplicate-detection ' +
-        'contract (a deterministic title/text match over existing PUBLIC ' +
-        'requests, surfaced BEFORE create so the user upvotes the existing one ' +
-        '— Canny’s behaviour) and the vote model (one vote per account per ' +
-        'item, server-enforced; the count is a sort key the 6.10 triage queue ' +
-        'reads). Decide the vote storage (a `PublicRequestVote` join, unique on ' +
-        '`(workItemId, userId)`).\n\n' +
+        '**Type:** decision (the keystone ADR the schema + service cards ' +
+        'build against; no app behavior ships, but the shapes it fixes are ' +
+        'load-bearing). Write `motir-core/docs/decisions/triage-model.md`. It ' +
+        'MUST fix:\n\n' +
+        '1. **A submission IS a work_item, in a `triage` state (Yue).** Not a ' +
+        'separate submissions table. A submission is born a `work_item` (kind ' +
+        '`bug` for a bug report, `task` for a feature request — the request ' +
+        'grammar) with NO parent and a `triage` marker. Decide the marker ' +
+        'shape: a dedicated boolean/`triagedAt` column vs. a reserved ' +
+        '`workflow_status` — choose the one that makes the read-exclusion a ' +
+        'cheap, indexable predicate AND survives the item later taking a ' +
+        'normal status on promote (a column is the durable choice; justify).\n' +
+        '2. **Read-exclusion is total and central.** EVERY normal read — the ' +
+        'tree, every board, every list, the ready set, and 6.1.1 FilterAST ' +
+        'search — excludes triage items; the triage-queue read is the ONLY ' +
+        'read that includes only them. Decide WHERE the predicate lives so it ' +
+        "can't be forgotten by a future read (a repository-level default " +
+        'scope / a shared `where` fragment threaded through every list query ' +
+        '— NOT N independent filters). This mirrors Linear: "we exclude ' +
+        'triage issues from all views since triage is considered to be ' +
+        'outside the normal workflow."\n' +
+        '3. **Submitter attribution — member OR external.** A triage item ' +
+        'records its origin: a member (userId) or an external portal ' +
+        'submitter (a captured name/email, no account). Decide the storage ' +
+        '(nullable `submittedByUserId` + an `externalSubmitter` JSON/embedded ' +
+        'fields) and that external submitters get no tenant access.\n' +
+        '4. **Promote semantics.** Promote = clear the triage marker + set ' +
+        'parent (backlog = no parent but triage-cleared / sprint / epic / ' +
+        'story, per the kind-parent matrix) + set position/backlogRank — ALL ' +
+        'through `workItemsService` (never raw). Accept = promote to the ' +
+        'backlog at the default status with an optional comment. The ' +
+        'kind-parent matrix still governs (a `bug` can parent to epic/story/' +
+        'task; a `task` similarly) — promotion must respect it.\n' +
+        '5. **Decline / mark-duplicate / merge / snooze.** Decline → a ' +
+        'canceled terminal status (+ optional comment). Mark-duplicate/merge ' +
+        '→ pick a canonical item; the duplicate is canceled and its ' +
+        'comments + attachments fold into the canonical item (mirror Linear ' +
+        'moving attachments/customer-requests to the canonical issue). ' +
+        'Snooze → hidden from the queue until a chosen time OR new activity, ' +
+        'whichever first (decide the `snoozedUntil` storage + the ' +
+        'return-on-activity trigger).\n\n' +
         '## Acceptance criteria\n\n' +
-        '- The ADR fixes all six sections, naming the FOUR-level ladder ' +
-        '(public > open > limited > private) as a one-value extension of 6.4’s ' +
-        'enum + the SAME `projectAccessService`.\n' +
-        '- It states the cross-org READ exception is public-only and lives in a ' +
-        'single auditable branch, and that 404-not-403 holds for non-public ' +
-        'projects.\n' +
-        '- It enumerates the three explicit write grants (submit / upvote / ' +
-        'comment) as independent of `canEdit`, and the EXACT hidden-field set ' +
-        '(assignees, estimates, internal comments) stripped by a public ' +
-        'PROJECTION at the read layer.\n' +
-        '- It fixes the account-required (not anonymous) rule, the ' +
-        'duplicate-detection-before-create contract, and the one-vote-per-' +
-        'account model with its storage.\n' +
-        '- It cites the verified mirror (OpenProject/Plane/GitHub public ' +
-        'visibility + Canny/Productboard/Featurebase portal set) for the ' +
-        'public-project + submit/upvote/comment/status-roadmap shape.\n\n' +
+        '- The ADR fixes all five sections with the chosen column/relation ' +
+        'shapes and a one-paragraph justification for the `triage`-marker ' +
+        'column over a reserved status, and for the central exclusion ' +
+        'predicate over per-read filters.\n' +
+        '- It enumerates EVERY normal read that must exclude triage items ' +
+        '(tree, each board read, each list read, ready set, FilterAST ' +
+        'search) as the checklist 6.11.3 + 6.11.8 implement and test.\n' +
+        '- It states that promotion/decline/merge all route through ' +
+        '`workItemsService` (write authority unchanged) and respect 6.4 ' +
+        'permissions + the kind-parent matrix.\n' +
+        '- Linear Triage is cited as the verified mirror for the state-' +
+        'outside-the-workflow exclusion and the action taxonomy.\n\n' +
         '## Context refs\n\n' +
-        '- `scripts/plan-seed/data/story-6.4.ts` — the shipped ' +
-        '`ProjectAccessLevel` (open/limited/private) + the ' +
-        '`projectAccessService` `canBrowse`/`canEdit` policy this extends.\n' +
-        '- `scripts/plan-seed/data/story-6.10.ts` — the triage intake (6.10.4) ' +
-        '+ queue (6.10.3) the public submit reuses + the vote-count sort feeds.\n' +
-        '- `scripts/plan-seed/data/story-6.9.ts` — the org gate the public ' +
-        'cross-org READ exception bypasses (for public projects only).\n' +
-        '- `motir-core/lib/services/workItemsService.ts` — the write authority ' +
-        'submit/upvote/comment route through.\n' +
-        '- Canny (https://canny.io/use-cases/feature-request-management) — ' +
-        'duplicate detection + upvote-the-existing + status roadmap; ' +
-        'OpenProject (https://www.openproject.org/roadmap/) + Plane ' +
-        '(https://plane.so/open-source) — public project / public roadmap ' +
-        'visibility.',
+        '- Linear Triage (https://linear.app/docs/triage) — exclusion + ' +
+        'action semantics.\n' +
+        '- Jira Product Discovery / JSM intake ' +
+        '(https://www.atlassian.com/software/jira/product-discovery) — the ' +
+        'triaged-gate-before-promote pattern.\n' +
+        '- `motir-core/lib/services/workItemsService.ts` — the write ' +
+        'authority promote/decline commit through.\n' +
+        '- `prisma/sql/work_item_triggers.sql` — the kind-parent matrix ' +
+        'promotion must satisfy.\n' +
+        '- 6.1.1 FilterAST search (shipped) — the search read that must also ' +
+        'exclude triage items.',
       dependsOn: [],
     },
     {
       id: '6.11.3',
-      title:
-        'Schema + access — add `public` to `ProjectAccessLevel`; extend the access-check cross-org for READ; migration',
+      title: 'Schema + the read-exclusion-everywhere invariant',
       status: 'blocked',
       type: 'code',
       executor: 'coding_agent',
-      estimateMinutes: 60,
+      estimateMinutes: 70,
       descriptionMd:
-        'Implement the `public` access level + the access-check extension per ' +
-        '6.11.2. This is the load-bearing correctness work the whole story ' +
-        'rides — it must EXTEND 6.4’s shipped `projectAccessService`, not fork ' +
-        'a parallel policy.\n\n' +
-        '- **Schema:** add `public` to the existing 6.4 `ProjectAccessLevel` ' +
-        'enum (`open | limited | private | public`) with a migration; no ' +
-        'default change (existing projects stay their current level — adding an ' +
-        'enum value locks nothing out). Add the `PublicRequestVote` join ' +
-        '(`{ id, workItemId, userId, createdAt }`, unique on ' +
-        '`(workItemId, userId)`) modelled as Prisma `@relation` on BOTH sides ' +
-        '(to `work_item` + `User`) per the CLAUDE.md FK-as-`@relation` rule — ' +
-        'NO raw-SQL-only FK (6.11.6 uses it, but the model lands with the ' +
-        'access foundation so the schema is coherent in one migration).\n' +
-        '- **Access-check extension (the single auditable branch):** extend ' +
-        '`canBrowse` so that when a project is `public`, it returns true for ' +
-        'ANY authenticated user — bypassing the 6.9 org/workspace membership ' +
-        'gate FOR READ ON PUBLIC PROJECTS ONLY. Every other level keeps its ' +
-        '6.4 semantics; the 404-not-403 posture is UNTOUCHED for non-public ' +
-        'projects (a cross-org user on a non-public project still gets ' +
-        'not-found). `canEdit` is UNCHANGED — a public viewer (non-member) ' +
-        'gets false for every normal write. Add the three explicit grants ' +
-        '`canSubmitToTriage` / `canUpvotePublicRequest` / ' +
-        '`canCommentPublicRequest` (true for any authed account on a public ' +
-        'project), independent of `canEdit`, so later cards check THEM, never a ' +
-        'relaxed edit gate.\n\n' +
-        'Stay 4-layer: the enum + vote model in `prisma/schema.prisma` + the ' +
-        'repository, the access policy in the service layer (extend the ' +
-        'existing `projectAccessService`), no raw Prisma in routes.\n\n' +
+        'Implement the triage marker on `work_item` and enforce the ' +
+        'exclusion invariant across EVERY normal read (the load-bearing ' +
+        'correctness work of this story). Per 6.11.2:\n\n' +
+        '- **Schema:** add the `triage` marker (a `triagedAt: DateTime?` / ' +
+        '`isTriage` column per the ADR) + `snoozedUntil: DateTime?` + the ' +
+        'submitter-attribution columns (`submittedByUserId` nullable ' +
+        '`@relation`; `externalSubmitter` embedded fields) to `work_item`, ' +
+        'with a migration and a partial index supporting the cheap exclusion ' +
+        'predicate + the queue read. Model every FK as a Prisma `@relation` ' +
+        '(CLAUDE.md migration rule — no raw-SQL-only FK).\n' +
+        '- **Central exclusion:** thread a single shared "not-in-triage" ' +
+        '`where` fragment (or a repository default scope) through EVERY ' +
+        'normal list read so the predicate is defined once: the issue tree, ' +
+        'every board column read, every list/saved-view read, the ready-set ' +
+        'read, and the 6.1.1 FilterAST search compilation. A triage item (and ' +
+        'a snoozed item, in the inbox sense) is absent from all of them.\n' +
+        '- **The queue read:** a new repository read + service method ' +
+        'returning ONLY triage items for a project, paginated/cursor’d ' +
+        '(finding #57 — never load-all), excluding currently-snoozed items, ' +
+        'newest-first, with submitter attribution.\n\n' +
+        'All reads stay 4-layer (Route→Service→Repository→' +
+        'Prisma); the queue and exclusion live in the repository read layer so ' +
+        'no future read can bypass them.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- The migration adds `public` to `ProjectAccessLevel` and the ' +
-        '`PublicRequestVote` join (every FK an `@relation` on both sides); ' +
-        '`prisma migrate dev` reports no drift; no existing project’s level ' +
-        'changes.\n' +
-        '- `canBrowse` returns true for ANY authenticated user on a `public` ' +
-        'project (cross-org), in a single auditable branch; non-public ' +
-        'projects keep 6.4 semantics + the 404-not-403 cross-tenant posture ' +
-        'unchanged.\n' +
-        '- `canEdit` is unchanged (a public non-member viewer → false for ' +
-        'every normal write); the three explicit grants ' +
-        '(`canSubmitToTriage` / `canUpvotePublicRequest` / ' +
-        '`canCommentPublicRequest`) exist and are true only for an ' +
-        'authenticated account on a public project, independent of `canEdit`.\n' +
-        '- 4-layer respected (policy in the extended service, vote model in a ' +
-        'single-op repository, no raw Prisma in routes).\n\n' +
+        '- The migration adds the triage marker + snooze + submitter columns ' +
+        'with the supporting index; `prisma migrate dev` reports no drift ' +
+        '(every FK modelled as `@relation`).\n' +
+        '- The exclusion predicate is defined ONCE and applied to the tree, ' +
+        'every board read, every list read, the ready set, and FilterAST ' +
+        'search — verified by the 6.11.8 tests at each read.\n' +
+        '- The triage-queue read returns ONLY triage items for the project, ' +
+        'paginated, excluding snoozed items, with submitter attribution; no ' +
+        'load-all.\n' +
+        '- 4-layer respected; no raw Prisma outside repositories; the queue ' +
+        'read goes through a service.\n\n' +
         '## Context refs\n\n' +
-        '- 6.11.2 — the semantics this implements (the ladder + the cross-org ' +
-        'read exception + the explicit grants + the projection contract).\n' +
-        '- `scripts/plan-seed/data/story-6.4.ts` (6.4.2 schema + 6.4.3 ' +
-        '`projectAccessService`) — the enum + `canBrowse`/`canEdit` policy this ' +
-        'EXTENDS (mirror its shape; do not fork).\n' +
-        '- `motir-core/lib/repositories/` + `lib/services/` — the project ' +
-        'access service + repositories the extension threads into.\n' +
-        '- `motir-core/CLAUDE.md` § 4-layer + § migration FK-as-`@relation` ' +
-        'rule.',
+        '- 6.11.2 — the model decision this implements (marker shape + the ' +
+        'reads-to-exclude checklist).\n' +
+        '- `motir-core/lib/repositories/workItemRepository.ts` + the tree / ' +
+        'board / ready-set read paths — where the shared exclusion fragment ' +
+        'threads in.\n' +
+        '- 6.1.1 FilterAST search compiler — the search read to extend with ' +
+        'the exclusion.\n' +
+        '- `motir-core/CLAUDE.md` § 4-layer + § migration FK-as-' +
+        'relation rule.',
       dependsOn: ['6.11.2'],
     },
     {
       id: '6.11.4',
-      title:
-        'Public read-only project view (board / issues) — internal fields hidden, no edit affordances',
+      title: 'Submission intake — in-app submit + the rate-limited public portal form',
       status: 'blocked',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 65,
       descriptionMd:
-        'Build the public read-only project view per the 6.11.1 design, over ' +
-        'the 6.11.3 access extension. A cross-org authenticated viewer opens a ' +
-        'public project and sees the board columns + issue list READ-ONLY, with ' +
-        'INTERNAL fields hidden and NO edit affordances.\n\n' +
-        '- **The public PROJECTION (the load-bearing correctness):** the read ' +
-        'goes through a dedicated public read shape / DTO (per 6.11.2) that ' +
-        'NEVER includes the hidden internal fields — **assignees, estimates, ' +
-        'internal comments are stripped at the read/service layer**, not ' +
-        'fetched-then-hidden (so nothing internal crosses the wire). What IS ' +
-        'returned: issue key / title / kind / status / description, board ' +
-        'columns, ordering — the public-safe fields only.\n' +
-        '- **The view UI:** render the read-only board + issue list with the ' +
-        '"public project" framing (banner/chip) and the signed-in cross-org ' +
-        'viewer’s identity; NO create / move / assign / status / drag ' +
-        'affordances anywhere (the public surface is view-only besides the ' +
-        '6.11.6 upvote/comment + 6.11.5 submit entry points). Paginated / lazy ' +
-        '(the at-scale rule — a public board is an unbounded read surface).\n' +
-        '- **Gating:** the route is session-gated (a signed-in account is ' +
-        'required — account-required, not anonymous) and access is granted via ' +
-        '6.11.3’s `canBrowse` (true cross-org for public); a non-public project ' +
-        'a cross-org user hits stays 404-not-403.\n\n' +
-        'Stay 4-layer: the route parses + calls one service method returning ' +
-        'the public projection; the projection lives in the service/repository ' +
-        'read layer so no future read can leak internal fields.\n\n' +
+        'The intake path that CREATES a triage work_item, from two channels. ' +
+        'Both create a `work_item` (kind `bug` or `task`) with the `triage` ' +
+        'marker set and no parent, through `workItemsService` (so the create ' +
+        'path is the same authority the rest of the app uses):\n\n' +
+        '- **In-app submit** (authenticated member): a service + ' +
+        '`POST /api/.../triage/submissions` route taking ' +
+        '`{ kind, title, descriptionMd, attachment? }`, attributing the ' +
+        'submission to the session user, scoped to the active project.\n' +
+        '- **Public portal form** (UNAUTHENTICATED): a separate ' +
+        'public-surface route keyed by a per-project shareable token/slug ' +
+        '(the form’s shareable URL). It creates the same triage ' +
+        'work_item with EXTERNAL-submitter attribution (captured name/email, ' +
+        'no tenant access granted). Because it is public it MUST be ' +
+        'rate-limited + abuse-guarded (per-IP / per-token throttle, a size ' +
+        'cap, and a spam/honeypot guard) and must NOT leak project internals ' +
+        '(it only accepts a submission; it returns no tree data). Decide the ' +
+        'shareable-token model (a per-project rotatable form key) so a ' +
+        'project can enable/disable/rotate its public intake.\n\n' +
+        'Stay 4-layer: routes parse + call one service method; the service ' +
+        'owns the transaction and calls `workItemsService` to create the ' +
+        'item; the throttle/guard is a service-layer concern.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- A cross-org authenticated viewer opens a public project and sees the ' +
-        'read-only board + issue list rendering the 6.11.1 design; a non-public ' +
-        'project stays 404 cross-org.\n' +
-        '- The public projection strips assignees, estimates, and internal ' +
-        'comments at the read layer (verified: the hidden fields are absent ' +
-        'from the response payload, not merely hidden in the DOM).\n' +
-        '- NO edit affordances render on the public surface (no create / move ' +
-        '/ assign / status / drag); the view is paginated / lazy.\n' +
-        '- Only `--el-*` + `[data-display-style]` tokens + shipped ' +
-        '`components/ui/*`; matches the 6.11.1 design; 4-layer respected (the ' +
-        'projection in the service/repository, no raw Prisma in the route).\n\n' +
+        '- An authenticated in-app submit creates a triage work_item ' +
+        'attributed to the session user, in the right project, invisible to ' +
+        'the tree (it shows only in the queue).\n' +
+        '- The public form (unauthenticated, by the project form token) ' +
+        'creates a triage work_item with external-submitter attribution; an ' +
+        'invalid/disabled token is rejected; the response leaks no tree ' +
+        'data.\n' +
+        '- The public endpoint is rate-limited + abuse-guarded (rapid repeat ' +
+        'submits are throttled with a typed error, not a 500; the honeypot/' +
+        'size cap rejects junk).\n' +
+        '- Both paths create through `workItemsService` (no raw Prisma in the ' +
+        'route); the form token can be rotated/disabled per project.\n\n' +
         '## Context refs\n\n' +
-        '- 6.11.1 (design asset — required), 6.11.3 (the access extension + ' +
-        '`canBrowse` cross-org + the projection contract).\n' +
-        '- `motir-core/lib/services/workItemsService.ts` + the board / issue ' +
-        'read paths — the reads the public projection derives from.\n' +
-        '- `motir-core/components/ui/*` + `app/globals.css` token layers; ' +
-        '`motir-core/CLAUDE.md` § 4-layer + § colour/shape tokens.',
-      dependsOn: ['6.11.1', '6.11.3'],
+        '- 6.11.3 — the triage marker + schema the created item carries.\n' +
+        '- `motir-core/lib/services/workItemsService.ts` — the create ' +
+        'authority both channels use.\n' +
+        '- Linear Asks / external intake ' +
+        '(https://linear.app/docs/triage) — the external-submitter channel ' +
+        'being mirrored.\n' +
+        '- `motir-core/CLAUDE.md` § 4-layer; any existing rate-limit / ' +
+        'public-route precedent in the repo.',
+      dependsOn: ['6.11.3'],
     },
     {
       id: '6.11.5',
-      title:
-        'Public submit-to-triage for any account + DUPLICATE DETECTION (surface the existing request to upvote)',
+      title: 'Triage actions service — accept / promote / decline / mark-duplicate-merge / snooze',
       status: 'blocked',
       type: 'code',
       executor: 'coding_agent',
-      estimateMinutes: 60,
+      estimateMinutes: 70,
       descriptionMd:
-        'The cross-account public submission path, REUSING 6.10.4’s intake ' +
-        '(no second submissions table), plus the duplicate-detection pre-check ' +
-        '(Canny’s core behaviour). Per 6.11.2:\n\n' +
-        '- **Cross-org-account submit:** a service + route taking ' +
-        '`{ kind (bug|feature), title, descriptionMd }` that creates a triage ' +
-        '`work_item` through `workItemsService` (the SAME 6.10.4 creation ' +
-        'path), attributed to the SUBMITTING cross-org account (a real ' +
-        'authenticated `submittedByUserId`, not an external/anonymous ' +
-        'submitter), scoped to the public project. Gated by 6.11.3’s ' +
-        '`canSubmitToTriage` (true for any authed account on a public project) ' +
-        '— NOT `canEdit`. Rate-limited + abuse-guarded per the 6.10.4 ' +
-        'precedent (per-account throttle, size cap), since this is an ' +
-        'internet-facing write.\n' +
-        '- **Duplicate detection (BEFORE create):** a service method that, ' +
-        'given a draft title/text, finds matching EXISTING public requests for ' +
-        'the project (a deterministic title/text match — e.g. normalized ' +
-        'token / trigram similarity, reusing the 6.1.1 search where it fits; ' +
-        'NOT an AI call — AI dedupe is an Epic-7 enhancement) and returns the ' +
-        'candidates so the UI can offer **"upvote this instead"**. If the user ' +
-        'chooses an existing request, NO new item is created — the flow hands ' +
-        'off to the 6.11.6 upvote. If they choose "submit as new", the create ' +
-        'path runs. The match read must respect the public projection (it only ' +
-        'searches public-facing requests) and the triage queue (a duplicate of ' +
-        'a still-in-triage request is still surfaceable).\n\n' +
-        'Stay 4-layer: routes parse + call one service method; the service owns ' +
-        'the transaction + the throttle; creation goes through ' +
-        '`workItemsService`.\n\n' +
+        'The service + APIs an admin uses to clear the queue, implementing the ' +
+        '6.11.2 action taxonomy (the verified Linear set). Every action ' +
+        'mutates through `workItemsService` and honours 6.4 permissions + the ' +
+        'kind-parent matrix:\n\n' +
+        '- **Accept → backlog:** clear the triage marker, place the item in ' +
+        'the backlog at the team default status, optional comment. (Linear: ' +
+        'accept "move[s] the issue to your team’s default status".)\n' +
+        '- **Promote → sprint / epic / story:** clear the triage marker + set ' +
+        'parent + set position/`backlogRank` via `workItemsService` ' +
+        '(re-parent honouring the kind-parent matrix). The same item now ' +
+        'appears in the tree with its full thread.\n' +
+        '- **Decline:** move to a canceled terminal status + optional ' +
+        'comment; it leaves the queue. (Linear: decline → Canceled.)\n' +
+        '- **Mark-duplicate / merge:** pick a canonical item; cancel the ' +
+        'duplicate and fold its comments + attachments into the canonical ' +
+        'item (mirror Linear moving attachments/customer-requests to the ' +
+        'canonical issue), recording the duplicate-of link.\n' +
+        '- **Snooze / unsnooze:** set `snoozedUntil`; the item drops out of ' +
+        'the active queue until that time OR new activity (a comment / edit) ' +
+        'returns it, whichever first.\n\n' +
+        'One service method = one transaction; reads that gate a write take ' +
+        '`tx` + `SELECT FOR UPDATE` where a concurrent triage action could ' +
+        'race the same item (lock-before-read-derived-update). Routes are ' +
+        'thin; typed errors map to status codes.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- A cross-org authenticated account submits a request on a public ' +
-        'project → a triage `work_item` is created via `workItemsService`, ' +
-        'attributed to that account, invisible to the normal tree (it shows in ' +
-        'the project’s triage queue); gated by `canSubmitToTriage`, NOT ' +
-        '`canEdit`; rate-limited (rapid repeats throttle with a typed error, ' +
-        'not a 500).\n' +
-        '- The duplicate-detection method returns matching existing public ' +
-        'requests for a draft title BEFORE creation; choosing an existing one ' +
-        'creates NO new item and routes to upvote (6.11.6); choosing "submit ' +
-        'as new" creates the item.\n' +
-        '- The match is deterministic (no AI call) and searches only ' +
-        'public-facing requests; no raw Prisma in the route; creation reuses ' +
-        '6.10.4’s path (no second submissions table).\n\n' +
+        '- Accept places the item in the backlog at the default status; ' +
+        'promote sets parent + position via `workItemsService` respecting the ' +
+        'kind-parent matrix; both clear the triage marker so the item enters ' +
+        'the tree.\n' +
+        '- Decline cancels + optionally comments; the item leaves the ' +
+        'queue.\n' +
+        '- Mark-duplicate/merge cancels the duplicate, folds its comments + ' +
+        'attachments into the canonical item, and records the duplicate-of ' +
+        'link.\n' +
+        '- Snooze removes the item from the active queue until the chosen ' +
+        'time or new activity; each action is permission-checked (6.4) and ' +
+        'transactional (FOR UPDATE where it gates a write).\n\n' +
         '## Context refs\n\n' +
-        '- 6.11.3 — `canSubmitToTriage` (the grant this checks) + the public ' +
-        'projection the match respects.\n' +
-        '- `scripts/plan-seed/data/story-6.10.ts` § 6.10.4 (the intake ' +
-        'creation path REUSED) + § 6.10.3 (the triage queue the item lands ' +
-        'in).\n' +
-        '- `motir-core/lib/services/workItemsService.ts` — the create ' +
-        'authority; the 6.1.1 FilterAST search (shipped) — the match read ' +
-        'reuses it where it fits.\n' +
-        '- Canny duplicate detection ' +
-        '(https://canny.io/use-cases/feature-request-management) — the ' +
-        '"upvote the existing request instead of creating a dupe" behaviour.\n' +
-        '- `motir-core/CLAUDE.md` § 4-layer; the 6.10.4 rate-limit precedent.',
-      dependsOn: ['6.11.3', '6.10.4'],
+        '- 6.11.2 — the action taxonomy + semantics.\n' +
+        '- 6.11.3 — the triage marker + snooze columns the actions mutate.\n' +
+        '- `motir-core/lib/services/workItemsService.ts` — the re-parent / ' +
+        'rank / status write authority.\n' +
+        '- Linear Triage (https://linear.app/docs/triage) — accept/decline/' +
+        'merge/snooze behaviour.\n' +
+        '- `motir-core/CLAUDE.md` § 4-layer + one-method-one-transaction; ' +
+        'the lock-before-read-derived-update rule.',
+      dependsOn: ['6.11.3'],
     },
     {
       id: '6.11.6',
-      title:
-        'Upvoting + comments on public requests — the vote model (the demand signal the triage queue sorts by)',
+      title: 'Triage inbox UI — queue + detail + actions (paginated)',
+      status: 'blocked',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 65,
+      descriptionMd:
+        'Build the admin triage inbox per the 6.11.1 design, over the 6.11.3 ' +
+        'queue read + the 6.11.5 actions service. A paginated/infinite queue ' +
+        'list (kind icon, title, submitter [member avatar OR external chip], ' +
+        'age, snippet) + a detail pane (full body, comments, attachments, ' +
+        'attribution) + the action bar wiring Accept, Promote (the backlog / ' +
+        'sprint / epic / story parent + position picker), Decline, Mark ' +
+        'duplicate / Merge (the canonical-item picker), and Snooze (the time ' +
+        'picker). It uses ONLY shipped `components/ui/*` primitives + ' +
+        '`--el-*` / `[data-display-style]` tokens (no Tier-0 `--color-*`, no ' +
+        'raw spacing/radius), renders the empty state ("No items to ' +
+        'triage"), and is paginated (finding #57). The promote/merge pickers ' +
+        'reuse the existing item-picker / parent-picker primitives.\n\n' +
+        'Watch the Radix-portal-in-dialog gotcha if the promote/merge picker ' +
+        'is a popover rendered inside a modal (gate the portal on not-in-' +
+        'dialog).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- The inbox renders the queue (paginated/infinite, newest-first), ' +
+        'the detail pane, and every action from 6.11.1, matching the design ' +
+        'asset.\n' +
+        '- Accept / promote / decline / merge / snooze call the 6.11.5 ' +
+        'service and reflect the result (the item leaves the queue on a ' +
+        'terminal action); the promote picker offers backlog / sprint / epic ' +
+        '/ story + position.\n' +
+        '- Only `--el-*` + `[data-display-style]` tokens + shipped ' +
+        '`components/ui/*`; the empty + loading + error states render; AA ' +
+        'contrast holds for the external chip + the destructive Decline.\n' +
+        '- A promoted item disappears from the queue and (verified in 6.11.9) ' +
+        'appears in the tree.\n\n' +
+        '## Context refs\n\n' +
+        '- 6.11.1 (design asset — required), 6.11.5 (the actions service), ' +
+        '6.11.3 (the queue read).\n' +
+        '- `motir-core/components/ui/*` + `app/globals.css` token layers; ' +
+        'the existing item-picker / parent-picker primitives.\n' +
+        '- `motir-core/CLAUDE.md` § colour + shape tokens; the ' +
+        'portal-popover-in-Radix-Dialog gotcha note.',
+      dependsOn: ['6.11.1', '6.11.5'],
+    },
+    {
+      id: '6.11.7',
+      title: 'Submission form UI — in-app widget + the public portal form',
       status: 'blocked',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
       descriptionMd:
-        'The two remaining public-viewer writes — UPVOTE and COMMENT — over ' +
-        'the 6.11.3 `PublicRequestVote` model + the 6.10.3 queue. Per ' +
-        '6.11.2:\n\n' +
-        '- **Upvote (one per account per item, server-enforced):** a service + ' +
-        'route that records a `PublicRequestVote(workItemId, userId)` for the ' +
-        'signed-in account, gated by 6.11.3’s `canUpvotePublicRequest` (any ' +
-        'authed account on a public project) — NOT `canEdit`. The unique ' +
-        '`(workItemId, userId)` makes a second upvote a no-op / toggle (never a ' +
-        'double count); the vote COUNT becomes a sort key the 6.10.3 triage ' +
-        'queue reads (so the project admin sees the highest-demand requests ' +
-        'first — the demand signal). Lock-before-read-derived-update where a ' +
-        'concurrent vote could race the count.\n' +
-        '- **Comment on a public request:** a service + route that adds a ' +
-        'comment to the public request, attributed to the signed-in cross-org ' +
-        'account, gated by `canCommentPublicRequest` — NOT `canEdit`. These ' +
-        'PUBLIC-REQUEST comments are visible on the public surface (distinct ' +
-        'from the issue’s INTERNAL comments, which the 6.11.4 projection hides ' +
-        '— 6.11.2 fixes that line). Reuse the existing comment ' +
-        'model/service where the request is a `work_item` with a comment ' +
-        'thread; mark the public-request comments as public-visible.\n\n' +
-        'Stay 4-layer: routes parse + call one service method; the vote/comment ' +
-        'writes own their transaction; the count sort threads into the 6.10.3 ' +
-        'queue read.\n\n' +
+        'Build the two submission surfaces per the 6.11.1 design, over the ' +
+        '6.11.4 intake endpoints:\n\n' +
+        '- **In-app widget** — a compact "report a bug / request a feature" ' +
+        'modal/popover (type toggle bug|feature, title, description, optional ' +
+        'attachment) reachable from the app shell; on submit it posts to the ' +
+        'authenticated intake endpoint and confirms.\n' +
+        '- **Public portal form** — an unauthenticated, branded, single-' +
+        'column page at the project’s shareable form URL: the same ' +
+        'fields plus the external submitter’s name/email, a “thanks, we ' +
+        'got it” confirmation state, and graceful rate-limit / validation ' +
+        'error states. It exposes NO tree data and no app chrome that ' +
+        'implies authenticated access.\n\n' +
+        'Both use ONLY shipped `components/ui/*` + `--el-*` / ' +
+        '`[data-display-style]` tokens (no Tier-0 `--color-*`, no raw ' +
+        'spacing/radius), matching the design asset.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- A signed-in cross-org account upvotes a public request → one vote ' +
-        'recorded; a second upvote from the same account is a no-op / toggle ' +
-        '(the unique `(workItemId, userId)` holds, no double count); gated by ' +
-        '`canUpvotePublicRequest`, NOT `canEdit`.\n' +
-        '- The vote count is a sort key the 6.10.3 triage queue reads ' +
-        '(highest-demand-first); a concurrent vote serializes via the row lock ' +
-        '(no lost update).\n' +
-        '- A signed-in cross-org account comments on a public request → the ' +
-        'comment is attributed + public-visible; gated by ' +
-        '`canCommentPublicRequest`, NOT `canEdit`; the issue’s internal ' +
-        'comments remain hidden by the 6.11.4 projection.\n' +
-        '- 4-layer respected (vote/comment writes through a service → ' +
-        'repository / `workItemsService`; no raw Prisma in routes).\n\n' +
-        '## Context refs\n\n' +
-        '- 6.11.3 — the `PublicRequestVote` model + ' +
-        '`canUpvotePublicRequest` / `canCommentPublicRequest` grants.\n' +
-        '- `scripts/plan-seed/data/story-6.10.ts` § 6.10.3 — the triage queue ' +
-        'the vote-count sort feeds.\n' +
-        '- `motir-core/lib/services/workItemsService.ts` + the existing ' +
-        'comment model/service — the comment thread reused.\n' +
-        '- Canny feature voting ' +
-        '(https://canny.io/blog/feature-voting-best-practices/) — the upvote ' +
-        '+ comment-on-the-request behaviour.\n' +
-        '- `motir-core/CLAUDE.md` § 4-layer + the ' +
-        'lock-before-read-derived-update rule.',
-      dependsOn: ['6.11.3', '6.10.3'],
-    },
-    {
-      id: '6.11.7',
-      title: 'The public roadmap view — status tracking (submitted → planned → in_progress → done)',
-      status: 'blocked',
-      type: 'code',
-      executor: 'coding_agent',
-      estimateMinutes: 55,
-      descriptionMd:
-        'Build the public ROADMAP per the 6.11.1 design, over the 6.11.4 ' +
-        'public projection. The status-grouped, vote-counted public view of a ' +
-        'project’s public-facing items — the Canny / Productboard / Featurebase ' +
-        'public-roadmap shape.\n\n' +
-        '- **Status grouping:** columns by a public-facing status mapping — ' +
-        '**submitted → planned → in progress → done** — derived from the ' +
-        'project’s workflow statuses (decide the mapping from the real status ' +
-        'set to these four public buckets; a status not meant to be public — ' +
-        'e.g. canceled / triage — is NOT shown). Each card shows the request ' +
-        'title + kind + **vote count** + a link to the public request detail ' +
-        '(6.11.6 upvote/comment).\n' +
-        '- **The read** goes through the public projection (6.11.4) so no ' +
-        'internal field leaks; it is paginated / lazy per column (the at-scale ' +
-        'rule — a busy public roadmap is unbounded). As the project admin ' +
-        'advances an item’s status (via the normal internal flow), the public ' +
-        'roadmap reflects the new bucket.\n' +
-        '- **The view UI** uses ONLY shipped `components/ui/*` + `--el-*` / ' +
-        '`[data-display-style]` tokens, renders the empty-roadmap + loading + ' +
-        'error states, and uses the palette for the per-status tones (not ' +
-        'grey-only).\n\n' +
-        'Stay 4-layer: the route parses + calls one service method returning ' +
-        'the public roadmap projection (grouped + counted); no raw Prisma in ' +
-        'the route.\n\n' +
-        '## Acceptance criteria\n\n' +
-        '- The public roadmap renders status-grouped columns (submitted → ' +
-        'planned → in progress → done) of public-facing items, each with its ' +
-        'vote count + a link to the request, per the 6.11.1 design; ' +
-        'non-public statuses (canceled / triage) are not shown.\n' +
-        '- The read uses the 6.11.4 public projection (no internal field leaks) ' +
-        'and is paginated / lazy; advancing an item’s status moves it to the ' +
-        'right bucket.\n' +
+        '- The in-app widget submits to the authenticated endpoint and shows ' +
+        'a success confirmation; it is reachable from the shell.\n' +
+        '- The public form renders unauthenticated at the shareable URL, ' +
+        'submits with external attribution, shows the confirmation state, and ' +
+        'renders the rate-limit + validation error states gracefully (no raw ' +
+        '500).\n' +
         '- Only `--el-*` + `[data-display-style]` tokens + shipped ' +
-        '`components/ui/*`; empty / loading / error states render; per-status ' +
-        'tones use the palette (AA-safe).\n' +
-        '- 4-layer respected (the roadmap projection in the service/repository, ' +
-        'no raw Prisma in the route).\n\n' +
+        'primitives; the public form leaks no tree/project internals.\n' +
+        '- Both match the 6.11.1 design asset.\n\n' +
         '## Context refs\n\n' +
-        '- 6.11.4 — the public projection the roadmap read derives from + the ' +
-        'design (6.11.1) it renders.\n' +
-        '- `motir-core/lib/workflows/defaultWorkflow.ts` + the project status ' +
-        'set — the source statuses mapped to the four public buckets.\n' +
-        '- Canny roadmap (https://canny.io/use-cases/feature-request-' +
-        'management) + Productboard portal ' +
-        '(https://support.productboard.com/hc/en-us/articles/360056315454) — ' +
-        'the status-column + vote-count public roadmap mirrored.\n' +
-        '- `motir-core/components/ui/*` + `app/globals.css`; ' +
-        '`motir-core/CLAUDE.md` § colour + shape tokens.',
-      dependsOn: ['6.11.4'],
+        '- 6.11.1 (design asset — required), 6.11.4 (the intake endpoints + ' +
+        'the form token).\n' +
+        '- `motir-core/components/ui/*` + `app/globals.css` token layers.\n' +
+        '- `motir-core/CLAUDE.md` § colour + shape tokens.',
+      dependsOn: ['6.11.1', '6.11.4'],
     },
     {
       id: '6.11.8',
-      title: 'Project settings — the "make public" toggle + the shareable public link',
+      title: 'Tests (vitest) — read-exclusion everywhere + promote/decline/dedupe/snooze',
       status: 'blocked',
-      type: 'code',
+      type: 'test',
       executor: 'coding_agent',
-      estimateMinutes: 45,
+      estimateMinutes: 60,
       descriptionMd:
-        'Extend project settings with the FOUR-level Access control + the ' +
-        'shareable public link, per the 6.11.1 design, over the 6.11.3 access ' +
-        'extension. This is how a project admin turns a project public.\n\n' +
-        '- **The make-public toggle:** extend the existing 6.4 Access control ' +
-        '(open / limited / private) to the FOUR levels ' +
-        '**public > open > limited > private**, with the explanatory copy ' +
-        '(public = any signed-in Motir account, across orgs, can view + ' +
-        'submit/upvote/comment). Setting `public` calls the 6.4 ' +
-        '`setAccessLevel` service (now accepting the new enum value); ' +
-        'project-admin-gated (reuse the 6.4 project-admin check — non-admins ' +
-        'see it read-only).\n' +
-        '- **The shareable public link:** a per-project public link (a stable ' +
-        'public slug / route to the public view) shown when the project is ' +
-        'public, with copy + disable + rotate. The link is an ENTRY POINTER — ' +
-        'it still requires sign-in (account-required, not an unauthenticated ' +
-        'bypass); decide the slug model so a project can rotate/disable its ' +
-        'public link without changing the project key.\n' +
-        '- **Design-system compliance:** ONLY `--el-*` + `[data-display-' +
-        'style]` tokens + shipped `components/ui/*`; the access-level copy + ' +
-        'the account-required note per the 6.11.1 design; inline edits follow ' +
-        'the no-whole-tree-refresh rule (a success response is the ' +
-        'confirmation).\n\n' +
-        'Stay 4-layer: the route parses + calls one service method ' +
-        '(`setAccessLevel` / the link rotate/disable); project-admin-gated; no ' +
-        'raw Prisma in the route.\n\n' +
+        'Lock the two load-bearing guarantees: (1) triage items are excluded ' +
+        'from EVERY normal read, and (2) the actions do exactly what the ' +
+        'taxonomy says. On a real Postgres (the standing rule), covering:\n\n' +
+        '- **Exclusion at every read** — create a triage item, then assert it ' +
+        'is ABSENT from: the issue tree, each board read, each list/saved-' +
+        'view read, the ready set, and a 6.1.1 FilterAST search that matches ' +
+        'its title; and assert it IS present in the triage-queue read. (A ' +
+        'parameterized test over the read set so adding a new read without ' +
+        'the exclusion is caught.)\n' +
+        '- **Intake** — in-app submit attributes to the user; the public ' +
+        'form attributes externally and is rate-limited (rapid repeats ' +
+        'throttle with a typed error); a disabled/invalid form token is ' +
+        'rejected.\n' +
+        '- **Actions** — accept lands it in the backlog at default status; ' +
+        'promote sets parent + position via `workItemsService` and the item ' +
+        'now appears in the tree/search; decline cancels it; mark-duplicate ' +
+        'folds comments+attachments into the canonical item and cancels the ' +
+        'duplicate; snooze hides it from the queue and new activity returns ' +
+        'it. Each respects 6.4 permissions.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- The Access control renders all FOUR levels ' +
-        '(public > open > limited > private) with copy; setting `public` ' +
-        'persists via the 6.4 `setAccessLevel` service; project-admin-gated ' +
-        '(read-only for non-admins).\n' +
-        '- A shareable public link appears when the project is public, with ' +
-        'copy / disable / rotate; the link requires sign-in (account-required, ' +
-        'no unauthenticated bypass); rotating/disabling does not change the ' +
-        'project key.\n' +
-        '- Only `--el-*` + `[data-display-style]` tokens + shipped ' +
-        'primitives; matches the 6.11.1 design; inline edits use the ' +
-        'success-response-is-confirmation pattern.\n' +
-        '- 4-layer respected (route → service; no raw Prisma in the route).\n\n' +
+        '- The exclusion is asserted at tree, every board read, every list ' +
+        'read, ready set, AND FilterAST search; the queue-only read is ' +
+        'asserted; the parameterized read-set test fails if a read omits the ' +
+        'exclusion.\n' +
+        '- Promote/accept/decline/merge/snooze each assert their post-state ' +
+        '(parent/position/status/queue-presence) against a repository read.\n' +
+        '- The public-form rate-limit + invalid-token paths are covered; ' +
+        'promote/decline assert 6.4 permission enforcement.\n' +
+        '- New service/repository code respects the per-file coverage gate ' +
+        '(CLAUDE.md § coverage); tests use the real Postgres helper.\n\n' +
         '## Context refs\n\n' +
-        '- 6.11.1 (design asset — required), 6.11.3 (the `public` enum value + ' +
-        'access extension).\n' +
-        '- `scripts/plan-seed/data/story-6.4.ts` § 6.4.4 (`setAccessLevel` ' +
-        'service) + § 6.4.5 (the project-settings Access UI this extends) — ' +
-        'mirror + extend, do not fork.\n' +
-        '- `motir-core/components/ui/*` + `app/globals.css`; ' +
-        '`motir-core/CLAUDE.md` § 4-layer + § colour/shape tokens + the ' +
-        'inline-edit no-whole-tree-refresh rule.',
-      dependsOn: ['6.11.1', '6.11.3'],
+        '- 6.11.3 (exclusion + queue read), 6.11.4 (intake), 6.11.5 ' +
+        '(actions).\n' +
+        '- `motir-core/CLAUDE.md` § tests-use-real-Postgres + the ' +
+        'per-file coverage gate.\n' +
+        '- `tests/helpers/db.ts` — the truncate-between-tests harness.',
+      dependsOn: ['6.11.4', '6.11.5'],
     },
     {
       id: '6.11.9',
       title:
-        'Tests (vitest) — access enforcement (cross-org read, writes blocked except triage/vote/comment) + dedupe + voting',
+        'E2E (playwright) — submit a bug → lands in triage (not the tree) → admin promotes → appears in the tree',
       status: 'blocked',
-      type: 'test',
+      type: 'subtask',
       executor: 'coding_agent',
       estimateMinutes: 55,
       descriptionMd:
-        'Lock the load-bearing guarantees: (1) `public` access enforces ' +
-        'cross-org READ but blocks every write except the three grants, (2) ' +
-        'duplicate detection matches, and (3) voting is one-per-account. On a ' +
-        'real Postgres (the standing rule), covering:\n\n' +
-        '- **Access matrix.** A cross-org account (no membership in the ' +
-        'project’s org/workspace) can READ a `public` project ' +
-        '(`canBrowse` true cross-org) but `canEdit` is FALSE — assert every ' +
-        'normal write (create / move / assign / status / field-edit) is ' +
-        'rejected. The three grants succeed: `canSubmitToTriage`, ' +
-        '`canUpvotePublicRequest`, `canCommentPublicRequest` each allow their ' +
-        'write for a cross-org authed account on a public project. A NON-public ' +
-        'project the same account hits is 404-not-403 (the cross-org read ' +
-        'exception is public-only). An UNauthenticated request is rejected ' +
-        '(account-required).\n' +
-        '- **The public projection.** Assert the public read shape EXCLUDES ' +
-        'assignees, estimates, and internal comments from the payload (not just ' +
-        'the DOM) while including the public-safe fields + public-request ' +
-        'comments.\n' +
-        '- **Duplicate detection.** A draft title matching an existing public ' +
-        'request returns the candidate(s) before creation; choosing it creates ' +
-        'NO new item; "submit as new" creates one. The match is deterministic ' +
-        '(no AI).\n' +
-        '- **Voting.** One vote per account per item (the unique ' +
-        '`(workItemId, userId)` holds; a second upvote is a no-op / toggle, no ' +
-        'double count); the vote count is the 6.10.3 queue sort key (assert the ' +
-        'queue orders by demand); a concurrent vote serializes via the row ' +
-        'lock.\n\n' +
+        '**Type:** e2e (playwright) — the full intake→triage→' +
+        'promote loop across both surfaces, proving the exclusion + promotion ' +
+        'end to end in a browser.\n\n' +
+        'Flow: (1) submit a bug via the in-app widget (and/or the public ' +
+        'portal form) for the `PROD` project; (2) confirm it appears in the ' +
+        'triage inbox and is ABSENT from the issue tree / a board / a list / ' +
+        'search; (3) as an admin, promote it from the inbox to the backlog ' +
+        '(or under a chosen epic/story); (4) confirm it is now GONE from the ' +
+        'triage queue and PRESENT in the tree (and matches in search). Add a ' +
+        'second leg exercising decline (→ it leaves the queue, never ' +
+        'enters the tree).\n\n' +
+        'Mind the known prodect e2e selector + harness gotchas (heading ' +
+        'level/exact-name on empty states; the combobox option name = label + ' +
+        'secondary; run the dev server yourself + reuse it).\n\n' +
         '## Acceptance criteria\n\n' +
-        '- The access matrix is asserted: cross-org READ allowed on public, ' +
-        'every normal write blocked, the three grants allowed, non-public ' +
-        '404-not-403 cross-org, unauthenticated rejected.\n' +
-        '- The public projection’s hidden-field exclusion is asserted at the ' +
-        'payload level; duplicate detection (match → upvote-existing vs ' +
-        'submit-new) and one-vote-per-account + the queue sort are each ' +
-        'asserted.\n' +
-        '- New service/repository code respects the per-file coverage gate ' +
-        '(CLAUDE.md § coverage); the empty-input / no-membership / ' +
-        'already-voted guards each have a direct test; tests use the real ' +
-        'Postgres helper.\n\n' +
+        '- A submitted bug appears in the triage inbox and is verifiably ' +
+        'absent from the tree/board/list/search before promotion.\n' +
+        '- Promoting it removes it from the queue and makes it appear in the ' +
+        'tree (and search) under the chosen parent.\n' +
+        '- A declined item leaves the queue and never appears in the tree.\n' +
+        '- The public-form leg lands an external submission in the same ' +
+        'inbox.\n\n' +
         '## Context refs\n\n' +
-        '- 6.11.3 (access extension + grants + vote model), 6.11.4 (the ' +
-        'projection), 6.11.5 (dedupe), 6.11.6 (voting + comments).\n' +
-        '- `motir-core/CLAUDE.md` § tests-use-real-Postgres + the per-file ' +
-        'coverage gate.\n' +
-        '- `motir-core/tests/helpers/db.ts` — the per-test truncation harness.',
-      dependsOn: ['6.11.5', '6.11.6'],
-    },
-    {
-      id: '6.11.10',
-      title:
-        'E2E (playwright) — a second account (different org) reads a public project read-only, submits (dedupe → upvote), comments; a non-public project is not viewable cross-org',
-      status: 'blocked',
-      type: 'e2e',
-      executor: 'coding_agent',
-      estimateMinutes: 55,
-      descriptionMd:
-        '**Type:** e2e (playwright) — the full cross-org public-project loop ' +
-        'in a browser, proving the access exception + the portal set end to ' +
-        'end with a SECOND Motir account in a DIFFERENT org.\n\n' +
-        'The flow:\n\n' +
-        '1. As the `motir` project admin, set the project **public** in ' +
-        'project settings (6.11.8) and copy the shareable public link.\n' +
-        '2. Sign in as a SECOND, seeded Motir account in a DIFFERENT org with ' +
-        'NO membership in the public project’s org/workspace. Open the public ' +
-        'link → the read-only board / issue list + the public roadmap render; ' +
-        'assert there are NO edit affordances and that ' +
-        '**assignees / estimates / internal comments are absent**.\n' +
-        '3. Submit a feature request whose title matches an EXISTING public ' +
-        'request → the duplicate-detection surfaces the existing one → choose ' +
-        '**"upvote this instead"** → the vote count increments and NO duplicate ' +
-        'is created. Then add a **comment** on that public request → it ' +
-        'appears.\n' +
-        '4. Submit a genuinely-NEW request → it lands in the project’s triage ' +
-        'queue (verify as the admin it appears there, attributed to the ' +
-        'second account, and is absent from the normal tree until promoted).\n' +
-        '5. Confirm the cross-org EXCLUSION: the same second account navigating ' +
-        'to a NON-public project of that org is NOT able to view it ' +
-        '(404-not-403) — proving public is the only cross-org read exception.\n\n' +
-        'Mind the prodect e2e selector + harness gotchas (combobox option = ' +
-        'label + secondary; exact/level on heading selectors; the empty-state ' +
-        'headings; run the dev server yourself + reuse it). Drive the real UI, ' +
-        'not API shortcuts; use a second browser context for the second ' +
-        'account.\n\n' +
-        '## Acceptance criteria\n\n' +
-        '- The second (different-org) account opens the public project ' +
-        'read-only: board / issues / roadmap render, no edit affordances, ' +
-        'internal fields (assignee / estimate / internal comments) absent.\n' +
-        '- Submitting a matching-title request surfaces the dedupe and the ' +
-        '"upvote this instead" path (vote increments, no duplicate); a comment ' +
-        'on the request appears; a genuinely-new request lands in the admin’s ' +
-        'triage queue attributed to the second account, absent from the tree.\n' +
-        '- The second account CANNOT view a non-public project of that org ' +
-        '(404-not-403) — public is the only cross-org read exception.\n' +
-        '- The test drives the real UI (no API-only shortcuts), uses a second ' +
-        'browser context, and follows the prodect E2E selector + run-harness ' +
-        'conventions.\n\n' +
-        '## Context refs\n\n' +
-        '- 6.11.4 (the public view) + 6.11.8 (the make-public toggle + share ' +
-        'link) — the surfaces driven; 6.11.5/6.11.6/6.11.7 (submit/dedupe/' +
-        'upvote/comment/roadmap) exercised through them.\n' +
-        '- `scripts/plan-seed/data/story-6.10.ts` § 6.10.9 — the triage e2e ' +
-        'whose harness + the promote-from-queue step this builds on.\n' +
-        '- `motir-core/e2e/` — the existing Playwright specs + the run-harness ' +
-        '+ selector conventions to mirror.',
-      dependsOn: ['6.11.4', '6.11.8'],
+        '- 6.11.6 (inbox UI) + 6.11.7 (submission UIs) — the surfaces driven.\n' +
+        '- The prodect e2e selector + run-harness gotcha notes (empty-state ' +
+        'headings, combobox option naming, reuse-existing-server).\n' +
+        '- `tests/e2e/*` — the existing Playwright setup to mirror.',
+      dependsOn: ['6.11.6', '6.11.7'],
     },
   ],
 };

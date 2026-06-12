@@ -27,7 +27,7 @@ import type { PlanStory } from '../types';
  *   billing correction) and assigns tiers, where 7.12 itself only ever modelled
  *   the row shape. The ledger stays in motir-ai; the console reaches it over the
  *   7.1 boundary, never holding billing tables in core.
- * - **Org lifecycle (10.3.3)** — suspend / reactivate an `Organization` (6.9's
+ * - **Org lifecycle (10.3.3)** — suspend / reactivate an `Organization` (6.10's
  *   root-account tier). A suspended org GATES all access for every member of every
  *   workspace under it (a tenant-wide tripwire for non-payment / abuse), and the
  *   action is audited with a reason. Reactivation is the symmetric, audited
@@ -61,7 +61,7 @@ import type { PlanStory } from '../types';
  * CREDIT / ledger data is motir-ai's (7.12, the closed side); the ORG lifecycle
  * state, the per-org FEATURE FLAGS, the IMPERSONATION grants, and the AUDIT LOG
  * are platform-operational facts about motir-core tenants and live in motir-core's
- * DB (the `Organization` from 6.9 is a core entity; suspension/flags gate core
+ * DB (the `Organization` from 6.10 is a core entity; suspension/flags gate core
  * access; the audit log records core-side staff actions). 10.3.2's credit ops
  * reach the ledger over the 7.1 boundary (the 7.12 read/write path), exactly as
  * 7.12.5's display does — the console never grows its own billing tables. This
@@ -73,12 +73,12 @@ import type { PlanStory } from '../types';
  *   - 10.1.3 (the gated, audited cross-tenant admin surface) — backward, same epic.
  *   - 7.12.3 (the `CreditLedger` / `CreditTransaction` / `PlanTier` the credit ops
  *     write over) — Epic 7, backward.
- *   - 6.9.4 (the org-scoped services + access gating suspend/reactivate hook into)
+ *   - 6.10.4 (the org-scoped services + access gating suspend/reactivate hook into)
  *     — Epic 6, backward.
  *   - 10.3.x (same-story chaining) and the same-story design gate (10.3.1).
  * No dep points forward. Statuses follow the rule: 10.3.1 (design, `dependsOn: []`)
  * is `planned`; everything chained behind it or behind a not-yet-done 10.1.x /
- * 7.12.x / 6.9.x id is `blocked`.
+ * 7.12.x / 6.10.x id is `blocked`.
  *
  * **The design gate fires (Principle #13).** 10.3 ships a real staff-facing
  * surface — the ops toolkit (credit grant/adjust, plan/tier mgmt, org suspend,
@@ -125,7 +125,7 @@ export const story_10_3: PlanStory = {
     'the authenticated STAFF path that writes the `grant` / `adjustment` rows (a ' +
     'support credit, a goodwill refund, a billing correction) and assigns tiers, ' +
     'over the 7.1 boundary — the ledger stays in motir-ai.\n' +
-    '- **Org lifecycle** — suspend / reactivate an `Organization` (6.9). A ' +
+    '- **Org lifecycle** — suspend / reactivate an `Organization` (6.10). A ' +
     'suspended org GATES all access for every member of every workspace under it ' +
     '(non-payment / abuse tripwire); the action is audited with a reason.\n' +
     '- **Support impersonation** — enter a tenant to reproduce an issue, ' +
@@ -156,7 +156,7 @@ export const story_10_3: PlanStory = {
   verificationRecipeMd:
     '- Pull the Story branch; bring up motir-core (`:3000`) + motir-ai (its dev ' +
     'port, each pointed at the other), seeded with a platform-staff user (10.1), ' +
-    'at least one `Organization` (6.9) with a workspace + project + a few work ' +
+    'at least one `Organization` (6.10) with a workspace + project + a few work ' +
     'items, and a `CreditLedger` for that tenant (7.12).\n' +
     '- **Credit ops (10.3.2).** As staff, open a tenant’s billing-ops panel: ' +
     'GRANT 500 credits with a reason → a `grant` `CreditTransaction` appears ' +
@@ -421,14 +421,14 @@ export const story_10_3: PlanStory = {
       executor: 'coding_agent',
       estimateMinutes: 60,
       descriptionMd:
-        'A staff operator can SUSPEND or REACTIVATE an `Organization` (6.9’s ' +
+        'A staff operator can SUSPEND or REACTIVATE an `Organization` (6.10’s ' +
         'root-account tier). A suspended org is a tenant-wide tripwire: it GATES ' +
         'all access for every member of every workspace under it (the ' +
         'non-payment / abuse lever), and both the suspend and the reactivate are ' +
         'audited with a reason. This is the blunt account-level control; the ' +
         'finer-grained abuse/moderation queue is a deferred future 10.x (named in ' +
         'the header), not here.\n\n' +
-        '**Schema (motir-core — the org is a core entity from 6.9).** Add ' +
+        '**Schema (motir-core — the org is a core entity from 6.10).** Add ' +
         'the suspension state to `Organization`: `{ suspendedAt?, suspendedReason?, ' +
         'suspendedByUserId? }` (or a small `OrganizationSuspension` row if a ' +
         'history of suspend/reactivate events is wanted — prefer the row so ' +
@@ -437,7 +437,7 @@ export const story_10_3: PlanStory = {
         'clean.\n\n' +
         '**The gate (the load-bearing part).** Suspension must DENY access ' +
         'everywhere a tenant member would normally be admitted — hook the ' +
-        '6.9.4 org-scoped access gating (org membership already gates workspace ' +
+        '6.10.4 org-scoped access gating (org membership already gates workspace ' +
         'access there): when the resolved org is suspended, the access check ' +
         'fails CLEANLY with a typed `OrganizationSuspendedError` that the route ' +
         'layer maps to a clear state (a 403-with-reason for members, NOT a 500 ' +
@@ -454,11 +454,11 @@ export const story_10_3: PlanStory = {
         'action + reason. Reactivate is the symmetric reverse (clears / closes ' +
         'the suspension), also audited.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- `Organization` (6.9) carries suspension state (modelled as a ' +
+        '- `Organization` (6.10) carries suspension state (modelled as a ' +
         '`@relation`-clean schema, history-preserving preferred); a migration ' +
         'runs clean.\n' +
         '- Suspending an org GATES all access for every member of every ' +
-        'workspace under it via the 6.9.4 access gating — a member load is ' +
+        'workspace under it via the 6.10.4 access gating — a member load is ' +
         'refused with a typed `OrganizationSuspendedError` → a clear ' +
         'suspended state (not a 500, not a misleading 404); a sibling un-suspended ' +
         'org is unaffected; a platform-staff session is NOT gated.\n' +
@@ -468,9 +468,9 @@ export const story_10_3: PlanStory = {
         '- The gate adds no extra per-request round-trip (it rides the org ' +
         'resolution already performed).\n\n' +
         '## Context refs\n\n' +
-        '- 6.9.4 — the org-scoped services + access gating the suspension ' +
+        '- 6.10.4 — the org-scoped services + access gating the suspension ' +
         'gate hooks into (org membership gates workspace access).\n' +
-        '- 6.9.3 — the `Organization` + `Workspace.organizationId` schema ' +
+        '- 6.10.3 — the `Organization` + `Workspace.organizationId` schema ' +
         'the suspension state extends.\n' +
         '- 10.1.3 — the superadmin gate the suspend/reactivate route lives ' +
         'under.\n' +
@@ -478,7 +478,7 @@ export const story_10_3: PlanStory = {
         '- `motir-core/CLAUDE.md` § 4-layer + § FK-as-`@relation` + the ' +
         '404-not-403 tenant-guard convention (suspension is a 403-with-reason, ' +
         'distinct from the cross-tenant 404).',
-      dependsOn: ['10.1.3', '6.9.4'],
+      dependsOn: ['10.1.3', '6.10.4'],
     },
     {
       id: '10.3.4',
@@ -623,7 +623,7 @@ export const story_10_3: PlanStory = {
         'against the known registry (unknown key rejected), and is AUDITED ' +
         '(10.3.6) with actor + org + key + state + reason.\n\n' +
         '## Context refs\n\n' +
-        '- 6.9.3 — the `Organization` the flags are scoped to.\n' +
+        '- 6.10.3 — the `Organization` the flags are scoped to.\n' +
         '- 10.1.3 — the superadmin gate the flag-flip route lives under.\n' +
         '- 10.3.6 — the audit log each flip records to.\n' +
         '- The 7.x planning-dispatch / submit path — the `ai_planning` ' +

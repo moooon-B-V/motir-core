@@ -1098,9 +1098,9 @@ export const EPICS: EpicMeta[] = [
       'grants/adjustments, plan/tier management, org suspend/reactivate, time-boxed audited ' +
       'support impersonation, per-org feature flags / kill-switches, and a tamper-evident ' +
       '(hash-chained) admin audit log.\n\n' +
-      '**Builds backward on:** the Epic-6 **Organization** tier (6.9 — the billing entity usage ' +
+      '**Builds backward on:** the Epic-6 **Organization** tier (6.10 — the billing entity usage ' +
       'rolls up to), 7.12 metering + credit ledger, and 9.0 gateway spend. The **Triage inbox** ' +
-      '(bug/feature intake → promote) is a customer-facing PM feature and lives in Epic 6 (6.10), ' +
+      '(bug/feature intake → promote) is a customer-facing PM feature and lives in Epic 6 (6.11), ' +
       'not here. Future 10.x (named in the story headers, deferred not forgotten): abuse / content ' +
       'moderation, DSAR / compliance export-delete, status & maintenance banners, email-delivery ops.',
   },
