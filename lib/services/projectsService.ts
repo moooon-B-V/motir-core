@@ -1,13 +1,23 @@
 import { Prisma, type Project } from '@prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { projectKeyAliasRepository } from '@/lib/repositories/projectKeyAliasRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 import {
+  AliasNotFoundError,
   IdentifierCollisionError,
+  IdentifierReservedError,
+  IdentifierTakenError,
+  IdentifierUnchangedError,
+  InvalidAvatarError,
+  InvalidIdentifierError,
+  InvalidProjectNameError,
   ProjectNotFoundError,
   ProjectWorkspaceMismatchError,
 } from '@/lib/projects/errors';
+import { isValidAvatarColor, isValidAvatarIcon } from '@/lib/projects/avatar';
 import { toProjectDTO } from '@/lib/mappers/projectMappers';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { boardsService } from '@/lib/services/boardsService';
@@ -68,6 +78,25 @@ function normalizeIdentifier(identifier: string): string {
   if (cleaned.length === 0) return IDENTIFIER_FALLBACK;
   return cleaned.slice(0, IDENTIFIER_MAX_LENGTH).padEnd(IDENTIFIER_MIN_LENGTH, 'X');
 }
+
+// STRICT key-shape guard for an EXPLICIT key change (Story 6.8 `changeKey`),
+// distinct from `normalizeIdentifier` above: the create path COERCES a derived
+// or caller-supplied identifier into shape (pad/clamp), but an admin renaming
+// the key must be REJECTED on a malformed value rather than silently mutated —
+// renaming every issue to a key the admin never typed is a surprising,
+// hard-to-undo change (Jira likewise rejects a malformed key — rung 1). The
+// shape is the shipped column contract: 3–5 chars, uppercase A–Z / 0–9.
+const IDENTIFIER_SHAPE = /^[A-Z0-9]{3,5}$/;
+function isValidIdentifierShape(identifier: string): boolean {
+  return IDENTIFIER_SHAPE.test(identifier);
+}
+
+// Module-private sentinel: the create-path identifier the loop is about to use
+// is RESERVED by a project_key_alias (Story 6.8 — a new project must not take a
+// retired key). Thrown inside the create transaction so the existing
+// catch-and-re-suffix path advances to the next candidate, exactly as it does
+// for a P2002 unique violation. Never escapes the service.
+class ReservedIdentifierSentinel extends Error {}
 
 // Append a numeric suffix while staying within IDENTIFIER_MAX_LENGTH by
 // trimming the base end as the suffix grows.
@@ -149,6 +178,18 @@ export const projectsService = {
         const project = await withWorkspaceContext(
           { userId: input.actorUserId, workspaceId: input.workspaceId },
           async (tx) => {
+            // Reserved-key guard (Story 6.8): a new project must not take a key
+            // reserved by another project's retired-key alias. The alias table is
+            // a SEPARATE table from `project`, so a reserved key does NOT trip the
+            // project's unique index — it needs an explicit check. Throwing the
+            // sentinel rolls back this attempt and re-suffixes in the catch,
+            // exactly like a P2002 (nothing has been written yet).
+            const reserved = await projectKeyAliasRepository.findByWorkspaceAndIdentifier(
+              input.workspaceId,
+              identifier,
+              tx,
+            );
+            if (reserved) throw new ReservedIdentifierSentinel();
             const created = await projectRepository.create(
               { workspaceId: input.workspaceId, name: trimmedName, slug, identifier },
               tx,
@@ -168,8 +209,10 @@ export const projectsService = {
         );
         return toProjectDTO(project);
       } catch (err) {
-        if (isUniqueViolation(err)) {
-          // Unconditional re-suffix of BOTH fields — see method docstring.
+        // A P2002 (live identifier/slug collision) OR a reserved-alias hit both
+        // mean "this candidate is taken" — re-suffix BOTH fields and retry in a
+        // fresh transaction (see method docstring).
+        if (isUniqueViolation(err) || err instanceof ReservedIdentifierSentinel) {
           identifier = identifierWithSuffix(identifierBase, attempt + 1);
           slug = `${slugBase}-${randomSlugSuffix()}`;
           continue;
@@ -278,7 +321,7 @@ export const projectsService = {
         );
       },
     );
-    return browsable.map(toProjectDTO);
+    return browsable.map((project) => toProjectDTO(project));
   },
 
   /**
@@ -478,4 +521,198 @@ export const projectsService = {
       return toProjectDTO(first);
     });
   },
+
+  // ── Story 6.8 — edit project details + change project key ──────────────────
+  // All three write methods are PROJECT-ADMIN gated (the 6.4.3 capability, via
+  // projectAccessService.assertCanManage: a non-browser reads as
+  // ProjectNotFoundError → 404 so the project stays hidden; a browser who is not
+  // an admin → NotProjectAdminError → 403). The project is resolved by its
+  // workspace-scoped key INSIDE the transaction (one method = one transaction)
+  // so the gate read and the write share a snapshot, and a key naming a project
+  // in ANOTHER workspace is indistinguishable from a missing one (no existence
+  // leak — same shape as getByKey / projectMembersService).
+
+  /**
+   * Read a project's details (the editable Details surface, Story 6.8.4) — the
+   * DTO WITH `previousKeys` loaded. BROWSE-gated (assertCanBrowse): anyone who
+   * can see the project reads its details; the read-only-for-non-admins
+   * rendering is the UI's concern (6.4.6 grammar). Separate from `getByKey`
+   * (which the agent-dispatch endpoints use) precisely so the hot key-resolution
+   * path keeps its single project-row fetch with no alias join.
+   */
+  async getDetails(key: string, ctx: WorkspaceContext): Promise<ProjectDTO> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const project = await resolveProjectByKeyInTx(key, ctx.workspaceId, tx);
+      await projectAccessService.assertCanBrowse(project.id, ctx, tx);
+      const aliases = await projectKeyAliasRepository.findManyByProject(project.id, tx);
+      return toProjectDTO(project, aliases);
+    });
+  },
+
+  /**
+   * Update a project's name and/or avatar (Story 6.8). Admin-gated. `name` is
+   * trimmed + non-empty; the `slug` is NOT regenerated — it is a create-time
+   * artifact no URL consumes (recorded decision), so a rename keeps every
+   * existing slug-addressed link working. Avatar icon/colour are validated
+   * against the preset registry (lib/projects/avatar.ts); `null` clears a field
+   * back to the shipped mono-identifier rendering; an absent field is left
+   * untouched. Returns the DTO with `previousKeys` (the details-surface shape).
+   */
+  async updateDetails(input: {
+    key: string;
+    ctx: WorkspaceContext;
+    name?: string;
+    avatarIcon?: string | null;
+    avatarColor?: string | null;
+  }): Promise<ProjectDTO> {
+    return withWorkspaceContext(input.ctx, async (tx) => {
+      const project = await resolveProjectByKeyInTx(input.key, input.ctx.workspaceId, tx);
+      await projectAccessService.assertCanManage(project.id, input.ctx, tx);
+
+      const data: { name?: string; avatarIcon?: string | null; avatarColor?: string | null } = {};
+      if (input.name !== undefined) {
+        const trimmed = input.name.trim();
+        if (!trimmed) throw new InvalidProjectNameError();
+        data.name = trimmed;
+      }
+      if (input.avatarIcon !== undefined) {
+        if (input.avatarIcon !== null && !isValidAvatarIcon(input.avatarIcon)) {
+          throw new InvalidAvatarError('icon', input.avatarIcon);
+        }
+        data.avatarIcon = input.avatarIcon;
+      }
+      if (input.avatarColor !== undefined) {
+        if (input.avatarColor !== null && !isValidAvatarColor(input.avatarColor)) {
+          throw new InvalidAvatarError('color', input.avatarColor);
+        }
+        data.avatarColor = input.avatarColor;
+      }
+
+      const updated = await projectRepository.update(project.id, data, tx);
+      const aliases = await projectKeyAliasRepository.findManyByProject(project.id, tx);
+      return toProjectDTO(updated, aliases);
+    });
+  },
+
+  /**
+   * Change a project's key (identifier) mid-project, Jira-faithfully (Story
+   * 6.8). Admin-gated. ONE transaction:
+   *   1. resolve + admin-gate the project by its CURRENT key;
+   *   2. FOR-UPDATE lock the project row (the lock-before-read-derived-update
+   *      rule) so a concurrent rename OR issue creation serializes on it, then
+   *      RE-READ the identifier under the lock (the committed-current value);
+   *   3. no-op guard (new == current → IdentifierUnchangedError);
+   *   4. collision guards across ONE key namespace — a LIVE identifier of
+   *      another project → IdentifierTakenError; an ALIAS of another project →
+   *      IdentifierReservedError; the project's OWN alias → RECLAIM (delete that
+   *      alias row so the key goes live again — the verified revert path);
+   *   5. a SINGLE bulk `UPDATE work_item SET identifier = <new>-<key>` (the
+   *      identifier is derived data — no per-row loop, no revision rows, the
+   *      `key` number untouched); this IS the "re-index", synchronous + atomic;
+   *   6. record the OLD key as an alias (reserve it — old links keep working);
+   *   7. set `project.identifier` to the new key.
+   * The new key is validated STRICTLY (rejected, not coerced — see
+   * isValidIdentifierShape). Returns the DTO with `previousKeys`.
+   */
+  async changeKey(input: {
+    key: string;
+    newKey: string;
+    ctx: WorkspaceContext;
+  }): Promise<ProjectDTO> {
+    const requested = input.newKey.trim().toUpperCase();
+    if (!isValidIdentifierShape(requested)) throw new InvalidIdentifierError(input.newKey);
+    const { workspaceId } = input.ctx;
+
+    return withWorkspaceContext(input.ctx, async (tx) => {
+      const resolved = await resolveProjectByKeyInTx(input.key, workspaceId, tx);
+      await projectAccessService.assertCanManage(resolved.id, input.ctx, tx);
+
+      // Serialize on the project row, then re-read the current key under the
+      // lock — a concurrent rename committed between the resolve and the lock is
+      // now visible, and a concurrent issue creation (whose allocateWorkItemNumber
+      // UPDATEs this same row) blocks until we commit.
+      await projectRepository.lockById(resolved.id, tx);
+      const locked = await projectRepository.findById(resolved.id, tx);
+      if (!locked) throw new ProjectNotFoundError(input.key);
+      const current = locked.identifier;
+
+      if (requested === current) throw new IdentifierUnchangedError(current);
+
+      // Collision guard across the single (live identifiers ∪ aliases) namespace.
+      const liveOther = await projectRepository.findByIdentifier(workspaceId, requested, tx);
+      if (liveOther && liveOther.id !== resolved.id) throw new IdentifierTakenError(requested);
+
+      const alias = await projectKeyAliasRepository.findByWorkspaceAndIdentifier(
+        workspaceId,
+        requested,
+        tx,
+      );
+      if (alias) {
+        if (alias.projectId !== resolved.id) throw new IdentifierReservedError(requested);
+        // Reclaiming the project's OWN previous key — delete that alias so the
+        // key becomes live again (the verified Jira revert path).
+        await projectKeyAliasRepository.deleteByWorkspaceAndIdentifier(workspaceId, requested, tx);
+      }
+
+      // The bulk rewrite (one statement) + reserve the old key + set the new key.
+      await workItemRepository.rewriteIdentifiersForProject(resolved.id, requested, tx);
+      await projectKeyAliasRepository.create(
+        { workspaceId, projectId: resolved.id, identifier: current },
+        tx,
+      );
+      const updated = await projectRepository.updateIdentifier(resolved.id, requested, tx);
+
+      const aliases = await projectKeyAliasRepository.findManyByProject(resolved.id, tx);
+      return toProjectDTO(updated, aliases);
+    });
+  },
+
+  /**
+   * Release a retired key (Story 6.8 — the Jira Cloud "Previous project keys"
+   * remove): delete one of the project's alias rows, un-reserving the key (it
+   * becomes available to other projects) and BREAKING its old links (they 404
+   * thereafter — the verified mirror consequence). Admin-gated. A key that is
+   * not one of THIS project's aliases → AliasNotFoundError (404). Returns the
+   * DTO with the remaining `previousKeys`.
+   */
+  async releaseAlias(input: {
+    key: string;
+    alias: string;
+    ctx: WorkspaceContext;
+  }): Promise<ProjectDTO> {
+    const aliasKey = input.alias.trim().toUpperCase();
+    return withWorkspaceContext(input.ctx, async (tx) => {
+      const project = await resolveProjectByKeyInTx(input.key, input.ctx.workspaceId, tx);
+      await projectAccessService.assertCanManage(project.id, input.ctx, tx);
+
+      const removed = await projectKeyAliasRepository.deleteByProjectAndIdentifier(
+        project.id,
+        aliasKey,
+        tx,
+      );
+      if (removed === 0) throw new AliasNotFoundError(aliasKey);
+
+      const fresh = await projectRepository.findById(project.id, tx);
+      const aliases = await projectKeyAliasRepository.findManyByProject(project.id, tx);
+      return toProjectDTO(fresh ?? project, aliases);
+    });
+  },
 };
+
+/**
+ * Resolve a project by its workspace-scoped key inside a transaction, throwing
+ * ProjectNotFoundError when no LIVE project carries it (no existence leak — a
+ * key in another workspace, or a key that is only an ALIAS, is indistinguishable
+ * from a missing project; alias-aware resolution is Subtask 6.8.2's job, not the
+ * admin write path's). Mirrors projectMembersService.resolveProjectInTx.
+ */
+async function resolveProjectByKeyInTx(
+  key: string,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<Project> {
+  const identifier = key.trim().toUpperCase();
+  const project = await projectRepository.findByIdentifier(workspaceId, identifier, tx);
+  if (!project) throw new ProjectNotFoundError(key);
+  return project;
+}

@@ -25,4 +25,28 @@ export interface ProjectDTO {
    * computed server-side (`projectAccessService`); this is only the level.
    */
   accessLevel: 'open' | 'limited' | 'private';
+  /**
+   * Project avatar (Story 6.8) — a preset icon key + a colour-swatch key from
+   * the avatar registry (lib/projects/avatar.ts), or null = the shipped
+   * mono-identifier rendering (the chip falls back to the identifier letters).
+   * Carried on the base DTO because the project switcher + details card both
+   * render the chip on every project read; null is the zero-config default.
+   */
+  avatarIcon: string | null;
+  avatarColor: string | null;
+  /**
+   * The project's retired keys (Story 6.8), newest first — the details card's
+   * "Previous keys" list. OPTIONAL: only the details-surface read path
+   * (`updateDetails` / `changeKey` returns, and a details read) loads +
+   * populates it, so the hot project reads (switcher list, active-project
+   * resolution) stay a single project-row fetch with no alias join. Absent ⇒
+   * "not loaded"; an empty array ⇒ "loaded, no previous keys".
+   */
+  previousKeys?: PreviousKeyDTO[];
+}
+
+/** One retired project key — the key string + when it was retired (ISO). */
+export interface PreviousKeyDTO {
+  identifier: string;
+  retiredAt: string;
 }

@@ -220,6 +220,9 @@ model Workspace {
   boardColumnStatuses      BoardColumnStatus[]
   sprints                  Sprint[]
   projectMemberships       ProjectMembership[]
+  // Retired project keys (Story 6.8) — workspace-scoped reservation rows.
+  // Cascade with the workspace (a deleted workspace frees its keys).
+  projectKeyAliases        ProjectKeyAlias[]
   comments                 Comment[]
   labels                   Label[]
   components               Component[]
@@ -290,6 +293,15 @@ model Project {
   /// `work_item.storyPoints`, so a `Float[]` for the suggestion list is fine
   /// (avoids a Decimal-array column). Backfills to `[]` on migration.
   customScaleValues   Float[]             @default([])
+  /// Project avatar (Story 6.8) — a preset icon key + a colour-swatch key, both
+  /// validated at the service layer against the avatar registry
+  /// (lib/projects/avatar.ts). NULL on either = the shipped mono-identifier
+  /// rendering (the avatar chip falls back to the project's first identifier
+  /// letters), so every existing row backfills with no migration data step.
+  /// NOT an image upload — Jira's own default avatars are a preset library; the
+  /// 2.3.7 upload primitive is attachment-scoped (the recorded deviation).
+  avatarIcon          String?
+  avatarColor         String?
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   archivedAt          DateTime?
@@ -328,6 +340,9 @@ model Project {
   // Project-sourced dashboard widgets (Story 6.3). Cascade: a deleted
   // project takes its widgets (no meaningful stale state).
   dashboardWidgets       DashboardWidget[]
+  // Retired project keys (Story 6.8). Cascade: deleting a project FREES its
+  // reserved keys (the verified Jira rule — only deletion un-reserves a key).
+  keyAliases             ProjectKeyAlias[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -400,6 +415,38 @@ model ProjectMembership {
   @@index([projectId])
   @@index([userId])
   @@map("project_membership")
+}
+
+/// A retired project key (Story 6.8) — when a project's `identifier` changes
+/// (PROD → NIF), the OLD key is recorded here so it keeps resolving forever
+/// (old issue links 308-redirect, REST calls on the old key still serve) and
+/// stays RESERVED against other projects in the workspace (the verified Jira
+/// "Editing a project key" + "Previous project keys" behaviour). The
+/// `@@unique([workspaceId, identifier])` reserves the key workspace-wide — the
+/// SAME uniqueness shape `project.identifier` carries — so a rename's collision
+/// guard checks live identifiers AND aliases against one namespace. Reclaiming
+/// a project's OWN previous key DELETEs its alias row (the verified revert
+/// path); releasing an alias (the "Previous project keys" remove) deletes it
+/// too, un-reserving the key and breaking its old links.
+///
+/// `workspaceId` is denormalized from the project — the SAME pattern
+/// `project_membership` / `work_item` use — so the RLS gate is a direct
+/// `workspace_id = app.workspace_id` comparison with no join. Both FKs cascade:
+/// deleting the project FREES its keys (the verified mirror rule — only
+/// deletion un-reserves), and deleting the workspace takes the rows with it.
+model ProjectKeyAlias {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  projectId   String   @map("project_id")
+  identifier  String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, identifier])
+  @@index([projectId])
+  @@map("project_key_alias")
 }
 
 /// The role a user holds in a workspace or project (Story 6.4). Formalizes
