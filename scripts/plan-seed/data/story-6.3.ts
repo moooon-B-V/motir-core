@@ -78,7 +78,7 @@ import type { PlanStory } from '../types';
 export const story_6_3: PlanStory = {
   id: '6.3',
   title: 'Dashboards & reports',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The reporting layer: **configurable dashboards** — named, shareable grids of widgets ' +
     'backed by a **saved filter (6.2) or the project** — and the **project Reports hub** ' +
@@ -553,7 +553,7 @@ export const story_6_3: PlanStory = {
       id: '6.3.7',
       title:
         'Story tests — aggregation matrices + permission/no-access matrix + the dashboard E2E journey + the reports E2E + a11y sweeps',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
