@@ -407,7 +407,7 @@ export const story_6_1: PlanStory = {
       id: '6.1.5',
       title:
         'Epic-5 rows in the builder — custom-field / label / component conditions (dynamic field entries, per-type editors, stale states)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
