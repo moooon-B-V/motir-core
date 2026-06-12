@@ -553,7 +553,7 @@ export const story_6_3: PlanStory = {
       id: '6.3.7',
       title:
         'Story tests — aggregation matrices + permission/no-access matrix + the dashboard E2E journey + the reports E2E + a11y sweeps',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
