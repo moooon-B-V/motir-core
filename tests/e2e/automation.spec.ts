@@ -198,8 +198,11 @@ test.describe('automation rules — author → fire → audit', () => {
 
     await page.getByRole('button', { name: 'Save rule' }).click();
 
-    // Listed enabled, with the trigger summary + owner.
-    await expect(page.getByText('Prioritise resolved bugs')).toBeVisible();
+    // Listed with the trigger summary (the per-row overflow button is the
+    // toast-free anchor — `getByText(name)` also matches the success toast).
+    await expect(
+      page.getByRole('button', { name: 'Actions for Prioritise resolved bugs' }),
+    ).toBeVisible();
     await expect(page.getByText('When transitioned')).toBeVisible();
 
     const ruleId = await ruleIdByName(tenant.projectId, 'Prioritise resolved bugs');
@@ -238,7 +241,7 @@ test.describe('automation rules — author → fire → audit', () => {
     await page.getByRole('combobox', { name: 'Target status' }).click();
     await page.getByRole('option', { name: 'Done', exact: true }).click();
     await page.getByRole('button', { name: 'Save rule' }).click();
-    await expect(page.getByText('Force to done')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Actions for Force to done' })).toBeVisible();
 
     const ruleId = await ruleIdByName(tenant.projectId, 'Force to done');
 
@@ -358,7 +361,7 @@ test.describe('automation rules — author → fire → audit', () => {
 
     // The editor (every offered trigger/action config kind reachable; open it).
     await page.getByRole('button', { name: 'Create rule' }).click();
-    await expect(page.getByText('When')).toBeVisible();
+    await expect(page.getByText('When', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Add action' }).click();
     await expectAxeClean(page, 'editor');
     await page.getByRole('button', { name: 'Cancel' }).click();
