@@ -361,7 +361,7 @@ export const story_6_1: PlanStory = {
       id: '6.1.4',
       title:
         'Filter-builder UI on /issues — built-in fields (rows, combinator, live-apply URL state, facet upgrade, applied summary)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
@@ -407,7 +407,7 @@ export const story_6_1: PlanStory = {
       id: '6.1.5',
       title:
         'Epic-5 rows in the builder — custom-field / label / component conditions (dynamic field entries, per-type editors, stale states)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
