@@ -173,7 +173,7 @@ export const story_6_8: PlanStory = {
       id: '6.8.1',
       title:
         'Schema (project_key_alias + avatar columns) + the details/rename service core (locked atomic key-change tx, alias reservation, release) + admin-gated PATCH',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 33,
