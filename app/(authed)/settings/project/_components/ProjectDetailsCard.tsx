@@ -1,37 +1,58 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { type ReactNode, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Calendar, Eye, Hash, Image as ImageIcon, Info, Layers, Shield, Type } from 'lucide-react';
+import {
+  Check,
+  Eye,
+  Hash,
+  History,
+  Image as ImageIcon,
+  Key,
+  Loader2,
+  Shield,
+  Type,
+  Unlink,
+} from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { useToast } from '@/components/ui/Toast';
+import { ProjectAvatar } from '../../../_components/ProjectAvatar';
 import { ArchiveProjectCard } from './ArchiveProjectCard';
+import { AvatarPicker } from './AvatarPicker';
+import { ChangeKeyModal } from './ChangeKeyModal';
+import { ReleaseKeyModal } from './ReleaseKeyModal';
+import { updateProjectDetailsAction } from '../actions';
 
-// The Details landing body (Story 6.5 · Subtask 6.5.3) — the read-only project
-// identity card plus the re-homed Archive "Danger zone", matching the Details
-// panel of `design/projects/settings-area.mock.html`. Pure + presentational
-// (every value arrives as a prop, the created date pre-formatted server-side),
-// so the role split is unit-testable without a date or a DB.
+// The editable Details landing body (Story 6.8 · Subtask 6.8.4) — grows the
+// 6.5.3 read-only identity card into the editable surface, per
+// `design/projects/details.mock.html`. Name + avatar batch through ONE save bar
+// (`updateDetails`); the KEY change is its own guarded modal (re-keying every
+// issue is too consequential to fold into a generic "Save changes"); Previous
+// keys list the retired aliases with a release-with-confirm.
 //
-// Role split (the verified 1.3.4 / 6.4 rule the mock's role-states panel draws):
-//   * the card head pill reflects the actor's capability — admins get the
-//     "Admin" pill (they will gain editing in Story 6.8); non-admin members get
-//     the "Read-only" pill;
-//   * the "editing arrives with project-details editing" seam shows only to
-//     admins (only they ever edit — 6.8's updateDetails is admin-gated);
-//   * the Danger zone (archive) renders ONLY for admins — a non-admin member
-//     sees Details WITHOUT it (archive is admin-gated; the UI hide is backed by
-//     the server-side `assertCanManage` in `projectsService.archiveProject`).
-// The identity rows themselves are identical for every viewer.
+// Role split (the 6.4.6 gating grammar): a non-admin member sees the values but
+// NO controls — no save bar, no Change key / Change avatar, no Previous keys, no
+// Danger zone — and the `Read-only` pill replaces `Admin`. The hide is
+// presentation; the 6.8.1 PATCH/DELETE reject a non-admin server-side too.
+
+export interface PreviousKeyView {
+  identifier: string;
+  /** The retired date, pre-formatted in the active locale by the server page. */
+  retiredLabel: string;
+}
 
 export interface ProjectDetailsCardProps {
   projectId: string;
   projectName: string;
   projectIdentifier: string;
-  workspaceName: string;
-  /** The creation date, pre-formatted in the active locale by the server page. */
-  createdLabel: string;
-  /** Project admin (or workspace owner/admin) — gates the seam + the danger zone. */
+  avatarIcon: string | null;
+  avatarColor: string | null;
+  previousKeys: PreviousKeyView[];
+  /** Project admin (or workspace owner/admin) — gates every editing affordance. */
   canManage: boolean;
 }
 
@@ -39,122 +60,352 @@ export function ProjectDetailsCard({
   projectId,
   projectName,
   projectIdentifier,
-  workspaceName,
-  createdLabel,
+  avatarIcon,
+  avatarColor,
+  previousKeys,
   canManage,
 }: ProjectDetailsCardProps) {
-  const t = useTranslations('settings');
-  const avatarInitial = projectName.trim().charAt(0).toUpperCase() || '?';
+  const td = useTranslations('settings.details');
+
+  if (!canManage) {
+    return (
+      <Card header={<CardHead canManage={false} t={td} />}>
+        <dl className="flex flex-col">
+          <Field
+            icon={<ImageIcon className="h-[15px] w-[15px]" aria-hidden />}
+            label={td('fieldAvatar')}
+          >
+            <ProjectAvatar
+              icon={avatarIcon}
+              color={avatarColor}
+              identifier={projectIdentifier}
+              size={52}
+            />
+          </Field>
+          <Field icon={<Type className="h-[15px] w-[15px]" aria-hidden />} label={td('fieldName')}>
+            <span className="font-sans text-[13.5px] font-medium text-(--el-text)">
+              {projectName}
+            </span>
+          </Field>
+          <Field icon={<Hash className="h-[15px] w-[15px]" aria-hidden />} label={td('fieldKey')}>
+            <KeyValue>{projectIdentifier}</KeyValue>
+          </Field>
+        </dl>
+      </Card>
+    );
+  }
+
+  return (
+    <EditableDetails
+      projectId={projectId}
+      projectName={projectName}
+      projectIdentifier={projectIdentifier}
+      avatarIcon={avatarIcon}
+      avatarColor={avatarColor}
+      previousKeys={previousKeys}
+    />
+  );
+}
+
+function EditableDetails({
+  projectId,
+  projectName,
+  projectIdentifier,
+  avatarIcon,
+  avatarColor,
+  previousKeys,
+}: Omit<ProjectDetailsCardProps, 'canManage'>) {
+  const td = useTranslations('settings.details');
+  const tc = useTranslations('common');
+  const router = useRouter();
+  const { toast } = useToast();
+
+  // Editable form state + a saved baseline (the dirty comparison). The KEY +
+  // previous-keys are read straight from props — their mutations are their own
+  // modal flows that `router.refresh()` to reconcile the whole app.
+  const [name, setName] = useState(projectName);
+  const [icon, setIcon] = useState<string | null>(avatarIcon);
+  const [color, setColor] = useState<string | null>(avatarColor);
+  const [saved, setSaved] = useState({ name: projectName, icon: avatarIcon, color: avatarColor });
+  const [justSaved, setJustSaved] = useState(false);
+  const [keyOpen, setKeyOpen] = useState(false);
+  const [releasing, setReleasing] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const trimmedName = name.trim();
+  const dirty = trimmedName !== saved.name || icon !== saved.icon || color !== saved.color;
+  const canSave = dirty && trimmedName.length > 0 && !isPending;
+
+  function handleCancel() {
+    setName(saved.name);
+    setIcon(saved.icon);
+    setColor(saved.color);
+    setJustSaved(false);
+  }
+
+  function handleSave() {
+    if (!canSave) return;
+    startTransition(async () => {
+      const result = await updateProjectDetailsAction({
+        name: trimmedName,
+        avatarIcon: icon,
+        avatarColor: color,
+      });
+      if (result.ok) {
+        setSaved({ name: trimmedName, icon, color });
+        setName(trimmedName);
+        setJustSaved(true);
+        router.refresh();
+        // Clear the transient "Saved" affordance after a beat (a callback, not
+        // a useEffect — the React-19 set-state-in-effect lint rule).
+        setTimeout(() => setJustSaved(false), 2500);
+      } else {
+        toast({ variant: 'error', title: td('saveErrorTitle') });
+      }
+    });
+  }
 
   return (
     <div className="flex flex-col gap-6">
-      <Card
-        header={
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="font-sans text-base font-semibold text-(--el-text)">
-              {t('details.cardTitle')}
-            </h2>
-            {canManage ? (
-              <Pill memberRole="admin">
-                <Shield className="h-3.5 w-3.5" aria-hidden />
-                {t('details.roleAdmin')}
-              </Pill>
-            ) : (
-              <Pill memberRole="viewer">
-                <Eye className="h-3.5 w-3.5" aria-hidden />
-                {t('details.roleReadOnly')}
-              </Pill>
-            )}
-          </div>
-        }
-      >
-        <dl className="flex flex-col">
-          <IdentityRow
+      <Card header={<CardHead canManage t={td} />} className="p-0">
+        <div className="flex flex-col p-(--spacing-card-padding)">
+          {/* Avatar */}
+          <FieldStack
             icon={<ImageIcon className="h-[15px] w-[15px]" aria-hidden />}
-            label={t('details.fieldAvatar')}
+            label={td('fieldAvatar')}
+            help={td('avatarHelp')}
           >
-            <span
-              aria-hidden
-              className="inline-flex h-10 w-10 items-center justify-center rounded-(--radius-control) bg-(--el-type-task) font-sans text-[17px] font-bold text-(--el-text-inverted)"
-            >
-              {avatarInitial}
-            </span>
-          </IdentityRow>
-          <IdentityRow
-            icon={<Type className="h-[15px] w-[15px]" aria-hidden />}
-            label={t('details.fieldName')}
-          >
-            {projectName}
-          </IdentityRow>
-          <IdentityRow
-            icon={<Hash className="h-[15px] w-[15px]" aria-hidden />}
-            label={t('details.fieldKey')}
-            mono
-          >
-            {projectIdentifier}
-          </IdentityRow>
-          <IdentityRow
-            icon={<Layers className="h-[15px] w-[15px]" aria-hidden />}
-            label={t('details.fieldWorkspace')}
-          >
-            {workspaceName}
-          </IdentityRow>
-          <IdentityRow
-            icon={<Calendar className="h-[15px] w-[15px]" aria-hidden />}
-            label={t('details.fieldCreated')}
-          >
-            {createdLabel}
-          </IdentityRow>
-        </dl>
+            <AvatarPicker
+              icon={icon}
+              color={color}
+              identifier={projectIdentifier}
+              disabled={isPending}
+              onChange={({ icon: nextIcon, color: nextColor }) => {
+                setJustSaved(false);
+                setIcon(nextIcon);
+                setColor(nextColor);
+              }}
+            />
+          </FieldStack>
 
-        {canManage ? (
-          <p className="mt-3.5 flex items-start gap-2 rounded-(--radius-card) bg-(--el-surface) px-3 py-2.5 font-sans text-xs leading-relaxed text-(--el-text-secondary)">
-            <Info className="mt-px h-[15px] w-[15px] shrink-0 text-(--el-text-muted)" aria-hidden />
-            <span>{t('details.editingSeam')}</span>
-          </p>
-        ) : null}
+          {/* Name */}
+          <FieldStack
+            icon={<Type className="h-[15px] w-[15px]" aria-hidden />}
+            label={td('fieldName')}
+            help={td('nameHelp')}
+          >
+            <Input
+              value={name}
+              onChange={(e) => {
+                setJustSaved(false);
+                setName(e.target.value);
+              }}
+              disabled={isPending}
+              aria-label={td('fieldName')}
+            />
+          </FieldStack>
+
+          {/* Key (read-only value + guarded change affordance) */}
+          <FieldStack
+            icon={<Hash className="h-[15px] w-[15px]" aria-hidden />}
+            label={td('fieldKey')}
+            help={td('keyHelp', { ident: projectIdentifier })}
+          >
+            <div className="flex items-center gap-2">
+              <KeyValue>{projectIdentifier}</KeyValue>
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={<Key className="h-4 w-4" />}
+                onClick={() => setKeyOpen(true)}
+                disabled={isPending}
+              >
+                {td('changeKey')}
+              </Button>
+            </div>
+          </FieldStack>
+
+          {/* Previous keys — present only when at least one key has been retired */}
+          {previousKeys.length > 0 ? (
+            <FieldStack
+              icon={<History className="h-[15px] w-[15px]" aria-hidden />}
+              label={td('prevKeysLabel')}
+              help={td('prevKeysHelp', { ident: projectIdentifier })}
+            >
+              <ul className="flex flex-col gap-1.5">
+                {previousKeys.map((pk) => (
+                  <li key={pk.identifier} className="flex items-center gap-2.5">
+                    <span
+                      aria-hidden
+                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-surface) text-(--el-text-muted)"
+                    >
+                      <Key className="h-[13px] w-[13px]" />
+                    </span>
+                    <span className="font-mono text-[12.5px] font-medium text-(--el-text)">
+                      {pk.identifier}
+                    </span>
+                    <span className="font-sans text-xs text-(--el-text-muted)">
+                      {td('prevKeyRetired', { date: pk.retiredLabel })}
+                    </span>
+                    <span className="flex-1" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={<Unlink className="h-4 w-4" />}
+                      onClick={() => setReleasing(pk.identifier)}
+                      disabled={isPending}
+                    >
+                      {td('release')}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </FieldStack>
+          ) : null}
+        </div>
+
+        {/* Save bar — the card footer action row */}
+        <div className="flex items-center gap-3 border-t border-(--el-border-soft) px-(--spacing-card-padding) py-3">
+          <SaveStatus saving={isPending} saved={justSaved} dirty={dirty} td={td} />
+          <span className="flex-1" />
+          <Button variant="ghost" onClick={handleCancel} disabled={!dirty || isPending}>
+            {tc('cancel')}
+          </Button>
+          <Button variant="primary" onClick={handleSave} disabled={!canSave} loading={isPending}>
+            {td('saveButton')}
+          </Button>
+        </div>
       </Card>
 
-      {canManage ? (
-        <ArchiveProjectCard
-          projectId={projectId}
-          projectName={projectName}
-          projectIdentifier={projectIdentifier}
-        />
-      ) : null}
+      <ArchiveProjectCard
+        projectId={projectId}
+        projectName={projectName}
+        projectIdentifier={projectIdentifier}
+      />
+
+      <ChangeKeyModal
+        open={keyOpen}
+        onOpenChange={setKeyOpen}
+        currentKey={projectIdentifier}
+        projectName={projectName}
+      />
+      <ReleaseKeyModal
+        open={releasing !== null}
+        onOpenChange={(o) => !o && setReleasing(null)}
+        alias={releasing ?? ''}
+      />
     </div>
   );
 }
 
-// One identity row: an icon + label cell (fixed width, muted) and a value cell.
-// A `<div>` pair inside a `<dl>` — `<dt>` for the label, `<dd>` for the value —
-// so the read-only identity reads as a description list to assistive tech.
-function IdentityRow({
-  icon,
-  label,
-  mono = false,
-  children,
+// ── presentational helpers ───────────────────────────────────────────────────
+
+function CardHead({ canManage, t }: { canManage: boolean; t: (k: string) => string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <h2 className="font-sans text-base font-semibold text-(--el-text)">{t('cardTitle')}</h2>
+      {canManage ? (
+        <Pill memberRole="admin">
+          <Shield className="h-3.5 w-3.5" aria-hidden />
+          {t('roleAdmin')}
+        </Pill>
+      ) : (
+        <Pill memberRole="viewer">
+          <Eye className="h-3.5 w-3.5" aria-hidden />
+          {t('roleReadOnly')}
+        </Pill>
+      )}
+    </div>
+  );
+}
+
+function SaveStatus({
+  saving,
+  saved,
+  dirty,
+  td,
 }: {
-  icon: ReactNode;
-  label: string;
-  mono?: boolean;
-  children: ReactNode;
+  saving: boolean;
+  saved: boolean;
+  dirty: boolean;
+  td: (k: string) => string;
 }) {
+  if (saving) {
+    return (
+      <span
+        role="status"
+        className="flex items-center gap-1.5 font-sans text-xs text-(--el-text-muted)"
+      >
+        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+        {td('saveSaving')}
+      </span>
+    );
+  }
+  if (saved) {
+    return (
+      <span
+        role="status"
+        className="flex items-center gap-1.5 font-sans text-xs font-medium text-(--el-success)"
+      >
+        <Check className="h-3.5 w-3.5" aria-hidden />
+        {td('saveSaved')}
+      </span>
+    );
+  }
+  if (dirty) {
+    return (
+      <span className="flex items-center gap-1.5 font-sans text-xs text-(--el-text-secondary)">
+        <span className="h-2 w-2 rounded-full bg-(--el-warning)" aria-hidden />
+        {td('saveDirty')}
+      </span>
+    );
+  }
+  return null;
+}
+
+// A read-only identity row (label cell + value cell) inside a <dl>.
+function Field({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
   return (
     <div className="flex items-center gap-3.5 border-b border-(--el-border-soft) py-3.5 last:border-b-0">
       <dt className="flex w-[132px] flex-none items-center gap-2 font-sans text-[12.5px] text-(--el-text-muted)">
         {icon}
         {label}
       </dt>
-      <dd
-        className={
-          mono
-            ? 'min-w-0 flex-1 font-mono text-[12.5px] font-medium text-(--el-text)'
-            : 'min-w-0 flex-1 font-sans text-[13.5px] font-medium text-(--el-text)'
-        }
-      >
-        {children}
-      </dd>
+      <dd className="min-w-0 flex-1">{children}</dd>
     </div>
+  );
+}
+
+// A stacked editable field: label row on top, control below, optional help.
+function FieldStack({
+  icon,
+  label,
+  help,
+  children,
+}: {
+  icon: ReactNode;
+  label: string;
+  help?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2 border-b border-(--el-border-soft) py-4 last:border-b-0">
+      <span className="flex items-center gap-2 font-sans text-[12.5px] font-medium text-(--el-text-muted)">
+        {icon}
+        {label}
+      </span>
+      {children}
+      {help ? (
+        <p className="font-sans text-xs leading-relaxed text-(--el-text-muted)">{help}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function KeyValue({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-(--radius-control) bg-(--el-surface) px-2 py-1 font-mono text-[12.5px] font-medium text-(--el-text)">
+      {children}
+    </span>
   );
 }

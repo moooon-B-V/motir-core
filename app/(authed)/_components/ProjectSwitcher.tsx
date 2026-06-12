@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils/cn';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import { setActiveProjectAction } from '../_project-actions';
 import { CreateProjectModal } from './CreateProjectModal';
+import { ProjectAvatar } from './ProjectAvatar';
 
 export interface ProjectSwitcherProps {
   /** Non-archived projects in the workspace (the switch targets). */
@@ -78,6 +79,14 @@ export function ProjectSwitcher({
             )}
           >
             <span className="flex w-full items-center gap-2">
+              {active ? (
+                <ProjectAvatar
+                  icon={active.avatarIcon}
+                  color={active.avatarColor}
+                  identifier={active.identifier}
+                  size={22}
+                />
+              ) : null}
               <span className="min-w-0 flex-1 truncate text-left">
                 {active?.name ?? t('projectSwitcher.none')}
               </span>
@@ -114,11 +123,12 @@ export function ProjectSwitcher({
                       isActive && 'bg-(--el-surface)',
                     )}
                   >
-                    <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center">
-                      {isActive ? (
-                        <Check className="h-4 w-4" style={{ color: 'var(--el-accent)' }} />
-                      ) : null}
-                    </span>
+                    <ProjectAvatar
+                      icon={p.avatarIcon}
+                      color={p.avatarColor}
+                      identifier={p.identifier}
+                      size={24}
+                    />
                     <span
                       className={cn(
                         'flex-1 truncate font-sans text-sm text-(--el-text)',
@@ -126,6 +136,11 @@ export function ProjectSwitcher({
                       )}
                     >
                       {p.name}
+                    </span>
+                    <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center">
+                      {isActive ? (
+                        <Check className="h-4 w-4" style={{ color: 'var(--el-accent)' }} />
+                      ) : null}
                     </span>
                   </button>
                 </li>

@@ -4,24 +4,21 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { workspacesService } from '@/lib/services/workspacesService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ProjectDetailsCard } from './_components/ProjectDetailsCard';
 
-// Project-settings AREA landing — the registry's `details` entry (Story 6.5 ·
-// Subtask 6.5.3). The verified mirror rule: settings opens ON Details, and
-// Details owns project identity + the danger zone. This route (the retired card
-// hub) is now the read-only Details page: identity rows (avatar, name, key,
-// workspace, created) with the "editing arrives with project-details editing"
-// seam (the 6.8 seam — 6.8 swaps these rows for edit forms + the key-change
-// flow), and the re-homed Archive danger zone (admin-only). The area layout
-// (`../layout.tsx`) already guards no-project / no-browse for every settings
-// page; the defensive empty state here keeps the route self-sufficient.
+// Project-settings AREA landing — the registry's `details` entry. Story 6.5 ·
+// 6.5.3 shipped this read-only; Story 6.8 · 6.8.4 grows it into the EDITABLE
+// surface (name + avatar + the guarded change-key flow + previous keys), per
+// `design/projects/details.mock.html`. The verified mirror rule: settings opens
+// ON Details, and Details owns the editable project identity + the danger zone.
 //
-// `createdAt` is read via the details-surface path (`projectsService.getDetails`)
-// — the same read Story 6.8 grows this page on — NOT the hot active-project DTO
-// (which deliberately omits it). `canManage` gates the danger zone in the UI;
-// the archive Server Action is independently admin-gated server-side.
+// Identity, avatar, and the retired-key history are read via the details-surface
+// path (`projectsService.getDetails`) — the DTO that loads `avatarIcon`,
+// `avatarColor`, and `previousKeys` (the hot active-project read deliberately
+// omits the alias join). `canManage` gates the editable affordances in the UI;
+// the update / change-key / release Server Actions are independently
+// admin-gated server-side.
 
 export default async function ProjectSettingsPage() {
   const session = await getSession();
@@ -41,20 +38,17 @@ export default async function ProjectSettingsPage() {
   }
 
   const actorCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-  const [details, workspace, caps] = await Promise.all([
+  const [details, caps] = await Promise.all([
     projectsService.getDetails(ctx.project.identifier, actorCtx),
-    workspacesService.getWorkspaceSummary(ctx.workspaceId, ctx.userId),
     projectAccessService.getManageCapabilities(ctx.projectId, actorCtx),
   ]);
 
   const format = await getFormatter();
-  const createdLabel = details.createdAt
-    ? format.dateTime(new Date(details.createdAt), {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      })
-    : '';
+  const dateOpts = { day: 'numeric', month: 'long', year: 'numeric' } as const;
+  const previousKeys = (details.previousKeys ?? []).map((pk) => ({
+    identifier: pk.identifier,
+    retiredLabel: format.dateTime(new Date(pk.retiredAt), dateOpts),
+  }));
 
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
@@ -67,8 +61,9 @@ export default async function ProjectSettingsPage() {
         projectId={ctx.projectId}
         projectName={details.name}
         projectIdentifier={details.identifier}
-        workspaceName={workspace?.name ?? ''}
-        createdLabel={createdLabel}
+        avatarIcon={details.avatarIcon}
+        avatarColor={details.avatarColor}
+        previousKeys={previousKeys}
         canManage={caps.canManage}
       />
     </div>
