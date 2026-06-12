@@ -899,7 +899,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Settings create/edit modals: input focus ring is clipped by the scrollable modal body',
-        status: 'in_progress',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 5 (current epic — discovered during Epic 5 work) · ' +
