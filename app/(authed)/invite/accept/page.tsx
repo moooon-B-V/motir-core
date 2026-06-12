@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
@@ -72,11 +73,11 @@ async function ExpiredState() {
   return (
     <InviteCard>
       <AuthShell headline={t('inviteExpired')} subhead={t('inviteExpiredSubhead')}>
-        <a href="/dashboard">
+        <Link href="/dashboard">
           <Button variant="secondary" className="w-full">
             {t('backToDashboard')}
           </Button>
-        </a>
+        </Link>
       </AuthShell>
     </InviteCard>
   );
@@ -117,11 +118,11 @@ async function WrongEmailState({
               {t('signInWith', { invitedEmail })}
             </Button>
           </a>
-          <a href="/dashboard">
+          <Link href="/dashboard">
             <Button variant="secondary" className="w-full">
               {t('backToDashboard')}
             </Button>
-          </a>
+          </Link>
         </div>
       </AuthShell>
     </InviteCard>
