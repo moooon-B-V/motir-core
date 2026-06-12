@@ -108,7 +108,7 @@ export const story_6_9: PlanStory = {
       id: '6.9.1',
       title:
         'Reusable server-side issue quick-search read — key + title (trgm), workspace + 6.4-permission scoped, bounded + relevance-ordered',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
