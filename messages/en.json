@@ -1896,5 +1896,103 @@
       "body": "This unsubscribe link is malformed or has already been used. If you're still receiving emails, unsubscribe from the Filters directory.",
       "action": "Go to Issues"
     }
+  },
+  "reports": {
+    "backToReports": "Reports",
+    "hub": {
+      "title": "Reports",
+      "subtitle": "Built-in analysis of this project's issues, sprints, and throughput.",
+      "agileGroup": "Agile",
+      "analysisGroup": "Issue analysis",
+      "burndownTitle": "Burndown chart",
+      "burndownBody": "Points remaining across the active sprint. Lives in the sprint report.",
+      "velocityTitle": "Velocity chart",
+      "velocityBody": "Committed vs completed points over recent sprints.",
+      "sprintReportTitle": "Sprint report",
+      "sprintReportBody": "Scope, completed, and carried-over work for a sprint.",
+      "createdVsResolvedTitle": "Created vs Resolved",
+      "createdVsResolvedBody": "How fast issues are opened versus closed over a window.",
+      "distributionTitle": "Status distribution",
+      "distributionBody": "Break issues down by status, assignee, priority, type, and more.",
+      "moreTitle": "More reports",
+      "moreBody": "Average age, resolution time, workload — registry additions.",
+      "extensionTag": "Extension",
+      "noProjectTitle": "No project yet",
+      "noProjectBody": "Create a project to see its reports."
+    },
+    "period": {
+      "day": "Daily",
+      "week": "Weekly",
+      "month": "Monthly"
+    },
+    "periodAxis": {
+      "day": "Day",
+      "week": "Week",
+      "month": "Month"
+    },
+    "scope": {
+      "label": "Scope",
+      "project": "Project · {name}",
+      "groupProject": "Project",
+      "groupFilters": "Saved filters",
+      "searchPlaceholder": "Search filters…"
+    },
+    "states": {
+      "noAccessTitle": "No access",
+      "noAccessBody": "This data is scoped to a project you can't view.",
+      "emptyTitle": "No data in this window",
+      "emptyBody": "No matching issues for the selected scope and window.",
+      "staleFilterTitle": "Filter missing",
+      "staleFilterBody": "The saved filter behind this report was deleted or is no longer visible.",
+      "staleStatisticTitle": "Statistic unavailable",
+      "staleStatisticBody": "The custom field this report grouped by was deleted.",
+      "resetToProject": "Use project scope",
+      "none": "None"
+    },
+    "cvr": {
+      "title": "Created vs Resolved",
+      "periodLabel": "Period",
+      "daysBackLabel": "Days back",
+      "daysBackFewer": "Shorter window",
+      "daysBackMore": "Longer window",
+      "daysBackValue": "{days} days",
+      "aggregationLabel": "Aggregation",
+      "perPeriod": "Per period",
+      "cumulative": "Cumulative",
+      "created": "Created",
+      "resolved": "Resolved",
+      "yIssues": "Issues",
+      "net": "Net",
+      "legendCreated": "Created · {total} total",
+      "legendResolved": "Resolved · {total} total",
+      "legendBacklog": "Backlog growing",
+      "legendCatchingUp": "Catching up",
+      "chartDesc": "Created vs resolved per {period} over the last {count} buckets. Created {created} total versus resolved {resolved} total; the difference is shaded red where the backlog grows and green where the team catches up.",
+      "tableCaption": "Created vs resolved per period (per-period counts).",
+      "tableCaptionCumulative": "Created vs resolved per period (cumulative running totals).",
+      "subWindow": "last {days} days"
+    },
+    "distribution": {
+      "title": "Status distribution",
+      "statisticLabel": "Statistic type",
+      "statisticSearch": "Search statistics…",
+      "issues": "issues",
+      "chartDesc": "Distribution of {total} issues by {statistic}: {breakdown}.",
+      "byStatistic": "by {statistic}",
+      "issuesCount": "{count, plural, one {# issue} other {# issues}}",
+      "builtinGroup": "Fields",
+      "customGroup": "Custom fields",
+      "unknownStatistic": "Unknown"
+    },
+    "statistic": {
+      "kind": "Type",
+      "status": "Status",
+      "priority": "Priority",
+      "assignee": "Assignee",
+      "reporter": "Reporter",
+      "sprint": "Sprint",
+      "label": "Label",
+      "component": "Component"
+    }
   }
 }

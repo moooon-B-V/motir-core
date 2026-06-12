@@ -1896,5 +1896,103 @@
       "body": "此取消订阅链接格式有误或已被使用。如果你仍在收到邮件，请在「筛选器」目录中取消订阅。",
       "action": "前往工作项"
     }
+  },
+  "reports": {
+    "backToReports": "报表",
+    "hub": {
+      "title": "报表",
+      "subtitle": "对本项目的工作项、Sprint 与吞吐量的内置分析。",
+      "agileGroup": "敏捷",
+      "analysisGroup": "工作项分析",
+      "burndownTitle": "燃尽图",
+      "burndownBody": "当前 Sprint 的剩余点数。位于 Sprint 报告中。",
+      "velocityTitle": "速度图",
+      "velocityBody": "近期各 Sprint 的承诺点数与完成点数对比。",
+      "sprintReportTitle": "Sprint 报告",
+      "sprintReportBody": "某个 Sprint 的范围、已完成与遗留的工作。",
+      "createdVsResolvedTitle": "新建与解决",
+      "createdVsResolvedBody": "在一段时间内工作项的新建速度与解决速度。",
+      "distributionTitle": "状态分布",
+      "distributionBody": "按状态、负责人、优先级、类型等维度拆解工作项。",
+      "moreTitle": "更多报表",
+      "moreBody": "平均时长、解决耗时、工作量——注册表扩展项。",
+      "extensionTag": "扩展",
+      "noProjectTitle": "尚无项目",
+      "noProjectBody": "创建一个项目以查看其报表。"
+    },
+    "period": {
+      "day": "按日",
+      "week": "按周",
+      "month": "按月"
+    },
+    "periodAxis": {
+      "day": "日",
+      "week": "周",
+      "month": "月"
+    },
+    "scope": {
+      "label": "范围",
+      "project": "项目 · {name}",
+      "groupProject": "项目",
+      "groupFilters": "已保存的筛选器",
+      "searchPlaceholder": "搜索筛选器…"
+    },
+    "states": {
+      "noAccessTitle": "无访问权限",
+      "noAccessBody": "此数据所属的项目你无权查看。",
+      "emptyTitle": "此时间窗内暂无数据",
+      "emptyBody": "所选范围与时间窗内没有匹配的工作项。",
+      "staleFilterTitle": "筛选器已失效",
+      "staleFilterBody": "此报表所依赖的已保存筛选器已被删除或不再可见。",
+      "staleStatisticTitle": "统计维度不可用",
+      "staleStatisticBody": "此报表所分组的自定义字段已被删除。",
+      "resetToProject": "使用项目范围",
+      "none": "无"
+    },
+    "cvr": {
+      "title": "新建与解决",
+      "periodLabel": "周期",
+      "daysBackLabel": "回溯天数",
+      "daysBackFewer": "缩短时间窗",
+      "daysBackMore": "延长时间窗",
+      "daysBackValue": "{days} 天",
+      "aggregationLabel": "聚合方式",
+      "perPeriod": "各周期",
+      "cumulative": "累计",
+      "created": "新建",
+      "resolved": "已解决",
+      "yIssues": "工作项",
+      "net": "净值",
+      "legendCreated": "新建 · 共 {total}",
+      "legendResolved": "已解决 · 共 {total}",
+      "legendBacklog": "积压增加",
+      "legendCatchingUp": "正在追赶",
+      "chartDesc": "最近 {count} 个区间内每{period}的新建与解决对比。新建共 {created}，已解决共 {resolved}；积压增加处填充红色，团队追赶处填充绿色。",
+      "tableCaption": "每个周期的新建与解决（各周期计数）。",
+      "tableCaptionCumulative": "每个周期的新建与解决（累计总数）。",
+      "subWindow": "最近 {days} 天"
+    },
+    "distribution": {
+      "title": "状态分布",
+      "statisticLabel": "统计维度",
+      "statisticSearch": "搜索统计维度…",
+      "issues": "个工作项",
+      "chartDesc": "{total} 个工作项按{statistic}的分布：{breakdown}。",
+      "byStatistic": "按{statistic}",
+      "issuesCount": "{count, plural, other {# 个工作项}}",
+      "builtinGroup": "字段",
+      "customGroup": "自定义字段",
+      "unknownStatistic": "未知"
+    },
+    "statistic": {
+      "kind": "类型",
+      "status": "状态",
+      "priority": "优先级",
+      "assignee": "负责人",
+      "reporter": "创建人",
+      "sprint": "Sprint",
+      "label": "标签",
+      "component": "组件"
+    }
   }
 }
