@@ -445,6 +445,36 @@ describe('DonutChart (distribution form)', () => {
     );
     expect(screen.getByRole('img', { name: 'Eight groups, report-page donut.' })).toBeTruthy();
   });
+
+  // The surface-sizing contract (bug-reports-chart-sizing): `below` is the
+  // full-page report landing, so the donut renders at the FULL `size`; `side`
+  // is the dashboard-widget tile, so it renders at the compact 0.71×. Locking
+  // both directions guards the page against re-inheriting the tile shrink AND
+  // the tile against accidentally going page-sized.
+  it('renders the page donut (legend below) at the full `size`', () => {
+    render(
+      <DonutChart
+        data={[{ label: 'A', value: 1 }]}
+        description="x"
+        size={360}
+        legendLayout="below"
+      />,
+    );
+    expect(screen.getByRole('img', { name: 'x' }).style.width).toBe('360px');
+  });
+
+  it('renders the widget-tile donut (legend side) at the compact 0.71× of `size`', () => {
+    render(
+      <DonutChart
+        data={[{ label: 'A', value: 1 }]}
+        description="x"
+        size={220}
+        legendLayout="side"
+      />,
+    );
+    // 220 × 0.71 = 156.2 — the tile thumbnail proportion.
+    expect(screen.getByRole('img', { name: 'x' }).style.width).toBe('156.2px');
+  });
 });
 
 describe('DifferenceAreaChart (created-vs-resolved form)', () => {

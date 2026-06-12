@@ -157,7 +157,11 @@ function DistributionBody({
         ariaLabel={t('distribution.title')}
         totalNoun={t('distribution.issues')}
         statisticLabel={statisticLabel}
-        size={240}
+        // Page-level size: the `below` layout renders the donut at the full
+        // `size`, so 360 → a ~300 px ring — a primary page visualization, not
+        // the ~170 px widget-tile thumbnail this page used to inherit
+        // (bug-reports-chart-sizing).
+        size={360}
         legendLayout="below"
       />
     </div>
