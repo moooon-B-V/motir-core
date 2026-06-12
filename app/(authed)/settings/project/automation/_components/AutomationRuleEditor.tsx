@@ -24,9 +24,23 @@ import {
   AUTOMATION_TRIGGER_TYPES,
   automationActionDef,
   automationTriggerDef,
+  type AutomationActionEditorKind,
   type AutomationActionType,
   type AutomationTriggerType,
 } from '@/lib/automation/registry';
+
+/**
+ * Action types whose config editor this surface renders today. The 6.6.3
+ * registry added four Epic-5 actions (add_watcher / add_comment / add_label /
+ * set_custom_field) whose dedicated config editors are a 6.6.5 follow-up; until
+ * those land we don't OFFER them in the picker (the backend + registries fully
+ * support them — only the authoring UI is pending), so an author never lands on
+ * an action with no editor. A `set-field` editor kind also covers `transition`.
+ */
+export const EDITOR_READY_ACTION_TYPES: ReadonlyArray<AutomationActionType> = [
+  'transition',
+  'set_field',
+];
 import {
   actionDraftProblem,
   canAddAction,
@@ -135,7 +149,9 @@ export function AutomationRuleEditor({
     value: type,
     label: t(`triggerType.${type}`),
   }));
-  const actionTypeOptions: ComboboxOption<string>[] = AUTOMATION_ACTION_TYPES.map((type) => ({
+  const actionTypeOptions: ComboboxOption<string>[] = AUTOMATION_ACTION_TYPES.filter((type) =>
+    EDITOR_READY_ACTION_TYPES.includes(type),
+  ).map((type) => ({
     value: type,
     label: t(`actionType.${type}`),
   }));
@@ -392,7 +408,7 @@ function safeTriggerEditorKind(type: string): 'none' | 'transition' | 'field-cha
   }
 }
 
-function safeActionEditorKind(type: string): 'transition' | 'set-field' | null {
+function safeActionEditorKind(type: string): AutomationActionEditorKind | null {
   try {
     return automationActionDef(type).editorKind;
   } catch {

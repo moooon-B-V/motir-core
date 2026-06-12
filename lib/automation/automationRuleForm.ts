@@ -52,6 +52,18 @@ export interface ActionDraft {
   priority: AutomationPriority | null;
   dueDate: string | null;
   estimate: number | null;
+  /**
+   * Epic-5 action slots (the 6.6.3 registry actions: add_watcher / add_comment
+   * / add_label / set_custom_field). The form model round-trips them so an
+   * API-authored rule loads and re-saves losslessly; their dedicated config
+   * EDITORS are a 6.6.5 follow-up (tracked below) and these types are NOT yet
+   * offered in the editor's action picker, so a fresh draft never reaches them.
+   */
+  userId: string | null;
+  bodyMd: string | null;
+  labelName: string | null;
+  customFieldId: string | null;
+  customFieldValue: string | number | null;
 }
 
 /** The full editor draft. `condition` is the FilterAst the shared
@@ -96,6 +108,11 @@ export function emptyActionDraft(type: AutomationActionType = 'transition'): Act
     priority: null,
     dueDate: null,
     estimate: null,
+    userId: null,
+    bodyMd: null,
+    labelName: null,
+    customFieldId: null,
+    customFieldValue: null,
   };
 }
 
@@ -141,20 +158,32 @@ function triggerDraftFromConfig(config: AutomationTriggerConfig): TriggerDraft {
 
 function actionDraftFromConfig(config: AutomationActionConfig): ActionDraft {
   const base = emptyActionDraft(config.type);
-  if (config.type === 'transition') {
-    return { ...base, toStatusId: config.toStatusId };
-  }
-  // set_field — fan the value into the matching slot.
-  const draft: ActionDraft = { ...base, setField: config.field };
-  switch (config.field) {
-    case 'assignee':
-      return { ...draft, assignee: config.value };
-    case 'priority':
-      return { ...draft, priority: config.value };
-    case 'dueDate':
-      return { ...draft, dueDate: config.value };
-    case 'estimate':
-      return { ...draft, estimate: config.value };
+  switch (config.type) {
+    case 'transition':
+      return { ...base, toStatusId: config.toStatusId };
+    case 'set_field': {
+      // fan the value into the matching slot.
+      const draft: ActionDraft = { ...base, setField: config.field };
+      switch (config.field) {
+        case 'assignee':
+          return { ...draft, assignee: config.value };
+        case 'priority':
+          return { ...draft, priority: config.value };
+        case 'dueDate':
+          return { ...draft, dueDate: config.value };
+        case 'estimate':
+          return { ...draft, estimate: config.value };
+      }
+    }
+    // The Epic-5 actions (6.6.3) — round-trip into their slots.
+    case 'add_watcher':
+      return { ...base, userId: config.userId };
+    case 'add_comment':
+      return { ...base, bodyMd: config.bodyMd };
+    case 'add_label':
+      return { ...base, labelName: config.name };
+    case 'set_custom_field':
+      return { ...base, customFieldId: config.fieldId, customFieldValue: config.value };
   }
 }
 
@@ -171,27 +200,44 @@ export function triggerConfigOf(trigger: TriggerDraft): Record<string, unknown> 
   }
 }
 
-/** Build one action's config JSON (its `type` + per-type slots). */
+/** Build one action's config JSON (its `type` + per-type slots). The 6.6.1 /
+ * 6.6.3 registries remain the validation authority — this only assembles the
+ * shape they parse. */
 export function actionConfigOf(action: ActionDraft): Record<string, unknown> {
-  if (action.type === 'transition') {
-    return { type: 'transition', toStatusId: action.toStatusId };
+  switch (action.type) {
+    case 'transition':
+      return { type: 'transition', toStatusId: action.toStatusId };
+    case 'set_field': {
+      const out: Record<string, unknown> = { type: 'set_field', field: action.setField };
+      switch (action.setField) {
+        case 'assignee':
+          out.value = action.assignee;
+          break;
+        case 'priority':
+          out.value = action.priority;
+          break;
+        case 'dueDate':
+          out.value = action.dueDate;
+          break;
+        case 'estimate':
+          out.value = action.estimate;
+          break;
+      }
+      return out;
+    }
+    case 'add_watcher':
+      return { type: 'add_watcher', userId: action.userId };
+    case 'add_comment':
+      return { type: 'add_comment', bodyMd: action.bodyMd };
+    case 'add_label':
+      return { type: 'add_label', name: action.labelName };
+    case 'set_custom_field':
+      return {
+        type: 'set_custom_field',
+        fieldId: action.customFieldId,
+        value: action.customFieldValue,
+      };
   }
-  const out: Record<string, unknown> = { type: 'set_field', field: action.setField };
-  switch (action.setField) {
-    case 'assignee':
-      out.value = action.assignee;
-      break;
-    case 'priority':
-      out.value = action.priority;
-      break;
-    case 'dueDate':
-      out.value = action.dueDate;
-      break;
-    case 'estimate':
-      out.value = action.estimate;
-      break;
-  }
-  return out;
 }
 
 /** Serialize a draft into the create/update payload. The condition encodes via
@@ -218,24 +264,40 @@ export function ruleWritePayload(draft: RuleDraft): RuleWritePayload {
  * and pins on the offending row (never a generic toast). */
 export type ActionDraftProblem = 'no-target-status' | 'no-field' | 'no-value';
 
-/** Null when the action is shippable, else the first blocking problem. */
+/** Null when the action is shippable, else the first blocking problem. The
+ * Epic-5 actions reuse the generic `no-value` reason (their dedicated editors —
+ * and any finer-grained copy — are the 6.6.5 follow-up; they aren't reachable
+ * from the picker yet, so this only guards an API-authored rule opened here). */
 export function actionDraftProblem(action: ActionDraft): ActionDraftProblem | null {
-  if (action.type === 'transition') {
-    return action.toStatusId ? null : 'no-target-status';
-  }
-  if (!action.setField) return 'no-field';
-  switch (action.setField) {
-    case 'assignee':
-      // null = "Unassign" — a legitimate value, so assignee never blocks.
+  switch (action.type) {
+    case 'transition':
+      return action.toStatusId ? null : 'no-target-status';
+    case 'set_field': {
+      if (!action.setField) return 'no-field';
+      switch (action.setField) {
+        case 'assignee':
+          // null = "Unassign" — a legitimate value, so assignee never blocks.
+          return null;
+        case 'priority':
+          return action.priority ? null : 'no-value';
+        case 'dueDate':
+          // null = "Clear due date" — legitimate.
+          return null;
+        case 'estimate':
+          // null = "Clear estimate" — legitimate.
+          return null;
+      }
       return null;
-    case 'priority':
-      return action.priority ? null : 'no-value';
-    case 'dueDate':
-      // null = "Clear due date" — legitimate.
-      return null;
-    case 'estimate':
-      // null = "Clear estimate" — legitimate.
-      return null;
+    }
+    case 'add_watcher':
+      return action.userId ? null : 'no-value';
+    case 'add_comment':
+      return action.bodyMd && action.bodyMd.trim().length > 0 ? null : 'no-value';
+    case 'add_label':
+      return action.labelName && action.labelName.trim().length > 0 ? null : 'no-value';
+    case 'set_custom_field':
+      // null value = a legitimate clear; only the target field is required.
+      return action.customFieldId ? null : 'no-value';
   }
 }
 

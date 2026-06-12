@@ -126,6 +126,60 @@ describe('automationRuleForm — config builders', () => {
   });
 });
 
+// The Epic-5 registry actions (6.6.3) round-trip through the form model even
+// though their dedicated editors are a 6.6.5 follow-up (gated out of the picker
+// in the component) — an API-authored rule must load + re-save losslessly.
+describe('automationRuleForm — Epic-5 actions round-trip (6.6.3)', () => {
+  const EPIC5_ACTIONS = [
+    { type: 'add_watcher', userId: 'u-9' },
+    { type: 'add_comment', bodyMd: 'Verify the fix' },
+    { type: 'add_label', name: 'needs-qa' },
+    { type: 'set_custom_field', fieldId: 'cf-1', value: 'opt-1' },
+  ] as const;
+
+  it('hydrates each Epic-5 action from a DTO and serializes it back unchanged', () => {
+    const draft = ruleDraftFromDto(dto({ actions: [...EPIC5_ACTIONS] }));
+    const payload = ruleWritePayload(draft);
+    expect(payload.actions).toEqual([...EPIC5_ACTIONS]);
+  });
+
+  it('actionConfigOf builds each Epic-5 action shape from its slots', () => {
+    expect(actionConfigOf({ ...emptyActionDraft('add_watcher'), userId: 'u-9' })).toEqual({
+      type: 'add_watcher',
+      userId: 'u-9',
+    });
+    expect(actionConfigOf({ ...emptyActionDraft('add_comment'), bodyMd: 'hi' })).toEqual({
+      type: 'add_comment',
+      bodyMd: 'hi',
+    });
+    expect(actionConfigOf({ ...emptyActionDraft('add_label'), labelName: 'qa' })).toEqual({
+      type: 'add_label',
+      name: 'qa',
+    });
+    expect(
+      actionConfigOf({
+        ...emptyActionDraft('set_custom_field'),
+        customFieldId: 'cf-1',
+        customFieldValue: 42,
+      }),
+    ).toEqual({ type: 'set_custom_field', fieldId: 'cf-1', value: 42 });
+  });
+
+  it('completeness flags an unconfigured Epic-5 action and clears once filled', () => {
+    expect(actionDraftProblem(emptyActionDraft('add_watcher'))).toBe('no-value');
+    expect(actionDraftProblem({ ...emptyActionDraft('add_watcher'), userId: 'u-9' })).toBeNull();
+    expect(actionDraftProblem(emptyActionDraft('add_comment'))).toBe('no-value');
+    expect(actionDraftProblem({ ...emptyActionDraft('add_comment'), bodyMd: '  ' })).toBe(
+      'no-value',
+    );
+    expect(actionDraftProblem(emptyActionDraft('add_label'))).toBe('no-value');
+    expect(actionDraftProblem(emptyActionDraft('set_custom_field'))).toBe('no-value');
+    expect(
+      actionDraftProblem({ ...emptyActionDraft('set_custom_field'), customFieldId: 'cf-1' }),
+    ).toBeNull();
+  });
+});
+
 describe('automationRuleForm — completeness gate', () => {
   const transitionAction = (over: Partial<ActionDraft> = {}): ActionDraft => ({
     ...emptyActionDraft('transition'),

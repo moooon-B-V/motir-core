@@ -5,7 +5,8 @@ import type { ReactElement } from 'react';
 import type { AutomationRuleDto } from '@/lib/dto/automationRules';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
-import { AUTOMATION_TRIGGER_TYPES, AUTOMATION_ACTION_TYPES } from '@/lib/automation/registry';
+import { AUTOMATION_TRIGGER_TYPES } from '@/lib/automation/registry';
+import { EDITOR_READY_ACTION_TYPES } from '@/app/(authed)/settings/project/automation/_components/AutomationRuleEditor';
 import { ToastProvider } from '@/components/ui/Toast';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 
@@ -219,14 +220,19 @@ describe('AutomationRuleEditor — registry-driven when/if/then', () => {
     }
   });
 
-  it('the action picker renders EVERY registered action (registry-driven)', () => {
+  it('the action picker renders the editor-ready actions (registry-driven; Epic-5 actions gated until their editors land)', () => {
     openCreate();
     fireEvent.click(screen.getByRole('button', { name: 'Add action' }));
     fireEvent.click(screen.getByRole('combobox', { name: 'Action type' }));
     const expected: Record<string, string> = { transition: 'Transition', set_field: 'Set field' };
-    for (const type of AUTOMATION_ACTION_TYPES) {
+    for (const type of EDITOR_READY_ACTION_TYPES) {
       expect(screen.getByRole('option', { name: expected[type] })).toBeTruthy();
     }
+    // The four 6.6.3 Epic-5 actions (add_watcher / add_comment / add_label /
+    // set_custom_field) are NOT offered yet — their config editors are a 6.6.5
+    // follow-up, so the picker gates them out (the backend fully supports them).
+    expect(screen.queryByRole('option', { name: 'Add comment' })).toBeNull();
+    expect(screen.queryByRole('option', { name: 'Add watcher' })).toBeNull();
   });
 
   it('gates Save: a nameless, action-less rule surfaces the validation messages', () => {
