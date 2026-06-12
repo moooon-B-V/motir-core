@@ -229,8 +229,23 @@ export default async function IssueDetailPage({
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <IssueTypeIcon type={item.kind as IssueType} className="h-5 w-5 shrink-0" />
             <span className="text-(--el-text-muted) font-mono text-sm">{item.identifier}</span>
-            <ParentBreadcrumb ancestors={detail.ancestors} />
-            <Pill tone="neutral">{item.status}</Pill>
+            {/* bug-issue-detail-eyebrow-overflows-viewport: the breadcrumb + status
+              Pill share a `min-w-0 flex-1` cell so the breadcrumb has a BOUNDED
+              track to truncate against — its inner `<span className="truncate">`
+              (ParentBreadcrumb) only fires inside a bounded parent. Without this
+              cell the breadcrumb sits as a bare flex child and resolves to its
+              min-content width (a flex item defaults to `min-width:auto`), so a
+              long ancestor chain pushes the whole page wider than the viewport and
+              clips the right cluster + core-fields rail. Grouping the Pill in the
+              SAME cell keeps it glued to the breadcrumb, so short / no-ancestor
+              items render exactly as before (the cell collapses to content width
+              at the left). */}
+            <div className="flex min-w-0 flex-1 items-center gap-x-3">
+              <ParentBreadcrumb ancestors={detail.ancestors} />
+              <Pill tone="neutral" className="shrink-0">
+                {item.status}
+              </Pill>
+            </div>
             <div className="ml-auto flex items-center gap-3">
               {/* Epic/parent subtree roll-up (4.3.5) — labelled so it never reads
                 as the parent's OWN estimate; shown only when it has descendants. */}
@@ -269,9 +284,15 @@ export default async function IssueDetailPage({
           <h1 className="text-(--el-text) font-serif text-2xl font-semibold">{item.title}</h1>
         </header>
 
-        {/* Body — two columns; later subtasks fill the regions. */}
+        {/* Body — two columns; later subtasks fill the regions. The `1fr` track is
+          `minmax(auto, 1fr)`, so `min-w-0` on the <main> floors its min-content to
+          0 — otherwise a wide markdown child (a long unbroken URL, a code block, a
+          wide table) blows the track past the viewport. The code block itself
+          scrolls inside its own `.motir-prose pre` (overflow-x:auto), but only once
+          this track is bounded. Sibling of the eyebrow fix above —
+          bug-issue-detail-eyebrow-overflows-viewport. */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_18rem]">
-          <main className="flex flex-col gap-6">
+          <main className="flex min-w-0 flex-col gap-6">
             <ContentSectionCard
               title={t('description')}
               subtitle={t('descriptionGloss')}
