@@ -394,7 +394,7 @@ export const story_6_8: PlanStory = {
       id: '6.8.5',
       title:
         'Story tests — rename-tx matrix (atomicity, collisions, races, reclaim/release) + redirect/serve matrix + the rename E2E journey + a11y sweep',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
