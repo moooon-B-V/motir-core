@@ -1248,6 +1248,155 @@ export const EPICS: EpicMeta[] = [
           '- `motir-core/CLAUDE.md` — colour via `--el-*`, shape via element-shape tokens ' +
           '(applies to whatever wrapper / prop the fix introduces)',
       },
+      {
+        id: 'bug-board-cannot-drag-from-in-review-to-done',
+        kind: 'bug',
+        title:
+          'Kanban board — dragging a card from In Review to Done does not move it (card snaps back, status unchanged)',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** Kanban board (`/boards`, Stories 3.1 / 3.2) · **Status:** ' +
+          'open · **Reported by:** Yue.\n\n' +
+          'On the Kanban board (`/boards`, flat / no swimlanes) a card in the **In Review** ' +
+          'column cannot be dragged into **Done**. The drag visibly starts (the card lifts, the ' +
+          'pointer follows it), but the drop either snaps back to In Review (the column it came ' +
+          'from) or never registers — the card stays in In Review and the work-item status is ' +
+          'unchanged. Adjacent column moves on the same board work as expected (other transitions ' +
+          'verified manually), so this is specific to the `in_review → done` edge.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open the `moooon` / `motir` ' +
+          "project → `/boards` (flat / no swimlanes; the default workflow's six columns: " +
+          '`todo · blocked · in_progress · in_review · done · cancelled`). Find a work item ' +
+          'whose current status is `in_review`. Drag it from the In Review column onto the ' +
+          'Done column. Observe: the card does NOT settle in Done — it either snaps back to ' +
+          'In Review immediately on drop, or the drag completes visually but a refresh shows ' +
+          'the status unchanged. Repeat with a different card from In Review to confirm the ' +
+          'edge is the variable, not the card.\n\n' +
+          '**Diagnostic data the fix Subtask MUST capture before changing code (the bug ' +
+          'report is symptomatic; the dispatch needs to nail down which branch is firing):**\n' +
+          '1. Open DevTools → Network and replay the drag. Did the browser fire ' +
+          '**`POST /api/board/move`** at all?\n' +
+          '   - **NO request** → the bug is in the dnd-kit wiring: either the drop target ' +
+          "isn't resolving (over-id mismatch), or `handleDragEnd` is short-circuiting before " +
+          '`runMove` (likely a guard in `BoardContainer.tsx` — e.g. `canEdit` resolving false, ' +
+          'or `columnOfOverId` returning null for the Done column). See ' +
+          '`app/(authed)/boards/_components/BoardContainer.tsx` ~line 875 onward + the ' +
+          '`columnOfOverId` helper in `boardMove.ts`.\n' +
+          '   - **Request fired, response NON-200** → look at the status:\n' +
+          '     - `409` (IllegalBoardMoveError) — the workflow rejected the transition. The ' +
+          'default workflow DOES permit `in_review → done` (`lib/workflows/defaultWorkflow.ts` ' +
+          'line ~74), so a 409 here would imply: (a) the project workflow is customised and ' +
+          'the edge was removed; (b) the Done column maps a status whose key is NOT the ' +
+          "literal `done` (the column's first mapped status by `position` is what " +
+          '`boardsService.moveCard` transitions to — `boardsService.ts` ~lines 478-501); or ' +
+          "(c) the card's current status isn't actually `in_review` (it could be in a " +
+          'multi-status column that LOOKS like In Review but the card carries a different key).\n' +
+          '     - `422` (UnmappedColumnTargetError) — the Done column maps NO live status; ' +
+          'this would mean the workflow was edited (a status renamed/deleted) and the column ' +
+          'mappings drifted. Unmapped statuses tray should be visible above the board if ' +
+          "that's the case.\n" +
+          '     - `404` — boardId / workItemId / column id stale (a re-projection ' +
+          'mid-drag, or the active project changed in another tab).\n' +
+          '     - `500` / network error — server fault; check server logs.\n' +
+          '   - **Request fired, response 200 but UI snaps back** → reconcile bug in ' +
+          '`BoardContainer.runMove` (`reconcileCard` produces an unexpected shape) or a ' +
+          'racing re-fetch overwriting the optimistic state. Less likely but possible.\n' +
+          '2. Check the toast. The 3.2.4 wiring emits a toast on snap-back ' +
+          '(`moveIllegalDescription` / `moveUnmappedDescription` / `moveErrorDescription`). ' +
+          'If a toast appears, READ IT — the copy names the failure class.\n' +
+          '3. Inspect the Done column in DevTools — find its `data-testid` / id and confirm ' +
+          'the dnd-kit `useDroppable({ id: column.id })` registration (`BoardColumn.tsx` ' +
+          'line ~76). If the Done column has zero cards and no padding, its droppable area ' +
+          'may be too narrow to reliably receive a drop at a typical pointer velocity ' +
+          '(a 3.2.x finding; the empty-state region needs a sensible min-height).\n\n' +
+          '**Hypotheses, in order of likelihood (the fix Subtask should narrow this with the ' +
+          'diagnostics above, NOT pick one blind):**\n' +
+          '1. **The Done column droppable surface is too small / mis-bounded** when the ' +
+          'column is empty or short. The dnd-kit pointer collision detection ' +
+          '(default `closestCorners`) needs a stable droppable rect; a zero-card column with ' +
+          'only the header + an empty-state caption can resolve to a SIBLING column under ' +
+          'the pointer, so the over-id never points at Done. Likely if no `POST /api/board/move` ' +
+          'fires.\n' +
+          '2. **The Done column maps a status whose KEY differs from `done`** in the live ' +
+          'tenant (e.g. customized workflow, or seed drift). `moveCard` ' +
+          '(`boardsService.ts:478-501`) transitions to the mapped target status; if that key ' +
+          "isn't in the workflow's edges out of `in_review`, the service throws " +
+          '`IllegalTransitionError` → 409 → snap-back. Likely if a 409 fires.\n' +
+          '3. **A 409 IS firing and the toast is missing or unreadable** (e.g. dismissed too ' +
+          'fast, or the next-intl string for `moveIllegalDescription` is missing in the ' +
+          'current locale — the screenshot history shows the app is in `zh` for Yue). ' +
+          'A silent 409 looks identical to a no-request bug from the user side.\n' +
+          '4. **Sprint mode interaction.** If the board has an active sprint open and the ' +
+          'item is NOT in the active sprint, board state might be filtering it out of the ' +
+          'reconciled response. Less likely but worth ruling out via the network response ' +
+          'body.\n' +
+          '5. **A row-position rank collision** (`keyBetween` returns an identical key) — ' +
+          'wildly unlikely (Story 1.4 fractional-index helper is well-tested) but the only ' +
+          'remaining "request fires, 200 returns, card snaps back" branch.\n\n' +
+          '**Why this is logged as a bug, not a finding.** Yue can reproduce it reliably ' +
+          "(it's a hard blocker — you can't progress an issue to Done by drag, the primary " +
+          'board interaction). Even if it turns out to be data drift in a specific tenant ' +
+          '(hypothesis 2) or a localisation gap (hypothesis 3), the user-facing symptom is ' +
+          'identical: "the board move silently fails." A finding would defer the user-facing ' +
+          'fix; a bug attaches the fix to the seed so it surfaces in the board.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- The fix Subtask STARTS by reproducing the bug on a fresh `pnpm dev` against ' +
+          'the seed, capturing the diagnostic data above (Network request fired? response ' +
+          'status? toast? Done-column droppable rect?). The root cause is determined from ' +
+          'observation, not assumption.\n' +
+          '- After the fix, a card in `in_review` can be dragged into the Done column on ' +
+          'the flat Kanban board and the move sticks: the card renders in Done, the work ' +
+          'item status is `done`, and refreshing the page does not revert the change.\n' +
+          '- Adjacent transitions that ALREADY worked (e.g. `todo → in_progress`, ' +
+          '`in_progress → in_review`, `in_review → in_progress`, `in_progress → blocked`, ' +
+          '`done → in_progress` reopen) continue to work — no regression in the green-path ' +
+          'board moves.\n' +
+          '- ALL six default columns accept drops cleanly even when EMPTY (the ' +
+          'droppable surface for an empty column is at least, say, 120 px tall — the ' +
+          'empty-state region has a sensible min-height so the drop target is reliable). ' +
+          'This is the "fix the smallest hypothesis-1 surface" backstop regardless of which ' +
+          'hypothesis turns out to be the actual root cause — if the fix is elsewhere, this ' +
+          'still lands as a coverage improvement.\n' +
+          '- The snap-back toast strings (`moveIllegalDescription` / ' +
+          '`moveUnmappedDescription` / `moveErrorDescription`) are verified present and ' +
+          'readable in BOTH `en` and `zh` locales (next-intl) — a silent snap-back is a ' +
+          'bug-class on its own.\n' +
+          '- A Playwright regression in `tests/e2e/board-flat.spec.ts` (or a sibling) ' +
+          'exercises EACH default transition edge from a seed card (`todo → in_progress`, ' +
+          '`in_progress → in_review`, **`in_review → done`** ← the one this bug names, plus ' +
+          'the others); the test drives a real drag (`page.dragAndDrop` or pointer ' +
+          'sequences) and asserts the card lands in the target column AND the work-item ' +
+          'status reflects the transition after a reload. The matrix posture catches a ' +
+          'future "one specific edge regresses" of the same shape.\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/boards/_components/BoardContainer.tsx` — the dnd `handleDragEnd`, ' +
+          '`runMove` (~line 498), `runTransition` (~line 547), and the over-id resolution. ' +
+          'The 3.2.4 optimistic / 409-snap-back wiring.\n' +
+          '- `app/(authed)/boards/_components/BoardColumn.tsx` (~line 76) — the ' +
+          '`useDroppable({ id: column.id })` for each column; the empty-column droppable ' +
+          'area is the hypothesis-1 fix site.\n' +
+          '- `app/(authed)/boards/_components/boardMove.ts` — `columnOfOverId` + ' +
+          '`relocateCard` (the over-id resolver and optimistic reducer).\n' +
+          '- `app/api/board/move/route.ts` — the HTTP layer (typed-error → status mapping).\n' +
+          '- `lib/services/boardsService.ts:415-535` — `moveCard` orchestration + the ' +
+          'cross-column transition path (`applyStatusTransition` → `IllegalTransitionError` ' +
+          '→ `IllegalBoardMoveError`).\n' +
+          '- `lib/services/workItemsService.ts:1124-1182` — `applyStatusTransition`: it ' +
+          'gates on `workflowsService.canTransition` ONLY — **does NOT readiness-gate moves ' +
+          'into a `done`-category status against unresolved `is_blocked_by` links** (so an ' +
+          'open blocker is NOT a cause of this bug at the service layer; if Yue wants ' +
+          'readiness to GATE the move, that is a separate Story-4.x decision, not this fix).\n' +
+          '- `lib/workflows/defaultWorkflow.ts:67-89` — the 15-edge default transition graph; ' +
+          '`in_review → done` is the third edge (forward main path).\n' +
+          '- `messages/en.json` + `messages/zh.json` — `boards.move*` strings the snap-back ' +
+          'toast renders.\n' +
+          '- `tests/e2e/board-flat.spec.ts` (and siblings) — the Playwright regression ' +
+          'site.\n' +
+          '- `motir-core/CLAUDE.md` — colour via `--el-*`, shape via element-shape tokens; ' +
+          'the 4-layer Route → Service → Repository → Prisma contract for any backend ' +
+          'change the fix may need.',
+      },
     ],
   },
   {
