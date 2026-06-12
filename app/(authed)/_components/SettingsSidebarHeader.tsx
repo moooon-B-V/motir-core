@@ -84,13 +84,15 @@ export function SettingsSidebarHeader({
           <span className="truncate font-sans text-[13.5px] font-semibold text-(--el-text)">
             {activeProject.name}
           </span>
-          <span className="font-mono text-[11px] text-(--el-text-muted)">
+          <span className="font-mono text-[11px] text-(--el-text-secondary)">
             {activeProject.identifier}
           </span>
         </span>
       </div>
 
-      <span className="px-(--spacing-control-x) font-sans text-[11px] font-semibold uppercase tracking-[0.02em] text-(--el-text-faint)">
+      {/* Eyebrow on the sidebar surface (#f6f5f4): --el-text-faint/-muted both
+          undershoot WCAG AA at 11px, so use --el-text-secondary (AA-safe). */}
+      <span className="px-(--spacing-control-x) font-sans text-[11px] font-semibold uppercase tracking-[0.02em] text-(--el-text-secondary)">
         {t('nav.eyebrow')}
       </span>
     </div>

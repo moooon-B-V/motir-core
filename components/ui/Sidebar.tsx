@@ -231,7 +231,10 @@ function SidebarSectionFrame({
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
           )}
         >
-          <SectionLabel label={section.label} />
+          {/* Section captions sit on the sidebar surface (#f6f5f4), where the
+              default --el-text-muted undershoots WCAG AA at 11px; --el-text-secondary
+              is the AA-safe sidebar caption color. */}
+          <SectionLabel label={section.label} className="text-(--el-text-secondary)" />
           <ChevronDown
             aria-hidden
             className="h-3.5 w-3.5 text-(--el-text-muted) transition-transform group-data-[state=closed]:-rotate-90"
@@ -246,7 +249,10 @@ function SidebarSectionFrame({
 
   return (
     <div className="flex flex-col gap-1.5">
-      {section.label && !collapsed ? <SectionLabel label={section.label} className="px-2" /> : null}
+      {section.label && !collapsed ? (
+        // AA-safe sidebar caption color (see the collapsible branch above).
+        <SectionLabel label={section.label} className="px-2 text-(--el-text-secondary)" />
+      ) : null}
       {rows}
     </div>
   );
