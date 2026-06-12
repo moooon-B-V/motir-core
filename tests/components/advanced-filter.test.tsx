@@ -4,6 +4,9 @@ import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
+import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
+import type { ComponentDto } from '@/lib/dto/components';
+import type { LabelDto } from '@/lib/dto/labels';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import { EMPTY_FILTER, parseIssueFilter, type IssueFilter } from '@/lib/issues/issueListFilter';
 import { decodeFilterParam, encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
@@ -42,6 +45,13 @@ beforeAll(() => {
     unobserve() {}
     disconnect() {}
   };
+  // The label value editor's bounded autocomplete (6.1.5) — stub the fetch so
+  // opening a label row never hits the network; chip names/stale come from the
+  // server-resolved `referencedLabels` prop, so an empty window is fine here.
+  (globalThis as unknown as { fetch: unknown }).fetch = vi.fn(async () => ({
+    ok: true,
+    json: async () => ({ labels: [] }),
+  }));
 });
 
 afterEach(() => {
@@ -93,7 +103,63 @@ const SPRINTS: SprintDto[] = [
   } as unknown as SprintDto,
 ];
 
-function renderBuilder(opts: { ast?: FilterAst | null; fields?: FilterFieldDef[] } = {}) {
+// Epic-5 builder fixtures (Subtask 6.1.5): a select CF (with an archived
+// option), a number CF, a user CF; two components; two referenced labels.
+const CUSTOM_FIELDS: CustomFieldDefinitionDTO[] = [
+  {
+    id: 'cf-sev',
+    key: 'severity',
+    label: 'Severity',
+    fieldType: 'select',
+    description: null,
+    position: 'a',
+    valueCount: 3,
+    options: [
+      { id: 'opt-high', label: 'High', position: 'a', archived: false, valueCount: 2 },
+      { id: 'opt-crit', label: 'Critical', position: 'b', archived: true, valueCount: 1 },
+    ],
+  },
+  {
+    id: 'cf-eff',
+    key: 'effort',
+    label: 'Effort',
+    fieldType: 'number',
+    description: null,
+    position: 'b',
+    valueCount: 1,
+    options: [],
+  },
+  {
+    id: 'cf-qa',
+    key: 'qa_owner',
+    label: 'QA owner',
+    fieldType: 'user',
+    description: null,
+    position: 'c',
+    valueCount: 0,
+    options: [],
+  },
+];
+
+const COMPONENTS: ComponentDto[] = [
+  { id: 'cmp-api', name: 'API', description: null, defaultAssigneeId: null },
+  { id: 'cmp-web', name: 'Web', description: null, defaultAssigneeId: null },
+];
+
+const REFERENCED_LABELS: LabelDto[] = [
+  { id: 'lbl-perf', name: 'perf-q3' },
+  { id: 'lbl-api', name: 'api' },
+];
+
+function renderBuilder(
+  opts: {
+    ast?: FilterAst | null;
+    fields?: FilterFieldDef[];
+    customFields?: CustomFieldDefinitionDTO[];
+    components?: ComponentDto[];
+    referencedLabels?: LabelDto[];
+  } = {},
+) {
   const ast = opts.ast ?? null;
   const filter = ast ? setAdvancedParam(EMPTY_FILTER, ast) : EMPTY_FILTER;
   return renderWithIntl(
@@ -105,6 +171,10 @@ function renderBuilder(opts: { ast?: FilterAst | null; fields?: FilterFieldDef[]
       statuses={STATUSES}
       members={MEMBERS}
       sprints={SPRINTS}
+      customFields={opts.customFields ?? CUSTOM_FIELDS}
+      components={opts.components ?? COMPONENTS}
+      referencedLabels={opts.referencedLabels ?? REFERENCED_LABELS}
+      projectKey="PROD"
       fields={opts.fields}
     />,
   );
@@ -411,7 +481,15 @@ describe('AdvancedFilterSummary — the read-only chip readout', () => {
       ],
     };
     renderWithIntl(
-      <AdvancedFilterSummary ast={ast} statuses={STATUSES} members={MEMBERS} sprints={SPRINTS} />,
+      <AdvancedFilterSummary
+        ast={ast}
+        statuses={STATUSES}
+        members={MEMBERS}
+        sprints={SPRINTS}
+        customFields={CUSTOM_FIELDS}
+        components={COMPONENTS}
+        referencedLabels={REFERENCED_LABELS}
+      />,
     );
     expect(screen.getByText('Match any')).toBeTruthy();
     expect(screen.getByText('is any of To Do, In Progress')).toBeTruthy();
@@ -429,6 +507,9 @@ describe('AdvancedFilterSummary — the read-only chip readout', () => {
         statuses={STATUSES}
         members={MEMBERS}
         sprints={SPRINTS}
+        customFields={CUSTOM_FIELDS}
+        components={COMPONENTS}
+        referencedLabels={REFERENCED_LABELS}
       />,
     );
     expect(screen.queryByText('Match any')).toBeNull();
@@ -442,5 +523,177 @@ describe('InvalidFilterCallout — the typed recoverable state', () => {
     expect(within(alert).getByText('This filter link couldn’t be read')).toBeTruthy();
     fireEvent.click(within(alert).getByRole('button', { name: 'Clear filter' }));
     expect(push).toHaveBeenCalledWith('/issues?view=list');
+  });
+});
+
+describe('IssueAdvancedFilter — Epic-5 rows (Subtask 6.1.5)', () => {
+  function openFieldPicker(rowName = 'Condition 1') {
+    const row = screen.getByRole('group', { name: rowName });
+    fireEvent.click(within(row).getByRole('combobox', { name: 'Field' }));
+    return row;
+  }
+
+  it('the field menu groups the dynamic custom-field entries under "Custom fields"', () => {
+    renderBuilder();
+    openBuilder();
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+    openFieldPicker();
+    // the group header + every dynamic CF entry + the join fields render
+    expect(screen.getByText('Custom fields')).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Severity' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Effort' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'QA owner' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Label' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Component' })).toBeTruthy();
+  });
+
+  it('a project with no custom fields shows zero CF entries (registry-driven)', () => {
+    renderBuilder({ customFields: [] });
+    openBuilder();
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+    openFieldPicker();
+    expect(screen.queryByText('Custom fields')).toBeNull();
+    expect(screen.queryByRole('option', { name: 'Severity' })).toBeNull();
+    // the built-in + join fields are still there
+    expect(screen.getByRole('option', { name: 'Label' })).toBeTruthy();
+  });
+
+  it('builds a select custom-field condition incl. the archived option (URL round-trip)', () => {
+    renderBuilder();
+    openBuilder();
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+    const row = openFieldPicker();
+    fireEvent.click(screen.getByRole('option', { name: 'Severity' }));
+    // the value editor is the CF option picker; archived options carry the mark
+    fireEvent.focus(within(row).getByRole('combobox', { name: 'Severity values' }));
+    expect(screen.getByRole('option', { name: 'Critical (archived)' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('option', { name: 'High' }));
+    expect(lastPushedAst()).toEqual({
+      combinator: 'and',
+      conditions: [{ field: 'cf:cf-sev', operator: 'is_any_of', value: ['opt-high'] }],
+    });
+  });
+
+  it('builds a component condition (URL round-trip)', () => {
+    renderBuilder();
+    openBuilder();
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+    const row = openFieldPicker();
+    fireEvent.click(screen.getByRole('option', { name: 'Component' }));
+    fireEvent.focus(within(row).getByRole('combobox', { name: 'Component values' }));
+    fireEvent.click(screen.getByRole('option', { name: 'API' }));
+    expect(lastPushedAst()).toEqual({
+      combinator: 'and',
+      conditions: [{ field: 'cmp', operator: 'is_any_of', value: ['cmp-api'] }],
+    });
+  });
+
+  it('builds a number custom-field comparison (Effort ≥ 3)', () => {
+    vi.useFakeTimers();
+    try {
+      renderBuilder();
+      openBuilder();
+      fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+      const row = openFieldPicker();
+      fireEvent.click(screen.getByRole('option', { name: 'Effort' }));
+      // default operator for a number field is `=`; switch to ≥ and type 3
+      fireEvent.click(within(row).getByRole('combobox', { name: 'Operator' }));
+      fireEvent.click(screen.getByRole('option', { name: '≥' }));
+      // numeric input free-typing debounces the live-apply push
+      fireEvent.change(within(row).getByRole('textbox', { name: 'Effort values' }), {
+        target: { value: '3' },
+      });
+      vi.advanceTimersByTime(300);
+      expect(lastPushedAst()).toEqual({
+        combinator: 'and',
+        conditions: [{ field: 'cf:cf-eff', operator: 'gte', value: 3 }],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('restores a label row from the URL — a deleted referent renders the stale chip + notice', () => {
+    const ast: FilterAst = {
+      combinator: 'and',
+      conditions: [{ field: 'lbl', operator: 'is_any_of', value: ['lbl-perf', 'lbl-gone'] }],
+    };
+    // referencedLabels resolves only the surviving id; 'lbl-gone' is deleted.
+    renderBuilder({ ast, referencedLabels: [{ id: 'lbl-perf', name: 'perf-q3' }] });
+    openBuilder();
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    expect(within(row).getByText('perf-q3')).toBeTruthy();
+    expect(within(row).getByText('Unknown value')).toBeTruthy();
+    expect(
+      within(row).getByText(
+        'This value no longer exists in the project — this condition matches nothing.',
+      ),
+    ).toBeTruthy();
+    // removing the stale chip re-applies WITHOUT it (it matched nothing)
+    fireEvent.click(within(row).getByRole('button', { name: 'Remove Unknown value' }));
+    expect(lastPushedAst()).toEqual({
+      combinator: 'and',
+      conditions: [{ field: 'lbl', operator: 'is_any_of', value: ['lbl-perf'] }],
+    });
+  });
+
+  it('degrades a deleted custom FIELD to the unknown-field row (kept, removable)', () => {
+    const ast: FilterAst = {
+      combinator: 'and',
+      conditions: [{ field: 'cf:cf-gone', operator: 'is_any_of', value: ['opt-x'] }],
+    };
+    renderBuilder({ ast });
+    openBuilder();
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    expect(within(row).getByText('Unknown field')).toBeTruthy();
+    expect(
+      within(row).getByText('This field no longer exists — this condition matches nothing.'),
+    ).toBeTruthy();
+    // it counts as applied (matches nothing) until removed
+    expect(screen.getByText('1 of 20 conditions · applied live')).toBeTruthy();
+    fireEvent.click(within(row).getByRole('button', { name: 'Remove condition 1' }));
+    expect(lastPushedAst()).toBeNull();
+  });
+});
+
+describe('AdvancedFilterSummary — Epic-5 value resolution (6.1.5)', () => {
+  function renderSummary(ast: FilterAst, referencedLabels = REFERENCED_LABELS) {
+    return renderWithIntl(
+      <AdvancedFilterSummary
+        ast={ast}
+        statuses={STATUSES}
+        members={MEMBERS}
+        sprints={SPRINTS}
+        customFields={CUSTOM_FIELDS}
+        components={COMPONENTS}
+        referencedLabels={referencedLabels}
+      />,
+    );
+  }
+
+  it('resolves CF-option, label, and component value names (with the field labels)', () => {
+    renderSummary({
+      combinator: 'and',
+      conditions: [
+        { field: 'cf:cf-sev', operator: 'is_any_of', value: ['opt-high', 'opt-crit'] },
+        { field: 'lbl', operator: 'is_none_of', value: ['lbl-api'] },
+        { field: 'cmp', operator: 'is_any_of', value: ['cmp-api'] },
+      ],
+    });
+    expect(screen.getByText('Severity')).toBeTruthy();
+    expect(screen.getByText('is any of High, Critical (archived)')).toBeTruthy();
+    expect(screen.getByText('is none of api')).toBeTruthy();
+    expect(screen.getByText('is any of API')).toBeTruthy();
+  });
+
+  it('renders a deleted referent as the unknown-value text', () => {
+    renderSummary(
+      {
+        combinator: 'and',
+        conditions: [{ field: 'lbl', operator: 'is_any_of', value: ['lbl-gone'] }],
+      },
+      [],
+    );
+    expect(screen.getByText('is any of Unknown value')).toBeTruthy();
   });
 });

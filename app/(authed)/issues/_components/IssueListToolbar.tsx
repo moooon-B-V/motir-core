@@ -4,6 +4,9 @@ import type { FilterAst } from '@/lib/filters/ast';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
+import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
+import type { ComponentDto } from '@/lib/dto/components';
+import type { LabelDto } from '@/lib/dto/labels';
 import { IssueFilterBar } from './IssueFilterBar';
 import { IssueAdvancedFilter } from './IssueAdvancedFilter';
 import { IssueViewSwitcher } from './IssueViewSwitcher';
@@ -37,6 +40,13 @@ export interface IssueListToolbarProps {
   statuses: WorkflowStatusDto[];
   members: WorkspaceMemberDTO[];
   sprints: SprintDto[];
+  /** Epic-5 builder data (Subtask 6.1.5): the project's custom-field
+   * definitions, its components, and the active AST's referenced labels. */
+  customFields: CustomFieldDefinitionDTO[];
+  components: ComponentDto[];
+  referencedLabels: LabelDto[];
+  /** Project identifier — the Label editor's autocomplete read. */
+  projectKey: string;
 }
 
 export function IssueListToolbar({
@@ -47,6 +57,10 @@ export function IssueListToolbar({
   statuses,
   members,
   sprints,
+  customFields,
+  components,
+  referencedLabels,
+  projectKey,
 }: IssueListToolbarProps) {
   return (
     <div className="flex items-center gap-2">
@@ -66,6 +80,10 @@ export function IssueListToolbar({
         statuses={statuses}
         members={members}
         sprints={sprints}
+        customFields={customFields}
+        components={components}
+        referencedLabels={referencedLabels}
+        projectKey={projectKey}
       />
       <IssueViewSwitcher view={view} sort={sort} filter={filter} />
       <NewIssueButton />

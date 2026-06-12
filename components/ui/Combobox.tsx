@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Fragment,
   useCallback,
   useEffect,
   useId,
@@ -59,6 +60,15 @@ export interface ComboboxOption<T extends string> {
   icon?: ReactNode;
   /** Trailing muted text (e.g. the identifier). */
   secondary?: string;
+  /**
+   * Optional section label. When consecutive options carry different `group`
+   * values, a non-interactive header row is rendered at each transition (the
+   * advanced filter's "Fields" / "Custom fields" / "Other" field menu). Pass
+   * options pre-sorted by group; headers follow list order, so a group whose
+   * every option is filtered out disappears with it. Decorative — not part of
+   * the listbox's option indices, so keyboard nav is unaffected.
+   */
+  group?: string;
 }
 
 export interface ComboboxProps<T extends string> {
@@ -329,28 +339,43 @@ export function Combobox<T extends string>({
           filtered.map((opt, i) => {
             const isSelected = opt.value === value;
             const isActive = i === active;
+            // A non-interactive group header at each group transition (in list
+            // order, so a fully-filtered group's header drops with it). Not an
+            // option row — keyboard nav over `filtered` is unaffected.
+            const header =
+              opt.group !== undefined && opt.group !== filtered[i - 1]?.group ? (
+                <div
+                  key={`group-${opt.group}`}
+                  role="presentation"
+                  className="px-(--spacing-control-x) pt-2 pb-1 font-mono text-[11px] font-semibold tracking-wider text-(--el-text-faint) uppercase"
+                >
+                  {opt.group}
+                </div>
+              ) : null;
             return (
-              <div
-                key={opt.value}
-                id={optionId(i)}
-                role="option"
-                aria-selected={isSelected}
-                onMouseEnter={() => setActiveIndex(i)}
-                onClick={() => commit(i)}
-                className={cn(
-                  'flex cursor-pointer items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm',
-                  isActive ? 'bg-(--el-surface) text-(--el-text)' : 'text-(--el-text)',
-                )}
-              >
-                {opt.icon ? <span aria-hidden>{opt.icon}</span> : null}
-                <span className="truncate">{opt.label}</span>
-                {opt.secondary ? (
-                  <span className="text-(--el-text-muted) ml-auto truncate text-xs">
-                    {opt.secondary}
-                  </span>
-                ) : null}
-                {isSelected ? <Check className="ml-1 h-4 w-4 shrink-0" aria-hidden /> : null}
-              </div>
+              <Fragment key={opt.value}>
+                {header}
+                <div
+                  id={optionId(i)}
+                  role="option"
+                  aria-selected={isSelected}
+                  onMouseEnter={() => setActiveIndex(i)}
+                  onClick={() => commit(i)}
+                  className={cn(
+                    'flex cursor-pointer items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm',
+                    isActive ? 'bg-(--el-surface) text-(--el-text)' : 'text-(--el-text)',
+                  )}
+                >
+                  {opt.icon ? <span aria-hidden>{opt.icon}</span> : null}
+                  <span className="truncate">{opt.label}</span>
+                  {opt.secondary ? (
+                    <span className="text-(--el-text-muted) ml-auto truncate text-xs">
+                      {opt.secondary}
+                    </span>
+                  ) : null}
+                  {isSelected ? <Check className="ml-1 h-4 w-4 shrink-0" aria-hidden /> : null}
+                </div>
+              </Fragment>
             );
           })
         )}
