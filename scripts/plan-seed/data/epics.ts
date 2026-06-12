@@ -10,7 +10,7 @@ export const EPICS: EpicMeta[] = [
   {
     id: '1',
     title: 'Foundation',
-    status: 'done',
+    status: 'in_progress',
     descriptionMd:
       'The architectural floor every other epic stands on: **project bootstrap**, **design ' +
       'system & brand**, authentication, multi-tenant workspaces, projects, the work-item schema, ' +
