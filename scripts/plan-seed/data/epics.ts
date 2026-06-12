@@ -1158,6 +1158,150 @@ export const EPICS: EpicMeta[] = [
           'next occurrence justifies a shared layout primitive / lint rule for ' +
           '"every flex/grid track that should shrink needs `min-w-0`."',
       },
+      {
+        id: 'bug-reports-landing-charts-sized-for-widget-tile-not-page',
+        kind: 'bug',
+        title:
+          'Reports landing pages render their charts at widget-tile proportions — Distribution donut is too small (lost in whitespace); Created-vs-Resolved line chart is too big (fills viewport width, runs off the bottom)',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 · **Surfaces:** reports landing pages ' +
+          '(`/reports/distribution` — Subtask 6.5.2; `/reports/created-vs-resolved` — ' +
+          'Subtask 6.5.3) · **Status:** open · **Reported by:** Yue.\n\n' +
+          'On both full-page report landings under `/reports/*`, the chart visual is sized as ' +
+          'if it were a **dashboard widget tile**, not a page-level data visualization. The two ' +
+          'symptoms look opposite but share one root cause:\n\n' +
+          '- **Distribution (`/reports/distribution`)** — the donut renders at ~170 px wide ' +
+          'on a 1400+ px page, floating in a vast empty plot area. The "419 工作项" total + ' +
+          'segment legend dominate the small ring; the whole upper half of the page is empty.\n' +
+          '- **Created vs Resolved (`/reports/created-vs-resolved`)** — the line/area chart ' +
+          'stretches to the FULL page width and proportionally grows TALL (the SVG uses ' +
+          '`block w-full h-auto`, so width scales the viewBox and height comes along). With ' +
+          'sparse data (a single spike at the right edge, Y axis up to 500), the chart fills ' +
+          'the viewport horizontally AND vertically — the legend / Y-axis label "工作项" sit ' +
+          'fine, but the X axis and the rest of the line run below the fold; on a 1280 px ' +
+          'page the chart paints at ~1280 × ~600 px, well past a typical laptop fold.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open `/reports/distribution` ' +
+          'on the `moooon` / `motir` project — observe the donut is small relative to the ' +
+          'page; lots of whitespace above and around the ring (per screenshot 1). Then open ' +
+          '`/reports/created-vs-resolved` and observe the chart fills the page width and ' +
+          'the bottom of the plot area is below the fold (per screenshot 2). Resize the ' +
+          "window: the donut stays the same pixel size (it's hard-coded), while the line " +
+          'chart scales WITH the window — both directions of wrong.\n\n' +
+          '**Root cause.** Two distinct sizing strategies in `components/ui/charts/`, both ' +
+          'tuned for the 6.3.3 dashboard-widget tile (~400 px wide column), neither correct ' +
+          'for a full-width report page:\n\n' +
+          '1. **`DonutChart.tsx`** — the SVG uses a fixed pixel `style={{ width: size * 0.71 }}` ' +
+          '(lines ~101-108) where `size` is a prop with a default of 220; `DistributionReport.tsx` ' +
+          'passes `size={240}` (line 160). That gives the SVG a hard `width: 170px`, ' +
+          'independent of the container. So even on a 1400-px-wide report page the donut ' +
+          'stays ~170 px — that is the "lost in whitespace" symptom. (`preserveAspectRatio` ' +
+          'and `h-auto` are present but irrelevant because `width` is hard-pixel.)\n' +
+          '2. **`ChartFrame.tsx`** (used by `LineChart` / `BarChart` / `DifferenceAreaChart`) ' +
+          'uses `className="block w-full h-auto"` on the SVG with `viewBox="0 0 ${width} ' +
+          '${height}"` (lines ~85-94). That means the SVG scales **responsively to ' +
+          'container width**, preserving the aspect ratio implied by the `width`/`height` ' +
+          'props. `CreatedVsResolvedReport.tsx` passes `width={680} height={320}` (ratio ' +
+          "~2.125:1). On a 1280-px page that's ~1280 × ~602 px; on a 1400-px page it's ~1400 " +
+          '× ~659 px — both push the X axis below the fold. The `width`/`height` props are ' +
+          'doing the WRONG job: they read like fixed canvas dimensions but actually only ' +
+          'set the aspect ratio.\n\n' +
+          'Both report pages embed the dashboard-widget-tuned chart components directly with ' +
+          'no max-width / aspect-ratio override; the chrome ' +
+          '(`app/(authed)/reports/_components/ReportPageChrome.tsx` / page wrappers) inherits ' +
+          'the authed-shell padding-only container (`app/(authed)/layout.tsx:117`, no ' +
+          '`max-w-*`), so the chart inherits the full page width.\n\n' +
+          '**Why it survived 6.5.2 / 6.5.3.** The chart primitives were originally built ' +
+          'for the 6.3.3 dashboard-widget surface where each widget sits in a tile ' +
+          '~400 px wide — and at THAT width both shapes are correct (the 170 px donut sits ' +
+          'centered in the tile; the 680 × 320 line chart at `w-full` of a ~400 px tile ' +
+          'renders ~400 × ~188 px, a sensible widget chart). The 6.5.x report-landing ' +
+          'subtasks reused them on a full-page surface without giving the chart a bounded ' +
+          'container, so a tile-tuned chart paints on a page-tuned canvas. Same mistake on ' +
+          'BOTH chart families, opposite-direction symptoms — a strong tell that the chart ' +
+          "API doesn't carry the surface (tile vs page) signal it needs.\n\n" +
+          '**Fix shapes (decide at fix time — both are mechanical):**\n' +
+          '1. **Give the report-landing chart container a bounded width**, e.g. wrap each ' +
+          'chart in a `max-w-3xl` (or `max-w-[56rem]`) centered block — the same shape we ' +
+          'already use for narrow forms. For the donut, also raise the `size` prop ' +
+          '(e.g. `size={360}` or `420`) so the ring is presence-sized for a page-level ' +
+          'visualization rather than a tile thumbnail. For the line chart, leave the ' +
+          'responsive `w-full` behaviour, but the bounded container caps its tall growth ' +
+          '(56-rem ≈ 896 px max width × 2.125:1 aspect ≈ 422 px tall — fits one fold).\n' +
+          '2. **Add a `surface` prop (or `variant`) to the chart primitives** — ' +
+          '`surface="tile"` (default, current behaviour) vs `surface="page"` (caps the ' +
+          'rendered size at a sensible page-level maximum with `max-width` / ' +
+          '`aspect-ratio` CSS instead of relying on the consumer to wrap it). This is the ' +
+          'durable shape — the chart component owns the responsive contract; consumers ' +
+          'pick the surface intent.\n' +
+          'Option 2 is the cleaner of the two and matches how `Pill` / `Card` / other ' +
+          'primitives carry size variants already. Either way the fix is contained to ' +
+          'the chart primitives + the two report-page wrappers; no data / service / DTO ' +
+          'change.\n\n' +
+          '**Verify via design.** `design/reports/` should already specify the page-level ' +
+          'donut diameter and the line-chart max width/height (the 6.3.3 widget tile shape ' +
+          'and the 6.5.x landing shape are DIFFERENT design surfaces — confirm by listing ' +
+          'the area folder and reading `design-notes.md` before picking a number). If the ' +
+          'landing shape was not specified in `design/reports/`, that is a design-gate ' +
+          'miss on the 6.5.x stories — the fix should ADD a `type: design` subtask first ' +
+          '(mirror 1.0.5 / 1.2.1 / 1.3.3 / 1.5.1 for output convention; produce a ' +
+          '`*.mock.html` + `design-notes.md`), then the code fix follows.\n\n' +
+          '**Test gap that let it ship.** Existing report-page tests likely assert data ' +
+          'rendering (legend totals, table rows) but not chart geometry. The fix MUST add ' +
+          "either a render-test or Playwright assertion that asserts the rendered SVG's " +
+          '`offsetWidth` / `offsetHeight` (via `getBoundingClientRect`) fits sensible ' +
+          'caps at a 1280-px viewport — e.g. donut diameter between 280–420 px on the ' +
+          'distribution page; line chart total height ≤ 480 px on the created-vs-resolved ' +
+          'page. Same measurement posture as the Epic-3 swimlane / Epic-6 detail-overflow ' +
+          'bugs — measure rendered geometry via `getBoundingClientRect`, not CSS rules.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- On `/reports/distribution`, the donut renders at a **page-level** size ' +
+          '(diameter in the 280–420 px range at typical laptop widths 1280–1440 px), not ' +
+          'the 170-px widget-tile size; the ring + center total + legend feel like a ' +
+          'primary page visualization, not an afterthought.\n' +
+          '- On `/reports/created-vs-resolved`, the line/area chart fits **within one ' +
+          'fold** at typical laptop widths (1280–1440 × 800–900 px viewport) — total ' +
+          'chart height (plus legend + scope/period chrome) ≤ ~480 px so the X axis and ' +
+          'plot area are visible without scrolling.\n' +
+          '- The chart components carry their sizing intent **explicitly** (a `surface` ' +
+          'prop, or a documented bounded-container contract) so a future report page or ' +
+          "widget tile can't accidentally render the wrong size; the dashboard-widget " +
+          '(6.3.3) surfaces continue to render at their existing tile size (guard against ' +
+          'regression of the tile shape that was correct).\n' +
+          '- Both report pages respect the design reference under `design/reports/` (if ' +
+          'present); if no page-level chart sizing exists there, a `type: design` ' +
+          'subtask is added first per the design-gate (MOTIR.md § Design-reference rule).\n' +
+          '- A render-test or Playwright regression asserts the rendered chart geometry ' +
+          'fits the caps above at a 1280-px viewport — measured via ' +
+          '`getBoundingClientRect`, not CSS rules.\n' +
+          '- AA contrast preserved; data-table fallback (`View data table`) still works; ' +
+          'next-intl strings unchanged; no service / DTO / route change.\n\n' +
+          '## Context refs\n\n' +
+          '- `components/ui/charts/DonutChart.tsx` (lines ~95-145) — the SVG with ' +
+          '`style={{ width: size * 0.71 }}` (the hard-pixel-width sizing strategy)\n' +
+          '- `components/ui/charts/ChartFrame.tsx` (lines ~85-94) — the SVG with ' +
+          '`block w-full h-auto` + `viewBox` (the responsive aspect-ratio sizing ' +
+          'strategy used by `LineChart` / `BarChart` / `DifferenceAreaChart`)\n' +
+          '- `app/(authed)/reports/_components/DistributionReport.tsx` (line 160) — ' +
+          'passes `size={240}` to `<DonutChart />` (the widget-tuned size on a page-level ' +
+          'surface)\n' +
+          '- `app/(authed)/reports/_components/CreatedVsResolvedReport.tsx` (lines ' +
+          '~231-238) — passes `width={680} height={320}` to `<DifferenceAreaChart />` ' +
+          '(the widget-tuned aspect ratio on a page-level surface)\n' +
+          '- `app/(authed)/reports/_components/ReportPageChrome.tsx` + the per-report ' +
+          '`page.tsx` files — where a bounded-width wrapper would land if going with ' +
+          'fix shape 1\n' +
+          '- `design/reports/` (verify the page-level chart spec exists; if not, the ' +
+          'fix opens a `type: design` subtask first per the design-gate)\n' +
+          '- `bug-issue-detail-eyebrow-overflows-viewport` (sibling Epic 6 bug) — the ' +
+          'recurring "Epic 6 surfaces stretch to the viewport" pattern; this one has the ' +
+          'opposite manifestation but the same authed-shell uncapped-width root\n' +
+          '- 6.3.3 widget tile + 6.5.2 / 6.5.3 report-landing — the two consumer ' +
+          'surfaces whose differing requirements the chart API has to encode\n' +
+          '- `motir-core/CLAUDE.md` — colour via `--el-*`, shape via element-shape tokens ' +
+          '(applies to whatever wrapper / prop the fix introduces)',
+      },
     ],
   },
   {
