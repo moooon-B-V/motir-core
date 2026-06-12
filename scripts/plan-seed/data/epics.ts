@@ -10,7 +10,7 @@ export const EPICS: EpicMeta[] = [
   {
     id: '1',
     title: 'Foundation',
-    status: 'in_progress',
+    status: 'done',
     descriptionMd:
       'The architectural floor every other epic stands on: **project bootstrap**, **design ' +
       'system & brand**, authentication, multi-tenant workspaces, projects, the work-item schema, ' +
@@ -895,7 +895,7 @@ export const EPICS: EpicMeta[] = [
   {
     id: '5',
     title: 'Collaboration & fields',
-    status: 'planned',
+    status: 'in_progress',
     descriptionMd:
       'The layer that turns an issue from a record into a team workspace: **comments**, ' +
       '**@mentions**, **attachments**, **custom fields**, labels / components, assignees / ' +
@@ -976,7 +976,7 @@ export const EPICS: EpicMeta[] = [
   {
     id: '6',
     title: 'Search, reporting & admin',
-    status: 'planned',
+    status: 'in_progress',
     descriptionMd:
       'The tools that make the PM core enterprise-usable and complete the standalone Jira ' +
       'alternative: **search & filtering**, **dashboards & reports**, **roles & permissions**, ' +
@@ -986,7 +986,7 @@ export const EPICS: EpicMeta[] = [
   {
     id: '7',
     title: 'AI Planning Layer',
-    status: 'planned',
+    status: 'in_progress',
     descriptionMd:
       'The headline differentiator — a feature layered on the now-complete PM core (Epics 1-6). A ' +
       'chat front door drafts discovery context, generates and augments the issue tree in the PM ' +
@@ -1039,7 +1039,7 @@ export const EPICS: EpicMeta[] = [
   {
     id: '8',
     title: 'Launch readiness',
-    status: 'planned',
+    status: 'in_progress',
     descriptionMd:
       'Everything between "feature complete" and "live, paid users." Stripe billing, marketing ' +
       'site + the Motir brand mark, go-to-market strategy, the one-time Prodect → Motir rebrand ' +
