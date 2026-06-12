@@ -300,7 +300,7 @@ export const story_6_5: PlanStory = {
       id: '6.5.4',
       title:
         'Story tests — registry totality + role-gating matrix + the settings-area E2E journey + a11y sweep',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 28,
