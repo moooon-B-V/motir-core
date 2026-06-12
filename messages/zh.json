@@ -820,6 +820,19 @@
       "noProjectTitle": "未选择项目",
       "noProjectDescription": "从切换器中选择一个项目，或从工作台创建一个项目，以管理其设置。"
     },
+    "details": {
+      "title": "详情",
+      "subtitle": "项目名称、标识与头像。",
+      "cardTitle": "项目详情",
+      "roleAdmin": "管理员",
+      "roleReadOnly": "只读",
+      "fieldAvatar": "头像",
+      "fieldName": "名称",
+      "fieldKey": "标识",
+      "fieldWorkspace": "工作区",
+      "fieldCreated": "创建时间",
+      "editingSeam": "项目名称、标识与头像的编辑——以及更改项目标识并自动重定向旧标识——将随项目详情编辑功能一起推出。目前这些内容均为只读。"
+    },
     "workspace": {
       "empty": {
         "title": "还没有工作区",

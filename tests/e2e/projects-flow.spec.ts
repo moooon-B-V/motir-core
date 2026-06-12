@@ -127,9 +127,11 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   await page.getByRole('button', { name: /^Mobile App/ }).click();
   await expect(page.getByRole('button', { name: 'Switch project' })).toContainText('Mobile App');
 
-  // 6) Archive — navigate to project settings, open archive modal
+  // 6) Archive — navigate to project settings, open archive modal. The area now
+  // LANDS on the read-only Details page (Subtask 6.5.3); its danger zone re-homes
+  // the Archive control (admin-only — this actor owns the workspace).
   await page.goto('/settings/project');
-  await expect(page.getByRole('heading', { name: 'Project settings' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Details', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
   await expect(page.getByRole('heading', { name: /Archive Mobile App\?/ })).toBeVisible();
   // Danger button disabled until identifier matches

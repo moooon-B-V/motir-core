@@ -66,7 +66,7 @@ const SHELL_ROUTES: { path: string; ready: (page: Page) => Promise<void> }[] = [
   {
     path: '/settings/project',
     ready: async (page) =>
-      expect(page.getByRole('heading', { name: 'Project settings' })).toBeVisible(),
+      expect(page.getByRole('heading', { name: 'Details', exact: true })).toBeVisible(),
   },
   {
     // Workflow editor (Subtask 2.2.5). Swept against a fresh project's default

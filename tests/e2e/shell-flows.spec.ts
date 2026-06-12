@@ -125,9 +125,7 @@ test.describe('@smoke shell journeys', () => {
     // nav landmark appears, landing on Details) instead of a Primary-rail state.
     await rail.getByRole('link', { name: 'Settings' }).click();
     await page.waitForURL('**/settings/project');
-    await expect(
-      page.getByRole('heading', { name: 'Project settings', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Details', exact: true })).toBeVisible();
     const settingsRail = page.getByRole('navigation', { name: 'Project settings' });
     await expect(settingsRail).toBeVisible();
     await expect(settingsRail.getByRole('link', { name: 'Details' })).toHaveAttribute(
