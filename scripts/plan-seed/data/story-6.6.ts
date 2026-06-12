@@ -539,7 +539,7 @@ export const story_6_6: PlanStory = {
       id: '6.6.7',
       title:
         'Story tests — engine matrix + loop/idempotency/auto-disable proofs + the author→fire→audit E2E + a11y sweep',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
