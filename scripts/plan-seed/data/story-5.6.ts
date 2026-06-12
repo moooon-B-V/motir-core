@@ -47,7 +47,7 @@ import type { PlanStory } from '../types';
 export const story_5_6: PlanStory = {
   id: '5.6',
   title: 'Tests — the combined collaboration journey + the loaded issue at scale',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The Epic-5 cross-cutting test story, re-scoped (the 3.5/4.7 precedent) to the ' +
     'non-duplicative remainder now that every sibling story carries its own closing test ' +
@@ -205,7 +205,7 @@ export const story_5_6: PlanStory = {
       id: '5.6.3',
       title:
         'The loaded issue at scale — bounded-read + bounded-DOM specs and the full-page strict a11y sweep over every Epic-5 surface at once',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
