@@ -443,7 +443,7 @@ export const story_6_6: PlanStory = {
       id: '6.6.5',
       title:
         'Automation settings UI — rule list + when/if/then editor (registry-driven rows, enable/disable, caps, validation states)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
