@@ -4,7 +4,11 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { ProjectNotFoundError, ProjectWorkspaceMismatchError } from '@/lib/projects/errors';
+import {
+  NotProjectAdminError,
+  ProjectNotFoundError,
+  ProjectWorkspaceMismatchError,
+} from '@/lib/projects/errors';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 import { truncateAuthTables } from './helpers/db';
 
@@ -623,6 +627,43 @@ describe('archiveProject + listProjects', () => {
 
     const archivedRow = await db.project.findUnique({ where: { id: drop.id } });
     expect(archivedRow?.archivedAt).not.toBeNull();
+  });
+
+  it('blocks archiveProject for a non-admin member but allows the workspace owner (admin-gated — Story 6.5.3)', async () => {
+    // The Details "Danger zone" (6.5.3) is admin-only in the UI; the archive
+    // write is independently admin-gated server-side so a non-admin who reaches
+    // the Server Action directly is rejected. A plain workspace member CAN
+    // browse an `open` project (canBrowse) but is not a project admin
+    // (canManage=false) → NotProjectAdminError. The owner is the always-pass
+    // tier and still archives.
+    const { owner, workspace } = await makeWorkspace('owner@example.com', 'Acme');
+    const member = await makeUser('member@example.com', 'Member');
+    await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
+    const project = await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'Existing',
+    });
+
+    await expect(
+      projectsService.archiveProject({
+        projectId: project.id,
+        workspaceId: workspace.id,
+        actorUserId: member.id,
+      }),
+    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    // Not archived by the rejected attempt.
+    const stillActive = await db.project.findUnique({ where: { id: project.id } });
+    expect(stillActive?.archivedAt).toBeNull();
+
+    // The owner (always-pass tier) archives successfully.
+    await projectsService.archiveProject({
+      projectId: project.id,
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+    });
+    const archived = await db.project.findUnique({ where: { id: project.id } });
+    expect(archived?.archivedAt).not.toBeNull();
   });
 
   it('archiving the same project a second time succeeds and is a no-op (re-stamps archivedAt)', async () => {

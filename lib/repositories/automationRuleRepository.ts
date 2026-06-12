@@ -1,4 +1,4 @@
-import { Prisma, type AutomationRule } from '@prisma/client';
+import { Prisma, type AutomationRule, type AutomationTriggerType } from '@prisma/client';
 import { db } from '@/lib/db';
 
 // Single-op data access for the `automation_rule` table (Story 6.6 · Subtask
@@ -45,10 +45,44 @@ export const automationRuleRepository = {
     });
   },
 
+  /** The engine's hot read (Subtask 6.6.2): a project's ENABLED rules for one
+   * trigger type, owner included, oldest first so a project's rules fire in a
+   * stable, author-order sequence. Rides the `[projectId, triggerType, enabled]`
+   * index. Bounded by the per-project rule cap. */
+  async listEnabledByProjectAndTrigger(
+    projectId: string,
+    triggerType: AutomationTriggerType,
+    tx?: Prisma.TransactionClient,
+  ): Promise<AutomationRuleWithOwner[]> {
+    return (tx ?? db).automationRule.findMany({
+      where: { projectId, triggerType, enabled: true },
+      include: withOwner,
+      orderBy: { createdAt: 'asc' },
+    });
+  },
+
   /** Count a project's rules — the create cap guard. Takes `tx` (it gates a
    * subsequent write in the same transaction). */
   async countByProject(projectId: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.automationRule.count({ where: { projectId } });
+  },
+
+  /** Lock one rule's failure state FOR UPDATE inside a transaction (Subtask
+   * 6.6.2) — the engine reads the current counter + enabled flag under the lock
+   * before deriving the next values (the lock-before-read-derived-update rule),
+   * so two concurrent runs of the same rule can't lose an increment. Returns
+   * null when the rule was deleted between the run and the audit write. */
+  async lockFailureState(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ consecutiveFailureCount: number; enabled: boolean } | null> {
+    const rows = await tx.$queryRaw<Array<{ consecutiveFailureCount: number; enabled: boolean }>>`
+      SELECT "consecutive_failure_count" AS "consecutiveFailureCount", "enabled"
+      FROM "automation_rule"
+      WHERE "id" = ${id}
+      FOR UPDATE
+    `;
+    return rows[0] ?? null;
   },
 
   /** Lock one rule row FOR UPDATE inside a transaction — the update / enable /

@@ -1064,6 +1064,29 @@ export const workItemRepository = {
   },
 
   /**
+   * Does one work item satisfy an automation rule's condition group (Story 6.6
+   * · Subtask 6.6.2)? Compiles the FilterAST through the 6.1.1 compiler over
+   * alias `w` (stale referents → match-nothing, the 6.1.2 rule) and tests it
+   * against the SINGLE triggering item — `WHERE w.id = :id AND (<conditions>)`,
+   * one indexed point read. An empty condition group compiles to `TRUE`, so the
+   * predicate reduces to "the item still exists" (the always-match rule). A
+   * deleted/missing item returns false (it can't be acted on). Read-only path →
+   * `db` singleton (the engine has no surrounding write tx when it evaluates).
+   */
+  async matchesAutomationCondition(
+    workItemId: string,
+    ast: FilterAst,
+    referents?: ProjectFilterReferents,
+  ): Promise<boolean> {
+    const astSql = compileFilterConditionsSql(ast, referents);
+    const rows = await db.$queryRaw<Array<{ ok: number }>>`
+      SELECT 1 AS ok FROM "work_item" w
+      WHERE w."id" = ${workItemId} AND (${astSql})
+      LIMIT 1`;
+    return rows.length > 0;
+  },
+
+  /**
    * The CREATED series of the created-vs-resolved report (Story 6.3 · Subtask
    * 6.3.2): non-archived items whose `createdAt` falls inside the inclusive
    * window, COUNTed per `date_trunc(period, createdAt)` bucket in ONE grouped

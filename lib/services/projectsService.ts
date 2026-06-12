@@ -268,6 +268,16 @@ export const projectsService = {
    *     (#29.2) until they switch — rather than silently swapping it out.
    * Done in the SAME transaction as the archive so the row can't be left
    * pointing at a project that was archived a moment earlier.
+   *
+   * PROJECT-ADMIN gated (Story 6.5.3): archive is a destructive lifecycle
+   * action that only a project admin (or workspace owner/admin — the always-pass
+   * tier) may take — the verified Jira rule the Details "Danger zone" UI renders
+   * (a non-admin member sees Details WITHOUT the zone). The gate is enforced
+   * server-side too, INSIDE the transaction, so the UI hide isn't the only
+   * guard: a non-admin who reaches the Server Action directly is rejected
+   * (NotProjectAdminError → 403; a non-browser reads as ProjectNotFoundError →
+   * 404, so a private project stays hidden). Before 6.4 introduced project roles
+   * this write was only membership-gated; the gate tightens it to match the AC.
    */
   async archiveProject(input: {
     projectId: string;
@@ -279,6 +289,11 @@ export const projectsService = {
       { userId: input.actorUserId, workspaceId: input.workspaceId },
       async (tx) => {
         await projectsService.assertProjectInWorkspaceInTx(input.projectId, input.workspaceId, tx);
+        await projectAccessService.assertCanManage(
+          input.projectId,
+          { userId: input.actorUserId, workspaceId: input.workspaceId },
+          tx,
+        );
         await projectRepository.archive(input.projectId, tx);
 
         const membership = await workspaceMembershipRepository.findByUserAndWorkspaceWithWorkspace(
