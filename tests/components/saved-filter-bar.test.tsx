@@ -130,12 +130,13 @@ function mockApi(
   const page = opts.page ?? PAGE;
   vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
     const url = typeof input === 'string' ? input : (input as Request).url;
+    const path = url.split('?')[0] ?? url;
     const method = (init?.method ?? 'GET').toUpperCase();
     if (url.includes('/star')) return Promise.resolve(json({ filter: opts.star ?? row() }));
     if (method === 'POST') return Promise.resolve(json({ filter: opts.create ?? row() }, 201));
     if (method === 'PATCH') return Promise.resolve(json({ filter: opts.patch ?? row() }));
     // GET single filter (resolve) — has an id segment after saved-filters/
-    if (method === 'GET' && /\/saved-filters\/[^/?]+$/.test(url.split('?')[0])) {
+    if (method === 'GET' && /\/saved-filters\/[^/?]+$/.test(path)) {
       return Promise.resolve(json(opts.resolve ?? resolved()));
     }
     return Promise.resolve(json(page)); // the list
@@ -204,7 +205,7 @@ describe('SavedFilterDropdown — grouping + apply + star', () => {
     fireEvent.click(await screen.findByText('Design backlog'));
 
     await waitFor(() => expect(push).toHaveBeenCalledTimes(1));
-    const href = push.mock.calls[0][0] as string;
+    const href = String(push.mock.calls[0]?.[0]);
     expect(href).toContain(`filter=${encodeURIComponent(encodeFilterParam(AST_A))}`);
     // The applied name chip now renders in the bar.
     expect(
