@@ -82,20 +82,70 @@ import type { PlanStory } from '../types';
  * `planned`), and the admin UI (7.10.6) depends on it and is `blocked`. No
  * improvised admin screen (notes.html #31 — the design-gate rule).
  *
- * **The self-improving mechanism (the dogfood that closes the quality loop).**
- * Capturing a lesson is only HALF the loop — a lesson the planner notes but
- * nobody can act on is a private regret. So when the capture loop (7.10.4)
- * records a mistake, motir-ai ALSO files a `kind: bug` work item INTO THE
- * PROJECT (7.10.8) — the planning gap becomes a trackable, fixable, assignable
- * item in the very backlog the planner manages. This is **Motir using Motir on
- * Motir**: the planner files bugs about its OWN planning mistakes through the
- * same write authority an agent uses. The mechanism is GENERAL (any tenant's
- * project), but the FIRST / canonical instance is Motir's own planner, while
- * building Motir, filing bugs into the live `motir` / `PROD` project — the
- * dogfood that proves the whole learning loop end-to-end: mistake captured →
- * `create_work_item` → a bug appears in the tracker the team already watches.
- * It is the first self-improving mechanism in the system: the quality loop is
- * demonstrated by turning the tool on itself.
+ * **TWO self-improving mechanisms — inward (capture-own-mistake) + outward
+ * (analyze-cross-project-bugs).** The store is only half a quality system; the
+ * loops that make Motir actually improve are two distinct, complementary
+ * mechanisms, and they must not be conflated:
+ *
+ * **(1) INWARD — the planner captures ITS OWN mistake → a bug in THAT project
+ * (7.10.8).** Capturing a lesson is only HALF the inward loop — a lesson the
+ * planner notes but nobody can act on is a private regret. So when the capture
+ * loop (7.10.4) records a mistake DURING planning, motir-ai ALSO files a
+ * `kind: bug` work item INTO THE PROJECT BEING PLANNED (7.10.8) — the planning
+ * gap becomes a trackable, fixable, assignable item in the very backlog the
+ * planner manages. This is **Motir using Motir on Motir**: the planner files
+ * bugs about its OWN planning mistakes through the same write authority an
+ * agent uses. The mechanism is GENERAL (any tenant's project), but the FIRST /
+ * canonical instance is Motir's own planner, while building Motir, filing bugs
+ * into the live `motir` / `PROD` project — the dogfood that proves the inward
+ * loop end-to-end: mistake captured → `create_work_item` → a bug appears in the
+ * tracker the team already watches. It is the FIRST self-improving mechanism:
+ * the quality loop is demonstrated by turning the tool on itself.
+ *
+ * **(2) OUTWARD — analyze a bug raised in a USER's project → if Motir-caused,
+ * a meta-bug in motir/PROD (7.10.9 + 7.10.10).** The inward loop only fires
+ * when the planner CATCHES itself mid-plan. But the overwhelming majority of
+ * Motir's failures surface LATER and ELSEWHERE: a user (or their coding agent)
+ * files a `kind: bug` in their OWN project because something Motir planned or an
+ * agent Motir dispatched went wrong in the real world. The SECOND mechanism
+ * harvests those. When a `kind: bug` work item is created in ANY project OTHER
+ * than motir's own (the trigger is a bug-created event on the shipped Story-1.6
+ * Inngest cron/job pipeline — `work-item/created` with `kind: bug`), motir-ai
+ * is triggered to ANALYZE the bug and classify its root cause into one of three
+ * buckets: **planning mistake** (the plan was wrong — a missing subtask, a bad
+ * dependency, an unconsidered prerequisite) | **coding-agent mistake** (the plan
+ * was sound but the dispatched agent mis-executed — the 7.6 dispatch prompt /
+ * the 7.7 PR-status context tells this apart from a planning fault) |
+ * **out-of-scope** (a genuine user/product bug — Motir is NOT at fault, no
+ * action). If — and only if — the conclusion is a Motir planning- or
+ * coding-agent mistake, motir-ai logs a `kind: bug` work item in the
+ * **motir / PROD** project so Motir's own team fixes the ROOT CAUSE in Motir's
+ * planner / agent system, AND captures the lesson (7.10.4) so the planner
+ * itself learns. This is how Motir improves its planner + agents from REAL
+ * failures aggregated across its WHOLE user base — failure telemetry, productized.
+ *
+ * **The two, contrasted (do not conflate them).**
+ *   - 1st (7.10.8): Motir catches its OWN mistake during planning → bug filed in
+ *     THAT project (the project being planned). Trigger: the 7.10.4 capture.
+ *   - 2nd (7.10.9/10): a bug appears in a USER's project → motir-ai ANALYZES it
+ *     → if Motir-caused → bug filed in MOTIR / PROD (the meta-improvement / the
+ *     failure-telemetry loop that improves Motir itself). Trigger: a
+ *     bug-created event on the 1.6 pipeline.
+ *
+ * **CRITICAL — privacy / cross-tenant sanitization (the open-core line holds).**
+ * The meta-bug the SECOND mechanism files into motir/PROD is CROSS-TENANT
+ * telemetry — it leaves the user's tenant and lands in Motir's own project. So
+ * it MUST be SANITIZED: it carries ONLY the abstracted ROOT-CAUSE signal (the
+ * planner/agent flaw as a transferable pattern — "the planner omits a feature-
+ * flag prerequisite for new endpoints"), NEVER the user's confidential code,
+ * project names, identifiers, issue text, or any reconstructable detail. This
+ * is the same per-tenant-isolation + open-core posture every Epic-7 store
+ * already holds (the 6.4 permission model + the 7.1 boundary): the only thing
+ * that crosses tenants is the de-identified lesson about Motir's OWN system. The
+ * inward bug (7.10.8) stays IN-tenant and needs no sanitization; the outward bug
+ * (7.10.10) is sanitized by construction and idempotent (one meta-bug per
+ * distinct abstracted root cause — no re-file for the same flaw across many
+ * users hitting it).
  *
  * **The write path — the AI never writes directly (architecture #1).** Per the
  * locked 7.1 boundary, motir-ai holds NO write credential to the plan tree; it
@@ -109,15 +159,18 @@ import type { PlanStory } from '../types';
  * `create_work_item` tool, 7.8 < 7.10 — no forward dep) and 7.10.4 (the capture
  * that triggers it).
  *
- * **Scope (the eight cards).** the `Lesson` store schema + repo/service on the
+ * **Scope (the ten cards).** the `Lesson` store schema + repo/service on the
  * motir-ai DB (7.10.1); the curated BASE lesson set ported from notes.html as
  * seed content (7.10.2, `type: content`); injecting the relevant lessons into
  * the planner at plan time inside the 7.3.2/7.4 loop (7.10.3); the capture loop
  * where a correction becomes a new tenant lesson (7.10.4); the lessons admin
  * view design (7.10.5) + the admin UI in motir-core (7.10.6); the test suite
- * over store + injection + capture (7.10.7); and the self-improving auto-file-a-bug
+ * over store + injection + capture (7.10.7); the FIRST (inward) self-improving
  * mechanism that turns a captured mistake into a `kind: bug` work item in the
- * project (7.10.8).
+ * project being planned (7.10.8); and the SECOND (outward) self-improving
+ * mechanism — the cross-project bug ROOT-CAUSE classifier (7.10.9) and the
+ * 1.6-event trigger that, when the classifier blames Motir, files the SANITIZED
+ * meta-bug into motir/PROD and captures the lesson (7.10.10).
  *
  * **Out of scope (named so they don't silently expand this story):** no vector
  * store / embedding retrieval (architecture #3 — lessons are structured records
@@ -156,29 +209,52 @@ export const story_7_10: PlanStory = {
     'memory*). Capture is two-way — the curated base (7.10.2, the manual seed) + ' +
     'the correction-capture loop (7.10.4, Rovo `/memory reflect`: "analyze the ' +
     'session to identify mistakes/inefficiencies and write them back").\n\n' +
-    '**The self-improving mechanism (Motir on Motir).** Capturing a lesson is only ' +
-    'half the loop — so when a mistake is captured (7.10.4), motir-ai ALSO files ' +
-    'a `kind: bug` work item INTO THE PROJECT (7.10.8), turning the planning gap ' +
-    'into a trackable, fixable backlog item. This is the **first self-improving ' +
-    'mechanism**: the planner files bugs about its OWN planning mistakes, closing ' +
-    'a quality loop by using Motir on Motir. The mechanism is GENERAL (any ' +
-    "project), but the canonical first instance is Motir's own planner, while " +
-    'building Motir, filing bugs into the live `motir` / `PROD` project — the ' +
-    'dogfood that proves the loop end-to-end (mistake captured → `create_work_item` ' +
-    '→ a bug appears in the tracker). The AI never writes directly (architecture ' +
-    '#1): the bug is requested through motir-core write authority — the 7.8.5 ' +
-    'MCP `create_work_item` tool and/or the 7.1.6 persist callback.\n\n' +
+    '**TWO self-improving mechanisms (do not conflate them).** Capturing a lesson ' +
+    'is only half a quality system; the loops that make Motir improve are two ' +
+    'distinct mechanisms. **(1) INWARD (7.10.8):** when a mistake is captured ' +
+    'DURING planning (7.10.4), motir-ai ALSO files a `kind: bug` work item into ' +
+    'the PROJECT BEING PLANNED, turning the planning gap into a trackable backlog ' +
+    'item — the planner files bugs about its OWN mistakes (Motir on Motir; the ' +
+    'canonical first instance is the live `motir`/`PROD` project while building ' +
+    'Motir). **(2) OUTWARD (7.10.9 + 7.10.10):** when a `kind: bug` is created in ' +
+    'ANY OTHER project (NOT motir) — the trigger is a bug-created event on the ' +
+    'shipped Story-1.6 Inngest cron/job pipeline (`work-item/created`, ' +
+    '`kind: bug`) — motir-ai ANALYZES the bug and classifies its root cause as ' +
+    '**planning mistake | coding-agent mistake | out-of-scope** (a genuine ' +
+    'user/product bug, not Motir’s fault). If — and only if — the conclusion ' +
+    'is a Motir planning- or coding-agent mistake, motir-ai logs a `kind: bug` in ' +
+    'the **motir / PROD** project so Motir’s own team fixes the ROOT CAUSE in ' +
+    'the planner/agent system, AND captures the lesson (7.10.4). This is how Motir ' +
+    'improves its planner + agents from REAL failures aggregated across its whole ' +
+    'user base — failure telemetry, productized.\n\n' +
+    '**Privacy / cross-tenant sanitization (the open-core line holds).** The ' +
+    'OUTWARD meta-bug filed into motir/PROD is cross-tenant telemetry, so it ' +
+    'carries ONLY the abstracted ROOT-CAUSE signal (the planner/agent flaw as a ' +
+    'transferable pattern), NEVER the user’s confidential code, project names, ' +
+    'identifiers, or issue text — the same per-tenant-isolation + open-core ' +
+    'posture every Epic-7 store holds (6.4 permissions + the 7.1 boundary). It is ' +
+    'idempotent: one meta-bug per distinct abstracted root cause (no re-file for ' +
+    'the same flaw across many users). The INWARD bug (7.10.8) stays IN-tenant and ' +
+    'needs no sanitization. Both ride motir-core write authority — the AI never ' +
+    'writes directly (architecture #1): the 7.8.5 MCP `create_work_item` tool ' +
+    'and/or the 7.1.6 persist callback.\n\n' +
     '**This is an ENHANCEMENT — 7.3 does not hard-depend on it.** Generation ' +
     'runs with an empty lesson set; 7.10 makes it better, not possible. Every ' +
     'dep points BACKWARD at 7.1.3 (the motir-ai DB), 7.3.2 (the planner loop it ' +
-    'injects into), 7.8.5 (the create-work-item write path the self-improving bug ' +
-    'rides — 7.8 < 7.10), or same-story 7.10.x. Cross-story dep audit: PASSES.\n\n' +
+    'injects into), 7.8.5 (the create-work-item write path the self-improving ' +
+    'bugs ride — 7.8 < 7.10), the SHIPPED Story-1.6 event pipeline (the outward ' +
+    'trigger), or same-story 7.10.x. No forward dep (Epic-9 hosted runs are an ' +
+    'additive context source for the coding-agent-mistake classification, named ' +
+    'in prose only, never depended on). Cross-story dep audit: PASSES.\n\n' +
     '**Scope:** the `Lesson` store schema + repo/service on motir-ai (7.10.1); ' +
     'the curated base set ported from notes.html (7.10.2, content); plan-time ' +
     'injection into the 7.3.2/7.4 loop (7.10.3); the correction → new tenant ' +
     'lesson capture loop (7.10.4); the lessons admin view design (7.10.5) + the ' +
-    'motir-core admin UI (7.10.6); the test suite (7.10.7); the self-improving ' +
-    'auto-file-a-bug-on-capture mechanism (7.10.8).\n\n' +
+    'motir-core admin UI (7.10.6); the test suite (7.10.7); the INWARD ' +
+    'self-improving auto-file-a-bug-on-capture mechanism (7.10.8); the OUTWARD ' +
+    'cross-project bug root-cause classifier (7.10.9) + the 1.6-event trigger ' +
+    'that files the SANITIZED Motir-caused meta-bug into motir/PROD and captures ' +
+    'the lesson (7.10.10).\n\n' +
     '**Out of scope (named so they land elsewhere, not here):** a vector store / ' +
     'embedding retrieval (architecture #3 — lessons are STRUCTURED records ' +
     'injected into system context, ranked by scope + relevance heuristics, not ' +
@@ -218,21 +294,39 @@ export const story_7_10: PlanStory = {
     'the injection selection (relevant-in / irrelevant-out, scope precedence), ' +
     'and the capture path (a correction yields exactly one tenant lesson, bound ' +
     'to the right tenant, idempotent on a repeated identical correction).\n' +
-    '- **The self-improving loop (the dogfood).** Capture a mistake during a ' +
-    'planning run (the 7.10.4 path) → a NEW `kind: bug` work item appears in the ' +
-    "project's backlog describing the planning gap (filed through motir-core " +
-    'write authority — the 7.8.5 `create_work_item` tool / the 7.1.6 persist ' +
-    'callback, NOT a direct AI write), linked to the tenant lesson, reporter = ' +
-    'the planner identity. Re-capturing the SAME mistake does NOT file a second ' +
-    'bug (idempotent — one bug per distinct lesson). Run it against the live ' +
-    '`motir` / `PROD` project itself: the planner files a bug about its own ' +
-    'planning mistake into the tracker the team already watches (Motir on ' +
-    'Motir, the canonical first instance).\n' +
-    '- **Open-core check (the recurring Epic-7 posture).** Confirm the `Lesson` ' +
-    "table exists ONLY in motir-ai (no lessons table in motir-core's schema); " +
-    'the admin UI reaches it solely over the 7.1 boundary (no `motir-ai` import ' +
-    'in motir-core, no shared DB). The learned-lessons knowledge is part of the ' +
-    'closed planning brain.\n' +
+    '- **The INWARD self-improving loop (the dogfood, 7.10.8).** Capture a ' +
+    'mistake during a planning run (the 7.10.4 path) → a NEW `kind: bug` work ' +
+    "item appears in the project's backlog describing the planning gap (filed " +
+    'through motir-core write authority — the 7.8.5 `create_work_item` tool / ' +
+    'the 7.1.6 persist callback, NOT a direct AI write), linked to the tenant ' +
+    'lesson, reporter = the planner identity. Re-capturing the SAME mistake does ' +
+    'NOT file a second bug (idempotent — one bug per distinct lesson). Run it ' +
+    'against the live `motir` / `PROD` project itself: the planner files a bug ' +
+    'about its own planning mistake into the tracker the team already watches ' +
+    '(Motir on Motir, the canonical first instance).\n' +
+    '- **The OUTWARD self-improving loop (cross-project failure telemetry, ' +
+    '7.10.9 + 7.10.10).** In a NON-motir tenant project, create a `kind: bug` ' +
+    'work item describing a failure whose root cause is a planning gap (e.g. "the ' +
+    'endpoint shipped with no feature flag" — a missing-prerequisite planning ' +
+    'fault). The Story-1.6 bug-created event fires → motir-ai analyzes it (7.10.9) ' +
+    '→ classifies the root cause **planning mistake** → a SANITIZED `kind: bug` ' +
+    'appears in the **motir / PROD** project (7.10.10) carrying ONLY the ' +
+    'abstracted flaw, with NO trace of the user’s code / project name / issue ' +
+    'text (inspect the meta-bug body — it is de-identified), AND a lesson is ' +
+    'captured (7.10.4). File a SECOND user bug with the same abstracted root ' +
+    'cause → NO second meta-bug in PROD (idempotent on the abstracted cause). ' +
+    'File a bug whose root cause is a genuine USER/product defect → classified ' +
+    '**out-of-scope**, NO meta-bug filed (Motir is not at fault). File a bug ' +
+    'inside the `motir` project ITSELF → the outward analyzer SKIPS it (the ' +
+    'inward loop owns motir’s own mistakes; no self-referential meta-bug).\n' +
+    '- **Open-core + cross-tenant privacy check (the recurring Epic-7 posture).** ' +
+    "Confirm the `Lesson` table exists ONLY in motir-ai (no lessons table in motir-core's " +
+    'schema); the admin UI reaches it solely over the 7.1 boundary (no `motir-ai` ' +
+    'import in motir-core, no shared DB). The learned-lessons knowledge is part ' +
+    'of the closed planning brain. And confirm the OUTWARD meta-bug (7.10.10) is ' +
+    'SANITIZED: nothing crosses from a user tenant into motir/PROD except the ' +
+    'abstracted root-cause signal — no user code / project name / key / issue ' +
+    'text (per-tenant isolation holds, the 6.4 + 7.1 posture).\n' +
     '- If every step holds, approve and merge the Story PR. If anything fails, ' +
     "comment with what didn't work and Motir will produce a follow-up Subtask " +
     'under the same Story.',
@@ -836,6 +930,195 @@ export const story_7_10: PlanStory = {
         '(notes.html #26 follow-ups) this mechanism fulfils for the planner ' +
         'itself.',
       dependsOn: ['7.10.4', '7.8.5'],
+    },
+    {
+      id: '7.10.9',
+      title:
+        'Cross-project bug ROOT-CAUSE classifier — analyze a user-project `kind: bug`, classify planning | coding-agent | out-of-scope',
+      status: 'blocked',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 55,
+      descriptionMd:
+        'The analysis brain of the SECOND (outward) self-improving mechanism. ' +
+        'Where the inward loop (7.10.8) fires when the planner CATCHES ITSELF ' +
+        'mid-plan, the outward loop harvests the failures that surface LATER and ' +
+        'ELSEWHERE: a `kind: bug` a USER (or their dispatched coding agent) files ' +
+        'in their OWN project because something Motir planned or dispatched went ' +
+        'wrong in the real world. This card is the CLASSIFIER that decides whether ' +
+        'such a bug is Motir’s fault — and if so, which part of Motir.\n\n' +
+        '**Input (the analysis unit).** Given a bug work item (the project + key + ' +
+        'its description/comments, read over the 7.1.6 read-back as the requesting ' +
+        'identity — never a direct cross-tenant DB reach), assemble the analysis ' +
+        'context: the bug text, the plan-tree neighborhood around the bug (the ' +
+        'owning story/epic + the subtasks that produced the implicated work — the ' +
+        '7.1.6 skeleton breadth), and, when resolvable, the DISPATCH + PR-STATUS ' +
+        'signal that tells a planning fault from an execution fault: the 7.6 ' +
+        'dispatch prompt that was generated for the implicated subtask and the 7.7 ' +
+        'PR/CI status the agent’s work produced (named in PROSE as additive ' +
+        'context — this card does NOT hard-depend on 7.6/7.7; when they are absent ' +
+        'the classifier degrades to plan-tree-only reasoning). Epic-9 hosted ' +
+        'agent-run transcripts are a FURTHER additive context source named in ' +
+        'prose only — NEVER a dependency (that would be a forward dep).\n\n' +
+        '**Classification (the three buckets).** Implement ' +
+        '`lessonService.classifyBugRootCause({ aiProjectId, bugKey, context })` ' +
+        '— a planner-LLM call (the 7.2.2 SDK, the same one 7.10.4 distillation ' +
+        'uses) that returns a typed verdict:\n\n' +
+        '- **`planning_mistake`** — the PLAN was wrong: a missing subtask, an ' +
+        'unconsidered prerequisite (no feature flag, no migration), a bad ' +
+        'dependency / ordering, a design gate skipped. The fix belongs in Motir’s ' +
+        'planner.\n' +
+        '- **`coding_agent_mistake`** — the plan was sound but the DISPATCHED ' +
+        'agent mis-executed (ignored a context ref, broke an unrelated surface, ' +
+        'shipped without the asked-for test). The dispatch-prompt + PR-status ' +
+        'signal is what separates this from a planning fault. The fix belongs in ' +
+        'Motir’s agent/prompt system.\n' +
+        '- **`out_of_scope`** — a GENUINE user/product bug: the user’s own ' +
+        'business logic, a third-party outage, a data-entry error — NOT Motir’s ' +
+        'fault. The default/conservative verdict when the signal does not clearly ' +
+        'implicate Motir (we do NOT over-claim Motir authorship; a false ' +
+        '`planning_mistake` pollutes PROD’s backlog).\n\n' +
+        'The verdict carries a `rationale` and — critically — a SANITIZED, ' +
+        'abstracted `rootCauseSignal`: the transferable flaw pattern with the ' +
+        'user’s confidential specifics STRIPPED (see 7.10.10 for why this is the ' +
+        'only thing allowed to cross tenants). The classifier is a PURE analysis ' +
+        'step — it writes nothing to any tracker; 7.10.10 owns the trigger + the ' +
+        'filing + the lesson capture. Keeping classification separate makes it ' +
+        'unit-testable on fixed bug fixtures (deterministic with the LLM seam ' +
+        'stubbed) and lets the verdict be inspected before any write.\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- `lessonService.classifyBugRootCause(...)` returns one of ' +
+        '`planning_mistake | coding_agent_mistake | out_of_scope` with a ' +
+        '`rationale` and an abstracted `rootCauseSignal`, reading the bug + ' +
+        'plan-tree context ONLY over the 7.1.6 read-back (no cross-tenant DB ' +
+        'reach).\n' +
+        '- When dispatch/PR-status signal (7.6/7.7) is available it is folded in ' +
+        'to separate a coding-agent fault from a planning fault; when ABSENT the ' +
+        'classifier still returns a verdict from plan-tree context alone (no hard ' +
+        'dependency on 7.6/7.7/9.x).\n' +
+        '- The verdict is conservative: an ambiguous / un-implicating signal ' +
+        'classifies `out_of_scope` (Motir authorship is not over-claimed).\n' +
+        '- `rootCauseSignal` is ABSTRACTED — it contains no verbatim user code, ' +
+        'project name, key, or issue text (the sanitization 7.10.10 relies on ' +
+        'begins here).\n' +
+        '- The classifier writes to NO tracker — it is pure analysis; 7.10.10 ' +
+        'owns the write.\n\n' +
+        '## Context refs\n\n' +
+        '- 7.10.1 — `lessonService` (the `classifyBugRootCause` method lives ' +
+        'here).\n' +
+        '- 7.1.6 — the read-back the analysis reads the bug + plan-tree ' +
+        'neighborhood over (permission-checked as the requesting identity).\n' +
+        '- 7.2.2 (stub) — the planner LLM/SDK the classification call uses.\n' +
+        '- Story 7.6 (stub, dispatch prompt) + Story 7.7 (stub, PR/CI status ' +
+        'sync) — the ADDITIVE coding-agent-vs-planning signal, named in prose, ' +
+        'NOT a dependency; Epic-9 hosted-run transcripts likewise additive (prose ' +
+        'only, never a forward dep).\n' +
+        '- 7.10.4 — the lesson-capture this verdict ultimately feeds (via ' +
+        '7.10.10).',
+      dependsOn: ['7.10.1'],
+    },
+    {
+      id: '7.10.10',
+      title:
+        'Outward trigger + SANITIZED meta-bug into motir/PROD + lesson capture — the cross-tenant failure-telemetry loop',
+      status: 'blocked',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 55,
+      descriptionMd:
+        'Close the SECOND (outward) self-improving mechanism: wire the 7.10.9 ' +
+        'classifier to a real-world TRIGGER, and — when the verdict blames Motir — ' +
+        'file a SANITIZED meta-bug into the **motir / PROD** project and capture ' +
+        'the lesson. This is how Motir improves its planner + agents from REAL ' +
+        'failures aggregated across its whole user base, not just from mistakes it ' +
+        'catches mid-plan.\n\n' +
+        '**The trigger (the shipped 1.6 pipeline).** Subscribe to the ' +
+        'bug-created event on the Story-1.6 Inngest cron/job pipeline — the ' +
+        '`work-item/created` event (emitted by the 6.6 automation path) FILTERED ' +
+        'to `kind: bug`. On each such event: (a) SKIP it if the bug’s project IS ' +
+        'the `motir` project itself — motir’s own mistakes are owned by the INWARD ' +
+        'loop (7.10.8); the outward analyzer never files a self-referential ' +
+        'meta-bug; (b) otherwise hand the bug to `classifyBugRootCause` (7.10.9). ' +
+        'A bug-created event is the natural fan-in point (every channel that ' +
+        'creates a bug — UI, the 7.8.5 MCP tool, the API — emits it once after the ' +
+        'create transaction commits, mirror the 5.7 single-event / many-consumers ' +
+        'shape), so this loop fires no matter HOW the user filed the bug.\n\n' +
+        '**On a Motir-caused verdict (`planning_mistake | coding_agent_mistake`).**\n\n' +
+        '1. **File the SANITIZED meta-bug into motir / PROD.** Request a ' +
+        '`kind: bug` work item in the `motir` project (resolved by its stable ' +
+        'project key, NOT the user’s project) whose `title` + `descriptionMd` ' +
+        'carry ONLY the abstracted `rootCauseSignal` from 7.10.9 — the planner / ' +
+        'agent flaw as a transferable pattern ("the planner omits a feature-flag ' +
+        'prerequisite when planning a new endpoint") — and the verdict + ' +
+        'rationale. **NEVER** the user’s code, project name/key, issue text, ' +
+        'identifiers, or anything reconstructable: this bug LEAVES the user’s ' +
+        'tenant, so it is cross-tenant telemetry and the open-core + ' +
+        'per-tenant-isolation line (6.4 + the 7.1 boundary) MUST hold. A ' +
+        'verification step asserts the body is de-identified. The bug is filed ' +
+        'through motir-core WRITE AUTHORITY (architecture #1 — the AI never writes ' +
+        'directly): the 7.8.5 `create_work_item` tool and/or the 7.1.6 persist ' +
+        'callback, reporter = the planner/meta identity, under motir/PROD’s ' +
+        'planning/meta parent (honoring the kind-parent matrix the create service ' +
+        'enforces).\n' +
+        '2. **Capture the lesson (7.10.4).** Feed the abstracted root cause into ' +
+        '`captureFromCorrection` (the SAME capture entry point) so the planner ' +
+        'itself LEARNS from the real-world failure — a `global`-candidate or ' +
+        'tenant lesson per the cause (a Motir-system flaw is a craft lesson; the ' +
+        'capture path decides scope), and the planner stops repeating it.\n\n' +
+        '**Idempotency — one meta-bug per distinct abstracted root cause.** Many ' +
+        'users hitting the SAME Motir flaw must NOT spam PROD with N identical ' +
+        'meta-bugs. Key the meta-bug on a stable hash of the abstracted ' +
+        '`rootCauseSignal` (NOT on the user bug id — that would let the same flaw ' +
+        're-file): if a PROD meta-bug for that signal already exists, ' +
+        'REINFORCE/annotate it (an occurrence count / "seen again") rather than ' +
+        'file a duplicate — the 7.10.4 dedup discipline applied to the cross-tenant ' +
+        'path. Record the PROD meta-bug key on the captured lesson so the ' +
+        'store + PROD stay 1:1 with distinct root causes.\n\n' +
+        '**Resilience + privacy by construction.** The file-into-PROD is a ' +
+        'follow-on side effect, not a gate: a failed PROD write is retried / ' +
+        'surfaced and never loses the analysis. The sanitization is enforced at ' +
+        'THIS boundary (the abstracted signal is the ONLY field allowed into the ' +
+        'PROD bug) — a test asserts a representative user-confidential token never ' +
+        'appears in the filed meta-bug. `out_of_scope` verdicts file NOTHING and ' +
+        'capture NO lesson (Motir is not at fault).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- A `work-item/created` (`kind: bug`) event in a NON-motir project drives ' +
+        'the bug through 7.10.9; a `planning_mistake` / `coding_agent_mistake` ' +
+        'verdict files exactly ONE `kind: bug` into the `motir` / `PROD` project ' +
+        'via motir-core write authority (7.8.5 / 7.1.6 — NEVER a direct AI write) ' +
+        'and captures a lesson (7.10.4); an `out_of_scope` verdict files nothing ' +
+        'and captures nothing.\n' +
+        '- A bug created in the `motir` project ITSELF is SKIPPED by the outward ' +
+        'loop (the inward loop, 7.10.8, owns motir’s own mistakes — no ' +
+        'self-referential meta-bug).\n' +
+        '- **Sanitization:** the filed PROD meta-bug carries ONLY the abstracted ' +
+        'root-cause signal + verdict/rationale — a test asserts no user code / ' +
+        'project name / key / issue text appears in it (cross-tenant isolation ' +
+        'holds; the open-core posture, 6.4 + the 7.1 boundary).\n' +
+        '- **Idempotency:** a second user bug with the SAME abstracted root cause ' +
+        'does NOT file a second PROD meta-bug (reinforces/annotates the existing ' +
+        'one, keyed on the signal hash); the PROD key is recorded on the lesson.\n' +
+        '- The trigger fans in from ANY bug-create channel (UI / 7.8.5 MCP / API) ' +
+        'via the single 1.6-pipeline `work-item/created` event; a PROD-write ' +
+        'failure is retried/surfaced and never loses the analysis.\n\n' +
+        '## Context refs\n\n' +
+        '- 7.10.9 — `classifyBugRootCause` (the verdict + the abstracted ' +
+        '`rootCauseSignal` this files / sanitizes from).\n' +
+        '- 7.10.4 — `captureFromCorrection` (the lesson-capture entry point this ' +
+        'reuses for real-world failures).\n' +
+        '- 7.8.5 — the MCP `create_work_item` tool (the `kind: bug` write path ' +
+        'into motir/PROD; 7.8 < 7.10, a backward dep).\n' +
+        '- Story 1.6 (SHIPPED) — the Inngest cron/job event pipeline; the ' +
+        '`work-item/created` event (6.6 automation) filtered to `kind: bug` is the ' +
+        'trigger; the 5.7 single-event / many-consumers shape is the fan-in ' +
+        'precedent.\n' +
+        '- 6.4 (SHIPPED) + story-7.1.ts header §1/§4 — the permission model + ' +
+        'open-core / per-tenant-isolation posture the cross-tenant sanitization ' +
+        'upholds.\n' +
+        '- 7.10.8 — the INWARD counterpart (this is its OUTWARD sibling; together ' +
+        'the two self-improving mechanisms cover own-mistakes + cross-project ' +
+        'failures).',
+      dependsOn: ['7.10.9', '7.10.4', '7.8.5'],
     },
   ],
 };
