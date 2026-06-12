@@ -77,7 +77,7 @@ import type { PlanStory } from '../types';
 export const story_6_1: PlanStory = {
   id: '6.1',
   title: 'Structured search + filter builder',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The advanced-search layer: a **filter builder** — field / operator / value rows under a ' +
     'flat **Match all / Match any** combinator — compiling to a **safe parameterized query** ' +
@@ -445,7 +445,7 @@ export const story_6_1: PlanStory = {
       id: '6.1.6',
       title:
         'Story tests — compile-correctness matrix + injection fuzz + serialization properties + the build-a-filter E2E + a11y sweep',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
