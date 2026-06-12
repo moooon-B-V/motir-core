@@ -282,7 +282,10 @@ export const story_9_2: PlanStory = {
         '(a message composer: "Request design changes…") with the running ' +
         'thread of prior change requests + the agent’s responses. Show which ' +
         'design subtask + which session PR this review is for (the link to the ' +
-        'PR).\n' +
+        'PR). **A direct link to the design-approval-gate SETTING sits on this ' +
+        'surface** (deep-links to the Panel-5 toggle) — so a user who does not ' +
+        'want to approve every design can DISABLE the gate in one click, ' +
+        'without hunting through project settings.\n' +
         '- **Panel 2 — the "for review" indicator (in the run + on the ' +
         'subtask).** How a design subtask in the **"for review"** state reads ' +
         'in the `motir auto` run view (9.1.8’s live run) and on the work-item ' +
@@ -916,7 +919,10 @@ export const story_9_2: PlanStory = {
         'open-in-new-tab affordance. BESIDE it, the rendered `design-notes.md`. ' +
         'A prominent **Approve** button (calls 9.2.8) and a **revise-chat** ' +
         'box (the message composer + the running thread; sending calls 9.2.7), ' +
-        'with the link to the SESSION PR + which design subtask this is for.\n' +
+        'with the link to the SESSION PR + which design subtask this is for, ' +
+        'AND a direct link to the design-approval-gate setting (deep-links to ' +
+        'the project-settings toggle) so the user can disable the gate in one ' +
+        'click straight from the approval surface.\n' +
         '- **The "for review" indicator + held state.** A design subtask in ' +
         '"for review" reads with a distinct `Pill` tone in the 9.1.8 run view ' +
         '+ on the work-item ("held, awaiting your approval"); the HELD ' +
