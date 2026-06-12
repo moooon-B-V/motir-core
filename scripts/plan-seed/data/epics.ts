@@ -1068,11 +1068,16 @@ export const EPICS: EpicMeta[] = [
       '**Builds entirely on Epic 7 — backward deps only:** the 7.9.7 multi-agent sandbox image ' +
       '(the hosted image extends it), 7.6 dispatch (a hosted run is a dispatch-target variant), ' +
       'and 7.12 metering + credits (the token-usage report records an `AgentRun` and debits the ' +
-      'ledger). **Story 9.1** is the hosted-execution foundation — the hosted container + ' +
-      'run-scoped auth (the user is logged in INSIDE the run) + token-usage reporting into the ' +
-      'credit system. Future 9.x stories (named in story-9.1.ts, deferred not forgotten): the ' +
-      'PR review/iteration loop, multi-agent / parallel hosted runs, agent-selection policy, ' +
-      'hosted-run pricing in the Epic-8 billing surface, and security hardening.',
+      'ledger). **Story 9.0** is the LLM metering gateway (fork of one-api) every hosted run ' +
+      'meters through; **Story 9.1** is the hosted-execution foundation — the hosted container + ' +
+      'run-scoped auth (the user is logged in INSIDE the run) + gateway-metered token usage; ' +
+      '**Story 9.2** adds the runtime DESIGN-APPROVAL gate — distinct from MOTIR.md’s ' +
+      'planning-time design gate: when the hosted agent PRODUCES a design in `motir auto`, a ' +
+      'deployed preview (iframe) + a revise-chat hold the dependent subtasks on the user’s ' +
+      'manual approval (per-project, default ON; the preview is undeployed on approval to cap ' +
+      'cost). Future 9.x stories (deferred not forgotten): the PR review/iteration loop, ' +
+      'multi-agent / parallel hosted runs, agent-selection policy, hosted-run pricing in the ' +
+      'Epic-8 billing surface, and security hardening.',
   },
   {
     id: '10',
