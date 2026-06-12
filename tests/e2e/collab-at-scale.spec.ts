@@ -212,6 +212,40 @@ async function gotoLoadedIssue(page: Page): Promise<void> {
 }
 
 /**
+ * Click a "Show more" edge until the collection's mounted count grows. The
+ * click is RETRIED because the loaded detail page renders hundreds of
+ * relative-time stamps that mismatch SSR↔client, hydration-fail the page (the
+ * `ENVIRONMENT_FALLBACK` flood — finding #89), and React regenerates the client
+ * tree — silently dropping a click dispatched into the pre-regeneration DOM (the
+ * same hazard the activity spec's `extendFeed` guards). Re-clicking only while
+ * the count has NOT grown never doubles a click that did land (a landed click
+ * grew the count → the loop exits).
+ */
+async function clickShowMoreUntilGrown(
+  page: Page,
+  edge: Locator,
+  count: () => Promise<number>,
+  before: number,
+): Promise<void> {
+  await expect(async () => {
+    if (await edge.isVisible()) await edge.click();
+    expect(await count(), 'the collection appended a bounded page').toBeGreaterThan(before);
+  }).toPass({ timeout: 30_000 });
+}
+
+/**
+ * Run a click-style action until a follow-up expectation holds — the finding-#89
+ * retry for an IDEMPOTENT interaction (opening a tab, opening the composer):
+ * re-running the action is a no-op once it has landed, so the retry is safe.
+ */
+async function actUntil(action: () => Promise<void>, confirm: () => Promise<void>): Promise<void> {
+  await expect(async () => {
+    await action();
+    await confirm();
+  }).toPass({ timeout: 30_000 });
+}
+
+/**
  * Compile + warm every route the loaded-issue tests touch, in a throwaway
  * context, so the real tests never hit a COLD route. This spec runs in its own
  * dedicated CI step (a fresh `pnpm dev`), so it is the FIRST and ONLY caller of
@@ -269,6 +303,12 @@ async function warmIssueRoutes(browser: Browser): Promise<void> {
 let fixture: CollabFixture;
 
 test.beforeAll(async ({ browser }) => {
+  // The seed (40+ comments + 60+ edits through the real services, each firing a
+  // stubbed Inngest event) plus the route warm-up runs well past Playwright's
+  // default 30s HOOK timeout (the describe-level test timeout does not cover
+  // hooks), so set this hook's own budget generously.
+  test.setTimeout(300_000);
+
   // Seed the 5.6.1 loaded issue through the shipped services (the child process
   // inherits whatever SEED_COLLAB_* the lane set — full size locally, reduced in
   // CI). Idempotent: it clears and reseeds its own workspace only.
@@ -357,12 +397,12 @@ test.describe('collab-at-scale — bounded load (5.6.3)', () => {
     // page exhausts the backlog (at the reduced cap there are ~2 pages), so we
     // assert the bounded GROWTH, not a lingering edge.
     const rootsBefore = await threadList(page).locator('> li').count();
-    await showMoreComments(page).click();
-    await expect
-      .poll(async () => threadList(page).locator('> li').count(), {
-        message: 'comments append a bounded page of roots',
-      })
-      .toBeGreaterThan(rootsBefore);
+    await clickShowMoreUntilGrown(
+      page,
+      showMoreComments(page),
+      () => threadList(page).locator('> li').count(),
+      rootsBefore,
+    );
     const rootsAfter = await threadList(page).locator('> li').count();
     // One page is COMMENT_PAGE_SIZE roots; the leading edge `<li>` may toggle, so
     // allow ±1 around the page size.
@@ -374,29 +414,40 @@ test.describe('collab-at-scale — bounded load (5.6.3)', () => {
     // ── Attachments: extend exactly one page (50 → 100 when ≥ 100 remain, else
     // the remainder) — bounded append, not load-all.
     const filesBefore = await fileList(page).getByRole('listitem').count();
-    await showMoreAttachments(page).click();
-    await expect
-      .poll(async () => fileList(page).getByRole('listitem').count(), {
-        message: 'attachments append a bounded page',
-      })
-      .toBeGreaterThan(filesBefore);
+    await clickShowMoreUntilGrown(
+      page,
+      showMoreAttachments(page),
+      () => fileList(page).getByRole('listitem').count(),
+      filesBefore,
+    );
     const filesAfter = await fileList(page).getByRole('listitem').count();
     expect(filesAfter - filesBefore, 'attachments append at most one page').toBeLessThanOrEqual(
       ATTACHMENT_PAGE_SIZE,
     );
 
     // ── Activity History: switch to the tab (its first page is SSR-prefetched
-    // behind the edge), then extend one page — the bounded client read.
-    await switchActivityTab(page, 'History');
-    await expect(historyFeed(page)).toBeVisible();
+    // behind the edge), then extend one page — the bounded client read. The tab
+    // switch is retried (finding #89) until its feed mounts.
+    await actUntil(
+      () => switchActivityTab(page, 'History'),
+      () => expect(historyFeed(page)).toBeVisible({ timeout: 3_000 }),
+    );
     await extendActivityFeed(page, 'history', census);
 
     // ── Activity All: the merged stream; extend the composite cursor one page.
-    await switchActivityTab(page, 'All');
-    await expect(allFeed(page)).toBeVisible();
+    await actUntil(
+      () => switchActivityTab(page, 'All'),
+      () => expect(allFeed(page)).toBeVisible({ timeout: 3_000 }),
+    );
     await extendActivityFeed(page, 'all', census);
     // Back to the comment composer's tab for the post below.
-    await switchActivityTab(page, 'Comments');
+    await actUntil(
+      () => switchActivityTab(page, 'Comments'),
+      () =>
+        expect(page.getByRole('button', { name: 'Add a comment…' })).toBeVisible({
+          timeout: 3_000,
+        }),
+    );
 
     // ── Watchers: opening the popover issues a single bounded roster read.
     await watchButton(page).click();
@@ -406,16 +457,27 @@ test.describe('collab-at-scale — bounded load (5.6.3)', () => {
     await expect(watchersPopover(page)).toBeHidden();
 
     // ── Interaction smoke: posting on the loaded issue completes (a load-all
-    // regression would stall the heavy page here).
-    await page.getByRole('button', { name: 'Add a comment…' }).click();
-    await expect(page.locator('.ProseMirror')).toBeVisible();
+    // regression would stall the heavy page here). Open the composer with the
+    // finding-#89 retry (click only while the rest-state button is still shown).
+    const smokeText = 'At-scale smoke comment on the loaded issue.';
+    await actUntil(
+      async () => {
+        const rest = page.getByRole('button', { name: 'Add a comment…' });
+        if (await rest.isVisible()) await rest.click();
+      },
+      () => expect(page.locator('.ProseMirror')).toBeVisible({ timeout: 3_000 }),
+    );
     await page.locator('.ProseMirror').click();
-    await page.keyboard.type('At-scale smoke comment on the loaded issue.');
-    await page.getByRole('button', { name: 'Comment', exact: true }).click();
+    await page.keyboard.type(smokeText);
+    // Submit, retried: re-click only while the Comment button is still shown
+    // (a landed post collapses the composer), so a swallowed click is retried
+    // and a landed one is never doubled.
+    const submit = page.getByRole('button', { name: 'Comment', exact: true });
+    await expect(async () => {
+      if (await submit.isVisible()) await submit.click();
+      await expect(threadList(page).getByText(smokeText)).toBeVisible({ timeout: 3_000 });
+    }).toPass({ timeout: 30_000 });
     await expect(page.getByRole('button', { name: 'Add a comment…' })).toBeVisible();
-    await expect(
-      threadList(page).getByText('At-scale smoke comment on the loaded issue.'),
-    ).toBeVisible();
 
     // ── The whole-page census: every collection that was read paged within its
     // bound, and the genuinely-large ones (guarded > page size) actually issued
