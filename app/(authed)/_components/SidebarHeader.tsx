@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils/cn';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import { ProjectSwitcher } from './ProjectSwitcher';
 import { CreateProjectModal } from './CreateProjectModal';
+import { ProjectAvatar } from './ProjectAvatar';
 
 // The sidebar's top slot — the project context for the active workspace.
 // Resolves the three states PRODECT_FINDINGS #29 pins for Subtask 1.5.3:
@@ -40,26 +41,37 @@ export function SidebarHeader({ activeProject, projects, collapsed = false }: Si
   const [createOpen, setCreateOpen] = useState(false);
   const hasProject = Boolean(activeProject);
 
-  // Collapsed rail (56px): an avatar-sized square. With a project it shows
-  // the name's initial; without one it's a "+" that opens the create modal.
+  // Collapsed rail (56px): an avatar-sized square. With a project it shows the
+  // project avatar chip (Story 6.8); without one it's a "+" that opens the
+  // create modal.
   if (collapsed) {
-    const initial = activeProject?.name.trim().charAt(0).toUpperCase() || '+';
+    if (hasProject && activeProject) {
+      return (
+        <span className="mx-auto block" aria-label={t('sidebarHeader.activeProject')}>
+          <ProjectAvatar
+            icon={activeProject.avatarIcon}
+            color={activeProject.avatarColor}
+            identifier={activeProject.identifier}
+            size={32}
+          />
+        </span>
+      );
+    }
     return (
       <>
         <button
           type="button"
-          aria-label={hasProject ? t('sidebarHeader.activeProject') : t('project.createFirst')}
-          onClick={hasProject ? undefined : () => setCreateOpen(true)}
+          aria-label={t('project.createFirst')}
+          onClick={() => setCreateOpen(true)}
           className={cn(
             'bg-(--el-accent) text-(--el-accent-text) mx-auto flex h-8 w-8 items-center justify-center',
             'rounded-(--radius-sm) font-sans text-sm font-semibold',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
-            hasProject && 'pointer-events-none',
           )}
         >
-          {hasProject ? initial : <Plus className="h-4 w-4" aria-hidden />}
+          <Plus className="h-4 w-4" aria-hidden />
         </button>
-        {!hasProject ? <CreateProjectModal open={createOpen} onOpenChange={setCreateOpen} /> : null}
+        <CreateProjectModal open={createOpen} onOpenChange={setCreateOpen} />
       </>
     );
   }

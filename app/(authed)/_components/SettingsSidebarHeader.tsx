@@ -6,6 +6,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/utils/cn';
 import type { ProjectDTO } from '@/lib/dto/projects';
+import { ProjectAvatar } from './ProjectAvatar';
 
 // The settings-area rail header (Story 6.5 · Subtask 6.5.2). When the rail is in
 // the project-settings area it REPLACES the SidebarHeader/ProjectSwitcher with a
@@ -27,7 +28,6 @@ export function SettingsSidebarHeader({
   collapsed = false,
 }: SettingsSidebarHeaderProps) {
   const t = useTranslations('settings');
-  const initial = activeProject.name.trim().charAt(0).toUpperCase() || '?';
   const backLabel = t('nav.backToProject', { projectName: activeProject.name });
 
   // Collapsed rail (56px): a back-arrow icon button (tooltip) above the project
@@ -48,12 +48,12 @@ export function SettingsSidebarHeader({
             <ArrowLeft className="h-4 w-4" aria-hidden />
           </Link>
         </Tooltip>
-        <span
-          aria-hidden
-          className="flex h-8 w-8 items-center justify-center rounded-(--radius-control) bg-(--el-type-task) font-sans text-sm font-bold text-(--el-text-inverted)"
-        >
-          {initial}
-        </span>
+        <ProjectAvatar
+          icon={activeProject.avatarIcon}
+          color={activeProject.avatarColor}
+          identifier={activeProject.identifier}
+          size={32}
+        />
       </div>
     );
   }
@@ -74,12 +74,12 @@ export function SettingsSidebarHeader({
       </Link>
 
       <div className="flex items-center gap-2.5 px-(--spacing-control-x) pb-0.5 pt-1.5">
-        <span
-          aria-hidden
-          className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-type-task) font-sans text-[13px] font-bold text-(--el-text-inverted)"
-        >
-          {initial}
-        </span>
+        <ProjectAvatar
+          icon={activeProject.avatarIcon}
+          color={activeProject.avatarColor}
+          identifier={activeProject.identifier}
+          size={30}
+        />
         <span className="flex min-w-0 flex-col">
           <span className="truncate font-sans text-[13.5px] font-semibold text-(--el-text)">
             {activeProject.name}
