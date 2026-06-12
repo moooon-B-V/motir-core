@@ -1369,25 +1369,36 @@
         height: 15px;
       }
       .ldetail {
-        padding: 0 16px 14px 124px;
+        padding: 2px 16px 16px;
         border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
       }
       .ldetail .errbox {
-        border: 1px solid var(--el-border);
-        border-left: 3px solid var(--el-danger);
+        display: flex;
+        gap: 9px;
         border-radius: var(--radius-card);
-        background: var(--el-surface-soft);
+        background: var(--el-tint-rose);
         padding: 11px 13px;
         font-size: 12px;
         line-height: 1.55;
-        color: var(--el-text-secondary);
+        color: var(--el-text-strong);
+      }
+      .ldetail .errbox .ei {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-danger);
       }
       .ldetail .errbox .ec {
         font-family: var(--font-mono);
-        font-size: 11.5px;
+        font-size: 11px;
         color: var(--el-danger-text);
-        display: block;
-        margin-top: 4px;
+        display: inline-block;
+        margin-top: 7px;
+        padding: 3px 7px;
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
       }
       .ldetail .steps {
         margin-top: 9px;
@@ -2450,11 +2461,14 @@
             </div>
             <div class="ldetail">
               <div class="errbox">
-                The transition action failed — the target status isn’t reachable from the item’s
-                current status under the project workflow.
-                <span class="ec"
-                  >WorkflowTransitionIllegalError: "In Review" is not allowed from "Done"</span
-                >
+                <svg class="ei" viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+                <span>
+                  The transition action failed — the target status isn’t reachable from the item’s
+                  current status under the project workflow.
+                  <span class="ec"
+                    >WorkflowTransitionIllegalError: "In Review" is not allowed from "Done"</span
+                  >
+                </span>
               </div>
               <div class="steps">
                 <div class="step fail">

@@ -1057,9 +1057,12 @@ triangle`) · **No actions** (neutral, `minus-circle`) — AA per finding #35
   load-all** (the finding-#57 tell, avoided).
 - **Deleted triggering item** — renders the `tomb` tombstone (struck-through
   key, no link), not a dead link.
-- **Failure detail** — a failure row expands to the typed error (`errbox` with
-  the danger left-border) + per-step list (which action failed, which were
-  skipped).
+- **Failure detail** — a failure row expands (on a quiet `--el-surface-soft`
+  band) to a rose-tinted `errbox` callout: a leading `alert-triangle`, the
+  message in `--el-text-strong`, and the typed error as a mono `--el-page-bg`
+  code chip (the finding-#35 hue-in-background grammar, shared with the
+  auto-disabled banner — NOT a grey box with a danger stripe) + a per-step list
+  (which action failed, which were skipped).
 - **Auto-disable banner** — at 10 consecutive failures the rule switches off; a
   rose banner (AA, `--el-text-strong`) on the list + editor names the count and
   offers **Re-enable** (wired to the 6.6.1 counter reset).
