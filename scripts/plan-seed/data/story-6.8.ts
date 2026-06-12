@@ -173,7 +173,7 @@ export const story_6_8: PlanStory = {
       id: '6.8.1',
       title:
         'Schema (project_key_alias + avatar columns) + the details/rename service core (locked atomic key-change tx, alias reservation, release) + admin-gated PATCH',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 33,
@@ -239,7 +239,7 @@ export const story_6_8: PlanStory = {
       id: '6.8.2',
       title:
         'Alias-aware resolution everywhere the key is addressed — central project-by-key fallback, /issues/[key] 308 redirects, API old-key serving',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 25,
