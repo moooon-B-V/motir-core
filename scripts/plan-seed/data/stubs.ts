@@ -71,24 +71,13 @@ export const STUB_STORIES: PlanStory[] = [
   // collaboration journey (the seams between stories) + the collaboration-
   // heavy loaded-issue fixture and its bounded-read/bounded-DOM at-scale
   // specs + the full-page strict a11y sweep. Epic 5 is now fully expanded
-  // except the 5.7 stub below.
-  {
-    id: '5.7',
-    title: 'In-app notifications (bell + unread feed)',
-    status: 'planned',
-    descriptionMd:
-      'The in-app half of the notification surface (5.1.6 ships the email half): a bell in the ' +
-      'shell header with an unread count, a notification feed (mentions first; watcher / ' +
-      'assignment / transition events as Stories 5.4 + 6.6 land), mark-read / mark-all-read, ' +
-      'deep links into issues, and per-user notification preferences (email vs in-app — the ' +
-      'Jira personal-notification-settings shape). Consumes the SAME channel-agnostic job ' +
-      'events 5.1.6 / 5.4 emit (`work-item/comment.created`, `work-item/mentioned`, …) — a ' +
-      'notification persistence model fed by a job, never a second emit path. Added during the ' +
-      '5.1 expansion: Jira notifies mentions in-app as well as by email, and no story owned ' +
-      'that surface (the no-V1-tier rule: an unowned capability is a planning bug, not a scope ' +
-      'cut).',
-    items: [],
-  },
+  // 5.7 (In-app notifications — bell + unread feed) is fully expanded —
+  // data/story-5.7.ts. Added 2026-06-12. The IN-APP channel: a Notification
+  // model fed by a SECOND consumer of 5.1.6's shipped channel-agnostic events
+  // (no new emit path), the shell-header bell + drawer, mark-read/mark-all,
+  // and a per-user × event-type × channel (email|in_app) preference matrix
+  // both the in-app consumer and the done 5.1.6 email job honor. Epic 5 is now
+  // fully expanded.
 
   // ── Epic 6: Search, reporting & admin ─────────────────────────────────────
   // 6.4 (Roles & permissions) shipped early — data/story-6.4.ts, done.
