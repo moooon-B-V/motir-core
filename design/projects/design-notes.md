@@ -1152,3 +1152,266 @@ When a string here disagrees with shipped 6.6.5 / 6.6.6 code, the code wins —
 file a fix so the mockup stays the reference. `automation.mock.html` is the
 layout-confirmation artifact; it may drift from pixel-exact production once the
 React lands.
+
+---
+
+# Editable project Details (Story 6.8) — Subtask 6.8.3 output
+
+Story 6.8 grows the **6.5.3 read-only Details landing** (the identity page the
+6.5 settings **AREA** lands on) into the **editable** surface: the project
+**name**, **avatar** (preset icon + colour swatch), and — the load-bearing
+piece — a **project-key change with old-key redirects** (PROD → NIF, every
+issue identifier re-renders with its number preserved, old links keep working
+forever via the `project_key_alias` table). It also lists **previous keys** with
+a release control. The backend already shipped in **6.8.1** (schema + the locked
+atomic `changeKey` tx + alias reservation/release + admin-gated PATCH) and
+**6.8.2** (alias-aware resolution everywhere the key is addressed); this asset is
+the **design gate** for the UI code subtask **6.8.4**.
+
+This section is the canonical reference for **6.8.4** (the editable Details page),
+which carries **6.8.3 + 6.5.3** in `dependsOn` and seeds `'blocked'` (Principle
+#13). The asset is an **HTML mockup** — `details.mock.html`, built FROM the real
+design system (the `app/globals.css` token block copied 1:1 — incl. the
+`--el-sidebar-*` shell tokens — + shipped `components/ui/*` primitives), with
+`details.png` as the light-mode render. The HTML is the source of truth; toggle
+`data-theme="dark"` in it to confirm token parity.
+
+**This EXTENDS the 6.5.1 area asset — it does NOT redraw the chrome.** The rail
+(grouped settings nav + the project-identity header + back-to-project), the
+serif page-title grammar, the Details landing's outer Card, and the re-homed
+Archive danger zone are all the 6.5.1 drawing, reused whole. 6.8 changes only the
+**content** of the Details card — the read-only identity rows become editable
+controls — and adds three new things: the **avatar picker** (Popover), the
+**change-key modal**, and the **previous-keys** rows + **release confirm**.
+
+## Files
+
+| Source of truth (HTML)              | Render (PNG)                          |
+| ----------------------------------- | ------------------------------------- |
+| `design/projects/details.mock.html` | `design/projects/details.png` (light) |
+
+`details.mock.html` is one multi-panel review page (panels 0–5); `details.png`
+is the full-page light render. Dark parity is in-file (the `Toggle dark` button).
+Avatar-registry + key-error contracts come from the shipped 6.8.1 code, not the
+mock — see the catalog below.
+
+## Mirror product (rung 1, VERIFIED at plan time 2026-06-10 — Atlassian docs)
+
+Jira Cloud **project details** + the **"Previous project keys"** details-page
+feature (the same sources the Story 6.8 seed cites — checked, not asserted, per
+`notes.html` mistake #33):
+
+- **Details owns name / key / avatar.** Adopted 1:1. The key is **not a
+  free-typing field** — it shows as a read-only value with a guarded "change key"
+  flow (Jira routes the rename through a confirmation, not an inline edit).
+- **Old keys keep working + stay reserved.** After PROD → NIF: old `PROD-`
+  issue links **redirect** to the new key, REST calls on the old key **resolve**
+  (no redirect), and PROD **stays reserved** against other projects. Link text is
+  never rewritten. The Details page lists **"Previous project keys"** with a
+  **remove** that un-reserves the key and **breaks its old links** — drawn as the
+  release-with-confirm row.
+- **Re-key is one operation.** Jira runs a background re-index here; ours is
+  structurally cheaper (search reads the denormalized `work_item.identifier`
+  column), so the bulk `UPDATE` **is** the re-index — synchronous + atomic. The
+  modal's in-flight state reflects that (one commit, "won't leave issues
+  half-renamed"), not a progress bar over a background job.
+
+## Composing primitives (no new primitive required)
+
+Everything is a shipped `components/ui/*` primitive — the mock's classes name
+the primitive each block maps to:
+
+- **`Sidebar` / area chrome** — the 6.5.1 settings nav + rail header, REUSED
+  whole. The rail's project chip now renders the **avatar** (preset icon over the
+  tint, or the mono key-letters fallback) instead of a flat letter tile.
+- **`Card`** — the Details card (`card` + `card-head` + `card-body`), the
+  Previous-keys card, and the re-homed **Danger zone** (`card.danger` —
+  `border-2` `--el-danger`, the `Archive…` `danger` Button + its modal,
+  UNCHANGED from 6.5.1). Each editable row is a labelled `field`.
+- **`Input`** — the **name** field (text), the **change-key** field
+  (`font-mono`, `letter-spacing`). The error state is the Input **error
+  grammar** (`--el-danger` border + an `--el-danger-text` message with an
+  `alert` glyph); the success state is the `--el-success` "Available" line. The
+  read-only **key** value is a `key-val` (mono, `--el-surface` fill, no border
+  emphasis) — a display, not an input.
+- **`Button`** — `primary` (Save changes / Change key), `ghost` (Cancel / Change
+  avatar / Change key… / Release), `danger` (Archive… / Release key). Sizes via
+  `--height-btn-md` / `-sm`.
+- **`Pill`** — `Admin` (`--el-tint-lavender`) / `Read-only` (`--el-tint-mint`),
+  AA-safe (hue in the tint bg, `--el-text-strong` text — finding #35). The
+  `Soon` automation chip is the 6.5.1 drawing.
+- **`Popover`** — the **avatar picker** (the 18-icon grid + the 6 colour swatches
+  - a live preview + "None") AND the **project switcher** open state (redrawn
+    from the 1.3.4 frames with the avatar chip; the active row keeps its `Check`).
+- **`Modal`** — the **change-key** modal (no `title` prop; a custom heading row:
+  a `Key` glyph in an `--el-tint-lavender` circle + the serif title) and the
+  **release** confirm (the **archive-confirm danger grammar**: `TriangleAlert` in
+  an `--el-tint-rose` circle + a `danger` Button). `Modal.Footer` = ghost Cancel
+  - the action button.
+- **`Toast`** — the change-key success feedback (inverted surface, `--el-success`
+  check), naming the consequence.
+- The **save bar** is the card footer action row (`save-bar`) with a
+  dirty/saving/saved status region on the left.
+
+## The avatar contract (the 6.8.1 registry — `lib/projects/avatar.ts`)
+
+The picker renders from the SAME two key sets the `updateDetails` service
+validates against — the mock does not invent its own:
+
+- **18 preset ICON keys** (the grid, in registry order): `folder`, `rocket`,
+  `layers`, `box`, `compass`, `flag`, `star`, `target`, `zap`, `bug`, `code`,
+  `sparkles`, `hexagon`, `briefcase`, `beaker`, `palette`, `globe`, `bookmark`.
+  The keys are opaque STRINGS server-side; **6.8.4 owns the key → lucide-component
+  map** (the picker imports `lucide-react`; the service must not — the same
+  UI-free split `issueTypes.ts` → `parentRules.ts` uses).
+- **6 COLOUR keys**, aligned 1:1 to `--el-tint-*`: `peach`, `rose`, `mint`,
+  `lavender`, `sky`, `yellow`. Each swatch is `bg-(--el-tint-<key>)` — colour
+  stays on the swap layer, never a raw `--color-*`. The chip puts the glyph in
+  `--el-text-strong` over the tint (AA, finding #35).
+- **`null` avatar = the shipped MONO rendering** — the chip shows the project's
+  key letters on `--el-type-task` (the existing tile). "None" in the picker
+  restores it. Drawn on the switcher's "Apex" row (`AP`).
+- **NO image upload** (recorded deviation — Jira's own default avatars are a
+  preset library; the 2.3.7 upload primitive is issue-attachment-scoped; an
+  arbitrary user image as workspace chrome would need crop/moderation infra).
+  Adding an icon key is append-only-safe; removing one orphans existing rows.
+
+## The change-key flow (the 6.8.1 service + errors contract)
+
+The key is a **read-only `font-mono` value + a "Change key…" affordance** on the
+card (never a free-typing field — the mirror shape, and a guard against an
+accidental re-key of every issue). The affordance opens the modal. Validation is
+**STRICT** — the field rejects a malformed key, it does **not** pad/truncate the
+way the create-time `normalizeIdentifier` coerces (an admin re-key is surprising
+to silently mutate). Live shape: `/^[A-Z0-9]{3,5}$/`. The **six modal states**
+(panel 3) map 1:1 to the shipped errors:
+
+| Modal state              | Source (`lib/projects/errors.ts`) | Surface                                                          |
+| ------------------------ | --------------------------------- | ---------------------------------------------------------------- |
+| Clean (valid, available) | — (passes)                        | green "Available" + the verbatim consequence; Change key enabled |
+| Format invalid           | `InvalidIdentifierError` → 400    | Input error grammar; Change key disabled                         |
+| Collision — live key     | `IdentifierTakenError` → 409      | "Another project … already uses the key …" (distinct copy)       |
+| Collision — reserved     | `IdentifierReservedError` → 409   | "… is reserved by another project's previous key." (distinct)    |
+| In-flight                | (the atomic tx committing)        | inputs locked + spinner; "won't leave issues half-renamed"       |
+| Success                  | (resolves)                        | modal closes → Toast; card now lists the old key under Previous  |
+
+The two collision states get **distinct copy** because they have distinct
+remedies (a live key is taken now; a reserved key is freed only by releasing the
+other project's alias or deleting it) — that's exactly why 6.8.1 split
+`IdentifierTakenError` from `IdentifierReservedError`. `IdentifierUnchangedError`
+(new == current) is a typed no-op the field prevents (Change key stays disabled
+when the value equals the current key), so it has no error panel.
+
+## Previous keys + release
+
+The **Previous keys** row appears in the card only when `previousKeys.length > 0`
+(panel 5 right shows the zero-aliases case — the row is **absent**, not an empty
+box). Each row = a `Key` glyph + the mono key + its retired-date + a `ghost`
+**Release** button. Chained renames each get their OWN row (PROD-row + NIFR-row
+on the NIF project — they resolve flat, matching 6.8.2's no-chain-walk rule).
+Release opens the **danger confirm** (archive-confirm grammar) naming the
+consequence; **no typed-identifier arm step** — releasing is recoverable only by
+a fresh rename back to that key, and the broken-links consequence is the gate
+(parity with the components/automation delete confirms, which also drop the
+arm-step when a consequence statement suffices).
+
+## Save states (panel 1)
+
+The card footer is the **save bar**: **clean** (Save disabled, no status),
+**dirty** (amber dot + "Unsaved changes", Save enabled), **saving** (spinner,
+both buttons locked), **saved** (`--el-success` check + "Saved", auto-clears).
+Name + avatar edits batch through this single Save (one `updateDetails` PATCH);
+the **key change is its own modal flow** (a separate, guarded mutation) and does
+NOT ride the save bar — re-keying every issue is too consequential to fold into a
+generic "Save changes".
+
+## Gated state (panel 5 left — the 6.4.6 grammar)
+
+A non-admin **member** sees the values but **no controls**: no Save bar, no
+"Change avatar" / "Change key" affordances, no Danger zone — the `Read-only` Pill
+replaces the `Admin` Pill (the same degradation 6.5.1 drew for the read-only
+Details landing). The actions also **reject server-side** (the 6.8.1
+admin-gated PATCH/DELETE → typed 403) — hiding is presentation, the gate is the
+service. This is the 6.4.6 read-only grammar 5.4 / 6.4 / 6.5 all share.
+
+## Copy strings catalog (use verbatim in 6.8.4; i18n under `settings.details`)
+
+`{Project}` = display name, `{IDENT}`/`{NEW}`/`{OLD}` = project keys (mono).
+
+| Surface                       | String                                                                                                                                                                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Page title / sub              | `"Details"` / `"Your project's name, avatar and key. Changing the key re-keys every issue and keeps old links working. Only project admins can edit these."`                                                                         |
+| Card title                    | `"Project details"`                                                                                                                                                                                                                  |
+| Avatar field label / help     | `"Avatar"` / `"A preset icon and colour, shown on the project switcher and lists. Choose \"None\" to fall back to the key letters."`                                                                                                 |
+| Change-avatar button          | `"Change avatar"`                                                                                                                                                                                                                    |
+| Avatar picker sections / None | `"Icon"` · `"Colour"` · `"Preview"` · `"None"`                                                                                                                                                                                       |
+| Name field label / help       | `"Name"` / `"The display name across the app. The URL slug is not affected."`                                                                                                                                                        |
+| Key field label / help        | `"Key"` / `"Issues are keyed {IDENT}-1, {IDENT}-2, … Changing it re-keys every issue and keeps old links working."`                                                                                                                  |
+| Change-key affordance         | `"Change key…"`                                                                                                                                                                                                                      |
+| Save bar (clean→saved)        | `"Unsaved changes"` · `"Saving…"` · `"Saved"` · buttons `"Cancel"` / `"Save changes"`                                                                                                                                                |
+| Change-key modal title / lede | `"Change project key"` / `"The key prefixes every issue ID in {Project}. Pick a new one — 3–5 uppercase letters or digits."`                                                                                                         |
+| Change-key field label        | `"New key"`                                                                                                                                                                                                                          |
+| Available / consequence (go)  | `"Available"` · `"Every issue identifier becomes {NEW}-1, {NEW}-2, … — the numbers stay the same."` · `"Old {OLD}- links keep working — they redirect to the new key."`                                                              |
+| Format error                  | `"\"{value}\" is not a valid project key (use 3–5 uppercase letters or digits)."` (≡ `InvalidIdentifierError`)                                                                                                                       |
+| Collision — live key          | `"Another project in this workspace already uses the key \"{value}\"."` (≡ `IdentifierTakenError`)                                                                                                                                   |
+| Collision — reserved          | `"The key \"{value}\" is reserved by another project's previous key."` (≡ `IdentifierReservedError`)                                                                                                                                 |
+| In-flight lede / button       | `"Re-keying every issue to {NEW}-. This is one atomic change — it won't leave issues half-renamed."` · `"Changing key…"`                                                                                                             |
+| Change-key buttons            | `"Cancel"` / `"Change key"`                                                                                                                                                                                                          |
+| Success toast                 | `"Project key changed to {NEW}. Every issue is now {NEW}-<n>, and old {OLD} links keep working."`                                                                                                                                    |
+| Previous keys label / row     | `"Previous keys"` · `"retired {date}"` · button `"Release"`                                                                                                                                                                          |
+| Previous keys help            | `"Old links to these keys redirect to {IDENT}."`                                                                                                                                                                                     |
+| Release confirm title / body  | `"Release {IDENT}?"` / `"Releasing {IDENT} frees it for other projects and breaks old {IDENT} links — they'll stop redirecting and start returning \"not found\". This can't be undone except by changing the key back to {IDENT}."` |
+| Release confirm buttons       | `"Cancel"` / `"Release key"`                                                                                                                                                                                                         |
+
+The change-key error strings are the SAME text the 6.8.1 `errors.ts` constructors
+build — keep them in lock-step (the route returns the typed `code`; 6.8.4 maps
+`code` → the i18n string above, so the wording lives once in the catalog).
+
+## Recorded deviations from the mirror (justified — no complexity for nothing)
+
+- **No image upload** for the avatar — preset icon + tint only (above). Jira's
+  own default avatars ARE a preset library; upload is the documented extension.
+- **No description / category / lead / default-assignee** fields — absent from
+  the shipped `Project` model (rung 2); component default-assignees (5.4) cover
+  the default-assignee need. Each is a documented extension slot.
+- **`slug` is not regenerated** on rename — it's a create-time artifact no URL
+  consumes; touching it would break nothing and help nothing.
+- **Key change is its own modal**, not an inline save-bar field — matches Jira's
+  guarded flow and protects against an accidental whole-project re-key.
+
+## Extension slots (reserved — do NOT build here)
+
+- Avatar **image upload** (crop/moderation infra) — when a use case lands.
+- **Project description / category / lead** — when the model grows the fields.
+- A workspace-level **"reserved keys" admin view** — deletion already cascades
+  the aliases (the 6.8.1 `onDelete: Cascade`), so there's no orphan to manage yet.
+
+## Tokens & a11y
+
+Colour is `--el-*` only — `--el-tint-{peach,rose,mint,lavender,sky,yellow}` for
+the avatar swatches/chips + the modal-icon circles (hue in the bg,
+`--el-text-strong` glyph — finding #35, AA holds), `--el-success` (Available +
+Saved), `--el-warning` (the dirty dot), `--el-danger` + `--el-danger-text` (the
+Input error outline + message + the release danger button), `--el-accent` (the
+picker selection ring + Save / Change-key primary), `--el-type-task` (the mono
+avatar fallback). No grey-+-primary collapse (finding #54): the picker, chips,
+and modal icons carry real hue. Shape via the element shape tokens
+(`--radius-card/-input/-modal/-btn/-control/-badge`,
+`--spacing-card-padding/-input-*/-control-*/-chip-*/-btn-x`,
+`--height-input/-btn-*/-control`, `--shadow-card/-elevated/-modal/-subtle`);
+`rounded-full` only on the colour swatches / the dirty dot / the spinner / the
+modal-icon circles. A11y: each editable row is a labelled `field`; the avatar
+picker is a keyboard-complete `Popover` (the icon grid is a roving-tabindex
+listbox, the swatches a radiogroup); the change-key field validation is
+`role="alert"` on the message + the success line `role="status"`; both modals are
+focus-trapped, ESC-closable, and the danger confirm's action is reachable without
+a typed arm step; the Toast is `role="status"`. Extends the settings strict axe
+sweep. Dark parity verified by toggle.
+
+## Source of truth
+
+When a string here disagrees with shipped 6.8.4 code, the code wins — file a fix
+so the mockup stays the reference (and keep the change-key error strings in
+lock-step with `lib/projects/errors.ts`). `details.mock.html` is the
+layout-confirmation artifact; it may drift from pixel-exact production once the
+React lands.
