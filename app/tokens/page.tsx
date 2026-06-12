@@ -20,7 +20,13 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { ISSUE_TYPES } from '@/lib/issues/parentRules';
 import { useToast } from '@/components/ui/Toast';
 import { Button } from '@/components/ui/Button';
-import { BarChart, LineChart, chartColor } from '@/components/ui/charts';
+import {
+  BarChart,
+  LineChart,
+  DonutChart,
+  DifferenceAreaChart,
+  chartColor,
+} from '@/components/ui/charts';
 import { Card } from '@/components/ui/Card';
 import { CommandPalette, type CommandGroup } from '@/components/ui/CommandPalette';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -812,20 +818,24 @@ export default function TokensPage() {
         <AppShellDemo />
       </Section>
 
-      <Section title="Charts — viz primitives (Story 4.6)">
+      <Section title="Charts — viz primitives (Stories 4.6 + 6.3)">
         <p
           className="text-sm"
           style={{ color: 'var(--el-page-text-muted)', marginBottom: 'var(--spacing-lg)' }}
         >
-          The reusable token-aware SVG chart layer (Subtask 4.6.2) — a{' '}
+          The reusable token-aware SVG chart layer — a{' '}
           <code className="font-mono text-xs">LineChart</code> (the burndown) and a grouped{' '}
-          <code className="font-mono text-xs">BarChart</code> (the velocity), the viz Story 6.3
-          reuses. No charting library: hand-rolled SVG consuming the{' '}
-          <code className="font-mono text-xs">--el-chart-*</code> tokens. Every chart ships a
-          visible legend, a <code className="font-mono text-xs">role=&quot;img&quot;</code>{' '}
+          <code className="font-mono text-xs">BarChart</code> (the velocity) from Subtask 4.6.2,
+          plus the <code className="font-mono text-xs">DonutChart</code> (distribution) and{' '}
+          <code className="font-mono text-xs">DifferenceAreaChart</code> (created-vs-resolved) Story
+          6.3 (Subtask 6.3.4) grows into the same layer. No charting library: hand-rolled SVG
+          consuming the <code className="font-mono text-xs">--el-chart-*</code> tokens (incl. the
+          new <code className="font-mono text-xs">--el-chart-cat-*</code> ramp +{' '}
+          <code className="font-mono text-xs">--el-chart-deficit/surplus</code> fills). Every chart
+          ships a visible legend, a <code className="font-mono text-xs">role=&quot;img&quot;</code>{' '}
           <code className="font-mono text-xs">&lt;desc&gt;</code> summary, and a data-table fallback
           (open &ldquo;View data table&rdquo;) so the series read as text+number, never colour alone
-          (finding #35).
+          (finding #35). Toggle the theme above to confirm dark-mode parity.
         </p>
         <ChartsSpecimen />
       </Section>
@@ -979,6 +989,78 @@ function ChartsSpecimen() {
             label: 'avg 26',
             legendLabel: 'Average completed',
           }}
+        />
+      </Card>
+
+      <Card
+        header={<h3 className="font-serif text-lg font-semibold">Status distribution — donut</h3>}
+      >
+        <DonutChart
+          size={220}
+          totalNoun="issues"
+          statisticLabel="Status"
+          description="Donut of 80 issues by status: To Do 30 (37.5%), In Progress 16 (20%), Done 22 (27.5%), In Review 8 (10%), Blocked 4 (5%)."
+          ariaLabel="Issues by status"
+          data={[
+            { label: 'To Do', value: 30 },
+            { label: 'In Progress', value: 16 },
+            { label: 'Done', value: 22 },
+            { label: 'In Review', value: 8 },
+            { label: 'Blocked', value: 4 },
+          ]}
+        />
+      </Card>
+
+      <Card
+        header={
+          <h3 className="font-serif text-lg font-semibold">
+            Created vs Resolved — difference/area
+          </h3>
+        }
+      >
+        <DifferenceAreaChart
+          width={600}
+          height={300}
+          x={{
+            domain: [1, 12],
+            title: 'Week',
+            ticks: [1, 4, 8, 12].map((v) => ({ value: v, label: `W${v}` })),
+          }}
+          y={{
+            domain: [0, 20],
+            title: 'Issues / week',
+            ticks: [0, 5, 10, 15, 20].map((v) => ({ value: v, label: String(v) })),
+          }}
+          description="Created vs resolved per week over 12 weeks. Created outpaces resolved through week 4 (backlog growing, shaded red), the lines meet at week 5, then resolved overtakes created (catching up, shaded green)."
+          ariaLabel="Created vs resolved over 12 weeks"
+          created={[
+            { x: 1, y: 14 },
+            { x: 2, y: 16 },
+            { x: 3, y: 13 },
+            { x: 4, y: 18 },
+            { x: 5, y: 15 },
+            { x: 6, y: 11 },
+            { x: 7, y: 9 },
+            { x: 8, y: 8 },
+            { x: 9, y: 10 },
+            { x: 10, y: 7 },
+            { x: 11, y: 6 },
+            { x: 12, y: 5 },
+          ]}
+          resolved={[
+            { x: 1, y: 6 },
+            { x: 2, y: 8 },
+            { x: 3, y: 10 },
+            { x: 4, y: 9 },
+            { x: 5, y: 15 },
+            { x: 6, y: 14 },
+            { x: 7, y: 13 },
+            { x: 8, y: 12 },
+            { x: 9, y: 14 },
+            { x: 10, y: 11 },
+            { x: 11, y: 9 },
+            { x: 12, y: 8 },
+          ]}
         />
       </Card>
     </div>

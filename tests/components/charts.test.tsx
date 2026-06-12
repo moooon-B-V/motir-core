@@ -3,7 +3,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { BarChart, LineChart, chartColor } from '@/components/ui/charts';
+import {
+  BarChart,
+  LineChart,
+  DonutChart,
+  DifferenceAreaChart,
+  chartColor,
+} from '@/components/ui/charts';
 
 // Chart primitives (Subtask 4.6.2) — the reusable token-aware SVG viz layer.
 // These are PURE presentational components: typed data props in, SVG out, no
@@ -336,6 +342,204 @@ describe('BarChart — 4.6.7 branch pass', () => {
         (r.getAttribute('fill') ?? '').includes('--el-chart'),
       ).length,
     ).toBe(0);
+  });
+});
+
+// 6.3.4 — the donut + difference/area forms grown into the same 4.6.2 layer.
+// Same a11y bar: every form carries role="img" + a <desc> summary + a visible
+// legend (count + percentage for the donut) + a data-table fallback, so the
+// series read as text+number, never colour alone (finding #35).
+
+describe('DonutChart (distribution form)', () => {
+  const STATUS = [
+    { label: 'To Do', value: 30 },
+    { label: 'In Progress', value: 16 },
+    { label: 'Done', value: 22 },
+    { label: 'In Review', value: 8 },
+    { label: 'Blocked', value: 4 },
+  ];
+
+  function renderDonut() {
+    return render(
+      <DonutChart
+        data={STATUS}
+        totalNoun="issues"
+        statisticLabel="Status"
+        description="Donut of 80 issues by status: To Do 30 (37.5%), In Progress 16 (20%), Done 22 (27.5%), In Review 8 (10%), Blocked 4 (5%)."
+        ariaLabel="Issues by status"
+      />,
+    );
+  }
+
+  it('renders a labelled role="img" SVG with a <desc> summary + a wedge per segment', () => {
+    const { container } = renderDonut();
+    const img = screen.getByRole('img', { name: 'Issues by status' });
+    expect(img.tagName.toLowerCase()).toBe('svg');
+    expect(img.querySelector('desc')?.textContent).toContain('80 issues by status');
+    // one arc <path> per segment (the centre total/noun are <text>, not paths)
+    const wedges = Array.from(container.querySelectorAll('path')).filter((p) =>
+      (p.getAttribute('fill') ?? '').includes('--el-chart'),
+    );
+    expect(wedges).toHaveLength(5);
+    // the centre hole shows the total + noun
+    expect(screen.getByText('80')).toBeTruthy();
+    expect(screen.getByText('issues')).toBeTruthy();
+  });
+
+  it('shows a visible legend with count AND percentage per segment (finding #35)', () => {
+    const { container } = renderDonut();
+    const legend = within(container.querySelector('ul') as HTMLElement);
+    expect(legend.getByText('To Do')).toBeTruthy();
+    expect(legend.getByText('37.5%')).toBeTruthy();
+    expect(legend.getByText('20%')).toBeTruthy();
+    expect(legend.getByText('5%')).toBeTruthy();
+  });
+
+  it('ships a data-table fallback re-expressing the segments as text+number', () => {
+    const { container } = renderDonut();
+    const table = container.querySelector('table');
+    expect(table).toBeTruthy();
+    const scope = within(table as HTMLElement);
+    expect(scope.getByText('Status')).toBeTruthy();
+    expect(scope.getByText('Count')).toBeTruthy();
+    expect(scope.getAllByText('30').length).toBeGreaterThan(0);
+  });
+
+  it('rolls overflow beyond the ramp into a "+N more" legend row', () => {
+    const data = Array.from({ length: 9 }, (_, i) => ({ label: `Component ${i}`, value: 10 }));
+    const { container } = render(
+      <DonutChart data={data} description="Nine components, capped to the ramp with a rollup." />,
+    );
+    const legend = within(container.querySelector('ul') as HTMLElement);
+    expect(legend.getByText('+3 more')).toBeTruthy();
+  });
+
+  it('renders the empty state (no SVG) when there is no positive data', () => {
+    const { container } = render(
+      <DonutChart
+        data={[{ label: 'None', value: 0 }]}
+        description="No issues match."
+        emptyState={<p>No issues match this scope.</p>}
+      />,
+    );
+    expect(container.querySelector('svg')).toBeNull();
+    expect(screen.getByText('No issues match this scope.')).toBeTruthy();
+  });
+
+  it('falls back to a default empty message when no emptyState is given', () => {
+    const { container } = render(<DonutChart data={[]} description="Nothing yet." />);
+    expect(container.querySelector('svg')).toBeNull();
+    expect(screen.getByText('No data to chart yet.')).toBeTruthy();
+  });
+
+  it('renders the report-page layout (legend below) and falls back to the desc as the name', () => {
+    // legendLayout="below" + no ariaLabel exercises both the layout + name branches;
+    // rampLength beyond the ramp length drives the neutral colour fallback.
+    render(
+      <DonutChart
+        data={Array.from({ length: 8 }, (_, i) => ({ label: `S${i}`, value: 5 }))}
+        legendLayout="below"
+        rampLength={9}
+        description="Eight groups, report-page donut."
+      />,
+    );
+    expect(screen.getByRole('img', { name: 'Eight groups, report-page donut.' })).toBeTruthy();
+  });
+});
+
+describe('DifferenceAreaChart (created-vs-resolved form)', () => {
+  const X = {
+    domain: [1, 5] as [number, number],
+    title: 'Week',
+    ticks: [1, 3, 5].map((v) => ({ value: v, label: `W${v}` })),
+  };
+  const Y = {
+    domain: [0, 20] as [number, number],
+    title: 'Issues',
+    ticks: [0, 10, 20].map((v) => ({ value: v, label: String(v) })),
+  };
+  // created starts above resolved (deficit), they cross, resolved ends above (surplus)
+  const CREATED = [
+    { x: 1, y: 14 },
+    { x: 2, y: 16 },
+    { x: 3, y: 12 },
+    { x: 4, y: 8 },
+    { x: 5, y: 6 },
+  ];
+  const RESOLVED = [
+    { x: 1, y: 6 },
+    { x: 2, y: 8 },
+    { x: 3, y: 12 },
+    { x: 4, y: 14 },
+    { x: 5, y: 15 },
+  ];
+
+  function renderDiff() {
+    return render(
+      <DifferenceAreaChart
+        x={X}
+        y={Y}
+        created={CREATED}
+        resolved={RESOLVED}
+        description="Created vs resolved over 5 weeks: created leads early (backlog growing), then resolved overtakes (catching up)."
+        ariaLabel="Created vs resolved"
+      />,
+    );
+  }
+
+  it('renders a labelled role="img" SVG with both series lines', () => {
+    const { container } = renderDiff();
+    expect(screen.getByRole('img', { name: 'Created vs resolved' })).toBeTruthy();
+    const lines = Array.from(container.querySelectorAll('path[stroke]')).filter(
+      (p) => p.getAttribute('stroke') !== 'none',
+    );
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('shades the difference between the series (the deficit/surplus fills)', () => {
+    const { container } = renderDiff();
+    const fills = Array.from(container.querySelectorAll('path[opacity]'));
+    expect(fills.length).toBeGreaterThan(0);
+  });
+
+  it('distinguishes the series + the fill meaning by TEXT legend, not colour alone', () => {
+    const { container } = renderDiff();
+    const legend = within(container.querySelector('ul') as HTMLElement);
+    expect(legend.getByText('Created')).toBeTruthy();
+    expect(legend.getByText('Resolved')).toBeTruthy();
+    expect(legend.getByText('Backlog ↑')).toBeTruthy();
+    expect(legend.getByText('Catching up')).toBeTruthy();
+  });
+
+  it('ships a data-table fallback with both series per bucket', () => {
+    const { container } = renderDiff();
+    const table = container.querySelector('table');
+    const scope = within(table as HTMLElement);
+    expect(scope.getByText('Week')).toBeTruthy();
+    expect(scope.getAllByText('16').length).toBeGreaterThan(0);
+    expect(scope.getAllByText('15').length).toBeGreaterThan(0);
+  });
+
+  it('honours hideLegend + a host legend/dataTable override, and "—" for a missing bucket', () => {
+    // A bucket present in created but absent from resolved → the "—" cell;
+    // an x with no title → the "Bucket" header fallback; hideLegend hides the legend.
+    const { container } = render(
+      <DifferenceAreaChart
+        x={{ domain: [1, 2] as [number, number], ticks: [{ value: 1, label: 'W1' }] }}
+        y={Y}
+        created={[
+          { x: 1, y: 5 },
+          { x: 2, y: 7 },
+        ]}
+        resolved={[{ x: 1, y: 3 }]}
+        description="Created leads; one bucket missing from resolved."
+        hideLegend
+      />,
+    );
+    expect(container.querySelector('ul')).toBeNull(); // legend hidden
+    const scope = within(container.querySelector('table') as HTMLElement);
+    expect(scope.getByText('Bucket')).toBeTruthy(); // x.title fallback
+    expect(scope.getAllByText('—').length).toBeGreaterThan(0); // missing-bucket cell
   });
 });
 
