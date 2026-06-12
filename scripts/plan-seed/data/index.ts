@@ -45,8 +45,15 @@ import { story_6_7 } from './story-6.7';
 import { story_6_8 } from './story-6.8';
 import { story_7_0 } from './story-7.0';
 import { story_7_1 } from './story-7.1';
+import { story_7_2 } from './story-7.2';
+import { story_7_3 } from './story-7.3';
+import { story_7_4 } from './story-7.4';
+import { story_7_5 } from './story-7.5';
+import { story_7_6 } from './story-7.6';
+import { story_7_7 } from './story-7.7';
 import { story_7_8 } from './story-7.8';
 import { story_7_9 } from './story-7.9';
+import { story_7_10 } from './story-7.10';
 import { story_8_7 } from './story-8.7';
 
 /** Every fully-expanded story module (canonical subtask depth). */
@@ -95,8 +102,15 @@ const EXPANDED_STORIES: PlanStory[] = [
   story_6_8,
   story_7_0,
   story_7_1,
+  story_7_2,
+  story_7_3,
+  story_7_4,
+  story_7_5,
+  story_7_6,
+  story_7_7,
   story_7_8,
   story_7_9,
+  story_7_10,
   story_8_7,
 ];
 
