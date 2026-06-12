@@ -775,6 +775,29 @@
     }
   },
   "settings": {
+    "nav": {
+      "eyebrow": "Project settings",
+      "backToProject": "Back to {projectName}",
+      "soon": "Soon",
+      "group": {
+        "general": "General",
+        "access": "Access",
+        "work": "Work",
+        "automation": "Automation"
+      },
+      "details": "Details",
+      "members": "Members & access",
+      "workflow": "Workflow",
+      "board": "Boards",
+      "estimation": "Estimation",
+      "fields": "Fields",
+      "components": "Components",
+      "rules": "Rules"
+    },
+    "area": {
+      "noProjectTitle": "No project selected",
+      "noProjectDescription": "Choose a project from the switcher, or create one from the dashboard, to manage its settings."
+    },
     "workspace": {
       "empty": {
         "title": "No workspace yet",
