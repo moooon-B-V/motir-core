@@ -234,13 +234,20 @@ describe('settings-area role-gating matrix — nav visibility (driven from the r
             canManage: caps.canManage,
           });
           // The whole area gates on browse: a non-browser sees NOTHING (no nav
-          // leak); a browser sees the full nav (no orphan page behind a hidden
-          // entry). Today every entry gates on `canBrowse`, so the two are
-          // equivalent — pin it so a future entry can't silently break it.
-          if (caps.canBrowse) {
+          // leak). A browser sees every entry whose own access predicate it
+          // satisfies — the full nav for an admin, but minus the ADMIN-ONLY
+          // entries for a browse-only member/viewer. Story 6.6's Automation
+          // entry is the first admin-gated one (`access: manage`), so pin the
+          // split explicitly: an admin sees all; a non-admin browser sees all
+          // EXCEPT Automation — neither a leak nor an orphan can slip past.
+          if (!caps.canBrowse) {
+            expect(visible).toEqual([]);
+          } else if (caps.canManage) {
             expect(visible).toEqual(PROJECT_SETTINGS_NAV);
           } else {
-            expect(visible).toEqual([]);
+            expect(visible).toEqual(
+              PROJECT_SETTINGS_NAV.filter((entry) => entry.id !== 'automation'),
+            );
           }
         });
       }

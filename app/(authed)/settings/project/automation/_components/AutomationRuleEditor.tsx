@@ -37,7 +37,10 @@ import {
  * support them — only the authoring UI is pending), so an author never lands on
  * an action with no editor. A `set-field` editor kind also covers `transition`.
  */
-const EDITOR_READY_ACTION_TYPES: ReadonlyArray<AutomationActionType> = ['transition', 'set_field'];
+export const EDITOR_READY_ACTION_TYPES: ReadonlyArray<AutomationActionType> = [
+  'transition',
+  'set_field',
+];
 import {
   actionDraftProblem,
   canAddAction,
