@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import type { SavedFilterPageDto } from '@/lib/dto/savedFilters';
 import { ToastProvider } from '@/components/ui/Toast';
@@ -122,7 +122,7 @@ describe('FiltersDirectory — rendering + gating', () => {
     expect(screen.getByText('2')).toBeTruthy();
   });
 
-  it('shows the actions menu for a row the viewer can manage, and hides it otherwise', async () => {
+  it('shows a row actions menu for every visible row (Subscribe… is universal), gating manage actions inside (6.2.5)', async () => {
     mockList({
       items: [
         row({ id: 'mine', name: 'Mine', owner: { id: ME, name: 'Me' } }),
@@ -138,9 +138,19 @@ describe('FiltersDirectory — rendering + gating', () => {
     renderDirectory(<FiltersDirectory projectKey="PROD" viewer={viewer({ isAdmin: false })} />);
 
     await screen.findByText('Mine');
-    expect(screen.queryByRole('button', { name: /Actions for Mine/ })).toBeTruthy();
-    // Non-owner, non-admin: no menu on someone else's shared filter.
-    expect(screen.queryByRole('button', { name: /Actions for Theirs/ })).toBeNull();
+    // Subscriptions (6.2.5) are a read-layer action available to ANYONE who can
+    // see the row, so every row now carries a menu trigger — including a
+    // non-owner's shared filter (which previously had none).
+    expect(screen.getByRole('button', { name: /Actions for Mine/ })).toBeTruthy();
+    const theirsTrigger = screen.getByRole('button', { name: /Actions for Theirs/ });
+    expect(theirsTrigger).toBeTruthy();
+
+    // But the MANAGE actions stay gated: a non-owner, non-admin on someone
+    // else's shared filter gets Subscribe… alone — no Edit details / Delete.
+    fireEvent.click(theirsTrigger);
+    expect(await screen.findByRole('menuitem', { name: 'Subscribe…' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Edit details' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Delete' })).toBeNull();
   });
 
   it('lists built-in defaults read-only — no actions menu', async () => {

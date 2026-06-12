@@ -127,6 +127,22 @@ export interface WorkItemTransitionedData {
 }
 
 /**
+ * The `filter-subscription/deliver` event payload (Story 6.2 · Subtask 6.2.5)
+ * — one per DUE subscription, enqueued by the hourly `system.filter-
+ * subscription-tick` cron so each delivery retries/dead-letters independently
+ * (the watcher fan-out shape). The consumer (savedFilterSubscriptionsService.
+ * deliver) resolves the filter AS the subscriber and enqueues the durable
+ * `email.send`. Workspace-scoped — the tick reads the denormalized
+ * `workspaceId` so it never touches the RLS-protected saved_filter.
+ */
+export interface FilterSubscriptionDeliverData {
+  workspaceId: string;
+  subscriptionId: string;
+  /** The per-occurrence email idempotency key — one mail per scheduled tick. */
+  occurrenceKey: string;
+}
+
+/**
  * Map of event-name → payload. Each key is a job id and the event name that
  * triggers it; for an event's FIRST consumer the two are the same string (the
  * 1:1 convention). An event with MULTIPLE consumers (e.g.
@@ -141,6 +157,8 @@ export interface WorkItemTransitionedData {
 export interface JobEventDataMap {
   'system.daily-health-check': SystemScheduledData;
   'system.attachment-gc': SystemScheduledData;
+  'system.filter-subscription-tick': SystemScheduledData;
+  'filter-subscription/deliver': FilterSubscriptionDeliverData;
   'email.send': EmailSendData;
   'work-item/comment.created': WorkItemCommentCreatedData;
   'work-item/mentioned': WorkItemMentionedData;

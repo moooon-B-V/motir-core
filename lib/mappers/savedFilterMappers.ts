@@ -1,7 +1,11 @@
-import type { SavedFilter } from '@prisma/client';
+import type { SavedFilter, SavedFilterSubscription } from '@prisma/client';
 import type { BuiltinFilterDef } from '@/lib/savedFilters/builtins';
 import { builtinFilterId } from '@/lib/savedFilters/builtins';
-import type { BuiltinFilterSummaryDto, SavedFilterSummaryDto } from '@/lib/dto/savedFilters';
+import type {
+  BuiltinFilterSummaryDto,
+  SavedFilterSubscriptionDto,
+  SavedFilterSummaryDto,
+} from '@/lib/dto/savedFilters';
 
 // Prisma → DTO converters for saved filters (Story 6.2 · Subtask 6.2.1).
 // Drops workspaceId/projectId (implicit in the route), nameLower (a server-
@@ -33,4 +37,12 @@ export function toSavedFilterSummaryDto(row: SavedFilterWithStars): SavedFilterS
 
 export function toBuiltinFilterSummaryDto(def: BuiltinFilterDef): BuiltinFilterSummaryDto {
   return { id: builtinFilterId(def.slug), name: def.name, builtin: true };
+}
+
+/** A subscription row → its wire shape (Subtask 6.2.5) — schedule fields only;
+ * the filter/user FKs are implicit in the route. */
+export function toSavedFilterSubscriptionDto(
+  row: SavedFilterSubscription,
+): SavedFilterSubscriptionDto {
+  return { schedule: row.schedule, weekday: row.weekday, hour: row.hour };
 }

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { savedFilterRepository } from '@/lib/repositories/savedFilterRepository';
 import type { SavedFilterListView } from '@/lib/repositories/savedFilterRepository';
 import { savedFilterStarRepository } from '@/lib/repositories/savedFilterStarRepository';
+import { savedFilterSubscriptionRepository } from '@/lib/repositories/savedFilterSubscriptionRepository';
 import { dashboardWidgetRepository } from '@/lib/repositories/dashboardWidgetRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
@@ -533,7 +534,10 @@ export const savedFiltersService = {
     const pc = await resolveProjectAndCaps(projectKey, ctx);
     const row = await getVisibleFilter(filterId, pc, ctx);
     const widgetCount = await dashboardWidgetRepository.countBySavedFilter(row.id);
-    return { subscriptionCount: 0, widgetCount };
+    // Subscriptions (Subtask 6.2.5) FK-cascade with the row; the delete warning
+    // names them. They die in the same delete transaction (the FK Cascade).
+    const subscriptionCount = await savedFilterSubscriptionRepository.countByFilter(row.id);
+    return { subscriptionCount, widgetCount };
   },
 
   /**
