@@ -207,7 +207,7 @@ export const story_6_5: PlanStory = {
       id: '6.5.2',
       title:
         'Settings-nav registry + area layout — re-house Workflow / Boards / Estimation / Members / Fields / Components under one chrome',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
@@ -259,7 +259,7 @@ export const story_6_5: PlanStory = {
       id: '6.5.3',
       title:
         'Details landing at `/settings/project` — read-only project identity + the re-homed Archive danger zone (the 6.8 seam)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
