@@ -202,7 +202,7 @@ describe('upgradeFacetsIntoAst (the one-way lossless upgrade)', () => {
 });
 
 describe('advancedBuilderFields (the registry-driven field menu)', () => {
-  it('offers every built-in field, in registry order, and defers the Epic-5 editors to 6.1.5', () => {
+  it('offers every registry field, in registry order, incl. the Epic-5 join fields (6.1.5)', () => {
     expect(advancedBuilderFields().map((f) => f.id)).toEqual([
       'kind',
       'status',
@@ -216,6 +216,8 @@ describe('advancedBuilderFields (the registry-driven field menu)', () => {
       'due',
       'storyPoints',
       'estimate',
+      'lbl',
+      'cmp',
     ]);
   });
 

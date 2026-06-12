@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter } from 'next/navigation';
-import { FunnelPlus, Plus, X } from 'lucide-react';
+import { Component as ComponentIcon, FunnelPlus, Plus, Tag, TriangleAlert, X } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { Segmented } from '@/components/ui/Segmented';
+import { CUSTOM_FIELD_TYPE_META } from '@/lib/customFields/typeMeta';
 import { buildIssueListHref, type IssueListView, type IssueSort } from '@/lib/issues/issueListView';
 import type { IssueFilter } from '@/lib/issues/issueListFilter';
 import {
@@ -20,32 +21,49 @@ import {
   setAdvancedParam,
   type AdvancedBuilderRow,
 } from '@/lib/issues/issueListAdvancedFilter';
-import type {
-  FilterAst,
-  FilterCombinator,
-  FilterFieldId,
-  FilterOperatorId,
+import {
+  advancedFieldGroup,
+  buildAdvancedFilterFieldDefs,
+  computeAdvancedFilterStale,
+  type AdvancedFieldGroup,
+} from '@/lib/issues/advancedFilterFields';
+import {
+  customFieldFilterFieldId,
+  type FilterAst,
+  type FilterCombinator,
+  type FilterFieldId,
+  type FilterOperatorId,
 } from '@/lib/filters/ast';
 import { filterFieldDef, filterValueEditorKind, type FilterFieldDef } from '@/lib/filters/registry';
 import { UnknownFilterFieldError } from '@/lib/filters/errors';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
+import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
+import type { ComponentDto } from '@/lib/dto/components';
+import type { LabelDto } from '@/lib/dto/labels';
 import { cn } from '@/lib/utils/cn';
 import { useAdvancedFilterPopover } from './AdvancedFilterContext';
 import { AdvancedFilterValueEditor } from './AdvancedFilterValueEditor';
-import { advancedFieldLabel, advancedOperatorLabel } from './advancedFilterLabels';
+import {
+  advancedFieldLabel,
+  advancedOperatorLabel,
+  type DynamicFieldLabels,
+} from './advancedFilterLabels';
 
-// The ADVANCED filter builder (Story 6.1 · Subtask 6.1.4), per
-// design/work-items/filter-builder.mock.html panels 1–3: the [Advanced]
+// The ADVANCED filter builder (Story 6.1 · Subtasks 6.1.4 + 6.1.5), per
+// design/work-items/filter-builder.mock.html panels 1–4 + 6: the [Advanced]
 // ToolbarButton beside the 2.5.4 [Filter] facet button, opening a Popover
 // dialog of field / operator / value condition rows under a "Match all / any"
-// Segmented combinator. THE ROWS RENDER THE 6.1.1 REGISTRY — the field menu
-// lists `advancedBuilderFields()` (registry order), choosing a field
-// populates its operator menu from `def.operators`, and the operator resolves
-// the value editor via `filterValueEditorKind` — no hard-coded field lists
-// anywhere (a registry addition appears with zero UI changes; tests assert it
-// by injecting one through the `fields` prop).
+// Segmented combinator. THE ROWS RENDER THE REGISTRY — the field menu lists
+// `advancedBuilderFields()` (registry order) PLUS the project's dynamic Epic-5
+// entries (one `cf:<id>` per custom-field definition + the Label/Component
+// join fields), grouped "Fields" / "Custom fields" / "Other" with their type
+// glyphs (6.1.5). Choosing a field populates its operator menu from
+// `def.operators`, and the operator resolves the value editor via
+// `filterValueEditorKind` — no hard-coded field lists anywhere (a registry or
+// custom-field addition appears with zero UI changes; tests assert it by
+// injecting one through the `fields` prop).
 //
 // LIVE-APPLY (no Apply button — the 2.5.4 precedent): complete rows write the
 // versioned `?filter=v1:…` param as they land (composing with ?view/?sort and
@@ -59,6 +77,12 @@ import { advancedFieldLabel, advancedOperatorLabel } from './advancedFilterLabel
 // comparing against the param this component last pushed — so an in-flight
 // pending row never gets stomped by its own navigation echo (finding #58's
 // optimistic-mirror lesson, one level up).
+//
+// STALE referents (6.1.5): a shared/saved URL outliving its data resolves
+// against the project's loaded referents — a deleted option/label/component
+// value renders the "unknown value" chip + per-row notice and matches nothing;
+// a deleted custom FIELD degrades its whole row to the unknown-field state.
+// Both stay visible + removable (the 6.2 saved-filter durability rule).
 
 const FIELD_TRIGGER_WIDTH = 'w-[158px] shrink-0';
 const OPERATOR_TRIGGER_WIDTH = 'w-[168px] shrink-0';
@@ -73,8 +97,18 @@ export interface IssueAdvancedFilterProps {
   statuses: WorkflowStatusDto[];
   members: WorkspaceMemberDTO[];
   sprints: SprintDto[];
+  /** The project's custom-field definitions — the dynamic `cf:<id>` field
+   * entries + their option editors (Subtask 6.1.5). */
+  customFields: CustomFieldDefinitionDTO[];
+  /** The project's components (bounded) — the Component field's value editor. */
+  components: ComponentDto[];
+  /** The active AST's referenced labels, resolved to names server-side — seeds
+   * the Label editor's chips + drives label stale-detection. */
+  referencedLabels: LabelDto[];
+  /** Project identifier — the Label editor's debounced autocomplete read. */
+  projectKey: string;
   /** Field-def override for tests (the registry-driven AC); defaults to the
-   * registry's built-in entries. */
+   * registry's built-ins + the project's dynamic custom-field entries. */
   fields?: FilterFieldDef[];
 }
 
@@ -87,10 +121,11 @@ function workingFromAst(ast: FilterAst | null): WorkingState {
   return { combinator: ast?.combinator ?? 'and', rows: rowsFromAst(ast) };
 }
 
-/** Resolve a row's def — from the menu set first (covers test-injected
- * entries), then the full registry (covers URL-carried rows whose editors a
- * later subtask ships, e.g. Epic-5 fields pre-6.1.5); null for a field id
- * nothing knows (can't happen for an URL-parsed AST — the page validated). */
+/** Resolve a row's def — from the menu set first (built-ins + dynamic
+ * custom-field entries), then the static registry (covers a URL-carried
+ * built-in row not in the current menu); null for a field id nothing knows —
+ * a STALE custom field (`cf:<id>` whose definition is gone), rendered as the
+ * degraded unknown-field row. */
 function rowDef(menuFields: FilterFieldDef[], field: FilterFieldId): FilterFieldDef | null {
   const fromMenu = menuFields.find((f) => f.id === field);
   if (fromMenu) return fromMenu;
@@ -102,6 +137,21 @@ function rowDef(menuFields: FilterFieldDef[], field: FilterFieldId): FilterField
   }
 }
 
+/** The leading glyph for a field def in the menu + trigger (Subtask 6.1.5):
+ * a custom field's type glyph (5.3.4 map), the Label tag, the Component glyph;
+ * the core built-in columns carry none (the design's menu grammar). */
+function fieldIcon(def: FilterFieldDef): ReactNode | undefined {
+  if (def.customField) {
+    const Glyph = CUSTOM_FIELD_TYPE_META[def.customField.fieldType].icon;
+    return <Glyph className="h-4 w-4 text-(--el-text-muted)" aria-hidden />;
+  }
+  if (def.id === 'lbl') return <Tag className="h-4 w-4 text-(--el-text-muted)" aria-hidden />;
+  if (def.id === 'cmp') {
+    return <ComponentIcon className="h-4 w-4 text-(--el-text-muted)" aria-hidden />;
+  }
+  return undefined;
+}
+
 export function IssueAdvancedFilter({
   filter,
   ast,
@@ -110,6 +160,10 @@ export function IssueAdvancedFilter({
   statuses,
   members,
   sprints,
+  customFields,
+  components,
+  referencedLabels,
+  projectKey,
   fields,
 }: IssueAdvancedFilterProps) {
   const router = useRouter();
@@ -122,7 +176,49 @@ export function IssueAdvancedFilter({
   const open = popoverCtx?.open ?? localOpen;
   const setOpen = popoverCtx?.setOpen ?? setLocalOpen;
 
-  const menuFields = useMemo(() => advancedBuilderFields(fields), [fields]);
+  // The field menu: built-ins + one dynamic `cf:<id>` def per custom-field
+  // definition (the `fields` prop overrides for tests). Filtered to fields
+  // whose editors are shipped (the registry-driven guard).
+  const menuFields = useMemo(
+    () =>
+      advancedBuilderFields(
+        fields ??
+          buildAdvancedFilterFieldDefs(
+            customFields.map((f) => ({ id: f.id, fieldType: f.fieldType })),
+          ),
+      ),
+    [fields, customFields],
+  );
+
+  // Display labels for the dynamic `cf:<id>` fields (the definition labels) —
+  // the builder + summary resolve field names through this.
+  const dynamicLabels = useMemo<DynamicFieldLabels>(
+    () => new Map(customFields.map((f) => [customFieldFilterFieldId(f.id), f.label] as const)),
+    [customFields],
+  );
+
+  // The stale referents an APPLIED URL carries (Subtask 6.1.5) — computed from
+  // the active AST against the project's loaded referents; mirrors the server
+  // compile-time rule so the builder marks exactly what matches nothing.
+  const stale = useMemo(
+    () =>
+      computeAdvancedFilterStale(ast ?? { combinator: 'and', conditions: [] }, {
+        customFields: new Map(
+          customFields.map((f) => [
+            f.id,
+            { fieldType: f.fieldType, optionIds: new Set(f.options.map((o) => o.id)) },
+          ]),
+        ),
+        labelIds: new Set(referencedLabels.map((l) => l.id)),
+        componentIds: new Set(components.map((c) => c.id)),
+      }),
+    [ast, customFields, referencedLabels, components],
+  );
+
+  const resolveDef = useMemo(
+    () => (field: FilterFieldId) => rowDef(menuFields, field),
+    [menuFields],
+  );
 
   // The working copy (incl. pending rows). Resync from the URL only when the
   // param changed EXTERNALLY — i.e. it differs from what we last pushed.
@@ -152,12 +248,12 @@ export function IssueAdvancedFilter({
     };
   }, []);
 
-  // Live-apply: push the complete rows' AST whenever it differs from the
+  // Live-apply: push the applied rows' AST whenever it differs from the
   // applied param. `debounce` marks free-typing edits.
   function apply(next: WorkingState, opts?: { debounce?: boolean }) {
     workingRef.current = next;
     setWorking(next);
-    const nextAst = astFromRows(next.combinator, next.rows);
+    const nextAst = astFromRows(next.combinator, next.rows, resolveDef);
     const nextFilter = setAdvancedParam(filter, nextAst);
     if (pushTimer.current) clearTimeout(pushTimer.current);
     // `lastPushedRef` starts at the URL's param and tracks every push (a
@@ -192,13 +288,19 @@ export function IssueAdvancedFilter({
     };
   }
 
-  const appliedCount = working.rows.filter(isRowComplete).length;
+  function removeRow(key: number) {
+    apply({ ...workingRef.current, rows: workingRef.current.rows.filter((r) => r.key !== key) });
+  }
+
+  const appliedCount = astFromRows(working.combinator, working.rows, resolveDef).conditions.length;
   const active = appliedCount > 0;
   const atCap = working.rows.length >= FILTER_ROW_CAP;
 
   const fieldOptions: ComboboxOption<FilterFieldId>[] = menuFields.map((def) => ({
     value: def.id,
-    label: advancedFieldLabel(t, def.id),
+    label: advancedFieldLabel(t, def.id, dynamicLabels),
+    icon: fieldIcon(def),
+    group: t(GROUP_LABEL_KEYS[advancedFieldGroup(def)]),
     secondary: def.id === 'text' ? t('advancedFieldTextSecondary') : undefined,
   }));
 
@@ -286,10 +388,25 @@ export function IssueAdvancedFilter({
 
           {working.rows.map((row, index) => {
             const def = rowDef(menuFields, row.field);
-            if (def === null) return null;
+            // A STALE custom FIELD (definition deleted under a shared/saved
+            // URL or mid-session) — the row degrades to the unknown-field
+            // state: name shown, editors disabled, the per-row notice; it
+            // stays removable and is kept in the applied AST (match-nothing).
+            if (def === null) {
+              return (
+                <StaleFieldRow
+                  key={row.key}
+                  index={index}
+                  fieldLabel={advancedFieldLabel(t, row.field, dynamicLabels)}
+                  onRemove={() => removeRow(row.key)}
+                />
+              );
+            }
             const inMenu = menuFields.some((f) => f.id === def.id);
             const editorKind = filterValueEditorKind(def, row.operator);
-            const pending = !isRowComplete(row);
+            const pending = !isRowComplete(row, def);
+            const rowValueIds = Array.isArray(row.value) ? row.value : [];
+            const rowStale = rowValueIds.some((v) => stale.staleValueIds.has(v));
             const operatorOptions: ComboboxOption<FilterOperatorId>[] = def.operators.map((op) => ({
               value: op,
               label: advancedOperatorLabel(t, op),
@@ -315,7 +432,7 @@ export function IssueAdvancedFilter({
                     }))();
                   }}
                   label={t('advancedFieldAria')}
-                  placeholder={advancedFieldLabel(t, def.id)}
+                  placeholder={advancedFieldLabel(t, def.id, dynamicLabels)}
                   searchable
                   searchPlaceholder={t('advancedSearchFields')}
                   emptyText={t('advancedNoMatches')}
@@ -341,27 +458,38 @@ export function IssueAdvancedFilter({
                   editorKind={editorKind}
                   value={row.value}
                   onChange={(value, opts) => updateRow(row.key, (r) => ({ ...r, value }))(opts)}
-                  fieldLabel={advancedFieldLabel(t, def.id)}
+                  fieldLabel={advancedFieldLabel(t, def.id, dynamicLabels)}
                   statuses={statuses}
                   members={members}
                   sprints={sprints}
+                  customFields={customFields}
+                  components={components}
+                  referencedLabels={referencedLabels}
+                  projectKey={projectKey}
+                  staleValueIds={stale.staleValueIds}
                   disabled={!inMenu}
                   className={pending ? PENDING_CONTROL : undefined}
                 />
                 <button
                   type="button"
-                  onClick={() =>
-                    apply({
-                      ...workingRef.current,
-                      rows: workingRef.current.rows.filter((r) => r.key !== row.key),
-                    })
-                  }
+                  onClick={() => removeRow(row.key)}
                   aria-label={t('advancedRemoveCondition', { n: index + 1 })}
                   className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
                 >
                   <X className="h-3.5 w-3.5" aria-hidden />
                 </button>
-                {pending ? (
+                {rowStale ? (
+                  <p
+                    role="status"
+                    className="col-span-full -mt-1 flex items-center gap-1.5 text-xs text-(--el-text-secondary)"
+                  >
+                    <TriangleAlert
+                      className="h-3.5 w-3.5 shrink-0 text-(--el-warning)"
+                      aria-hidden
+                    />
+                    {t('advancedStaleNote')}
+                  </p>
+                ) : pending ? (
                   <p className="col-span-full -mt-1 text-xs text-(--el-text-muted) italic">
                     {t('advancedPendingNote')}
                   </p>
@@ -393,5 +521,53 @@ export function IssueAdvancedFilter({
         </div>
       </Popover.Content>
     </Popover>
+  );
+}
+
+const GROUP_LABEL_KEYS: Record<AdvancedFieldGroup, string> = {
+  fields: 'advancedGroupFields',
+  customFields: 'advancedGroupCustomFields',
+  other: 'advancedGroupOther',
+};
+
+/** The degraded unknown-field row (Subtask 6.1.5): a deleted custom field's
+ * condition stays visible + removable, editors disabled, matching nothing. */
+function StaleFieldRow({
+  index,
+  fieldLabel,
+  onRemove,
+}: {
+  index: number;
+  fieldLabel: string;
+  onRemove: () => void;
+}) {
+  const t = useTranslations('issueViews');
+  return (
+    <div
+      role="group"
+      aria-label={t('advancedConditionLabel', { n: index + 1 })}
+      className="grid grid-cols-[158px_minmax(0,1fr)_26px] items-center gap-2"
+    >
+      <span
+        className={cn(
+          'inline-flex h-(--height-control) items-center gap-2 truncate rounded-(--radius-input) border border-dashed border-(--el-border) px-(--spacing-control-x) text-sm text-(--el-text-muted)',
+          FIELD_TRIGGER_WIDTH,
+        )}
+      >
+        <TriangleAlert className="h-4 w-4 shrink-0 text-(--el-warning)" aria-hidden />
+        <span className="truncate">{fieldLabel}</span>
+      </span>
+      <span className="flex items-center gap-1.5 text-xs text-(--el-text-secondary)">
+        {t('advancedStaleFieldNote')}
+      </span>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={t('advancedRemoveCondition', { n: index + 1 })}
+        className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+      >
+        <X className="h-3.5 w-3.5" aria-hidden />
+      </button>
+    </div>
   );
 }
