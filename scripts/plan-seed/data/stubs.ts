@@ -221,6 +221,19 @@ export const STUB_STORIES: PlanStory[] = [
   // required before any tree write. Reuses the 7.4 jobs + 7.2 chat.
   // (Also 2026-06-12: 7.3.8 added an opt-in explanation-generation toggle.)
 
+  // 7.14 (Coding convention + code-health audit) — data/story-7.14.ts. Added
+  // 2026-06-12. motir-ai's 4th store: a per-project coding convention (proposed
+  // from existing code + clean-code rules → standard on user approval) + a
+  // code-issues audit report; the standard convention injects into 7.6 prompt
+  // generation (the productized CLAUDE.md). Audit half is migrate-only.
+  // 7.15 (Start-fresh onboarding flow) — data/story-7.15.ts. Added 2026-06-12.
+  // The guided wizard for a NEW project: discovery (7.2) → convention from
+  // stack (7.14) → generate (7.3) → review/approve → dispatch setup.
+  // 7.16 (Migrate-existing-codebase onboarding flow) — data/story-7.16.ts.
+  // Added 2026-06-12. The guided wizard for an EXISTING repo: connect (7.7) →
+  // index (7.5) → AUDIT + convention approve (7.14, a hard gate) → discovery
+  // (7.2) → code-aware generate (7.3+7.5.6) → review/approve.
+
   // ── Epic 8: Launch readiness ──────────────────────────────────────────────
   {
     id: '8.1',
