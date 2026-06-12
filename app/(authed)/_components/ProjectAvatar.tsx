@@ -113,8 +113,12 @@ export function ProjectAvatar({
       <span
         aria-hidden
         style={{ ...boxStyle, fontSize: Math.round(size * 0.4) }}
+        // White key-letters on the type-task fill (the mock's `#fff`). NOT
+        // `--el-text-inverted`: that flips to the dark page bg in dark mode,
+        // which fails AA on the blue tile (4.19:1). `--el-accent-text` is
+        // #ffffff in BOTH themes → 4.57:1, AA-safe (the dark-sweep caught this).
         className={cn(
-          'inline-flex flex-none items-center justify-center bg-(--el-type-task) font-sans font-bold text-(--el-text-inverted)',
+          'inline-flex flex-none items-center justify-center bg-(--el-type-task) font-sans font-bold text-(--el-accent-text)',
           radius,
           className,
         )}
