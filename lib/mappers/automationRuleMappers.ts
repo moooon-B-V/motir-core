@@ -3,7 +3,12 @@ import { validateFilterAst } from '@/lib/filters/registry';
 import { AUTOMATION_AUTO_DISABLE_THRESHOLD } from '@/lib/automation/constants';
 import type { AutomationActionConfig, AutomationTriggerConfig } from '@/lib/automation/registry';
 import type { AutomationRuleWithOwner } from '@/lib/repositories/automationRuleRepository';
-import type { AutomationConditionError, AutomationRuleDto } from '@/lib/dto/automationRules';
+import type { AutomationRuleExecutionWithItem } from '@/lib/repositories/automationRuleExecutionRepository';
+import type {
+  AutomationConditionError,
+  AutomationExecutionDto,
+  AutomationRuleDto,
+} from '@/lib/dto/automationRules';
 
 // Prisma row → DTO conversion for the automation domain (Story 6.6 · Subtask
 // 6.6.1). Pure transforms (the mapper layer). The three JSON columns were
@@ -51,5 +56,22 @@ export function toAutomationRuleDto(row: AutomationRuleWithOwner): AutomationRul
     autoDisableThreshold: AUTOMATION_AUTO_DISABLE_THRESHOLD,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/** One audit-log row → DTO (Subtask 6.6.6). Maps the joined `workItem` to
+ * `triggerItem` — null when the item was deleted after the run (`SetNull`), so
+ * the UI renders a tombstone, not a dead link. Only the fields 6.6.2 persisted
+ * cross the wire; `key` is the work item's display identifier ("PROD-42"). */
+export function toAutomationExecutionDto(
+  row: AutomationRuleExecutionWithItem,
+): AutomationExecutionDto {
+  return {
+    id: row.id,
+    status: row.status,
+    triggerItem: row.workItem ? { key: row.workItem.identifier, title: row.workItem.title } : null,
+    error: row.error,
+    durationMs: row.durationMs,
+    createdAt: row.createdAt.toISOString(),
   };
 }

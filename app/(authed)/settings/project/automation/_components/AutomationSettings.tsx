@@ -6,7 +6,7 @@ import { TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
-import type { AutomationRuleDto } from '@/lib/dto/automationRules';
+import type { AutomationRuleDto, AutomationRuleSummaryDto } from '@/lib/dto/automationRules';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
@@ -15,6 +15,7 @@ import type { ComponentDto } from '@/lib/dto/components';
 import type { LabelDto } from '@/lib/dto/labels';
 import { AutomationRuleList } from './AutomationRuleList';
 import { AutomationRuleEditor } from './AutomationRuleEditor';
+import { AutomationRuleAuditLog } from './AutomationRuleAuditLog';
 
 // The automation settings surface root (Story 6.6 · Subtask 6.6.5) — switches
 // between the rule LIST and the when/if/then EDITOR (the editor is a full panel,
@@ -24,12 +25,16 @@ import { AutomationRuleEditor } from './AutomationRuleEditor';
 // returned DTO into the list. Admin-gating is enforced server-side (the page +
 // every route) — this client never renders for a non-admin.
 
-type Mode = { kind: 'list' } | { kind: 'create' } | { kind: 'edit'; rule: AutomationRuleDto };
+type Mode =
+  | { kind: 'list' }
+  | { kind: 'create' }
+  | { kind: 'edit'; rule: AutomationRuleSummaryDto }
+  | { kind: 'log'; rule: AutomationRuleSummaryDto };
 
 export interface AutomationSettingsProps {
   projectKey: string;
   currentUserName: string;
-  initialRules: AutomationRuleDto[];
+  initialRules: AutomationRuleSummaryDto[];
   statuses: WorkflowStatusDto[];
   members: WorkspaceMemberDTO[];
   sprints: SprintDto[];
@@ -52,17 +57,21 @@ export function AutomationSettings({
   const t = useTranslations('settings.automation');
   const { toast } = useToast();
 
-  const [rules, setRules] = useState<AutomationRuleDto[]>(initialRules);
+  const [rules, setRules] = useState<AutomationRuleSummaryDto[]>(initialRules);
   const [mode, setMode] = useState<Mode>({ kind: 'list' });
-  const [deleting, setDeleting] = useState<AutomationRuleDto | null>(null);
+  const [deleting, setDeleting] = useState<AutomationRuleSummaryDto | null>(null);
 
   const base = `/api/projects/${encodeURIComponent(projectKey)}/automation-rules`;
 
+  // The single-rule routes (enable toggle, content PATCH) return the bare
+  // `AutomationRuleDto` (no last-run join). Merge it back into the summary row,
+  // preserving the existing `lastRun` (the run history doesn't change on an
+  // enable / content edit).
   function replaceRule(next: AutomationRuleDto) {
-    setRules((cur) => cur.map((r) => (r.id === next.id ? next : r)));
+    setRules((cur) => cur.map((r) => (r.id === next.id ? { ...next, lastRun: r.lastRun } : r)));
   }
 
-  async function toggleEnabled(rule: AutomationRuleDto) {
+  async function toggleEnabled(rule: AutomationRuleSummaryDto) {
     const nextEnabled = !rule.enabled;
     const snapshot = rules;
     // Optimistic: flip locally (and, when enabling, clear the failure tally the
@@ -97,7 +106,7 @@ export function AutomationSettings({
     }
   }
 
-  async function confirmDelete(rule: AutomationRuleDto) {
+  async function confirmDelete(rule: AutomationRuleSummaryDto) {
     const snapshot = rules;
     setRules((cur) => cur.filter((r) => r.id !== rule.id));
     setDeleting(null);
@@ -117,8 +126,10 @@ export function AutomationSettings({
 
   function handleSaved(saved: AutomationRuleDto) {
     setRules((cur) => {
-      const exists = cur.some((r) => r.id === saved.id);
-      return exists ? cur.map((r) => (r.id === saved.id ? saved : r)) : [saved, ...cur];
+      const existing = cur.find((r) => r.id === saved.id);
+      // A content edit keeps the rule's run history; a create has none yet.
+      const next: AutomationRuleSummaryDto = { ...saved, lastRun: existing?.lastRun ?? null };
+      return existing ? cur.map((r) => (r.id === saved.id ? next : r)) : [next, ...cur];
     });
     const created = mode.kind === 'create';
     setMode({ kind: 'list' });
@@ -130,11 +141,23 @@ export function AutomationSettings({
     });
   }
 
+  if (mode.kind === 'log') {
+    return (
+      <AutomationRuleAuditLog
+        projectKey={projectKey}
+        ruleId={mode.rule.id}
+        ruleName={mode.rule.name}
+        onBack={() => setMode({ kind: 'list' })}
+      />
+    );
+  }
+
   if (mode.kind !== 'list') {
+    const editingRule = mode.kind === 'edit' ? mode.rule : null;
     return (
       <AutomationRuleEditor
-        rule={mode.kind === 'edit' ? mode.rule : null}
-        ownerName={mode.kind === 'edit' ? mode.rule.owner.name : currentUserName}
+        rule={editingRule}
+        ownerName={editingRule ? editingRule.owner.name : currentUserName}
         projectKey={projectKey}
         statuses={statuses}
         members={members}
@@ -144,6 +167,7 @@ export function AutomationSettings({
         referencedLabels={referencedLabels}
         onCancel={() => setMode({ kind: 'list' })}
         onSaved={handleSaved}
+        onReEnable={editingRule ? () => void toggleEnabled(editingRule) : undefined}
       />
     );
   }
@@ -154,6 +178,7 @@ export function AutomationSettings({
         rules={rules}
         onCreate={() => setMode({ kind: 'create' })}
         onEdit={(rule) => setMode({ kind: 'edit', rule })}
+        onViewLog={(rule) => setMode({ kind: 'log', rule })}
         onToggleEnabled={(rule) => void toggleEnabled(rule)}
         onDelete={(rule) => setDeleting(rule)}
       />
@@ -173,9 +198,9 @@ function DeleteRuleModal({
   onOpenChange,
   onConfirm,
 }: {
-  rule: AutomationRuleDto | null;
+  rule: AutomationRuleSummaryDto | null;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (rule: AutomationRuleDto) => void;
+  onConfirm: (rule: AutomationRuleSummaryDto) => void;
 }) {
   const t = useTranslations('settings.automation.delete');
   const tc = useTranslations('common');

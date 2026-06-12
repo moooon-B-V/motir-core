@@ -35,8 +35,52 @@ export interface AutomationRuleDto {
   updatedAt: string;
 }
 
-/** A rule list row — the same shape as the full DTO today (the list view in
- * 6.6.5 reads name / enabled / owner / failure state); kept as its own alias so
- * the two can diverge (the audit-log last-run join lands on the list row in
- * 6.6.6) without churning callers. */
-export type AutomationRuleSummaryDto = AutomationRuleDto;
+/** The three terminal states a single rule execution can land in (Subtask
+ * 6.6.2's `AutomationExecutionStatus`): every action ran (`success`), an action
+ * threw (`failure`), or the condition didn't match so nothing ran
+ * (`no_actions`). The DTO wire-narrows the Prisma enum to this literal union. */
+export type AutomationExecutionStatusDto = 'success' | 'failure' | 'no_actions';
+
+/** The last (most-recent) run of a rule — the glyph + relative-time the list row
+ * renders (6.6.6). Only the terminal status and the time are surfaced; the full
+ * run detail lives in the per-rule audit log. Null when the rule has never
+ * fired. */
+export interface AutomationRuleLastRunDto {
+  status: AutomationExecutionStatusDto;
+  /** ISO-8601 timestamp of the run (the list row formats it as "{time} ago"). */
+  at: string;
+}
+
+/** A rule list row — the full rule DTO PLUS the last-run summary the 6.6.6 list
+ * renders (the populated last-run glyph). `lastRun` is null for a rule that has
+ * never fired. The list read attaches it (per-rule latest-execution join);
+ * the editor / create / update single-rule reads return the bare
+ * `AutomationRuleDto` (no last-run join). */
+export interface AutomationRuleSummaryDto extends AutomationRuleDto {
+  lastRun: AutomationRuleLastRunDto | null;
+}
+
+/** One row in the per-rule audit log (6.6.6) — a single execution, narrowed to
+ * exactly what Subtask 6.6.2 persisted (status, the triggering item, the typed
+ * error, the duration, the time). `triggerItem` is null when the work item was
+ * deleted after the run (the FK is `SetNull` on delete — the key is
+ * unrecoverable, so the UI renders a tombstone, not a dead link). */
+export interface AutomationExecutionDto {
+  id: string;
+  status: AutomationExecutionStatusDto;
+  triggerItem: { key: string; title: string } | null;
+  /** The typed error text on a `failure` run, else null. */
+  error: string | null;
+  durationMs: number | null;
+  createdAt: string;
+}
+
+/** One bounded page of a rule's audit log (6.6.6) — never a load-all read
+ * (finding #57). `total` drives the "Showing a–b of total" footer + the pager;
+ * `page` is 1-based; `pageSize` is the server's fixed page size. */
+export interface AutomationExecutionPageDto {
+  executions: AutomationExecutionDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+}

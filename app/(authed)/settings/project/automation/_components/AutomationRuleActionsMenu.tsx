@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { MoreHorizontal, Pencil, Power, Trash2 } from 'lucide-react';
+import { List, MoreHorizontal, Pencil, Power, Trash2 } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 
 // The per-rule `⋯` actions menu (Story 6.6 · Subtask 6.6.5), per
@@ -16,12 +16,14 @@ export function AutomationRuleActionsMenu({
   ruleName,
   enabled,
   onEdit,
+  onViewLog,
   onToggleEnabled,
   onDelete,
 }: {
   ruleName: string;
   enabled: boolean;
   onEdit: () => void;
+  onViewLog: () => void;
   onToggleEnabled: () => void;
   onDelete: () => void;
 }) {
@@ -50,6 +52,15 @@ export function AutomationRuleActionsMenu({
           <button type="button" role="menuitem" className={itemClass} onClick={() => run(onEdit)}>
             <Pencil className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
             <span className="flex-1 truncate">{t('edit')}</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={itemClass}
+            onClick={() => run(onViewLog)}
+          >
+            <List className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
+            <span className="flex-1 truncate">{t('viewLog')}</span>
           </button>
           <button
             type="button"

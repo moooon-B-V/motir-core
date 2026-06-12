@@ -1,14 +1,14 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
-import { Bot, CircleAlert, Plus, TriangleAlert } from 'lucide-react';
+import { useFormatter, useTranslations } from 'next-intl';
+import { Bot, CheckCircle2, CircleAlert, MinusCircle, Plus, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import { AUTOMATION_RULES_PER_PROJECT_CAP } from '@/lib/automation/constants';
-import type { AutomationRuleDto } from '@/lib/dto/automationRules';
-import { MemberAvatar, RuleSwitch } from './AutomationParts';
+import type { AutomationRuleDto, AutomationRuleSummaryDto } from '@/lib/dto/automationRules';
+import { AutoDisabledBanner, MemberAvatar, RuleSwitch } from './AutomationParts';
 import { AutomationRuleActionsMenu } from './AutomationRuleActionsMenu';
 
 // The rule list (Story 6.6 · Subtask 6.6.5), per
@@ -32,14 +32,16 @@ export function AutomationRuleList({
   rules,
   onCreate,
   onEdit,
+  onViewLog,
   onToggleEnabled,
   onDelete,
 }: {
-  rules: AutomationRuleDto[];
+  rules: AutomationRuleSummaryDto[];
   onCreate: () => void;
-  onEdit: (rule: AutomationRuleDto) => void;
-  onToggleEnabled: (rule: AutomationRuleDto) => void;
-  onDelete: (rule: AutomationRuleDto) => void;
+  onEdit: (rule: AutomationRuleSummaryDto) => void;
+  onViewLog: (rule: AutomationRuleSummaryDto) => void;
+  onToggleEnabled: (rule: AutomationRuleSummaryDto) => void;
+  onDelete: (rule: AutomationRuleSummaryDto) => void;
 }) {
   const t = useTranslations('settings.automation');
   const atCap = rules.length >= AUTOMATION_RULES_PER_PROJECT_CAP;
@@ -63,16 +65,11 @@ export function AutomationRuleList({
   return (
     <div className="flex flex-col gap-4">
       {autoDisabled.map((rule) => (
-        <div
+        <AutoDisabledBanner
           key={`banner-${rule.id}`}
-          role="status"
-          className="flex items-start gap-2.5 rounded-(--radius-card) bg-(--el-tint-rose) p-(--spacing-card-padding)"
-        >
-          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-(--el-danger)" aria-hidden />
-          <p className="font-sans text-sm text-(--el-text-strong)">
-            {t('autoDisabledBanner', { name: rule.name, count: rule.consecutiveFailureCount })}
-          </p>
-        </div>
+          name={rule.name}
+          count={rule.consecutiveFailureCount}
+        />
       ))}
 
       <Card
@@ -121,6 +118,7 @@ export function AutomationRuleList({
               key={rule.id}
               rule={rule}
               onEdit={() => onEdit(rule)}
+              onViewLog={() => onViewLog(rule)}
               onToggleEnabled={() => onToggleEnabled(rule)}
               onDelete={() => onDelete(rule)}
             />
@@ -134,11 +132,13 @@ export function AutomationRuleList({
 function RuleRow({
   rule,
   onEdit,
+  onViewLog,
   onToggleEnabled,
   onDelete,
 }: {
-  rule: AutomationRuleDto;
+  rule: AutomationRuleSummaryDto;
   onEdit: () => void;
+  onViewLog: () => void;
   onToggleEnabled: () => void;
   onDelete: () => void;
 }) {
@@ -165,14 +165,7 @@ function RuleRow({
           <MemberAvatar name={rule.owner.name} className="size-4 text-[8px]" />
           <span className="truncate">{rule.owner.name}</span>
           <span aria-hidden>·</span>
-          {auto ? (
-            <span className="flex items-center gap-1 text-(--el-danger)">
-              <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
-              {t('row.autoDisabled', { count: rule.consecutiveFailureCount })}
-            </span>
-          ) : (
-            <span className="text-(--el-text-faint)">{t('row.neverRun')}</span>
-          )}
+          <LastRun rule={rule} auto={auto} />
         </span>
       </div>
       <div className="flex shrink-0 items-center gap-2">
@@ -186,10 +179,59 @@ function RuleRow({
           ruleName={rule.name}
           enabled={rule.enabled}
           onEdit={onEdit}
+          onViewLog={onViewLog}
           onToggleEnabled={onToggleEnabled}
           onDelete={onDelete}
         />
       </div>
     </li>
+  );
+}
+
+/** The last-run glyph + copy (Subtask 6.6.6), fed by `rule.lastRun`. An
+ * auto-disabled rule overrides everything (the engine switched it off after the
+ * failure threshold). Otherwise: Success → mint check + "Ran {time} ago",
+ * Failure → rose alert + "Failed · {time} ago", No actions → faint minus +
+ * "No actions · {time} ago", never-fired → faint "Never run". */
+function LastRun({ rule, auto }: { rule: AutomationRuleSummaryDto; auto: boolean }) {
+  const t = useTranslations('settings.automation');
+  const format = useFormatter();
+
+  if (auto) {
+    return (
+      <span className="flex items-center gap-1 text-(--el-danger)">
+        <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
+        {t('row.autoDisabled', { count: rule.consecutiveFailureCount })}
+      </span>
+    );
+  }
+
+  const lastRun = rule.lastRun;
+  if (!lastRun) {
+    return <span className="text-(--el-text-faint)">{t('row.neverRun')}</span>;
+  }
+
+  const time = format.relativeTime(new Date(lastRun.at));
+  if (lastRun.status === 'success') {
+    return (
+      <span className="flex items-center gap-1 text-(--el-text-muted)">
+        <CheckCircle2 className="size-3.5 shrink-0 text-(--el-success)" aria-hidden />
+        {t('row.ranAgo', { time })}
+      </span>
+    );
+  }
+  if (lastRun.status === 'failure') {
+    return (
+      <span className="flex items-center gap-1 text-(--el-danger)">
+        <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
+        {t('row.failedAgo', { time })}
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-1 text-(--el-text-faint)">
+      <MinusCircle className="size-3.5 shrink-0" aria-hidden />
+      {t('row.noActionsAgo', { time })}
+    </span>
   );
 }

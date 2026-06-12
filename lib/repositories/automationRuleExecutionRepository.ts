@@ -1,5 +1,24 @@
-import { Prisma, type AutomationRuleExecution } from '@prisma/client';
+import {
+  Prisma,
+  type AutomationRuleExecution,
+  type AutomationExecutionStatus,
+} from '@prisma/client';
 import { db } from '@/lib/db';
+
+/** A rule execution joined to the triggering item's key + title (the audit-log
+ * read shape). `workItem` is null when the item was deleted after the run
+ * (`work_item_id` is `SetNull` on delete). */
+export type AutomationRuleExecutionWithItem = Prisma.AutomationRuleExecutionGetPayload<{
+  include: { workItem: { select: { identifier: true; title: true } } };
+}>;
+
+/** The latest-execution row per rule (the list's last-run glyph) — just the
+ * status + time, keyed by rule. */
+export interface LatestExecutionRow {
+  ruleId: string;
+  status: AutomationExecutionStatus;
+  createdAt: Date;
+}
 
 // Single-op data access for the `automation_rule_execution` audit table (Story
 // 6.6 · Subtask 6.6.2), per the 4-layer rule: the engine's writes require `tx`;
@@ -53,5 +72,45 @@ export const automationRuleExecutionRepository = {
       )
     `;
     return r;
+  },
+
+  /** One bounded page of a rule's execution log, newest-first, with the
+   * triggering item's identifier + title joined (null when the item was
+   * deleted). Read-only (the audit-log UI read, 6.6.6) so it uses the `db`
+   * singleton; rides the `[ruleId, createdAt]` index. The service has already
+   * resolved + admin-gated the rule, so this takes a plain `ruleId`. */
+  async listByRule(
+    ruleId: string,
+    opts: { skip: number; take: number },
+  ): Promise<AutomationRuleExecutionWithItem[]> {
+    return db.automationRuleExecution.findMany({
+      where: { ruleId },
+      orderBy: { createdAt: 'desc' },
+      skip: opts.skip,
+      take: opts.take,
+      include: { workItem: { select: { identifier: true, title: true } } },
+    });
+  },
+
+  /** Total execution rows for a rule — the audit-log pager's `total`. Read-only
+   * (uses the `db` singleton). */
+  async countByRule(ruleId: string): Promise<number> {
+    return db.automationRuleExecution.count({ where: { ruleId } });
+  },
+
+  /** The latest execution per rule across a set of rule ids — the list's
+   * last-run glyph (6.6.6). One row per rule via `DISTINCT ON (rule_id)`
+   * ordered newest-first, served by the `[ruleId, createdAt]` index. Empty
+   * input short-circuits to `[]` (no SQL). Read-only (the `db` singleton);
+   * the caller has already admin-gated the project whose rules these are. */
+  async findLatestByRuleIds(ruleIds: string[]): Promise<LatestExecutionRow[]> {
+    if (ruleIds.length === 0) return [];
+    return db.$queryRaw<LatestExecutionRow[]>`
+      SELECT DISTINCT ON ("rule_id")
+        "rule_id" AS "ruleId", "status", "created_at" AS "createdAt"
+      FROM "automation_rule_execution"
+      WHERE "rule_id" IN (${Prisma.join(ruleIds)})
+      ORDER BY "rule_id", "created_at" DESC
+    `;
   },
 };

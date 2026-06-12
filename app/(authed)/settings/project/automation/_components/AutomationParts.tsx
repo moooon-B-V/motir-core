@@ -1,6 +1,9 @@
 'use client';
 
 import { type ReactNode } from 'react';
+import { TriangleAlert } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { Button } from '@/components/ui/Button';
 import type { ComboboxOption } from '@/components/ui/Combobox';
 import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
@@ -139,6 +142,40 @@ export function priorityOptions(
       icon: <Icon className={cn('h-4 w-4', PRIORITY_ICON_EL[p])} aria-hidden />,
     } satisfies ComboboxOption<string>;
   });
+}
+
+/** The auto-disabled banner (Subtask 6.6.6) — shared by the rule LIST and the
+ * EDITOR (when editing a rule the engine switched off after the failure
+ * threshold). Rose tint with AA `--el-text-strong` text (finding #35), names
+ * the failure count, and offers Re-enable — wired to the same enable toggle the
+ * list uses (enabling resets the failure counter). `onReEnable` omitted hides
+ * the button (the list renders its own inline Re-enable next to the row). */
+export function AutoDisabledBanner({
+  name,
+  count,
+  onReEnable,
+}: {
+  name: string;
+  count: number;
+  onReEnable?: () => void;
+}) {
+  const t = useTranslations('settings.automation');
+  return (
+    <div
+      role="status"
+      className="flex items-start gap-2.5 rounded-(--radius-card) bg-(--el-tint-rose) p-(--spacing-card-padding)"
+    >
+      <TriangleAlert className="mt-0.5 size-4 shrink-0 text-(--el-danger)" aria-hidden />
+      <p className="min-w-0 flex-1 font-sans text-sm text-(--el-text-strong)">
+        {t('autoDisabledBanner', { name, count })}
+      </p>
+      {onReEnable ? (
+        <Button variant="ghost" size="sm" onClick={onReEnable}>
+          {t('row.reEnable')}
+        </Button>
+      ) : null}
+    </div>
+  );
 }
 
 /** A small labelled wedge marker (the When/If/Then block glyph chip). */

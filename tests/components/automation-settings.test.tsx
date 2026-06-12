@@ -2,7 +2,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
-import type { AutomationRuleDto } from '@/lib/dto/automationRules';
+import type { AutomationRuleSummaryDto } from '@/lib/dto/automationRules';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { AUTOMATION_TRIGGER_TYPES } from '@/lib/automation/registry';
@@ -97,7 +97,7 @@ const MEMBERS: WorkspaceMemberDTO[] = [
   { userId: 'u2', name: 'Bo Philips', email: 'bo@motir.co', role: 'member' },
 ];
 
-function rule(over: Partial<AutomationRuleDto> = {}): AutomationRuleDto {
+function rule(over: Partial<AutomationRuleSummaryDto> = {}): AutomationRuleSummaryDto {
   return {
     id: 'r1',
     name: 'Bug verification handoff',
@@ -111,11 +111,12 @@ function rule(over: Partial<AutomationRuleDto> = {}): AutomationRuleDto {
     autoDisableThreshold: 10,
     createdAt: '2026-06-12T00:00:00.000Z',
     updatedAt: '2026-06-12T00:00:00.000Z',
+    lastRun: null,
     ...over,
   };
 }
 
-function renderSettings(rules: AutomationRuleDto[]): void {
+function renderSettings(rules: AutomationRuleSummaryDto[]): void {
   const ui: ReactElement = (
     <ToastProvider>
       <AutomationSettings
