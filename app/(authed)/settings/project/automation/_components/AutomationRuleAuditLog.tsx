@@ -209,7 +209,7 @@ function ExecutionRow({ execution }: { execution: AutomationExecutionDto }) {
             <Link2 className="size-3.5" aria-hidden />
           </Link>
         ) : (
-          <span className="inline-flex items-center gap-1 font-sans text-sm text-(--el-text-faint) line-through">
+          <span className="inline-flex items-center gap-1 font-sans text-sm text-(--el-text-secondary) line-through">
             {t('tombstone')}
           </span>
         )}
