@@ -445,7 +445,7 @@ export const story_6_1: PlanStory = {
       id: '6.1.6',
       title:
         'Story tests — compile-correctness matrix + injection fuzz + serialization properties + the build-a-filter E2E + a11y sweep',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
