@@ -30,6 +30,10 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.{ts,tsx}'],
+    // Global setup: stub inngest.send to a no-op so the unconditional
+    // `work-item/created` + `work-item/field.changed` emits (Subtask 6.6.2)
+    // don't throw on the keyless test client. Event-asserting tests re-spy.
+    setupFiles: ['./tests/helpers/inngestSetup.ts'],
     // DB-backed tests share connections to the local Postgres; running
     // them in parallel forks would cause cross-test row interference.
     // Serial is fine — total suite is small.
@@ -141,6 +145,9 @@ export default defineConfig({
         'lib/services/automationRulesService.ts',
         'lib/repositories/automationRuleRepository.ts',
         'lib/mappers/automationRuleMappers.ts',
+        // 6.6.2 — the execution engine + its audit-row leaf join the gate.
+        'lib/services/automationEngineService.ts',
+        'lib/repositories/automationRuleExecutionRepository.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -255,6 +262,13 @@ export default defineConfig({
         'lib/services/automationRulesService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/automationRuleRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mappers/automationRuleMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        // 6.6.2 — the execution engine + audit-row leaf.
+        'lib/services/automationEngineService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/automationRuleExecutionRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
       },
     },
   },

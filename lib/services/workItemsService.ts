@@ -30,6 +30,7 @@ import { parseMentionIds } from '@/lib/mentions/parse';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { extractReferencedBlobUrlsFromBodies } from '@/lib/blob/referencedUrls';
 import { sendEvent } from '@/lib/jobs/sendEvent';
+import { automationFieldsFromDiffKeys } from '@/lib/automation/fields';
 import { keyForAppend, keyBetween } from '@/lib/workItems/positioning';
 import { relationshipToLink } from '@/lib/workItems/linkRelationships';
 import {
@@ -755,6 +756,19 @@ export const workItemsService = {
       });
     }
 
+    // Automation `created` trigger (Story 6.6 · Subtask 6.6.2): every commit
+    // emits the channel-agnostic create event the rule engine consumes. Stamps
+    // provenance so a rule whose own action created the item can't loop (no
+    // create action ships in 6.6.2, but the field rides through for a future
+    // one).
+    await sendEvent('work-item/created', {
+      workspaceId,
+      projectId: input.projectId,
+      workItemId: dto.id,
+      actorId: ctx.userId,
+      ...(ctx.viaAutomationRuleId ? { viaAutomationRuleId: ctx.viaAutomationRuleId } : {}),
+    });
+
     return dto;
   },
 
@@ -957,7 +971,12 @@ export const workItemsService = {
       }
 
       if (Object.keys(diff).length === 0) {
-        return { dto: toWorkItemDto(current), revisionId: null, addedDescMentionIds: [] };
+        return {
+          dto: toWorkItemDto(current),
+          revisionId: null,
+          addedDescMentionIds: [],
+          changedFieldIds: [] as string[],
+        };
       }
 
       const row = await workItemRepository.update(id, update, tx);
@@ -997,7 +1016,12 @@ export const workItemsService = {
         { workItemId: id, changedById: ctx.userId, changeKind: 'updated', diff: revisionDiff },
         tx,
       );
-      return { dto: toWorkItemDto(row), revisionId, addedDescMentionIds };
+      // The automatable built-in fields that actually changed (Story 6.6 ·
+      // Subtask 6.6.2) — translated from the diff keys; drives the
+      // `field.changed` emit below. Computed off `diff` (the field cells), so
+      // the synthetic `attachments` cell on `revisionDiff` is naturally ignored.
+      const changedFieldIds: string[] = automationFieldsFromDiffKeys(Object.keys(diff));
+      return { dto: toWorkItemDto(row), revisionId, addedDescMentionIds, changedFieldIds };
     });
 
     // Post-commit description-mention event (5.1.6) — same shape and rules as
@@ -1010,6 +1034,25 @@ export const workItemsService = {
         revisionId: result.revisionId,
         authorId: ctx.userId,
         mentionedUserIds: result.addedDescMentionIds,
+      });
+    }
+
+    // Automation `field_changed` trigger (Story 6.6 · Subtask 6.6.2): emit only
+    // when an automatable built-in field (assignee / priority / dueDate /
+    // estimate) actually changed — so the event is never a no-op for the
+    // engine. Carries the changed field ids (the engine narrows by its rule's
+    // configured field) + provenance (a `set_field` action's own edit is
+    // skipped, so it can't loop). Status moves DON'T ride this — they ride
+    // `work-item/transitioned` from the typed-workflow path.
+    if (result.revisionId !== null && result.changedFieldIds.length > 0) {
+      await sendEvent('work-item/field.changed', {
+        workspaceId: ctx.workspaceId,
+        projectId: result.dto.projectId,
+        workItemId: result.dto.id,
+        actorId: ctx.userId,
+        changedFields: result.changedFieldIds,
+        revisionId: result.revisionId,
+        ...(ctx.viaAutomationRuleId ? { viaAutomationRuleId: ctx.viaAutomationRuleId } : {}),
       });
     }
 
@@ -1050,6 +1093,10 @@ export const workItemsService = {
         fromStatusKey: transition.fromStatusKey,
         toStatusKey: transition.toStatusKey,
         revisionId: transition.revisionId,
+        // Provenance (Story 6.6 · Subtask 6.6.2): set when a rule's `transition`
+        // action drove this move, so the engine skips the follow-on event and
+        // can't loop. Absent on a user-driven transition.
+        ...(ctx.viaAutomationRuleId ? { viaAutomationRuleId: ctx.viaAutomationRuleId } : {}),
       });
     }
     return dto;

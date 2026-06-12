@@ -31,3 +31,34 @@ export type AutomationSetFieldId = (typeof AUTOMATION_SET_FIELDS)[number];
 export const AUTOMATION_PRIORITIES = ['lowest', 'low', 'medium', 'high', 'highest'] as const;
 
 export type AutomationPriority = (typeof AUTOMATION_PRIORITIES)[number];
+
+/**
+ * Maps each automatable field id to the key it appears under in the
+ * `workItemsService.update` revision diff (Story 6.6 · Subtask 6.6.2). The two
+ * vocabularies differ for `assignee`/`estimate` (the diff uses the column names
+ * `assigneeId`/`estimateMinutes`), so the `field.changed` emit translates the
+ * diff keys into automation field ids through this map — the single place that
+ * bridge lives, shared by the emit site and the tests.
+ */
+export const AUTOMATION_FIELD_CHANGED_DIFF_KEY: Record<AutomationFieldChangedFieldId, string> = {
+  assignee: 'assigneeId',
+  priority: 'priority',
+  dueDate: 'dueDate',
+  estimate: 'estimateMinutes',
+};
+
+/**
+ * Translate a set of work-item revision-diff keys into the automatable field
+ * ids that changed, preserving the canonical `AUTOMATION_FIELD_CHANGED_FIELDS`
+ * order and dropping non-automatable keys (title, kind, body, …). The
+ * `field.changed` event carries exactly this — so the engine narrows a
+ * `field_changed` rule by its configured field against the result.
+ */
+export function automationFieldsFromDiffKeys(
+  changedKeys: Iterable<string>,
+): AutomationFieldChangedFieldId[] {
+  const changed = new Set(changedKeys);
+  return AUTOMATION_FIELD_CHANGED_FIELDS.filter((f) =>
+    changed.has(AUTOMATION_FIELD_CHANGED_DIFF_KEY[f]),
+  );
+}

@@ -23,6 +23,10 @@ import {
   filterSubscriptionEmail,
   type FilterSubscriptionEmailProps,
 } from '@/lib/emailTemplates/filterSubscription';
+import {
+  automationRuleFailedEmail,
+  type AutomationRuleFailedEmailProps,
+} from '@/lib/emailTemplates/automationRuleFailed';
 
 // The execution-side email service (Story 1.6 · Subtask 1.6.3). This is the
 // ONE place a transactional email is rendered and handed to the provider:
@@ -60,7 +64,12 @@ export type TransactionalEmail =
       template: 'watcher-transition-notification';
       data: WatcherTransitionNotificationEmailProps;
     }
-  | { to: string; template: 'filter-subscription'; data: FilterSubscriptionEmailProps };
+  | { to: string; template: 'filter-subscription'; data: FilterSubscriptionEmailProps }
+  | {
+      to: string;
+      template: 'automation-rule-failed';
+      data: AutomationRuleFailedEmailProps;
+    };
 
 /** Every template discriminant — handy for exhaustiveness + tests. */
 export type EmailTemplate = TransactionalEmail['template'];
@@ -92,6 +101,8 @@ async function renderTemplate(message: TransactionalEmail) {
       return watcherTransitionNotificationEmail(message.data);
     case 'filter-subscription':
       return filterSubscriptionEmail(message.data);
+    case 'automation-rule-failed':
+      return automationRuleFailedEmail(message.data);
     default: {
       // Exhaustiveness guard: a new template arm without a case here is a
       // compile error, not a silent fall-through.

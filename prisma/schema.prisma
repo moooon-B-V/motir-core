@@ -1900,12 +1900,22 @@ model AutomationRuleExecution {
   workItemId String?                   @map("work_item_id")
   error      String?                   @db.Text
   durationMs Int?                      @map("duration_ms")
+  /// The id of the job event this run processed (Subtask 6.6.2). The engine
+  /// claims an (rule, event) pair before executing actions and the partial
+  /// unique index below makes that claim atomic, so an Inngest replay / retry
+  /// of the same event never double-executes a rule's actions — the verified
+  /// "idempotent per (event × rule)" contract. Nullable for the rare context
+  /// (a manual/test write) that carries no event id; NULLs don't collide.
+  eventId    String?                   @map("event_id")
   createdAt  DateTime                  @default(now()) @map("created_at")
 
   rule     AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
   workItem WorkItem?      @relation(fields: [workItemId], references: [id], onDelete: SetNull)
 
   @@index([ruleId, createdAt])
+  // The idempotency claim — one execution row per (rule, event). Partial
+  // (event_id IS NOT NULL) so no-event writes never collide; declared in raw
+  // SQL in the 6.6.2 migration (Prisma can't express a partial unique index).
   @@map("automation_rule_execution")
 }
 
