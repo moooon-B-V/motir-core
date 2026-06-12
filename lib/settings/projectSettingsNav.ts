@@ -74,6 +74,7 @@ export interface SettingsNavEntry {
 export const PROJECT_SETTINGS_ROOT = '/settings/project';
 
 const browse = (caps: SettingsNavCapabilities): boolean => caps.canBrowse;
+const manage = (caps: SettingsNavCapabilities): boolean => caps.canManage;
 
 /**
  * The registry. Order within a group is the rail order. Routes are PRESERVED
@@ -143,13 +144,14 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
   {
     id: 'automation',
     group: 'automation',
-    href: '',
+    href: '/settings/project/automation',
     icon: Bot,
     labelKey: 'nav.rules',
-    // The slot shows to anyone who can see the area; Story 6.6 turns it into a
-    // real, admin-gated route.
-    access: browse,
-    placeholder: true,
+    // Story 6.6 lights up the reserved slot: a real route, ADMIN-ONLY end to end
+    // (the verified Jira scope — no member/viewer read-only variant). The entry,
+    // the page, and every route gate on the shipped 6.4.3 manage-project
+    // predicate, so a non-admin never sees the nav row.
+    access: manage,
   },
 ];
 
