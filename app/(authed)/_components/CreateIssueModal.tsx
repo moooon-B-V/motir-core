@@ -163,10 +163,9 @@ export function CreateIssueModal({ open, onOpenChange, onCreated }: CreateIssueM
       <form className="mt-4 flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
         {/* Scrollable field area — the dialog height is fixed (Modal caps at
             90vh), so the fields scroll and the footer below stays pinned.
-            `overflow-y-auto` also clips the X axis, so pad (p-1.5) + pull the
-            margin back (-m-1.5) to give focus rings (ring-2 + offset-2 ≈ 4px)
-            room instead of clipping them against the scroll edge. */}
-        <div className="-m-1.5 flex flex-col gap-3 overflow-y-auto p-1.5">
+            Modal.Body owns the ring-safe scroll recipe (the focus-ring inset
+            compensation lives there now, not inline). */}
+        <Modal.Body className="gap-3">
           <div className="flex flex-col gap-1 font-sans text-sm">
             <span className="text-(--el-text) font-medium">{t('createIssue.type')}</span>
             <TypePicker
@@ -298,7 +297,7 @@ export function CreateIssueModal({ open, onOpenChange, onCreated }: CreateIssueM
             disabled={isPending}
             error={linksError}
           />
-        </div>
+        </Modal.Body>
 
         <Modal.Footer className="shrink-0">
           <Button type="button" variant="ghost" onClick={close} disabled={isPending}>
