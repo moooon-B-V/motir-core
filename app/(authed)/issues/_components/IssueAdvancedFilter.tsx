@@ -513,7 +513,7 @@ export function IssueAdvancedFilter({
             <Plus className="h-3.5 w-3.5" aria-hidden />
             {t('advancedAddCondition')}
           </button>
-          <span className="text-xs text-(--el-text-faint) tabular-nums">
+          <span className="text-xs text-(--el-text-muted) tabular-nums">
             {atCap
               ? t('advancedCapReached', { cap: FILTER_ROW_CAP })
               : t('advancedFootHint', { count: working.rows.length, cap: FILTER_ROW_CAP })}
