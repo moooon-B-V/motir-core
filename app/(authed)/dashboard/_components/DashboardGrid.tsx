@@ -393,7 +393,7 @@ export function DashboardGrid({
             </Button>
           </div>
           <span
-            className={`flex items-center gap-1.5 text-xs ${atCap ? 'text-(--el-warning)' : 'text-(--el-text-muted)'}`}
+            className={`flex items-center gap-1.5 text-xs ${atCap ? 'text-(--el-warning)' : 'text-(--el-text-secondary)'}`}
           >
             {atCap ? <AlertTriangle className="size-3.5" aria-hidden /> : null}
             {atCap
@@ -536,7 +536,7 @@ function EditColumn({ column, children }: { column: number; children: React.Reac
       }`}
     >
       {children}
-      <div className="rounded-(--radius-control) border border-dashed border-(--el-border-strong) px-3 py-3 text-center text-xs text-(--el-text-faint)">
+      <div className="rounded-(--radius-control) border border-dashed border-(--el-border-strong) px-3 py-3 text-center text-xs text-(--el-text-muted)">
         {t('grid.dropHere')}
       </div>
     </div>

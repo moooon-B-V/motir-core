@@ -100,7 +100,7 @@ export function DashboardsHome({ dashboards }: { dashboards: DashboardSummaryDto
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h2 className="mb-2 text-xs font-semibold tracking-wide text-(--el-text-faint) uppercase">
+      <h2 className="mb-2 text-xs font-semibold tracking-wide text-(--el-text-muted) uppercase">
         {title}
       </h2>
       <div className="overflow-hidden rounded-(--radius-card) border border-(--el-border)">
