@@ -89,6 +89,51 @@ export async function resolveFilter(
   return res.json() as Promise<ResolvedSavedFilterDto>;
 }
 
+export interface CreateFilterInput {
+  name: string;
+  description?: string | null;
+  visibility: 'private' | 'project';
+  /** The `?filter=v1:` param string the builder holds (one codec, two
+   * carriers) — the 6.2.1 POST persists it as the stored envelope. */
+  filter: string;
+}
+
+/** Create a saved filter from the current builder AST (the /issues-side
+ * Save / Save-as — Subtask 6.2.3). */
+export async function createFilter(
+  projectKey: string,
+  input: CreateFilterInput,
+): Promise<SavedFilterSummaryDto> {
+  const res = await ensureOk(
+    await fetch(base(projectKey), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+  );
+  const data = (await res.json()) as { filter: SavedFilterSummaryDto };
+  return data.filter;
+}
+
+/** Overwrite an existing filter's CRITERIA in place (the owner/admin Save —
+ * Subtask 6.2.3; no dialog). Distinct from {@link updateFilter}, which edits
+ * metadata only. */
+export async function overwriteFilterCriteria(
+  projectKey: string,
+  filterId: string,
+  filterParam: string,
+): Promise<SavedFilterSummaryDto> {
+  const res = await ensureOk(
+    await fetch(`${base(projectKey)}/${encodeURIComponent(filterId)}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ filter: filterParam }),
+    }),
+  );
+  const data = (await res.json()) as { filter: SavedFilterSummaryDto };
+  return data.filter;
+}
+
 export interface UpdateFilterInput {
   name?: string;
   description?: string | null;

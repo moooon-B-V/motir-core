@@ -4,8 +4,10 @@ import type { FilterAst } from '@/lib/filters/ast';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
+import type { Viewer } from '@/app/(authed)/filters/_components/savedFiltersClient';
 import { IssueFilterBar } from './IssueFilterBar';
 import { IssueAdvancedFilter } from './IssueAdvancedFilter';
+import { SavedFilterDropdown } from './SavedFilterDropdown';
 import { IssueViewSwitcher } from './IssueViewSwitcher';
 import { NewIssueButton } from './NewIssueButton';
 
@@ -19,6 +21,8 @@ import { NewIssueButton } from './NewIssueButton';
 //   renders SUPERSEDED (muted + badge + read-only popover).
 // - Advanced is the filter BUILDER (IssueAdvancedFilter, 6.1.4) — registry-
 //   driven condition rows writing the versioned `?filter=v1:` param.
+// - Saved is the saved-filter dropdown (SavedFilterDropdown, 6.2.3) — apply /
+//   star / search the project's saved filters + the built-in defaults.
 // - The view-switcher (IssueViewSwitcher, 2.5.8) toggles the nested Tree view
 //   and the flat sortable List view via `?view=`.
 // - New issue reuses the shipped create-issue modal (2.3.3) via NewIssueButton.
@@ -37,6 +41,10 @@ export interface IssueListToolbarProps {
   statuses: WorkflowStatusDto[];
   members: WorkspaceMemberDTO[];
   sprints: SprintDto[];
+  /** The project identifier + the actor's saved-filter tier (Subtask 6.2.3) —
+   * powers the [Saved] dropdown's reads and per-row gating. */
+  projectKey: string;
+  viewer: Viewer;
 }
 
 export function IssueListToolbar({
@@ -47,6 +55,8 @@ export function IssueListToolbar({
   statuses,
   members,
   sprints,
+  projectKey,
+  viewer,
 }: IssueListToolbarProps) {
   return (
     <div className="flex items-center gap-2">
@@ -66,6 +76,14 @@ export function IssueListToolbar({
         statuses={statuses}
         members={members}
         sprints={sprints}
+      />
+      <SavedFilterDropdown
+        projectKey={projectKey}
+        viewer={viewer}
+        view={view}
+        sort={sort}
+        filter={filter}
+        ast={ast}
       />
       <IssueViewSwitcher view={view} sort={sort} filter={filter} />
       <NewIssueButton />

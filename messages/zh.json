@@ -1729,6 +1729,48 @@
       "deletedToast": "筛选器已删除",
       "errorTitle": "无法删除筛选器",
       "errorGeneric": "出了点问题，请重试。"
+    },
+    "dropdown": {
+      "label": "已保存",
+      "trigger": "已保存筛选器——应用、收藏或搜索",
+      "searchLabel": "查找筛选器",
+      "searchPlaceholder": "查找筛选器…",
+      "starred": "已收藏",
+      "mine": "我的筛选器",
+      "project": "项目筛选器",
+      "defaults": "默认",
+      "emptyStarred": "尚无收藏的筛选器——收藏筛选器即可固定在此。",
+      "emptyMine": "你还没有保存任何筛选器。",
+      "emptyProject": "尚无与此项目共享的筛选器。",
+      "viewAll": "查看全部筛选器",
+      "error": "无法加载筛选器，请重试。"
+    },
+    "save": {
+      "title": "保存筛选器",
+      "nameLabel": "名称",
+      "namePlaceholder": "筛选器名称",
+      "descriptionLabel": "描述（可选）",
+      "descriptionPlaceholder": "此筛选器用于什么？",
+      "visibilityLegend": "谁可以看到此筛选器？",
+      "duplicateName": "此项目中已存在名为“{name}”的筛选器。",
+      "submit": "保存筛选器",
+      "cancel": "取消",
+      "savedToast": "筛选器已保存",
+      "errorTitle": "无法保存筛选器",
+      "errorGeneric": "出了点问题，请重试。"
+    },
+    "applied": {
+      "barAria": "已应用的筛选器",
+      "edited": "已修改",
+      "save": "保存",
+      "saveAs": "另存为",
+      "discard": "放弃更改",
+      "savedToast": "筛选器已更新",
+      "overwriteError": "无法保存你的更改",
+      "nonOwnerTooltip": "只有拥有者（{owner}）才能覆盖此筛选器——「另存为」会创建你自己的副本。",
+      "chipAriaShared": "已应用的筛选器：{name}（已与项目共享）——打开已保存筛选器",
+      "chipAriaPrivate": "已应用的筛选器：{name}（私有）——打开已保存筛选器",
+      "chipAriaBuiltin": "已应用的筛选器：{name}（内置）——打开已保存筛选器"
     }
   }
 }
