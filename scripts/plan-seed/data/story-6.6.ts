@@ -324,7 +324,7 @@ export const story_6_6: PlanStory = {
       id: '6.6.3',
       title:
         'Epic-5 registry extensions — commented + transitioned triggers, add-watcher / add-comment / add-label / set-custom-field actions, Epic-5 condition rows',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
