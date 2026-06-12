@@ -34,6 +34,17 @@ export interface IssueFilter {
   assigneeIds: string[];
   includeUnassigned: boolean;
   text: string | null;
+  /**
+   * The advanced filter builder's `?filter=v1:…` param value (Story 6.1 ·
+   * Subtask 6.1.4), carried RAW (still encoded) and OPAQUE at this layer so
+   * every control that round-trips the filter through `buildIssueListHref`
+   * (view switcher, sort headers, pager, the facet bar itself) preserves the
+   * active builder state without knowing its shape. Decoding + validation is
+   * `lib/issues/issueListAdvancedFilter.ts`'s job at the page boundary — an
+   * INVALID param is nulled there before threading, so a broken link never
+   * propagates through navigation. `null` = no advanced filter.
+   */
+  advanced: string | null;
 }
 
 /** The no-filter state — the full, unpruned tree. */
@@ -43,6 +54,7 @@ export const EMPTY_FILTER: IssueFilter = {
   assigneeIds: [],
   includeUnassigned: false,
   text: null,
+  advanced: null,
 };
 
 /** Next.js hands each searchParams key as `string | string[] | undefined`. */
@@ -54,6 +66,8 @@ export interface IssueFilterParams {
   status?: RawParam;
   assignee?: RawParam;
   q?: RawParam;
+  /** The advanced builder's versioned AST param (Subtask 6.1.4). */
+  filter?: RawParam;
 }
 
 function toList(raw: RawParam): string[] {
@@ -82,16 +96,21 @@ export function parseIssueFilter(params: IssueFilterParams): IssueFilter {
   const includeUnassigned = assigneeRaw.includes(UNASSIGNED_TOKEN);
   const assigneeIds = dedupe(assigneeRaw.filter((a) => a !== UNASSIGNED_TOKEN)).sort();
   const text = (Array.isArray(params.q) ? params.q[0] : params.q)?.trim() ?? '';
+  const advanced = (Array.isArray(params.filter) ? params.filter[0] : params.filter)?.trim() ?? '';
   return {
     kinds,
     statuses,
     assigneeIds,
     includeUnassigned,
     text: text.length > 0 ? text : null,
+    advanced: advanced.length > 0 ? advanced : null,
   };
 }
 
-/** True when at least one facet is constraining the result. */
+/** True when at least one FACET is constraining the result. Deliberately
+ * blind to `advanced` — the facet bar's active ring/badge and the builder's
+ * are separate controls (the Advanced trigger owns its own count); read-path
+ * "is anything filtering?" checks OR this with the decoded AST. */
 export function isFilterActive(f: IssueFilter): boolean {
   return (
     f.kinds.length > 0 ||
@@ -129,6 +148,7 @@ export function appendFilterParams(params: URLSearchParams, f: IssueFilter): voi
   for (const a of f.assigneeIds) params.append('assignee', a);
   if (f.includeUnassigned) params.append('assignee', UNASSIGNED_TOKEN);
   if (f.text !== null) params.set('q', f.text);
+  if (f.advanced !== null) params.set('filter', f.advanced);
 }
 
 /**

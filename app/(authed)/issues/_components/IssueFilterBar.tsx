@@ -3,14 +3,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter } from 'next/navigation';
-import { Check, Search, SlidersHorizontal, UserX, X } from 'lucide-react';
+import { Check, FunnelPlus, Search, SlidersHorizontal, UserX, X } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { ISSUE_TYPES, type IssueType } from '@/lib/issues/parentRules';
 import { DEFAULT_STATUS_KEYS } from '@/lib/workflows/defaultWorkflow';
 import { buildIssueListHref, type IssueListView, type IssueSort } from '@/lib/issues/issueListView';
 import {
-  EMPTY_FILTER,
   countActiveFilters,
   isFilterActive,
   setFilterText,
@@ -20,6 +20,14 @@ import {
   toggleUnassigned,
   type IssueFilter,
 } from '@/lib/issues/issueListFilter';
+import {
+  astExceedsFacets,
+  clearFacets,
+  setAdvancedParam,
+  upgradeFacetsIntoAst,
+} from '@/lib/issues/issueListAdvancedFilter';
+import type { FilterAst } from '@/lib/filters/ast';
+import { useAdvancedFilterPopover } from './AdvancedFilterContext';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { cn } from '@/lib/utils/cn';
@@ -68,21 +76,26 @@ function OptionRow({
   glyph,
   label,
   secondary,
+  disabled,
 }: {
   selected: boolean;
   onToggle: () => void;
   glyph: React.ReactNode;
   label: string;
   secondary?: string;
+  /** Read-only mode — the superseded facet popover (Subtask 6.1.4). */
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       role="option"
       aria-selected={selected}
+      disabled={disabled}
       onClick={onToggle}
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:bg-(--el-surface) focus-visible:outline-none',
+        'flex w-full items-center gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left text-sm text-(--el-text) focus-visible:bg-(--el-surface) focus-visible:outline-none',
+        disabled ? 'cursor-default opacity-60' : 'hover:bg-(--el-surface)',
         selected && 'bg-(--el-surface)',
       )}
     >
@@ -119,9 +132,20 @@ export interface IssueFilterBarProps {
   members: WorkspaceMemberDTO[];
   view: IssueListView;
   sort: IssueSort;
+  /** The decoded advanced AST (Subtask 6.1.4) — drives the SUPERSEDED state
+   * (exactly when the AST exceeds facet expressiveness) and rides into the
+   * one-way "Edit in Advanced" upgrade. */
+  ast?: FilterAst | null;
 }
 
-export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueFilterBarProps) {
+export function IssueFilterBar({
+  filter,
+  statuses,
+  members,
+  view,
+  sort,
+  ast = null,
+}: IssueFilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const t = useTranslations('issueViews');
@@ -136,6 +160,13 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
     DEFAULT_STATUS_KEYS.has(s.key) ? tStatus(s.key) : s.label;
   const [open, setOpen] = useState(false);
   const [memberQuery, setMemberQuery] = useState('');
+  const advancedPopover = useAdvancedFilterPopover();
+
+  // SUPERSEDED — the builder holds conditions the facets can't express
+  // (OR / negation / empty / comparisons / non-facet fields): the trigger
+  // mutes + badges, and the popover goes READ-ONLY with the same hand-off.
+  // Never a silent down-conversion (the verified one-way mirror rule).
+  const superseded = ast !== null && astExceedsFacets(ast);
 
   // The text quick-filter is locally controlled for responsiveness, then pushed
   // to the URL debounced (live-apply without a router.push per keystroke).
@@ -209,32 +240,66 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
     return m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q);
   });
 
+  // The one-way "Edit in Advanced" upgrade (the facet popover's footer):
+  // every facet selection carries into the builder as rows — LOSSLESS — and
+  // the URL swaps the facet params for the `?filter=v1:` AST in one push.
+  function editInAdvanced() {
+    const facets = filterRef.current;
+    const merged = upgradeFacetsIntoAst(facets, ast);
+    if (merged.conditions.length > 0) {
+      const next = setAdvancedParam(clearFacets(facets), merged);
+      filterRef.current = next;
+      setOptimistic(next);
+      setText('');
+      router.push(buildIssueListHref(pathname, { view, sort, filter: next }));
+    }
+    setOpen(false);
+    advancedPopover?.setOpen(true);
+  }
+
+  const trigger = (
+    <button
+      type="button"
+      aria-label={active ? t('filterActiveAria', { count }) : t('filter')}
+      className={cn(
+        'inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border px-3 font-sans text-sm hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
+        superseded ? 'text-(--el-text-muted)' : 'text-(--el-text)',
+        active ? 'border-(--el-accent) bg-(--el-tint-lavender)' : 'border-(--el-border)',
+      )}
+    >
+      <SlidersHorizontal
+        className={cn('h-4 w-4', active ? 'text-(--el-accent)' : 'text-(--el-text-muted)')}
+        aria-hidden
+      />
+      {t('filter')}
+      {active ? (
+        <span
+          aria-hidden
+          className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-(--radius-badge) bg-(--el-accent) px-1.5 text-[11px] font-semibold text-(--el-accent-text) tabular-nums"
+        >
+          {count}
+        </span>
+      ) : null}
+      {superseded ? (
+        <span
+          aria-label={t('filterSupersededAria')}
+          className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-(--radius-badge) bg-(--el-tint-lavender) text-(--el-accent)"
+        >
+          <FunnelPlus className="h-[11px] w-[11px]" aria-hidden />
+        </span>
+      ) : null}
+    </button>
+  );
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Popover.Trigger asChild>
-        <button
-          type="button"
-          aria-label={active ? t('filterActiveAria', { count }) : t('filter')}
-          className={cn(
-            'inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border px-3 font-sans text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
-            active ? 'border-(--el-accent) bg-(--el-tint-lavender)' : 'border-(--el-border)',
-          )}
-        >
-          <SlidersHorizontal
-            className={cn('h-4 w-4', active ? 'text-(--el-accent)' : 'text-(--el-text-muted)')}
-            aria-hidden
-          />
-          {t('filter')}
-          {active ? (
-            <span
-              aria-hidden
-              className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-(--radius-badge) bg-(--el-accent) px-1.5 text-[11px] font-semibold text-(--el-accent-text) tabular-nums"
-            >
-              {count}
-            </span>
-          ) : null}
-        </button>
-      </Popover.Trigger>
+      {superseded ? (
+        <Tooltip content={t('filterSupersededTooltip')}>
+          <Popover.Trigger asChild>{trigger}</Popover.Trigger>
+        </Tooltip>
+      ) : (
+        <Popover.Trigger asChild>{trigger}</Popover.Trigger>
+      )}
 
       <Popover.Content
         role="dialog"
@@ -250,15 +315,15 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
           </span>
           <button
             type="button"
-            disabled={!active}
+            disabled={!active || superseded}
             onClick={() => {
               setMemberQuery('');
               setText('');
-              apply(EMPTY_FILTER);
+              apply(clearFacets(filterRef.current));
             }}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-(--radius-control) px-1 py-0.5 text-sm focus-visible:outline-none',
-              active
+              active && !superseded
                 ? 'text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)'
                 : 'cursor-default text-(--el-text-faint)',
             )}
@@ -278,6 +343,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
             <input
               type="text"
               value={text}
+              disabled={superseded}
               onChange={(e) => onTextChange(e.target.value)}
               placeholder={t('filterFindPlaceholder')}
               aria-label={t('filterByText')}
@@ -296,6 +362,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
                   onToggle={() => apply(toggleKind(filterRef.current, type))}
                   glyph={<IssueTypeIcon type={type} className="h-4 w-4" />}
                   label={tType(type)}
+                  disabled={superseded}
                 />
               ))}
             </div>
@@ -312,6 +379,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
                   onToggle={() => apply(toggleStatus(filterRef.current, s.key))}
                   glyph={<StatusDot status={s} />}
                   label={statusLabel(s)}
+                  disabled={superseded}
                 />
               ))}
             </div>
@@ -331,6 +399,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
               <input
                 type="text"
                 value={memberQuery}
+                disabled={superseded}
                 onChange={(e) => setMemberQuery(e.target.value)}
                 placeholder={t('filterSearchMembers')}
                 aria-label={t('filterSearchMembersAria')}
@@ -347,6 +416,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
                   </span>
                 }
                 label={t('unassigned')}
+                disabled={superseded}
               />
               {memberMatches.map((m) => (
                 <OptionRow
@@ -356,6 +426,7 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
                   glyph={<Avatar name={m.name} />}
                   label={m.name}
                   secondary={m.email}
+                  disabled={superseded}
                 />
               ))}
               {memberMatches.length === 0 ? (
@@ -365,6 +436,20 @@ export function IssueFilterBar({ filter, statuses, members, view, sort }: IssueF
               ) : null}
             </div>
           </div>
+        </div>
+
+        {/* The upgrade footer — the one-way basic→advanced hand-off (6.1.4).
+            While superseded the popover above is read-only and this is the
+            only action; otherwise it carries the current facets into rows. */}
+        <div className="border-t border-(--el-border) px-3 py-2">
+          <button
+            type="button"
+            onClick={editInAdvanced}
+            className="inline-flex items-center gap-1.5 rounded-(--radius-control) px-1 py-0.5 text-[13px] text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          >
+            <FunnelPlus className="h-3.5 w-3.5" aria-hidden />
+            {t('filterEditInAdvanced')}
+          </button>
         </div>
       </Popover.Content>
     </Popover>

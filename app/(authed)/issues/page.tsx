@@ -6,10 +6,15 @@ import { getActiveProject } from '@/lib/projects';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { parsePage, parseSort, parseView, serializeSort } from '@/lib/issues/issueListView';
 import { parseIssueFilter, type IssueFilterParams } from '@/lib/issues/issueListFilter';
+import { parseAdvancedFilterParam } from '@/lib/issues/issueListAdvancedFilter';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
+import { sprintsService } from '@/lib/services/sprintsService';
 import { NoAccessState } from '@/components/projects/NoAccessState';
+import { AdvancedFilterProvider } from './_components/AdvancedFilterContext';
+import { AdvancedFilterSummary } from './_components/AdvancedFilterSummary';
+import { InvalidFilterCallout } from './_components/InvalidFilterCallout';
 import { IssueListToolbar } from './_components/IssueListToolbar';
 import { IssueTreeSection } from './_components/IssueTreeSection';
 import { IssueTreeSkeleton } from './_components/IssueTreeSkeleton';
@@ -82,7 +87,14 @@ export default async function IssuesPage({
   const sp = await searchParams;
   const view = parseView(sp.view);
   const sort = parseSort(sp.sort);
-  const filter = parseIssueFilter(sp);
+  let filter = parseIssueFilter(sp);
+  // The advanced builder's `?filter=v1:` param (Subtask 6.1.4): decoded +
+  // validated ONCE here. A malformed/forged/foreign param is the typed
+  // recoverable state — the callout renders over the UNFILTERED list and the
+  // broken param is nulled before threading, so no navigation re-carries it.
+  const advanced = parseAdvancedFilterParam(filter.advanced);
+  if (advanced.state !== 'active') filter = { ...filter, advanced: null };
+  const ast = advanced.state === 'active' ? advanced.ast : null;
   const page = parsePage(sp.page);
   // The quick-view peek (Subtask 2.5.19) — `?peek=<key>` opens the work item in
   // a modal over the list without leaving it. URL-driven so it's shareable /
@@ -94,7 +106,7 @@ export default async function IssuesPage({
   // BOTH the toolbar and the streamed section — the section then only awaits the
   // issues read (the heavy one) behind the skeleton. The page calls services
   // only (never Prisma) per the 4-layer rule.
-  const [workflow, members] = await Promise.all([
+  const [workflow, members, sprints] = await Promise.all([
     workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
     // Assignable users scoped by access level (6.4.6): private → project members.
     assignableMembersService.list({
@@ -102,60 +114,88 @@ export default async function IssuesPage({
       accessLevel: ctx.project.accessLevel,
       ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
     }),
+    // The builder's sprint value editor (6.1.4) — a project's sprint list is
+    // small by nature (the bounded read its owner ships).
+    sprintsService.listByProject(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    }),
   ]);
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
-          <p className="text-sm text-(--el-text-muted)">
-            {t('allIssuesIn', { project: ctx.project.name })}
-          </p>
-        </div>
-        <IssueListToolbar
-          view={view}
-          sort={sort}
-          filter={filter}
-          statuses={workflow.statuses}
-          members={members}
-        />
-      </header>
+    <AdvancedFilterProvider>
+      <div className="flex flex-col gap-6">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
+            <p className="text-sm text-(--el-text-muted)">
+              {t('allIssuesIn', { project: ctx.project.name })}
+            </p>
+          </div>
+          <IssueListToolbar
+            view={view}
+            sort={sort}
+            filter={filter}
+            ast={ast}
+            statuses={workflow.statuses}
+            members={members}
+            sprints={sprints}
+          />
+        </header>
 
-      <Suspense
-        key={`${view}:${serializeSort(sort)}:${JSON.stringify(filter)}:${page}`}
-        fallback={<IssueTreeSkeleton flat={view === 'list'} />}
-      >
-        <IssueTreeSection
-          projectId={ctx.projectId}
-          workspaceId={ctx.workspaceId}
-          userId={ctx.userId}
-          view={view}
-          sort={sort}
-          filter={filter}
-          page={page}
-          workflow={workflow}
-          members={members}
-        />
-      </Suspense>
+        {/* The invalid `?filter=` recovery callout (6.1.4, mock panel 6) —
+            above the UNFILTERED list, never a crash, never a silent drop. */}
+        {advanced.state === 'invalid' ? (
+          <InvalidFilterCallout view={view} sort={sort} filter={filter} />
+        ) : null}
 
-      {/* Quick-view peek (Subtask 2.5.19) — the modal frame mounts immediately
+        {/* The applied advanced-filter chip readout (6.1.4, mock panel 5) —
+            read-only; any chip reopens the builder. */}
+        {ast !== null ? (
+          <AdvancedFilterSummary
+            ast={ast}
+            statuses={workflow.statuses}
+            members={members}
+            sprints={sprints}
+          />
+        ) : null}
+
+        <Suspense
+          key={`${view}:${serializeSort(sort)}:${JSON.stringify(filter)}:${page}`}
+          fallback={<IssueTreeSkeleton flat={view === 'list'} />}
+        >
+          <IssueTreeSection
+            projectId={ctx.projectId}
+            workspaceId={ctx.workspaceId}
+            userId={ctx.userId}
+            view={view}
+            sort={sort}
+            filter={filter}
+            ast={ast}
+            page={page}
+            workflow={workflow}
+            members={members}
+          />
+        </Suspense>
+
+        {/* Quick-view peek (Subtask 2.5.19) — the modal frame mounts immediately
           when `?peek` is present (so it opens instantly); the item's fields
           stream behind a <Suspense> whose fallback is the loading skeleton. The
           read reuses getIssueDetail (its workspace gate + not-found path), so a
           stale / cross-workspace key renders the not-found state, never a crash. */}
-      {peek ? (
-        <IssueQuickView peekKey={peek}>
-          <Suspense fallback={<IssueQuickViewPanel state="loading" peekKey={peek} />}>
-            <IssueQuickViewContent
-              projectId={ctx.projectId}
-              ctx={{ userId: ctx.userId, workspaceId: ctx.workspaceId }}
-              peekKey={peek}
-              members={members}
-            />
-          </Suspense>
-        </IssueQuickView>
-      ) : null}
-    </div>
+        {peek ? (
+          <IssueQuickView peekKey={peek}>
+            <Suspense fallback={<IssueQuickViewPanel state="loading" peekKey={peek} />}>
+              <IssueQuickViewContent
+                projectId={ctx.projectId}
+                ctx={{ userId: ctx.userId, workspaceId: ctx.workspaceId }}
+                peekKey={peek}
+                members={members}
+              />
+            </Suspense>
+          </IssueQuickView>
+        ) : null}
+      </div>
+    </AdvancedFilterProvider>
   );
 }
