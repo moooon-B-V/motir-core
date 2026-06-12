@@ -1163,7 +1163,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Reports landing pages render their charts at widget-tile proportions — Distribution donut is too small (lost in whitespace); Created-vs-Resolved line chart is too big (fills viewport width, runs off the bottom)',
-        status: 'planned',
+        status: 'in_progress',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 · **Surfaces:** reports landing pages ' +
