@@ -413,6 +413,23 @@ describe('labelsService.resolveByIds — the filter-builder referenced-label rea
       labelsService.resolveByIds(otherTenant.projectIdentifier, ['whatever'], s.memberCtx),
     ).rejects.toThrow(ProjectNotFoundError);
   });
+
+  it('hides a PRIVATE project from a non-member as 404 (browse-gated, not edit-gated)', async () => {
+    const s = await buildScenario();
+    await projectMembersService.setAccessLevel({
+      key: s.fx.projectIdentifier,
+      actorUserId: s.fx.ownerId,
+      ctx: s.fx.ctx,
+      level: 'private',
+    });
+    const outsider = await createTestUser({ email: 'late-resolve@ex.com', name: 'Late Joiner' });
+    await workspacesService.addMember({ userId: outsider.id, workspaceId: s.fx.workspaceId });
+    const outsiderCtx = { userId: outsider.id, workspaceId: s.fx.workspaceId };
+
+    await expect(
+      labelsService.resolveByIds(s.fx.projectIdentifier, ['whatever'], outsiderCtx),
+    ).rejects.toThrow(ProjectNotFoundError);
+  });
 });
 
 describe('labelsService — the permission matrix', () => {
