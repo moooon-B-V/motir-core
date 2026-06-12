@@ -402,8 +402,10 @@ test('the combinator flip widens the set; the zero-results + Clear all states re
   await expect(page.getByText('No work items match this filter')).toBeVisible();
 
   // Flip the combinator to "Match any" → Story OR Bug → the 1 story + 3 bugs.
+  // The Segmented combinator is a labelled group of toggle BUTTONS ("all" /
+  // "any"), not radios.
   await page.getByRole('button', { name: /^Advanced/ }).click();
-  await dialog.getByRole('radio', { name: 'any' }).click();
+  await dialog.getByRole('button', { name: 'any', exact: true }).click();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('status').filter({ hasText: 'match' })).toHaveText(
     '4 work items match',
@@ -424,21 +426,23 @@ test('the facet state upgrades losslessly into builder rows (one-way "Edit in Ad
   await seedRecipe(page, 'upgrade@e2e.test');
 
   await page.goto('/issues?view=list');
-  // Build a quick FACET first: Kind = Bug.
+  // Build a quick FACET first: Kind = Bug → the 3 bugs render (the count-line
+  // status is an ADVANCED-filter element, so it isn't shown for facets alone).
   await page.getByRole('button', { name: 'Filter', exact: true }).click();
   await page.getByRole('listbox', { name: 'Kind' }).getByRole('option', { name: 'Bug' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'match' })).toHaveText(
-    '3 work items match',
-  );
+  await expect(
+    page.getByRole('row').filter({ hasText: 'OAuth callback drops state' }),
+  ).toBeVisible();
+  await expect(page.getByText('Unrelated story')).toHaveCount(0);
 
-  // "Edit in Advanced" carries the facet in as a Kind row — LOSSLESS — and the
-  // builder opens with that row already present.
+  // "Edit in Advanced" (the facet popover footer) carries the facet in as a
+  // Kind row — LOSSLESS — opening the builder with that row already present.
   await page.getByRole('button', { name: 'Edit in Advanced' }).click();
   const dialog = page.getByRole('dialog', { name: 'Advanced filter' });
   await expect(dialog).toBeVisible();
   const row1 = dialog.getByRole('group', { name: 'Condition 1' });
   await expect(row1.getByRole('combobox', { name: 'Field' })).toContainText('Kind');
-  // The kind facet became an AST row but the match set is unchanged.
+  // Now an ADVANCED filter, so the count-line status renders, unchanged at 3.
   await page.keyboard.press('Escape');
   await expect(page).toHaveURL(/filter=v1/);
   await expect(page.getByRole('status').filter({ hasText: 'match' })).toHaveText(
