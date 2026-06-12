@@ -157,6 +157,17 @@ export const STUB_STORIES: PlanStory[] = [
   // normal tree/board/list read; intake (in-app + portal) → promote to
   // backlog/sprint/epic/story (the Linear Triage mirror).
 
+  // 6.11 (Public projects — "open project management") — data/story-6.11.ts.
+  // Added 2026-06-12. A 4th `ProjectAccessLevel` = `public`: any signed-in
+  // Motir account reads the project cross-org, read-only; the only write is
+  // submit-to-triage (6.10) + upvote + comment + dedupe (the Canny shape) +
+  // a public roadmap. Extends 6.4's access model.
+  // 6.12 (Project square — system-level public project directory) —
+  // data/story-6.12.ts. Added 2026-06-12. The cross-org discovery gallery of
+  // ALL public projects (cards + search + category/tag filters + trending/
+  // popular/recent rank tabs, paginated), each linking to its 6.11 public
+  // view. Mirror: GitHub/GitLab Explore.
+
   // ── Epic 7: AI Planning Layer ─────────────────────────────────────────────
   // 7.1 (Core ↔ AI API contract + motir-ai persistence foundation) is fully
   // expanded — data/story-7.1.ts. Added 2026-06-11 (the Epic-7 architecture
