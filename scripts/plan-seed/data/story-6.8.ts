@@ -283,7 +283,7 @@ export const story_6_8: PlanStory = {
       id: '6.8.3',
       title:
         'Design — the editable Details page (`design/projects/details.mock.html`: name, avatar picker, key change + consequence modal, previous keys, gated states)',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 35,
