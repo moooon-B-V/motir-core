@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/Card';
 // component (no state); the sub-line is rebuilt on every URL-driven re-render,
 // so it always tracks the active config.
 //
-// The page is bounded to `mx-auto max-w-3xl` and the body sits in the design's
+// The page is bounded to `mx-auto max-w-[48rem]` and the body sits in the design's
 // `.report-card` (the `Card` primitive). This is load-bearing, not cosmetic:
 // the chart primitives render responsively to their container (the
 // ChartFrame bounded-container contract), so the authed shell's unbounded
@@ -33,8 +33,12 @@ export function ReportPageChrome({
   subLine: string;
   children: ReactNode;
 }) {
+  // Arbitrary `max-w-[48rem]` (768px), NOT `max-w-3xl` — this project's Tailwind
+  // `@theme` clears the named container scale, so `max-w-3xl` collapses the page
+  // to a ~40px column (the same trap documented in
+  // app/tokens/markdown-editor/page.tsx). Use rem arbitrary values.
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4">
+    <div className="mx-auto flex max-w-[48rem] flex-col gap-4">
       <Link
         href="/reports"
         className="inline-flex w-fit items-center gap-1 text-sm text-(--el-text-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
