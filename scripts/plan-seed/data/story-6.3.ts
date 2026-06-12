@@ -405,7 +405,7 @@ export const story_6_3: PlanStory = {
       id: '6.3.4',
       title:
         'Chart primitives — donut + two-series difference/area forms in the 4.6.2 token-aware SVG layer (+ the categorical `--el-chart-*` ramp)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 26,
