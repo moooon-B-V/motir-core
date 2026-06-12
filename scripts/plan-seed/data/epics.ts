@@ -1012,7 +1012,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Automation audit-log tombstone ("item since deleted") fails AA colour-contrast (--el-text-faint)',
-        status: 'in_progress',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 · **Surfaces:** automation run-history / audit ' +
