@@ -1047,4 +1047,31 @@ export const EPICS: EpicMeta[] = [
       'domain + SSL, onboarding, and day-1 admin tools. Most of this is human subtasks ' +
       "running through Motir's own queue. (Formerly Epic 5.)",
   },
+  {
+    id: '9',
+    title: 'Native AI coding (hosted agent execution)',
+    status: 'planned',
+    descriptionMd:
+      'The **third layer of the pipeline made native** — Motir runs the coding agent in a ' +
+      "HOSTED cloud sandbox on the user's behalf. Until now Motir shipped only the **external-" +
+      'agent (BYOK)** form of AI coding (7.6 generates a prompt, the user runs it in their own ' +
+      'agent — locally, optionally in the 7.9.7 sandbox container). This epic adds the hosted ' +
+      'runtime the vision reserved as "a **designed-for extension that augments — not replaces — ' +
+      'the external-agent path**" (MOTIR.md § What Motir is) — previously noted as a decided ' +
+      'follow-up BEYOND the eight planned epics, now planned (2026-06-12, Yue: "plan one step ' +
+      'further — host the container as the coding agent").\n\n' +
+      '**The hosted run mirrors the verified cloud-agent lifecycle** (Devin / Google Jules / ' +
+      'OpenAI Codex cloud / GitHub Copilot coding agent): a dispatched ticket → provision a ' +
+      'container-per-run sandbox → the agent autonomously edits + tests → opens a PR → human ' +
+      'review. Billing is **usage-based**, reusing the Epic-7 credit system: hosted CODING runs ' +
+      'spend tokens and debit the SAME 7.12 credit ledger as planning (one balance covers both).\n\n' +
+      '**Builds entirely on Epic 7 — backward deps only:** the 7.9.7 multi-agent sandbox image ' +
+      '(the hosted image extends it), 7.6 dispatch (a hosted run is a dispatch-target variant), ' +
+      'and 7.12 metering + credits (the token-usage report records an `AgentRun` and debits the ' +
+      'ledger). **Story 9.1** is the hosted-execution foundation — the hosted container + ' +
+      'run-scoped auth (the user is logged in INSIDE the run) + token-usage reporting into the ' +
+      'credit system. Future 9.x stories (named in story-9.1.ts, deferred not forgotten): the ' +
+      'PR review/iteration loop, multi-agent / parallel hosted runs, agent-selection policy, ' +
+      'hosted-run pricing in the Epic-8 billing surface, and security hardening.',
+  },
 ];
