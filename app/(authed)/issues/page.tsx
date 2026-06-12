@@ -18,6 +18,8 @@ import { labelsService } from '@/lib/services/labelsService';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { AdvancedFilterProvider } from './_components/AdvancedFilterContext';
 import { AdvancedFilterSummary } from './_components/AdvancedFilterSummary';
+import { SavedFilterSessionProvider } from './_components/SavedFilterContext';
+import { IssueAppliedFilterBar } from './_components/IssueAppliedFilterBar';
 import { InvalidFilterCallout } from './_components/InvalidFilterCallout';
 import { IssueListToolbar } from './_components/IssueListToolbar';
 import { IssueTreeSection } from './_components/IssueTreeSection';
@@ -66,8 +68,11 @@ export default async function IssuesPage({
   }
 
   // Story 6.4.6 — gate the issue list on canBrowse; a non-browsable active
-  // project renders the no-access state, not the list.
-  const caps = await projectAccessService.getCapabilities(ctx.projectId, {
+  // project renders the no-access state, not the list. The same resolve also
+  // yields the saved-filter share/admin tiers the 6.2.3 [Saved] dropdown +
+  // save dialog gate over (one round-trip — the getSavedFilterCapabilities
+  // shape is canBrowse + canShare + isAdmin).
+  const caps = await projectAccessService.getSavedFilterCapabilities(ctx.projectId, {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
@@ -139,87 +144,106 @@ export default async function IssuesPage({
       labelsService.resolveByIds(ctx.project.identifier, referencedLabelIds, wsCtx),
     ]);
 
+  // The actor's saved-filter tier (Subtask 6.2.3) — passed to the toolbar's
+  // [Saved] dropdown + the applied-filter bar's save dialog.
+  const viewer = { userId: ctx.userId, ...caps };
+
   return (
     <AdvancedFilterProvider>
-      <div className="flex flex-col gap-6">
-        <header className="flex flex-wrap items-end justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
-            <p className="text-sm text-(--el-text-muted)">
-              {t('allIssuesIn', { project: ctx.project.name })}
-            </p>
-          </div>
-          <IssueListToolbar
-            view={view}
-            sort={sort}
-            filter={filter}
-            ast={ast}
-            statuses={workflow.statuses}
-            members={members}
-            sprints={sprints}
-            customFields={customFields}
-            components={components}
-            referencedLabels={referencedLabels}
-            projectKey={ctx.project.identifier}
-          />
-        </header>
+      <SavedFilterSessionProvider>
+        <div className="flex flex-col gap-6">
+          <header className="flex flex-wrap items-end justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
+              <p className="text-sm text-(--el-text-muted)">
+                {t('allIssuesIn', { project: ctx.project.name })}
+              </p>
+            </div>
+            <IssueListToolbar
+              view={view}
+              sort={sort}
+              filter={filter}
+              ast={ast}
+              statuses={workflow.statuses}
+              members={members}
+              sprints={sprints}
+              customFields={customFields}
+              components={components}
+              referencedLabels={referencedLabels}
+              projectKey={ctx.project.identifier}
+              viewer={viewer}
+            />
+          </header>
 
-        {/* The invalid `?filter=` recovery callout (6.1.4, mock panel 6) —
+          {/* The invalid `?filter=` recovery callout (6.1.4, mock panel 6) —
             above the UNFILTERED list, never a crash, never a silent drop. */}
-        {advanced.state === 'invalid' ? (
-          <InvalidFilterCallout view={view} sort={sort} filter={filter} />
-        ) : null}
+          {advanced.state === 'invalid' ? (
+            <InvalidFilterCallout view={view} sort={sort} filter={filter} />
+          ) : null}
 
-        {/* The applied advanced-filter chip readout (6.1.4, mock panel 5) —
-            read-only; any chip reopens the builder. */}
-        {ast !== null ? (
-          <AdvancedFilterSummary
-            ast={ast}
-            statuses={workflow.statuses}
-            members={members}
-            sprints={sprints}
-            customFields={customFields}
-            components={components}
-            referencedLabels={referencedLabels}
-          />
-        ) : null}
-
-        <Suspense
-          key={`${view}:${serializeSort(sort)}:${JSON.stringify(filter)}:${page}`}
-          fallback={<IssueTreeSkeleton flat={view === 'list'} />}
-        >
-          <IssueTreeSection
-            projectId={ctx.projectId}
-            workspaceId={ctx.workspaceId}
-            userId={ctx.userId}
+          {/* The applied-filter bar (6.2.3, mock panel 0) — the saved-filter name
+            chip + dirty state + Save / Save-as / Discard, prepended to the
+            6.1.4 condition-chip readout (panel 5, read-only; any chip reopens
+            the builder). The bar renders nothing when no filter is applied and
+            the builder is empty. */}
+          <IssueAppliedFilterBar
+            projectKey={ctx.project.identifier}
+            viewer={viewer}
             view={view}
             sort={sort}
             filter={filter}
             ast={ast}
-            page={page}
-            workflow={workflow}
-            members={members}
-          />
-        </Suspense>
+          >
+            {ast !== null ? (
+              <AdvancedFilterSummary
+                ast={ast}
+                statuses={workflow.statuses}
+                members={members}
+                sprints={sprints}
+                customFields={customFields}
+                components={components}
+                referencedLabels={referencedLabels}
+              />
+            ) : null}
+          </IssueAppliedFilterBar>
 
-        {/* Quick-view peek (Subtask 2.5.19) — the modal frame mounts immediately
+          <Suspense
+            key={`${view}:${serializeSort(sort)}:${JSON.stringify(filter)}:${page}`}
+            fallback={<IssueTreeSkeleton flat={view === 'list'} />}
+          >
+            <IssueTreeSection
+              projectId={ctx.projectId}
+              workspaceId={ctx.workspaceId}
+              userId={ctx.userId}
+              view={view}
+              sort={sort}
+              filter={filter}
+              ast={ast}
+              page={page}
+              workflow={workflow}
+              members={members}
+            />
+          </Suspense>
+
+          {/* Quick-view peek (Subtask 2.5.19) — the modal frame mounts immediately
           when `?peek` is present (so it opens instantly); the item's fields
           stream behind a <Suspense> whose fallback is the loading skeleton. The
           read reuses getIssueDetail (its workspace gate + not-found path), so a
           stale / cross-workspace key renders the not-found state, never a crash. */}
-        {peek ? (
-          <IssueQuickView peekKey={peek}>
-            <Suspense fallback={<IssueQuickViewPanel state="loading" peekKey={peek} />}>
-              <IssueQuickViewContent
-                projectId={ctx.projectId}
-                ctx={{ userId: ctx.userId, workspaceId: ctx.workspaceId }}
-                peekKey={peek}
-                members={members}
-              />
-            </Suspense>
-          </IssueQuickView>
-        ) : null}
-      </div>
+          {peek ? (
+            <IssueQuickView peekKey={peek}>
+              <Suspense fallback={<IssueQuickViewPanel state="loading" peekKey={peek} />}>
+                <IssueQuickViewContent
+                  projectId={ctx.projectId}
+                  ctx={{ userId: ctx.userId, workspaceId: ctx.workspaceId }}
+                  peekKey={peek}
+                  members={members}
+                />
+              </Suspense>
+            </IssueQuickView>
+          ) : null}
+        </div>
+      </SavedFilterSessionProvider>
     </AdvancedFilterProvider>
   );
 }

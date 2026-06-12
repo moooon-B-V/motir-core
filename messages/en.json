@@ -1752,6 +1752,48 @@
       "errorTitle": "Couldn't delete the filter",
       "errorGeneric": "Something went wrong. Please try again."
     },
+    "dropdown": {
+      "label": "Saved",
+      "trigger": "Saved filters — apply, star, or search",
+      "searchLabel": "Find filters",
+      "searchPlaceholder": "Find filters…",
+      "starred": "Starred",
+      "mine": "My filters",
+      "project": "Project filters",
+      "defaults": "Defaults",
+      "emptyStarred": "No starred filters yet — star a filter to pin it here.",
+      "emptyMine": "You haven't saved any filters yet.",
+      "emptyProject": "No filters shared with this project yet.",
+      "viewAll": "View all filters",
+      "error": "Couldn't load filters. Please try again."
+    },
+    "save": {
+      "title": "Save filter",
+      "nameLabel": "Name",
+      "namePlaceholder": "Filter name",
+      "descriptionLabel": "Description (optional)",
+      "descriptionPlaceholder": "What is this filter for?",
+      "visibilityLegend": "Who can see this filter?",
+      "duplicateName": "A filter named “{name}” already exists in this project.",
+      "submit": "Save filter",
+      "cancel": "Cancel",
+      "savedToast": "Filter saved",
+      "errorTitle": "Couldn't save the filter",
+      "errorGeneric": "Something went wrong. Please try again."
+    },
+    "applied": {
+      "barAria": "Applied filter",
+      "edited": "Edited",
+      "save": "Save",
+      "saveAs": "Save as",
+      "discard": "Discard changes",
+      "savedToast": "Filter updated",
+      "overwriteError": "Couldn't save your changes",
+      "nonOwnerTooltip": "Only the owner ({owner}) can overwrite this filter — Save as creates your own copy.",
+      "chipAriaShared": "Applied filter: {name} (shared with project) — open saved filters",
+      "chipAriaPrivate": "Applied filter: {name} (private) — open saved filters",
+      "chipAriaBuiltin": "Applied filter: {name} (built-in) — open saved filters"
+    },
     "subscribeAction": "Subscribe…",
     "subscribe": {
       "title": "Subscribe to “{name}”",
