@@ -19,6 +19,10 @@ import {
   watcherTransitionNotificationEmail,
   type WatcherTransitionNotificationEmailProps,
 } from '@/lib/emailTemplates/watcherTransitionNotification';
+import {
+  filterSubscriptionEmail,
+  type FilterSubscriptionEmailProps,
+} from '@/lib/emailTemplates/filterSubscription';
 
 // The execution-side email service (Story 1.6 · Subtask 1.6.3). This is the
 // ONE place a transactional email is rendered and handed to the provider:
@@ -55,7 +59,8 @@ export type TransactionalEmail =
       to: string;
       template: 'watcher-transition-notification';
       data: WatcherTransitionNotificationEmailProps;
-    };
+    }
+  | { to: string; template: 'filter-subscription'; data: FilterSubscriptionEmailProps };
 
 /** Every template discriminant — handy for exhaustiveness + tests. */
 export type EmailTemplate = TransactionalEmail['template'];
@@ -85,6 +90,8 @@ async function renderTemplate(message: TransactionalEmail) {
       return watcherCommentNotificationEmail(message.data);
     case 'watcher-transition-notification':
       return watcherTransitionNotificationEmail(message.data);
+    case 'filter-subscription':
+      return filterSubscriptionEmail(message.data);
     default: {
       // Exhaustiveness guard: a new template arm without a case here is a
       // compile error, not a silent fall-through.

@@ -4,6 +4,9 @@ import type { FilterAst } from '@/lib/filters/ast';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
+import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
+import type { ComponentDto } from '@/lib/dto/components';
+import type { LabelDto } from '@/lib/dto/labels';
 import type { Viewer } from '@/app/(authed)/filters/_components/savedFiltersClient';
 import { IssueFilterBar } from './IssueFilterBar';
 import { IssueAdvancedFilter } from './IssueAdvancedFilter';
@@ -41,9 +44,16 @@ export interface IssueListToolbarProps {
   statuses: WorkflowStatusDto[];
   members: WorkspaceMemberDTO[];
   sprints: SprintDto[];
-  /** The project identifier + the actor's saved-filter tier (Subtask 6.2.3) —
-   * powers the [Saved] dropdown's reads and per-row gating. */
+  /** Epic-5 builder data (Subtask 6.1.5): the project's custom-field
+   * definitions, its components, and the active AST's referenced labels. */
+  customFields: CustomFieldDefinitionDTO[];
+  components: ComponentDto[];
+  referencedLabels: LabelDto[];
+  /** Project identifier — the Label editor's autocomplete read (6.1.5) AND
+   * the [Saved] dropdown's reads (6.2.3). */
   projectKey: string;
+  /** The actor's saved-filter tier (Subtask 6.2.3) — powers the [Saved]
+   * dropdown's reads and per-row gating. */
   viewer: Viewer;
 }
 
@@ -55,6 +65,9 @@ export function IssueListToolbar({
   statuses,
   members,
   sprints,
+  customFields,
+  components,
+  referencedLabels,
   projectKey,
   viewer,
 }: IssueListToolbarProps) {
@@ -76,6 +89,10 @@ export function IssueListToolbar({
         statuses={statuses}
         members={members}
         sprints={sprints}
+        customFields={customFields}
+        components={components}
+        referencedLabels={referencedLabels}
+        projectKey={projectKey}
       />
       <SavedFilterDropdown
         projectKey={projectKey}

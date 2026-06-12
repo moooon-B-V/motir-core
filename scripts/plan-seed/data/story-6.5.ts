@@ -207,7 +207,7 @@ export const story_6_5: PlanStory = {
       id: '6.5.2',
       title:
         'Settings-nav registry + area layout — re-house Workflow / Boards / Estimation / Members / Fields / Components under one chrome',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,

@@ -315,4 +315,33 @@ export const labelsService = {
     const rows = await labelRepository.searchByPrefix(project.id, q.trim(), LABEL_SEARCH_LIMIT);
     return rows.map(toLabelDto);
   },
+
+  /**
+   * Resolve a BOUNDED set of label ids to their display DTOs (Subtask 6.1.5) —
+   * the filter builder's referenced-label read: a shared/saved `?filter=` URL
+   * carries label ids, not names, so the builder resolves them to render the
+   * chips with real names + the name-hash tint on first paint. Reads ONLY the
+   * referenced ids (never load-all; finding #57), project-scoped — an id that
+   * no longer exists (a deleted label) simply isn't returned, which the
+   * builder reads as the stale "unknown value" state (matches nothing, the 6.2
+   * saved-filter durability rule). Same view gate as {@link searchLabels}.
+   */
+  async resolveByIds(projectKey: string, ids: string[], ctx: ServiceContext): Promise<LabelDto[]> {
+    if (ids.length === 0) return [];
+    const project = await projectRepository.findByIdentifier(
+      ctx.workspaceId,
+      projectKey.trim().toUpperCase(),
+    );
+    if (!project) throw new ProjectNotFoundError(projectKey);
+    try {
+      await projectAccessService.assertCanBrowse(project.id, ctx);
+    } catch (err) {
+      if (err instanceof ProjectAccessDeniedError && err.kind === 'browse') {
+        throw new ProjectNotFoundError(projectKey);
+      }
+      throw err;
+    }
+    const rows = await labelRepository.findByIds([...new Set(ids)], project.id);
+    return rows.map(toLabelDto);
+  },
 };

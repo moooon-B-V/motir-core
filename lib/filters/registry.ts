@@ -286,18 +286,31 @@ function valueProblem(
 }
 
 /**
- * Validate one condition against the registry — typed throws on an unknown
- * field, an operator outside the field's set, or a value that fails the
- * (field, operator) arity. Returns the field def so compile paths chain off
- * one lookup.
+ * Validate a condition against an ALREADY-RESOLVED field def — the operator
+ * (must be in the def's set) and the value arity. This is the half of
+ * `validateFilterCondition` that runs once the def is in hand; the builder's
+ * live-apply gate reuses it for the per-project DYNAMIC `cf:<id>` defs (which
+ * `filterFieldDef` can't look up), so a custom-field row validates against its
+ * own operator set exactly like a built-in one.
  */
-export function validateFilterCondition(condition: FilterCondition): FilterFieldDef {
-  const def = filterFieldDef(condition.field);
+export function validateResolvedCondition(def: FilterFieldDef, condition: FilterCondition): void {
   if (!def.operators.includes(condition.operator)) {
     throw new UnknownFilterOperatorError(condition.field, condition.operator);
   }
   const problem = valueProblem(def, condition.operator, condition.value);
   if (problem) throw new InvalidFilterValueError(condition.field, condition.operator, problem);
+}
+
+/**
+ * Validate one condition against the registry — typed throws on an unknown
+ * field, an operator outside the field's set, or a value that fails the
+ * (field, operator) arity. Returns the field def so compile paths chain off
+ * one lookup. (Built-in fields only — `cf:<id>` ids go through
+ * {@link validateResolvedCondition} with the dynamic def.)
+ */
+export function validateFilterCondition(condition: FilterCondition): FilterFieldDef {
+  const def = filterFieldDef(condition.field);
+  validateResolvedCondition(def, condition);
   return def;
 }
 

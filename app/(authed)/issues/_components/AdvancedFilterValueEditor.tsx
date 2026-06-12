@@ -1,41 +1,53 @@
 'use client';
 
-import { useMemo, useState, type ComponentType } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { useTranslations } from 'next-intl';
-import { UserX } from 'lucide-react';
+import { Component as ComponentIcon, TriangleAlert, UserX } from 'lucide-react';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { MultiSelectPicker, type MultiSelectOption } from '@/components/ui/MultiSelectPicker';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { ISSUE_TYPES, type IssueType } from '@/lib/issues/parentRules';
 import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import { DEFAULT_STATUS_KEYS } from '@/lib/workflows/defaultWorkflow';
-import type { FilterConditionValue } from '@/lib/filters/ast';
+import { labelTint } from '@/lib/labels/labelTint';
+import { customFieldIdOfFilterField, type FilterConditionValue } from '@/lib/filters/ast';
 import type { FilterFieldDef, FilterValueEditorKind } from '@/lib/filters/registry';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
+import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
+import type { ComponentDto } from '@/lib/dto/components';
+import type { LabelDto } from '@/lib/dto/labels';
 import { cn } from '@/lib/utils/cn';
 
-// The per-operator VALUE editor of an advanced-filter condition row (Subtask
-// 6.1.4), per design/work-items/filter-builder.mock.html panel 1 — one editor
-// per `FilterValueEditorKind` the registry resolves for the row's (field,
-// operator) pair, each the SHIPPED primitive (no new size variants):
+// The per-operator VALUE editor of an advanced-filter condition row (Subtasks
+// 6.1.4 + 6.1.5), per design/work-items/filter-builder.mock.html panels 1 + 4
+// — one editor per `FilterValueEditorKind` the registry resolves for the row's
+// (field, operator) pair, each the SHIPPED primitive (no new size variants):
 //
 //   kind/status/priority/member/sprint-select → MultiSelectPicker (5.4.8),
 //     options drawn with the same glyph vocabulary as the 2.5.4 facet rows
 //     (IssueTypeIcon hue, status dot, PRIORITY_META direction icon, member
 //     avatar); the assignee list puts the Unassigned sentinel FIRST and the
 //     sprint list Backlog first (the registry's empty-bucket sentinels);
+//   label-select → MultiSelectPicker fed by the BOUNDED label autocomplete
+//     (debounced /api/projects/[key]/labels, finding #57), name-hash tinted
+//     chips (the 5.4 less-enterprise deviation);
+//   component-select → MultiSelectPicker over the project's components
+//     (preloaded — bounded), neutral chips + the component glyph;
+//   cf-option-select → the custom field's managed options, archived ones kept
+//     for historical matching with the 5.3.5 "(archived)" mark;
 //   text / number / days → the input grammar (`--height-input`), days with
 //     the "days" unit suffix; number/days hold a local raw string so partial
 //     keystrokes don't fight the parsed value;
 //   date → the shipped DatePicker trigger; date-range → two, joined by "and";
 //   none (is empty / is not empty) → the value slot COLLAPSES (renders null).
 //
-// Epic-5 editor kinds (label / component / CF-option pickers) are Subtask
-// 6.1.5's rows — a URL-carried condition renders the degraded read-only count
-// box until those land (the row's pickers are disabled by the caller).
+// STALE referents (Subtask 6.1.5): a selected id the builder flagged stale
+// (`staleValueIds` — a deleted option/label/component in a shared/saved URL)
+// renders the designed "Unknown value" chip (peach tint + warning glyph); the
+// condition matches nothing server-side and the row shows the per-row notice.
 
 const PRIORITIES: readonly WorkItemPriorityDto[] = ['highest', 'high', 'medium', 'low', 'lowest'];
 
@@ -98,6 +110,14 @@ function UnassignedGlyph({ className }: { className?: string }) {
       <UserX className="h-[70%] w-[70%]" aria-hidden />
     </span>
   );
+}
+
+function ComponentGlyph({ className }: { className?: string }) {
+  return <ComponentIcon className={className} aria-hidden />;
+}
+
+function StaleGlyph({ className }: { className?: string }) {
+  return <TriangleAlert className={className} aria-hidden />;
 }
 
 function filterByQuery(options: MultiSelectOption[], query: string): MultiSelectOption[] {
@@ -163,6 +183,22 @@ function NumberValueInput({
   );
 }
 
+/** Map a row's selected ids to chips against a known-options index, replacing
+ * any id the builder flagged stale with the designed "Unknown value" chip and
+ * falling back to the raw id for an unknown-but-open id (the 2.5.4 rule — a
+ * deleted member/sprint just renders its id and matches nothing). */
+function resolveChipValues(
+  ids: string[],
+  optionsById: Map<string, MultiSelectOption>,
+  staleValueIds: ReadonlySet<string>,
+  staleLabel: string,
+): MultiSelectOption[] {
+  return ids.map((id) => {
+    if (staleValueIds.has(id)) return { id, label: staleLabel, tint: 'peach', glyph: StaleGlyph };
+    return optionsById.get(id) ?? { id, label: id };
+  });
+}
+
 export interface AdvancedFilterValueEditorProps {
   def: FilterFieldDef;
   editorKind: FilterValueEditorKind;
@@ -175,10 +211,122 @@ export interface AdvancedFilterValueEditorProps {
   statuses: WorkflowStatusDto[];
   members: WorkspaceMemberDTO[];
   sprints: SprintDto[];
+  /** The project's custom-field definitions (their managed options feed the
+   * `cf-option-select` editor) — Subtask 6.1.5. */
+  customFields: CustomFieldDefinitionDTO[];
+  /** The project's components (the `component-select` editor's bounded set). */
+  components: ComponentDto[];
+  /** The active filter's referenced labels, resolved to names server-side —
+   * seeds the `label-select` chips on first paint (the autocomplete window
+   * fills in the rest as the user types). */
+  referencedLabels: LabelDto[];
+  /** Project identifier — the label editor's debounced autocomplete read. */
+  projectKey: string;
+  /** Ids in this row's value the builder determined are STALE (deleted
+   * referents) — rendered as the "Unknown value" chip. */
+  staleValueIds: ReadonlySet<string>;
   disabled?: boolean;
   /** Extra classes for the editor's BORDERED control — the row passes the
    * dashed pending treatment through here (mock panel 3). */
   className?: string;
+}
+
+const LABEL_SEARCH_DEBOUNCE_MS = 200;
+
+/** The label value editor (Subtask 6.1.5) — a MultiSelectPicker over the
+ * BOUNDED label autocomplete (debounced fetch, finding #57), name-hash tinted
+ * chips. Keeps a cache of every label it has seen (the server-resolved
+ * referenced set + each autocomplete window) so a selected chip keeps its name
+ * + tint even after the query that surfaced it changes. */
+function LabelValueEditor({
+  value,
+  onChange,
+  valuesAria,
+  projectKey,
+  referencedLabels,
+  staleValueIds,
+  disabled,
+  className,
+}: {
+  value: FilterConditionValue | null;
+  onChange: (value: FilterConditionValue | null) => void;
+  valuesAria: string;
+  projectKey: string;
+  referencedLabels: LabelDto[];
+  staleValueIds: ReadonlySet<string>;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const t = useTranslations('issueViews');
+  const [query, setQuery] = useState('');
+  const [windowLabels, setWindowLabels] = useState<LabelDto[]>([]);
+  // The name cache — seeded from the server-resolved referenced labels, grown
+  // by every autocomplete window so a picked chip keeps its name + tint even
+  // after the query that surfaced it changes. State (not a ref) so reads stay
+  // render-safe and a new window re-renders the chips.
+  const [cache, setCache] = useState<Map<string, LabelDto>>(
+    () => new Map(referencedLabels.map((l) => [l.id, l])),
+  );
+  // Drops a stale autocomplete response that resolves after a newer one.
+  const fetchSeq = useRef(0);
+
+  useEffect(() => {
+    const seq = ++fetchSeq.current;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/projects/${encodeURIComponent(projectKey)}/labels?q=${encodeURIComponent(query.trim())}`,
+        );
+        if (!res.ok) return;
+        const body = (await res.json()) as { labels: LabelDto[] };
+        if (seq !== fetchSeq.current) return;
+        setWindowLabels(body.labels);
+        setCache((prev) => {
+          const next = new Map(prev);
+          for (const l of body.labels) next.set(l.id, l);
+          return next;
+        });
+      } catch {
+        // A failed window just leaves the previous one; the next keystroke retries.
+      }
+    }, LABEL_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [query, projectKey]);
+
+  const ids = Array.isArray(value) ? value : [];
+  const toOption = (l: LabelDto): MultiSelectOption => ({
+    id: l.id,
+    label: l.name,
+    tint: labelTint(l.name),
+  });
+  const optionsById = new Map<string, MultiSelectOption>(
+    [...cache.values()].map((l) => [l.id, toOption(l)]),
+  );
+  const values = resolveChipValues(ids, optionsById, staleValueIds, t('advancedStaleValue'));
+  const options = filterByQuery(windowLabels.map(toOption), query);
+
+  const toggle = (option: MultiSelectOption) => {
+    const next = ids.includes(option.id)
+      ? ids.filter((id) => id !== option.id)
+      : [...ids, option.id];
+    onChange(next.length > 0 ? next : null);
+  };
+  return (
+    <MultiSelectPicker
+      values={values}
+      options={options}
+      onToggle={toggle}
+      onRemove={toggle}
+      query={query}
+      onQueryChange={setQuery}
+      label={valuesAria}
+      placeholder={t('advancedAddValuePlaceholder')}
+      removeLabel={(label) => t('advancedRemoveValue', { value: label })}
+      emptyText={t('advancedNoMatches')}
+      disabled={disabled}
+      className={className}
+    />
+  );
 }
 
 export function AdvancedFilterValueEditor({
@@ -190,6 +338,11 @@ export function AdvancedFilterValueEditor({
   statuses,
   members,
   sprints,
+  customFields,
+  components,
+  referencedLabels,
+  projectKey,
+  staleValueIds,
   disabled,
   className,
 }: AdvancedFilterValueEditorProps) {
@@ -198,6 +351,13 @@ export function AdvancedFilterValueEditor({
   const tStatus = useTranslations('labels.defaultStatus');
   const tPriority = useTranslations('labels.priority');
   const [query, setQuery] = useState('');
+
+  // The custom field this row filters on (for cf-option-select) — resolved
+  // from the dynamic def's marker; its managed options feed the editor.
+  const customFieldId = customFieldIdOfFilterField(def.id);
+  const customFieldDef = customFieldId
+    ? customFields.find((f) => f.id === customFieldId)
+    : undefined;
 
   const enumOptions = useMemo<MultiSelectOption[]>(() => {
     switch (editorKind) {
@@ -236,10 +396,30 @@ export function AdvancedFilterValueEditor({
           ? [{ id: def.emptySentinel, label: t('advancedBacklog') }, ...options]
           : options;
       }
+      case 'component-select':
+        return components.map((c) => ({ id: c.id, label: c.name, glyph: ComponentGlyph }));
+      case 'cf-option-select':
+        // Managed options, archived kept for historical matching (5.3.5 mark).
+        return (customFieldDef?.options ?? []).map((o) => ({
+          id: o.id,
+          label: o.archived ? t('advancedArchivedOption', { label: o.label }) : o.label,
+        }));
       default:
         return [];
     }
-  }, [editorKind, def.emptySentinel, statuses, members, sprints, t, tType, tStatus, tPriority]);
+  }, [
+    editorKind,
+    def.emptySentinel,
+    statuses,
+    members,
+    sprints,
+    components,
+    customFieldDef,
+    t,
+    tType,
+    tStatus,
+    tPriority,
+  ]);
 
   const valuesAria = t('advancedValuesAria', { field: fieldLabel });
 
@@ -248,17 +428,31 @@ export function AdvancedFilterValueEditor({
       // is empty / is not empty — the value slot collapses (mock panel 1).
       return <div />;
 
+    case 'label-select':
+      // The bounded autocomplete editor owns its own fetch/cache state.
+      return (
+        <LabelValueEditor
+          value={value}
+          onChange={onChange}
+          valuesAria={valuesAria}
+          projectKey={projectKey}
+          referencedLabels={referencedLabels}
+          staleValueIds={staleValueIds}
+          disabled={disabled}
+          className={className}
+        />
+      );
+
     case 'kind-select':
     case 'status-select':
     case 'priority-select':
     case 'member-select':
-    case 'sprint-select': {
+    case 'sprint-select':
+    case 'component-select':
+    case 'cf-option-select': {
       const ids = Array.isArray(value) ? value : [];
-      const byId = new Map(enumOptions.map((o) => [o.id, o]));
-      // An id with no option (a deleted member/sprint in a shared URL) keeps
-      // its chip with the raw id label — removable, matches nothing (the
-      // 2.5.4 open-id rule; the designed stale grammar lands with 6.1.5).
-      const values = ids.map((id) => byId.get(id) ?? { id, label: id });
+      const optionsById = new Map(enumOptions.map((o) => [o.id, o]));
+      const values = resolveChipValues(ids, optionsById, staleValueIds, t('advancedStaleValue'));
       const toggle = (option: MultiSelectOption) => {
         const next = ids.includes(option.id)
           ? ids.filter((id) => id !== option.id)
@@ -356,25 +550,6 @@ export function AdvancedFilterValueEditor({
             disabled={disabled}
             className={className}
           />
-        </div>
-      );
-    }
-
-    // The Epic-5 editors (label / component / CF options) are Subtask 6.1.5's
-    // rows — a shared-URL condition renders read-only until they land (it
-    // still filters through the shipped 6.1.2 compile path).
-    case 'label-select':
-    case 'component-select':
-    case 'cf-option-select': {
-      const count = Array.isArray(value) ? value.length : 0;
-      return (
-        <div
-          className="flex min-h-(--height-input) w-full items-center gap-1.5 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
-          aria-label={valuesAria}
-        >
-          <span className="inline-flex items-center rounded-(--radius-badge) border border-(--el-border) bg-(--el-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-secondary)">
-            {t('advancedValueCount', { count })}
-          </span>
         </div>
       );
     }

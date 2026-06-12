@@ -370,6 +370,68 @@ describe('labelsService.searchLabels — the bounded autocomplete', () => {
   });
 });
 
+describe('labelsService.resolveByIds — the filter-builder referenced-label read (6.1.5)', () => {
+  it('resolves the referenced ids to display DTOs; a deleted id is simply absent (stale)', async () => {
+    const s = await buildScenario();
+    const labels = await labelsService.setLabels(s.issue.id, ['perf-q3', 'api'], s.memberCtx);
+    const perf = labels.find((l) => l.name === 'perf-q3')!;
+    const api = labels.find((l) => l.name === 'api')!;
+
+    const resolved = await labelsService.resolveByIds(
+      s.fx.projectIdentifier,
+      [perf.id, 'lbl-deleted', api.id],
+      s.memberCtx,
+    );
+    // only the surviving ids come back — the missing one is the builder's
+    // stale "unknown value" (it's absent, never an error).
+    expect(resolved.map((l) => l.name).sort()).toEqual(['api', 'perf-q3']);
+  });
+
+  it('short-circuits an empty id list without a project read (the bounded guard)', async () => {
+    const s = await buildScenario();
+    expect(await labelsService.resolveByIds(s.fx.projectIdentifier, [], s.memberCtx)).toEqual([]);
+  });
+
+  it('is project-scoped — another project’s label id never resolves', async () => {
+    const s = await buildScenario();
+    const otherTenant = await makeWorkItemFixture({ name: 'Globex', identifier: 'GLX' });
+    const otherIssue = await createTestWorkItem(otherTenant, { kind: 'task', title: 'Theirs' });
+    const theirs = await labelsService.setLabels(otherIssue.id, ['leaky'], otherTenant.ctx);
+
+    const resolved = await labelsService.resolveByIds(
+      s.fx.projectIdentifier,
+      [theirs[0]!.id],
+      s.memberCtx,
+    );
+    expect(resolved).toEqual([]);
+  });
+
+  it('hides a cross-tenant project key as 404 (no existence leak)', async () => {
+    const s = await buildScenario();
+    const otherTenant = await makeWorkItemFixture({ name: 'Globex', identifier: 'GLX' });
+    await expect(
+      labelsService.resolveByIds(otherTenant.projectIdentifier, ['whatever'], s.memberCtx),
+    ).rejects.toThrow(ProjectNotFoundError);
+  });
+
+  it('hides a PRIVATE project from a non-member as 404 (browse-gated, not edit-gated)', async () => {
+    const s = await buildScenario();
+    await projectMembersService.setAccessLevel({
+      key: s.fx.projectIdentifier,
+      actorUserId: s.fx.ownerId,
+      ctx: s.fx.ctx,
+      level: 'private',
+    });
+    const outsider = await createTestUser({ email: 'late-resolve@ex.com', name: 'Late Joiner' });
+    await workspacesService.addMember({ userId: outsider.id, workspaceId: s.fx.workspaceId });
+    const outsiderCtx = { userId: outsider.id, workspaceId: s.fx.workspaceId };
+
+    await expect(
+      labelsService.resolveByIds(s.fx.projectIdentifier, ['whatever'], outsiderCtx),
+    ).rejects.toThrow(ProjectNotFoundError);
+  });
+});
+
 describe('labelsService — the permission matrix', () => {
   it('rejects every write from a read-only viewer with the typed edit denial (403)', async () => {
     const s = await buildScenario();

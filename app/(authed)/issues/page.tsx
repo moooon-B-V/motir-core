@@ -7,10 +7,14 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { parsePage, parseSort, parseView, serializeSort } from '@/lib/issues/issueListView';
 import { parseIssueFilter, type IssueFilterParams } from '@/lib/issues/issueListFilter';
 import { parseAdvancedFilterParam } from '@/lib/issues/issueListAdvancedFilter';
+import { collectFilterReferentIds } from '@/lib/filters/registry';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { sprintsService } from '@/lib/services/sprintsService';
+import { customFieldsService } from '@/lib/services/customFieldsService';
+import { componentsService } from '@/lib/services/componentsService';
+import { labelsService } from '@/lib/services/labelsService';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { AdvancedFilterProvider } from './_components/AdvancedFilterContext';
 import { AdvancedFilterSummary } from './_components/AdvancedFilterSummary';
@@ -111,21 +115,34 @@ export default async function IssuesPage({
   // BOTH the toolbar and the streamed section — the section then only awaits the
   // issues read (the heavy one) behind the skeleton. The page calls services
   // only (never Prisma) per the 4-layer rule.
-  const [workflow, members, sprints] = await Promise.all([
-    workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
-    // Assignable users scoped by access level (6.4.6): private → project members.
-    assignableMembersService.list({
-      projectId: ctx.projectId,
-      accessLevel: ctx.project.accessLevel,
-      ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
-    }),
-    // The builder's sprint value editor (6.1.4) — a project's sprint list is
-    // small by nature (the bounded read its owner ships).
-    sprintsService.listByProject(ctx.projectId, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    }),
-  ]);
+  // The advanced builder's Epic-5 value editors (Subtask 6.1.5) need the
+  // project's custom-field definitions + components (both BOUNDED reads — the
+  // field cap is 50, components are few) and, for a shared/saved URL, the
+  // referenced labels resolved to names (the ONLY ids the URL carries — never
+  // load-all; finding #57). The label resolve is skipped when the AST carries
+  // no label condition. The page calls services only (never Prisma).
+  const referencedLabelIds = ast ? collectFilterReferentIds(ast).labelIds : [];
+  const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  const [workflow, members, sprints, customFields, components, referencedLabels] =
+    await Promise.all([
+      workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
+      // Assignable users scoped by access level (6.4.6): private → project members.
+      assignableMembersService.list({
+        projectId: ctx.projectId,
+        accessLevel: ctx.project.accessLevel,
+        ctx: wsCtx,
+      }),
+      // The builder's sprint value editor (6.1.4) — a project's sprint list is
+      // small by nature (the bounded read its owner ships).
+      sprintsService.listByProject(ctx.projectId, wsCtx),
+      customFieldsService.listFields({
+        key: ctx.project.identifier,
+        actorUserId: ctx.userId,
+        ctx: wsCtx,
+      }),
+      componentsService.listComponents(ctx.project.identifier, wsCtx),
+      labelsService.resolveByIds(ctx.project.identifier, referencedLabelIds, wsCtx),
+    ]);
 
   // The actor's saved-filter tier (Subtask 6.2.3) — passed to the toolbar's
   // [Saved] dropdown + the applied-filter bar's save dialog.
@@ -150,6 +167,9 @@ export default async function IssuesPage({
               statuses={workflow.statuses}
               members={members}
               sprints={sprints}
+              customFields={customFields}
+              components={components}
+              referencedLabels={referencedLabels}
               projectKey={ctx.project.identifier}
               viewer={viewer}
             />
@@ -180,6 +200,9 @@ export default async function IssuesPage({
                 statuses={workflow.statuses}
                 members={members}
                 sprints={sprints}
+                customFields={customFields}
+                components={components}
+                referencedLabels={referencedLabels}
               />
             ) : null}
           </IssueAppliedFilterBar>
