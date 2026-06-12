@@ -234,6 +234,17 @@ export const STUB_STORIES: PlanStory[] = [
   // index (7.5) → AUDIT + convention approve (7.14, a hard gate) → discovery
   // (7.2) → code-aware generate (7.3+7.5.6) → review/approve.
 
+  // 7.17 (Issue importer — Jira/Linear/GitHub/CSV → work items) — data/story-7.17.ts.
+  // 7.18 (WF3: BYOK + codebase + import) — data/story-7.18.ts.
+  // 9.3 (Hosted execution layer — repo provisioning + scaffold + starter library +
+  //   GitHub handoff) — data/story-9.3.ts.
+  // 9.4 (WF4: hosted + fresh) / 9.5 (WF5: hosted + codebase) / 9.6 (WF6: hosted +
+  //   codebase + import) — data/story-9.4.ts / 9.5.ts / 9.6.ts. Added 2026-06-12:
+  //   the 6-workflow matrix (3 planning states × BYOK[Epic 7] / hosted[Epic 9]).
+  //   7.17 + 9.3 are the two new capability clusters; the WF stories are thin
+  //   orchestration + a manual-test each. Defaults: scaffold-then-build, curated
+  //   promote-to-starter, Motir-owned repo with transfer-on-request.
+
   // ── Epic 8: Launch readiness ──────────────────────────────────────────────
   {
     id: '8.1',
