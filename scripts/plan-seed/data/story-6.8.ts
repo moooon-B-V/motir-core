@@ -239,7 +239,7 @@ export const story_6_8: PlanStory = {
       id: '6.8.2',
       title:
         'Alias-aware resolution everywhere the key is addressed — central project-by-key fallback, /issues/[key] 308 redirects, API old-key serving',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 25,
