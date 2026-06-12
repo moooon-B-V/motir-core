@@ -53,7 +53,11 @@ import { watchersService } from '@/lib/services/watchersService';
 
 const PWD = 'collab-journey-e2e-pass-123';
 const PROJECT_NAME = 'Collab Journey Project';
-const PROJECT_KEY = 'CJ';
+// 3 chars — `projectsService` normalizes a shorter handle (it pads to the
+// 3-char minimum, e.g. `CJ` → `CJX`), so the seeded key would no longer match
+// what the field/component services resolve. `tenant.key` carries the ACTUAL
+// stored identifier regardless, but a valid constant keeps the two equal.
+const PROJECT_KEY = 'CJX';
 const ISSUE_TITLE = 'Combined journey issue';
 
 // Tenant + 3 personas + the rail's long picker flows + several real
@@ -70,6 +74,9 @@ interface Persona {
 interface Tenant {
   workspaceId: string;
   projectId: string;
+  /** The project's ACTUAL stored identifier (post-normalization) — the key the
+   *  field/component services resolve against. */
+  key: string;
   owner: Persona;
 }
 
@@ -123,7 +130,12 @@ async function seedTenant(ownerEmail: string): Promise<Tenant> {
     name: PROJECT_NAME,
     identifier: PROJECT_KEY,
   });
-  const tenant: Tenant = { workspaceId: workspace.id, projectId: project.id, owner };
+  const tenant: Tenant = {
+    workspaceId: workspace.id,
+    projectId: project.id,
+    key: project.identifier,
+    owner,
+  };
   await pinActiveProject(owner.id, tenant);
   return tenant;
 }
@@ -184,14 +196,14 @@ test('@smoke the combined collaboration journey: build-up across every Epic-5 fe
   await watchersService.watch(issue.id, { userId: odie.id, workspaceId: tenant.workspaceId });
 
   await customFieldsService.createField({
-    key: PROJECT_KEY,
+    key: tenant.key,
     actorUserId: tenant.owner.id,
     ctx: ownerCtx(tenant),
     label: 'Severity',
     fieldType: 'select',
     options: ['Low', 'Medium', 'High'],
   });
-  await componentsService.createComponent({ key: PROJECT_KEY, name: 'API' }, ownerCtx(tenant));
+  await componentsService.createComponent({ key: tenant.key, name: 'API' }, ownerCtx(tenant));
 
   // The waiting editor upload — UNLINKED (workItemId null), referenced by no
   // body yet. The comment below is what links it (5.2.3).
@@ -341,6 +353,12 @@ test('@smoke the combined collaboration journey: build-up across every Epic-5 fe
   // on the combined page; the precise fallback copy is 5.5.5's data-layer
   // assert — here we prove the stacked stream doesn't crash) ─────────────────
   await page.goto('/settings/project/fields');
+  await expect(page.getByRole('heading', { name: 'Fields', exact: true })).toBeVisible();
+  // Let the page (and its OWN initial fields GET) settle BEFORE arming the
+  // freshen wait — otherwise `waitForResponse` resolves on the page-load GET,
+  // and confirming inside the real confirm-open freshen round-trip clobbers
+  // the optimistic delete (finding #81 — the 5.3.8 freshen-GET race).
+  await expect(page.locator('[data-testid^="field-row-"]')).toHaveCount(1);
   const freshened = page.waitForResponse(
     (r) => r.request().method() === 'GET' && r.url().includes('/fields'),
   );
@@ -348,14 +366,25 @@ test('@smoke the combined collaboration journey: build-up across every Epic-5 fe
   await freshened;
   const deleteConfirm = page.getByRole('dialog');
   await expect(deleteConfirm.getByRole('heading', { name: 'Delete Severity?' })).toBeVisible();
+  // The editor drops the row OPTIMISTICALLY before the DELETE resolves — wait
+  // for the actual response, or the navigation below races the commit and the
+  // issue renders pre-delete (the 5.4.10 component-delete lesson; finding #81's
+  // sibling). The `field-row` count alone is the optimistic UI, not the server.
+  const fieldDeleted = page.waitForResponse(
+    (r) => r.request().method() === 'DELETE' && /\/api\/fields\/[^/]+$/.test(r.url()),
+  );
   await deleteConfirm.getByRole('button', { name: 'Delete field' }).click();
+  expect((await fieldDeleted).status()).toBe(200);
   await expect(page.locator('[data-testid^="field-row-"]')).toHaveCount(0);
 
-  await page.goto(`/issues/${issue.identifier}?activity=history`);
-  // The rail card is gone…
+  // The rail card is gone (the 5.3.8 plain-goto pattern — never the cached
+  // `?activity=` route)…
+  await page.goto(`/issues/${issue.identifier}`);
   await expect(editToggle(page, 'Severity')).toHaveCount(0);
-  // …but the History stream still renders — the created anchor and the
-  // comment-deletion entry survive the vanished custom-field referent.
+  await expect(page.getByText('High (archived)')).toHaveCount(0);
+  // …but the History stream still renders PAST the vanished custom-field
+  // referent — the created anchor and the comment-deletion entry survive.
+  await switchTab(page, 'History');
   const historyAfter = page.getByRole('list', { name: 'History' });
   await expect(historyAfter).toBeVisible();
   await expect(historyAfter.getByText(/created the issue/)).toBeVisible();
