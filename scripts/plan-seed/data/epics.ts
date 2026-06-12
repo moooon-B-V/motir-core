@@ -976,6 +976,60 @@ export const EPICS: EpicMeta[] = [
       'PM tool — ready for the AI Planning Layer (Epic 7) to sit on top.',
     items: [
       {
+        id: 'bug-automation-editor-status-id-not-key',
+        kind: 'bug',
+        title:
+          'Automation editor stores the status ROW ID (not the key) → every UI-authored transitioned-trigger rule never fires, and every transition action always fails',
+        status: 'in_progress',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 · **Surfaces:** automation rule editor ' +
+          '(Subtask 6.6.5 — `AutomationParts.statusOptions`) ↔ engine (Subtask 6.6.2 — ' +
+          '`automationEngineService`) · **Status:** fix in flight (PR #821) · **Source:** ' +
+          'surfaced by the Story 6.6 author→fire→audit E2E (Subtask 6.6.7).\n\n' +
+          'The editor’s status comboboxes — the **transitioned** trigger’s from/to and the ' +
+          '**transition** action’s target — stored the workflow status **row id** ' +
+          '(`statusOptions` emitted `value: s.id`). But the engine treats ' +
+          '`triggerConfig.toStatusId` / `fromStatusId` and a transition action’s ' +
+          '`toStatusId` as status **KEYS**: it narrows transitioned events by ' +
+          '`config.toStatusId === event.toStatusKey` (a key like `done`), and runs the ' +
+          'action via `workItemsService.updateStatus(toStatusId)`, which takes a key. So a ' +
+          'UI-authored *transitioned*-trigger rule **never matched any event** (id ≠ key), ' +
+          'and a UI-authored *transition* action **always failed** with an unknown-status ' +
+          'error. The headline recipe — "when an item transitions to Done, …" — was broken ' +
+          'for every real user; only rules built directly in the service/engine tests (which ' +
+          'pass keys) worked, so the gap never showed at the unit/integration tier.\n\n' +
+          '**Root cause / fix:** the editor must store the KEY. `statusOptions` now emits ' +
+          '`value: s.key` (one-line change; the component test that had encoded the id was ' +
+          'updated). **Fix:** motir-core PR #821 — verified green by 6.6.7’s E2E (the ' +
+          'transitioned author→fire→audit journey passes once the fix is applied). ' +
+          '**Class:** a UI subtask (6.6.5) and its data-producing backend (6.6.2) disagreed ' +
+          'on whether a JSON field named `…StatusId` holds an id or a key — caught only by ' +
+          'the cross-layer E2E.',
+      },
+      {
+        id: 'bug-automation-audit-log-tombstone-aa-contrast',
+        kind: 'bug',
+        title:
+          'Automation audit-log tombstone ("item since deleted") fails AA colour-contrast (--el-text-faint)',
+        status: 'in_progress',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 · **Surfaces:** automation run-history / audit ' +
+          'log (Subtask 6.6.6 — `AutomationRuleAuditLog.tsx`) · **Status:** fix in flight ' +
+          '(PR #822) · **Source:** surfaced by the Story 6.6 audit-log axe sweep ' +
+          '(Subtask 6.6.7).\n\n' +
+          'The run-history **tombstone** row — "Triggering item since deleted", shown when an ' +
+          'execution’s triggering work item was later deleted (the `SetNull` FK) — rendered ' +
+          'with `text-(--el-text-faint)`, which **fails WCAG AA colour-contrast** (axe: ' +
+          '`serious` `color-contrast`). The faint token is below the AA threshold on the ' +
+          'panel surface — the same class as the sidebar-caption AA fix.\n\n' +
+          '**Root cause / fix:** use `--el-text-secondary` — the AA-safe de-emphasis token; ' +
+          'the `line-through` still conveys the deleted state. **Fix:** motir-core PR #822 — ' +
+          'verified by 6.6.7’s `@a11y` sweep (a null-item execution renders the tombstone; ' +
+          'the sweep is clean once the fix is applied).',
+      },
+      {
         id: 'bug-issue-detail-eyebrow-overflows-viewport',
         kind: 'bug',
         title:
