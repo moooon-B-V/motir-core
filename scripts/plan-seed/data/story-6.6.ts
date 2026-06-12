@@ -378,7 +378,7 @@ export const story_6_6: PlanStory = {
       id: '6.6.4',
       title:
         'Design — Automation settings (`design/projects/automation.mock.html`: rule list, when/if/then editor, audit log, failure/cap states)',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 38,
