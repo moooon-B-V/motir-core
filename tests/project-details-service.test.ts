@@ -359,6 +359,10 @@ describe('getDetails', () => {
     const details = await projectsService.getDetails('NIF', ownerCtx);
     expect(details.identifier).toBe('NIF');
     expect(details.previousKeys).toEqual([{ identifier: 'PROD', retiredAt: expect.any(String) }]);
+    // The details-surface path also carries `createdAt` (the 6.5.3 "Created"
+    // row), as a parseable ISO string — unlike the hot active-project DTO.
+    expect(details.createdAt).toEqual(expect.any(String));
+    expect(Number.isNaN(Date.parse(details.createdAt!))).toBe(false);
 
     // The repo's no-tx read path (the `?? db` branch) also resolves the aliases.
     const direct = await projectKeyAliasRepository.findManyByProject(details.id);

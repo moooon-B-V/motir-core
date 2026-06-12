@@ -115,7 +115,8 @@ test('workflow editor is reachable from the project-settings page (finding #47)'
   await seedActiveProject(USER_EMAIL);
 
   await page.goto('/settings/project');
-  await expect(page.getByRole('heading', { name: 'Project settings' })).toBeVisible();
+  // The area lands on the read-only Details page (Subtask 6.5.3).
+  await expect(page.getByRole('heading', { name: 'Details', exact: true })).toBeVisible();
 
   // The Workflow entry in the settings rail navigates to the editor. Scope to the
   // settings nav landmark + exact name so the "Back to {project}" link (the

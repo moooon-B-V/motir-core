@@ -35,6 +35,16 @@ export interface ProjectDTO {
   avatarIcon: string | null;
   avatarColor: string | null;
   /**
+   * ISO timestamp the project was created — the Details surface's "Created" row
+   * (Story 6.5.3). OPTIONAL and loaded ONLY on the details-surface read path
+   * (alongside `previousKeys`), so the hot reads (switcher list, active-project
+   * resolution) keep their single project-row projection with NO `createdAt` on
+   * the DTO — the deliberate "the DTO is not a raw Prisma row" decision the
+   * create-path shape test enforces. Absent ⇒ "not loaded" (a hot read); a
+   * string ⇒ loaded on the details path.
+   */
+  createdAt?: string;
+  /**
    * The project's retired keys (Story 6.8), newest first — the details card's
    * "Previous keys" list. OPTIONAL: only the details-surface read path
    * (`updateDetails` / `changeKey` returns, and a details read) loads +

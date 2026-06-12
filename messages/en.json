@@ -831,6 +831,19 @@
       "noProjectTitle": "No project selected",
       "noProjectDescription": "Choose a project from the switcher, or create one from the dashboard, to manage its settings."
     },
+    "details": {
+      "title": "Details",
+      "subtitle": "Project name, key and avatar.",
+      "cardTitle": "Project details",
+      "roleAdmin": "Admin",
+      "roleReadOnly": "Read-only",
+      "fieldAvatar": "Avatar",
+      "fieldName": "Name",
+      "fieldKey": "Key",
+      "fieldWorkspace": "Workspace",
+      "fieldCreated": "Created",
+      "editingSeam": "Editing name, key and avatar — plus changing the project key with old-key redirects — arrives with project-details editing. For now these are read-only."
+    },
     "workspace": {
       "empty": {
         "title": "No workspace yet",
