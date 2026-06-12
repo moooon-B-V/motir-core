@@ -198,13 +198,7 @@ export function SavedFilterDropdown({
         </button>
       </Popover.Trigger>
 
-      <Popover.Content
-        role="listbox"
-        aria-label={t('dropdown.label')}
-        align="start"
-        width={320}
-        className="p-0"
-      >
+      <Popover.Content aria-label={t('dropdown.label')} align="start" width={320} className="p-0">
         {/* Search */}
         <div className="border-b border-(--el-border) p-1.5">
           <div className="relative">
@@ -332,8 +326,11 @@ function Group({
 }) {
   if (count === 0 && !empty) return null;
   return (
-    <div className="py-0.5">
-      <div className="px-2 py-1 font-mono text-[11px] font-semibold tracking-wider text-(--el-text-faint) uppercase">
+    <div role="group" aria-label={label} className="py-0.5">
+      <div
+        aria-hidden
+        className="px-2 py-1 font-mono text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase"
+      >
         {label}
       </div>
       {count === 0 && empty ? (
@@ -360,38 +357,42 @@ function OptionShell({
   label: string;
   secondary: React.ReactNode;
 }) {
+  // Each row is two SIBLING buttons — the apply button + the star toggle — not
+  // a `role="option"`. An ARIA listbox may contain only options (no interactive
+  // children), so a list of filters with a per-row star can't be a listbox
+  // without tripping `aria-required-children` + `nested-interactive`. A grouped
+  // set of buttons is the honest, a11y-clean shape (the applied row carries
+  // `aria-current`, never colour-only).
   return (
     <div
-      role="option"
-      aria-selected={selected}
-      tabIndex={0}
-      onClick={() => {
-        if (!applying) onApply();
-      }}
-      onKeyDown={(e) => {
-        if ((e.key === 'Enter' || e.key === ' ') && !applying) {
-          e.preventDefault();
-          onApply();
-        }
-      }}
       className={cn(
-        'flex w-full cursor-pointer items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:bg-(--el-surface) focus-visible:outline-none',
-        selected && 'bg-(--el-surface)',
+        'flex w-full items-center gap-2 rounded-(--radius-control) text-sm text-(--el-text)',
         applying && 'opacity-60',
       )}
     >
       <span className="flex w-[22px] shrink-0 items-center justify-center">{star}</span>
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      <span className="flex max-w-[130px] shrink-0 items-center gap-1 truncate text-xs text-(--el-text-muted)">
-        {secondary}
-      </span>
-      <Check
-        aria-hidden
+      <button
+        type="button"
+        aria-current={selected ? 'true' : undefined}
+        disabled={applying}
+        onClick={onApply}
         className={cn(
-          'h-4 w-4 shrink-0 text-(--el-accent)',
-          selected ? 'opacity-100' : 'opacity-0',
+          'flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-(--radius-control) py-(--spacing-control-y) pr-(--spacing-control-x) text-left hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
+          selected && 'bg-(--el-surface)',
         )}
-      />
+      >
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <span className="flex max-w-[130px] shrink-0 items-center gap-1 truncate text-xs text-(--el-text-secondary)">
+          {secondary}
+        </span>
+        <Check
+          aria-hidden
+          className={cn(
+            'h-4 w-4 shrink-0 text-(--el-accent)',
+            selected ? 'opacity-100' : 'opacity-0',
+          )}
+        />
+      </button>
     </div>
   );
 }
