@@ -161,7 +161,9 @@ function HubCard({
       </span>
       <span className="flex flex-col gap-1">
         <span className="text-sm font-semibold text-(--el-text)">{title}</span>
-        <span className="text-xs text-(--el-text-muted)">{body}</span>
+        {/* --el-text-secondary, not -muted: muted (#787671) fails AA on the
+            --el-surface-soft card (4.34:1) — the sidebar-caption-aa rule. */}
+        <span className="text-xs text-(--el-text-secondary)">{body}</span>
       </span>
     </Link>
   );
@@ -179,18 +181,21 @@ function HubCardDisabled({
   body: string;
 }) {
   return (
-    <div className="flex items-start gap-3 rounded-(--radius-card) border border-dashed border-(--el-border) p-(--spacing-card-padding) opacity-60">
+    // No opacity wrapper: a blanket opacity-60 drops the text below AA contrast.
+    // The "inactive extension" read comes from the dashed border + tag + faint
+    // icon; the text stays at AA-passing --el-text-secondary.
+    <div className="flex items-start gap-3 rounded-(--radius-card) border border-dashed border-(--el-border) p-(--spacing-card-padding)">
       <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-surface) text-(--el-text-faint)">
         {icon}
       </span>
       <span className="flex flex-col gap-1">
         <span className="flex items-center gap-2 text-sm font-semibold text-(--el-text-secondary)">
           {title}
-          <span className="rounded-(--radius-badge) bg-(--el-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-[10px] font-medium tracking-wide text-(--el-text-muted) uppercase">
+          <span className="rounded-(--radius-badge) bg-(--el-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-[10px] font-medium tracking-wide text-(--el-text-secondary) uppercase">
             {tag}
           </span>
         </span>
-        <span className="text-xs text-(--el-text-muted)">{body}</span>
+        <span className="text-xs text-(--el-text-secondary)">{body}</span>
       </span>
     </div>
   );
