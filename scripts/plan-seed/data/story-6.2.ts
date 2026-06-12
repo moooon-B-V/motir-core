@@ -427,7 +427,7 @@ export const story_6_2: PlanStory = {
       id: '6.2.6',
       title:
         'Story tests — permission/visibility matrix + persist→resolve properties + the save→share→subscribe E2E + a11y sweep',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
