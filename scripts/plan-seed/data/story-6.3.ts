@@ -454,7 +454,7 @@ export const story_6_3: PlanStory = {
       id: '6.3.5',
       title:
         'Dashboards UI at /dashboard — list/create/switch, the grid (view/edit, layouts, dnd), widget add/config/remove, the three widget renderers + all states',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 38,
@@ -553,7 +553,7 @@ export const story_6_3: PlanStory = {
       id: '6.3.7',
       title:
         'Story tests — aggregation matrices + permission/no-access matrix + the dashboard E2E journey + the reports E2E + a11y sweeps',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
