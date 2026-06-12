@@ -1074,4 +1074,29 @@ export const EPICS: EpicMeta[] = [
       'PR review/iteration loop, multi-agent / parallel hosted runs, agent-selection policy, ' +
       'hosted-run pricing in the Epic-8 billing surface, and security hardening.',
   },
+  {
+    id: '10',
+    title: 'Platform administration & operations',
+    status: 'planned',
+    descriptionMd:
+      'The **Motir-internal operator console** — everything a SaaS platform team needs to run the ' +
+      'system across ALL tenants, plus the home for the cross-tenant governance the customer-facing ' +
+      'epics deliberately keep out. Added 2026-06-12 (Yue: "the admin board of the whole system"). ' +
+      'Distinct from the per-tenant admin already in Epic 6 (roles 6.4, project/workspace settings): ' +
+      'this is **platform staff**, gated by a superadmin role SEPARATE from tenant `MemberRole`, ' +
+      'reading ACROSS tenants (audited).\n\n' +
+      '**Stories:** **10.1** the superadmin console — an all-tenant overview (orgs/workspaces/' +
+      'projects/users) + **token/credit usage rollups** (project→workspace→org→platform, per-model, ' +
+      'top consumers); **10.2** system monitoring — INTEGRATED read-only from **Vercel** (deploys / ' +
+      'function errors / traffic) + **Inngest** (job runs / failures / throughput / backlog) + the ' +
+      '9.0 gateway + DB health, link-out not rebuild; **10.3** the governance toolkit — credit ' +
+      'grants/adjustments, plan/tier management, org suspend/reactivate, time-boxed audited ' +
+      'support impersonation, per-org feature flags / kill-switches, and a tamper-evident ' +
+      '(hash-chained) admin audit log.\n\n' +
+      '**Builds backward on:** the Epic-6 **Organization** tier (6.9 — the billing entity usage ' +
+      'rolls up to), 7.12 metering + credit ledger, and 9.0 gateway spend. The **Triage inbox** ' +
+      '(bug/feature intake → promote) is a customer-facing PM feature and lives in Epic 6 (6.10), ' +
+      'not here. Future 10.x (named in the story headers, deferred not forgotten): abuse / content ' +
+      'moderation, DSAR / compliance export-delete, status & maintenance banners, email-delivery ops.',
+  },
 ];

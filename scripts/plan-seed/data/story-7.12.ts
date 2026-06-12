@@ -373,6 +373,14 @@ export const story_7_12: PlanStory = {
         'rate table, and the `tokens × rate × margin → credits` conversion that ' +
         'DEBITS the ledger per turn. Credits are an INTERNAL unit (header), ' +
         'normalized across models + carrying Motir’s margin.\n\n' +
+        '**Billing entity (updated 2026-06-12): the `CreditLedger` keys to the ' +
+        '`Organization`** — the Story 6.9 root-account billing entity (ONE balance ' +
+        'per org; its N workspaces/projects roll up into it), NOT per-`AiProject`. ' +
+        'The 7.12.2 metering rows keep the project/workspace grain so Story 10.1.5 ' +
+        'can roll usage up project→workspace→org→platform, but the BALANCE + tier ' +
+        'live at the org (standard SaaS: one org, one bill). This supersedes the ' +
+        'per-`aiProjectId` ledger keying sketched below — read it as the org ' +
+        'billing key (the 9.0 gateway debits the same org ledger).\n\n' +
         '**Schema (off the `AiProject` spine):**\n\n' +
         '- **`CreditLedger`** — one per tenant: `{ id, aiProjectId, ' +
         'balanceCredits, updatedAt }`. The running balance; the single row a ' +
@@ -445,7 +453,7 @@ export const story_7_12: PlanStory = {
         'margin (the human-readable side of this math).\n' +
         '- Story 8 (stub) — the Epic-8 billing that WRITES `top_up` transactions ' +
         'via checkout (7.12 ships only the row shape).',
-      dependsOn: ['7.12.2'],
+      dependsOn: ['7.12.2', '6.9.3'],
     },
     {
       id: '7.12.4',

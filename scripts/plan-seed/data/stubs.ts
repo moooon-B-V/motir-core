@@ -149,6 +149,14 @@ export const STUB_STORIES: PlanStory[] = [
   // backend (6.8.1/6.8.2) is independent. This is the capability the 8.7
   // rebrand cutover consumes — PROD-vs-NIF becomes a reversible setting.
 
+  // 6.9 (Organization root-account tier + org admin) — data/story-6.9.ts.
+  // Added 2026-06-12. `Organization` (≠ Better-Auth `Account`) above Workspace,
+  // the BILLING ENTITY credits/usage roll up to; org membership + admin.
+  // 6.10 (Triage inbox — bug/feature intake → promote) — data/story-6.10.ts.
+  // Added 2026-06-12. A work_item in a `triage` state EXCLUDED from every
+  // normal tree/board/list read; intake (in-app + portal) → promote to
+  // backlog/sprint/epic/story (the Linear Triage mirror).
+
   // ── Epic 7: AI Planning Layer ─────────────────────────────────────────────
   // 7.1 (Core ↔ AI API contract + motir-ai persistence foundation) is fully
   // expanded — data/story-7.1.ts. Added 2026-06-11 (the Epic-7 architecture
