@@ -1,20 +1,32 @@
 import type { PlanStory } from '../types';
 
 /**
- * Story 9.1 — Hosted agent container: auth + token-usage reporting. The
- * INAUGURAL story of **Epic 9 (Native AI coding)** — the third pipeline layer
- * MOTIR.md reserved as a designed-for extension beyond the eight planned
- * epics: Motir runs the coding agent itself, in a hosted cloud sandbox, ON THE
- * USER'S BEHALF — AUGMENTING (never replacing) the Epic-7 BYOK external-agent
- * path. Where 7.9's `motir auto` dispatches a ready item to the user's OWN
- * agent on the user's OWN machine, a hosted run dispatches that same item into
- * a Motir-operated container that clones the repo, runs the selected agent,
- * and opens a PR — the "dispatch a ticket, get a PR back" experience, with no
- * local agent install and no local compute.
+ * Story 9.1 — Hosted agent container: auth + gateway-metered token usage. The
+ * second story of **Epic 9 (Native AI coding)** — it builds ON Story 9.0 (the
+ * LLM metering gateway, a fork of one-api), which sorts BEFORE it (9.0 < 9.1,
+ * so 9.1 depending on 9.0.x is a BACKWARD dep): Motir runs the coding agent
+ * itself, in a hosted cloud sandbox, ON THE USER'S BEHALF — AUGMENTING (never
+ * replacing) the Epic-7 BYOK external-agent path. Where 7.9's `motir auto`
+ * dispatches a ready item to the user's OWN agent on the user's OWN machine, a
+ * hosted run dispatches that same item into a Motir-operated container that
+ * clones the repo, runs the selected agent, and opens a PR — the "dispatch a
+ * ticket, get a PR back" experience, with no local agent install and no local
+ * compute.
+ *
+ * **The trust-boundary principle (the metering posture 9.1 inherits from 9.0).**
+ * The meter sits OUTSIDE the billed sandbox's trust boundary — at the 9.0
+ * GATEWAY, never via in-container self-report. A hosted run executes an
+ * autonomous agent editing code, so anything that container reports about its
+ * OWN token spend is untrustworthy (it is the thing being billed). So a run's
+ * LLM egress is LOCKED to the gateway (9.0.7), the orchestrator mints a per-run
+ * gateway VIRTUAL KEY (9.0.4), and the gateway captures the PROVIDER's
+ * authoritative `usage` (9.0.5) and debits the 7.12 credit ledger (9.0.6). 9.1
+ * WIRES the run to the gateway and SURFACES the per-run usage/cost the gateway
+ * captured — it does NOT self-report.
  *
  * **9.1 is the hosted-execution FOUNDATION, not the whole layer.** It ships the
- * container image + its auth + its usage reporting + the orchestration that
- * provisions one container per run and surfaces the PR. The richer Epic-9
+ * container image + its auth + its wiring to the 9.0 gateway + the orchestration
+ * that provisions one container per run and surfaces the PR. The richer Epic-9
  * capabilities (named under "Out of scope" below) ride this foundation in
  * later stories.
  *
@@ -65,36 +77,47 @@ import type { PlanStory } from '../types';
  *    Antigravity / Cursor / Aider / Goose). 9.1's image is the CLOUD-HOSTED
  *    variant: it builds FROM that same base (same agent matrix, same Node floor,
  *    same credential-mount discipline) and adds hosted-only layers — the run
- *    harness, the usage reporter, the hosted-mode entrypoint. One agent matrix,
- *    two deployment shapes (local-on-host, hosted-in-cloud). The local image is
- *    NOT replaced; the hosted image is its sibling.
+ *    harness + the hosted-mode entrypoint. It carries NO provider keys and does
+ *    NO usage self-report: its agents' LLM `*_BASE_URL` point at the 9.0
+ *    gateway (which injects Motir's managed keys and is the meter). One agent
+ *    matrix, two deployment shapes (local-on-host, hosted-in-cloud). The local
+ *    image is NOT replaced; the hosted image is its sibling.
  *
  * 2. **Auth IN the container is a short-lived RUN-SCOPED token — NO long-lived
  *    creds baked into the image.** Mirroring 7.1.5's job-scoped-token pattern, a
  *    hosted run is authenticated AS the dispatching user via a short-lived token
  *    minted at provision time, carried into the container, and used for: git /
- *    PR operations, the Motir API, and the usage report. The token expires with
+ *    PR operations and the Motir API. The token expires with
  *    the run; the image carries no secret. (This is the cloud generalization of
  *    7.9.7's read-only credential MOUNTS — a hosted container has no host to
  *    mount from, so the credential is a minted run token, not a bind-mount.)
  *
- * 3. **Token-usage reporting → 7.12's metering + credit ledger.** The container
- *    posts per-run usage (model, in/out tokens, steps) to a report endpoint that
- *    records an `AgentRun` (kind=coding) into 7.12's metering store and debits
- *    via 7.12's `CreditLedger`. Coding is metered exactly like planning.
+ * 3. **Metering rides the 9.0 GATEWAY, not in-container self-report → 7.12's
+ *    credit ledger.** The run's LLM egress is LOCKED to the 9.0 gateway (9.0.7);
+ *    the orchestrator mints a per-run gateway VIRTUAL KEY (9.0.4) and injects it
+ *    + the gateway base-URL into the container as the run's only LLM config; the
+ *    gateway captures the PROVIDER's authoritative `usage` (9.0.5) and debits
+ *    7.12's `CreditLedger` (9.0.6) — recording an `AgentRun` (kind=coding) so
+ *    coding draws down the SAME balance as planning. 9.1 WIRES the run to the
+ *    gateway + SURFACES the per-run usage/cost the gateway captured; there is NO
+ *    in-sandbox self-report (that would be the wrong trust boundary — the
+ *    container is the thing being billed).
  *
  * 4. **Reuses 7.6 dispatch.** A hosted run is dispatched from a READY item, the
  *    same as a BYOK prompt — it is a DISPATCH-TARGET VARIANT of 7.6.3's dispatch
  *    payload contract (the prose there already names "the future native
  *    AI-coding executor plugs into the SAME shape"). 9.1 is that executor.
  *
- * **Backward deps only (the Epic-9 audit posture).** Epic 9 builds ENTIRELY on
- * Epic 7 — every 9.1 leaf depends only on same-story 9.1.x ids or DONE-or-
- * planned 7.x ids (7.9.7 base, 7.6.3 dispatch, 7.12.2/7.12.3 metering+ledger,
- * 7.1.5 token pattern referenced in prose). No dep points ABOVE 9.1, and none
- * points to an unplanned future Epic-9 story. Because every 7.x upstream is not-
- * yet-done, the status rule makes the design + decision cards (`dependsOn: []`)
- * `planned` and everything else `blocked`.
+ * **Backward deps only (the Epic-9 audit posture).** Epic 9 builds on Epic 7 AND
+ * on Story 9.0 (the gateway, which sorts BEFORE 9.1) — every 9.1 leaf depends
+ * only on same-story 9.1.x ids, backward 9.0.x gateway ids (9.0.4 virtual keys,
+ * 9.0.5 authoritative metering — 9.0 owns the credit debit via 9.0.6), or
+ * DONE-or-planned 7.x ids (7.9.7 base, 7.6.3 dispatch, 7.12.2/7.12.3
+ * metering+ledger, 7.1.5 token pattern referenced in prose). 9.0 < 9.1, so a dep
+ * on 9.0.x is BACKWARD; no dep points ABOVE 9.1, and none points to an unplanned
+ * future Epic-9 story. Because every upstream is not-yet-done, the status rule
+ * makes the design + decision cards (`dependsOn: []`) `planned` and everything
+ * else `blocked`.
  *
  * **The design gate fires.** 9.1 ships a real user-facing surface — kicking off
  * a hosted run + its live status/logs + per-run usage/credit-cost + the PR link
@@ -123,7 +146,8 @@ import type { PlanStory } from '../types';
  */
 export const story_9_1: PlanStory = {
   id: '9.1',
-  title: 'Hosted agent container — auth + token-usage reporting (the hosted-execution foundation)',
+  title:
+    'Hosted agent container — auth + gateway-metered token usage (the hosted-execution foundation)',
   status: 'planned',
   gitBranch: 'feat/PROD-9.1-hosted-agent-container',
   descriptionMd:
@@ -141,27 +165,35 @@ export const story_9_1: PlanStory = {
     '- **A DIFFERENT image that EXTENDS 7.9.7’s LOCAL multi-agent base.** ' +
     '7.9.7 is the container the user runs locally (the agent-profile matrix); ' +
     '9.1’s image builds FROM it and adds the hosted-only layers (run harness, ' +
-    'usage reporter, hosted entrypoint). One agent matrix, two deployment ' +
+    'hosted entrypoint). It carries NO provider keys — its agents’ LLM ' +
+    '`*_BASE_URL` point at the 9.0 gateway. One agent matrix, two deployment ' +
     'shapes — the local image is not replaced.\n' +
     '- **Auth IN the container is a short-lived RUN-SCOPED token** (mirroring ' +
-    '7.1.5’s job-scoped-token pattern) — used for git/PR, the Motir API, and ' +
-    'the usage report; it expires with the run. **NO long-lived creds baked ' +
-    'into the image.**\n' +
-    '- **Token-usage reporting rides 7.12’s metering + credit ledger.** ' +
-    'Hosted CODING runs spend tokens and debit the SAME credit system as ' +
-    'planning — a user’s credits cover planning AND coding. 9.1 generalizes ' +
-    '7.12’s `PlanningRun` to an **`AgentRun` (kind: planning | coding)** and ' +
-    'debits coding usage via 7.12’s `CreditLedger`. (Usage-based billing is ' +
+    '7.1.5’s job-scoped-token pattern) — used for git/PR and the Motir API; ' +
+    'it expires with the run. **NO long-lived creds baked ' +
+    'into the image.** (LLM auth is separate: the per-run GATEWAY virtual key, ' +
+    '9.0.4.)\n' +
+    '- **Metering rides the 9.0 GATEWAY, not in-container self-report.** ' +
+    'The meter sits OUTSIDE the billed sandbox’s trust boundary — the run’s ' +
+    'LLM egress is LOCKED to the 9.0 gateway (9.0.7), the orchestrator mints a ' +
+    'per-run gateway VIRTUAL KEY (9.0.4), and the gateway captures the ' +
+    'PROVIDER’s authoritative `usage` (9.0.5) and debits 7.12’s `CreditLedger` ' +
+    '(9.0.6). Hosted CODING runs thus draw down the SAME credit system as ' +
+    'planning — a user’s credits cover planning AND coding (an `AgentRun` ' +
+    'kind=coding, the generalized `PlanningRun`). 9.1 WIRES the run to the ' +
+    'gateway + SURFACES the captured usage/cost; the container does NOT ' +
+    'self-report. (Usage-based billing is ' +
     'the verified mirror: Copilot’s AI-credits-by-token, Devin’s ACUs, ' +
     'Cursor/Codex token-burn.)\n' +
     '- **Reuses 7.6 dispatch** — a hosted run is a DISPATCH-TARGET VARIANT of ' +
     '7.6.3’s payload contract (the executor the 7.6.3 prose reserved a seam ' +
     'for).\n\n' +
     '**Scope:** the hosted-run surface design (9.1.1); the hosted-execution ' +
-    'architecture decision — orchestration, lifecycle, the usage SIGNAL ' +
-    'source (9.1.2); the infra provisioning (9.1.3); the hosted container ' +
+    'architecture decision — orchestration, lifecycle, metering via the 9.0 ' +
+    'gateway (9.1.2); the infra provisioning (9.1.3); the hosted container ' +
     'image extending 7.9.7 (9.1.4); the in-container run-scoped auth (9.1.5); ' +
-    'the token-usage report endpoint into 7.12 (9.1.6); the hosted-run ' +
+    'wiring the run to the 9.0 gateway + surfacing the gateway-captured ' +
+    'usage/cost on the run record (9.1.6); the hosted-run ' +
     'orchestration from a 7.6 dispatch (9.1.7); the hosted-run UI (9.1.8); ' +
     'vitest (9.1.9).\n\n' +
     '**Out of scope (named so they land in their own Epic-9 stories, not ' +
@@ -186,22 +218,26 @@ export const story_9_1: PlanStory = {
     '- **Run-scoped auth (no baked creds).** Inspect the image: it carries NO ' +
     'long-lived git/API/agent secret. The run authenticates with a short-lived ' +
     'token minted at provision time; after the run’s TTL the same token is ' +
-    'rejected (assert a post-expiry call 401s), and the PR + the usage report ' +
-    'were both made AS the dispatching user (visible in the PR author / the ' +
+    'rejected (assert a post-expiry call 401s), and the PR was made AS the ' +
+    'dispatching user (visible in the PR author / the ' +
     'run’s attribution).\n' +
-    '- **Usage → metering → credit debit (the 7.12 reuse).** After the run, ' +
-    'confirm an `AgentRun` row with `kind = coding` carrying the model + the ' +
-    'in/out tokens + step count, recorded in 7.12’s metering store, and a ' +
-    '`CreditTransaction` debit against the SAME `CreditLedger` planning uses — ' +
-    'the balance dropped by `tokens × rate × margin` for the run’s model ' +
-    '(7.12.3’s conversion, unchanged). A planning run and a coding run debit ' +
-    'ONE balance.\n' +
+    '- **Gateway metering → credit debit (via 9.0).** After the run, confirm ' +
+    'the run’s LLM calls went THROUGH the 9.0 gateway on a per-run virtual key ' +
+    '(9.0.4 — the container held no provider key), the gateway captured the ' +
+    'PROVIDER’s authoritative `usage` (9.0.5), and a ' +
+    '`CreditTransaction` debit landed against the SAME `CreditLedger` planning ' +
+    'uses (9.0.6) — recorded as an `AgentRun` `kind = coding` carrying the ' +
+    'model + the in/out tokens, the balance dropped by `tokens × rate × ' +
+    'margin` for the run’s model (7.12.3’s conversion, unchanged). A planning ' +
+    'run and a coding run debit ONE balance. Confirm the run record SURFACES ' +
+    'that per-run usage/cost (no in-sandbox self-report).\n' +
     '- **The display.** The hosted-run view shows the per-run token usage + ' +
     'the credit cost + the PR link; the project usage view (7.12.5) now lists ' +
     'the coding run alongside planning runs (the generalized `AgentRun`). NO ' +
     'checkout / buy-credits control appears (Epic 8).\n' +
     '- `pnpm test` (motir-core) + the motir-ai suite — 9.1.9 covers the run ' +
-    'harness, the report endpoint (usage → metering → debit), the run-scoped ' +
+    'harness, the gateway wiring (per-run virtual key + base-URL injection → ' +
+    'the gateway-captured usage/cost surfaced on the run), the run-scoped ' +
     'auth (mint / present / expire / reject), and the lifecycle ' +
     '(timeout/cleanup).\n' +
     '- **Open-core boundary review (this Epic’s recurring posture).** No ' +
@@ -328,14 +364,14 @@ export const story_9_1: PlanStory = {
     {
       id: '9.1.2',
       title:
-        'Decision — the hosted-execution architecture: container orchestration, the run lifecycle, the token-usage signal source',
+        'Decision — the hosted-execution architecture: container orchestration, the run lifecycle, metering via the 9.0 gateway',
       status: 'planned',
       type: 'decision',
       executor: 'coding_agent',
       estimateMinutes: 50,
       descriptionMd:
-        '**Type:** decision (the keystone ADR the hosted image / auth / report ' +
-        '/ orchestration cards all build against). Produce a living ' +
+        '**Type:** decision (the keystone ADR the hosted image / auth / ' +
+        'gateway-wiring / orchestration cards all build against). Produce a living ' +
         'architecture document; no app behavior ships here, but the shapes it ' +
         'fixes are load-bearing for the rest of 9.1 and all of Epic 9.\n\n' +
         'Write `motir-ai/docs/hosted-execution.md` (owned by the side that ' +
@@ -362,35 +398,41 @@ export const story_9_1: PlanStory = {
         '`PlanningRun`). Tie it to the 7.6 dispatch entry (a hosted run starts ' +
         'from a 7.6.3 dispatch payload, a dispatch-target variant) and the ' +
         'review exit (the PR link; the item’s review state).\n' +
-        '3. **The token-usage SIGNAL source (how each agent CLI’s usage is ' +
-        'CAPTURED).** This is the load-bearing unknown — the agents in the ' +
-        '7.9.7 matrix report usage DIFFERENTLY (and the surfaces DRIFT — ' +
-        'notes.html #33: verify per agent, don’t assert). Evaluate the three ' +
-        'capture strategies and fix one (with a per-agent fallback): (a) ' +
-        'PARSE the agent CLI’s own usage output (each agent prints/returns ' +
-        'token usage — capture + normalize it); (b) an LLM PROXY the container ' +
-        'routes the agent’s model calls through, which METERS every request ' +
-        '(provider-agnostic, captures usage even when the CLI doesn’t surface ' +
-        'it — but adds a proxy hop + needs the agent pointed at it); (c) the ' +
-        'agent’s own usage API/telemetry where it exposes one. Record which ' +
-        'strategy each Tier-1 agent (Claude Code / Codex / OpenCode / Kimi) ' +
-        'uses and the NORMALIZED `{ model, inputTokens, outputTokens, steps }` ' +
-        'shape the 9.1.6 report posts — the metering contract is ' +
-        'agent-independent even when capture is per-agent.\n\n' +
+        '3. **Metering via the 9.0 GATEWAY (the trust-boundary posture).** The ' +
+        'meter sits OUTSIDE the billed sandbox’s trust boundary — at the 9.0 ' +
+        'gateway, NEVER via in-container self-report (the container runs an ' +
+        'autonomous agent editing code; it is the thing being billed, so its ' +
+        'own report of its spend is untrustworthy — notes.html #33: verify, ' +
+        'don’t trust). Fix that: (a) the run’s LLM EGRESS is LOCKED to the 9.0 ' +
+        'gateway (9.0.7 — a network policy + an injected `*_BASE_URL` is the ' +
+        'container’s only LLM config); (b) the container holds NO provider key ' +
+        '— the gateway injects Motir’s managed keys (9.0.2/9.0.3); (c) the ' +
+        'orchestrator mints a per-run gateway VIRTUAL KEY (9.0.4) and the ' +
+        'gateway captures the PROVIDER’s authoritative `usage` (9.0.5), ' +
+        'debiting 7.12’s ledger (9.0.6). 9.1’s job is to WIRE the run to the ' +
+        'gateway (inject the per-run virtual key + the gateway base-URL) and ' +
+        'SURFACE the gateway-captured per-run usage/cost on the `AgentRun` ' +
+        'record — NOT to capture usage in the sandbox. Record the injection ' +
+        'shape (which `*_BASE_URL` vars each Tier-1 agent in the 7.9.7 matrix — ' +
+        'Claude Code / Codex / OpenCode / Kimi — honors to route through the ' +
+        'gateway) so the wiring is agent-aware even though the meter is the ' +
+        'gateway for all of them.\n\n' +
         'Also fix the run-scoped AUTH shape at the architecture level (the ' +
         '9.1.5 detail builds on it): a short-lived token minted at provision, ' +
         'scoped to the run + the dispatching user, used for git/PR + the Motir ' +
-        'API + the usage report; expires with the run; NO long-lived secret in ' +
+        'API; expires with the run; NO long-lived secret in ' +
         'the image (the 7.1.5 job-scoped-token pattern, generalized to a ' +
-        'container).\n\n' +
+        'container). LLM auth is SEPARATE — the per-run gateway virtual key ' +
+        '(9.0.4), not the Motir run token.\n\n' +
         '## Acceptance criteria\n\n' +
         '- `motir-ai/docs/hosted-execution.md` exists and fixes ' +
         'orchestration (container-per-run + the swappable interface + ' +
         'isolation + the timeout/cleanup lifecycle), the run lifecycle state ' +
         'machine (`dispatched → provision → run → PR → teardown` + failure ' +
-        'branches + the emitted status/log events), and the token-usage ' +
-        'capture strategy (parse / proxy / usage-API) with a per-Tier-1-agent ' +
-        'note and the normalized usage shape.\n' +
+        'branches + the emitted status/log events), and the metering posture ' +
+        '(via the 9.0 gateway — egress lock + per-run virtual key + base-URL ' +
+        'injection, NOT in-container self-report) with the per-Tier-1-agent ' +
+        '`*_BASE_URL` injection note.\n' +
         '- The container-per-run + ephemeral-isolation decision cites the ' +
         'verified mirror (Devin/Jules/Codex/Copilot) rather than asserting ' +
         'it.\n' +
@@ -409,7 +451,11 @@ export const story_9_1: PlanStory = {
         'cloud variant generalizes its credential MOUNTS to a minted run ' +
         'token.\n' +
         '- 7.1.5 — the job-scoped-token pattern the run-scoped token mirrors.\n' +
-        '- 7.12.2 / 7.12.3 — the metering + ledger the usage signal feeds (the ' +
+        '- Story 9.0 — the LLM metering gateway this run meters THROUGH: 9.0.4 ' +
+        '(per-run virtual keys), 9.0.5 (authoritative provider-`usage` ' +
+        'capture), 9.0.6 (the credit debit into 7.12), 9.0.7 (the egress ' +
+        'lock + the `*_BASE_URL` injection shape 9.1 wires).\n' +
+        '- 7.12.2 / 7.12.3 — the metering + ledger the gateway feeds (the ' +
         '`PlanningRun` → `AgentRun` generalization the lifecycle persists ' +
         'into).\n' +
         '- 7.6.3 — the dispatch payload contract a hosted run is a target ' +
@@ -472,7 +518,7 @@ export const story_9_1: PlanStory = {
     {
       id: '9.1.4',
       title:
-        'The HOSTED container image (extends 7.9.7’s multi-agent base) — run harness + token-usage reporter + hosted entrypoint',
+        'The HOSTED container image (extends 7.9.7’s multi-agent base) — run harness + hosted entrypoint (LLM egress points at the 9.0 gateway, NO provider keys)',
       status: 'blocked',
       type: 'code',
       executor: 'coding_agent',
@@ -498,14 +544,20 @@ export const story_9_1: PlanStory = {
         '+ the log tail and does NOT open a PR. This is the in-container ' +
         'realization of the Devin/Jules/Codex/Copilot “clone → agent edits → ' +
         'open PR” lifecycle (web-verified).\n\n' +
-        '**The token-usage REPORTER (the in-container side).** The harness ' +
-        'captures the run’s token usage via the 9.1.2-decided SIGNAL source ' +
-        '(parse the agent CLI’s usage output / route through a metering LLM ' +
-        'proxy / the agent’s usage API — per the matrix), normalizes it to ' +
-        '`{ model, inputTokens, outputTokens, steps }`, and POSTs it to the ' +
-        '9.1.6 report endpoint (over the run-scoped token). Per-turn or once-at-' +
-        'end per the 9.1.2 decision; the endpoint is the metering authority — ' +
-        'the reporter only captures + posts.\n\n' +
+        '**LLM egress points at the 9.0 GATEWAY — NO provider keys, NO ' +
+        'self-report.** The image carries NO provider API keys; instead its ' +
+        'agents’ LLM `*_BASE_URL` (`ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL` / ' +
+        'the per-agent equivalents) point at the 9.0 gateway, which injects ' +
+        'Motir’s managed keys on egress (9.0.2/9.0.3). The container’s only LLM ' +
+        'credential is the per-run gateway VIRTUAL KEY (9.0.4), injected at ' +
+        'provision (9.1.7) alongside the gateway base-URL. The container does ' +
+        'NOT meter or self-report its own usage — that was the WRONG trust ' +
+        'boundary (the container is the thing being billed). The gateway is the ' +
+        'authoritative meter (9.0.5) and debits the ledger (9.0.6); 9.1.6 only ' +
+        'SURFACES the gateway-captured per-run usage/cost on the run record. ' +
+        'So the image just needs the agent CLIs configured to honor the ' +
+        'injected `*_BASE_URL` + virtual key (the gateway is ' +
+        'OpenAI/Anthropic-compatible, 9.0.3, so this is transparent).\n\n' +
         '**The hosted-mode entrypoint.** A hosted entrypoint distinct from ' +
         '7.9.7’s interactive `motir auto` shell: it reads the run inputs from ' +
         'the orchestrator (env / a mounted run-spec), runs the harness once, ' +
@@ -514,24 +566,27 @@ export const story_9_1: PlanStory = {
         'teardown). NO long-lived credential is baked into the image (auth is ' +
         'the minted run-scoped token, 9.1.5); filesystem confined to the run ' +
         'workspace; no docker socket (the 7.9.7 isolation, cloud variant).\n\n' +
-        'This card builds the IMAGE + the harness/reporter/entrypoint; the ' +
-        'minting + presentation of the run-scoped token is 9.1.5, the report ' +
-        'ENDPOINT is 9.1.6, and the orchestration that provisions + streams it ' +
+        'This card builds the IMAGE + the harness/entrypoint; the ' +
+        'minting + presentation of the run-scoped token is 9.1.5, the ' +
+        'gateway-wiring + usage SURFACING is 9.1.6, and the orchestration that ' +
+        'provisions + injects the gateway virtual key/base-URL + streams it ' +
         'is 9.1.7 — this is the unit those compose.\n\n' +
         '## Acceptance criteria\n\n' +
         '- The hosted image builds FROM the 7.9.7 base (asserted: it does not ' +
         're-define the agent matrix — it inherits it) and adds the harness + ' +
-        'reporter + hosted entrypoint; `docker build` succeeds from a clean ' +
+        'hosted entrypoint; `docker build` succeeds from a clean ' +
         'checkout and the image runs the hosted entrypoint’s liveness check.\n' +
         '- Given a run spec (repo + ref + prompt + agent + a STUB run-scoped ' +
-        'token), the harness clones, runs the agent, and opens a PR on a ' +
-        'fixture repo with a FAKE agent (a script that edits a file + emits ' +
-        'stubbed usage, exits 0) — asserted in a CI-friendly smoke that needs ' +
+        'token + a STUB gateway base-URL/virtual key), the harness clones, ' +
+        'runs the agent, and opens a PR on a ' +
+        'fixture repo with a FAKE agent (a script that edits a file, exits 0) ' +
+        '— asserted in a CI-friendly smoke that needs ' +
         'NO real LLM; a non-zero fake agent yields a reported failure + no ' +
         'PR.\n' +
-        '- The reporter normalizes captured usage to ' +
-        '`{ model, inputTokens, outputTokens, steps }` and POSTs it to the ' +
-        '9.1.6 endpoint (asserted against a stub endpoint in the smoke).\n' +
+        '- The image carries NO provider keys and does NO usage self-report: ' +
+        'the agents’ LLM `*_BASE_URL` resolve to the injected gateway base-URL ' +
+        '(asserted: a fake agent’s model call hits the stub gateway, not a ' +
+        'provider host) and the virtual key is the only LLM credential.\n' +
         '- NO long-lived secret is present in the image (asserted); ' +
         'filesystem writes outside the run workspace fail; no docker socket ' +
         'inside.\n' +
@@ -541,8 +596,12 @@ export const story_9_1: PlanStory = {
         '- 7.9.7 (`packages/cli/sandbox/`) — the LOCAL multi-agent base image ' +
         'this EXTENDS (the agent-profile matrix + Node floor + isolation it ' +
         'inherits; the credential MOUNTS it generalizes to a minted token).\n' +
-        '- 9.1.2 — the orchestration + lifecycle + the token-usage SIGNAL ' +
-        'source this harness/reporter implement.\n' +
+        '- 9.1.2 — the orchestration + lifecycle + the gateway-metering ' +
+        'posture this harness implements.\n' +
+        '- 9.0.3 / 9.0.4 / 9.0.7 — the OpenAI/Anthropic-compatible gateway the ' +
+        'agents’ `*_BASE_URL` target, the per-run virtual key (the only LLM ' +
+        'credential), and the egress-lock contract the base-URL injection ' +
+        'realizes.\n' +
         '- 7.6.2 / 7.6.3 — the generated prompt + dispatch payload the harness ' +
         'runs the agent on (a hosted run is a 7.6 dispatch-target variant).\n' +
         '- `packages/cli/` — the built `motir` binary / shared sources the ' +
@@ -571,15 +630,16 @@ export const story_9_1: PlanStory = {
         'the lifecycle timeout. It is injected into the container as the ONLY ' +
         'credential — never an agent API key, never a long-lived git token, ' +
         'never a service secret.\n\n' +
-        '**Present in the container (three uses).** The harness (9.1.4) ' +
+        '**Present in the container (two uses).** The harness (9.1.4) ' +
         'presents the run-scoped token for: (a) **git / PR** — clone + push + ' +
         'open-PR AS the user (via the GitHub identity the 9.1.7 orchestration ' +
         'exchanges the run token for, or a scoped installation token minted ' +
         'for the run — fix per the 9.1.2 decision; the user is the PR author); ' +
         '(b) **the Motir API** — any read it needs (the dispatched item’s ' +
         'prompt/context), permission-checked AS the user, the 7.1.6 read-back ' +
-        'posture; (c) **the usage report** (9.1.6) — so the debit lands on the ' +
-        'user’s tenant.\n\n' +
+        'posture. (LLM egress is NOT one of these — that goes to the 9.0 ' +
+        'gateway on the per-run gateway VIRTUAL KEY, 9.0.4, a SEPARATE ' +
+        'credential; there is no in-container usage report.)\n\n' +
         '**Verify + expire (the server side).** Every endpoint the container ' +
         'hits validates the run-scoped token (signature + TTL + run/user/' +
         'project match) and REJECTS an expired or foreign token (a token from ' +
@@ -592,9 +652,9 @@ export const story_9_1: PlanStory = {
         'user + project/repo + a TTL ≤ the lifecycle timeout) and is the ONLY ' +
         'credential injected — no agent key / long-lived git token / service ' +
         'secret in the container.\n' +
-        '- The container authenticates git/PR, the Motir API read, and the ' +
-        'usage report with the run-scoped token; the PR is authored AS the ' +
-        'dispatching user and the report debits that user’s tenant.\n' +
+        '- The container authenticates git/PR and the Motir API read with the ' +
+        'run-scoped token; the PR is authored AS the dispatching user. (LLM ' +
+        'egress uses the separate 9.0.4 gateway virtual key, not this token.)\n' +
         '- An expired token (post-TTL / post-teardown) is rejected (401); a ' +
         'token scoped to run A / tenant A cannot act on run B / tenant B ' +
         '(rejected; 404-not-403 cross-tenant).\n' +
@@ -608,7 +668,8 @@ export const story_9_1: PlanStory = {
         'short-TTL, user+project-scoped, presented on read-back).\n' +
         '- 7.1.6 — the permission-checked-as-the-user read-back posture the ' +
         'container’s Motir API reads mirror.\n' +
-        '- 9.1.4 — the harness that PRESENTS the token (git/PR + report).\n' +
+        '- 9.1.4 — the harness that PRESENTS the token (git/PR + the Motir API ' +
+        'read).\n' +
         '- 9.1.2 — the run-scoped-auth shape fixed at the architecture level ' +
         '(+ how the run token exchanges for the GitHub identity).\n' +
         '- 9.1.3 — the run-token signing secret this mints/verifies against.',
@@ -617,92 +678,113 @@ export const story_9_1: PlanStory = {
     {
       id: '9.1.6',
       title:
-        'The token-usage REPORT endpoint — record per-run usage into 7.12 metering (generalized `AgentRun` kind=coding) + debit via the 7.12 credit ledger',
+        'Meter the run VIA the 9.0 gateway — wire the per-run gateway virtual key + base-URL into the run, surface the gateway-captured usage/credit cost on the `AgentRun` (NO in-sandbox self-report)',
       status: 'blocked',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 70,
       descriptionMd:
-        'The endpoint the container POSTs its per-run usage to — recording ' +
-        'coding usage into 7.12’s metering store and debiting 7.12’s credit ' +
-        'ledger, so a hosted CODING run spends from the SAME credits planning ' +
-        'does (a user’s credits cover planning AND coding, ONE balance). This ' +
-        'is the load-bearing reuse: NO second metering store, NO second ledger ' +
-        '— it GENERALIZES 7.12’s `PlanningRun` to an `AgentRun`.\n\n' +
+        'Meter a hosted CODING run AUTHORITATIVELY by routing its LLM traffic ' +
+        'THROUGH the 9.0 gateway — NOT by trusting an in-container ' +
+        'self-report. The meter sits OUTSIDE the billed sandbox’s trust ' +
+        'boundary (the container runs an autonomous agent editing code; it is ' +
+        'the thing being billed, so its own report of its spend is ' +
+        'untrustworthy — that was the WRONG trust boundary and is removed). The ' +
+        'gateway already OWNS the metering + the credit debit: it captures the ' +
+        'PROVIDER’s authoritative `usage` (9.0.5) and debits 7.12’s ' +
+        '`CreditLedger` (9.0.6). THIS card’s job is to (a) WIRE the run to the ' +
+        'gateway — mint the per-run gateway VIRTUAL KEY (9.0.4) and inject it + ' +
+        'the gateway base-URL into the run — and (b) SURFACE the ' +
+        'gateway-captured per-run usage/credit cost on the run record for the ' +
+        '9.1.8 UI. So a hosted CODING run spends from the SAME credits planning ' +
+        'does (a user’s credits cover planning AND coding, ONE balance, ONE ' +
+        'ledger — owned by motir-ai), with no second metering store.\n\n' +
+        '**Wire the run to the gateway (mint + inject).** At provision (driven ' +
+        'by 9.1.7), request the gateway to mint a short-lived, run-scoped ' +
+        'VIRTUAL KEY (9.0.4 — carrying the tenant/run id, a TTL bounded by the ' +
+        'lifecycle timeout, a quota cap from the tenant’s remaining credits) ' +
+        'via the gateway-admin client, and inject it + the gateway base-URL ' +
+        'into the container as the run’s only LLM config (the agents’ ' +
+        '`*_BASE_URL`, 9.1.4). The orchestrator reaches the gateway over HTTP ' +
+        '(the open-core boundary: motir-core/-ai never import the gateway). On ' +
+        'teardown the virtual key is revoked (9.0.4). There is NO usage-report ' +
+        'endpoint the container POSTs to — the gateway is the meter.\n\n' +
         '**Generalize `PlanningRun` → `AgentRun` (kind: planning | coding) — in ' +
         'motir-ai.** 7.12.2 modelled `PlanningRun` (jobId, model, tenant, ' +
         'sessionId, token totals) + `PlanningTurn`. Add a `kind` discriminator ' +
         '(default `planning` for every existing planning row — a non-breaking ' +
         'migration) so a CODING run is the same shape: `AgentRun { kind: ' +
         'coding, runId (the 9.1 hosted run, not a 7.1.4 PlanJob), model, ' +
-        'tenant, totalInputTokens, totalOutputTokens, steps }` with per-step ' +
-        'turn rows if the signal gives them. The 7.12.5 usage display + the ' +
-        'monthly aggregation then see coding runs ALONGSIDE planning runs with ' +
-        'no new store (a coding run is just an `AgentRun` whose kind is ' +
-        'coding). Keep the rename additive + back-compatible (existing ' +
-        'planning code/queries keep working; the table/relation is generalized ' +
-        'not duplicated).\n\n' +
-        '**The endpoint (run-scoped-token auth, the 7.1-internal shape).** ' +
-        '`POST /v1/agent-runs/:runId/usage` (motir-ai, or a motir-core ' +
-        'internal route that proxies over the 7.1.5 client — fix per the open-' +
-        'core boundary: the LEDGER lives in motir-ai, so the debit must happen ' +
-        'in motir-ai) accepts the normalized ' +
-        '`{ model, inputTokens, outputTokens, steps }` the container reports, ' +
-        'authenticated by the run-scoped token (9.1.5 — so the usage is bound ' +
-        'to the run’s user/tenant; the container cannot report for another ' +
-        'tenant). It: (1) records/closes the `AgentRun` (kind=coding) + its ' +
-        'turn rows in 7.12.2’s metering store, then (2) DEBITS via 7.12.3’s ' +
-        '`creditService` — the SAME `creditsForTurn = (tokens/1k × rate) × ' +
-        'margin` conversion, the SAME per-model `ModelCreditRate` table, the ' +
-        'SAME locked-row `CreditLedger` debit + `CreditTransaction` (now ' +
-        'referencing the coding run), IDEMPOTENT on the run/usage id so a ' +
-        'retried report never double-debits.\n\n' +
+        'tenant, totalInputTokens, totalOutputTokens, steps }`. The ' +
+        'gateway’s spend (9.0.6) records into THIS `AgentRun` (kind=coding) — ' +
+        'it is the metering home the gateway debit references — so the 7.12.5 ' +
+        'usage display + the monthly aggregation see coding runs ALONGSIDE ' +
+        'planning runs with no new store (a coding run is just an `AgentRun` ' +
+        'whose kind is coding). Keep the rename additive + back-compatible ' +
+        '(existing planning code/queries keep working; the table/relation is ' +
+        'generalized not duplicated).\n\n' +
+        '**Surface the gateway-captured usage/cost on the run.** The gateway ' +
+        'attributes each captured `usage` row + each credit debit to the run ' +
+        'via the virtual key (9.0.5/9.0.6); this card ensures the run’s ' +
+        '`AgentRun` exposes the resulting per-run token totals + the credit ' +
+        'cost (read back from the gateway debit / the ledger transactions ' +
+        'referencing the run) so 9.1.8 can show them. The container reports ' +
+        'NOTHING about its spend — the surfaced numbers come from the gateway’s ' +
+        'authoritative metering, not the sandbox.\n\n' +
         '**Out-of-credits interplay (named, not built here).** The shared ' +
-        'balance means a hosted run can hit the 7.12.4 out-of-credits boundary; ' +
-        '9.1.7’s provision-time gate is where the pre-flight refusal fires ' +
-        '(this card RECORDS + debits usage; the refusal-before-provision check ' +
-        'rides 7.12.4’s `creditService` from 9.1.7). 9.1 debits the existing ' +
-        'ledger — it adds NO checkout/top-up (Epic 8).\n\n' +
-        '**Layering (motir-ai 4-layer-lite + the open-core boundary).** A thin ' +
-        'repo per entity + an `agentRunService` that owns the record-+-debit ' +
-        'transaction (the metering write + the ledger debit serialize under ' +
-        'the ledger row lock — the lock-before-read-derived-update rule). No ' +
-        'metering/ledger table in motir-core; motir-core only DISPLAYS over ' +
-        '7.1.\n\n' +
+        'balance means a hosted run can hit the 7.12.4 out-of-credits boundary ' +
+        'on two edges: 9.1.7’s PROVISION-time pre-flight gate (refuse before ' +
+        'provisioning), and the GATEWAY edge — a mid-run call that crosses zero ' +
+        'is refused with a `429` at the gateway (9.0.6) before any upstream ' +
+        'call. 9.1 debits the existing ledger (through the gateway) — it adds ' +
+        'NO checkout/top-up (Epic 8).\n\n' +
+        '**Layering (the open-core boundary).** The mint/inject + the ' +
+        'usage-surfacing ride a thin gateway-admin client over HTTP; the LEDGER ' +
+        '+ the metering stay in motir-ai and the DEBIT is the gateway’s (9.0.6) ' +
+        '— motir-core holds no billing table and only DISPLAYS over 7.1. No ' +
+        'in-container metering, no self-report endpoint.\n\n' +
         '## Acceptance criteria\n\n' +
         '- `motir-ai/prisma/schema.prisma` generalizes `PlanningRun` → ' +
         '`AgentRun` with a `kind` (planning | coding) discriminator via a ' +
         'NON-breaking migration (existing rows backfill to `planning`; ' +
         'planning code/queries keep working); FK-as-`@relation` preserved.\n' +
-        '- `POST …/usage` (run-scoped-token auth) records an `AgentRun` ' +
-        'kind=coding (model + in/out tokens + steps, bound to the run’s ' +
-        'user/tenant) and DEBITS the SAME `CreditLedger` planning uses, via ' +
-        '7.12.3’s `creditsForTurn` + `ModelCreditRate` (a coding run and a ' +
-        'planning run draw down ONE balance).\n' +
-        '- The debit is one locked transaction (the ledger row FOR UPDATE + ' +
-        're-read) and IDEMPOTENT on the run/usage id (a retried report never ' +
-        'double-debits); a foreign-tenant run token cannot report usage for ' +
-        'another tenant.\n' +
+        '- At provision the run is wired to the gateway: a per-run gateway ' +
+        'VIRTUAL KEY (9.0.4) is minted + injected with the gateway base-URL as ' +
+        'the run’s only LLM config, and revoked on teardown — there is NO ' +
+        'in-sandbox usage-report endpoint (asserted: no self-report path ' +
+        'exists; the container holds no provider key).\n' +
+        '- The run’s LLM spend is captured + debited AT THE GATEWAY (9.0.5/' +
+        '9.0.6) against the SAME `CreditLedger` planning uses, recorded into ' +
+        'this `AgentRun` (kind=coding) — a coding run and a planning run draw ' +
+        'down ONE balance.\n' +
+        '- The `AgentRun` surfaces the gateway-captured per-run token totals + ' +
+        'the credit cost (read back from the gateway debit), so 9.1.8 can show ' +
+        'them; a foreign-tenant virtual key cannot attribute spend to another ' +
+        'tenant (the gateway enforces it, 9.0.4).\n' +
         '- The 7.12.5 usage display + the monthly aggregation include the ' +
         'coding `AgentRun` with no new store (asserted: a coding run appears in ' +
         'the per-run log + the per-model month totals).\n' +
-        '- 4-layer-lite respected; the ledger/metering stay in motir-ai (no ' +
-        'billing table in motir-core); no checkout/top-up introduced (Epic ' +
+        '- Open-core boundary respected: the mint/inject + usage read cross to ' +
+        'the gateway/motir-ai over HTTP; the ledger/metering stay in motir-ai ' +
+        '(no billing table in motir-core); no checkout/top-up introduced (Epic ' +
         '8).\n\n' +
         '## Context refs\n\n' +
+        '- 9.0.4 — the per-run gateway VIRTUAL KEY this mints + injects (the ' +
+        'run’s only LLM credential).\n' +
+        '- 9.0.5 — the authoritative provider-`usage` the gateway captures ' +
+        '(the meter this run’s cost is surfaced from).\n' +
+        '- 9.0.6 — the credit debit the gateway OWNS (tokens × per-model rate × ' +
+        'margin → 7.12’s `CreditLedger`); the gateway 429 the shared balance ' +
+        'can trigger.\n' +
         '- 7.12.2 — the metering store (`PlanningRun`/`PlanningTurn`) this ' +
-        'GENERALIZES to `AgentRun` (kind) and records the coding run into.\n' +
-        '- 7.12.3 — the `creditService` + `creditsForTurn` + `ModelCreditRate` ' +
-        '+ the locked-ledger debit this REUSES verbatim for coding usage.\n' +
-        '- 7.12.4 — the out-of-credits refusal the shared balance can trigger ' +
-        '(the pre-flight gate is 9.1.7).\n' +
-        '- 7.12.5 — the usage display the generalized `AgentRun` surfaces ' +
-        'in.\n' +
-        '- 9.1.4 / 9.1.5 — the reporter that POSTs the usage + the run-scoped ' +
-        'token that authenticates it.\n' +
-        '- `motir-core/CLAUDE.md` § FK-as-`@relation` + § lock-before-read-' +
-        'derived-update.',
-      dependsOn: ['9.1.4', '7.12.2', '7.12.3'],
+        'GENERALIZES to `AgentRun` (kind), the home the gateway spend records ' +
+        'into.\n' +
+        '- 7.12.4 / 7.12.5 — the out-of-credits boundary (the provision gate is ' +
+        '9.1.7) + the usage display the generalized `AgentRun` surfaces in.\n' +
+        '- 9.1.4 / 9.1.7 — the image whose `*_BASE_URL` point at the gateway + ' +
+        'the orchestration that requests the mint + injects the key.\n' +
+        '- `motir-core/CLAUDE.md` § FK-as-`@relation`.',
+      dependsOn: ['9.1.4', '9.0.4', '9.0.5'],
     },
     {
       id: '9.1.7',
@@ -733,8 +815,10 @@ export const story_9_1: PlanStory = {
         '**Provision → run → PR → teardown (the 9.1.2 lifecycle).** ' +
         '(1) PROVISION a fresh container-per-run on the 9.1.3 orchestrator ' +
         'from the 9.1.4 hosted image; (2) INJECT the run spec (repo + ref, the ' +
-        '7.6 prompt, the selected agent) + the 9.1.5 run-scoped token (the ' +
-        'ONLY credential); (3) STREAM the container’s structured status/log ' +
+        '7.6 prompt, the selected agent) + the 9.1.5 run-scoped token (for ' +
+        'git/PR + the Motir API) + the per-run 9.0 gateway VIRTUAL KEY + ' +
+        'gateway base-URL (the run’s only LLM config — the mint/inject 9.1.6 ' +
+        'wires); (3) STREAM the container’s structured status/log ' +
         'events (the lifecycle stepper + the console the 9.1.8 UI shows) — ' +
         'persisted to the `AgentRun` + streamed (SSE, the 7.1.4 stream shape); ' +
         '(4) on success SURFACE the PR (the harness opened it as the user — ' +
@@ -778,7 +862,8 @@ export const story_9_1: PlanStory = {
         '- 7.6.3 — the dispatch payload contract a hosted run is a TARGET ' +
         'variant of (the native-AI-coding executor seam).\n' +
         '- 9.1.4 (the image provisioned) / 9.1.5 (the run-scoped token ' +
-        'injected) / 9.1.6 (the usage debit the run produces).\n' +
+        'injected) / 9.1.6 (the gateway virtual-key mint/inject + the ' +
+        'gateway-metered usage the run produces).\n' +
         '- 9.1.2 — the orchestration + lifecycle decision this implements; ' +
         '9.1.3 — the orchestrator/registry/secrets it runs on.\n' +
         '- 7.1.4 — the SSE stream shape the status/log streaming mirrors; ' +
@@ -866,7 +951,7 @@ export const story_9_1: PlanStory = {
     {
       id: '9.1.9',
       title:
-        'Vitest — run harness + report endpoint (usage → metering → credit debit) + run-scoped auth + lifecycle',
+        'Vitest — run harness + gateway wiring (virtual-key mint/inject → gateway-metered usage surfaced) + run-scoped auth + lifecycle',
       status: 'blocked',
       type: 'test',
       executor: 'coding_agent',
@@ -881,33 +966,39 @@ export const story_9_1: PlanStory = {
         'debit, the run-scoped auth, and the lifecycle are exercised for ' +
         'real.\n\n' +
         '**The run harness (9.1.4):**\n\n' +
-        '- Given a run spec + a fake agent (edits a file + emits stubbed ' +
-        'usage, exits 0) over a fixture repo, the harness clones, runs the ' +
+        '- Given a run spec + a fake agent (edits a file, exits 0) over a ' +
+        'fixture repo, the harness clones, runs the ' +
         'agent, and opens a PR (asserted against a fixture git remote / a ' +
         'stub PR surface); a non-zero fake agent yields a reported failure + ' +
         'NO PR.\n' +
-        '- The reporter normalizes captured usage to ' +
-        '`{ model, inputTokens, outputTokens, steps }` and POSTs it (asserted ' +
-        'against a stub endpoint).\n\n' +
-        '**The report endpoint — usage → metering → debit (9.1.6):**\n\n' +
-        '- A posted coding usage records an `AgentRun` (kind=coding) + turn ' +
-        'rows in 7.12.2’s metering store and DEBITS the SAME `CreditLedger` ' +
-        'planning uses, via 7.12.3’s `creditsForTurn` + `ModelCreditRate` — ' +
-        'the balance drops by exactly `(tokens/1k × rate) × margin` for the ' +
-        'run’s model.\n' +
+        '- The image carries NO provider keys; the fake agent’s model call ' +
+        'resolves to the injected gateway base-URL (asserted: it hits the stub ' +
+        'gateway, not a provider host) — the container does NO usage ' +
+        'self-report.\n\n' +
+        '**Gateway wiring → metering surfaced (9.1.6):**\n\n' +
+        '- At provision a per-run gateway VIRTUAL KEY (9.0.4) is minted + ' +
+        'injected with the gateway base-URL as the run’s only LLM config and ' +
+        'revoked on teardown (asserted against a stub gateway-admin client); ' +
+        'there is NO in-sandbox usage-report endpoint.\n' +
+        '- The gateway-captured usage (stubbed with recorded `usage` figures, ' +
+        '9.0.5) debits the SAME `CreditLedger` planning uses (9.0.6) recorded ' +
+        'into the `AgentRun` (kind=coding) — the balance drops by exactly ' +
+        '`(tokens/1k × rate) × margin` for the run’s model.\n' +
         '- The `PlanningRun` → `AgentRun` generalization is non-breaking: an ' +
         'existing planning row reads back as kind=planning and a planning + a ' +
         'coding run draw down ONE balance (asserted: the balance after both = ' +
         'start − planningDebit − codingDebit).\n' +
-        '- The debit is idempotent on the run/usage id (a retried report does ' +
-        'NOT double-debit) and serializes under the ledger row lock; a ' +
-        'foreign-tenant run token cannot report for another tenant.\n\n' +
+        '- The `AgentRun` surfaces the gateway-captured per-run token totals + ' +
+        'credit cost (asserted: read back from the gateway debit, not from a ' +
+        'container report); a foreign-tenant virtual key cannot attribute ' +
+        'spend to another tenant.\n\n' +
         '**Run-scoped auth (9.1.5):**\n\n' +
         '- A minted run-scoped token authenticates git/PR + the Motir API ' +
-        'read + the usage report AS the dispatching user; an EXPIRED (post-TTL ' +
+        'read AS the dispatching user; an EXPIRED (post-TTL ' +
         '/ post-teardown) token is rejected (401); a run-A/tenant-A token ' +
         'cannot act on run B / tenant B (rejected; 404-not-403 cross-tenant); ' +
-        'NO long-lived credential is present in the run spec.\n\n' +
+        'NO long-lived credential (and no provider key) is present in the run ' +
+        'spec.\n\n' +
         '**Lifecycle (9.1.7):**\n\n' +
         '- A run that overruns is cancelled by the per-run TIMEOUT and torn ' +
         'down; teardown is invoked on every terminal path ' +
@@ -926,9 +1017,9 @@ export const story_9_1: PlanStory = {
         'proven; the out-of-credits pre-flight makes NO provision + NO token ' +
         'spend.\n' +
         '- New motir-core service code respects the per-file coverage gate ' +
-        '(`motir-core/CLAUDE.md` § coverage); the report/debit + the ' +
+        '(`motir-core/CLAUDE.md` § coverage); the gateway-wiring + the ' +
         'run-scoped-auth verify branches are directly covered (the expired / ' +
-        'foreign-tenant / idempotent-retry guards each have a test).\n\n' +
+        'foreign-tenant / revoked-key guards each have a test).\n\n' +
         '## Context refs\n\n' +
         '- 9.1.4 / 9.1.5 / 9.1.6 / 9.1.7 (everything under test).\n' +
         '- 7.12.6 — the metering/ledger test patterns + conversion fixtures ' +
