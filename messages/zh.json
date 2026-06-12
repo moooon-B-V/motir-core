@@ -1323,6 +1323,124 @@
         "helper": "选择Motir界面使用的语言。",
         "label": "语言"
       }
+    },
+    "automation": {
+      "title": "自动化",
+      "subtitle": "当{projectName}中发生某些事件时，自动执行操作。规则以其所有者身份运行——只有项目管理员可以管理规则。",
+      "createRule": "创建规则",
+      "ruleCount": "共{total}条规则中的{count}条",
+      "perProjectCap": "每个项目最多{max}条规则",
+      "capReached": "已达{max}条规则上限——删除一条规则后才能新增。",
+      "empty": {
+        "title": "暂无规则",
+        "description": "让重复性工作自动化——在发生特定事件时流转工作项、设置字段、添加关注者或评论。规则以其所有者身份运行。"
+      },
+      "noAccess": {
+        "title": "仅限管理员",
+        "description": "项目自动化由项目管理员管理。如需修改规则，请联系管理员。"
+      },
+      "row": {
+        "enabledAria": "已启用——{name}",
+        "neverRun": "从未运行",
+        "autoDisabled": "已自动停用 · {count}次失败",
+        "actionsAria": "{name}的操作",
+        "reEnable": "重新启用"
+      },
+      "triggerSummary": {
+        "created": "创建时",
+        "transitioned": "流转时",
+        "field_changed": "字段变更时",
+        "commented": "评论时"
+      },
+      "autoDisabledBanner": "{name}在连续{count}次失败后已被自动停用。请修复规则后重新启用——重新启用会重置失败计数。",
+      "menu": {
+        "edit": "编辑",
+        "enable": "启用",
+        "disable": "停用",
+        "delete": "删除"
+      },
+      "delete": {
+        "title": "删除{name}？",
+        "body": "这将永久删除该规则及其运行历史，且无法撤销。",
+        "confirm": "删除规则"
+      },
+      "editor": {
+        "createTitle": "新建规则",
+        "nameLabel": "规则名称",
+        "namePlaceholder": "为规则命名",
+        "nameRequired": "请为规则填写名称。",
+        "nameTooLong": "名称需少于{max}个字符。",
+        "enabledAria": "规则已启用",
+        "when": "当",
+        "whenSub": "触发条件——每条规则一个",
+        "if": "若",
+        "ifSub": "对触发工作项的条件——可选",
+        "then": "则",
+        "thenSub": "按顺序执行操作，以规则所有者身份",
+        "triggerAria": "触发器",
+        "triggerType": {
+          "created": "工作项创建",
+          "transitioned": "工作项流转",
+          "field_changed": "字段值变更",
+          "commented": "工作项评论"
+        },
+        "noConfig": "无需进一步配置",
+        "from": "从",
+        "to": "到",
+        "anyStatus": "任意状态",
+        "fromAria": "起始状态",
+        "toAria": "目标状态",
+        "field": "字段",
+        "fieldAria": "要监视的字段",
+        "setField": {
+          "assignee": "负责人",
+          "priority": "优先级",
+          "dueDate": "截止日期",
+          "estimate": "预估工时"
+        },
+        "addAction": "添加操作",
+        "actionAria": "操作{n}",
+        "actionTypeAria": "操作类型",
+        "actionType": {
+          "transition": "流转",
+          "set_field": "设置字段"
+        },
+        "setFieldAria": "要设置的字段",
+        "statusTargetAria": "目标状态",
+        "assigneeAria": "负责人",
+        "unassigned": "未分配",
+        "priorityAria": "优先级",
+        "estimateAria": "预估工时值",
+        "estimatePlaceholder": "数值",
+        "dueDateAria": "截止日期",
+        "removeAction": "移除操作{n}",
+        "reorderAction": "重排操作{n}",
+        "moveUp": "上移",
+        "moveDown": "下移",
+        "actionCapReached": "已达{max}个操作上限——单条规则最多{max}个操作。",
+        "runsAs": "以{owner}（规则所有者）身份运行 · {max}个操作中的{count}个",
+        "needAction": "至少添加一个操作。",
+        "problem": {
+          "noTargetStatus": "请选择目标状态。",
+          "noField": "请选择字段。",
+          "noValue": "请选择值。",
+          "triggerNoField": "请选择要监视的字段。"
+        },
+        "cancel": "取消",
+        "save": "保存规则"
+      },
+      "toast": {
+        "created": "已创建规则“{name}”。",
+        "saved": "已保存规则“{name}”。",
+        "deleted": "已删除规则“{name}”。",
+        "enabled": "规则已启用。",
+        "disabled": "规则已停用。",
+        "errorTitle": "出错了",
+        "saveError": "无法保存规则，请重试。",
+        "deleteError": "无法删除规则，请重试。",
+        "toggleError": "无法更新规则，请重试。",
+        "capError": "已达到本项目{max}条规则的上限。"
+      }
     }
   },
   "boards": {

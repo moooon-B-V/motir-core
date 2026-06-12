@@ -56,25 +56,30 @@ describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('the Automation slot is a placeholder, excluded from the route set', () => {
+  it('the Automation slot is now a real admin-only route (Story 6.6 lit it up)', () => {
     const automation = PROJECT_SETTINGS_NAV.find((e) => e.id === 'automation');
-    expect(automation?.placeholder).toBe(true);
-    expect(automation?.href).toBe('');
-    expect(PROJECT_SETTINGS_ROUTES).not.toContainEqual(
-      expect.objectContaining({ id: 'automation' }),
-    );
+    expect(automation?.placeholder).toBeUndefined();
+    expect(automation?.href).toBe('/settings/project/automation');
+    // It joins the real route set (the totality test pairs it with the
+    // on-disk automation/page.tsx).
+    expect(PROJECT_SETTINGS_ROUTES).toContainEqual(expect.objectContaining({ id: 'automation' }));
   });
 });
 
 describe('projectSettingsNav registry — access matrix (rides the 6.4.3 policy)', () => {
-  it('a project admin sees every entry (incl. the placeholder slot)', () => {
+  it('a project admin sees every entry (incl. the admin-only Automation route)', () => {
     expect(visibleSettingsNav(ADMIN)).toEqual(PROJECT_SETTINGS_NAV);
     expect(visibleSettingsNav(ADMIN, PROJECT_SETTINGS_ROUTES)).toEqual(PROJECT_SETTINGS_ROUTES);
   });
 
-  it('a member sees every entry too — members VIEW every section (read-only)', () => {
-    expect(visibleSettingsNav(MEMBER)).toEqual(PROJECT_SETTINGS_NAV);
-    expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_ROUTES)).toEqual(PROJECT_SETTINGS_ROUTES);
+  it('a member sees every section EXCEPT Automation (admin-only, no read-only variant)', () => {
+    const memberNav = visibleSettingsNav(MEMBER);
+    expect(memberNav.map((e) => e.id)).not.toContain('automation');
+    // Everything else (the browse-gated sections) stays visible to a member.
+    expect(memberNav).toEqual(PROJECT_SETTINGS_NAV.filter((e) => e.id !== 'automation'));
+    expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_ROUTES)).toEqual(
+      PROJECT_SETTINGS_ROUTES.filter((e) => e.id !== 'automation'),
+    );
   });
 
   it('a no-browse actor sees NOTHING — the whole area filters away (no nav leak)', () => {
@@ -121,9 +126,10 @@ describe('projectSettingsNav registry — active detection', () => {
     expect(isSettingsEntryActive(board, '/settings/project/workflow')).toBe(false);
   });
 
-  it('the placeholder (no href) is never active', () => {
+  it('the Automation entry is active on its route, not on the area root', () => {
     const automation = PROJECT_SETTINGS_NAV.find((e) => e.id === 'automation')!;
     expect(isSettingsEntryActive(automation, '/settings/project')).toBe(false);
+    expect(isSettingsEntryActive(automation, '/settings/project/automation')).toBe(true);
   });
 });
 
