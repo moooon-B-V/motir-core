@@ -259,7 +259,7 @@ export const story_6_5: PlanStory = {
       id: '6.5.3',
       title:
         'Details landing at `/settings/project` — read-only project identity + the re-homed Archive danger zone (the 6.8 seam)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
