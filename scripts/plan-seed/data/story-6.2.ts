@@ -295,7 +295,7 @@ export const story_6_2: PlanStory = {
       id: '6.2.3',
       title:
         'Save + apply UI on /issues — Save/Save-as with dirty state, the filter dropdown (starred/mine/project/defaults), name chip, star toggle',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
@@ -427,7 +427,7 @@ export const story_6_2: PlanStory = {
       id: '6.2.6',
       title:
         'Story tests — permission/visibility matrix + persist→resolve properties + the save→share→subscribe E2E + a11y sweep',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
