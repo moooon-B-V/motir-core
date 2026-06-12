@@ -454,7 +454,7 @@ export const story_6_3: PlanStory = {
       id: '6.3.5',
       title:
         'Dashboards UI at /dashboard — list/create/switch, the grid (view/edit, layouts, dnd), widget add/config/remove, the three widget renderers + all states',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 38,
