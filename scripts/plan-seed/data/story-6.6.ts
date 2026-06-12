@@ -254,7 +254,7 @@ export const story_6_6: PlanStory = {
       id: '6.6.2',
       title:
         'Execution engine — `work-item/created` + `work-item/field.changed` events, the rule-run Inngest job (match → conditions → actions-as-owner), loop prevention, audit writes, auto-disable + owner error email, retention sweep',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 38,
