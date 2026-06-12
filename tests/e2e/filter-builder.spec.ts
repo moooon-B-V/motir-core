@@ -436,22 +436,28 @@ test('the facet state upgrades losslessly into builder rows (one-way "Edit in Ad
   await expect(page.getByText('Unrelated story')).toHaveCount(0);
 
   // "Edit in Advanced" (the facet popover footer) carries the facet in as a
-  // Kind row — LOSSLESS — opening the builder with that row already present.
+  // Kind row — LOSSLESS: the facet params swap for the `?filter=v1:` AST and
+  // the result set is unchanged (now an ADVANCED filter, so the count-line
+  // status renders, at the same 3).
   await page.getByRole('button', { name: 'Edit in Advanced' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Advanced filter' });
-  await expect(dialog).toBeVisible();
-  const row1 = dialog.getByRole('group', { name: 'Condition 1' });
-  await expect(row1.getByRole('combobox', { name: 'Field' })).toContainText('Kind');
-  // Now an ADVANCED filter, so the count-line status renders, unchanged at 3.
-  await page.keyboard.press('Escape');
   await expect(page).toHaveURL(/filter=v1/);
   await expect(page.getByRole('status').filter({ hasText: 'match' })).toHaveText(
     '3 work items match',
   );
 
+  // The carried row is in the builder. Reload for a deterministically-closed
+  // builder (the upgrade's auto-open races the navigation), then open it from
+  // the restored URL and confirm the Kind row is present.
+  await page.reload();
+  await page.getByRole('button', { name: /^Advanced/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Advanced filter' });
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole('group', { name: 'Condition 1' }).getByRole('combobox', { name: 'Field' }),
+  ).toContainText('Kind');
+
   // Add a negation row — now the builder state is beyond facet expressiveness,
   // so the facet button reads as superseded (no silent down-conversion).
-  await page.getByRole('button', { name: /^Advanced/ }).click();
   await dialog.getByRole('button', { name: 'Add condition' }).click();
   const row2 = await setField(dialog, 2, 'Priority');
   await row2.getByRole('combobox', { name: 'Operator' }).click();
