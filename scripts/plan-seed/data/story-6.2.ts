@@ -295,7 +295,7 @@ export const story_6_2: PlanStory = {
       id: '6.2.3',
       title:
         'Save + apply UI on /issues — Save/Save-as with dirty state, the filter dropdown (starred/mine/project/defaults), name chip, star toggle',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
