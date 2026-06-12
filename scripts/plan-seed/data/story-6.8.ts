@@ -346,7 +346,7 @@ export const story_6_8: PlanStory = {
       id: '6.8.4',
       title:
         'Editable Details page — name/avatar editing on the 6.5.3 landing, the change-key flow, previous keys + release, switcher chip, admin gating',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
@@ -394,7 +394,7 @@ export const story_6_8: PlanStory = {
       id: '6.8.5',
       title:
         'Story tests — rename-tx matrix (atomicity, collisions, races, reclaim/release) + redirect/serve matrix + the rename E2E journey + a11y sweep',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
