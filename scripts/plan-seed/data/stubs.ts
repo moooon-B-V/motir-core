@@ -245,6 +245,14 @@ export const STUB_STORIES: PlanStory[] = [
   //   orchestration + a manual-test each. Defaults: scaffold-then-build, curated
   //   promote-to-starter, Motir-owned repo with transfer-on-request.
 
+  // 7.19 (Design system selection — palette/typography/shape → project design
+  //   tokens, recorded in motir-ai) — data/story-7.19.ts. Added 2026-06-12. The
+  //   PRE-PLANNING step for all 6 workflows: the user picks palette + shape
+  //   (from getdesign.md) + typography (curated) → the project's `--el-*` +
+  //   `[data-display-style]` tokens, confirmed on a /tokens-style page. The 5th
+  //   motir-ai store (the designer's contract, sibling to 7.14's coding
+  //   convention); injected into ALL later design-subtask planning.
+
   // ── Epic 8: Launch readiness ──────────────────────────────────────────────
   {
     id: '8.1',
