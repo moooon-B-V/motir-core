@@ -6,6 +6,10 @@ import { automationRuleExecutionRepository } from '@/lib/repositories/automation
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService, loadFilterReferents } from '@/lib/services/workItemsService';
+import { watchersService } from '@/lib/services/watchersService';
+import { commentsService } from '@/lib/services/commentsService';
+import { labelsService } from '@/lib/services/labelsService';
+import { customFieldValuesService } from '@/lib/services/customFieldValuesService';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { decodeFilterEnvelope, type FilterAst } from '@/lib/filters/ast';
 import {
@@ -62,7 +66,11 @@ import type { AutomationTriggerType } from '@prisma/client';
 export interface AutomationEngineEventInput {
   trigger: AutomationTriggerType;
   workspaceId: string;
-  projectId: string;
+  /** The triggering item's project. The `created` / `field.changed` events
+   * carry it directly (one fewer read); the Epic-5-sourced `transitioned` /
+   * `comment.created` events (5.4.5 / 5.1.2) DON'T, so it's optional and the
+   * engine resolves it from the item (Subtask 6.6.3). */
+  projectId?: string;
   workItemId: string;
   /** The job event's id — the idempotency key half (rule × event). */
   eventId: string;
@@ -142,6 +150,46 @@ const ACTION_EXECUTORS: {
     const ownerCtx = ownerServiceContext(ctx);
     await workItemsService.updateWorkItem(ctx.workItemId, setFieldPatch(config), ownerCtx);
   },
+  // --- Epic-5 actions (Subtask 6.6.3), each through its owning shipped service
+  // AS THE OWNER. Full side-effect fidelity: watcher rows, mention parsing +
+  // emails, find-or-create labels, per-type CF validation + revision diffs — all
+  // exactly as a person's edit would produce. A stale / ineligible referent
+  // (deleted user, archived option, non-member) is the SERVICE's typed throw,
+  // caught one level up as a RECORDED failure (the 6.1 stale-referent rule). ---
+  async add_watcher(config, ctx) {
+    // watchersService.addWatcher (5.4.4): the target's view-access validation is
+    // the authority — an ineligible / deleted user throws (a recorded failure),
+    // never the mirror's silent drop. Idempotent on an already-watching target.
+    await watchersService.addWatcher(ctx.workItemId, config.userId, ownerServiceContext(ctx));
+  },
+  async add_comment(config, ctx) {
+    // commentsService.addComment (5.1.2): mention parsing runs; the comment's own
+    // `work-item/comment.created` event is stamped with this rule's provenance
+    // (via the owner ServiceContext), so mention emails still send but no rule
+    // re-fires off it (loop prevention — invariant #1).
+    await commentsService.addComment(
+      ctx.workItemId,
+      { bodyMd: config.bodyMd },
+      ownerServiceContext(ctx),
+    );
+  },
+  async add_label(config, ctx) {
+    // labelsService.addLabel (5.4.2): find-or-create, idempotent if already
+    // present, records the labels revision. The per-issue label cap throws a
+    // recorded failure.
+    await labelsService.addLabel(ctx.workItemId, config.name, ownerServiceContext(ctx));
+  },
+  async set_custom_field(config, ctx) {
+    // customFieldValuesService.setValue (5.3.3): per-type validation + the 1.4.6
+    // revision diff apply. A deleted field / archived option / non-member user
+    // is a recorded failure (stale referent), never a crash.
+    await customFieldValuesService.setValue(
+      ctx.workItemId,
+      config.fieldId,
+      config.value,
+      ownerServiceContext(ctx),
+    );
+  },
 };
 
 /** Build the owner-attributed ServiceContext for an action, stamped with the
@@ -184,13 +232,24 @@ export const automationEngineService = {
     };
 
     // (1) Loop prevention — a rule never fires off another rule's action.
+    // Short-circuits BEFORE any read (the `before any read` half of invariant
+    // #1), which is also why the projectId resolution below sits AFTER it: a
+    // provenance-carrying `comment.created` / `transitioned` event never even
+    // reads the item to find its project.
     if (input.viaAutomationRuleId) {
       summary.skipped = true;
       return summary;
     }
 
+    // The Epic-5-sourced events (5.4.5 transitioned / 5.1.2 comment.created)
+    // don't carry projectId — resolve it from the item (Subtask 6.6.3). A
+    // since-deleted item (gone within the async window) has no project ⇒ no
+    // rules match ⇒ the run is a clean no-op, never a crash.
+    const projectId = input.projectId ?? (await this.resolveProjectId(input));
+    if (!projectId) return summary;
+
     const rules = await automationRuleRepository.listEnabledByProjectAndTrigger(
-      input.projectId,
+      projectId,
       input.trigger,
     );
     const matching = rules.filter((rule) => triggerMatches(rule, input));
@@ -214,6 +273,18 @@ export const automationEngineService = {
       }
     }
     return summary;
+  },
+
+  /**
+   * Resolve the triggering item's project (Subtask 6.6.3) — for the Epic-5
+   * events that don't carry it. Tenant-checked against the event's workspace
+   * (an item from another workspace, or a since-deleted one, yields null ⇒ the
+   * caller treats the run as a clean no-op). One indexed read.
+   */
+  async resolveProjectId(input: AutomationEngineEventInput): Promise<string | null> {
+    const item = await workItemRepository.findById(input.workItemId);
+    if (!item || item.workspaceId !== input.workspaceId) return null;
+    return item.projectId;
   },
 
   /**

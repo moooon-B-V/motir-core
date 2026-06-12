@@ -76,6 +76,16 @@ export interface WorkItemCommentCreatedData {
   /** The actor whose write produced the mentions (comment author / editor). */
   authorId: string;
   mentionedUserIds: string[];
+  /**
+   * Automation provenance (Story 6.6 · Subtask 6.6.3). Set to the rule id when
+   * this comment was written by an automation rule's `add_comment` action;
+   * absent on an ordinary user comment. The automation engine's `commented`-
+   * trigger consumer SKIPS any event carrying this — the verified Jira loop-
+   * prevention default (rules don't trigger rules), so an add-comment action
+   * cannot re-fire a comment-trigger rule. The mention / watcher consumers
+   * ignore it (mention + watcher emails still send for an automation comment).
+   */
+  viaAutomationRuleId?: string;
 }
 
 /**

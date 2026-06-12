@@ -29,7 +29,15 @@ import {
 // 6.1.6 totality-guard pattern).
 
 const KNOWN_TRIGGER_EDITOR_KINDS = new Set(['none', 'transition', 'field-changed']);
-const KNOWN_ACTION_EDITOR_KINDS = new Set(['transition', 'set-field']);
+const KNOWN_ACTION_EDITOR_KINDS = new Set([
+  'transition',
+  'set-field',
+  // Epic-5 extension editor kinds (6.6.3).
+  'add-watcher',
+  'add-comment',
+  'add-label',
+  'set-custom-field',
+]);
 
 // A canonical valid raw config per trigger type — the enumeration fixture.
 const VALID_TRIGGER_CONFIG: Record<AutomationTriggerType, unknown> = {
@@ -39,10 +47,16 @@ const VALID_TRIGGER_CONFIG: Record<AutomationTriggerType, unknown> = {
   field_changed: { field: 'assignee' },
 };
 
-// A canonical valid raw action per action type — the enumeration fixture.
+// A canonical valid raw action per action type — the enumeration fixture. The
+// four Epic-5 entries (6.6.3) MUST be present or the totality test fails (the
+// 6.1.6 totality-guard: a registry entry without its fixture is caught here).
 const VALID_ACTION: Record<AutomationActionType, unknown> = {
   transition: { type: 'transition', toStatusId: 's-done' },
   set_field: { type: 'set_field', field: 'priority', value: 'high' },
+  add_watcher: { type: 'add_watcher', userId: 'u-1' },
+  add_comment: { type: 'add_comment', bodyMd: 'Verify the fix' },
+  add_label: { type: 'add_label', name: 'needs-qa' },
+  set_custom_field: { type: 'set_custom_field', fieldId: 'cf-1', value: 'opt-1' },
 };
 
 describe('trigger registry — totality', () => {
@@ -213,5 +227,83 @@ describe('action config validation', () => {
 
   it('the set-field field vocabulary is exactly the field-changed vocabulary (one settable set)', () => {
     expect([...AUTOMATION_SET_FIELDS].sort()).toEqual([...AUTOMATION_FIELD_CHANGED_FIELDS].sort());
+  });
+});
+
+// --- Epic-5 action extensions (Subtask 6.6.3) — config-shape validation; the
+// referent ids stay OPEN (existence is a stale-referent check at execution). ---
+describe('Epic-5 action config validation (6.6.3)', () => {
+  it('add_watcher requires a non-empty open userId', () => {
+    expect(parseAction({ type: 'add_watcher', userId: 'u-7' })).toEqual({
+      type: 'add_watcher',
+      userId: 'u-7',
+    });
+    expect(() => parseAction({ type: 'add_watcher' })).toThrow(InvalidAutomationActionConfigError);
+    expect(() => parseAction({ type: 'add_watcher', userId: '' })).toThrow(
+      InvalidAutomationActionConfigError,
+    );
+    expect(() => parseAction({ type: 'add_watcher', userId: 5 })).toThrow(
+      InvalidAutomationActionConfigError,
+    );
+  });
+
+  it('add_comment requires a non-empty body within the length bound', () => {
+    expect(parseAction({ type: 'add_comment', bodyMd: 'ship it' })).toEqual({
+      type: 'add_comment',
+      bodyMd: 'ship it',
+    });
+    expect(() => parseAction({ type: 'add_comment', bodyMd: '   ' })).toThrow(
+      InvalidAutomationActionConfigError,
+    );
+    expect(() => parseAction({ type: 'add_comment' })).toThrow(InvalidAutomationActionConfigError);
+    expect(() => parseAction({ type: 'add_comment', bodyMd: 'x'.repeat(5001) })).toThrow(
+      InvalidAutomationActionConfigError,
+    );
+  });
+
+  it('add_label requires a non-empty name within the label length cap', () => {
+    expect(parseAction({ type: 'add_label', name: 'needs-qa' })).toEqual({
+      type: 'add_label',
+      name: 'needs-qa',
+    });
+    expect(() => parseAction({ type: 'add_label', name: '' })).toThrow(
+      InvalidAutomationActionConfigError,
+    );
+    expect(() => parseAction({ type: 'add_label', name: 'x'.repeat(61) })).toThrow(
+      InvalidAutomationActionConfigError,
+    );
+  });
+
+  it('set_custom_field takes an open fieldId + a scalar value (string / number / null)', () => {
+    expect(parseAction({ type: 'set_custom_field', fieldId: 'cf-1', value: 'opt-1' })).toEqual({
+      type: 'set_custom_field',
+      fieldId: 'cf-1',
+      value: 'opt-1',
+    });
+    expect(parseAction({ type: 'set_custom_field', fieldId: 'cf-1', value: 42 })).toEqual({
+      type: 'set_custom_field',
+      fieldId: 'cf-1',
+      value: 42,
+    });
+    expect(parseAction({ type: 'set_custom_field', fieldId: 'cf-1', value: null })).toEqual({
+      type: 'set_custom_field',
+      fieldId: 'cf-1',
+      value: null,
+    });
+    // Absent value normalizes to a clear (null).
+    expect(parseAction({ type: 'set_custom_field', fieldId: 'cf-1' })).toEqual({
+      type: 'set_custom_field',
+      fieldId: 'cf-1',
+      value: null,
+    });
+    expect(() => parseAction({ type: 'set_custom_field', fieldId: '' })).toThrow(
+      InvalidAutomationActionConfigError,
+    );
+    expect(() =>
+      parseAction({ type: 'set_custom_field', fieldId: 'cf-1', value: { nested: true } }),
+    ).toThrow(InvalidAutomationActionConfigError);
+    expect(() =>
+      parseAction({ type: 'set_custom_field', fieldId: 'cf-1', value: Number.NaN }),
+    ).toThrow(InvalidAutomationActionConfigError);
   });
 });
