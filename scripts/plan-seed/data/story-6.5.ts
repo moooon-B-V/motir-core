@@ -259,7 +259,7 @@ export const story_6_5: PlanStory = {
       id: '6.5.3',
       title:
         'Details landing at `/settings/project` — read-only project identity + the re-homed Archive danger zone (the 6.8 seam)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
@@ -300,7 +300,7 @@ export const story_6_5: PlanStory = {
       id: '6.5.4',
       title:
         'Story tests — registry totality + role-gating matrix + the settings-area E2E journey + a11y sweep',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 28,
