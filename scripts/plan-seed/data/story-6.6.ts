@@ -503,7 +503,7 @@ export const story_6_6: PlanStory = {
       id: '6.6.6',
       title:
         'Audit-log UI — per-rule execution log (status, error detail, pagination) + last-run surfacing + the auto-disabled banner wiring',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 25,
@@ -539,7 +539,7 @@ export const story_6_6: PlanStory = {
       id: '6.6.7',
       title:
         'Story tests — engine matrix + loop/idempotency/auto-disable proofs + the author→fire→audit E2E + a11y sweep',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
