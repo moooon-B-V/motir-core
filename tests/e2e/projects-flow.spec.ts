@@ -96,7 +96,11 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   await expect(page.getByText('Project created').first()).toBeVisible({ timeout: 5_000 });
   // Top-nav switcher now shows Mobile App
   await expect(page.getByRole('button', { name: 'Switch project' })).toContainText('Mobile App');
-  await expect(page.getByText('Active project:')).toBeVisible();
+  // /dashboard now lands on the dashboards home (Subtask 6.3.5 replaced the
+  // 1.1.2 smoke greeting per the page-comment contract); with a project but no
+  // dashboards yet it renders the "Dashboards" heading + the create-first
+  // empty state.
+  await expect(page.getByRole('heading', { name: 'Dashboards', exact: true })).toBeVisible();
 
   // 3) Switcher — open state
   await page.getByRole('button', { name: 'Switch project' }).click();
