@@ -70,7 +70,7 @@ import type { PlanStory } from '../types';
 export const story_6_5: PlanStory = {
   id: '6.5',
   title: 'Project admin surface',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The unified **project-settings area**: one grouped settings navigation wrapping every ' +
     'per-project admin page — **Details** (this story; 6.8 makes it editable), **Members & ' +
@@ -300,7 +300,7 @@ export const story_6_5: PlanStory = {
       id: '6.5.4',
       title:
         'Story tests — registry totality + role-gating matrix + the settings-area E2E journey + a11y sweep',
-      status: 'planned',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 28,

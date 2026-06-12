@@ -1323,6 +1323,124 @@
         "helper": "选择Motir界面使用的语言。",
         "label": "语言"
       }
+    },
+    "automation": {
+      "title": "自动化",
+      "subtitle": "当{projectName}中发生某些事件时，自动执行操作。规则以其所有者身份运行——只有项目管理员可以管理规则。",
+      "createRule": "创建规则",
+      "ruleCount": "共{total}条规则中的{count}条",
+      "perProjectCap": "每个项目最多{max}条规则",
+      "capReached": "已达{max}条规则上限——删除一条规则后才能新增。",
+      "empty": {
+        "title": "暂无规则",
+        "description": "让重复性工作自动化——在发生特定事件时流转工作项、设置字段、添加关注者或评论。规则以其所有者身份运行。"
+      },
+      "noAccess": {
+        "title": "仅限管理员",
+        "description": "项目自动化由项目管理员管理。如需修改规则，请联系管理员。"
+      },
+      "row": {
+        "enabledAria": "已启用——{name}",
+        "neverRun": "从未运行",
+        "autoDisabled": "已自动停用 · {count}次失败",
+        "actionsAria": "{name}的操作",
+        "reEnable": "重新启用"
+      },
+      "triggerSummary": {
+        "created": "创建时",
+        "transitioned": "流转时",
+        "field_changed": "字段变更时",
+        "commented": "评论时"
+      },
+      "autoDisabledBanner": "{name}在连续{count}次失败后已被自动停用。请修复规则后重新启用——重新启用会重置失败计数。",
+      "menu": {
+        "edit": "编辑",
+        "enable": "启用",
+        "disable": "停用",
+        "delete": "删除"
+      },
+      "delete": {
+        "title": "删除{name}？",
+        "body": "这将永久删除该规则及其运行历史，且无法撤销。",
+        "confirm": "删除规则"
+      },
+      "editor": {
+        "createTitle": "新建规则",
+        "nameLabel": "规则名称",
+        "namePlaceholder": "为规则命名",
+        "nameRequired": "请为规则填写名称。",
+        "nameTooLong": "名称需少于{max}个字符。",
+        "enabledAria": "规则已启用",
+        "when": "当",
+        "whenSub": "触发条件——每条规则一个",
+        "if": "若",
+        "ifSub": "对触发工作项的条件——可选",
+        "then": "则",
+        "thenSub": "按顺序执行操作，以规则所有者身份",
+        "triggerAria": "触发器",
+        "triggerType": {
+          "created": "工作项创建",
+          "transitioned": "工作项流转",
+          "field_changed": "字段值变更",
+          "commented": "工作项评论"
+        },
+        "noConfig": "无需进一步配置",
+        "from": "从",
+        "to": "到",
+        "anyStatus": "任意状态",
+        "fromAria": "起始状态",
+        "toAria": "目标状态",
+        "field": "字段",
+        "fieldAria": "要监视的字段",
+        "setField": {
+          "assignee": "负责人",
+          "priority": "优先级",
+          "dueDate": "截止日期",
+          "estimate": "预估工时"
+        },
+        "addAction": "添加操作",
+        "actionAria": "操作{n}",
+        "actionTypeAria": "操作类型",
+        "actionType": {
+          "transition": "流转",
+          "set_field": "设置字段"
+        },
+        "setFieldAria": "要设置的字段",
+        "statusTargetAria": "目标状态",
+        "assigneeAria": "负责人",
+        "unassigned": "未分配",
+        "priorityAria": "优先级",
+        "estimateAria": "预估工时值",
+        "estimatePlaceholder": "数值",
+        "dueDateAria": "截止日期",
+        "removeAction": "移除操作{n}",
+        "reorderAction": "重排操作{n}",
+        "moveUp": "上移",
+        "moveDown": "下移",
+        "actionCapReached": "已达{max}个操作上限——单条规则最多{max}个操作。",
+        "runsAs": "以{owner}（规则所有者）身份运行 · {max}个操作中的{count}个",
+        "needAction": "至少添加一个操作。",
+        "problem": {
+          "noTargetStatus": "请选择目标状态。",
+          "noField": "请选择字段。",
+          "noValue": "请选择值。",
+          "triggerNoField": "请选择要监视的字段。"
+        },
+        "cancel": "取消",
+        "save": "保存规则"
+      },
+      "toast": {
+        "created": "已创建规则“{name}”。",
+        "saved": "已保存规则“{name}”。",
+        "deleted": "已删除规则“{name}”。",
+        "enabled": "规则已启用。",
+        "disabled": "规则已停用。",
+        "errorTitle": "出错了",
+        "saveError": "无法保存规则，请重试。",
+        "deleteError": "无法删除规则，请重试。",
+        "toggleError": "无法更新规则，请重试。",
+        "capError": "已达到本项目{max}条规则的上限。"
+      }
     }
   },
   "boards": {
@@ -1896,5 +2014,282 @@
       "body": "此取消订阅链接格式有误或已被使用。如果你仍在收到邮件，请在「筛选器」目录中取消订阅。",
       "action": "前往工作项"
     }
+  },
+  "reports": {
+    "backToReports": "报表",
+    "hub": {
+      "title": "报表",
+      "subtitle": "对本项目的工作项、Sprint 与吞吐量的内置分析。",
+      "agileGroup": "敏捷",
+      "analysisGroup": "工作项分析",
+      "burndownTitle": "燃尽图",
+      "burndownBody": "当前 Sprint 的剩余点数。位于 Sprint 报告中。",
+      "velocityTitle": "速度图",
+      "velocityBody": "近期各 Sprint 的承诺点数与完成点数对比。",
+      "sprintReportTitle": "Sprint 报告",
+      "sprintReportBody": "某个 Sprint 的范围、已完成与遗留的工作。",
+      "createdVsResolvedTitle": "新建与解决",
+      "createdVsResolvedBody": "在一段时间内工作项的新建速度与解决速度。",
+      "distributionTitle": "状态分布",
+      "distributionBody": "按状态、负责人、优先级、类型等维度拆解工作项。",
+      "moreTitle": "更多报表",
+      "moreBody": "平均时长、解决耗时、工作量——注册表扩展项。",
+      "extensionTag": "扩展",
+      "noProjectTitle": "尚无项目",
+      "noProjectBody": "创建一个项目以查看其报表。"
+    },
+    "period": {
+      "day": "按日",
+      "week": "按周",
+      "month": "按月"
+    },
+    "periodAxis": {
+      "day": "日",
+      "week": "周",
+      "month": "月"
+    },
+    "scope": {
+      "label": "范围",
+      "project": "项目 · {name}",
+      "groupProject": "项目",
+      "groupFilters": "已保存的筛选器",
+      "searchPlaceholder": "搜索筛选器…"
+    },
+    "states": {
+      "noAccessTitle": "无访问权限",
+      "noAccessBody": "此数据所属的项目你无权查看。",
+      "emptyTitle": "此时间窗内暂无数据",
+      "emptyBody": "所选范围与时间窗内没有匹配的工作项。",
+      "staleFilterTitle": "筛选器已失效",
+      "staleFilterBody": "此报表所依赖的已保存筛选器已被删除或不再可见。",
+      "staleStatisticTitle": "统计维度不可用",
+      "staleStatisticBody": "此报表所分组的自定义字段已被删除。",
+      "resetToProject": "使用项目范围",
+      "none": "无"
+    },
+    "cvr": {
+      "title": "新建与解决",
+      "periodLabel": "周期",
+      "daysBackLabel": "回溯天数",
+      "daysBackFewer": "缩短时间窗",
+      "daysBackMore": "延长时间窗",
+      "daysBackValue": "{days} 天",
+      "aggregationLabel": "聚合方式",
+      "perPeriod": "各周期",
+      "cumulative": "累计",
+      "created": "新建",
+      "resolved": "已解决",
+      "yIssues": "工作项",
+      "net": "净值",
+      "legendCreated": "新建 · 共 {total}",
+      "legendResolved": "已解决 · 共 {total}",
+      "legendBacklog": "积压增加",
+      "legendCatchingUp": "正在追赶",
+      "chartDesc": "最近 {count} 个区间内每{period}的新建与解决对比。新建共 {created}，已解决共 {resolved}；积压增加处填充红色，团队追赶处填充绿色。",
+      "tableCaption": "每个周期的新建与解决（各周期计数）。",
+      "tableCaptionCumulative": "每个周期的新建与解决（累计总数）。",
+      "subWindow": "最近 {days} 天"
+    },
+    "distribution": {
+      "title": "状态分布",
+      "statisticLabel": "统计维度",
+      "statisticSearch": "搜索统计维度…",
+      "issues": "个工作项",
+      "chartDesc": "{total} 个工作项按{statistic}的分布：{breakdown}。",
+      "byStatistic": "按{statistic}",
+      "issuesCount": "{count, plural, other {# 个工作项}}",
+      "builtinGroup": "字段",
+      "customGroup": "自定义字段",
+      "unknownStatistic": "未知"
+    },
+    "statistic": {
+      "kind": "类型",
+      "status": "状态",
+      "priority": "优先级",
+      "assignee": "负责人",
+      "reporter": "创建人",
+      "sprint": "Sprint",
+      "label": "标签",
+      "component": "组件"
+    }
+  },
+  "dashboards": {
+    "title": "仪表板",
+    "subtitle": "将项目和已保存筛选器上的小组件组织为可共享的命名网格。",
+    "newDashboard": "新建仪表板",
+    "groupMine": "我的仪表板",
+    "groupShared": "与工作区共享",
+    "ownedByYou": "由你拥有",
+    "widgetCount": "{count, plural, other {# 个小组件}}",
+    "viewOnly": "仅查看",
+    "accessPrivate": "私有",
+    "accessWorkspace": "工作区",
+    "optionsAria": "仪表板选项",
+    "open": "打开",
+    "rename": "重命名",
+    "changeAccess": "更改访问权限",
+    "delete": "删除",
+    "backToList": "仪表板",
+    "empty": {
+      "title": "创建你的第一个仪表板",
+      "body": "仪表板将小组件——问题表格、图表和报表——汇集到一个可共享的视图中，覆盖你的项目和已保存筛选器。"
+    },
+    "create": {
+      "title": "新建仪表板",
+      "nameLabel": "名称",
+      "namePlaceholder": "例如：团队概览",
+      "accessLabel": "访问权限",
+      "privateTitle": "私有",
+      "privateDesc": "只有你能查看和编辑。",
+      "workspaceTitle": "工作区",
+      "workspaceDesc": "工作区中的所有人都能查看，由你编辑。",
+      "submit": "创建仪表板"
+    },
+    "renameModal": {
+      "title": "重命名仪表板",
+      "label": "名称",
+      "submit": "保存"
+    },
+    "accessModal": {
+      "title": "更改访问权限",
+      "submit": "保存"
+    },
+    "deleteModal": {
+      "title": "删除“{name}”？",
+      "body": "这会为所有人移除该仪表板及其小组件，且无法撤销。",
+      "confirm": "删除仪表板"
+    },
+    "grid": {
+      "switchAria": "切换仪表板",
+      "edit": "编辑",
+      "done": "完成",
+      "cancel": "取消",
+      "layoutLabel": "布局",
+      "layoutOne": "一列",
+      "layoutTwo": "两列",
+      "layoutThree": "三列",
+      "addWidget": "添加小组件",
+      "capNote": "{count} / {max} 个小组件",
+      "capReachedNote": "{max} / {max} 个小组件——请移除一个再添加",
+      "dropHere": "拖放到此处",
+      "emptyTitle": "尚无小组件",
+      "emptyBody": "添加一个小组件，开始搭建这个仪表板。",
+      "emptyViewerTitle": "这里还没有内容",
+      "emptyViewerBody": "所有者尚未向该仪表板添加任何小组件。",
+      "reorderAria": "重新排序 {title}",
+      "columnAria": "第 {n} 列",
+      "ownerMeta": "由你拥有 · {count, plural, other {# 个小组件}}",
+      "sharedMeta": "由 {owner} 拥有 · {count, plural, other {# 个小组件}}"
+    },
+    "widget": {
+      "optionsAria": "小组件选项",
+      "configure": "配置",
+      "remove": "移除",
+      "regionAria": "{title} 小组件",
+      "untitled": "小组件"
+    },
+    "states": {
+      "loadingAria": "正在加载小组件…",
+      "emptyTitle": "没有匹配的问题",
+      "emptyBody": "目前没有匹配的内容。",
+      "errorTitle": "加载失败",
+      "errorBody": "获取该小组件的数据时出错。",
+      "retry": "重试",
+      "noAccessTitle": "无访问权限",
+      "noAccessBody": "该小组件指向一个你无法查看的项目，计数和行将保持隐藏。",
+      "staleTitle": "筛选器缺失",
+      "staleBody": "该小组件使用的已保存筛选器已被删除，因此无法加载结果。",
+      "chooseFilter": "选择筛选器",
+      "capTitle": "已达小组件上限",
+      "capBody": "一个仪表板最多容纳 {max} 个小组件，请移除一个再添加。"
+    },
+    "add": {
+      "title": "添加小组件",
+      "filter_results_name": "筛选结果",
+      "filter_results_desc": "来自已保存筛选器或项目的分页问题表格（每页最多 50 行）。",
+      "distribution_name": "分布",
+      "distribution_desc": "按状态、经办人、优先级、类型等对问题进行细分的圆环图。",
+      "created_vs_resolved_name": "创建对比解决",
+      "created_vs_resolved_desc": "随时间推移，创建的问题与已解决的问题的双序列趋势。"
+    },
+    "config": {
+      "addTitle_filter_results": "筛选结果",
+      "addTitle_distribution": "分布",
+      "addTitle_created_vs_resolved": "创建对比解决",
+      "dataSource": "数据源",
+      "sourceFilter": "已保存筛选器",
+      "sourceProject": "项目",
+      "pickFilter": "选择一个已保存筛选器…",
+      "pickProject": "选择一个项目…",
+      "noFilters": "没有可用的已保存筛选器。",
+      "noProjects": "没有可用的项目。",
+      "rowsPerPage": "每页行数",
+      "rowsHint": "最多 {max} 行（小组件上限）。",
+      "statisticType": "统计类型",
+      "pickStatistic": "选择一个字段…",
+      "standardFields": "标准字段",
+      "customFields": "自定义字段",
+      "period": "周期",
+      "periodDay": "每日",
+      "periodWeek": "每周",
+      "periodMonth": "每月",
+      "daysBack": "回溯天数",
+      "daysBackHint": "最多 {max} 天（窗口上限）。",
+      "cumulative": "累计",
+      "save": "保存",
+      "cancel": "取消",
+      "sourceRequired": "请选择一个数据源。"
+    },
+    "statistic": {
+      "kind": "问题类型",
+      "status": "状态",
+      "priority": "优先级",
+      "assignee": "经办人",
+      "reporter": "报告人",
+      "sprint": "冲刺",
+      "label": "标签",
+      "component": "组件"
+    },
+    "widgetTitle": {
+      "filter_results": "筛选结果",
+      "distribution": "按{statistic}统计的问题",
+      "created_vs_resolved": "创建对比解决"
+    },
+    "source": {
+      "filter": "筛选器 · {name}",
+      "project": "项目 · {name}",
+      "stale": "筛选器缺失"
+    },
+    "toast": {
+      "errorTitle": "出错了",
+      "createError": "无法创建仪表板。",
+      "renameError": "无法重命名仪表板。",
+      "accessError": "无法更改访问权限。",
+      "deleteError": "无法删除仪表板。",
+      "layoutError": "无法更改布局。",
+      "addWidgetError": "无法添加小组件。",
+      "updateWidgetError": "无法保存小组件。",
+      "removeWidgetError": "无法移除小组件。",
+      "moveWidgetError": "无法移动小组件。"
+    },
+    "totalNoun": "个问题",
+    "donutDesc": "按{statistic}分组的 {total} 个问题的圆环图。",
+    "donutEmpty": "暂无可绘制的问题。",
+    "cvrDesc": "过去 {days} 天内每{period}创建与解决的问题对比。",
+    "unitDay": "日",
+    "unitWeek": "周",
+    "unitMonth": "月",
+    "daysShort": "{days} 天",
+    "axisBucket": "区间",
+    "none": "无",
+    "pagerRange": "{total} 中的 {from}–{to}",
+    "pagerPrev": "上一页",
+    "pagerNext": "下一页",
+    "colKey": "编号",
+    "colSummary": "摘要",
+    "colPriority": "优先级",
+    "colAssignee": "经办人",
+    "assigned": "已分配",
+    "unassigned": "未分配"
   }
 }

@@ -1,20 +1,26 @@
 import { defineJob } from '../defineJob';
-import type { WorkItemCreatedData, WorkItemFieldChangedData } from '../types';
+import type {
+  WorkItemCommentCreatedData,
+  WorkItemCreatedData,
+  WorkItemFieldChangedData,
+  WorkItemTransitionedData,
+} from '../types';
 
 // The automation EXECUTION ENGINE's Inngest jobs (Story 6.6 · Subtask 6.6.2) —
 // the rule-processing queue the verified Jira model runs (rules execute
-// asynchronously, never inline with the triggering write). Two thin event
+// asynchronously, never inline with the triggering write). FOUR thin event
 // consumers over ONE engine service (automationEngineService.runForEvent), the
 // watcherNotify shape: each narrows the typed payload and runs the engine in a
 // single durable step. The engine does the match → conditions → actions-as-
 // owner → audit pipeline; these handlers are the trigger seam.
 //
-// `work-item/created` + `work-item/field.changed` are NEW events this subtask
-// emits from the shipped workItemsService paths; each gets its own consumer
-// here. The `transitioned` + `commented` consumers (over the existing 5.4.5 /
-// 5.1.2 events) land in 6.6.3 the same way. The job ids are distinct from the
-// event names (the additional-consumer form) so a future consumer of the same
-// event — e.g. Story 5.7's in-app bell on `work-item/created` — coexists.
+// `work-item/created` + `work-item/field.changed` are NEW events 6.6.2 emits
+// from the shipped workItemsService paths; each gets its own consumer here. The
+// `transitioned` + `commented` consumers (over the existing 5.4.5 / 5.1.2
+// events) are the 6.6.3 extensions, added the same way. The job ids are
+// distinct from the event names (the additional-consumer form) so a future
+// consumer of the same event — e.g. Story 5.7's in-app bell on
+// `work-item/created` — coexists.
 //
 // `retryPolicy: 'idempotent'`: the engine is idempotent per (event × rule) by
 // construction (the 6.6.2 (rule, event) claim), so a transient DB blip is worth
@@ -60,6 +66,61 @@ export const automationEngineOnFieldChanged = defineJob(
         workItemId: payload.workItemId,
         eventId: ctx.event.id ?? ctx.runId,
         changedFields: payload.changedFields,
+        ...(payload.viaAutomationRuleId
+          ? { viaAutomationRuleId: payload.viaAutomationRuleId }
+          : {}),
+      }),
+    );
+  },
+);
+
+// The Epic-5-sourced trigger consumers (Subtask 6.6.3) — additional consumers
+// over the EXISTING 5.4.5 `work-item/transitioned` and 5.1.2
+// `work-item/comment.created` events (no new emit path). Distinct ids from the
+// already-registered watcher/mention consumers of the same events
+// (`watcher-notify/*`, `mention-notify/*`), so all coexist on Inngest. Neither
+// event carries `projectId`, so the engine resolves it from the item; both
+// honour the `viaAutomationRuleId` provenance skip (a rule's own transition /
+// comment never re-fires a rule).
+
+export const automationEngineOnTransitioned = defineJob(
+  {
+    id: 'automation-engine/transitioned',
+    trigger: 'work-item/transitioned',
+    retryPolicy: 'idempotent',
+  },
+  async (ctx, services) => {
+    const payload = ctx.event.data as WorkItemTransitionedData;
+    return ctx.step.run('run-rules', () =>
+      services.automationEngine.runForEvent({
+        trigger: 'transitioned',
+        workspaceId: payload.workspaceId,
+        workItemId: payload.workItemId,
+        eventId: ctx.event.id ?? ctx.runId,
+        fromStatusKey: payload.fromStatusKey,
+        toStatusKey: payload.toStatusKey,
+        ...(payload.viaAutomationRuleId
+          ? { viaAutomationRuleId: payload.viaAutomationRuleId }
+          : {}),
+      }),
+    );
+  },
+);
+
+export const automationEngineOnCommented = defineJob(
+  {
+    id: 'automation-engine/commented',
+    trigger: 'work-item/comment.created',
+    retryPolicy: 'idempotent',
+  },
+  async (ctx, services) => {
+    const payload = ctx.event.data as WorkItemCommentCreatedData;
+    return ctx.step.run('run-rules', () =>
+      services.automationEngine.runForEvent({
+        trigger: 'commented',
+        workspaceId: payload.workspaceId,
+        workItemId: payload.workItemId,
+        eventId: ctx.event.id ?? ctx.runId,
         ...(payload.viaAutomationRuleId
           ? { viaAutomationRuleId: payload.viaAutomationRuleId }
           : {}),

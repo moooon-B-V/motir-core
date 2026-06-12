@@ -6,6 +6,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
 import { decodeFilterParam, encodeFilterEnvelope, type FilterAst } from '@/lib/filters/ast';
 import { validateFilterAst } from '@/lib/filters/registry';
+import { loadFilterReferents } from '@/lib/services/workItemsService';
 import { MalformedFilterError } from '@/lib/filters/errors';
 import {
   parseAction,
@@ -47,6 +48,10 @@ interface NormalizedRule {
   name: string;
   triggerType: AutomationTriggerType;
   triggerConfig: AutomationTriggerConfig;
+  /** The decoded condition AST — kept alongside the stored envelope so the
+   * per-project referent validation (Subtask 6.6.3) can re-check its Epic-5
+   * dynamic rows once the project is resolved. */
+  conditionAst: FilterAst;
   conditionEnvelope: Prisma.InputJsonValue;
   actions: AutomationActionConfig[];
 }
@@ -73,17 +78,43 @@ function normalizeName(raw: unknown): string {
   return name;
 }
 
-/** Decode + deep-validate the incoming condition param into the stored
- * envelope. Null / '' → the empty always-match group. Forgery (bad structure,
- * unknown static field, bad value) throws a typed FilterValidationError /
- * MalformedFilterError (→ 422) — the 6.1 injection posture, extended here. */
-function normalizeCondition(filterParam: string | null): Prisma.InputJsonValue {
+/** Decode + structurally validate the incoming condition param. Null / '' → the
+ * empty always-match group. Forgery (bad structure, unknown STATIC field, bad
+ * static value, over-cap) throws a typed FilterValidationError /
+ * MalformedFilterError (→ 422) — the 6.1 injection posture. This first pass runs
+ * with EMPTY referents (no DB), so an Epic-5 DYNAMIC row (`cf:<id>` custom field)
+ * is only structure-checked here; its operator/value + referent are fully
+ * validated by {@link validateConditionAgainstProject} once the project is known
+ * (Subtask 6.6.3). Returns both the decoded AST (for that second pass) and the
+ * stored envelope. */
+function normalizeCondition(filterParam: string | null): {
+  ast: FilterAst;
+  envelope: Prisma.InputJsonValue;
+} {
   const ast: FilterAst =
     filterParam == null || filterParam === ''
       ? { combinator: 'and', conditions: [] }
       : decodeIncoming(filterParam);
   validateFilterAst(ast);
-  return encodeFilterEnvelope(ast) as unknown as Prisma.InputJsonValue;
+  return { ast, envelope: encodeFilterEnvelope(ast) as unknown as Prisma.InputJsonValue };
+}
+
+/** Fully validate a condition AST's Epic-5 DYNAMIC rows against the project's
+ * referents (Subtask 6.6.3) — the same resolution the 6.1.x read path runs,
+ * pulled to write time. Loads the project's custom-field / label / component
+ * referents and re-runs `validateFilterAst` WITH them, so a `cf:<id>` row's
+ * operator/value is checked against the field's real type (a forged one → 422),
+ * while a stale referent (deleted field/option/label/component) is NOT an error
+ * — it compiles to match-nothing at execution (the durable 6.1 rule). A
+ * condition with no Epic-5 rows resolves `referents` to `undefined` and this is
+ * a cheap re-validate with the empty set. */
+async function validateConditionAgainstProject(
+  ast: FilterAst,
+  projectId: string,
+  workspaceId: string,
+): Promise<void> {
+  const referents = await loadFilterReferents(projectId, workspaceId, ast);
+  validateFilterAst(ast, referents);
 }
 
 function decodeIncoming(filterParam: string): FilterAst {
@@ -110,8 +141,15 @@ function normalizeRule(input: AutomationRuleWriteInput): NormalizedRule {
   const name = normalizeName(input.name);
   const triggerConfig = parseTriggerConfig(input.triggerType, input.triggerConfig);
   const actions = normalizeActions(input.actions);
-  const conditionEnvelope = normalizeCondition(input.conditionFilterParam);
-  return { name, triggerType: triggerConfig.type, triggerConfig, conditionEnvelope, actions };
+  const condition = normalizeCondition(input.conditionFilterParam);
+  return {
+    name,
+    triggerType: triggerConfig.type,
+    triggerConfig,
+    conditionAst: condition.ast,
+    conditionEnvelope: condition.envelope,
+    actions,
+  };
 }
 
 /** Resolve the project by key within the actor's workspace AND assert the actor
@@ -169,6 +207,9 @@ export const automationRulesService = {
     const normalized = normalizeRule(input);
     return withWorkspaceContext(ctx, async (tx) => {
       const projectId = await resolveManageableProject(projectKey, ctx, tx);
+      // 6.6.3: fully validate the condition's Epic-5 dynamic rows now that the
+      // project is known (the registry pre-pass only structure-checked them).
+      await validateConditionAgainstProject(normalized.conditionAst, projectId, ctx.workspaceId);
       const count = await automationRuleRepository.countByProject(projectId, tx);
       if (count >= AUTOMATION_RULES_PER_PROJECT_CAP) {
         throw new AutomationRuleLimitError(AUTOMATION_RULES_PER_PROJECT_CAP);
@@ -202,6 +243,8 @@ export const automationRulesService = {
     const normalized = normalizeRule(input);
     return withWorkspaceContext(ctx, async (tx) => {
       const projectId = await resolveManageableProject(projectKey, ctx, tx);
+      // 6.6.3: validate the condition's Epic-5 dynamic rows against the project.
+      await validateConditionAgainstProject(normalized.conditionAst, projectId, ctx.workspaceId);
       const locked = await automationRuleRepository.lockByIdInProject(ruleId, projectId, tx);
       if (!locked) throw new AutomationRuleNotFoundError(ruleId);
       const row = await automationRuleRepository.update(

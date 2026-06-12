@@ -982,6 +982,137 @@ export const EPICS: EpicMeta[] = [
       'alternative: **search & filtering**, **dashboards & reports**, **roles & permissions**, ' +
       'project admin, and **automation rules**. After this epic, motir-core is a feature-complete ' +
       'PM tool — ready for the AI Planning Layer (Epic 7) to sit on top.',
+    items: [
+      {
+        id: 'bug-issue-detail-eyebrow-overflows-viewport',
+        kind: 'bug',
+        title:
+          'Issue detail page overflows the viewport horizontally when the parent-breadcrumb eyebrow is long — right-rail controls scroll off-screen',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** issue detail page (`/issues/[key]`, Subtask 2.4.1 — ' +
+          '`app/(authed)/issues/[key]/page.tsx` + Subtask 2.4.3 — ' +
+          '`ParentBreadcrumb.tsx`) · **Status:** open · **Reported by:** Yue.\n\n' +
+          'On the issue **detail** page (`/issues/[key]`), some work items render with a ' +
+          'page width LARGER than the browser viewport — the entire page is pushed to the ' +
+          'right and the rightmost controls in the header (the watch popover trigger + the ' +
+          '**Edit** button) and the right-rail (CoreFieldsPanel — status, assignee, priority, ' +
+          'labels, components, etc.) are clipped off-screen. The overflow originates beneath ' +
+          "the authed shell, but the consequence is the same: fields on the right aren't " +
+          'reachable without horizontal scroll. Most items render correctly; only some ' +
+          'trigger it — the ones with a long ancestor chain in their eyebrow.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open the `moooon` / `motir` ' +
+          'project, navigate to a subtask whose Story title is long — e.g. **PROD-346** ' +
+          '(Subtask 6.6.6 "Audit-log UI — per-rule execution log …", whose parent is ' +
+          'Story 6.6 "Automation rules"); or **PROD-356** (under Story 6.8 "Edit project ' +
+          'details + change project key (with old-key redirects)"). Observe at typical ' +
+          'laptop widths: the eyebrow row renders on ONE line and extends past the right ' +
+          'edge of the viewport, the page-body description text gets cut off mid-word at ' +
+          'the right edge ("dura…" in the original repro), and the right rail ' +
+          '(CoreFieldsPanel) is partly or fully off-screen. Items with a short Story title ' +
+          "(or a top-level item with no breadcrumb at all) render normally — that's why " +
+          "it's intermittent. Yue's follow-up screenshot of PROD-356's eyebrow shows the " +
+          'row laid out as `PROD-356 · ⚡ Epic: Epic 6: Search, reporting & admin · 📖 ' +
+          'Story: 6.8 Edit project details + change project key (with old-key redirects) · ' +
+          'blocked` on a single non-wrapping line wider than the viewport — the smoking gun.\n\n' +
+          '**Root cause (hypothesis to verify in the fix Subtask).** The eyebrow row in ' +
+          '`app/(authed)/issues/[key]/page.tsx` (~line 220) is a ' +
+          '`<div className="flex flex-wrap items-center gap-x-3 gap-y-2">` whose children ' +
+          'include the type icon, the identifier, **`<ParentBreadcrumb>`**, a status `Pill`, ' +
+          'and an `ml-auto` right cluster (rollup badge + watch + edit). ' +
+          '`ParentBreadcrumb` correctly sets `min-w-0 flex-wrap` on its OWN `<nav>` and ' +
+          '`truncate` on the title span (`ParentBreadcrumb.tsx:30, 44`) — **but only the ' +
+          "breadcrumb's INNER track has `min-w-0`; the breadcrumb sits as a flex child of " +
+          'the eyebrow with no `flex-1 min-w-0` wrapper, so the eyebrow flex track resolves ' +
+          'the breadcrumb to its min-content width (the default for a flex item is ' +
+          '`min-width: auto`, i.e. min-content).** `truncate` only fires when the container ' +
+          "is bounded; here it isn't, so the breadcrumb grows to its full text width. The " +
+          "eyebrow then exceeds the viewport. AND the page body's " +
+          '`grid grid-cols-1 gap-6 md:grid-cols-[1fr_18rem]` (`page.tsx:264`) has the same ' +
+          'shape — `1fr` is `minmax(auto, 1fr)`, so any wide min-content child (the eyebrow ' +
+          'above OR a wide `<pre>` / table / long URL inside the Markdown description) ' +
+          'pushes the whole grid wider than the viewport. The authed shell wrapper ' +
+          '(`app/(authed)/layout.tsx:117`, `<div className="px-4 py-6 sm:px-6 lg:px-8">`) ' +
+          'sets only padding — no `min-w-0`, no `max-w-*` cap, no `overflow-x` guard — so ' +
+          "it doesn't contain the overflow either. The intermittent shape (some items " +
+          "overflow, most don't) is the giveaway: the bug is content-driven, and the " +
+          'trigger is min-content of an inline-only-sized child.\n\n' +
+          '**Why it survived 2.4.1 / 2.4.3.** The detail page was first built against ' +
+          '`design/work-items/detail.png` whose mockup ancestors are short ("Epic: Foo"), ' +
+          'so a min-content breadcrumb fit naturally. Epic 6 introduced Stories with long ' +
+          'titles (parenthetical clauses — "(with old-key redirects)", "(status, error ' +
+          'detail, pagination)") that crossed the threshold; the design did not change, ' +
+          'but the data did.\n\n' +
+          '**Fix shapes (decide at fix time — both are mechanical, both are needed):**\n' +
+          '1. **Eyebrow flex container.** Wrap the `<ParentBreadcrumb />` slot in a ' +
+          '`flex-1 min-w-0` cell (or give the `<nav>` itself `flex-1 min-w-0`), so the ' +
+          'truncate inside the breadcrumb actually has a bounded track to truncate against. ' +
+          'Verify the `ml-auto` right cluster stays pinned right; verify multi-ancestor ' +
+          'chains still wrap to a second line at narrow widths.\n' +
+          '2. **Two-column body grid.** Add `min-w-0` to the `<main>` (the `1fr` track) so ' +
+          'wide markdown content (long URLs, code blocks, tables) cannot blow out the grid ' +
+          'either — a separate latent overflow source that shares the page. (Same shape as ' +
+          '`bug-swimlane-lane-header-not-spanning-scrolled-columns` in Epic 3 — both are ' +
+          '"a flex/grid track sized to the wrong intrinsic width.")\n' +
+          'Both fixes are contained to `page.tsx` (and possibly the `<nav>` className in ' +
+          '`ParentBreadcrumb.tsx`); no projection / service / DTO change.\n\n' +
+          '**Test gap that let it ship.** Existing tests for 2.4.1 / 2.4.3 cover the ' +
+          'short-ancestor case; the long-ancestor case is uncovered. The fix MUST add a ' +
+          'render-test or Playwright assertion: render the detail page for an item whose ' +
+          "ancestor title is at least 80 chars, measure the page root's " +
+          '`scrollWidth`/`clientWidth`, and assert no horizontal overflow ' +
+          '(`scrollWidth <= clientWidth + tolerance`). Same measurement posture as the ' +
+          'Epic-3 swimlane / `bug-tree-header-misalignment` fixes — measure rendered ' +
+          'geometry, not CSS rules.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- On the issue detail page, an item with a LONG ancestor title (≥ 80 chars) ' +
+          'renders WITHOUT pushing the page wider than the viewport — no horizontal scroll ' +
+          'on the page root, the right-rail (CoreFieldsPanel) and the header right cluster ' +
+          '(rollup badge + watch + Edit) are fully visible at typical laptop widths ' +
+          '(1280–1440 px).\n' +
+          '- The ancestor breadcrumb TRUNCATES inside its track (the existing ' +
+          '`<span className="truncate">` actually fires) when the ancestor title would ' +
+          'otherwise overflow; multi-ancestor chains still wrap to a second line at ' +
+          'narrower widths (the `flex-wrap` behaviour is preserved).\n' +
+          '- The right-cluster `ml-auto` still pins right; the description / explanation / ' +
+          'relationships / activity sections still fill the 2-col grid; AA contrast ' +
+          'preserved (no colour change).\n' +
+          '- A WIDE markdown child (a code block with a long line, a long unbroken URL, ' +
+          'a wide table) inside Description / Explanation does NOT blow out the page either ' +
+          '(the `<main>` grid track has `min-w-0`); wide content scrolls inside its own ' +
+          'block (or wraps), not the whole page.\n' +
+          '- Items with a SHORT ancestor (or no ancestors — a top-level Epic) render ' +
+          'identically to today (guard against regression of the green-path layout).\n' +
+          '- A render-test (`tests/components/issue-detail-*.test.tsx`) or Playwright ' +
+          'regression seeds an item with a long ancestor title and asserts the page root ' +
+          '`scrollWidth <= clientWidth + 1` at a 1280-px viewport — measuring rendered ' +
+          'geometry via `getBoundingClientRect` / `scrollWidth`, not CSS rules.\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/issues/[key]/page.tsx` — the eyebrow `flex flex-wrap` row ' +
+          '(~line 220) and the body `grid grid-cols-[1fr_18rem]` (~line 264) — both fix sites\n' +
+          '- `app/(authed)/issues/[key]/_components/ParentBreadcrumb.tsx` — the breadcrumb ' +
+          '`<nav>` already carries `min-w-0 flex-wrap` and a `truncate` span; the missing ' +
+          "piece is its OUTER slot's bounded track\n" +
+          '- `app/(authed)/layout.tsx:117` — the authed shell wrapper (padding-only, no ' +
+          '`min-w-0` / `max-w-*` / `overflow-x` guard; intentional, since the page owns its ' +
+          'own width)\n' +
+          '- `design/work-items/detail.png` + `design/work-items/design-notes.md` — the ' +
+          'design source (the eyebrow is meant to truncate, not push the page wider)\n' +
+          '- `bug-swimlane-lane-header-not-spanning-scrolled-columns` + ' +
+          '`bug-swimlane-collapsed-lane-header-not-full-width` (Epic 3 siblings) — same ' +
+          'shape (wrong intrinsic width on a flex/grid track); precedent for the ' +
+          '`getBoundingClientRect`-based test posture\n' +
+          '- `motir-core/CLAUDE.md` — colour via `--el-*`, shape via element-shape tokens ' +
+          '(applies to whatever wrapper the fix introduces)\n\n' +
+          '**Refactor signal (rule of three watch).** This is the THIRD occurrence of ' +
+          '"wrong intrinsic width on a flex/grid track" — the two Epic-3 swimlane bugs ' +
+          'and now this one. The pattern is consistent enough across surfaces that the ' +
+          'next occurrence justifies a shared layout primitive / lint rule for ' +
+          '"every flex/grid track that should shrink needs `min-w-0`."',
+      },
+    ],
   },
   {
     id: '7',

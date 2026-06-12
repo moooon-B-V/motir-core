@@ -98,6 +98,18 @@ import type { PlanStory } from '../types';
  * Cross-epic dependency audit: clean — every dep points at Epic ≤ 6
  * (6.1.x same-epic-earlier; 5.x backward; 1.6 + 6.4 are done substrate).
  *
+ * UI-composition dependency (corrected post-plan — notes.html mistake #36).
+ * 6.6.6 (audit-log UI) does NOT just read 6.6.2's execution data + follow the
+ * 6.6.4 design — it RENDERS INSIDE the surface 6.6.5 builds: its last-run
+ * glyph + auto-disabled banner wire into 6.6.5's rule list + editor, and the
+ * per-rule log is reached from that list (which mounts in the 6.5.2 settings
+ * page 6.6.5 — not 6.6.6 — declares). So 6.6.6 `dependsOn` 6.6.5 and seeds
+ * `'blocked'` until 6.6.5 is done; the two are NOT parallel despite disjoint
+ * data (6.6.5 reads rules/registries, 6.6.6 reads executions). The original
+ * expansion modeled only 6.6.6's data/design deps (6.6.2 / 6.6.4) and missed
+ * this UI-composition edge — the host-surface axis the planner must model
+ * alongside data/design lineage.
+ *
  * Expanded from its `stubs.ts` entry per `motir plan 6.6`, on the standing
  * `seed/epic-5-plan` branch (Epic-5/6 planning). Matches the canonical style
  * of 5.1–5.6 / 6.1.
@@ -324,7 +336,7 @@ export const story_6_6: PlanStory = {
       id: '6.6.3',
       title:
         'Epic-5 registry extensions — commented + transitioned triggers, add-watcher / add-comment / add-label / set-custom-field actions, Epic-5 condition rows',
-      status: 'blocked',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
@@ -443,7 +455,7 @@ export const story_6_6: PlanStory = {
       id: '6.6.5',
       title:
         'Automation settings UI — rule list + when/if/then editor (registry-driven rows, enable/disable, caps, validation states)',
-      status: 'planned',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
@@ -491,11 +503,11 @@ export const story_6_6: PlanStory = {
       id: '6.6.6',
       title:
         'Audit-log UI — per-rule execution log (status, error detail, pagination) + last-run surfacing + the auto-disabled banner wiring',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 25,
-      dependsOn: ['6.6.2', '6.6.4'],
+      dependsOn: ['6.6.2', '6.6.4', '6.6.5'],
       descriptionMd:
         'The observability half of the surface, per the 6.6.4 audit-log panels, on ' +
         'the 6.6.2 execution data.\n\n' +

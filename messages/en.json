@@ -1323,6 +1323,124 @@
         "helper": "Choose the language for the Motir interface.",
         "label": "Language"
       }
+    },
+    "automation": {
+      "title": "Automation",
+      "subtitle": "When something happens in {projectName}, run actions automatically. Rules run as their owner — only project admins can manage them.",
+      "createRule": "Create rule",
+      "ruleCount": "{count} of {total} rules",
+      "perProjectCap": "{max} rules per project",
+      "capReached": "{max} of {max} rules — delete a rule to add another.",
+      "empty": {
+        "title": "No rules yet",
+        "description": "Automate repetitive work — transition items, set fields, add watchers or comments when something happens. Rules run as their owner."
+      },
+      "noAccess": {
+        "title": "Admins only",
+        "description": "Project automation is managed by project admins. Ask an admin if you need a rule changed."
+      },
+      "row": {
+        "enabledAria": "Enabled — {name}",
+        "neverRun": "Never run",
+        "autoDisabled": "Auto-disabled · {count} failures",
+        "actionsAria": "Actions for {name}",
+        "reEnable": "Re-enable"
+      },
+      "triggerSummary": {
+        "created": "When created",
+        "transitioned": "When transitioned",
+        "field_changed": "When field changed",
+        "commented": "When commented"
+      },
+      "autoDisabledBanner": "{name} was disabled automatically after {count} consecutive failures. Fix the rule and re-enable it — re-enabling resets the failure count.",
+      "menu": {
+        "edit": "Edit",
+        "enable": "Enable",
+        "disable": "Disable",
+        "delete": "Delete"
+      },
+      "delete": {
+        "title": "Delete {name}?",
+        "body": "This permanently deletes the rule and its run history. This can't be undone.",
+        "confirm": "Delete rule"
+      },
+      "editor": {
+        "createTitle": "New rule",
+        "nameLabel": "Rule name",
+        "namePlaceholder": "Name this rule",
+        "nameRequired": "Give the rule a name.",
+        "nameTooLong": "Keep the name under {max} characters.",
+        "enabledAria": "Rule enabled",
+        "when": "When",
+        "whenSub": "the trigger — one per rule",
+        "if": "If",
+        "ifSub": "conditions on the triggering item — optional",
+        "then": "Then",
+        "thenSub": "actions run in order, as the rule owner",
+        "triggerAria": "Trigger",
+        "triggerType": {
+          "created": "Item created",
+          "transitioned": "Item transitioned",
+          "field_changed": "Field value changed",
+          "commented": "Item commented"
+        },
+        "noConfig": "No further configuration",
+        "from": "from",
+        "to": "to",
+        "anyStatus": "Any status",
+        "fromAria": "From status",
+        "toAria": "To status",
+        "field": "field",
+        "fieldAria": "Field to watch",
+        "setField": {
+          "assignee": "Assignee",
+          "priority": "Priority",
+          "dueDate": "Due date",
+          "estimate": "Estimate"
+        },
+        "addAction": "Add action",
+        "actionAria": "Action {n}",
+        "actionTypeAria": "Action type",
+        "actionType": {
+          "transition": "Transition",
+          "set_field": "Set field"
+        },
+        "setFieldAria": "Field to set",
+        "statusTargetAria": "Target status",
+        "assigneeAria": "Assignee",
+        "unassigned": "Unassigned",
+        "priorityAria": "Priority",
+        "estimateAria": "Estimate value",
+        "estimatePlaceholder": "Value",
+        "dueDateAria": "Due date",
+        "removeAction": "Remove action {n}",
+        "reorderAction": "Reorder action {n}",
+        "moveUp": "Move up",
+        "moveDown": "Move down",
+        "actionCapReached": "{max} of {max} actions — the maximum for one rule.",
+        "runsAs": "Runs as {owner} (rule owner) · {count} of {max} actions",
+        "needAction": "Add at least one action.",
+        "problem": {
+          "noTargetStatus": "Choose a target status.",
+          "noField": "Choose a field.",
+          "noValue": "Choose a value.",
+          "triggerNoField": "Choose a field to watch."
+        },
+        "cancel": "Cancel",
+        "save": "Save rule"
+      },
+      "toast": {
+        "created": "Rule “{name}” created.",
+        "saved": "Rule “{name}” saved.",
+        "deleted": "Rule “{name}” deleted.",
+        "enabled": "Rule enabled.",
+        "disabled": "Rule disabled.",
+        "errorTitle": "Something went wrong",
+        "saveError": "Couldn't save the rule. Try again.",
+        "deleteError": "Couldn't delete the rule. Try again.",
+        "toggleError": "Couldn't update the rule. Try again.",
+        "capError": "You've reached the {max}-rule limit for this project."
+      }
     }
   },
   "boards": {
@@ -1896,5 +2014,282 @@
       "body": "This unsubscribe link is malformed or has already been used. If you're still receiving emails, unsubscribe from the Filters directory.",
       "action": "Go to Issues"
     }
+  },
+  "reports": {
+    "backToReports": "Reports",
+    "hub": {
+      "title": "Reports",
+      "subtitle": "Built-in analysis of this project's issues, sprints, and throughput.",
+      "agileGroup": "Agile",
+      "analysisGroup": "Issue analysis",
+      "burndownTitle": "Burndown chart",
+      "burndownBody": "Points remaining across the active sprint. Lives in the sprint report.",
+      "velocityTitle": "Velocity chart",
+      "velocityBody": "Committed vs completed points over recent sprints.",
+      "sprintReportTitle": "Sprint report",
+      "sprintReportBody": "Scope, completed, and carried-over work for a sprint.",
+      "createdVsResolvedTitle": "Created vs Resolved",
+      "createdVsResolvedBody": "How fast issues are opened versus closed over a window.",
+      "distributionTitle": "Status distribution",
+      "distributionBody": "Break issues down by status, assignee, priority, type, and more.",
+      "moreTitle": "More reports",
+      "moreBody": "Average age, resolution time, workload — registry additions.",
+      "extensionTag": "Extension",
+      "noProjectTitle": "No project yet",
+      "noProjectBody": "Create a project to see its reports."
+    },
+    "period": {
+      "day": "Daily",
+      "week": "Weekly",
+      "month": "Monthly"
+    },
+    "periodAxis": {
+      "day": "Day",
+      "week": "Week",
+      "month": "Month"
+    },
+    "scope": {
+      "label": "Scope",
+      "project": "Project · {name}",
+      "groupProject": "Project",
+      "groupFilters": "Saved filters",
+      "searchPlaceholder": "Search filters…"
+    },
+    "states": {
+      "noAccessTitle": "No access",
+      "noAccessBody": "This data is scoped to a project you can't view.",
+      "emptyTitle": "No data in this window",
+      "emptyBody": "No matching issues for the selected scope and window.",
+      "staleFilterTitle": "Filter missing",
+      "staleFilterBody": "The saved filter behind this report was deleted or is no longer visible.",
+      "staleStatisticTitle": "Statistic unavailable",
+      "staleStatisticBody": "The custom field this report grouped by was deleted.",
+      "resetToProject": "Use project scope",
+      "none": "None"
+    },
+    "cvr": {
+      "title": "Created vs Resolved",
+      "periodLabel": "Period",
+      "daysBackLabel": "Days back",
+      "daysBackFewer": "Shorter window",
+      "daysBackMore": "Longer window",
+      "daysBackValue": "{days} days",
+      "aggregationLabel": "Aggregation",
+      "perPeriod": "Per period",
+      "cumulative": "Cumulative",
+      "created": "Created",
+      "resolved": "Resolved",
+      "yIssues": "Issues",
+      "net": "Net",
+      "legendCreated": "Created · {total} total",
+      "legendResolved": "Resolved · {total} total",
+      "legendBacklog": "Backlog growing",
+      "legendCatchingUp": "Catching up",
+      "chartDesc": "Created vs resolved per {period} over the last {count} buckets. Created {created} total versus resolved {resolved} total; the difference is shaded red where the backlog grows and green where the team catches up.",
+      "tableCaption": "Created vs resolved per period (per-period counts).",
+      "tableCaptionCumulative": "Created vs resolved per period (cumulative running totals).",
+      "subWindow": "last {days} days"
+    },
+    "distribution": {
+      "title": "Status distribution",
+      "statisticLabel": "Statistic type",
+      "statisticSearch": "Search statistics…",
+      "issues": "issues",
+      "chartDesc": "Distribution of {total} issues by {statistic}: {breakdown}.",
+      "byStatistic": "by {statistic}",
+      "issuesCount": "{count, plural, one {# issue} other {# issues}}",
+      "builtinGroup": "Fields",
+      "customGroup": "Custom fields",
+      "unknownStatistic": "Unknown"
+    },
+    "statistic": {
+      "kind": "Type",
+      "status": "Status",
+      "priority": "Priority",
+      "assignee": "Assignee",
+      "reporter": "Reporter",
+      "sprint": "Sprint",
+      "label": "Label",
+      "component": "Component"
+    }
+  },
+  "dashboards": {
+    "title": "Dashboards",
+    "subtitle": "Named, shareable grids of widgets over your projects and saved filters.",
+    "newDashboard": "New dashboard",
+    "groupMine": "My dashboards",
+    "groupShared": "Shared with the workspace",
+    "ownedByYou": "Owned by you",
+    "widgetCount": "{count, plural, one {# widget} other {# widgets}}",
+    "viewOnly": "View only",
+    "accessPrivate": "Private",
+    "accessWorkspace": "Workspace",
+    "optionsAria": "Dashboard options",
+    "open": "Open",
+    "rename": "Rename",
+    "changeAccess": "Change access",
+    "delete": "Delete",
+    "backToList": "Dashboards",
+    "empty": {
+      "title": "Create your first dashboard",
+      "body": "Dashboards collect widgets — issue tables, charts, and reports — over your projects and saved filters into one shareable view."
+    },
+    "create": {
+      "title": "New dashboard",
+      "nameLabel": "Name",
+      "namePlaceholder": "e.g. Team overview",
+      "accessLabel": "Access",
+      "privateTitle": "Private",
+      "privateDesc": "Only you can see and edit it.",
+      "workspaceTitle": "Workspace",
+      "workspaceDesc": "Everyone in the workspace can view it. You edit.",
+      "submit": "Create dashboard"
+    },
+    "renameModal": {
+      "title": "Rename dashboard",
+      "label": "Name",
+      "submit": "Save"
+    },
+    "accessModal": {
+      "title": "Change access",
+      "submit": "Save"
+    },
+    "deleteModal": {
+      "title": "Delete {name}?",
+      "body": "This removes the dashboard and its widgets for everyone. This can’t be undone.",
+      "confirm": "Delete dashboard"
+    },
+    "grid": {
+      "switchAria": "Switch dashboard",
+      "edit": "Edit",
+      "done": "Done",
+      "cancel": "Cancel",
+      "layoutLabel": "Layout",
+      "layoutOne": "One column",
+      "layoutTwo": "Two columns",
+      "layoutThree": "Three columns",
+      "addWidget": "Add widget",
+      "capNote": "{count} / {max} widgets",
+      "capReachedNote": "{max} / {max} widgets — remove one to add another",
+      "dropHere": "Drop here",
+      "emptyTitle": "No widgets yet",
+      "emptyBody": "Add a widget to start building this dashboard.",
+      "emptyViewerTitle": "Nothing here yet",
+      "emptyViewerBody": "The owner hasn’t added any widgets to this dashboard.",
+      "reorderAria": "Reorder {title}",
+      "columnAria": "Column {n}",
+      "ownerMeta": "Owned by you · {count, plural, one {# widget} other {# widgets}}",
+      "sharedMeta": "Owned by {owner} · {count, plural, one {# widget} other {# widgets}}"
+    },
+    "widget": {
+      "optionsAria": "Widget options",
+      "configure": "Configure",
+      "remove": "Remove",
+      "regionAria": "{title} widget",
+      "untitled": "Widget"
+    },
+    "states": {
+      "loadingAria": "Loading widget…",
+      "emptyTitle": "No matching issues",
+      "emptyBody": "Nothing here matches yet.",
+      "errorTitle": "Couldn’t load",
+      "errorBody": "Something went wrong fetching this widget’s data.",
+      "retry": "Retry",
+      "noAccessTitle": "No access",
+      "noAccessBody": "This widget points at a project you can’t view. Counts and rows stay hidden.",
+      "staleTitle": "Filter missing",
+      "staleBody": "The saved filter this widget used was deleted, so it can’t load results.",
+      "chooseFilter": "Choose a filter",
+      "capTitle": "Widget limit reached",
+      "capBody": "A dashboard holds up to {max} widgets. Remove one to add another."
+    },
+    "add": {
+      "title": "Add a widget",
+      "filter_results_name": "Filter results",
+      "filter_results_desc": "A paginated issue table from a saved filter or project (up to 50 per page).",
+      "distribution_name": "Distribution",
+      "distribution_desc": "A donut breaking issues down by status, assignee, priority, type, and more.",
+      "created_vs_resolved_name": "Created vs Resolved",
+      "created_vs_resolved_desc": "Two-series trend of issues created against issues resolved over time."
+    },
+    "config": {
+      "addTitle_filter_results": "Filter results",
+      "addTitle_distribution": "Distribution",
+      "addTitle_created_vs_resolved": "Created vs Resolved",
+      "dataSource": "Data source",
+      "sourceFilter": "Saved filter",
+      "sourceProject": "Project",
+      "pickFilter": "Select a saved filter…",
+      "pickProject": "Select a project…",
+      "noFilters": "No saved filters available.",
+      "noProjects": "No projects available.",
+      "rowsPerPage": "Rows per page",
+      "rowsHint": "Maximum {max} (the gadget cap).",
+      "statisticType": "Statistic type",
+      "pickStatistic": "Select a field…",
+      "standardFields": "Standard fields",
+      "customFields": "Custom fields",
+      "period": "Period",
+      "periodDay": "Daily",
+      "periodWeek": "Weekly",
+      "periodMonth": "Monthly",
+      "daysBack": "Days back",
+      "daysBackHint": "Up to {max} days (the window cap).",
+      "cumulative": "Cumulative",
+      "save": "Save",
+      "cancel": "Cancel",
+      "sourceRequired": "Choose a data source."
+    },
+    "statistic": {
+      "kind": "Issue type",
+      "status": "Status",
+      "priority": "Priority",
+      "assignee": "Assignee",
+      "reporter": "Reporter",
+      "sprint": "Sprint",
+      "label": "Label",
+      "component": "Component"
+    },
+    "widgetTitle": {
+      "filter_results": "Filter results",
+      "distribution": "Issues by {statistic}",
+      "created_vs_resolved": "Created vs Resolved"
+    },
+    "source": {
+      "filter": "Filter · {name}",
+      "project": "Project · {name}",
+      "stale": "Filter missing"
+    },
+    "toast": {
+      "errorTitle": "Something went wrong",
+      "createError": "Couldn’t create the dashboard.",
+      "renameError": "Couldn’t rename the dashboard.",
+      "accessError": "Couldn’t change access.",
+      "deleteError": "Couldn’t delete the dashboard.",
+      "layoutError": "Couldn’t change the layout.",
+      "addWidgetError": "Couldn’t add the widget.",
+      "updateWidgetError": "Couldn’t save the widget.",
+      "removeWidgetError": "Couldn’t remove the widget.",
+      "moveWidgetError": "Couldn’t move the widget."
+    },
+    "totalNoun": "issues",
+    "donutDesc": "Donut of {total} issues grouped by {statistic}.",
+    "donutEmpty": "No issues to chart yet.",
+    "cvrDesc": "Issues created versus resolved per {period} over the last {days} days.",
+    "unitDay": "day",
+    "unitWeek": "week",
+    "unitMonth": "month",
+    "daysShort": "{days}d",
+    "axisBucket": "Bucket",
+    "none": "None",
+    "pagerRange": "{from}–{to} of {total}",
+    "pagerPrev": "Previous",
+    "pagerNext": "Next",
+    "colKey": "Key",
+    "colSummary": "Summary",
+    "colPriority": "Priority",
+    "colAssignee": "Assignee",
+    "assigned": "Assigned",
+    "unassigned": "Unassigned"
   }
 }

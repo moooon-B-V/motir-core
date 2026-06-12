@@ -14,6 +14,8 @@ import { filterSubscriptionDeliver } from './definitions/filterSubscriptionDeliv
 import {
   automationEngineOnCreated,
   automationEngineOnFieldChanged,
+  automationEngineOnTransitioned,
+  automationEngineOnCommented,
   automationRetentionSweep,
 } from './definitions/automationEngine';
 
@@ -33,5 +35,7 @@ export const jobFunctions = [
   filterSubscriptionDeliver,
   automationEngineOnCreated,
   automationEngineOnFieldChanged,
+  automationEngineOnTransitioned,
+  automationEngineOnCommented,
   automationRetentionSweep,
 ];

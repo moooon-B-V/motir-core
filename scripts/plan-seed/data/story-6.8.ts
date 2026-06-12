@@ -239,7 +239,7 @@ export const story_6_8: PlanStory = {
       id: '6.8.2',
       title:
         'Alias-aware resolution everywhere the key is addressed — central project-by-key fallback, /issues/[key] 308 redirects, API old-key serving',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 25,
@@ -283,7 +283,7 @@ export const story_6_8: PlanStory = {
       id: '6.8.3',
       title:
         'Design — the editable Details page (`design/projects/details.mock.html`: name, avatar picker, key change + consequence modal, previous keys, gated states)',
-      status: 'blocked',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 35,
@@ -346,7 +346,7 @@ export const story_6_8: PlanStory = {
       id: '6.8.4',
       title:
         'Editable Details page — name/avatar editing on the 6.5.3 landing, the change-key flow, previous keys + release, switcher chip, admin gating',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
