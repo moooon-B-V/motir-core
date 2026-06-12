@@ -1,5 +1,6 @@
 import { Prisma, type AutomationTriggerType } from '@prisma/client';
 import { automationRuleRepository } from '@/lib/repositories/automationRuleRepository';
+import { automationRuleExecutionRepository } from '@/lib/repositories/automationRuleExecutionRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -25,8 +26,13 @@ import {
   AutomationRuleNotFoundError,
   InvalidAutomationRuleError,
 } from '@/lib/automation/errors';
-import { toAutomationRuleDto } from '@/lib/mappers/automationRuleMappers';
-import type { AutomationRuleDto } from '@/lib/dto/automationRules';
+import { toAutomationExecutionDto, toAutomationRuleDto } from '@/lib/mappers/automationRuleMappers';
+import type {
+  AutomationExecutionPageDto,
+  AutomationRuleDto,
+  AutomationRuleLastRunDto,
+  AutomationRuleSummaryDto,
+} from '@/lib/dto/automationRules';
 
 // automationRulesService (Story 6.6 · Subtask 6.6.1) — persistence +
 // permissions for the rule model. Owns validation (the TOTAL trigger/action
@@ -42,6 +48,10 @@ import type { AutomationRuleDto } from '@/lib/dto/automationRules';
 // own is AutomationRuleNotFoundError (404). The condition rides the SAME 6.1
 // codec saved filters use (one codec, two carriers): writes accept the
 // `?filter=v1:` param string, decode + deep-validate, and store the envelope.
+
+/** The audit-log page size (Subtask 6.6.6) — bounded reads only (finding #57),
+ * the jobs-dashboard precedent (`JOBS_PAGE_SIZE`). */
+export const AUTOMATION_EXECUTIONS_PAGE_SIZE = 20;
 
 /** The validated, write-ready core of a rule (shared by create + update). */
 interface NormalizedRule {
@@ -177,13 +187,64 @@ function jsonTrigger(config: AutomationTriggerConfig): Prisma.InputJsonValue {
 }
 
 export const automationRulesService = {
-  /** List a project's rules (admin-only). Bounded by the per-project cap. */
-  async list(projectKey: string, ctx: WorkspaceContext): Promise<AutomationRuleDto[]> {
+  /** List a project's rules (admin-only). Bounded by the per-project cap. Each
+   * row carries its `lastRun` summary (the latest execution's status + time, or
+   * null when the rule has never fired) — a single per-rule latest-execution
+   * join (6.6.6), so the list renders the populated last-run glyph without an
+   * N+1 read. */
+  async list(projectKey: string, ctx: WorkspaceContext): Promise<AutomationRuleSummaryDto[]> {
     return withWorkspaceContext(ctx, async (tx) => {
       const projectId = await resolveManageableProject(projectKey, ctx, tx);
       const rows = await automationRuleRepository.listByProject(projectId, tx);
-      return rows.map(toAutomationRuleDto);
+      const latest = await automationRuleExecutionRepository.findLatestByRuleIds(
+        rows.map((r) => r.id),
+      );
+      const lastRunByRule = new Map<string, AutomationRuleLastRunDto>(
+        latest.map((l) => [l.ruleId, { status: l.status, at: l.createdAt.toISOString() }]),
+      );
+      return rows.map((row) => ({
+        ...toAutomationRuleDto(row),
+        lastRun: lastRunByRule.get(row.id) ?? null,
+      }));
     });
+  },
+
+  /** One bounded page of a rule's execution audit log (admin-only, Subtask
+   * 6.6.6). Re-asserts the rule belongs to the actor's project (404 otherwise —
+   * the same cross-tenant hide-gate the single-rule reads use) before the
+   * paged read. `page` is 1-based; out-of-range pages return an empty page with
+   * the true `total`. NO load-all — `take`/`skip` over the indexed log. */
+  async listExecutions(
+    projectKey: string,
+    ruleId: string,
+    opts: { page: number },
+    ctx: WorkspaceContext,
+  ): Promise<AutomationExecutionPageDto> {
+    const page = Number.isFinite(opts.page) && opts.page >= 1 ? Math.floor(opts.page) : 1;
+    const pageSize = AUTOMATION_EXECUTIONS_PAGE_SIZE;
+
+    await withWorkspaceContext(ctx, async (tx) => {
+      const projectId = await resolveManageableProject(projectKey, ctx, tx);
+      const rule = await automationRuleRepository.findByIdInProject(ruleId, projectId, tx);
+      if (!rule) throw new AutomationRuleNotFoundError(ruleId);
+    });
+
+    // The audit reads are read-only (the `db` singleton path) — they run after
+    // the admin gate + the rule-belongs-to-project assertion above.
+    const [rows, total] = await Promise.all([
+      automationRuleExecutionRepository.listByRule(ruleId, {
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      automationRuleExecutionRepository.countByRule(ruleId),
+    ]);
+
+    return {
+      executions: rows.map(toAutomationExecutionDto),
+      total,
+      page,
+      pageSize,
+    };
   },
 
   /** Read one rule (admin-only). 404 if it isn't this project's. */

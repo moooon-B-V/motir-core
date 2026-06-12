@@ -67,7 +67,9 @@ import {
   workingFromAst,
   type WorkingState,
 } from '@/app/(authed)/issues/_components/FilterConditionBuilder';
+import { isAutoDisabled } from './AutomationRuleList';
 import {
+  AutoDisabledBanner,
   BlockWedge,
   memberOptions,
   priorityOptions,
@@ -102,6 +104,10 @@ export interface AutomationRuleEditorProps {
   referencedLabels: LabelDto[];
   onCancel: () => void;
   onSaved: (rule: AutomationRuleDto) => void;
+  /** Re-enable the rule (auto-disabled banner action) — wired to the same
+   * enable toggle the list uses (resets the failure counter). Undefined on the
+   * create flow / a non-auto-disabled rule. */
+  onReEnable?: () => void;
 }
 
 export function AutomationRuleEditor({
@@ -116,6 +122,7 @@ export function AutomationRuleEditor({
   referencedLabels,
   onCancel,
   onSaved,
+  onReEnable,
 }: AutomationRuleEditorProps) {
   const t = useTranslations('settings.automation.editor');
   const tToast = useTranslations('settings.automation.toast');
@@ -133,6 +140,17 @@ export function AutomationRuleEditor({
   const [saving, setSaving] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  // The auto-disabled banner shows when editing a rule the engine switched off
+  // after the failure threshold; Re-enable clears it (and resets the counter
+  // via the parent's enable toggle), so it hides immediately on click.
+  const [reEnabled, setReEnabled] = useState(false);
+  const showAutoDisabledBanner = rule != null && isAutoDisabled(rule) && !reEnabled;
+
+  function handleReEnable() {
+    setReEnabled(true);
+    setEnabled(true);
+    onReEnable?.();
+  }
 
   const model = useFilterConditionModel({
     ast: initial.conditionAst,
@@ -213,6 +231,14 @@ export function AutomationRuleEditor({
   return (
     <Card>
       <div className="flex flex-col gap-5">
+        {showAutoDisabledBanner ? (
+          <AutoDisabledBanner
+            name={rule.name}
+            count={rule.consecutiveFailureCount}
+            onReEnable={handleReEnable}
+          />
+        ) : null}
+
         {/* Header — name + enable toggle */}
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">

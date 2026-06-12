@@ -1342,6 +1342,9 @@
       "row": {
         "enabledAria": "Enabled — {name}",
         "neverRun": "Never run",
+        "ranAgo": "Ran {time}",
+        "failedAgo": "Failed · {time}",
+        "noActionsAgo": "No actions · {time}",
         "autoDisabled": "Auto-disabled · {count} failures",
         "actionsAria": "Actions for {name}",
         "reEnable": "Re-enable"
@@ -1355,6 +1358,7 @@
       "autoDisabledBanner": "{name} was disabled automatically after {count} consecutive failures. Fix the rule and re-enable it — re-enabling resets the failure count.",
       "menu": {
         "edit": "Edit",
+        "viewLog": "View log",
         "enable": "Enable",
         "disable": "Disable",
         "delete": "Delete"
@@ -1440,6 +1444,32 @@
         "deleteError": "Couldn't delete the rule. Try again.",
         "toggleError": "Couldn't update the rule. Try again.",
         "capError": "You've reached the {max}-rule limit for this project."
+      },
+      "log": {
+        "title": "Run history — {ruleName}",
+        "back": "Back to rules",
+        "backToList": "Back",
+        "status": {
+          "success": "Success",
+          "failure": "Failure",
+          "no_actions": "No actions"
+        },
+        "conditionNotMet": "Condition not met",
+        "durationMs": "{ms} ms",
+        "viewItemAria": "Open {key}",
+        "tombstone": "Triggering item since deleted",
+        "expandFailureAria": "Toggle error detail",
+        "errorHeading": "This run failed",
+        "showing": "Showing {a}–{b} of {total}",
+        "retention": "Run history is kept for 90 days.",
+        "prevPage": "Previous page",
+        "nextPage": "Next page",
+        "goToPage": "Go to page {page}",
+        "loadError": "Couldn't load run history. Try again.",
+        "empty": {
+          "title": "No runs yet",
+          "description": "This rule hasn't fired. When an item matches its trigger and conditions, each run appears here with its result, duration and the item that triggered it."
+        }
       }
     }
   },
