@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
+import { notFound, permanentRedirect, redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
@@ -17,6 +17,7 @@ import { EstimationConfigProvider } from '@/components/issues/EstimationConfigPr
 import { ParentRollupBadge } from '@/components/issues/ParentRollupBadge';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
+import { resolveAliasedIssueKey } from '@/lib/issues/aliasRedirect';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -81,6 +82,14 @@ export default async function IssueDetailPage({
     // A browse denial (6.4.3) means the project is hidden from this actor — it
     // must be indistinguishable from a missing issue (404, no existence leak).
     if (err instanceof WorkItemNotFoundError || err instanceof ProjectAccessDeniedError) {
+      // Story 6.8.2 — old-key link: if `key` addresses an issue under a RETIRED
+      // project key (PROD-7 after PROD→NIF), 308-redirect to the canonical
+      // identifier (NIF-7) so old bookmarks keep working; otherwise a real 404.
+      const canonical = await resolveAliasedIssueKey(key, {
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      if (canonical) permanentRedirect(`/issues/${canonical}`);
       notFound();
     }
     throw err;

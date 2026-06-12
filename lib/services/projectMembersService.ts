@@ -10,9 +10,9 @@ import {
   LastProjectAdminError,
   NotAProjectMemberError,
   NotProjectAdminError,
-  ProjectNotFoundError,
   TargetNotWorkspaceMemberError,
 } from '@/lib/projects/errors';
+import { resolveProjectByKeyWithAliasInTx } from '@/lib/projects/resolveByKey';
 import {
   asAccessLevel,
   asProjectRole,
@@ -46,12 +46,16 @@ import type { ProjectAccessDTO, ProjectMemberDTO } from '@/lib/dto/projectMember
 // is indistinguishable from a non-existent one (both throw ProjectNotFoundError
 // → 404), so a caller can't probe cross-tenant keys.
 
+// Alias-aware (Story 6.8 · Subtask 6.8.2): resolves the live identifier first
+// and the retired-key alias table on a miss, through the SINGLE central
+// resolver, so the `/api/projects/[key]` members + access routes SERVE old keys
+// identically to the live key (the verified Jira REST behaviour). `viaAlias` is
+// irrelevant to a management write (the response carries the canonical project
+// either way), so it's discarded here. Still no existence leak — the central
+// resolver throws ProjectNotFoundError for a missing/cross-workspace/released
+// key, exactly as before.
 function resolveProjectInTx(key: string, ctx: WorkspaceContext, tx: Prisma.TransactionClient) {
-  const identifier = key.trim().toUpperCase();
-  return projectRepository.findByIdentifier(ctx.workspaceId, identifier, tx).then((project) => {
-    if (!project) throw new ProjectNotFoundError(key);
-    return project;
-  });
+  return resolveProjectByKeyWithAliasInTx(key, ctx.workspaceId, tx).then((r) => r.project);
 }
 
 /**

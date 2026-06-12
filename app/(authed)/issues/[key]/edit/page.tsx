@@ -1,4 +1,4 @@
-import { notFound, redirect } from 'next/navigation';
+import { notFound, permanentRedirect, redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
@@ -7,6 +7,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
+import { resolveAliasedIssueKey } from '@/lib/issues/aliasRedirect';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { EditIssueForm } from './_components/EditIssueForm';
 import { RelationshipsPanel } from '../_components/RelationshipsPanel';
@@ -46,6 +47,11 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
   } catch (err) {
     // A browse denial = the project is hidden from this actor → 404, no leak.
     if (err instanceof WorkItemNotFoundError || err instanceof ProjectAccessDeniedError) {
+      // Story 6.8.2 — old-key link: PROD-7/edit after PROD→NIF 308-redirects to
+      // NIF-7/edit (the canonical key) so old edit bookmarks keep working;
+      // otherwise a real 404.
+      const canonical = await resolveAliasedIssueKey(key, serviceCtx);
+      if (canonical) permanentRedirect(`/issues/${canonical}/edit`);
       notFound();
     }
     throw err;
