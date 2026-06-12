@@ -152,7 +152,7 @@ export const story_5_6: PlanStory = {
       id: '5.6.2',
       title:
         'The combined collaboration journey E2E — one issue through every Epic-5 feature, the cross-story seams asserted end-to-end',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 35,
