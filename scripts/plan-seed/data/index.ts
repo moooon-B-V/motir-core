@@ -44,6 +44,7 @@ import { story_6_6 } from './story-6.6';
 import { story_6_7 } from './story-6.7';
 import { story_6_8 } from './story-6.8';
 import { story_7_0 } from './story-7.0';
+import { story_7_1 } from './story-7.1';
 import { story_7_8 } from './story-7.8';
 import { story_7_9 } from './story-7.9';
 import { story_8_7 } from './story-8.7';
@@ -93,6 +94,7 @@ const EXPANDED_STORIES: PlanStory[] = [
   story_6_7,
   story_6_8,
   story_7_0,
+  story_7_1,
   story_7_8,
   story_7_9,
   story_8_7,

@@ -152,16 +152,16 @@ export const STUB_STORIES: PlanStory[] = [
   // rebrand cutover consumes — PROD-vs-NIF becomes a reversible setting.
 
   // ── Epic 7: AI Planning Layer ─────────────────────────────────────────────
-  {
-    id: '7.1',
-    title: 'Core ↔ AI API contract (motir-core ↔ motir-ai)',
-    status: 'planned',
-    descriptionMd:
-      'The documented HTTP boundary the open core calls into. All later stories ride this ' +
-      'contract. Designed so a future native AI-coding executor plugs in behind the same dispatch ' +
-      'shape.',
-    items: [],
-  },
+  // 7.1 (Core ↔ AI API contract + motir-ai persistence foundation) is fully
+  // expanded — data/story-7.1.ts. Added 2026-06-11 (the Epic-7 architecture
+  // discussion with Yue). It fixes the locked boundary every 7.x story rides:
+  // one-directional WRITES (AI proposes a tree-delta, motir-core persists via
+  // workItemsService — write authority stays in core); a tool-use SESSION not
+  // a one-shot call (motir-ai HOSTS the planning agent, emits read requests,
+  // graph-traversal-not-RAG — the Rovo mirror); an ASYNC job model serving
+  // BOTH the 7.2 chat and the headless MCP/CLI planners; and motir-ai as a
+  // STATEFUL service with its OWN DB (headless ≠ stateless) — direction docs
+  // (7.2), planning-mistakes (7.10), code graph (7.5/7.7) live there.
   {
     id: '7.2',
     title: 'Chat front door + stack/opinion discovery',
@@ -169,7 +169,16 @@ export const STUB_STORIES: PlanStory[] = [
     descriptionMd:
       'Streaming chat UI + the planner\'s "do you care?" pass (stack, deploy, design language) so ' +
       "it never assumes a default that doesn't fit. Drafts discovery context; read-react-revise " +
-      'loop. (Former Epic 2.)',
+      'loop. (Former Epic 2.)\n\n' +
+      '**Two project kinds (locked 2026-06-11):** Motir plans (1) **start-fresh** projects and ' +
+      '(2) **existing projects migrating to Motir**. As a startup we ship (1) FIRST; (2) follows. ' +
+      'The init chat for a fresh project produces **three direction docs — vision / discovery / ' +
+      "feasibility** (this story owns their generation + schema + write). They are the project's " +
+      'north star and important planning context, but they are NOT PM substrate, so per the ' +
+      "open-core boundary they are **stored in motir-ai's own DB, NOT motir-core** (the 7.1 " +
+      'stateful-motir-ai decision); motir-core RENDERS them by fetching over 7.1. This is ' +
+      "motir-meta's own vision.html/discovery.html/feasibility.html, productized per project. " +
+      'Generation rides the 7.1 async-job + the 7.3-family tool-use loop.',
     items: [],
   },
   {
@@ -183,7 +192,14 @@ export const STUB_STORIES: PlanStory[] = [
       'HEADLESSLY — an async server-side job + MCP tool surface (the 7.9 MCP-first rule), not ' +
       'only via the 7.2 web chat — and must accept an OPTIONAL code-context bundle (the ' +
       "CLI-gathered snapshot of the user's checkout, 7.9.9) alongside the chat-derived " +
-      'discovery context.',
+      'discovery context.\n\n' +
+      '**Architecture (locked 2026-06-11, rides 7.1):** generation is a **tool-use SESSION**, ' +
+      'NOT a one-shot prompt — motir-ai HOSTS the planning agent (its context lives there: ' +
+      'direction docs, mistakes, code graph), reasons step by step, and the produced tree is ' +
+      'returned as a **delta** that motir-core persists via `workItemsService` (the AI never ' +
+      'writes the tree directly). Generate→**human approve**→persist (Principle #3; the Rovo ' +
+      '"customize and approve, then auto-create" mirror). `jobKind: generate_tree` replaces 7.1.7\'s ' +
+      'noop handler with the real planner.',
     items: [],
   },
   {
@@ -200,7 +216,16 @@ export const STUB_STORIES: PlanStory[] = [
       'retarget it to the concrete subtask when this story expands. `motir plan` (7.9.9) drives ' +
       'augmentation ("plan <description>" on an existing backlog) and explicit expansion ' +
       '("plan <KEY>") through the SAME async-job + MCP-tool surface, optionally carrying the ' +
-      '7.9.9 code-context bundle.',
+      '7.9.9 code-context bundle.\n\n' +
+      '**Context-selection decision (locked 2026-06-11): the plan tree is NEVER serialized ' +
+      "whole into a job.** Context is a function of the operation's blast radius, not the tree's " +
+      'size: **expand** a stub and **re-plan** an epic are structurally bounded (push the ' +
+      'neighborhood subtree, projected — same small slice at 10 or 10k issues); **augment** ' +
+      '("add SSO") is unbounded, so the agent gets a cheap global SKELETON for breadth + ' +
+      'on-demand graph-traversal RETRIEVAL (incl. comments + history) for depth. The whole tree ' +
+      'is *reachable* every job, *transmitted* never. This makes 7.4 augmentation **depend on ' +
+      '7.5 retrieval** (load-bearing, not incidental). Completed work is passed as ' +
+      'locked/immutable.',
     items: [],
   },
   {
@@ -222,17 +247,34 @@ export const STUB_STORIES: PlanStory[] = [
       'narrow single-artifact tools an AI planner calls). The split is justified inline in ' +
       'story-7.0.ts; see also notes.html #32 (epic-ordering-follows-deps) — 7.0 has no ' +
       'forward-pointing deps, so the early ship is a clean deviation, not a planning bug.\n\n' +
-      '**Code-access decision (recorded 2026-06-10, for `motir plan` / planning context):** the ' +
-      "planner reads the user's CODE through TWO retrieval sources, both landing in this " +
-      "story's retrieval layer — (a) **the 7.7 GitHub App read path** (server-side: an App " +
-      'installation with per-repo selection + contents:read — the verified standard shape for ' +
-      'hosted AI dev tools that read your repo from their cloud, e.g. the CodeRabbit-style ' +
-      'GitHub App installation; serves web-chat planning 7.2/7.3 and dispatch-' +
-      'prompt injection), and (b) **the CLI-pushed code-context bundle** (7.9.9 — the CLI runs ' +
-      'where the code LIVES, so it gathers context locally with explicit user consent; covers ' +
-      'pre-GitHub / non-GitHub projects and needs no server-side credential). Either source ' +
-      'crossing the 7.1 core↔AI boundary is REQUEST-SCOPED: motir-ai consumes the context ' +
-      "per job and never persists the user's code.",
+      '**Retrieval is GRAPH-TRAVERSAL, not RAG (locked 2026-06-11; Rovo mirror).** Motir walks ' +
+      'TWO explicit relational graphs over MCP — no embeddings, no vector store: (1) the **plan ' +
+      'tree** (motir-core: parent/child rollup + is_blocked_by DAG + comments — already a graph; ' +
+      'read tools `get_item(withComments,history)` / `get_subtree` / `walk_blocking` / ' +
+      '`search(FilterAST 6.1.1)` / `skeleton`, riding the 7.8 read surface; these SUPERSEDE ' +
+      "7.1.6's minimal skeleton read), and (2) the **code graph** (below). Rovo's Teamwork-Graph " +
+      'lesson verified, not asserted (notes.html #33): explicit edges beat flattening to vectors.\n\n' +
+      '**Code-graph store (locked 2026-06-11): adopt `colbymchenry/codegraph`, embedded as a ' +
+      'library, behind a thin `CodeGraph` interface in motir-ai.** It is TypeScript/Node ' +
+      '(matches motir-ai), MIT (usable in closed source), SQLite+FTS5 STRUCTURAL graph with NO ' +
+      'embeddings (= our graph-traversal decision, arrived at independently), exposes MCP tools ' +
+      '(`search`/`explore`/`callers`/`impact`), and indexes 20+ languages. The one friction is ' +
+      'its "100% local / file-watcher" deployment model — so we use its **engine** (indexer + ' +
+      'SQLite schema + query tools) and supply the cloud parts ourselves: **read from GitHub** ' +
+      "(the 7.7 App installation token; we do NOT read the user's machine during planning), " +
+      'index server-side in a motir-ai worker, **store the per-repo graph per-tenant in ' +
+      "motir-ai's DB**, and **refresh incrementally via the 7.7 GitHub webhook** (NOT codegraph's " +
+      'OS watcher). **A `type: spike` gates adoption** — validate server-side embedding + ' +
+      'per-tenant SQLite at ~50 repos, and pin a version behind the interface (codegraph is ' +
+      'pre-1.0). The planner thus becomes an **MCP client of two graphs** (plan tree + code ' +
+      'graph) — one client pattern, no vectors.\n\n' +
+      '**Code-access (locked 2026-06-11): GitHub App read is the PRIMARY (and startup-phase ' +
+      'ONLY) source.** Both project kinds get indexed from GitHub server-side; start-fresh has no ' +
+      'graph until its first dispatch cycle produces code, migrate-existing indexes on connect. ' +
+      'Storing the code/graph is fine (start-fresh code is Motir-originated; both cases read the ' +
+      'repo anyway) — the earlier "never persists the user\'s code" note is superseded. The ' +
+      'CLI-pushed code-context bundle (7.9.9) is **demoted** to a later option for ' +
+      'non-GitHub repos, not part of the core loop.',
     items: [],
   },
   {
@@ -266,7 +308,32 @@ export const STUB_STORIES: PlanStory[] = [
       'repo from their cloud (CodeRabbit-style, per its GitHub-integration docs; ' +
       'OAuth identifies the USER, the App installation grants the REPO access — two separate ' +
       "grants). This App read path is ALSO the server-side code-access source for 7.5's " +
-      'planning/dispatch context retrieval (see the 7.5 code-access decision).',
+      'planning/dispatch context retrieval (see the 7.5 code-access decision).\n\n' +
+      '**Code-graph build/refresh (locked 2026-06-11):** this story owns the server-side ' +
+      'pipeline that turns the App read into the 7.5 code graph — on install, clone/fetch via ' +
+      'the installation token → index with the embedded codegraph engine → store the per-repo ' +
+      'graph in motir-ai; on a **push/PR webhook**, re-index changed files (incremental, ' +
+      "replacing codegraph's local OS file-watcher). The richer write scopes here also drive the " +
+      'status-sync / review loop.',
+    items: [],
+  },
+  {
+    id: '7.10',
+    title: 'Planning-mistakes store + learning loop (the productized notes.html)',
+    status: 'planned',
+    descriptionMd:
+      'The orphaned-deferral fix (no-V1-tier rule: an unowned capability is a planning bug). ' +
+      'motir-ai needs a place to STORE accumulated planning mistakes/lessons — the product ' +
+      "analog of motir-meta's `notes.html` — and to INJECT them into the planner at plan time so " +
+      "it stops repeating them. This is the closed AI layer's durable moat and has no home in " +
+      "the open PM substrate, so it lives in **motir-ai's own DB** (the 7.1 stateful-motir-ai " +
+      'decision). Added 2026-06-11; surfaced during the Epic-7 architecture discussion when the ' +
+      'three motir-ai stores (direction docs / mistakes / code graph) were enumerated and only ' +
+      "this one owned no story. Scope: the mistakes schema + a curated base set (Motir's shipped " +
+      'planning wisdom) + the injection at plan time (rides the 7.3/7.4 tool-use loop) + the ' +
+      'feedback path that captures a correction into a new lesson (the loop that makes the ' +
+      'planner improve). Likely per-tenant learned lessons layered on the global base set — ' +
+      'verify the mirror (how Rovo/agentic planners persist learned preferences) at expansion.',
     items: [],
   },
   // 7.8 (Motir MCP server — agent tool surface over the PM core) is fully

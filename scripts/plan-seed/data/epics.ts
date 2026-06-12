@@ -994,7 +994,29 @@ export const EPICS: EpicMeta[] = [
       'independently useful before any AI planning ships, so we pull it in front of the ' +
       'remaining Epic-6 stubs rather than waiting. Full justification + the front-half/back-' +
       'half split with stub 7.5 lives in story-7.0.ts. (notes.html #32 — the cross-epic dep ' +
-      'audit passes; this is a deliberate deviation, not the mistake the rule guards against.)',
+      'audit passes; this is a deliberate deviation, not the mistake the rule guards against.)\n\n' +
+      '**Locked AI architecture (the Epic-7 planning discussion with Yue, 2026-06-11; full ' +
+      'rationale in story-7.1.ts; each story carries its slice):**\n\n' +
+      '1. **One-directional writes.** motir-core is the system of record; the AI NEVER writes the ' +
+      'tree. motir-core calls motir-ai to GENERATE → motir-ai returns a tree-DELTA → motir-core ' +
+      'persists via the shipped `workItemsService`. Generate→human-approve→persist (Principle #3).\n' +
+      '2. **A tool-use SESSION, not a one-shot call.** Planning context is non-local, so motir-ai ' +
+      'HOSTS the planning agent and reads on demand; the whole tree is reachable every job, ' +
+      "transmitted never. Context scales by the operation's blast radius (push bounded ops; " +
+      'skeleton + retrieve for unbounded augment).\n' +
+      '3. **Graph-traversal, not RAG.** Two explicit relational graphs walked over MCP, no vector ' +
+      'store — the **plan tree** (motir-core: rollup + is_blocked_by + comments) and the **code ' +
+      'graph** (motir-ai: `codegraph` embedded, GitHub-read-fed, webhook-refreshed). The verified ' +
+      'Atlassian-Rovo mirror (Teamwork Graph; notes.html #33 — checked, not asserted).\n' +
+      '4. **Async job model** serving BOTH the 7.2 chat and the headless MCP/CLI planners (7.9) — ' +
+      'two co-equal front doors over one 7.1 boundary.\n' +
+      '5. **motir-ai is STATEFUL** (headless ≠ stateless): its own DB holds the three context ' +
+      'stores with no home in an open PM tool — direction docs (7.2), planning-mistakes (7.10), ' +
+      'code graph (7.5/7.7). This is `motir-meta` productized, and it SHARPENS the open-core line ' +
+      '(motir-core stays a complete, exportable Jira clone with zero AI tables).\n\n' +
+      '**Two project kinds:** start-fresh (shipped first) and existing-project migration. ' +
+      '**Story 7.10** (planning-mistakes store + learning loop) was added in the same pass — the ' +
+      'orphaned-deferral fix for the third motir-ai store.',
   },
   {
     id: '8',
