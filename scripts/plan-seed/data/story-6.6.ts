@@ -503,7 +503,7 @@ export const story_6_6: PlanStory = {
       id: '6.6.6',
       title:
         'Audit-log UI — per-rule execution log (status, error detail, pagination) + last-run surfacing + the auto-disabled banner wiring',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 25,
