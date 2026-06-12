@@ -18,4 +18,13 @@
 export interface ServiceContext {
   userId: string;
   workspaceId: string;
+  /**
+   * Automation provenance (Story 6.6 · Subtask 6.6.2). When a write is
+   * performed by the automation engine running a rule's action, this carries
+   * that rule's id. The post-commit `work-item/*` events the write emits stamp
+   * it as `viaAutomationRuleId`, and the engine NEVER fires a rule off a
+   * provenance-carrying event — the verified Jira loop-prevention default
+   * (rules don't trigger rules). Absent on every ordinary user-driven write.
+   */
+  viaAutomationRuleId?: string;
 }

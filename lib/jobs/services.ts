@@ -8,6 +8,7 @@ import { mentionNotificationsService } from '@/lib/services/mentionNotifications
 import { watcherNotificationsService } from '@/lib/services/watcherNotificationsService';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
+import { automationEngineService } from '@/lib/services/automationEngineService';
 
 // The service-layer injection bag handed to every job handler as its 2nd arg
 // (Story 1.6 · Subtask 1.6.2). This is the seam that keeps the 4-layer rule
@@ -31,6 +32,7 @@ export const jobServices = {
   watcherNotifications: watcherNotificationsService,
   attachments: attachmentsService,
   savedFilterSubscriptions: savedFilterSubscriptionsService,
+  automationEngine: automationEngineService,
 };
 
 export type JobServices = typeof jobServices;

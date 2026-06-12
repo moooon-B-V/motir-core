@@ -221,6 +221,17 @@
       "fallback": "Or copy this link into your browser:",
       "reason": "You're receiving this because you subscribed to the “{filter}” filter.",
       "unsubscribe": "Unsubscribe from this filter"
+    },
+    "automationRuleFailed": {
+      "subject": "Your automation rule “{rule}” failed",
+      "preview": "Automation rule “{rule}” failed to run",
+      "greeting": "Hi {name},",
+      "lede": "Your automation rule “{rule}” failed the last time it ran.",
+      "errorLabel": "Error: {detail}",
+      "autoDisabled": "It reached the consecutive-failure limit, so we’ve turned it off. Fix the issue and re-enable it to resume.",
+      "view": "Manage automation rules",
+      "fallback": "Or copy this link into your browser:",
+      "reason": "You’re receiving this because you own this automation rule."
     }
   },
   "auth": {

@@ -221,6 +221,17 @@
       "fallback": "或将此链接复制到浏览器：",
       "reason": "你收到此邮件是因为你订阅了「{filter}」筛选器。",
       "unsubscribe": "取消订阅此筛选器"
+    },
+    "automationRuleFailed": {
+      "subject": "你的自动化规则“{rule}”执行失败",
+      "preview": "自动化规则“{rule}”未能运行",
+      "greeting": "你好 {name}：",
+      "lede": "你的自动化规则“{rule}”上次运行时执行失败。",
+      "errorLabel": "错误：{detail}",
+      "autoDisabled": "它已达到连续失败上限，因此我们已将其关闭。请修复问题后重新启用以恢复运行。",
+      "view": "管理自动化规则",
+      "fallback": "或将此链接复制到浏览器：",
+      "reason": "你收到此邮件是因为你是该自动化规则的所有者。"
     }
   },
   "auth": {
