@@ -348,7 +348,7 @@ export const story_7_3: PlanStory = {
         'this handler invokes.\n' +
         '- `motir-ai/docs/contract.md` (7.1.1/7.1.9) — the envelope + the ' +
         'tree-delta result shape.',
-      dependsOn: ['7.2.5', '7.1.7'],
+      dependsOn: ['7.2.5', '7.1.7', '2.7.3'],
     },
     {
       id: '7.3.3',
@@ -694,6 +694,53 @@ export const story_7_3: PlanStory = {
         '- `motir-core/scripts/plan-seed/` — the seeded tenant + how to ' +
         'fixture the direction docs for the run.',
       dependsOn: ['7.3.5'],
+    },
+    {
+      id: '7.3.8',
+      title: 'Explanation generation — opt-in project setting honored by the generator',
+      status: 'blocked',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 35,
+      descriptionMd:
+        'Make AI-drafted **explanations** an opt-in project setting (the ' +
+        'user-confirmed feature 6). The `work_item.explanationMd` field + the ' +
+        '`explanationSource` enum (`user_authored | ai_draft | user_edited`) ' +
+        'ALREADY exist (Story 1.4 / the AI-draft seam) — this subtask adds the ' +
+        'toggle + makes the generator honor it. **Default OFF**: generation ' +
+        'leaves `explanationMd` null. **When ON**: every generated work item ' +
+        'also drafts its `explanationMd` (the "why this matters" prose) with ' +
+        '`explanationSource: ai_draft`, so the user can later edit it ' +
+        '(→ `user_edited`).\n\n' +
+        'Add a `Project.aiGenerateExplanations` boolean column (default ' +
+        '`false`) + migration HERE — owning the column in 7.3 keeps it ≤ the ' +
+        'generation that reads it (no forward dep on Story 7.11, which only ' +
+        'SURFACES this toggle in the AI-settings panel, 7.11.6). The ' +
+        '`generate_tree` handler (7.3.2) reads the flag through the job ' +
+        'envelope and conditionally emits the explanation per node; the ' +
+        '7.3.4 persist maps it onto each created item with the `ai_draft` ' +
+        'source.\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- A `Project.aiGenerateExplanations` boolean column (default `false`) ' +
+        '+ migration, modelled per `motir-core/CLAUDE.md`.\n' +
+        '- With the flag OFF (default), a generated tree carries NO ' +
+        'explanations (`explanationMd` null on every node).\n' +
+        '- With the flag ON, every generated node carries an `explanationMd` ' +
+        'with `explanationSource: ai_draft`; a later human edit flips it to ' +
+        '`user_edited` (existing behavior, unchanged).\n' +
+        '- The flag crosses the 7.1 boundary in the generate job envelope ' +
+        '(motir-ai never reads motir-core config directly); 4-layer respected.\n' +
+        '- A unit test covers both flag states; the column default backfills ' +
+        'every existing project to OFF.\n\n' +
+        '## Context refs\n\n' +
+        '- `motir-core/prisma/schema.prisma` — `work_item.explanationMd` + ' +
+        '`WorkItemExplanationSource` (the existing field this honors) + ' +
+        '`model Project` (where the toggle column lands, beside ' +
+        '`estimationStatistic`).\n' +
+        '- 7.3.2 / 7.3.4 — the generate handler + persist this flag gates.\n' +
+        '- Story 7.11 (7.11.6) — the AI-settings panel that surfaces this ' +
+        'toggle (backward consumer; not a dep of this card).',
+      dependsOn: ['7.3.4'],
     },
   ],
 };

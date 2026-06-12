@@ -8,6 +8,15 @@ import type { PlanStory } from '../types';
  * from the epic-*.html cards.
  */
 export const STUB_STORIES: PlanStory[] = [
+  // ── Epic 2: Issue tracking core ──────────────────────────────────────────
+  // Epic 2 was fully expanded + done; RE-OPENED 2026-06-12 with one new story:
+  // 2.7 (Work-item type + executor) — data/story-2.7.ts. Adds the structural
+  // `work_item.type` (code/design/test/…) + `executor` fields the AI layer
+  // generates (7.3) and routes prompts by (7.6); today they're only prose in
+  // the description. A Principle-#11 justified deviation from Jira (whose only
+  // type axis is `kind`). Placed in Epic 2 (core attribute) so every AI
+  // consumer is a clean backward dep.
+
   // ── Epic 3: Boards ─────────────────────────────────────────────────────────
   // Epic 3 is fully expanded — every story is a data/story-3.*.ts module
   // (3.1, 3.2, 3.3, 3.5, 3.6, 3.7, 3.8), assembled in index.ts; no Epic-3 stubs
@@ -188,6 +197,21 @@ export const STUB_STORIES: PlanStory[] = [
   // one PAT auth path), consuming 7.6's server-side prompt generation;
   // packages/cli workspace package, binary `motir`; npm publish is Epic-8
   // work (name securing gates it — no forward dep).
+  // 7.11 (Cadence — auto-planning trigger + AI sprint planning + AI project
+  // settings) — data/story-7.11.ts. Added 2026-06-12. Auto-expand when the
+  // ready set drains (rides the 1.6 cron); AI packs ready items into SHORT
+  // 2–3 day sprints (coding-agent cadence) via Epic-4 services; settings are
+  // Project columns surfaced in an AI-settings panel.
+  // 7.12 (Planning metering + token accounting + credit ledger) —
+  // data/story-7.12.ts. Added 2026-06-12. Per-model token metering + an
+  // internal credit unit (tokens × per-model rate × margin) in motir-ai's DB;
+  // out-of-credits refuses planning. Pricing/checkout UI defers to Epic 8; the
+  // ledger/tier/rate DATA lands now.
+  // 7.13 (Contextual planning from each work item) — data/story-7.13.ts. Added
+  // 2026-06-12. A planning chat embedded in the issue detail, scoped to the
+  // item but able to touch it / siblings / parent — confirmation ALWAYS
+  // required before any tree write. Reuses the 7.4 jobs + 7.2 chat.
+  // (Also 2026-06-12: 7.3.8 added an opt-in explanation-generation toggle.)
 
   // ── Epic 8: Launch readiness ──────────────────────────────────────────────
   {

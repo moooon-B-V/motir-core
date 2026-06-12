@@ -108,14 +108,22 @@ export const EPICS: EpicMeta[] = [
   {
     id: '2',
     title: 'Issue tracking core',
-    status: 'done',
+    status: 'in_progress',
     descriptionMd:
       'The irreducible Jira core — the first epic of the PM substrate that makes Motir a usable ' +
       "standalone product. Built directly on Story 1.4's `work_item` model: issue types " +
       '(epic / story / task / bug), the issue detail view, create / edit, customizable per-project ' +
       'status **workflows**, assignees, and the issue list. After this epic a team can track real ' +
       'work by hand, with zero AI involved. The AI Planning Layer (Epic 7) later *generates* these ' +
-      'same issues — but the manual path is the foundation and must stand on its own.',
+      'same issues — but the manual path is the foundation and must stand on its own.\n\n' +
+      '**Re-opened 2026-06-12 — Story 2.7 (work-item type + executor).** The 2026-06-12 Epic-7 ' +
+      'augmentation surfaced a gap in this core model: a work item carries `kind` ' +
+      '(epic/story/task/bug/subtask) but no executor-routing **type** (code/design/test/…) — the ' +
+      "plan's own `type`/`executor` are only PROSE in the description today. Story 2.7 adds them as " +
+      'real fields (a Principle-#11 justified deviation from Jira, whose only type axis is `kind`), ' +
+      'so the AI layer can generate typed leaves (7.3) and route prompts by type (7.6), and a human ' +
+      'can filter by type (Epic 6). It lands in Epic 2 — not Epic 7 — because it is a core ' +
+      'work-item attribute, which keeps every AI consumer a clean backward dep.',
     items: [
       {
         id: 'bug-finding-47',
@@ -1016,7 +1024,17 @@ export const EPICS: EpicMeta[] = [
       '(motir-core stays a complete, exportable Jira clone with zero AI tables).\n\n' +
       '**Two project kinds:** start-fresh (shipped first) and existing-project migration. ' +
       '**Story 7.10** (planning-mistakes store + learning loop) was added in the same pass — the ' +
-      'orphaned-deferral fix for the third motir-ai store.',
+      'orphaned-deferral fix for the third motir-ai store.\n\n' +
+      '**Augmentation 2026-06-12 — Stories 7.11–7.13** (six user-flagged feature gaps): ' +
+      '**7.11** cadence — an auto-planning trigger (expand when the ready set drains) + AI sprint ' +
+      'planning into SHORT 2–3 day sprints (coding-agent cadence, not human 1–2 week) + the AI ' +
+      'project-settings surface; **7.12** planning metering + token accounting + an internal ' +
+      'CREDIT ledger (credits normalize per-model token cost × margin; pricing/checkout UI defers ' +
+      'to Epic 8, the data lands now); **7.13** contextual planning from every work item (chat on ' +
+      'any issue to expand/modify it, its siblings, or its parent — confirmation ALWAYS required ' +
+      'before any tree write). The same pass added **Story 2.7** (work-item type + executor) in ' +
+      'Epic 2 and an explanation-generation toggle (7.3.8). Every new dep points backward — the ' +
+      'ordering audit stays clean.',
   },
   {
     id: '8',
