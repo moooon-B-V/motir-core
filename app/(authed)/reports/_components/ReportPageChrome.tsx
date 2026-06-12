@@ -33,7 +33,7 @@ export function ReportPageChrome({
           <ArrowLeft className="h-4 w-4" aria-hidden />
           {backLabel}
         </Link>
-        <div className="flex items-center gap-1 text-xs text-(--el-text-faint)">
+        <div className="flex items-center gap-1 text-xs text-(--el-text-muted)">
           <span>{crumb}</span>
           <span aria-hidden>/</span>
           <span>{title}</span>
