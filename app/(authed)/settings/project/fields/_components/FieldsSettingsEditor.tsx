@@ -603,7 +603,7 @@ function CreateFieldModal({
           void handleCreate();
         }}
       >
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+        <Modal.Body className="gap-4">
           <Input
             label={t('labelLabel')}
             helperText={t('labelHelper')}
@@ -640,7 +640,7 @@ function CreateFieldModal({
             onChange={(e) => setDescription(e.target.value)}
             disabled={pending}
           />
-        </div>
+        </Modal.Body>
         <Modal.Footer className="shrink-0">
           <Button variant="ghost" onClick={() => handleOpenChange(false)} disabled={pending}>
             {tc('cancel')}
@@ -790,7 +790,7 @@ function EditFieldModal({
       title={t('editTitle')}
       size="lg"
     >
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+      <Modal.Body className="gap-4">
         <Input
           label={t('labelLabel')}
           helperText={t('labelHelper')}
@@ -827,7 +827,7 @@ function EditFieldModal({
           onChange={(e) => setDescription(e.target.value)}
           disabled={pending}
         />
-      </div>
+      </Modal.Body>
       <Modal.Footer className="shrink-0">
         <Button variant="ghost" onClick={onClose} disabled={pending}>
           {tc('cancel')}

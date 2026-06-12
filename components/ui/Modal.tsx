@@ -15,10 +15,16 @@ import { cn } from '@/lib/utils/cn';
  *
  * Open/close is controlled by the consumer via `open` + `onOpenChange`.
  *
+ * For a scrollable body with a pinned footer, wrap the fields in `Modal.Body`
+ * (it owns the `flex-1 overflow-y-auto` scroll recipe and keeps focus rings
+ * from clipping against the scroll edge — see `ModalBody`).
+ *
  * @example
  * const [open, setOpen] = useState(false);
  * <Modal open={open} onOpenChange={setOpen} title="Confirm" size="md">
- *   <p>Body content</p>
+ *   <Modal.Body className="gap-4">
+ *     <Input label="Name" autoFocus />
+ *   </Modal.Body>
  *   <Modal.Footer>
  *     <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
  *     <Button variant="primary" onClick={confirm}>Confirm</Button>
@@ -33,7 +39,8 @@ const contentVariants = cva(
     'p-(--spacing-card-padding)',
     'focus:outline-none',
     // Never exceed the viewport: cap height and lay out as a column so a
-    // consumer can give its body `flex-1 overflow-y-auto` and pin a footer,
+    // consumer can wrap its fields in `Modal.Body` (which owns the
+    // `flex-1 overflow-y-auto` scroll recipe) and pin a `Modal.Footer`,
     // instead of the dialog growing off-screen (e.g. the create modal's
     // expandable Explanation pushing the Create button out of view).
     'flex max-h-[90vh] flex-col overflow-hidden',
@@ -177,10 +184,50 @@ const ModalFooter = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivEleme
   },
 );
 
+/**
+ * ModalBody — the scrollable field area of a modal. Owns the scroll recipe
+ * once so consumers don't re-derive it (and re-introduce the focus-ring clip):
+ * it fills the remaining column height (the panel caps at `max-h-[90vh]`) and
+ * scrolls, so a sibling `Modal.Footer` stays pinned.
+ *
+ * Ring-safe by construction. `Input` draws its focus ring as
+ * `focus-within:ring-2 … ring-offset-2` — a box-shadow extending ~4px OUTSIDE
+ * the field's border box. Per the CSS spec, `overflow-y: auto` forces the
+ * computed `overflow-x` from `visible` to `auto`, so this body is a clip box on
+ * BOTH axes; a full-width field's ring overhang would be painted outside it and
+ * silently clipped (rings are box-shadows — they never grow the layout box, so
+ * nothing scrolls, the paint is just cut). We pad the scroll container by more
+ * than the overhang (`p-1.5` = 6px > 4px) and pull an equal negative margin
+ * (`-m-1.5`), so the ring gets room while the body's visual gutter — and the
+ * fields' alignment with the modal title/footer — is unchanged.
+ *
+ * Pass `gap-*` (and any extra layout) via `className`.
+ */
+const ModalBody = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  function ModalBody({ className, children, ...rest }, ref) {
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          'flex min-h-0 flex-1 flex-col overflow-y-auto',
+          // Ring-safe inset (see the component doc above): padding ≥ the focus
+          // ring's ~4px overhang + an equal negative margin to keep the gutter.
+          '-m-1.5 p-1.5',
+          className,
+        )}
+        {...rest}
+      >
+        {children}
+      </div>
+    );
+  },
+);
+
 /** Convenience trigger — wires children to Radix's DialogTrigger. */
 const ModalTrigger = Dialog.Trigger;
 
 export const Modal = Object.assign(ModalRoot, {
+  Body: ModalBody,
   Footer: ModalFooter,
   Trigger: ModalTrigger,
 });

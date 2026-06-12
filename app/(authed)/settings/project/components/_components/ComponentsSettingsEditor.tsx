@@ -530,7 +530,7 @@ function CreateComponentModal({
           void handleCreate();
         }}
       >
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+        <Modal.Body className="gap-4">
           <Input
             label={t('nameLabel')}
             helperText={t('nameHelper')}
@@ -556,7 +556,7 @@ function CreateComponentModal({
             assignableMembers={assignableMembers}
             disabled={pending}
           />
-        </div>
+        </Modal.Body>
         <Modal.Footer>
           <Button variant="ghost" type="button" onClick={() => handleOpenChange(false)}>
             {tc('cancel')}
@@ -654,7 +654,7 @@ function EditComponentModal({
           void handleSave();
         }}
       >
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+        <Modal.Body className="gap-4">
           <Input
             label={t('nameLabel')}
             helperText={t('nameHelper')}
@@ -680,7 +680,7 @@ function EditComponentModal({
             assignableMembers={assignableMembers}
             disabled={pending}
           />
-        </div>
+        </Modal.Body>
         <Modal.Footer>
           <Button variant="ghost" type="button" onClick={onClose}>
             {tc('cancel')}
@@ -763,7 +763,7 @@ function DeleteComponentModalInner({
       size="md"
       srTitle={t('deleteTitle', { name: component.name })}
     >
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+      <Modal.Body className="gap-4">
         <div className="flex items-center gap-3">
           <span
             className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
@@ -852,7 +852,7 @@ function DeleteComponentModalInner({
             </button>
           </div>
         ) : null}
-      </div>
+      </Modal.Body>
       <Modal.Footer>
         <Button variant="ghost" onClick={() => onOpenChange(false)}>
           {tc('cancel')}
