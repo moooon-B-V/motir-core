@@ -539,7 +539,22 @@ export const workItemsService = {
 
     const { dto, revisionId } = await db.$transaction(async (tx) => {
       const key = await projectRepository.allocateWorkItemNumber(input.projectId, tx);
-      const identifier = `${project.identifier}-${key}`;
+      // Build the identifier prefix from a FRESH in-tx read, NOT the pre-tx
+      // `project` snapshot: a project key change (Story 6.8 `changeKey`) racing
+      // this creation could have committed a new prefix after `project` was read
+      // above. `allocateWorkItemNumber` UPDATEs (and thus row-locks) the project
+      // row, so this read — and a concurrent `changeKey`'s `SELECT … FOR UPDATE`
+      // on the same row — serialize: whichever grabs the lock first commits, and
+      // the loser observes the winner's identifier. Without re-reading here, an
+      // issue could be minted with the stale prefix mid-rename (the row the bulk
+      // rewrite already passed), so the re-read is what makes the FOR-UPDATE lock
+      // actually prevent a stale-prefix identifier.
+      const refreshed = await projectRepository.findById(input.projectId, tx);
+      /* istanbul ignore next -- allocateWorkItemNumber above already UPDATEd (and
+         threw ProjectNotFoundError if absent), so the project always resolves here;
+         the ?? guards a type-level null only and is never taken at runtime */
+      const prefix = refreshed?.identifier ?? project.identifier;
+      const identifier = `${prefix}-${key}`;
 
       // Append after the last sibling. Siblings are project-scoped and
       // parent-scoped (top-level when parentId is null) so the position only

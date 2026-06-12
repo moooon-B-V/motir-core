@@ -71,18 +71,25 @@ describe('createProject — happy path', () => {
       name: 'Motir Core',
     });
 
-    // DTO shape: id / name / slug / identifier / archivedAt ONLY — never a
-    // raw Prisma row (no createdAt, no lastWorkItemNumber). archivedAt rides
-    // on the DTO so the shell can flag an archived active project (#29.2);
-    // a freshly created project is always non-archived (null).
+    // DTO shape: id / name / slug / identifier / archivedAt / accessLevel +
+    // the Story 6.8 avatar fields ONLY — never a raw Prisma row (no createdAt,
+    // no lastWorkItemNumber). archivedAt rides on the DTO so the shell can flag
+    // an archived active project (#29.2); a freshly created project is always
+    // non-archived (null). avatarIcon/avatarColor backfill to null (the
+    // mono-identifier rendering); `previousKeys` is NOT present here — it loads
+    // only on the details-surface read path (6.8), not on a plain create.
     expect(Object.keys(project).sort()).toEqual([
       'accessLevel',
       'archivedAt',
+      'avatarColor',
+      'avatarIcon',
       'id',
       'identifier',
       'name',
       'slug',
     ]);
+    expect(project.avatarIcon).toBeNull();
+    expect(project.avatarColor).toBeNull();
     expect(project.name).toBe('Motir Core');
     expect(project.slug).toBe('motir-core');
     expect(project.archivedAt).toBeNull();

@@ -232,6 +232,31 @@ export const workItemRepository = {
   },
 
   /**
+   * Re-derive every work item's denormalized `identifier` for a project after a
+   * key change (Story 6.8 · `changeKey`). The identifier is derived data —
+   * `<project key>-<key number>` — so a rename is a single in-place bulk UPDATE,
+   * NOT a per-row loop and NOT a revision-generating mutation (the `key` number
+   * is untouched; only the prefix changes). ONE statement keyed on `projectId`,
+   * index-maintained by the `@@unique([projectId, identifier])` index, so it is
+   * bounded even on a 10k-issue project — this IS the "re-index", synchronous
+   * and atomic, where Jira would kick off a background Lucene job (ours reads the
+   * denormalized column, so there is no external index to rebuild). `"key"` is
+   * cast to text for the concatenation. Returns the row count. Write → `tx`
+   * required (it runs inside the FOR-UPDATE-locked rename transaction).
+   */
+  async rewriteIdentifiersForProject(
+    projectId: string,
+    newKey: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.$executeRaw`
+      UPDATE "work_item"
+      SET "identifier" = ${newKey} || '-' || "key"::text
+      WHERE "projectId" = ${projectId}
+    `;
+  },
+
+  /**
    * Bulk-read work items by id in a single `IN (...)` round-trip (Subtask
    * 1.4.4). Rows come back in Postgres' arbitrary order — service callers
    * (`getBlockers` / `getBlocking`) re-sort if they need a specific order.
