@@ -209,6 +209,18 @@
       "view": "查看工作项",
       "fallback": "或将此链接复制到浏览器中打开：",
       "reason": "你收到此邮件是因为你正在关注{identifier}。"
+    },
+    "filterSubscription": {
+      "subject": "“{filter}”{count, plural, =0 {没有结果} other {有 # 条结果}}",
+      "preview": "{filter} {count, plural, =0 {没有匹配的工作项} other {有 # 条匹配的工作项}}",
+      "greeting": "你好 {name}，",
+      "lede": "你在 {project} 中保存的筛选器「{filter}」匹配到 {count, plural, other {# 条工作项}}。",
+      "ledeEmpty": "你在 {project} 中保存的筛选器「{filter}」目前没有匹配到工作项。",
+      "truncated": "显示 {total} 条中的前 {shown} 条。打开筛选器查看全部。",
+      "view": "在 Motir 中查看",
+      "fallback": "或将此链接复制到浏览器：",
+      "reason": "你收到此邮件是因为你订阅了「{filter}」筛选器。",
+      "unsubscribe": "取消订阅此筛选器"
     }
   },
   "auth": {
@@ -1729,6 +1741,61 @@
       "deletedToast": "筛选器已删除",
       "errorTitle": "无法删除筛选器",
       "errorGeneric": "出了点问题，请重试。"
+    },
+    "subscribeAction": "订阅…",
+    "subscribe": {
+      "title": "订阅「{name}」",
+      "loadError": "无法加载你的订阅，请重试。",
+      "frequencyLabel": "频率",
+      "frequency": {
+        "daily": "每天",
+        "weekdays": "工作日",
+        "weekly": "每周"
+      },
+      "dayLabel": "星期",
+      "timeLabel": "时间",
+      "hourOption": "{hour} UTC",
+      "weekday": {
+        "0": "星期日",
+        "1": "星期一",
+        "2": "星期二",
+        "3": "星期三",
+        "4": "星期四",
+        "5": "星期五",
+        "6": "星期六"
+      },
+      "explainer": "按工作区时区（UTC）将前 50 条结果和总数发送到你的邮箱。这是一份报告而非提醒——即使没有匹配项也会发送。",
+      "subscribe": "订阅",
+      "save": "保存更改",
+      "cancel": "取消",
+      "changeSchedule": "更改计划",
+      "unsubscribe": "取消订阅",
+      "subscribedTitle": "已订阅",
+      "summary": {
+        "daily": "每天 {time} UTC",
+        "weekdays": "工作日 {time} UTC"
+      },
+      "summaryWeekly": "每周{day} {time} UTC",
+      "savedToast": "已订阅「{name}」",
+      "unsubscribedToast": "已取消订阅「{name}」",
+      "saveError": "无法更新你的订阅，请重试。"
+    }
+  },
+  "unsubscribeFilters": {
+    "confirm": {
+      "title": "取消订阅此筛选器？",
+      "body": "你将不再收到此保存筛选器的定时结果邮件。",
+      "action": "取消订阅"
+    },
+    "done": {
+      "title": "已取消订阅",
+      "body": "你将不再收到此筛选器的邮件。你可以随时在「筛选器」目录中重新订阅。",
+      "action": "前往工作项"
+    },
+    "invalid": {
+      "title": "此链接无效",
+      "body": "此取消订阅链接格式有误或已被使用。如果你仍在收到邮件，请在「筛选器」目录中取消订阅。",
+      "action": "前往工作项"
     }
   }
 }
