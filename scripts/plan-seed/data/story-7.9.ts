@@ -646,43 +646,97 @@ export const story_7_9: PlanStory = {
     },
     {
       id: '7.9.7',
-      title: 'Sandbox container — reference image for unattended `motir auto` runs',
+      title: 'Sandbox container — MULTI-AGENT reference image for unattended `motir auto` runs',
       status: 'blocked',
       type: 'code',
       executor: 'coding_agent',
-      estimateMinutes: 40,
+      estimateMinutes: 80,
       descriptionMd:
         'The walls for the unattended mode (the story-header sandbox decision): `motir ' +
-        'auto --agent "claude --dangerously-skip-permissions"` must have a confined, ' +
-        'reproducible place to run — the shape of the dev sandbox Motir itself is built ' +
-        "in — instead of a skip-permissions agent loose on the user's host. Running " +
-        '`motir auto` directly in a normal console with a permission-prompting agent ' +
-        'remains fully supported; the container is the RECOMMENDED path for unattended ' +
-        'runs, not a requirement.\n\n' +
+        'auto --agent "<agent> <auto-approve-flag>"` must have a confined, reproducible ' +
+        'place to run — the shape of the dev sandbox Motir itself is built in — instead ' +
+        "of a skip-permissions agent loose on the user's host. Running `motir auto` " +
+        'directly in a normal console with a permission-prompting agent remains fully ' +
+        'supported; the container is the RECOMMENDED path for unattended runs, not a ' +
+        'requirement.\n\n' +
+        "**This subtask's scope (refined 2026-06-12, Yue): the container is MULTI-AGENT.** " +
+        'Motir is BYOK and agent-agnostic — the sandbox must make the popular coding-agent ' +
+        'CLIs first-class, not leave the install entirely to the user. We ship a TESTED ' +
+        '**agent-profile matrix** (a documented + CI-built install layer per agent), each ' +
+        'selectable at build time, rather than one fat image carrying every agent.\n\n' +
+        '**Agent matrix (researched 2026-06-12 — web-verified; see Context refs):**\n\n' +
+        '- **Tier 1 — first-class, tested profiles (the four Yue named):**\n' +
+        '  - **Claude Code** (Anthropic) — npm `@anthropic-ai/claude-code`; creds `~/.claude`; ' +
+        'auto-approve `--dangerously-skip-permissions`. (Terminal-Bench #2, the consensus ' +
+        'default for serious work.)\n' +
+        '  - **Codex CLI** (OpenAI) — npm `@openai/codex`, Apache-2.0; creds `~/.codex`; ' +
+        'auto-approve `--full-auto` (a.k.a. yolo). (Terminal-Bench 2.1 #1 on GPT-5.5.)\n' +
+        '  - **OpenCode** — npm / install script, MIT, model-agnostic (the most-starred OSS ' +
+        'agent, ~172k★); creds `~/.config/opencode`.\n' +
+        '  - **Kimi Code CLI** (Moonshot) — npm (`MoonshotAI/kimi-code`), MIT, TypeScript, ' +
+        '**needs Node ≥ 24.15** (the version floor that sets the base image); creds the ' +
+        'Kimi config dir; powered by Kimi K2.6.\n' +
+        '- **Tier 2 — also-supported profiles (popular, web-verified):**\n' +
+        '  - **Antigravity CLI** (Google) — the MANDATORY replacement for the retired ' +
+        'Gemini CLI (consumer cutover 2026-06-18); Go binary via ' +
+        '`curl -fsSL https://antigravity.google/cli/install.sh | bash`. Include it ' +
+        'IN PLACE OF Gemini CLI (do not ship the sunset tool).\n' +
+        '  - **Cursor CLI** (Anysphere) — one of the big-vendor four.\n' +
+        '  - **Aider** — Python (pip), Apache-2.0; git-native repomap + auto-commits; ' +
+        'creds via `~/.aider.conf.yml` / env. (The base adds a thin Python layer for this ' +
+        'profile only.)\n' +
+        '  - **Goose** (Block) — Apache-2.0, model-agnostic OSS.\n' +
+        '- **Tier 3 — generic escape hatch:** any other agent via a build-arg install layer ' +
+        '+ `motir auto --agent "<cmd> <flag>"` (the original BYO mechanism, retained).\n\n' +
         '**Deliverable: `packages/cli/sandbox/`** — a reference `Dockerfile` (+ compose ' +
-        'file / devcontainer.json variant) providing: node >= 22 + git + `gh` + the built ' +
-        "`motir` binary; a `/workspace` mount point for the user's workspace root (the " +
-        '`.motir.json` tree — the ONLY writable host surface); read-only mount points for ' +
-        "the user's agent credentials (e.g. `~/.claude`) and `~/.config/motir` (the PAT); " +
-        'an entrypoint that drops into the workspace so `motir auto --agent "claude ' +
-        '--dangerously-skip-permissions"` is a one-liner; NO docker socket, NO host ' +
-        "filesystem beyond the mounts. The agent CLI itself is installed by the user's " +
-        'build arg / a documented layer (we do not pin or redistribute third-party ' +
-        'agents). Network stays open by default (agents need their APIs + git remotes) — ' +
-        'documented explicitly so the boundary is understood: the container confines the ' +
-        'FILESYSTEM blast radius, not egress.\n\n' +
+        'profiles + devcontainer.json variant) providing: a base of **node ≥ 24.15** (the ' +
+        'Kimi floor; covers every Node agent) + git + `gh` + the built `motir` binary, with ' +
+        'a `--build-arg AGENT=claude|codex|opencode|kimi|antigravity|cursor|aider|goose` ' +
+        '(or compose profiles) selecting the per-agent install layer (and its extra ' +
+        'runtime — Python for aider, the curl-installed Go binary for antigravity). ' +
+        "A `/workspace` mount for the user's workspace root (the `.motir.json` tree — the " +
+        "ONLY writable host surface); **read-only mounts for the SELECTED agent's " +
+        'credentials** (the per-agent path above) + `~/.config/motir` (the PAT); an ' +
+        'entrypoint that drops into the workspace so `motir auto` is a one-liner; NO docker ' +
+        'socket, NO host filesystem beyond the mounts. Network stays open by default ' +
+        '(agents need their APIs + git remotes) — documented explicitly: the container ' +
+        'confines the FILESYSTEM blast radius, not egress. We do not redistribute the ' +
+        'agents — each profile INSTALLS the third-party CLI from its official source at ' +
+        'build time (pinned where the source allows).\n\n' +
+        '**Per-agent auto-approve flags differ and DRIFT — treat as VERIFY-at-build, not ' +
+        'asserted.** Claude `--dangerously-skip-permissions` and Codex `--full-auto` are ' +
+        'verified; the others (opencode / kimi / antigravity / cursor / aider / goose) must ' +
+        "have their unattended/auto-approve flag confirmed against the agent's current " +
+        'docs in the profile README (flags change release-to-release — notes.html #33: ' +
+        'verify per agent, do not assert from memory).\n\n' +
         '## Acceptance criteria\n\n' +
-        '- `docker build` succeeds from a clean checkout; the image runs `motir --version` ' +
-        'and a mounted-workspace `motir auto --agent <fake-agent>` end-to-end (asserted in ' +
-        'a CI-friendly smoke test that does NOT need a real LLM).\n' +
+        '- For EACH Tier-1 agent profile (claude / codex / opencode / kimi): ' +
+        '`docker build --build-arg AGENT=<x>` succeeds from a clean checkout and the image ' +
+        "runs both `motir --version` AND the agent's own `--version` (or equivalent " +
+        'liveness check). Tier-2 profiles build in CI too (network permitting; a profile ' +
+        'whose install flakes on network is marked allow-fail, not removed).\n' +
+        '- A mounted-workspace `motir auto --agent <fake-agent>` runs end-to-end on the ' +
+        'base image (asserted in a CI-friendly smoke test that does NOT need a real LLM) — ' +
+        'the loop is validated agent-independently; the per-agent layers are validated by ' +
+        'their build + version check.\n' +
         '- Writes outside `/workspace` (beyond the credential mounts) fail — asserted in ' +
         'the smoke test; no docker socket inside.\n' +
-        '- The compose/devcontainer variant carries the same mounts; the README in ' +
-        '`packages/cli/sandbox/` documents the credential mounts, the egress caveat, and ' +
-        'the agent-install build arg.\n\n' +
+        '- The base image floors at Node ≥ 24.15 (so the Kimi profile installs cleanly) ' +
+        'and every Tier-1 profile mounts its agent-specific credential dir read-only.\n' +
+        '- The compose/devcontainer variants carry the same mounts + the agent selector; ' +
+        'the README in `packages/cli/sandbox/` documents, PER AGENT: the install source, ' +
+        'the credential mount path, and the verified auto-approve flag — plus the global ' +
+        'egress caveat. Antigravity is documented as the Gemini-CLI replacement (no Gemini ' +
+        'CLI profile ships).\n\n' +
         '## Context refs\n\n' +
         '- 7.9.4 (the loop being confined), 7.9.6 (the docs section this feeds)\n' +
-        '- `packages/cli/` (the binary the image bundles)\n\n' +
+        '- `packages/cli/` (the binary the image bundles)\n' +
+        '- Agent landscape (web-verified 2026-06-12): Claude Code ' +
+        '(`@anthropic-ai/claude-code`), OpenAI Codex CLI (`@openai/codex`), OpenCode ' +
+        '(github sst/opencode), Kimi Code CLI (github MoonshotAI/kimi-code, Node ≥ 24.15), ' +
+        'Google Antigravity CLI (antigravity.google/cli — the mandatory Gemini-CLI ' +
+        'replacement, consumer cutover 2026-06-18), Cursor CLI, Aider (Python), Goose ' +
+        '(Block). Terminal-Bench 2.1: Codex #1, Claude Code #2.\n\n' +
         '**Branch.** `subtask/PROD-7.9.7-cli-sandbox`.',
       dependsOn: ['7.9.4'],
     },
