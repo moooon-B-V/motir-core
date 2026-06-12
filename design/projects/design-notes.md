@@ -920,3 +920,232 @@ When a string here disagrees with shipped 6.5.2 / 6.5.3 code, the code wins —
 file a fix so the mockup stays the reference. `settings-area.mock.html` is the
 layout-confirmation artifact; it may drift from pixel-exact production once
 the React lands.
+
+---
+
+# Automation rules (Story 6.6) — Subtask 6.6.4 output
+
+The design asset for the whole **project automation** surface — the when/then
+rule engine's authoring + observability UI. Nothing under `design/` covered
+automation (the design-gate NONE-exists case: `projects/` held only
+Members/Access + Fields + Components + the 6.5 settings area), so this asset is
+the prerequisite that **gates the UI code subtasks 6.6.5** (rule list +
+when/if/then editor) **and 6.6.6** (audit-log UI + last-run + auto-disabled
+banner) — both carry 6.6.4 in `dependsOn` and seed `'blocked'` (Principle #13).
+
+## Files
+
+- `design/projects/automation.mock.html` — the source of truth (8 panels;
+  toggle dark to confirm token parity).
+- `design/projects/automation.png` — light full-page export for the board.
+- This section.
+
+## Mirror product (rung 1, VERIFIED at plan time 2026-06-10 — Atlassian docs)
+
+Jira's automation **rule builder**: a rule = **trigger → conditions →
+actions**, one trigger per rule, shown as a three-block editor ("When / If /
+Then"); a per-rule **audit log** (success / failure / no-actions, per-step
+detail, 90-day retention); rules run **as a configurable actor**;
+**auto-disable** at 10 consecutive failures. Adopted 1:1 in shape. The Story
+6.6 description records the verified core sets + the deviations (rule runs as
+the **owner**, not a synthetic app user; loop prevention is the Jira default
+only). This asset draws exactly that surface — it invents no rule-engine UI
+beyond the verified anatomy.
+
+## Entry + chrome — mounts INSIDE the 6.5 settings area (no second frame)
+
+The surface is **one page in the 6.5 settings AREA**, not a new shell. It
+mounts in the **reserved "Automation › Rules" nav slot** Story 6.5 drew as a
+disabled "Soon" entry (`settings-area.mock.html` panel 1 / "Groups & the
+Automation slot"). 6.6.4 **lights that slot up**: the row becomes an active
+route entry (`aria-current="page"`, the inset treatment, accent icon), the
+`Soon` chip drops. The rail, the back-to-project header, the serif page-title
+grammar, and the `Card` are the 6.5 chrome verbatim — this asset designs the
+**page bodies inside** it (the list, the editor, the audit log), never a frame.
+
+## The settings-nav registry entry (extends the 6.5.2 contract)
+
+The 6.5.2 registry reserved the slot without a route; 6.6.5 fills it with a
+real entry, and the route↔entry totality test now includes it:
+
+| Group · entry          | `href`                         | icon (lucide) |
+| ---------------------- | ------------------------------ | ------------- |
+| **Automation** · Rules | `/settings/project/automation` | `Bot`         |
+
+`access` rides the **shipped 6.4.3 admin predicate** (`projectAccessService`,
+the `manage-project` permission) — never a second role check. Automation is
+**admin-only** end to end: the nav entry, the page, and every route 403/404 for
+non-admins (no member/viewer read-only variant — unlike Fields/Components,
+there is no useful read-only automation view, matching Jira).
+
+## The editor-kind ↔ registry mapping (the 6.6.1 / 6.6.3 UI contract)
+
+The editor is **registry-driven** — the trigger picker, its per-kind config
+editor, the action picker, and its per-action config editor are ALL rendered
+FROM the 6.6.1 + 6.6.3 registries (the 6.1.4 "rows render from the registry"
+pattern; a new entry appears with zero editor changes, asserted in 6.6.5 with a
+test-only entry). The editor NEVER hard-codes a trigger/action/field list.
+
+**Triggers (the "When" block — one per rule):**
+
+| Trigger (registry id) | Config editor kind                                                                             |
+| --------------------- | ---------------------------------------------------------------------------------------------- |
+| `created`             | none ("No further configuration")                                                              |
+| `transitioned`        | optional **from → to** status `Combobox`s (the 6.6.1 status-id narrowing)                      |
+| `field-changed`       | built-in / CF **field picker** `Combobox`; **Assignee** surfaced first (the "assigned" preset) |
+| `commented` (6.6.3)   | none                                                                                           |
+
+**Actions (the "Then" block — ordered, max 10):**
+
+| Action (registry id)       | Config editor kind                                                                                                                            |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `transition`               | status-target `Combobox`                                                                                                                      |
+| `set-field` (built-ins)    | field `Combobox` + value editor per built-in: assignee (member) / priority (option) / due date (`DatePicker`) / story points (number `Input`) |
+| `set-field` (custom 6.6.3) | field `Combobox` + value editor per 5.3 CF type: select (option) / user (member) / number / date / text                                       |
+| `add-watcher` (6.6.3)      | member `MultiSelectPicker`                                                                                                                    |
+| `add-comment` (6.6.3)      | body `Input`                                                                                                                                  |
+| `add-label` (6.6.3)        | type-to-create `MultiSelectPicker` (the 5.4.2 find-or-create semantics)                                                                       |
+
+**Conditions (the "If" block) — REUSE 6.1.3, do not fork.** The condition group
+is the **6.1.3 filter-builder `.cond` row verbatim** (field `Combobox` ·
+operator `Combobox` · value editor · remove ×) under the **Match all / any**
+`Segmented` combinator, with the 6.1 **20-row cap** and the
+`.chip.stale` stale-referent treatment + `role="status"` row notice. 6.6.5
+reuses the **6.1.4 condition-row components** scoped to the rule editor — there
+is exactly **one predicate UI in the product**. Empty group = "always".
+
+## Composing primitives (no new primitive required)
+
+- **The 6.5 settings-area chrome** — rail (`Sidebar`), serif page title, `Card`
+  — verbatim; Automation is a page inside it.
+- **The 6.1.3 condition rows** — `.cond` grid, `Segmented` combinator,
+  `MultiSelectPicker` box, `.chip` / `.chip.tinted` / `.chip.stale`, the
+  `addrow` add button, the cap + `stale-note` states — verbatim.
+- **`Combobox`** — every trigger / action / field / operator / status target
+  picker (the `.cb` trigger + the `.menu` listbox, the field-picker shown open
+  with the Assignee preset + grouped built-in / custom sections).
+- **`MultiSelectPicker`** — member (watcher / assignee), enum (kind / status /
+  priority), and type-to-create (label) value editors.
+- **`Input` / `DatePicker`** — comment body, number values, due date.
+- **`Switch`** — the per-rule enable toggle (list rows + editor header),
+  optimistic.
+- **`Pill`** — the trigger summary chip on list rows, and the audit-log status
+  pills: **Success** (mint, `check-circle`) · **Failure** (rose, `alert-
+triangle`) · **No actions** (neutral, `minus-circle`) — AA per finding #35
+  (hue in the tint bg, `--el-text-strong` text).
+- **`Button`** — `primary` (Create rule / Save), `ghost` (Cancel / Re-enable),
+  `danger` (Delete in the overflow).
+- **`Avatar`** — the rule owner on list rows.
+- **`EmptyState`** — "No rules yet" (list) and "No runs yet" (audit log).
+- **Icon-button overflow menu** — Edit · Disable · Delete · View log per rule.
+- **The drag `grip`** — keyboard-operable action reorder (↑/↓ when focused).
+
+## The last-run glyph vocabulary (list + audit log share it)
+
+| State         | glyph            | colour            | copy                          |
+| ------------- | ---------------- | ----------------- | ----------------------------- |
+| Success       | `check-circle`   | `--el-success`    | "Ran {time} ago"              |
+| Failure       | `alert-triangle` | `--el-danger`     | "Failed · {time} ago"         |
+| No actions    | `minus-circle`   | `--el-text-faint` | "No actions · {time} ago"     |
+| Never run     | — (text only)    | `--el-text-faint` | "Never run"                   |
+| Auto-disabled | `alert-triangle` | `--el-danger`     | "Auto-disabled · 10 failures" |
+
+## Real-product operations (finding #57 — bounded, drawn)
+
+- **Audit log pagination** — reads page over the indexed `[ruleId, createdAt]`
+  log (the 6.6.1 index); the foot shows "Showing 1–N of M" + a pager. **No
+  load-all** (the finding-#57 tell, avoided).
+- **Deleted triggering item** — renders the `tomb` tombstone (struck-through
+  key, no link), not a dead link.
+- **Failure detail** — a failure row expands to the typed error (`errbox` with
+  the danger left-border) + per-step list (which action failed, which were
+  skipped).
+- **Auto-disable banner** — at 10 consecutive failures the rule switches off; a
+  rose banner (AA, `--el-text-strong`) on the list + editor names the count and
+  offers **Re-enable** (wired to the 6.6.1 counter reset).
+- **90-day retention** — a quiet footer line states the cron-swept window
+  (6.6.2).
+- **Caps** — 100 rules / project, 10 actions / rule, 20 conditions / rule —
+  each a disabled add affordance + an inline note, and a **typed 422** surfaced
+  **per row** (danger outline + `role="alert"` message) on bypass, never a
+  silent truncation or a detached toast.
+
+## Copy strings catalog (use verbatim in 6.6.5 / 6.6.6; i18n under `settings.automation`)
+
+| Surface                 | String                                                                                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Nav entry               | `"Rules"` (group `"Automation"`)                                                                                                                                               |
+| Page title · subtitle   | `"Automation"` · `"When something happens in {projectName}, run actions automatically. Rules run as their owner — only project admins can manage them."`                       |
+| Create CTA              | `"Create rule"`                                                                                                                                                                |
+| When / If / Then labels | `"When"` · `"If"` · `"Then"`                                                                                                                                                   |
+| When block sub          | `"the trigger — one per rule"`                                                                                                                                                 |
+| If block sub            | `"conditions on the triggering item — optional"`                                                                                                                               |
+| Then block sub          | `"actions run in order, as the rule owner"`                                                                                                                                    |
+| Combinator              | `"Match"` · `"all"` / `"any"` · `"of the following conditions:"`                                                                                                               |
+| Trigger options         | `"Item created"` · `"Item transitioned"` · `"Field value changed"` · `"Item commented"`                                                                                        |
+| Transitioned config     | `"from"` · `"to"` (status `Combobox`s; placeholder `"Any status"`)                                                                                                             |
+| Field-changed config    | `"field"` + the field picker (preset `"Assignee"`)                                                                                                                             |
+| Action options          | `"Transition"` · `"Set field"` · `"Add watcher"` · `"Add comment"` · `"Add label"`                                                                                             |
+| Add affordances         | `"Add condition"` · `"Add action"`                                                                                                                                             |
+| Editor foot             | `"Runs as {owner} (rule owner) · {n} of 10 actions"` · `"Cancel"` · `"Save rule"`                                                                                              |
+| List meta               | `"{n} of {n} rules"` · `"100 rules per project"`                                                                                                                               |
+| Last-run                | see the glyph vocabulary table above                                                                                                                                           |
+| Empty (list)            | `"No rules yet"` · `"Automate repetitive work — transition items, set fields, add watchers or comments when something happens. Rules run as their owner."`                     |
+| Auto-disabled banner    | `"{ruleName} was disabled automatically after 10 consecutive failures. Fix the rule and re-enable it — re-enabling resets the failure count."` · `"Re-enable"`                 |
+| Cap (rules)             | `"100 of 100 rules — delete a rule to add another."`                                                                                                                           |
+| Cap (conditions)        | `"20 of 20 conditions — the maximum for one rule."`                                                                                                                            |
+| Audit log title         | `"Run history — {ruleName}"`                                                                                                                                                   |
+| Audit status pills      | `"Success"` · `"Failure"` · `"No actions"`                                                                                                                                     |
+| Audit no-actions reason | `"Condition not met — {summary}"`                                                                                                                                              |
+| Audit tombstone         | `"{n} actions — triggering item since deleted"`                                                                                                                                |
+| Audit pager · retention | `"Showing {a}–{b} of {total}"` · `"Run history is kept for 90 days."`                                                                                                          |
+| Empty (audit)           | `"No runs yet"` · `"This rule hasn’t fired. When an item matches its trigger and conditions, each run appears here with its result, duration and the item that triggered it."` |
+| Stale-referent (cond)   | `"“{value}” was removed from {field}. Remove it, or pick a current option."`                                                                                                   |
+| Invalid action (422)    | `"{user} is no longer a member of this project — they can’t be a watcher. (422)"` (the per-referent shape)                                                                     |
+
+## Recorded deviations from the mirror (justified — no complexity for nothing)
+
+- **Runs as the rule OWNER, not a synthetic "Automation" actor** — the Story
+  6.6 recorded deviation; the editor foot states "Runs as {owner}". A synthetic
+  per-workspace user would leak into every member-bounded picker for no use
+  case.
+- **No "Soon"/disabled triggers or actions drawn** — only the verified core
+  sets ship; the documented extension slots (scheduled triggers, branches,
+  send-email/webhook actions, the chaining opt-in) are NOT drawn — drawing a
+  disabled control implies a near-term page (the 6.5 "Soon" convention is for a
+  reserved nav SLOT, not for unowned features).
+- **Admin-only, no read-only variant** — unlike Fields/Components there's no
+  useful viewer view of automation; the 6.4 gate hides the whole surface.
+
+## Extension slots (reserved — do NOT build here)
+
+Scheduled/cron triggers (need the 6.2 saved-filter item-selection substrate);
+branches + smart values; global / multi-project rules; the "Allow rule trigger"
+chaining opt-in; send-email / webhook / create-item actions; a manual "run now"
+trigger; monthly usage quotas (Epic 8.1 metering). Each is an additive registry
+entry when a use case lands — the registries (6.6.1/6.6.3) are the growth seam.
+
+## Tokens & a11y
+
+Colour is `--el-*` only — the `--el-tint-{sky,lavender,mint}` block wedges
+(When/If/Then), the `--el-tint-{mint,rose}` status pills + banner (hue in the
+bg, `--el-text-strong` text — finding #35, AA holds), the `--el-type-bug` /
+`--el-success` / `--el-info` / `--el-warning` issue + status hues (finding #54:
+not grey + primary alone), the `--el-danger` validation outline + error text.
+Shape via the element shape tokens (`--radius-card/-input/-btn/-control/-badge`,
+`--spacing-card-padding/-control-*/-chip-*/-input-*/-btn-x`,
+`--height-control/-input/-btn-*`, `--shadow-subtle/-card/-elevated`); `rounded-
+full` only on the avatar / status dots / the `Switch` knob. The When/If/Then
+columns are labelled groups; every picker is a keyboard-complete `Combobox`;
+the `Switch` + last-run status are announced; action reorder is keyboard-
+operable (the `grip` + ↑/↓); validation is `role="alert"` on the offending row,
+condition staleness `role="status"`; the audit log is a list with the failure
+detail in an expandable region. Extends the settings strict axe sweep. Dark
+parity verified by toggle.
+
+## Source of truth
+
+When a string here disagrees with shipped 6.6.5 / 6.6.6 code, the code wins —
+file a fix so the mockup stays the reference. `automation.mock.html` is the
+layout-confirmation artifact; it may drift from pixel-exact production once the
+React lands.

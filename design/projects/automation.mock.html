@@ -1,0 +1,3158 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Automation settings — rules + when/if/then editor + audit log (Story 6.6 ·
+      6.6.4)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the AUTOMATION SETTINGS surface — Story 6.6, subtask 6.6.4.
+
+      Nothing under design/ covered automation (the design-gate NONE-exists case: projects/
+      held only Members/Access + Fields + Components + the 6.5 settings area). This asset
+      designs the whole surface and GATES the UI code subtasks 6.6.5 (rule list + when/if/then
+      editor) and 6.6.6 (audit-log UI + last-run + auto-disabled banner), both of which carry
+      6.6.4 in dependsOn and seed 'blocked'.
+
+      Built FROM the real design system: the token block below is copied 1:1 from
+      app/globals.css (Tier-0 --color-* + Tier-3 --el-* + the shape tokens incl. the
+      --el-sidebar-* shell tokens), and the markup composes ONLY shipped primitives —
+        • The 6.5.1 SETTINGS-AREA chrome (settings-area.mock.html) VERBATIM — the same rail
+          (grouped Sidebar nav with the back-to-project header), the same serif page-title
+          grammar, the same Card. Automation mounts in the reserved "Automation › Rules" nav
+          slot Story 6.5 drew as "Soon"; this asset lights that slot up (active row, no Soon
+          chip) and designs the pages INSIDE the chrome. It NEVER draws a second frame.
+        • The 6.1.3 FILTER-BUILDER condition-row grammar (filter-builder.mock.html) VERBATIM
+          for the "If" group — the SAME .cond row (field Combobox · operator Combobox · value
+          editor · remove ×), the SAME Match all/any Segmented combinator, the SAME msp-box /
+          chip / pending / stale-note vocabulary, the SAME 20-row cap. There is exactly ONE
+          predicate UI in the product; this does NOT invent a second.
+        • Combobox trigger + menu (the trigger/action/field/operator/status pickers),
+          MultiSelectPicker box (member + enum value editors), Input / DatePicker triggers
+          (set-field value editors), Pill (status / last-run / role chips, AA-safe per
+          finding #35 — hue in the tint bg with --el-text-strong text), Button (primary /
+          ghost / danger), Card, EmptyState / ErrorState family, the toggle Switch, and the
+          icon-button overflow menu. NO new primitive, NO new size variant.
+
+      THE UI CONTRACT is the SHIPPED 6.6.1 + 6.6.3 registries (lib/automation/registry.ts):
+      the trigger picker, its per-kind config editor, the action picker, and its per-action
+      config editor are ALL registry-driven (the 6.1.4 "rows render from the registry"
+      pattern) — the editor never hard-codes a trigger/action list. design-notes.md names the
+      editor-kind ↔ registry mapping.
+
+      Covers (multi-panel — review EACH):
+        (0) THE AREA — the surface in the 6.5 chrome: rail with "Automation › Rules" ACTIVE,
+            content = the rule list (populated). The hero panel.
+        (1) THE EDITOR — the when/if/then column for the recipe rule (transition trigger +
+            one condition row + two actions), every column labelled, save/cancel.
+        (2) TRIGGER CONFIG GALLERY — every trigger-config kind open once: created (none) /
+            transitioned (from→to status) / field-changed (field picker + the Assignee
+            preset) / commented (none).
+        (3) ACTION CONFIG GALLERY — every action-config kind open once: transition · set-field
+            (built-ins: assignee / priority / due date / story points) · set-field (custom
+            fields: select / user / number / date / text) · add-watcher · add-comment ·
+            add-label; add/remove/reorder + the 10-action cap.
+        (4) CONDITIONS — the "If" group reusing the 6.1.3 rows: Match all/any, the 20-row
+            cap state, a stale-referent row (deleted option degrades typed).
+        (5) THE AUDIT LOG — per-rule paginated rows (Success / Failure / No actions), a failure
+            row EXPANDED with the typed error, a deleted-item tombstone, the empty state, and
+            the 90-day retention note line.
+        (6) LIST STATES — empty ("No rules yet") · the auto-disabled banner (failure count +
+            re-enable) · the 100-rule cap state.
+        (7) VALIDATION + NAV — the unknown/stale-referent action row + the typed-422 inline
+            surface; the Automation nav entry in its active / inactive states (lit up from the
+            6.5 "Soon" slot).
+      Toggle dark mode to confirm token parity. See design-notes.md "Automation rules
+      (Story 6.6) — Subtask 6.6.4 output" for the registry contract + copy catalog.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --el-sidebar-item-bg-hover: #eeede9;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 8px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --focus-ring-width: 2px;
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: ui-serif, Georgia, 'Times New Roman', serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-hairline);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        /* Shell — sidebar tokens (app/globals.css §App shell, Subtask 1.5.2) */
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-active: var(--color-background);
+
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --el-sidebar-item-bg-hover: #222222;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 860px;
+        line-height: 1.5;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+        line-height: 1.5;
+      }
+      .stage {
+        position: relative;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .legend {
+        max-width: 1180px;
+        margin: 10px auto 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .legend code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        align-items: start;
+      }
+      @media (max-width: 900px) {
+        .grid-2 {
+          grid-template-columns: 1fr;
+        }
+      }
+      .colcap {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 0 0 8px;
+        line-height: 1.45;
+      }
+      .colcap strong {
+        color: var(--el-text);
+      }
+      .colcap code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-muted);
+        padding: 1px 4px;
+        border-radius: var(--radius-control);
+      }
+
+      /* ── App shell (the 6.5 REPLACE chrome: one rail + content) ──────────── */
+      .shell {
+        display: flex;
+        min-height: 560px;
+      }
+      .shell.compact {
+        min-height: 440px;
+      }
+      .rail {
+        flex: none;
+        width: 248px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .rail-head {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .back:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .back svg {
+        width: 16px;
+        height: 16px;
+      }
+      .proj {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px var(--spacing-control-x) 2px;
+      }
+      .proj .pav {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-control);
+        background: var(--el-type-task);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .proj .pname {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .proj .pkey {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .settings-eyebrow {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--el-text-faint);
+        padding: 0 var(--spacing-control-x);
+        text-transform: uppercase;
+      }
+      .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .grp + .grp {
+        margin-top: 12px;
+      }
+      .grp-label {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-faint);
+        padding: 0 var(--spacing-control-x);
+        margin-bottom: 2px;
+      }
+      .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .nav-row:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .nav-row .ni {
+        flex: none;
+        display: inline-flex;
+        color: var(--el-text-muted);
+      }
+      .nav-row .ni svg {
+        width: 18px;
+        height: 18px;
+      }
+      .nav-row .nl {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .nav-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 500;
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+      }
+      .nav-row.active .ni {
+        color: var(--el-accent);
+      }
+
+      /* content area */
+      .content {
+        flex: 1;
+        min-width: 0;
+        background: var(--el-page-bg);
+        padding: 30px 32px 36px;
+        overflow: hidden;
+      }
+      .page-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 22px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .page-head .sub {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        margin-top: 5px;
+        max-width: 60ch;
+        line-height: 1.5;
+      }
+
+      /* ── Buttons (components/ui/Button) ──────────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .btn.sm {
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+      }
+      .btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-danger {
+        background: var(--el-danger);
+        color: #fff;
+      }
+      .btn[disabled],
+      .btn.is-disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      /* ── Pills (components/ui/Pill — hue in tint bg, --el-text-strong text) ── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        line-height: 1.2;
+        white-space: nowrap;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill-neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill-admin {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pill-success {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-failure {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .pill-noop {
+        background: var(--el-surface);
+        color: var(--el-text-muted);
+        border-color: var(--el-border);
+      }
+      .pill-success svg {
+        color: var(--el-success);
+      }
+      .pill-failure svg {
+        color: var(--el-danger);
+      }
+
+      /* ── The rule LIST ───────────────────────────────────────────────────── */
+      .rules {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .rule {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .rule:last-child {
+        border-bottom: 0;
+      }
+      .rule.disabled .r-name {
+        color: var(--el-text-muted);
+      }
+      /* Switch (the enable toggle — components/ui/Switch) */
+      .sw {
+        flex: none;
+        width: 34px;
+        height: 20px;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+        position: relative;
+        cursor: pointer;
+        border: 0;
+        padding: 0;
+      }
+      .sw::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 16px;
+        width: 16px;
+        height: 16px;
+        border-radius: 9999px;
+        background: #fff;
+        box-shadow: var(--shadow-subtle);
+        transition: left 0.1s;
+      }
+      .sw.off {
+        background: var(--el-border-strong);
+      }
+      .sw.off::after {
+        left: 2px;
+      }
+      .r-main {
+        flex: 1;
+        min-width: 0;
+      }
+      .r-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .r-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        flex-wrap: wrap;
+      }
+      .r-meta .dotsep {
+        color: var(--el-text-faint);
+      }
+      .r-owner {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .avatar {
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-type-subtask);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        font-weight: 700;
+        width: 18px;
+        height: 18px;
+      }
+      .lastrun {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .lastrun svg {
+        width: 13px;
+        height: 13px;
+      }
+      .lastrun.ok svg {
+        color: var(--el-success);
+      }
+      .lastrun.fail svg {
+        color: var(--el-danger);
+      }
+      .lastrun.noop svg {
+        color: var(--el-text-faint);
+      }
+      .lastrun.never {
+        color: var(--el-text-faint);
+      }
+      .r-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: none;
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: none;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .icon-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .icon-btn svg {
+        width: 17px;
+        height: 17px;
+      }
+      .list-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 16px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+
+      /* Auto-disabled banner (the failure-count notice) */
+      .banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-rose);
+        margin-bottom: 16px;
+      }
+      .banner svg.bi {
+        width: 17px;
+        height: 17px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-danger);
+      }
+      .banner .bt {
+        flex: 1;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-strong);
+      }
+      .banner .bt strong {
+        font-weight: 600;
+      }
+      .cap-note {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        margin-top: 14px;
+      }
+      .cap-note svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+
+      /* ── The when/if/then EDITOR ─────────────────────────────────────────── */
+      .editor {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .ed-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .ed-name {
+        flex: 1;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .ed-body {
+        padding: 6px var(--spacing-card-padding) 8px;
+      }
+      .block {
+        padding: 18px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .block:last-child {
+        border-bottom: 0;
+      }
+      .block-head {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 12px;
+      }
+      .wedge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border-radius: var(--radius-control);
+        flex: none;
+      }
+      .wedge svg {
+        width: 14px;
+        height: 14px;
+      }
+      .wedge.when {
+        background: var(--el-tint-sky);
+        color: var(--el-info);
+      }
+      .wedge.iff {
+        background: var(--el-tint-lavender);
+        color: var(--el-accent);
+      }
+      .wedge.then {
+        background: var(--el-tint-mint);
+        color: var(--el-success);
+      }
+      .block-head .bk {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-strong);
+      }
+      .block-head .bsub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+
+      /* Combobox trigger (shipped: h-control, radius-input) */
+      .cb {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        text-align: left;
+        min-width: 0;
+      }
+      .cb .glyph {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .cb .lbl {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cb .lbl.ph {
+        color: var(--el-text-muted);
+      }
+      .cb .caret {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .cb.is-open {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .cb.full {
+        width: 100%;
+      }
+
+      /* The "When" config rows (a labelled sentence of pickers) */
+      .conf {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .conf .kw {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .conf-none {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        font-style: italic;
+      }
+
+      /* The combinator (3.3.5 Segmented) + condition rows (6.1.3 verbatim) */
+      .adv-match {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        padding-bottom: 10px;
+      }
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        padding: 2px;
+      }
+      .seg button {
+        display: inline-flex;
+        align-items: center;
+        height: 28px;
+        padding: 0 var(--spacing-control-x);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .seg button[aria-pressed='true'] {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .conds {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .cond {
+        display: grid;
+        grid-template-columns: 150px 158px minmax(0, 1fr) 26px;
+        gap: 8px;
+        align-items: center;
+      }
+      .vin {
+        height: var(--height-input);
+        width: 100%;
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .vin::placeholder {
+        color: var(--el-text-muted);
+      }
+      .vin.num {
+        width: 110px;
+        font-variant-numeric: tabular-nums;
+      }
+      .dp {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .dp .glyph {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .msp-box {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        min-height: var(--height-input);
+        width: 100%;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        cursor: text;
+      }
+      .msp-input {
+        flex: 1 1 50px;
+        min-width: 50px;
+        border: 0;
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        outline: none;
+        padding: 2px 0;
+      }
+      .msp-input::placeholder {
+        color: var(--el-text-muted);
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .chip .cg {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .chip .cx {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        margin-right: -4px;
+        border: 0;
+        background: none;
+        border-radius: var(--radius-badge);
+        color: var(--el-text-muted);
+        cursor: pointer;
+        padding: 0;
+      }
+      .chip .cx svg {
+        width: 10px;
+        height: 10px;
+      }
+      .chip .avatar {
+        width: 16px;
+        height: 16px;
+        font-size: 8px;
+        margin-left: -4px;
+      }
+      .chip .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 9999px;
+      }
+      .chip.tinted {
+        border-color: transparent;
+        color: var(--el-text-strong);
+      }
+      .chip.stale {
+        background: var(--el-tint-peach);
+        border-color: transparent;
+        color: var(--el-text-strong);
+      }
+      .chip.stale .cg {
+        color: var(--el-warning);
+      }
+      .x-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: none;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .x-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .x-btn svg {
+        width: 14px;
+        height: 14px;
+      }
+      .stale-note {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: -2px 0 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .stale-note .wi {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        color: var(--el-warning);
+      }
+      .addrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: none;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        margin-top: 10px;
+      }
+      .addrow svg {
+        width: 14px;
+        height: 14px;
+      }
+      .addrow.is-disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        border-style: solid;
+      }
+      .cap-inline {
+        font-size: 12px;
+        color: var(--el-warning);
+        margin: 8px 0 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .cap-inline svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+
+      /* "Then" — ordered action rows (grip · action picker · config · remove) */
+      .acts {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .act {
+        display: grid;
+        grid-template-columns: 18px 188px minmax(0, 1fr) 26px;
+        gap: 8px;
+        align-items: center;
+      }
+      .grip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-faint);
+        cursor: grab;
+      }
+      .grip svg {
+        width: 15px;
+        height: 15px;
+      }
+      .act-conf {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        flex-wrap: wrap;
+      }
+      .act-conf .kw {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        flex: none;
+      }
+      .inline-err {
+        grid-column: 2 / -1;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: -2px;
+        font-size: 12px;
+        color: var(--el-danger-text);
+      }
+      .inline-err svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+
+      .ed-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 14px var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .ed-foot .left {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .ed-foot .right {
+        display: flex;
+        gap: 10px;
+      }
+
+      /* Combobox open menu (the picker listbox) */
+      .menu {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+        padding: 6px;
+        width: 280px;
+      }
+      .menu .mgrp {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding: 7px 8px 4px;
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .opt:hover {
+        background: var(--el-surface);
+      }
+      .opt.sel {
+        background: var(--el-surface);
+        font-weight: 500;
+      }
+      .opt .oi {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .opt .ck {
+        margin-left: auto;
+        width: 15px;
+        height: 15px;
+        color: var(--el-accent);
+      }
+
+      /* ── The AUDIT LOG ───────────────────────────────────────────────────── */
+      .log {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .log-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 13px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .log-head .lt {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .log-head .lt .glyph {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+      }
+      .lrow {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .lrow .lkey {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-link);
+        width: 92px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .lrow .lkey svg {
+        width: 12px;
+        height: 12px;
+        color: var(--el-text-faint);
+      }
+      .lrow .lkey.tomb {
+        color: var(--el-text-faint);
+        font-style: italic;
+        text-decoration: line-through;
+      }
+      .lrow .lwhat {
+        flex: 1;
+        min-width: 0;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .lrow .ldur {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        font-variant-numeric: tabular-nums;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        flex: none;
+      }
+      .lrow .ldur svg {
+        width: 12px;
+        height: 12px;
+        color: var(--el-text-faint);
+      }
+      .lrow .ltime {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        width: 96px;
+        text-align: right;
+        flex: none;
+      }
+      .lrow .lexp {
+        flex: none;
+        color: var(--el-text-faint);
+      }
+      .lrow .lexp svg {
+        width: 15px;
+        height: 15px;
+      }
+      .ldetail {
+        padding: 0 16px 14px 124px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .ldetail .errbox {
+        border: 1px solid var(--el-border);
+        border-left: 3px solid var(--el-danger);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 11px 13px;
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .ldetail .errbox .ec {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-danger-text);
+        display: block;
+        margin-top: 4px;
+      }
+      .ldetail .steps {
+        margin-top: 9px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .step {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .step svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+      .step.ok svg {
+        color: var(--el-success);
+      }
+      .step.fail svg {
+        color: var(--el-danger);
+      }
+      .step.skip {
+        color: var(--el-text-faint);
+      }
+      .log-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 11px 16px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .pager {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .pg {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 28px;
+        height: 28px;
+        padding: 0 6px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .pg.sel {
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .retention {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 10px 16px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 11.5px;
+        color: var(--el-text-faint);
+      }
+      .retention svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+
+      /* ── EmptyState / ErrorState family ──────────────────────────────────── */
+      .state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 52px 28px;
+      }
+      .state .ico {
+        width: 44px;
+        height: 44px;
+        margin-bottom: 14px;
+        color: var(--el-text-muted);
+      }
+      .state .ico svg {
+        width: 44px;
+        height: 44px;
+      }
+      .state h2 {
+        font-family: var(--font-serif);
+        font-size: 19px;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .state p {
+        margin-top: 8px;
+        max-width: 46ch;
+        font-size: 13px;
+        color: var(--el-text-muted);
+        line-height: 1.5;
+      }
+      .state .actions {
+        margin-top: 18px;
+      }
+
+      /* annotated registry map (panel 2/3) */
+      .map {
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        font-size: 12.5px;
+      }
+      .map .mh {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .map .mc {
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+        color: var(--el-text-secondary);
+      }
+      .map code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Automation settings — rules, the when/if/then editor & the audit log</h1>
+        <p>
+          Story 6.6 · Subtask 6.6.4 design asset — built from app/globals.css tokens. The
+          project-scoped rule engine's authoring + observability surface, mounted in the 6.5
+          settings-area chrome (the reserved <strong>Automation › Rules</strong> nav slot, lit up).
+          A rule = <strong>one trigger → one flat condition group → an ordered action list</strong>.
+          The "If" group reuses the 6.1.3 filter-builder rows verbatim (one predicate UI in the
+          product); the trigger/action pickers are driven by the 6.6.1/6.6.3 registries. Mirror =
+          Jira automation rule builder (rung 1, VERIFIED 2026-06-10). Source of truth = this HTML;
+          see design-notes.md “Automation rules (Story 6.6)”. Gates 6.6.5 + 6.6.6.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- ════════════════ PANEL 0 — THE AREA: rule list in the 6.5 chrome ════════════════ -->
+    <div class="panel-label">
+      0 · The area — the Automation page mounted in the 6.5 settings chrome. The rail's “Automation
+      › Rules” slot is now ACTIVE (lit up from the 6.5 “Soon” entry); the content is the rule list.
+      Project admin view.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to motir</span
+              >
+              <div class="proj">
+                <span class="pav">M</span>
+                <span> <span class="pname">motir</span> <span class="pkey">PROD</span> </span>
+              </div>
+              <span class="settings-eyebrow">Project settings</span>
+            </div>
+            <nav aria-label="Project settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sliders" /></svg
+                  ></span>
+                  <span class="nl">Details</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                  ></span>
+                  <span class="nl">Members &amp; access</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Work</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-workflow" /></svg
+                  ></span>
+                  <span class="nl">Workflow</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-columns" /></svg
+                  ></span>
+                  <span class="nl">Boards</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-gauge" /></svg
+                  ></span>
+                  <span class="nl">Estimation</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-tag" /></svg
+                  ></span>
+                  <span class="nl">Fields</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-box" /></svg
+                  ></span>
+                  <span class="nl">Components</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Automation</div>
+                <div class="nav-row active">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg
+                  ></span>
+                  <span class="nl">Rules</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+
+          <div class="content">
+            <div class="page-head">
+              <div>
+                <h2>Automation</h2>
+                <p class="sub">
+                  When something happens in <strong>motir</strong>, run actions automatically. Rules
+                  run as their owner — only project admins can manage them.
+                </p>
+              </div>
+              <span class="btn btn-primary"
+                ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Create rule</span
+              >
+            </div>
+
+            <div class="rules">
+              <div class="rule">
+                <button class="sw" aria-label="Enabled" aria-pressed="true"></button>
+                <div class="r-main">
+                  <div class="r-name">Bug verification handoff</div>
+                  <div class="r-meta">
+                    <span class="r-owner"><span class="avatar">ZY</span>Zhu Yue</span>
+                    <span class="dotsep">·</span>
+                    <span class="lastrun ok"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>Ran 4m ago</span
+                    >
+                  </div>
+                </div>
+                <div class="r-actions">
+                  <span class="pill pill-neutral">When transitioned</span>
+                  <button class="icon-btn" aria-label="Rule actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div class="rule">
+                <button class="sw" aria-label="Enabled" aria-pressed="true"></button>
+                <div class="r-main">
+                  <div class="r-name">Auto-watch on priority bump</div>
+                  <div class="r-meta">
+                    <span class="r-owner"><span class="avatar">BP</span>Bo Philips</span>
+                    <span class="dotsep">·</span>
+                    <span class="lastrun noop"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus-circle" /></svg>No actions · 1h
+                      ago</span
+                    >
+                  </div>
+                </div>
+                <div class="r-actions">
+                  <span class="pill pill-neutral">When field changed</span>
+                  <button class="icon-btn" aria-label="Rule actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div class="rule">
+                <button class="sw" aria-label="Enabled" aria-pressed="true"></button>
+                <div class="r-main">
+                  <div class="r-name">Triage label on create</div>
+                  <div class="r-meta">
+                    <span class="r-owner"><span class="avatar">ZY</span>Zhu Yue</span>
+                    <span class="dotsep">·</span>
+                    <span class="lastrun fail"
+                      ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>Failed · 2h ago</span
+                    >
+                  </div>
+                </div>
+                <div class="r-actions">
+                  <span class="pill pill-neutral">When created</span>
+                  <button class="icon-btn" aria-label="Rule actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div class="rule disabled">
+                <button class="sw off" aria-label="Disabled" aria-pressed="false"></button>
+                <div class="r-main">
+                  <div class="r-name">Notify on comment</div>
+                  <div class="r-meta">
+                    <span class="r-owner"><span class="avatar">OD</span>Odie</span>
+                    <span class="dotsep">·</span>
+                    <span class="lastrun never">Never run</span>
+                  </div>
+                </div>
+                <div class="r-actions">
+                  <span class="pill pill-neutral">When commented</span>
+                  <button class="icon-btn" aria-label="Rule actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="list-foot">
+                <span>4 of 4 rules</span>
+                <span>100 rules per project</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        The page mounts in the 6.5 area <code>layout.tsx</code> — the rail is the shipped
+        <code>Sidebar</code>, the “Automation › Rules” row is the registry entry Story 6.5 reserved
+        (now an active route, no <code>Soon</code> chip). Each rule row: the
+        <code>Switch</code> (enable/disable, optimistic), name, owner <code>Avatar</code>, the
+        last-run glyph (<code>check-circle</code> = Success · <code>minus-circle</code> = No actions
+        · <code>alert-triangle</code> = Failure · “Never run”), the trigger <code>Pill</code>, and
+        the overflow menu (Edit · Disable · Delete · View log). Admin-only — the 6.4 gate hides the
+        whole nav entry + page from non-admins (no viewer variant needed).
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 1 — the when/if/then editor ════════════════ -->
+    <div class="panel-label">
+      1 · The editor — the recipe rule “Bug verification handoff”. Three labelled blocks:
+      <strong>When</strong> (trigger + config) · <strong>If</strong> (the 6.1.3 condition group) ·
+      <strong>Then</strong> (ordered actions). Name field, save/cancel.
+    </div>
+    <div class="panel">
+      <div class="editor">
+        <div class="ed-head">
+          <input class="ed-name" value="Bug verification handoff" aria-label="Rule name" />
+          <button class="sw" aria-label="Enabled" aria-pressed="true"></button>
+        </div>
+        <div class="ed-body">
+          <!-- WHEN -->
+          <div class="block">
+            <div class="block-head">
+              <span class="wedge when"
+                ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+              ></span>
+              <span class="bk">When</span>
+              <span class="bsub">the trigger — one per rule</span>
+            </div>
+            <div class="conf">
+              <button class="cb" aria-haspopup="listbox" style="width: 220px">
+                <svg class="glyph" viewBox="0 0 24 24"><use href="#i-workflow" /></svg>
+                <span class="lbl">Item transitioned</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <span class="kw">from</span>
+              <button class="cb" aria-haspopup="listbox" style="width: 150px">
+                <span class="lbl ph">Any status</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <span class="kw">to</span>
+              <button class="cb" aria-haspopup="listbox" style="width: 150px">
+                <span
+                  class="dot"
+                  style="
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 9999px;
+                    background: var(--el-success);
+                  "
+                ></span>
+                <span class="lbl">Done</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- IF -->
+          <div class="block">
+            <div class="block-head">
+              <span class="wedge iff"
+                ><svg viewBox="0 0 24 24"><use href="#i-filter" /></svg
+              ></span>
+              <span class="bk">If</span>
+              <span class="bsub">conditions on the triggering item — optional</span>
+            </div>
+            <div class="adv-match">
+              <span>Match</span>
+              <div class="seg" role="group" aria-label="Combinator">
+                <button aria-pressed="true">all</button>
+                <button aria-pressed="false">any</button>
+              </div>
+              <span>of the following conditions:</span>
+            </div>
+            <div class="conds">
+              <div class="cond" role="group" aria-label="Condition 1">
+                <button class="cb full" aria-haspopup="listbox">
+                  <span class="lbl">Kind</span>
+                  <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                </button>
+                <button class="cb full" aria-haspopup="listbox">
+                  <span class="lbl">is any of</span>
+                  <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                </button>
+                <div class="msp-box">
+                  <span class="chip"
+                    ><span class="cg" style="color: var(--el-type-bug)"
+                      ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                    >Bug<button class="cx" aria-label="Remove Bug">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <input class="msp-input" placeholder="Add…" aria-label="Kind values" />
+                </div>
+                <button class="x-btn" aria-label="Remove condition">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                </button>
+              </div>
+            </div>
+            <button class="addrow">
+              <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Add condition
+            </button>
+          </div>
+
+          <!-- THEN -->
+          <div class="block">
+            <div class="block-head">
+              <span class="wedge then"
+                ><svg viewBox="0 0 24 24"><use href="#i-bolt-arrow" /></svg
+              ></span>
+              <span class="bk">Then</span>
+              <span class="bsub">actions run in order, as the rule owner</span>
+            </div>
+            <div class="acts">
+              <div class="act" role="group" aria-label="Action 1">
+                <span class="grip"
+                  ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                ></span>
+                <button class="cb full" aria-haspopup="listbox">
+                  <svg class="glyph" viewBox="0 0 24 24"><use href="#i-user-plus" /></svg>
+                  <span class="lbl">Add watcher</span>
+                  <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                </button>
+                <div class="act-conf">
+                  <div class="msp-box">
+                    <span class="chip"
+                      ><span class="avatar">BP</span>Bo Philips<button
+                        class="cx"
+                        aria-label="Remove"
+                      >
+                        <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                    ></span>
+                    <input class="msp-input" placeholder="Add member…" aria-label="Watchers" />
+                  </div>
+                </div>
+                <button class="x-btn" aria-label="Remove action">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                </button>
+              </div>
+
+              <div class="act" role="group" aria-label="Action 2">
+                <span class="grip"
+                  ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                ></span>
+                <button class="cb full" aria-haspopup="listbox">
+                  <svg class="glyph" viewBox="0 0 24 24"><use href="#i-comment" /></svg>
+                  <span class="lbl">Add comment</span>
+                  <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                </button>
+                <div class="act-conf">
+                  <input
+                    class="vin"
+                    value="Please verify the fix on staging before closing."
+                    aria-label="Comment body"
+                  />
+                </div>
+                <button class="x-btn" aria-label="Remove action">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                </button>
+              </div>
+            </div>
+            <button class="addrow">
+              <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Add action
+            </button>
+          </div>
+        </div>
+        <div class="ed-foot">
+          <span class="left">Runs as Zhu Yue (rule owner) · 2 of 10 actions</span>
+          <span class="right">
+            <span class="btn btn-ghost sm">Cancel</span>
+            <span class="btn btn-primary sm">Save rule</span>
+          </span>
+        </div>
+      </div>
+      <p class="legend">
+        Three blocks, one trigger / one condition group / an ordered action list — the verified Jira
+        anatomy. The <strong>If</strong> group is the 6.1.3 <code>.cond</code> row + Match all/any
+        <code>Segmented</code> combinator <em>verbatim</em> (one predicate UI in the product — 6.6.5
+        reuses the 6.1.4 components, it does not fork them). The <strong>Then</strong> rows carry a
+        <code>grip</code> for keyboard-operable reorder; the foot states the rule actor (the owner)
+        + the action count toward the 10-action cap.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 2 — trigger config gallery ════════════════ -->
+    <div class="panel-label">
+      2 · Trigger config gallery — every trigger-config kind open once. The picker is the 6.6.1
+      trigger registry; each kind renders its own config editor (or none).
+    </div>
+    <div class="panel">
+      <div class="grid-2">
+        <div>
+          <p class="colcap"><strong>created</strong> — no config (fires on every new item).</p>
+          <div class="stage" style="padding: 16px">
+            <div class="conf">
+              <button class="cb" aria-haspopup="listbox" style="width: 220px">
+                <svg class="glyph" viewBox="0 0 24 24"><use href="#i-plus-circle" /></svg>
+                <span class="lbl">Item created</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <span class="conf-none">No further configuration</span>
+            </div>
+          </div>
+          <p class="colcap" style="margin-top: 14px">
+            <strong>transitioned</strong> — optional from → to status (the 6.6.1
+            <code>from/to status-id</code> narrowing).
+          </p>
+          <div class="stage" style="padding: 16px">
+            <div class="conf">
+              <button class="cb" aria-haspopup="listbox" style="width: 200px">
+                <svg class="glyph" viewBox="0 0 24 24"><use href="#i-workflow" /></svg>
+                <span class="lbl">Item transitioned</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <span class="kw">from</span>
+              <button class="cb" aria-haspopup="listbox" style="width: 130px">
+                <span
+                  class="dot"
+                  style="width: 8px; height: 8px; border-radius: 9999px; background: var(--el-info)"
+                ></span>
+                <span class="lbl">In Progress</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <span class="kw">to</span>
+              <button class="cb" aria-haspopup="listbox" style="width: 130px">
+                <span
+                  class="dot"
+                  style="
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 9999px;
+                    background: var(--el-success);
+                  "
+                ></span>
+                <span class="lbl">Done</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <p class="colcap">
+            <strong>field-changed</strong> — a built-in / custom-field picker; the
+            <strong>Assignee</strong> preset is surfaced first (the “assigned” trigger).
+          </p>
+          <div class="stage" style="padding: 16px">
+            <div class="conf">
+              <button class="cb" aria-haspopup="listbox" style="width: 200px">
+                <svg class="glyph" viewBox="0 0 24 24"><use href="#i-edit" /></svg>
+                <span class="lbl">Field value changed</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <span class="kw">field</span>
+              <button class="cb is-open" aria-haspopup="listbox" style="width: 150px">
+                <span class="lbl">Assignee</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+            </div>
+            <div class="menu" style="margin: 8px 0 0 auto; width: 220px">
+              <div class="mgrp">Preset</div>
+              <div class="opt sel">
+                <svg class="oi" viewBox="0 0 24 24"><use href="#i-user" /></svg>Assignee
+                <svg class="ck" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="mgrp">Built-in fields</div>
+              <div class="opt">
+                <svg class="oi" viewBox="0 0 24 24"><use href="#i-flag" /></svg>Priority
+              </div>
+              <div class="opt">
+                <svg class="oi" viewBox="0 0 24 24"><use href="#i-calendar" /></svg>Due date
+              </div>
+              <div class="opt">
+                <svg class="oi" viewBox="0 0 24 24"><use href="#i-gauge" /></svg>Story points
+              </div>
+              <div class="mgrp">Custom fields</div>
+              <div class="opt">
+                <svg class="oi" viewBox="0 0 24 24"><use href="#i-tag" /></svg>Severity
+              </div>
+            </div>
+          </div>
+          <p class="colcap" style="margin-top: 14px">
+            <strong>commented</strong> — no config (fires on every comment; 6.6.3 extension).
+          </p>
+          <div class="stage" style="padding: 16px">
+            <div class="conf">
+              <button class="cb" aria-haspopup="listbox" style="width: 220px">
+                <svg class="glyph" viewBox="0 0 24 24"><use href="#i-comment" /></svg>
+                <span class="lbl">Item commented</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <span class="conf-none">No further configuration</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        The trigger <code>Combobox</code> renders the 6.6.1 trigger registry; the config editor
+        below it is the registry entry's <code>editor kind</code> (none · status-from/to ·
+        field-picker · none). A new trigger appears here with zero editor changes — the 6.1.4 “rows
+        render from the registry” pattern, asserted in 6.6.5 with a test-only entry.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 3 — action config gallery ════════════════ -->
+    <div class="panel-label">
+      3 · Action config gallery — every action-config kind open once (the 6.6.1 + 6.6.3 action
+      registry). Ordered rows; the “Then” grammar from panel 1, here one of each kind.
+    </div>
+    <div class="panel">
+      <div class="stage" style="padding: 18px 20px">
+        <div class="acts">
+          <!-- transition -->
+          <div class="act" role="group" aria-label="transition">
+            <span class="grip"
+              ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+            ></span>
+            <button class="cb full" aria-haspopup="listbox">
+              <svg class="glyph" viewBox="0 0 24 24"><use href="#i-workflow" /></svg>
+              <span class="lbl">Transition</span>
+              <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="act-conf">
+              <span class="kw">to</span>
+              <button class="cb" aria-haspopup="listbox" style="width: 160px">
+                <span
+                  class="dot"
+                  style="width: 8px; height: 8px; border-radius: 9999px; background: var(--el-info)"
+                ></span>
+                <span class="lbl">In Review</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+            </div>
+            <button class="x-btn" aria-label="Remove action">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <!-- set-field built-ins -->
+          <div class="act" role="group" aria-label="set assignee">
+            <span class="grip"
+              ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+            ></span>
+            <button class="cb full" aria-haspopup="listbox">
+              <svg class="glyph" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>
+              <span class="lbl">Set field</span>
+              <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="act-conf">
+              <button class="cb" aria-haspopup="listbox" style="width: 130px">
+                <span class="lbl">Assignee</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <span class="kw">to</span>
+              <button class="cb" aria-haspopup="listbox" style="width: 150px">
+                <span class="avatar" style="width: 16px; height: 16px; font-size: 8px">MO</span>
+                <span class="lbl">Mo</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+            </div>
+            <button class="x-btn" aria-label="Remove action">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <div class="act" role="group" aria-label="set priority">
+            <span class="grip"
+              ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+            ></span>
+            <button class="cb full" aria-haspopup="listbox">
+              <svg class="glyph" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>
+              <span class="lbl">Set field</span>
+              <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="act-conf">
+              <button class="cb" aria-haspopup="listbox" style="width: 130px">
+                <span class="lbl">Priority</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <span class="kw">to</span>
+              <button class="cb" aria-haspopup="listbox" style="width: 140px">
+                <svg class="glyph" viewBox="0 0 24 24" style="color: var(--el-warning)">
+                  <use href="#i-arrow-up" />
+                </svg>
+                <span class="lbl">High</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+            </div>
+            <button class="x-btn" aria-label="Remove action">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <div class="act" role="group" aria-label="set due date">
+            <span class="grip"
+              ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+            ></span>
+            <button class="cb full" aria-haspopup="listbox">
+              <svg class="glyph" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>
+              <span class="lbl">Set field</span>
+              <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="act-conf">
+              <button class="cb" aria-haspopup="listbox" style="width: 130px">
+                <span class="lbl">Due date</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <span class="kw">to</span>
+              <span class="dp"
+                ><svg class="glyph" viewBox="0 0 24 24"><use href="#i-calendar" /></svg>19 Jun
+                2026</span
+              >
+            </div>
+            <button class="x-btn" aria-label="Remove action">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <div class="act" role="group" aria-label="set story points">
+            <span class="grip"
+              ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+            ></span>
+            <button class="cb full" aria-haspopup="listbox">
+              <svg class="glyph" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>
+              <span class="lbl">Set field</span>
+              <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="act-conf">
+              <button class="cb" aria-haspopup="listbox" style="width: 130px">
+                <span class="lbl">Story points</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <span class="kw">to</span>
+              <input class="vin num" value="3" aria-label="Story points value" />
+            </div>
+            <button class="x-btn" aria-label="Remove action">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <!-- set-field custom: select / user / number / date / text -->
+          <div class="act" role="group" aria-label="set CF select">
+            <span class="grip"
+              ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+            ></span>
+            <button class="cb full" aria-haspopup="listbox">
+              <svg class="glyph" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>
+              <span class="lbl">Set field</span>
+              <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="act-conf">
+              <button class="cb" aria-haspopup="listbox" style="width: 130px">
+                <svg class="glyph" viewBox="0 0 24 24"><use href="#i-tag" /></svg>
+                <span class="lbl">Severity</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <span class="kw">to</span>
+              <button class="cb" aria-haspopup="listbox" style="width: 150px">
+                <span
+                  class="dot"
+                  style="
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 9999px;
+                    background: var(--el-warning);
+                  "
+                ></span>
+                <span class="lbl">High</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <span class="pill pill-neutral">select CF</span>
+            </div>
+            <button class="x-btn" aria-label="Remove action">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <div class="act" role="group" aria-label="set CF user/number/date/text">
+            <span class="grip"
+              ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+            ></span>
+            <button class="cb full" aria-haspopup="listbox">
+              <svg class="glyph" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>
+              <span class="lbl">Set field</span>
+              <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="act-conf">
+              <button class="cb" aria-haspopup="listbox" style="width: 130px">
+                <svg class="glyph" viewBox="0 0 24 24"><use href="#i-tag" /></svg>
+                <span class="lbl">Reviewer</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <span class="kw">to</span>
+              <button class="cb" aria-haspopup="listbox" style="width: 120px">
+                <span class="avatar" style="width: 16px; height: 16px; font-size: 8px">JU</span>
+                <span class="lbl">Julian</span>
+                <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <span class="pill pill-neutral">user / number / date / text — per CF type</span>
+            </div>
+            <button class="x-btn" aria-label="Remove action">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <!-- add-label -->
+          <div class="act" role="group" aria-label="add label">
+            <span class="grip"
+              ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+            ></span>
+            <button class="cb full" aria-haspopup="listbox">
+              <svg class="glyph" viewBox="0 0 24 24"><use href="#i-tag" /></svg>
+              <span class="lbl">Add label</span>
+              <svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            </button>
+            <div class="act-conf">
+              <div class="msp-box">
+                <span class="chip tinted" style="background: var(--el-tint-peach)"
+                  >needs-triage<button class="cx" aria-label="Remove">
+                    <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                ></span>
+                <input class="msp-input" placeholder="Type to add or create…" aria-label="Labels" />
+              </div>
+            </div>
+            <button class="x-btn" aria-label="Remove action">
+              <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+          </div>
+        </div>
+
+        <p class="cap-inline" style="color: var(--el-text-muted)">
+          <svg viewBox="0 0 24 24" style="color: var(--el-text-faint)"><use href="#i-grip" /></svg>
+          Drag the handle (or use ↑/↓ when focused) to reorder — actions run top to bottom.
+        </p>
+      </div>
+      <p class="legend">
+        Each action <code>Combobox</code> + its config editor is one 6.6.1/6.6.3 registry entry:
+        <code>transition</code> (status target), <code>set-field</code> (built-ins assignee /
+        priority / due date / story points <em>and</em> every 5.3 custom-field type — select / user
+        / number / date / text), <code>add-watcher</code> (member <code>MultiSelectPicker</code>),
+        <code>add-comment</code> (body <code>Input</code>), <code>add-label</code>
+        (type-to-create). One editor per kind — adding an action grows the registry, not the UI.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 4 — conditions: cap + stale referent ════════════════ -->
+    <div class="panel-label">
+      4 · Conditions — the “If” group reuses the 6.1.3 rows. Left: the 20-row cap reached (Add
+      disabled). Right: a stale-referent row (a deleted select option) degrades typed, never
+      crashes.
+    </div>
+    <div class="panel">
+      <div class="grid-2">
+        <div>
+          <p class="colcap">
+            <strong>20-row cap.</strong> The same 6.1 condition cap — Add condition disables with
+            the inline note (a typed 422 if bypassed).
+          </p>
+          <div class="stage" style="padding: 16px">
+            <div class="adv-match">
+              <span>Match</span>
+              <div class="seg" role="group" aria-label="Combinator">
+                <button aria-pressed="false">all</button>
+                <button aria-pressed="true">any</button>
+              </div>
+              <span>of the following conditions:</span>
+            </div>
+            <div class="conds">
+              <div class="cond" role="group" aria-label="Condition 20">
+                <button class="cb full">
+                  <span class="lbl">Priority</span
+                  ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                </button>
+                <button class="cb full">
+                  <span class="lbl">is any of</span
+                  ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                </button>
+                <div class="msp-box">
+                  <span class="chip"
+                    ><svg class="cg" viewBox="0 0 24 24" style="color: var(--el-danger)">
+                      <use href="#i-arrow-up" /></svg
+                    >Highest<button class="cx" aria-label="Remove">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <input class="msp-input" placeholder="Add…" aria-label="Priority values" />
+                </div>
+                <button class="x-btn" aria-label="Remove condition">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                </button>
+              </div>
+            </div>
+            <button class="addrow is-disabled" aria-disabled="true">
+              <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Add condition
+            </button>
+            <p class="cap-inline">
+              <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>20 of 20 conditions — the
+              maximum for one rule.
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <p class="colcap">
+            <strong>Stale referent.</strong> A select option referenced by a row was deleted in
+            Fields admin — the chip shows the peach stale state + a row notice (the 6.1
+            stale-referent rule), and the rule still validates.
+          </p>
+          <div class="stage" style="padding: 16px">
+            <div class="adv-match">
+              <span>Match</span>
+              <div class="seg" role="group" aria-label="Combinator">
+                <button aria-pressed="true">all</button>
+                <button aria-pressed="false">any</button>
+              </div>
+              <span>of the following conditions:</span>
+            </div>
+            <div class="conds">
+              <div class="cond" role="group" aria-label="Condition 1 (stale)">
+                <button class="cb full">
+                  <svg class="glyph" viewBox="0 0 24 24"><use href="#i-tag" /></svg
+                  ><span class="lbl">Severity</span
+                  ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                </button>
+                <button class="cb full">
+                  <span class="lbl">is any of</span
+                  ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                </button>
+                <div class="msp-box">
+                  <span class="chip stale"
+                    ><svg class="cg" viewBox="0 0 24 24"><use href="#i-alert" /></svg>Critical
+                    (deleted)<button class="cx" aria-label="Remove">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <input class="msp-input" placeholder="Add…" aria-label="Severity values" />
+                </div>
+                <button class="x-btn" aria-label="Remove condition">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                </button>
+                <p class="stale-note" role="status">
+                  <svg class="wi" viewBox="0 0 24 24"><use href="#i-alert" /></svg>“Critical” was
+                  removed from Severity. Remove it, or pick a current option.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        Both states are inherited from 6.1.3 unchanged — the cap’s disabled
+        <code>Add condition</code> + inline maximum note, and the <code>.chip.stale</code> peach
+        treatment + <code>role="status"</code> row notice. 6.6.5 reuses the 6.1.4 condition-row
+        component scoped to the rule editor, so these behave exactly as on
+        <code>/issues</code> Advanced filter.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 5 — the audit log ════════════════ -->
+    <div class="panel-label">
+      5 · The audit log (per rule) — paginated execution rows. Status pill · triggering item (link
+      or tombstone) · duration · time · expandable failure detail. The 90-day retention note + the
+      empty state.
+    </div>
+    <div class="panel">
+      <div class="grid-2" style="align-items: start">
+        <div style="grid-column: 1 / -1">
+          <div class="log">
+            <div class="log-head">
+              <span class="lt"
+                ><svg class="glyph" viewBox="0 0 24 24"><use href="#i-list" /></svg>Run history —
+                Bug verification handoff</span
+              >
+              <span class="pill pill-neutral">Enabled</span>
+            </div>
+
+            <div class="lrow">
+              <span class="pill pill-success"
+                ><svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>Success</span
+              >
+              <a class="lkey"
+                >PROD-418<svg viewBox="0 0 24 24"><use href="#i-link" /></svg
+              ></a>
+              <span class="lwhat">2 actions — add watcher, add comment</span>
+              <span class="ldur"
+                ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>312&nbsp;ms</span
+              >
+              <span class="ltime">4m ago</span>
+              <span class="lexp"
+                ><svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg
+              ></span>
+            </div>
+
+            <div class="lrow">
+              <span class="pill pill-failure"
+                ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>Failure</span
+              >
+              <a class="lkey"
+                >PROD-401<svg viewBox="0 0 24 24"><use href="#i-link" /></svg
+              ></a>
+              <span class="lwhat">Stopped at action 1 of 2</span>
+              <span class="ldur"
+                ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>88&nbsp;ms</span
+              >
+              <span class="ltime">2h ago</span>
+              <span class="lexp"
+                ><svg viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg
+              ></span>
+            </div>
+            <div class="ldetail">
+              <div class="errbox">
+                The transition action failed — the target status isn’t reachable from the item’s
+                current status under the project workflow.
+                <span class="ec"
+                  >WorkflowTransitionIllegalError: "In Review" is not allowed from "Done"</span
+                >
+              </div>
+              <div class="steps">
+                <div class="step fail">
+                  <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>1 · Transition → In Review —
+                  failed
+                </div>
+                <div class="step skip">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus-circle" /></svg>2 · Add comment —
+                  skipped
+                </div>
+              </div>
+            </div>
+
+            <div class="lrow">
+              <span class="pill pill-noop"
+                ><svg viewBox="0 0 24 24"><use href="#i-minus-circle" /></svg>No actions</span
+              >
+              <a class="lkey"
+                >PROD-377<svg viewBox="0 0 24 24"><use href="#i-link" /></svg
+              ></a>
+              <span class="lwhat">Condition not met — Kind is not Bug</span>
+              <span class="ldur"
+                ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>9&nbsp;ms</span
+              >
+              <span class="ltime">5h ago</span>
+              <span class="lexp"
+                ><svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg
+              ></span>
+            </div>
+
+            <div class="lrow">
+              <span class="pill pill-success"
+                ><svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>Success</span
+              >
+              <span class="lkey tomb">PROD-204</span>
+              <span class="lwhat">2 actions — triggering item since deleted</span>
+              <span class="ldur"
+                ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>270&nbsp;ms</span
+              >
+              <span class="ltime">Yesterday</span>
+              <span class="lexp"
+                ><svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg
+              ></span>
+            </div>
+
+            <div class="log-foot">
+              <span>Showing 1–4 of 126</span>
+              <span class="pager">
+                <span class="pg">‹</span>
+                <span class="pg sel">1</span>
+                <span class="pg">2</span>
+                <span class="pg">3</span>
+                <span class="pg">…</span>
+                <span class="pg">32</span>
+                <span class="pg">›</span>
+              </span>
+            </div>
+            <div class="retention">
+              <svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>Run history is kept for 90 days.
+            </div>
+          </div>
+        </div>
+
+        <div style="grid-column: 1 / -1">
+          <p class="colcap" style="margin-top: 16px">
+            <strong>Empty state.</strong> A rule that has not fired yet.
+          </p>
+          <div class="stage">
+            <div class="state">
+              <span class="ico"
+                ><svg viewBox="0 0 24 24"><use href="#i-list" /></svg
+              ></span>
+              <h2>No runs yet</h2>
+              <p>
+                This rule hasn’t fired. When an item matches its trigger and conditions, each run
+                appears here with its result, duration and the item that triggered it.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        Reads are paginated over the indexed <code>[ruleId, createdAt]</code> log (bounded — finding
+        #57, no load-all). Status <code>Pill</code>: Success (mint) · Failure (rose) · No actions
+        (neutral). The triggering item key links to the issue; a since-deleted item renders the
+        <code>tomb</code> tombstone, not a dead link. Failure rows expand to the typed error +
+        per-step detail (which action failed, which were skipped). The
+        <code>90 days</code> retention line states the cron-swept window (6.6.2).
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 6 — list states: empty / auto-disabled / cap ════════════════ -->
+    <div class="panel-label">
+      6 · List states — empty (“No rules yet”) · the auto-disabled banner (10 consecutive failures +
+      re-enable) · the 100-rule cap state.
+    </div>
+    <div class="panel">
+      <div class="grid-2">
+        <div>
+          <p class="colcap"><strong>Empty.</strong> No rules created yet.</p>
+          <div class="stage">
+            <div class="state">
+              <span class="ico"
+                ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg
+              ></span>
+              <h2>No rules yet</h2>
+              <p>
+                Automate repetitive work — transition items, set fields, add watchers or comments
+                when something happens. Rules run as their owner.
+              </p>
+              <span class="actions btn btn-primary"
+                ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Create rule</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <p class="colcap">
+            <strong>Auto-disabled.</strong> A rule that failed 10 times in a row is switched off
+            automatically; the banner shows on the list + editor, with re-enable (which resets the
+            counter).
+          </p>
+          <div class="stage" style="padding: 16px">
+            <div class="banner">
+              <svg class="bi" viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+              <span class="bt">
+                <strong>Triage label on create</strong> was disabled automatically after 10
+                consecutive failures. Fix the rule and re-enable it — re-enabling resets the failure
+                count.
+              </span>
+            </div>
+            <div class="rules">
+              <div class="rule disabled">
+                <button class="sw off" aria-label="Re-enable" aria-pressed="false"></button>
+                <div class="r-main">
+                  <div class="r-name">Triage label on create</div>
+                  <div class="r-meta">
+                    <span class="r-owner"><span class="avatar">ZY</span>Zhu Yue</span>
+                    <span class="dotsep">·</span>
+                    <span class="lastrun fail"
+                      ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>Auto-disabled · 10
+                      failures</span
+                    >
+                  </div>
+                </div>
+                <div class="r-actions">
+                  <span class="btn btn-ghost sm">Re-enable</span>
+                  <button class="icon-btn" aria-label="Rule actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="cap-note">
+              <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+              <span
+                >100 of 100 rules — delete a rule to add another. (The Create button disables at the
+                cap; a bypass hits a typed 422.)</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        The auto-disable number (10) + the first-failure-after-success owner email are the verified
+        Jira shapes (6.6.2). The banner uses the rose tint with
+        <code>--el-text-strong</code> (AA per finding #35); the re-enable affordance is wired to the
+        6.6.1 counter reset. The 100-rule cap is the neutral <code>cap-note</code> + a disabled
+        Create button (never a silent truncation).
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 7 — validation + nav entry ════════════════ -->
+    <div class="panel-label">
+      7 · Validation surfaces + the nav entry — an action row whose referent (a deleted member) is
+      now stale shows the typed-422 inline error; the Automation nav entry in its active / inactive
+      states (lit up from the 6.5 “Soon” slot).
+    </div>
+    <div class="panel">
+      <div class="grid-2">
+        <div>
+          <p class="colcap">
+            <strong>Stale / invalid action.</strong> An <code>add-watcher</code> action points at a
+            member who was removed from the project — save surfaces the typed 422 on the offending
+            row, not a generic toast.
+          </p>
+          <div class="stage" style="padding: 16px">
+            <div class="acts">
+              <div class="act" role="group" aria-label="add watcher (invalid)">
+                <span class="grip"
+                  ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                ></span>
+                <button class="cb full">
+                  <svg class="glyph" viewBox="0 0 24 24"><use href="#i-user-plus" /></svg
+                  ><span class="lbl">Add watcher</span
+                  ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                </button>
+                <div class="act-conf">
+                  <div
+                    class="msp-box"
+                    style="outline: 1px solid var(--el-danger); outline-offset: 0"
+                  >
+                    <span class="chip stale"
+                      ><svg class="cg" viewBox="0 0 24 24"><use href="#i-alert" /></svg>Eikooc
+                      (removed)<button class="cx" aria-label="Remove">
+                        <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                    ></span>
+                    <input class="msp-input" placeholder="Add member…" aria-label="Watchers" />
+                  </div>
+                </div>
+                <button class="x-btn" aria-label="Remove action">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                </button>
+                <p class="inline-err" role="alert">
+                  <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>Eikooc is no longer a member
+                  of this project — they can’t be a watcher. (422)
+                </p>
+              </div>
+            </div>
+          </div>
+          <p class="colcap" style="margin-top: 12px">
+            At run time, the same stale referent records a typed <strong>Failure</strong> in the
+            audit log (panel 5) rather than crashing — the 6.6.3 “recorded failure” rule.
+          </p>
+        </div>
+
+        <div>
+          <p class="colcap">
+            <strong>The nav entry.</strong> The 6.5 reserved Automation slot — inactive (top) and
+            active (bottom). 6.6.5 swaps the “Soon” chip for a live route entry.
+          </p>
+          <div class="stage" style="padding: 14px 12px">
+            <div class="grp" style="margin-bottom: 14px">
+              <div class="grp-label">Automation</div>
+              <div class="nav-row">
+                <span class="ni"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg
+                ></span>
+                <span class="nl">Rules</span>
+              </div>
+            </div>
+            <div class="grp">
+              <div class="grp-label">Automation</div>
+              <div class="nav-row active">
+                <span class="ni"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg
+                ></span>
+                <span class="nl">Rules</span>
+              </div>
+            </div>
+          </div>
+          <p class="colcap" style="margin-top: 12px">
+            Route <code>/settings/project/automation</code>, icon <code>Bot</code>, group
+            <code>Automation</code>, access = the shipped 6.4.3 admin predicate. It joins the 6.5.2
+            settings-nav registry as a real route entry (the route↔entry totality test now includes
+            it).
+          </p>
+        </div>
+      </div>
+      <p class="legend">
+        Validation is surfaced <em>per row</em> — the offending control gets the danger outline + an
+        <code>role="alert"</code> inline message naming the typed 422, never a detached toast. Caps
+        (100 rules / 10 actions / 20 conditions) and unknown/stale referents all share this per-row
+        grammar.
+      </p>
+    </div>
+
+    <!-- ── lucide symbol sprite (viewBox 0 0 24 24; stroke currentColor) ─────── -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-arrow-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </g>
+        <g
+          id="i-sliders"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="21" x2="14" y1="4" y2="4" />
+          <line x1="10" x2="3" y1="4" y2="4" />
+          <line x1="21" x2="12" y1="12" y2="12" />
+          <line x1="8" x2="3" y1="12" y2="12" />
+          <line x1="21" x2="16" y1="20" y2="20" />
+          <line x1="12" x2="3" y1="20" y2="20" />
+          <line x1="14" x2="14" y1="2" y2="6" />
+          <line x1="8" x2="8" y1="10" y2="14" />
+          <line x1="16" x2="16" y1="18" y2="22" />
+        </g>
+        <g
+          id="i-users"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </g>
+        <g
+          id="i-workflow"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="8" height="8" x="3" y="3" rx="2" />
+          <path d="M7 11v4a2 2 0 0 0 2 2h4" />
+          <rect width="8" height="8" x="13" y="13" rx="2" />
+        </g>
+        <g
+          id="i-columns"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+        </g>
+        <g
+          id="i-gauge"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 14 4-4" />
+          <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+        </g>
+        <g
+          id="i-tag"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"
+          />
+          <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g
+          id="i-box"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+          />
+          <path d="m3.3 7 8.7 5 8.7-5" />
+          <path d="M12 22V12" />
+        </g>
+        <g
+          id="i-bot"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 8V4H8" />
+          <rect width="16" height="12" x="4" y="8" rx="2" />
+          <path d="M2 14h2" />
+          <path d="M20 14h2" />
+          <path d="M15 13v2" />
+          <path d="M9 13v2" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-chevron-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m18 15-6-6-6 6" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-plus-circle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M8 12h8" />
+          <path d="M12 8v8" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-check-circle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-minus-circle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M8 12h8" />
+        </g>
+        <g
+          id="i-clock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </g>
+        <g
+          id="i-more"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+          <circle cx="5" cy="12" r="1" />
+        </g>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-filter"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </g>
+        <g
+          id="i-bolt-arrow"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </g>
+        <g
+          id="i-grip"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="9" cy="6" r="1" />
+          <circle cx="9" cy="12" r="1" />
+          <circle cx="9" cy="18" r="1" />
+          <circle cx="15" cy="6" r="1" />
+          <circle cx="15" cy="12" r="1" />
+          <circle cx="15" cy="18" r="1" />
+        </g>
+        <g
+          id="i-user"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </g>
+        <g
+          id="i-user-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <line x1="19" x2="19" y1="8" y2="14" />
+          <line x1="22" x2="16" y1="11" y2="11" />
+        </g>
+        <g
+          id="i-comment"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+        </g>
+        <g
+          id="i-edit"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </g>
+        <g
+          id="i-flag"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+          <line x1="4" x2="4" y1="22" y2="15" />
+        </g>
+        <g
+          id="i-calendar"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M8 2v4" />
+          <path d="M16 2v4" />
+          <rect width="18" height="18" x="3" y="4" rx="2" />
+          <path d="M3 10h18" />
+        </g>
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <g
+          id="i-list"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M8 6h13" />
+          <path d="M8 12h13" />
+          <path d="M8 18h13" />
+          <path d="M3 6h.01" />
+          <path d="M3 12h.01" />
+          <path d="M3 18h.01" />
+        </g>
+        <g
+          id="i-link"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 7h3a5 5 0 0 1 0 10h-3m-6 0H6a5 5 0 0 1 0-10h3" />
+          <line x1="8" x2="16" y1="12" y2="12" />
+        </g>
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+      </defs>
+    </svg>
+  </body>
+</html>
