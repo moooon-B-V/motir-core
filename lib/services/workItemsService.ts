@@ -1970,6 +1970,47 @@ export const workItemsService = {
   },
 
   /**
+   * Reusable server-side issue quick-search (Subtask 6.9.1) — the shared read
+   * the link pickers (6.9.2) and, later, the cmd-K palette consume. Trims and
+   * guards the query (empty / whitespace / shorter than
+   * {@link QUICK_SEARCH_MIN_QUERY_LENGTH} → `[]` with NO DB round-trip);
+   * resolves the actor's BROWSABLE project set (the Story 6.4 gate — the SAME
+   * `projectAccessService.filterBrowsable` the switcher / nav ride) so a user
+   * only ever finds issues in projects they may read; then runs the bounded,
+   * relevance-ordered key + title search scoped to that set, capped at
+   * {@link QUICK_SEARCH_DEFAULT_LIMIT} (or a caller-supplied `limit`, itself
+   * ceilinged at {@link QUICK_SEARCH_MAX_LIMIT}; finding #57 — never unbounded).
+   * `opts.excludeIds` drops specific rows (6.9.2's link picker passes self +
+   * already-linked). Returns the lighter {@link WorkItemSummaryDto}. No route is
+   * wired by THIS subtask — 6.9.2 calls it behind the existing link action.
+   */
+  async quickSearch(
+    query: string,
+    ctx: ServiceContext,
+    opts: { limit?: number; excludeIds?: string[] } = {},
+  ): Promise<WorkItemSummaryDto[]> {
+    const trimmed = query.trim();
+    if (trimmed.length < QUICK_SEARCH_MIN_QUERY_LENGTH) return [];
+    const limit = Math.min(
+      QUICK_SEARCH_MAX_LIMIT,
+      Math.max(1, opts.limit ?? QUICK_SEARCH_DEFAULT_LIMIT),
+    );
+    // The Story 6.4 gate, batched (one workspace-role + one membership query —
+    // no N+1), so the search only ever spans projects the actor may browse.
+    const projects = await projectRepository.findByWorkspace(ctx.workspaceId);
+    const browsable = await projectAccessService.filterBrowsable(projects, ctx);
+    if (browsable.length === 0) return [];
+    const rows = await workItemRepository.quickSearch(
+      ctx.workspaceId,
+      browsable.map((p) => p.id),
+      trimmed,
+      limit,
+      opts.excludeIds ?? [],
+    );
+    return rows.map(toWorkItemSummaryDto);
+  },
+
+  /**
    * The READY SET of a project (Subtask 7.0.2) — the AI dispatch surface's list
    * read, cursor-paginated, returning the 7.0.3 `ReadyItemDto`s. A work item is
    * "ready" when (a) its own status is in the `todo` category (not-yet-started —
@@ -2084,6 +2125,22 @@ export const workItemsService = {
 
 /** Upper bound on the link-picker candidate list (the Combobox filters it). */
 const LINK_CANDIDATE_LIMIT = 50;
+
+/**
+ * Quick-search bounds (Subtask 6.9.1) — bounded reads, never load-all (finding
+ * #57). The default window serves the cmd-K palette; a caller (6.9.2's link
+ * picker) may ask for more, but never beyond the ceiling. Exported so 6.9.2 +
+ * the future palette share the one source of truth.
+ */
+export const QUICK_SEARCH_DEFAULT_LIMIT = 20;
+export const QUICK_SEARCH_MAX_LIMIT = 50;
+/**
+ * Shortest query the quick-search runs — below this it returns `[]` with no DB
+ * round-trip. A 1-char title `ILIKE '%x%'` can't use the `pg_trgm` GIN index
+ * (a trigram needs ≥3 chars), so a sub-2-char search would only ever be a noisy
+ * seq-scan; the guard keeps the read index-friendly and cheap.
+ */
+export const QUICK_SEARCH_MIN_QUERY_LENGTH = 2;
 
 /**
  * Fetch ONE cursor-paginated window of READY candidate rows (Subtask 7.0.2) —

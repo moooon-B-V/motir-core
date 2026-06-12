@@ -418,6 +418,65 @@ export const workItemRepository = {
   },
 
   /**
+   * Reusable server-side quick-search read (Subtask 6.9.1) — the single read
+   * both link pickers (6.9.2) and, later, the cmd-K palette consume. Returns
+   * non-archived work items in the WORKSPACE, restricted to `projectIds` (the
+   * actor's BROWSABLE project set, resolved by the service's Story 6.4 gate —
+   * pass the full set; the service short-circuits an empty set, so this is only
+   * ever reached with ≥1 id), whose `identifier` matches the query (exact /
+   * prefix, case-insensitive) OR whose `title` ILIKE-CONTAINS it. The title
+   * contains-scan rides the 6.1.1 `pg_trgm` GIN index — it must not table-scan
+   * 10k titles. Relevance-ordered — exact-identifier → identifier-prefix →
+   * title-only match — then `key` ASC + `identifier` ASC as a stable, fully
+   * deterministic tiebreak. Bounded to `limit` (finding #57 — never an
+   * unbounded fetch). `excludeIds` drops specific rows (6.9.2's link picker
+   * passes self + already-linked-for-the-relationship); omitted ⇒ no exclusion.
+   * Explicit `workspaceId` gate — the primary tenant filter (finding #26; RLS
+   * is inert under the dev/CI superuser). Read-only → `db` singleton. The query
+   * binds as a parameter (never interpolated) and is pattern-escaped for LIKE
+   * metacharacters, so a search for "50%" matches the literal "50%".
+   */
+  async quickSearch(
+    workspaceId: string,
+    projectIds: string[],
+    query: string,
+    limit: number,
+    excludeIds: string[] = [],
+  ): Promise<WorkItem[]> {
+    if (projectIds.length === 0) return [];
+    const exact = query.toLowerCase();
+    const escaped = escapeLikePattern(query);
+    const prefixPattern = `${escaped}%`;
+    const containsPattern = `%${escaped}%`;
+    // Empty array params break `ANY`/`ALL` type inference; projectIds is
+    // guaranteed non-empty above, and the exclusion is omitted entirely when
+    // there's nothing to exclude.
+    const excludeSql = excludeIds.length
+      ? Prisma.sql`AND w."id" <> ALL(${excludeIds})`
+      : Prisma.empty;
+    return db.$queryRaw<WorkItem[]>`
+      SELECT w.*
+        FROM "work_item" w
+        WHERE w."workspaceId" = ${workspaceId}
+          AND w."projectId" = ANY(${projectIds})
+          AND w."archivedAt" IS NULL
+          ${excludeSql}
+          AND (
+            w."identifier" ILIKE ${prefixPattern}
+            OR w."title" ILIKE ${containsPattern}
+          )
+        ORDER BY
+          CASE
+            WHEN LOWER(w."identifier") = ${exact} THEN 0
+            WHEN w."identifier" ILIKE ${prefixPattern} THEN 1
+            ELSE 2
+          END ASC,
+          w."key" ASC,
+          w."identifier" ASC
+        LIMIT ${limit}`;
+  },
+
+  /**
    * Non-archived siblings under a parent WITHIN a project, ordered by
    * fractional `position` (Subtask 1.4.4). Distinct from `findChildren`: a
    * top-level sibling set has `parentId IS NULL`, and scoping by `projectId`
