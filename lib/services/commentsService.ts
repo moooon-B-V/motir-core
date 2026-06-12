@@ -244,12 +244,16 @@ export const commentsService = {
     });
 
     // Post-commit, never inside the tx — a rollback must not have notified.
+    // Automation provenance (6.6.3): a comment WRITTEN by an `add_comment`
+    // action carries the rule id, so the `commented`-trigger consumer skips it
+    // (loop prevention) while mention/watcher emails still fan out.
     await sendEvent('work-item/comment.created', {
       workspaceId: ctx.workspaceId,
       workItemId,
       commentId: row.id,
       authorId: ctx.userId,
       mentionedUserIds: storedMentionIds,
+      ...(ctx.viaAutomationRuleId ? { viaAutomationRuleId: ctx.viaAutomationRuleId } : {}),
     });
 
     return toSingleCommentDto(row, storedMentionIds);
@@ -336,6 +340,7 @@ export const commentsService = {
         commentId: row.id,
         authorId: ctx.userId,
         mentionedUserIds: addedMentionIds,
+        ...(ctx.viaAutomationRuleId ? { viaAutomationRuleId: ctx.viaAutomationRuleId } : {}),
       });
     }
 

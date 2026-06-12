@@ -17,6 +17,13 @@ export const AUTOMATION_CONDITION_ROW_CAP = 20;
 /** Rule-name length bound (the saved-filter name cap precedent). */
 export const AUTOMATION_RULE_NAME_MAX_LENGTH = 120;
 
+/** Upper bound on an `add_comment` action's fixed body (Subtask 6.6.3). The
+ * comment system itself enforces no length cap (only non-empty), so this is a
+ * safety bound on the rule's stored JSON config — never a silently truncated
+ * body, a typed 422 at authoring. Generous: an automation comment template is
+ * short ("Verify the fix") but may carry mentions / a checklist. */
+export const AUTOMATION_COMMENT_BODY_MAX_LENGTH = 5000;
+
 /** The consecutive-failure count that auto-disables a rule (the verified Jira
  * number). The engine (6.6.2) enforces it; 6.6.1 ships the column + the
  * enable-resets-the-counter rule. */

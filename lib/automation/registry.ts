@@ -29,6 +29,8 @@ import {
   type AutomationPriority,
   type AutomationSetFieldId,
 } from './fields';
+import { AUTOMATION_COMMENT_BODY_MAX_LENGTH } from './constants';
+import { LABEL_NAME_MAX_LENGTH } from '@/lib/labels/constants';
 import {
   InvalidAutomationActionConfigError,
   InvalidAutomationTriggerConfigError,
@@ -179,13 +181,27 @@ export function parseTriggerConfig(
 // Actions
 // ---------------------------------------------------------------------------
 
-/** The shipped-substrate action set THIS subtask ships (the stub's "small
- * built-in action set"). The Epic-5 actions (add-watcher / add-comment /
- * add-label / set-custom-field) are 6.6.3 registry EXTENSIONS — same pattern. */
-export type AutomationActionType = 'transition' | 'set_field';
+/** The full action set. The first two (`transition` / `set_field`) are the
+ * shipped-substrate entries 6.6.1 shipped; the four Epic-5 entries
+ * (`add_watcher` / `add_comment` / `add_label` / `set_custom_field`) are the
+ * 6.6.3 registry EXTENSIONS over the Epic-5 services — the same extension
+ * pattern as 6.1.2 over 6.1.1. */
+export type AutomationActionType =
+  | 'transition'
+  | 'set_field'
+  | 'add_watcher'
+  | 'add_comment'
+  | 'add_label'
+  | 'set_custom_field';
 
 /** What the editor renders for an action's config slot (6.6.4/6.6.5). */
-export type AutomationActionEditorKind = 'transition' | 'set-field';
+export type AutomationActionEditorKind =
+  | 'transition'
+  | 'set-field'
+  | 'add-watcher'
+  | 'add-comment'
+  | 'add-label'
+  | 'set-custom-field';
 
 /** A set-field action's typed value, by the field it targets. Built-in fields
  * the shipped `workItemsService.update` accepts. Open ids (assignee user id,
@@ -197,10 +213,18 @@ export type AutomationSetFieldValue =
   | { field: 'dueDate'; value: string | null }
   | { field: 'estimate'; value: number | null };
 
-/** The normalized, stored action config — a discriminated union keyed by type. */
+/** The normalized, stored action config — a discriminated union keyed by type.
+ * The four Epic-5 arms carry OPEN referent ids (user / label name / custom-field
+ * id + value) — never whitelisted here; a deleted/ineligible referent is matched
+ * at execution as a RECORDED failure (the 6.1 stale-referent rule), not a write
+ * reject. */
 export type AutomationActionConfig =
   | { type: 'transition'; toStatusId: string }
-  | ({ type: 'set_field' } & AutomationSetFieldValue);
+  | ({ type: 'set_field' } & AutomationSetFieldValue)
+  | { type: 'add_watcher'; userId: string }
+  | { type: 'add_comment'; bodyMd: string }
+  | { type: 'add_label'; name: string }
+  | { type: 'set_custom_field'; fieldId: string; value: string | number | null };
 
 export interface AutomationActionDef {
   type: AutomationActionType;
@@ -300,7 +324,113 @@ const ACTION_DEFS: ReadonlyArray<AutomationActionDef> = [
       return { type: 'set_field', ...parseSetFieldValue(asObject(raw)) };
     },
   },
+  // --- Epic-5 extensions (Subtask 6.6.3) — each over a shipped Epic-5 service ---
+  {
+    // add_watcher → watchersService.addWatcher (5.4.4). The target is an OPEN
+    // user id; the service's view-access validation is the authority (an
+    // ineligible / deleted user is a recorded failure at execution, the
+    // stale-referent rule), so this only checks the SHAPE.
+    type: 'add_watcher',
+    editorKind: 'add-watcher',
+    parseConfig(raw) {
+      const o = asObject(raw);
+      return {
+        type: 'add_watcher',
+        userId: requireNonEmptyString(o['userId'], 'add_watcher', 'userId'),
+      };
+    },
+  },
+  {
+    // add_comment → commentsService.addComment (5.1.2). A fixed body, bounded so
+    // the stored rule JSON stays bounded (the comment system enforces only
+    // non-empty); mention parsing + the provenance-stamped event are the
+    // service's concern at execution.
+    type: 'add_comment',
+    editorKind: 'add-comment',
+    parseConfig(raw) {
+      const o = asObject(raw);
+      const bodyMd = o['bodyMd'];
+      if (typeof bodyMd !== 'string' || bodyMd.trim().length === 0) {
+        throw new InvalidAutomationActionConfigError(
+          'add_comment',
+          'bodyMd must be a non-empty string',
+        );
+      }
+      if (bodyMd.length > AUTOMATION_COMMENT_BODY_MAX_LENGTH) {
+        throw new InvalidAutomationActionConfigError(
+          'add_comment',
+          `bodyMd is at most ${AUTOMATION_COMMENT_BODY_MAX_LENGTH} characters`,
+        );
+      }
+      return { type: 'add_comment', bodyMd };
+    },
+  },
+  {
+    // add_label → labelsService.addLabel (5.4.2, find-or-create). The name is
+    // normalized (slugified, deduped) by the service; here we bound the raw
+    // string by the same LABEL_NAME_MAX_LENGTH the service enforces, so an
+    // over-long name is a typed 422 at authoring rather than an execution
+    // failure.
+    type: 'add_label',
+    editorKind: 'add-label',
+    parseConfig(raw) {
+      const o = asObject(raw);
+      const name = requireNonEmptyString(o['name'], 'add_label', 'name');
+      if (name.length > LABEL_NAME_MAX_LENGTH) {
+        throw new InvalidAutomationActionConfigError(
+          'add_label',
+          `name is at most ${LABEL_NAME_MAX_LENGTH} characters`,
+        );
+      }
+      return { type: 'add_label', name };
+    },
+  },
+  {
+    // set_custom_field → customFieldValuesService.setValue (5.3.3). The registry
+    // can't know the field's type without the DB, so it validates only the
+    // SHAPE — a field id + a scalar value (string / number / null). The service
+    // is the per-type authority at execution (select-of-this-field, member-can-
+    // view for user, ISO date, decimal number); a deleted field / archived
+    // option / non-member is a recorded failure, the stale-referent rule.
+    type: 'set_custom_field',
+    editorKind: 'set-custom-field',
+    parseConfig(raw) {
+      const o = asObject(raw);
+      const fieldId = requireNonEmptyString(o['fieldId'], 'set_custom_field', 'fieldId');
+      // Absent value (undefined) normalizes to a clear (null) — the same
+      // no-tombstone clear the values service applies.
+      const value = o['value'];
+      if (
+        value !== null &&
+        value !== undefined &&
+        typeof value !== 'string' &&
+        typeof value !== 'number'
+      ) {
+        throw new InvalidAutomationActionConfigError(
+          'set_custom_field',
+          'value must be a string, a number, or null',
+        );
+      }
+      if (typeof value === 'number' && !Number.isFinite(value)) {
+        throw new InvalidAutomationActionConfigError(
+          'set_custom_field',
+          'value must be a finite number',
+        );
+      }
+      return { type: 'set_custom_field', fieldId, value: value ?? null };
+    },
+  },
 ];
+
+/** A non-empty trimmed string referent id (user / label / field id), or the
+ * typed 422. The id stays OPEN — existence is a stale-referent check at
+ * execution, never a whitelist here. */
+function requireNonEmptyString(value: unknown, actionType: string, slot: string): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new InvalidAutomationActionConfigError(actionType, `${slot} must be a non-empty string`);
+  }
+  return value;
+}
 
 function isSetField(v: string): v is AutomationSetFieldId {
   return (AUTOMATION_SET_FIELDS as readonly string[]).includes(v);
