@@ -127,9 +127,11 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   await page.getByRole('button', { name: /^Mobile App/ }).click();
   await expect(page.getByRole('button', { name: 'Switch project' })).toContainText('Mobile App');
 
-  // 6) Archive — navigate to project settings, open archive modal
+  // 6) Archive — navigate to project settings, open archive modal. The area now
+  // LANDS on the read-only Details page (Subtask 6.5.3); its danger zone re-homes
+  // the Archive control (admin-only — this actor owns the workspace).
   await page.goto('/settings/project');
-  await expect(page.getByRole('heading', { name: 'Project settings' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Details', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
   await expect(page.getByRole('heading', { name: /Archive Mobile App\?/ })).toBeVisible();
   // Danger button disabled until identifier matches
@@ -154,8 +156,11 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
 
   await archiveBtn.click();
   await expect(page.getByText('Project archived').first()).toBeVisible({ timeout: 5_000 });
-  // Active project should fall back to Marketing Site
-  await expect(page.getByRole('button', { name: 'Switch project' })).toContainText(
+  // Active project should fall back to Marketing Site. The project-settings AREA
+  // (Story 6.5.2) shows the back-to-project/identity header instead of the
+  // ProjectSwitcher, so the fallback surfaces in the settings rail itself (no
+  // extra navigation — this test is already near its time budget).
+  await expect(page.getByRole('navigation', { name: 'Project settings' })).toContainText(
     'Marketing Site',
   );
 

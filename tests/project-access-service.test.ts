@@ -214,6 +214,17 @@ describe('projectAccessService — browse/edit matrix (level × role)', () => {
           const caps = await projectAccessService.getCapabilities(s.projectId, ctx);
           expect(caps).toEqual({ canBrowse: want.browse, canEdit: want.edit });
 
+          // getSettingsCapabilities (6.5.2) — the same browse/edit verdicts plus
+          // the manage tier (workspace owner/admin or project admin) in ONE
+          // round-trip; drives the settings-area nav filter + edit affordances.
+          const wantManage = role === 'owner' || role === 'wsAdmin' || role === 'admin';
+          const settingsCaps = await projectAccessService.getSettingsCapabilities(s.projectId, ctx);
+          expect(settingsCaps).toEqual({
+            canBrowse: want.browse,
+            canEdit: want.edit,
+            canManage: wantManage,
+          });
+
           // assertCanBrowse — resolves when allowed, throws 'browse' when not.
           if (want.browse) {
             await expect(

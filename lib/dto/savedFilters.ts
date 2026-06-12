@@ -81,3 +81,17 @@ export interface SavedFilterDependentsDto {
   subscriptionCount: number;
   widgetCount: number;
 }
+
+/**
+ * The CURRENT actor's subscription to a filter (Subtask 6.2.5) — the
+ * subscribed-state read the dropdown/directory row action renders. At the
+ * `{ subscription }` envelope, `null` means "not subscribed". `hour` is UTC;
+ * the preset tier carries `weekday` only for `weekly`.
+ */
+export interface SavedFilterSubscriptionDto {
+  schedule: 'daily' | 'weekdays' | 'weekly';
+  /** 0=Sun … 6=Sat (JS getUTCDay); null unless `schedule === 'weekly'`. */
+  weekday: number | null;
+  /** 0–23, UTC. */
+  hour: number;
+}

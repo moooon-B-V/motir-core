@@ -232,6 +232,31 @@ export const workItemRepository = {
   },
 
   /**
+   * Re-derive every work item's denormalized `identifier` for a project after a
+   * key change (Story 6.8 · `changeKey`). The identifier is derived data —
+   * `<project key>-<key number>` — so a rename is a single in-place bulk UPDATE,
+   * NOT a per-row loop and NOT a revision-generating mutation (the `key` number
+   * is untouched; only the prefix changes). ONE statement keyed on `projectId`,
+   * index-maintained by the `@@unique([projectId, identifier])` index, so it is
+   * bounded even on a 10k-issue project — this IS the "re-index", synchronous
+   * and atomic, where Jira would kick off a background Lucene job (ours reads the
+   * denormalized column, so there is no external index to rebuild). `"key"` is
+   * cast to text for the concatenation. Returns the row count. Write → `tx`
+   * required (it runs inside the FOR-UPDATE-locked rename transaction).
+   */
+  async rewriteIdentifiersForProject(
+    projectId: string,
+    newKey: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.$executeRaw`
+      UPDATE "work_item"
+      SET "identifier" = ${newKey} || '-' || "key"::text
+      WHERE "projectId" = ${projectId}
+    `;
+  },
+
+  /**
    * Bulk-read work items by id in a single `IN (...)` round-trip (Subtask
    * 1.4.4). Rows come back in Postgres' arbitrary order — service callers
    * (`getBlockers` / `getBlocking`) re-sort if they need a specific order.
@@ -1036,6 +1061,29 @@ export const workItemRepository = {
         FROM up
         WHERE kind = 'epic'
         GROUP BY node_id`;
+  },
+
+  /**
+   * Does one work item satisfy an automation rule's condition group (Story 6.6
+   * · Subtask 6.6.2)? Compiles the FilterAST through the 6.1.1 compiler over
+   * alias `w` (stale referents → match-nothing, the 6.1.2 rule) and tests it
+   * against the SINGLE triggering item — `WHERE w.id = :id AND (<conditions>)`,
+   * one indexed point read. An empty condition group compiles to `TRUE`, so the
+   * predicate reduces to "the item still exists" (the always-match rule). A
+   * deleted/missing item returns false (it can't be acted on). Read-only path →
+   * `db` singleton (the engine has no surrounding write tx when it evaluates).
+   */
+  async matchesAutomationCondition(
+    workItemId: string,
+    ast: FilterAst,
+    referents?: ProjectFilterReferents,
+  ): Promise<boolean> {
+    const astSql = compileFilterConditionsSql(ast, referents);
+    const rows = await db.$queryRaw<Array<{ ok: number }>>`
+      SELECT 1 AS ok FROM "work_item" w
+      WHERE w."id" = ${workItemId} AND (${astSql})
+      LIMIT 1`;
+    return rows.length > 0;
   },
 
   /**

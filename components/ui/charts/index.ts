@@ -23,8 +23,24 @@ export type { ChartLegendProps } from './ChartLegend';
 export { ChartDataTable } from './ChartDataTable';
 export type { ChartDataTableProps, DataTableRow, DataTableCell } from './ChartDataTable';
 
-export { chartColor } from './tokens';
+// Story 6.3.4 — the donut + difference/area forms (the viz Story 6.3 reuses).
+export { DonutChart } from './DonutChart';
+export type { DonutChartProps, DonutDatum } from './DonutChart';
+
+export { DifferenceAreaChart } from './DifferenceAreaChart';
+export type { DifferenceAreaChartProps, DiffSeriesPoint } from './DifferenceAreaChart';
+
+export { chartColor, chartCategorical } from './tokens';
 export type { ChartColor, ChartAxis, AxisTick, ChartMargin, ChartLegendItem } from './tokens';
+
+export {
+  donutSegments,
+  annularWedgePath,
+  pointOnCircle,
+  differenceBands,
+  polygonPath,
+} from './geometry';
+export type { DonutInput, DonutGeometry, DonutSegment, DiffBand, XYPoint } from './geometry';
 
 export { linearScale, linePath, stepPath, areaPath, niceTicks, niceMax } from './scale';
 export type { Scale, DataPoint, PixelPoint } from './scale';

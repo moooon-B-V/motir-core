@@ -17,7 +17,15 @@ import { Sidebar, type SidebarSection } from '@/components/ui/Sidebar';
 import { SidebarToggle } from '@/components/ui/SidebarToggle';
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed';
 import type { ProjectDTO } from '@/lib/dto/projects';
+import {
+  groupSettingsNav,
+  isProjectSettingsPath,
+  isSettingsEntryActive,
+  visibleSettingsNav,
+  type SettingsNavCapabilities,
+} from '@/lib/settings/projectSettingsNav';
 import { SidebarHeader } from './SidebarHeader';
+import { SettingsSidebarHeader } from './SettingsSidebarHeader';
 
 // The signed-in navigation rail. Composes the 1.5.2 Sidebar primitive with
 // a SidebarHeader (project context) and the route-aware nav sections. Active
@@ -32,6 +40,15 @@ import { SidebarHeader } from './SidebarHeader';
 //     render the "this project is archived" empty state themselves.
 //   - no project (#29.1) → only the bottom section, with Settings deep-
 //     linking to the WORKSPACE settings (there's no project to configure).
+//
+// Settings AREA swap (Story 6.5 · Subtask 6.5.2): when the route is inside the
+// project-settings area (`/settings/project*`) and a project is active, the rail
+// REPLACES the project nav with the grouped settings nav rendered FROM the
+// `projectSettingsNav` registry (filtered by the actor's `settingsAccess`) and
+// swaps the header for the SettingsSidebarHeader (back-to-project + identity).
+// This is the design's "same rail" decision — one rail, no double chrome — which
+// the App Router forces into THIS component (the rail lives here, not in a
+// nested layout under <main>). The drawer variant inherits the swap for free.
 //
 // Two variants: `rail` (the persistent desktop rail, follows the shared
 // collapse store, carries the footer collapse toggle) and `drawer` (the
@@ -52,10 +69,29 @@ export interface SidebarNavProps {
    * cap; a zero count hides the badge.
    */
   readyCount?: { count: number; hasMore: boolean } | null;
+  /**
+   * The actor's settings-area capabilities (Subtask 6.5.2), resolved once in the
+   * (authed) layout via `projectAccessService.getSettingsCapabilities`. Drives
+   * the settings-nav registry's per-entry `access` filter when the rail is in the
+   * project-settings area. Omitted off the settings routes (the project nav never
+   * reads it); defaults closed so a missing value never leaks an entry.
+   */
+  settingsAccess?: SettingsNavCapabilities;
 }
 
 function isActive(pathname: string, match: string): boolean {
   return pathname === match || pathname.startsWith(`${match}/`);
+}
+
+/** The Automation slot's "Soon" chip — a yellow-tint badge, AA-safe (hue in the
+ *  background, `--el-text-strong` ink; finding #35). State is conveyed by the
+ *  text, not colour alone. */
+function SoonChip({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center rounded-(--radius-badge) bg-(--el-tint-yellow) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-[10px] font-semibold uppercase tracking-wide text-(--el-text-strong)">
+      {label}
+    </span>
+  );
 }
 
 /** The "Ready" entry's count badge — the neutral rail-badge grammar (7.0.1
@@ -73,8 +109,10 @@ export function SidebarNav({
   projects,
   variant = 'rail',
   readyCount,
+  settingsAccess,
 }: SidebarNavProps) {
   const t = useTranslations('shell');
+  const ts = useTranslations('settings');
   const pathname = usePathname();
   const [storeCollapsed] = useSidebarCollapsed();
   const isDrawer = variant === 'drawer';
@@ -82,6 +120,34 @@ export function SidebarNav({
   const collapsed = isDrawer ? false : storeCollapsed;
 
   const hasProject = Boolean(activeProject);
+
+  // Settings AREA: swap the project nav for the registry-driven settings nav.
+  if (activeProject && isProjectSettingsPath(pathname)) {
+    const caps = settingsAccess ?? { canBrowse: false, canManage: false };
+    const settingsSections: SidebarSection[] = groupSettingsNav(visibleSettingsNav(caps)).map(
+      ({ group, entries }) => ({
+        id: `settings-${group}`,
+        label: ts(`nav.group.${group}`),
+        items: entries.map((entry) => ({
+          icon: <entry.icon />,
+          label: ts(entry.labelKey),
+          href: entry.href,
+          active: isSettingsEntryActive(entry, pathname),
+          disabled: entry.placeholder,
+          badge: entry.placeholder ? <SoonChip label={ts('nav.soon')} /> : undefined,
+        })),
+      }),
+    );
+    return (
+      <Sidebar
+        aria-label={ts('nav.eyebrow')}
+        header={<SettingsSidebarHeader activeProject={activeProject} collapsed={collapsed} />}
+        sections={settingsSections}
+        footer={isDrawer ? undefined : <SidebarToggle variant="footer" />}
+        collapsed={isDrawer ? false : undefined}
+      />
+    );
+  }
 
   const sections: SidebarSection[] = [];
 

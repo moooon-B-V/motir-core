@@ -79,12 +79,46 @@ export const projectRepository = {
     return tx.project.create({ data });
   },
 
+  /**
+   * Acquire a row-level lock on the project inside the caller's transaction —
+   * the guarding read for the key-change flow (Story 6.8 · projectsService
+   * `changeKey`): lock the row, then run the collision guards + the bulk
+   * identifier rewrite + the alias insert, all serialized against a concurrent
+   * rename OR a concurrent `allocateWorkItemNumber`-backed issue creation on the
+   * same project (the lock-before-read-derived-update rule). Without it two
+   * renames could each read the pre-change identifier and clobber each other,
+   * or an issue could be minted with the stale prefix mid-rewrite. Returns null
+   * when the id doesn't exist. Mirrors workItemRepository.lockById /
+   * userRepository.lockById.
+   */
+  async lockById(id: string, tx: Prisma.TransactionClient): Promise<{ id: string } | null> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "project" WHERE "id" = ${id} FOR UPDATE
+    `;
+    return rows[0] ?? null;
+  },
+
   async update(
     id: string,
-    data: { name?: string },
+    data: { name?: string; avatarIcon?: string | null; avatarColor?: string | null },
     tx: Prisma.TransactionClient,
   ): Promise<Project> {
     return tx.project.update({ where: { id }, data });
+  },
+
+  /**
+   * Set the project's `identifier` (the "key") — the project-row half of the
+   * key-change transaction (Story 6.8). The work-item identifier rewrite is the
+   * separate bulk op `workItemRepository.rewriteIdentifiersForProject`, and the
+   * old key is recorded by `projectKeyAliasRepository.create`; the service
+   * orchestrates all three plus the FOR-UPDATE lock in one transaction.
+   */
+  async updateIdentifier(
+    id: string,
+    identifier: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Project> {
+    return tx.project.update({ where: { id }, data: { identifier } });
   },
 
   /**

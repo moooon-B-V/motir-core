@@ -69,16 +69,16 @@ model User {
   // cannot be hard-deleted) and can be assigned many (assignee — SetNull on
   // the FK: deleting an assignee leaves the issue unassigned, never removes
   // it). Named relations because there are two distinct User↔WorkItem edges.
-  reportedWorkItems         WorkItem[]            @relation("WorkItemReporter")
-  assignedWorkItems         WorkItem[]            @relation("WorkItemAssignee")
+  reportedWorkItems         WorkItem[]                @relation("WorkItemReporter")
+  assignedWorkItems         WorkItem[]                @relation("WorkItemAssignee")
   // Back-relation for WorkItemLink (Subtask 1.4.3). A user creates many
   // issue-to-issue links (createdBy — Restrict: a user with links on record
   // cannot be hard-deleted, mirroring the reporter pattern).
-  createdWorkItemLinks      WorkItemLink[]        @relation("WorkItemLinkCreatedBy")
+  createdWorkItemLinks      WorkItemLink[]            @relation("WorkItemLinkCreatedBy")
   // Back-relation for WorkItemRevision (Subtask 1.4.6). A user authors many
   // revisions (changedBy — Restrict on the FK: a user with audit history on
   // record cannot be hard-deleted, mirroring the reporter pattern).
-  authoredWorkItemRevisions WorkItemRevision[]    @relation("WorkItemRevisionAuthor")
+  authoredWorkItemRevisions WorkItemRevision[]        @relation("WorkItemRevisionAuthor")
   // Back-relation for Attachment (Subtask 2.3.7). A user uploads many
   // attachments (uploader — Cascade on the FK: deleting a user removes their
   // uploaded blobs' audit rows). Modelled to keep the schema graph in sync
@@ -94,14 +94,14 @@ model User {
   // pattern) and is mentioned in many (Cascade: a mention row is notification
   // substrate, not audit — it goes with the user, mirroring
   // projectMemberships).
-  authoredComments          Comment[]             @relation("CommentAuthor")
+  authoredComments          Comment[]                 @relation("CommentAuthor")
   commentMentions           CommentMention[]
   // Back-relations for Component + Watcher (Subtask 5.4.1). A user is the
   // default assignee of many components (SetNull: a departed user clears the
   // default, never blocks) and watches many issues (Cascade: a watcher row
   // is notification substrate, not audit — it goes with the user, mirroring
   // commentMentions).
-  defaultAssigneeComponents Component[]           @relation("ComponentDefaultAssignee")
+  defaultAssigneeComponents Component[]               @relation("ComponentDefaultAssignee")
   watchers                  Watcher[]
   // Back-relation for CustomFieldValue (Subtask 5.3.1). A user can be the
   // VALUE of a `user`-type custom field on many issues (SetNull on the FK:
@@ -113,16 +113,20 @@ model User {
   // admins change owner first when a shared filter must survive a departure)
   // and stars many (Cascade: preference substrate, not audit — the watchers
   // pattern).
-  savedFilters              SavedFilter[]         @relation("SavedFilterOwner")
-  savedFilterStars          SavedFilterStar[]     @relation("SavedFilterStarUser")
+  savedFilters              SavedFilter[]             @relation("SavedFilterOwner")
+  savedFilterStars          SavedFilterStar[]         @relation("SavedFilterStarUser")
+  // Per-user filter subscriptions (Subtask 6.2.5) — emailed-results loop.
+  // Cascade: a subscription is preference substrate (the star semantics),
+  // not audit, so it dies with the user.
+  savedFilterSubscriptions  SavedFilterSubscription[] @relation("SavedFilterSubscriptionUser")
   // Automation rules this user owns (Subtask 6.6.1) — the rule actor (the
   // recorded 6.6 deviation: rule actions run as the owner). Cascade with the
   // user, the savedFilters semantics: a departing admin's rules go with them
   // (an admin reassigns the owner first if a rule must survive).
-  automationRules           AutomationRule[]      @relation("AutomationRuleOwner")
+  automationRules           AutomationRule[]          @relation("AutomationRuleOwner")
   // Dashboards (Story 6.3) — owned grids ride the SavedFilter owner
   // semantics (Cascade; change-owner is the recorded extension).
-  dashboards                Dashboard[]           @relation("DashboardOwner")
+  dashboards                Dashboard[]               @relation("DashboardOwner")
 
   @@map("user")
 }
@@ -202,29 +206,33 @@ model Workspace {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  memberships            WorkspaceMembership[]
-  projects               Project[]
-  workItems              WorkItem[]
-  workItemLinks          WorkItemLink[]
-  jobRuns                JobRun[]
-  jobRunDlqs             JobRunDlq[]
-  workflowStatuses       WorkflowStatus[]
-  workflowTransitions    WorkflowTransition[]
-  attachments            Attachment[]
-  boards                 Board[]
-  boardColumns           BoardColumn[]
-  boardColumnStatuses    BoardColumnStatus[]
-  sprints                Sprint[]
-  projectMemberships     ProjectMembership[]
-  comments               Comment[]
-  labels                 Label[]
-  components             Component[]
-  customFieldDefinitions CustomFieldDefinition[]
-  customFieldValues      CustomFieldValue[]
-  savedFilters           SavedFilter[]
-  automationRules        AutomationRule[]
+  memberships              WorkspaceMembership[]
+  projects                 Project[]
+  workItems                WorkItem[]
+  workItemLinks            WorkItemLink[]
+  jobRuns                  JobRun[]
+  jobRunDlqs               JobRunDlq[]
+  workflowStatuses         WorkflowStatus[]
+  workflowTransitions      WorkflowTransition[]
+  attachments              Attachment[]
+  boards                   Board[]
+  boardColumns             BoardColumn[]
+  boardColumnStatuses      BoardColumnStatus[]
+  sprints                  Sprint[]
+  projectMemberships       ProjectMembership[]
+  // Retired project keys (Story 6.8) — workspace-scoped reservation rows.
+  // Cascade with the workspace (a deleted workspace frees its keys).
+  projectKeyAliases        ProjectKeyAlias[]
+  comments                 Comment[]
+  labels                   Label[]
+  components               Component[]
+  customFieldDefinitions   CustomFieldDefinition[]
+  customFieldValues        CustomFieldValue[]
+  savedFilters             SavedFilter[]
+  savedFilterSubscriptions SavedFilterSubscription[]
+  automationRules          AutomationRule[]
   // Dashboards (Story 6.3) — workspace-scoped widget grids. Cascade.
-  dashboards             Dashboard[]
+  dashboards               Dashboard[]
 
   @@map("workspace")
 }
@@ -285,6 +293,15 @@ model Project {
   /// `work_item.storyPoints`, so a `Float[]` for the suggestion list is fine
   /// (avoids a Decimal-array column). Backfills to `[]` on migration.
   customScaleValues   Float[]             @default([])
+  /// Project avatar (Story 6.8) — a preset icon key + a colour-swatch key, both
+  /// validated at the service layer against the avatar registry
+  /// (lib/projects/avatar.ts). NULL on either = the shipped mono-identifier
+  /// rendering (the avatar chip falls back to the project's first identifier
+  /// letters), so every existing row backfills with no migration data step.
+  /// NOT an image upload — Jira's own default avatars are a preset library; the
+  /// 2.3.7 upload primitive is attachment-scoped (the recorded deviation).
+  avatarIcon          String?
+  avatarColor         String?
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   archivedAt          DateTime?
@@ -323,6 +340,9 @@ model Project {
   // Project-sourced dashboard widgets (Story 6.3). Cascade: a deleted
   // project takes its widgets (no meaningful stale state).
   dashboardWidgets       DashboardWidget[]
+  // Retired project keys (Story 6.8). Cascade: deleting a project FREES its
+  // reserved keys (the verified Jira rule — only deletion un-reserves a key).
+  keyAliases             ProjectKeyAlias[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -395,6 +415,38 @@ model ProjectMembership {
   @@index([projectId])
   @@index([userId])
   @@map("project_membership")
+}
+
+/// A retired project key (Story 6.8) — when a project's `identifier` changes
+/// (PROD → NIF), the OLD key is recorded here so it keeps resolving forever
+/// (old issue links 308-redirect, REST calls on the old key still serve) and
+/// stays RESERVED against other projects in the workspace (the verified Jira
+/// "Editing a project key" + "Previous project keys" behaviour). The
+/// `@@unique([workspaceId, identifier])` reserves the key workspace-wide — the
+/// SAME uniqueness shape `project.identifier` carries — so a rename's collision
+/// guard checks live identifiers AND aliases against one namespace. Reclaiming
+/// a project's OWN previous key DELETEs its alias row (the verified revert
+/// path); releasing an alias (the "Previous project keys" remove) deletes it
+/// too, un-reserving the key and breaking its old links.
+///
+/// `workspaceId` is denormalized from the project — the SAME pattern
+/// `project_membership` / `work_item` use — so the RLS gate is a direct
+/// `workspace_id = app.workspace_id` comparison with no join. Both FKs cascade:
+/// deleting the project FREES its keys (the verified mirror rule — only
+/// deletion un-reserves), and deleting the workspace takes the rows with it.
+model ProjectKeyAlias {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  projectId   String   @map("project_id")
+  identifier  String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, identifier])
+  @@index([projectId])
+  @@map("project_key_alias")
 }
 
 /// The role a user holds in a workspace or project (Story 6.4). Formalizes
@@ -540,40 +592,40 @@ model WorkItem {
   createdAt         DateTime                  @default(now())
   updatedAt         DateTime                  @updatedAt
 
-  workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project           Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent            WorkItem?           @relation("WorkItemParent", fields: [parentId], references: [id], onDelete: NoAction)
-  children          WorkItem[]          @relation("WorkItemParent")
-  assignee          User?               @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  reporter          User                @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  workspace            Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project              Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent               WorkItem?                 @relation("WorkItemParent", fields: [parentId], references: [id], onDelete: NoAction)
+  children             WorkItem[]                @relation("WorkItemParent")
+  assignee             User?                     @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter             User                      @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
   // The sprint side of the association. Modelled on BOTH sides (Sprint.workItems
   // back-relation) with the SetNull action the migration uses, so `migrate dev`
   // reports "No difference detected" — the FK-drift rule (bug-attachment-fk-migration-drift).
-  sprint            Sprint?             @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  sprint               Sprint?                   @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   // Back-relations for WorkItemLink (Subtask 1.4.3). Two named relations
   // because there are two distinct WorkItem↔WorkItemLink edges (from/to).
   // Cascading delete on both sides: removing an issue removes its links.
-  linksFrom         WorkItemLink[]      @relation("LinksFrom")
-  linksTo           WorkItemLink[]      @relation("LinksTo")
+  linksFrom            WorkItemLink[]            @relation("LinksFrom")
+  linksTo              WorkItemLink[]            @relation("LinksTo")
   // Audit trail (Subtask 1.4.6). A work item accrues many revision rows; the
   // FK cascades so hard-deleting an issue removes its history with it.
-  revisions         WorkItemRevision[]
+  revisions            WorkItemRevision[]
   // Comment thread (Subtask 5.1.1). Comments die with the issue (Cascade) —
   // the rare hard-delete path; issues are soft-archived in practice.
-  comments          Comment[]
+  comments             Comment[]
   // Issue attachments (Subtask 5.2.1). SetNull — NOT cascade: hard-deleting an
   // issue must leave the attachment rows behind (unlinked) so the orphan-GC
   // (5.2.7) can remove their blobs too; a cascade would strand the blobs.
-  attachments       Attachment[]
+  attachments          Attachment[]
   // Organisation joins + watchers (Subtask 5.4.1). All three cascade with
   // the issue: label/component joins are pure association rows, watcher rows
   // are notification substrate.
-  labels            WorkItemLabel[]
-  components        WorkItemComponent[]
-  watchers          Watcher[]
+  labels               WorkItemLabel[]
+  components           WorkItemComponent[]
+  watchers             Watcher[]
   // Custom-field values (Story 5.3). One row per (issue, field) pair; the FK
   // cascades so deleting an issue takes its custom values with it.
-  customFieldValues CustomFieldValue[]
+  customFieldValues    CustomFieldValue[]
   // Automation execution audit rows that name this issue as the trigger
   // (Story 6.6). SetNull, not Cascade: the audit log outlives the work item
   // (the rule's history is kept; the deleted item renders a tombstone), so the
@@ -1659,14 +1711,18 @@ model SavedFilter {
   createdAt   DateTime              @default(now()) @map("created_at")
   updatedAt   DateTime              @updatedAt @map("updated_at")
 
-  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  owner            User              @relation("SavedFilterOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  workspace        Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project          Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner            User                      @relation("SavedFilterOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   stars            SavedFilterStar[]
   // Filter-sourced dashboard widgets (Story 6.3). SetNull: a deleted
   // filter STALES the widget (the designed "filter missing" card) — the
   // verified Cloud gadget behaviour the 6.2.1 dependents read counts.
   dashboardWidgets DashboardWidget[]
+  // Per-user email subscriptions (Subtask 6.2.5). Cascade: deleting a filter
+  // removes its subscriptions in the same transaction (the 6.2.1 delete cascade
+  // the dependents warning enumerates).
+  subscriptions    SavedFilterSubscription[]
 
   // Case-insensitive uniqueness per project; doubles as the directory /
   // dropdown search index (list reads walk projectId = ? AND name_lower
@@ -1699,6 +1755,66 @@ model SavedFilterStar {
   // The "starred" dropdown group ("filters I starred" within a project read).
   @@index([userId])
   @@map("saved_filter_star")
+}
+
+/// Filter-subscription schedule preset (Story 6.2 · Subtask 6.2.5) — Jira's
+/// preset tier (the advanced-cron editor is the recorded extension). `daily`
+/// (every day at `hour`), `weekdays` (Mon–Fri at `hour`), `weekly` (the row's
+/// `weekday` at `hour`). The hourly cron ticks and these decide due-ness.
+enum SavedFilterSubscriptionSchedule {
+  daily
+  weekdays
+  weekly
+
+  @@map("saved_filter_subscription_schedule")
+}
+
+/// Per-user filter subscription (Story 6.2 · Subtask 6.2.5) — emails the first
+/// 50 results + total count of a saved filter on a preset schedule, resolved AS
+/// the subscriber at send time (the 6.2.1 permission matrix applies). Runs on
+/// the Story 1.6 jobs substrate (the `dailyHealthCheck` cron precedent): an
+/// hourly cron ticks, lists DUE rows across every workspace, and fans each out
+/// as one delivery event.
+///
+/// `hour` is interpreted in UTC — the app's pinned timezone (lib/utils/datetime
+/// pins UTC everywhere; no per-workspace timezone is persisted yet, the
+/// recorded extension). UTC has no DST, so due-ness is stable across the wall-
+/// clock shifts a local timezone would introduce. `weekday` (0=Sunday … 6=
+/// Saturday, JS `getUTCDay`) is set only for `weekly` and ignored otherwise.
+///
+/// Tenancy: `workspaceId` is DENORMALIZED (unlike `saved_filter_star`, which
+/// joins through its parent) BECAUSE the cross-workspace cron tick scans this
+/// table under `withSystemContext` and must enqueue a workspace-scoped delivery
+/// event WITHOUT reading the RLS-protected parent `saved_filter` (whose policy
+/// has no system-admin branch). `saved_filter.workspace_id` is immutable (no
+/// write path changes it), so the denormalized copy cannot drift — the
+/// "could lie" risk the star comment guards against does not apply here.
+model SavedFilterSubscription {
+  id            String                          @id @default(cuid())
+  workspaceId   String                          @map("workspace_id")
+  savedFilterId String                          @map("saved_filter_id")
+  userId        String                          @map("user_id")
+  schedule      SavedFilterSubscriptionSchedule
+  /// 0=Sun … 6=Sat (JS getUTCDay); set only when `schedule = weekly`.
+  weekday       Int?
+  /// 0–23, interpreted in UTC.
+  hour          Int
+  createdAt     DateTime                        @default(now()) @map("created_at")
+  updatedAt     DateTime                        @updatedAt @map("updated_at")
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  savedFilter SavedFilter @relation(fields: [savedFilterId], references: [id], onDelete: Cascade)
+  user        User        @relation("SavedFilterSubscriptionUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  // One subscription per (filter, user) — re-subscribing edits the schedule.
+  @@unique([savedFilterId, userId])
+  // The hourly cron's due scan walks `hour = ?` (then filters schedule/weekday).
+  @@index([hour])
+  // The delete-cascade + dependents count walk the filter; the workspace index
+  // backs cross-workspace operator reads.
+  @@index([savedFilterId])
+  @@index([workspaceId])
+  @@map("saved_filter_subscription")
 }
 
 /// The trigger event an automation rule fires on (Story 6.6 · Subtask 6.6.1) —
@@ -1784,12 +1900,22 @@ model AutomationRuleExecution {
   workItemId String?                   @map("work_item_id")
   error      String?                   @db.Text
   durationMs Int?                      @map("duration_ms")
+  /// The id of the job event this run processed (Subtask 6.6.2). The engine
+  /// claims an (rule, event) pair before executing actions and the partial
+  /// unique index below makes that claim atomic, so an Inngest replay / retry
+  /// of the same event never double-executes a rule's actions — the verified
+  /// "idempotent per (event × rule)" contract. Nullable for the rare context
+  /// (a manual/test write) that carries no event id; NULLs don't collide.
+  eventId    String?                   @map("event_id")
   createdAt  DateTime                  @default(now()) @map("created_at")
 
   rule     AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
   workItem WorkItem?      @relation(fields: [workItemId], references: [id], onDelete: SetNull)
 
   @@index([ruleId, createdAt])
+  // The idempotency claim — one execution row per (rule, event). Partial
+  // (event_id IS NOT NULL) so no-event writes never collide; declared in raw
+  // SQL in the 6.6.2 migration (Prisma can't express a partial unique index).
   @@map("automation_rule_execution")
 }
 

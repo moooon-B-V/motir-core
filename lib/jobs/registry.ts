@@ -9,6 +9,13 @@ import {
   watcherNotifyOnTransitioned,
 } from './definitions/watcherNotify';
 import { attachmentGc } from './definitions/attachmentGc';
+import { filterSubscriptionTick } from './definitions/filterSubscriptionTick';
+import { filterSubscriptionDeliver } from './definitions/filterSubscriptionDeliver';
+import {
+  automationEngineOnCreated,
+  automationEngineOnFieldChanged,
+  automationRetentionSweep,
+} from './definitions/automationEngine';
 
 // The list of registered Inngest functions the serve route mounts (Story 1.6 ·
 // Subtask 1.6.2). Adding a new job = define it under `definitions/` and add it
@@ -22,4 +29,9 @@ export const jobFunctions = [
   watcherNotifyOnCommentCreated,
   watcherNotifyOnTransitioned,
   attachmentGc,
+  filterSubscriptionTick,
+  filterSubscriptionDeliver,
+  automationEngineOnCreated,
+  automationEngineOnFieldChanged,
+  automationRetentionSweep,
 ];

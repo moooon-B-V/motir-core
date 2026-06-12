@@ -209,6 +209,29 @@
       "view": "View work item",
       "fallback": "Or copy this link into your browser:",
       "reason": "You're receiving this because you watch {identifier}."
+    },
+    "filterSubscription": {
+      "subject": "{count, plural, =0 {No results} one {# result} other {# results}} for “{filter}”",
+      "preview": "{count, plural, =0 {No matching work items} one {# matching work item} other {# matching work items}} for {filter}",
+      "greeting": "Hi {name},",
+      "lede": "Your saved filter “{filter}” in {project} matched {count, plural, one {# work item} other {# work items}}.",
+      "ledeEmpty": "Your saved filter “{filter}” in {project} matched no work items right now.",
+      "truncated": "Showing the first {shown} of {total}. Open the filter to see them all.",
+      "view": "View in Motir",
+      "fallback": "Or copy this link into your browser:",
+      "reason": "You're receiving this because you subscribed to the “{filter}” filter.",
+      "unsubscribe": "Unsubscribe from this filter"
+    },
+    "automationRuleFailed": {
+      "subject": "Your automation rule “{rule}” failed",
+      "preview": "Automation rule “{rule}” failed to run",
+      "greeting": "Hi {name},",
+      "lede": "Your automation rule “{rule}” failed the last time it ran.",
+      "errorLabel": "Error: {detail}",
+      "autoDisabled": "It reached the consecutive-failure limit, so we’ve turned it off. Fix the issue and re-enable it to resume.",
+      "view": "Manage automation rules",
+      "fallback": "Or copy this link into your browser:",
+      "reason": "You’re receiving this because you own this automation rule."
     }
   },
   "auth": {
@@ -544,6 +567,14 @@
     "advancedFootHint": "{count} of {cap} conditions · applied live",
     "advancedCapReached": "Condition limit reached ({cap}) — remove one to add another.",
     "advancedPendingNote": "Not applied yet — pick a value to activate this condition.",
+    "advancedStaleNote": "This value no longer exists in the project — this condition matches nothing.",
+    "advancedStaleFieldNote": "This field no longer exists — this condition matches nothing.",
+    "advancedStaleValue": "Unknown value",
+    "advancedFieldUnknownField": "Unknown field",
+    "advancedGroupFields": "Fields",
+    "advancedGroupCustomFields": "Custom fields",
+    "advancedGroupOther": "Other",
+    "advancedArchivedOption": "{label} (archived)",
     "advancedRemoveCondition": "Remove condition {n}",
     "advancedValuesAria": "{field} values",
     "advancedAddValuePlaceholder": "Add…",
@@ -567,6 +598,8 @@
     "advancedFieldDue": "Due",
     "advancedFieldStoryPoints": "Story points",
     "advancedFieldEstimate": "Estimate",
+    "advancedFieldLabel": "Label",
+    "advancedFieldComponent": "Component",
     "advancedOpIsAnyOf": "is any of",
     "advancedOpIsNoneOf": "is none of",
     "advancedOpIsEmpty": "is empty",
@@ -775,6 +808,42 @@
     }
   },
   "settings": {
+    "nav": {
+      "eyebrow": "Project settings",
+      "backToProject": "Back to {projectName}",
+      "soon": "Soon",
+      "group": {
+        "general": "General",
+        "access": "Access",
+        "work": "Work",
+        "automation": "Automation"
+      },
+      "details": "Details",
+      "members": "Members & access",
+      "workflow": "Workflow",
+      "board": "Boards",
+      "estimation": "Estimation",
+      "fields": "Fields",
+      "components": "Components",
+      "rules": "Rules"
+    },
+    "area": {
+      "noProjectTitle": "No project selected",
+      "noProjectDescription": "Choose a project from the switcher, or create one from the dashboard, to manage its settings."
+    },
+    "details": {
+      "title": "Details",
+      "subtitle": "Project name, key and avatar.",
+      "cardTitle": "Project details",
+      "roleAdmin": "Admin",
+      "roleReadOnly": "Read-only",
+      "fieldAvatar": "Avatar",
+      "fieldName": "Name",
+      "fieldKey": "Key",
+      "fieldWorkspace": "Workspace",
+      "fieldCreated": "Created",
+      "editingSeam": "Editing name, key and avatar — plus changing the project key with old-key redirects — arrives with project-details editing. For now these are read-only."
+    },
     "workspace": {
       "empty": {
         "title": "No workspace yet",
@@ -1729,6 +1798,103 @@
       "deletedToast": "Filter deleted",
       "errorTitle": "Couldn't delete the filter",
       "errorGeneric": "Something went wrong. Please try again."
+    },
+    "dropdown": {
+      "label": "Saved",
+      "trigger": "Saved filters — apply, star, or search",
+      "searchLabel": "Find filters",
+      "searchPlaceholder": "Find filters…",
+      "starred": "Starred",
+      "mine": "My filters",
+      "project": "Project filters",
+      "defaults": "Defaults",
+      "emptyStarred": "No starred filters yet — star a filter to pin it here.",
+      "emptyMine": "You haven't saved any filters yet.",
+      "emptyProject": "No filters shared with this project yet.",
+      "viewAll": "View all filters",
+      "error": "Couldn't load filters. Please try again."
+    },
+    "save": {
+      "title": "Save filter",
+      "nameLabel": "Name",
+      "namePlaceholder": "Filter name",
+      "descriptionLabel": "Description (optional)",
+      "descriptionPlaceholder": "What is this filter for?",
+      "visibilityLegend": "Who can see this filter?",
+      "duplicateName": "A filter named “{name}” already exists in this project.",
+      "submit": "Save filter",
+      "cancel": "Cancel",
+      "savedToast": "Filter saved",
+      "errorTitle": "Couldn't save the filter",
+      "errorGeneric": "Something went wrong. Please try again."
+    },
+    "applied": {
+      "barAria": "Applied filter",
+      "edited": "Edited",
+      "save": "Save",
+      "saveAs": "Save as",
+      "discard": "Discard changes",
+      "savedToast": "Filter updated",
+      "overwriteError": "Couldn't save your changes",
+      "nonOwnerTooltip": "Only the owner ({owner}) can overwrite this filter — Save as creates your own copy.",
+      "chipAriaShared": "Applied filter: {name} (shared with project) — open saved filters",
+      "chipAriaPrivate": "Applied filter: {name} (private) — open saved filters",
+      "chipAriaBuiltin": "Applied filter: {name} (built-in) — open saved filters"
+    },
+    "subscribeAction": "Subscribe…",
+    "subscribe": {
+      "title": "Subscribe to “{name}”",
+      "loadError": "Couldn't load your subscription. Please try again.",
+      "frequencyLabel": "Frequency",
+      "frequency": {
+        "daily": "Daily",
+        "weekdays": "Weekdays",
+        "weekly": "Weekly"
+      },
+      "dayLabel": "Day",
+      "timeLabel": "Time",
+      "hourOption": "{hour} UTC",
+      "weekday": {
+        "0": "Sunday",
+        "1": "Monday",
+        "2": "Tuesday",
+        "3": "Wednesday",
+        "4": "Thursday",
+        "5": "Friday",
+        "6": "Saturday"
+      },
+      "explainer": "Emails you the first 50 results and the total count, on the workspace timezone (UTC). A report, not an alert — it sends even when nothing matches.",
+      "subscribe": "Subscribe",
+      "save": "Save changes",
+      "cancel": "Cancel",
+      "changeSchedule": "Change schedule",
+      "unsubscribe": "Unsubscribe",
+      "subscribedTitle": "Subscribed",
+      "summary": {
+        "daily": "Daily at {time} UTC",
+        "weekdays": "Weekdays at {time} UTC"
+      },
+      "summaryWeekly": "Weekly on {day} at {time} UTC",
+      "savedToast": "Subscribed to “{name}”",
+      "unsubscribedToast": "Unsubscribed from “{name}”",
+      "saveError": "Couldn't update your subscription. Please try again."
+    }
+  },
+  "unsubscribeFilters": {
+    "confirm": {
+      "title": "Unsubscribe from this filter?",
+      "body": "You'll stop receiving scheduled result emails for this saved filter.",
+      "action": "Unsubscribe"
+    },
+    "done": {
+      "title": "Unsubscribed",
+      "body": "You won't receive any more emails for this filter. You can re-subscribe anytime from the Filters directory.",
+      "action": "Go to Issues"
+    },
+    "invalid": {
+      "title": "This link isn’t valid",
+      "body": "This unsubscribe link is malformed or has already been used. If you're still receiving emails, unsubscribe from the Filters directory.",
+      "action": "Go to Issues"
     }
   }
 }

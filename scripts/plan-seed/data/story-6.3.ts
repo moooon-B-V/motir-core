@@ -405,7 +405,7 @@ export const story_6_3: PlanStory = {
       id: '6.3.4',
       title:
         'Chart primitives — donut + two-series difference/area forms in the 4.6.2 token-aware SVG layer (+ the categorical `--el-chart-*` ramp)',
-      status: 'planned',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 26,
@@ -454,7 +454,7 @@ export const story_6_3: PlanStory = {
       id: '6.3.5',
       title:
         'Dashboards UI at /dashboard — list/create/switch, the grid (view/edit, layouts, dnd), widget add/config/remove, the three widget renderers + all states',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 38,
@@ -506,7 +506,7 @@ export const story_6_3: PlanStory = {
       id: '6.3.6',
       title:
         'Reports hub at /reports + the two built-in report pages (created-vs-resolved, status distribution) with the verified Jira configs',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,

@@ -17,6 +17,87 @@ export class IdentifierCollisionError extends Error {
   }
 }
 
+// ── Edit project details + change key errors (Story 6.8 · Subtask 6.8.1) ─────
+// The PATCH /api/projects/[key] + DELETE .../aliases/[alias] write path throws
+// these; `projectErrorResponse` maps them:
+//   InvalidProjectNameError / InvalidIdentifierError / IdentifierUnchangedError
+//       / InvalidAvatarError                                 → 400
+//   IdentifierTakenError / IdentifierReservedError           → 409
+//   AliasNotFoundError                                       → 404
+// (admin-gating reuses NotProjectAdminError → 403 and ProjectNotFoundError → 404
+// from above / projectAccessService — no existence leak on a non-browser.)
+
+export class InvalidProjectNameError extends Error {
+  readonly code = 'INVALID_PROJECT_NAME' as const;
+  constructor() {
+    super('A project name is required and cannot be blank.');
+    this.name = 'InvalidProjectNameError';
+  }
+}
+
+// The new key is not a legal project key. STRICT (reject, don't normalize): an
+// explicit admin key change must not silently pad/truncate a malformed key the
+// way the create-time `normalizeIdentifier` does — renaming every issue to a key
+// the admin didn't type would be a surprising, hard-to-undo mutation. The shape
+// is the shipped column contract: 3–5 chars, uppercase A–Z / 0–9 (Jira likewise
+// rejects a malformed key rather than coercing it — decision-ladder rung 1).
+export class InvalidIdentifierError extends Error {
+  readonly code = 'INVALID_IDENTIFIER' as const;
+  constructor(identifier: string) {
+    super(`"${identifier}" is not a valid project key (use 3–5 uppercase letters or digits).`);
+    this.name = 'InvalidIdentifierError';
+  }
+}
+
+// The new key equals the current one — a typed no-op so the surface can tell
+// "nothing to change" apart from a real collision (and never runs the rewrite).
+export class IdentifierUnchangedError extends Error {
+  readonly code = 'IDENTIFIER_UNCHANGED' as const;
+  constructor(identifier: string) {
+    super(`The project key is already "${identifier}".`);
+    this.name = 'IdentifierUnchangedError';
+  }
+}
+
+// The key is the LIVE identifier of another project in the workspace.
+export class IdentifierTakenError extends Error {
+  readonly code = 'IDENTIFIER_TAKEN' as const;
+  constructor(identifier: string) {
+    super(`Another project in this workspace already uses the key "${identifier}".`);
+    this.name = 'IdentifierTakenError';
+  }
+}
+
+// The key is RESERVED by another project's previous-key alias. Distinct from
+// IdentifierTakenError so the UI can show distinct copy (the 6.8.3 design): a
+// reserved key is freed only by deleting that project or releasing its alias.
+export class IdentifierReservedError extends Error {
+  readonly code = 'IDENTIFIER_RESERVED' as const;
+  constructor(identifier: string) {
+    super(`The key "${identifier}" is reserved by another project's previous key.`);
+    this.name = 'IdentifierReservedError';
+  }
+}
+
+// An avatar icon/colour key that is not in the preset registry (lib/projects/avatar.ts).
+export class InvalidAvatarError extends Error {
+  readonly code = 'INVALID_AVATAR' as const;
+  constructor(field: 'icon' | 'color', value: string) {
+    super(`"${value}" is not a valid avatar ${field}.`);
+    this.name = 'InvalidAvatarError';
+  }
+}
+
+// No alias with this key belongs to the project (release of a non-existent
+// previous key). 404 — indistinguishable shape from a missing resource.
+export class AliasNotFoundError extends Error {
+  readonly code = 'ALIAS_NOT_FOUND' as const;
+  constructor(identifier: string) {
+    super(`No previous key "${identifier}" is reserved for this project.`);
+    this.name = 'AliasNotFoundError';
+  }
+}
+
 export class ProjectNotFoundError extends Error {
   readonly code = 'PROJECT_NOT_FOUND' as const;
   constructor(projectId: string) {

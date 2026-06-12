@@ -18,6 +18,7 @@
 // `issueListView.ts` — unit-tested in isolation.
 
 import {
+  customFieldIdOfFilterField,
   decodeFilterParam,
   encodeFilterParam,
   facetFilterToAst,
@@ -33,6 +34,7 @@ import {
   filterValueEditorKind,
   resolveFilterAst,
   validateFilterCondition,
+  validateResolvedCondition,
   type FilterFieldDef,
   type FilterValueEditorKind,
 } from '@/lib/filters/registry';
@@ -156,16 +158,19 @@ export interface AdvancedBuilderRow {
   value: FilterConditionValue | null;
 }
 
-/** The value-editor kinds Subtask 6.1.4 ships (built-in fields). The Epic-5
- * editors — label / component / CF-option pickers — are Subtask 6.1.5's rows;
- * until it lands, a URL carrying such a condition renders a degraded
- * read-only row (still filtering through the 6.1.2 compile path). */
-const BUILT_IN_EDITOR_KINDS: ReadonlySet<FilterValueEditorKind> = new Set([
+/** Every value-editor kind the builder ships. Subtask 6.1.4 shipped the
+ * built-in kinds; Subtask 6.1.5 adds the Epic-5 pickers (label / component /
+ * CF-option), so the whole `FilterValueEditorKind` union now has a row editor
+ * — the field menu offers every registry field. */
+const SUPPORTED_EDITOR_KINDS: ReadonlySet<FilterValueEditorKind> = new Set([
   'kind-select',
   'status-select',
   'priority-select',
   'member-select',
   'sprint-select',
+  'label-select',
+  'component-select',
+  'cf-option-select',
   'text',
   'number',
   'date',
@@ -174,15 +179,18 @@ const BUILT_IN_EDITOR_KINDS: ReadonlySet<FilterValueEditorKind> = new Set([
   'none',
 ]);
 
-/** The field defs the 6.1.4 builder offers in its field menu — the registry's
- * built-in entries (every def whose editors this subtask ships), in registry
- * (= menu) order. Parameterized for the registry-driven AC: a test (or 6.1.5)
- * passes an extended list and the rows render it with zero UI changes. */
+/** The field defs the builder offers in its field menu — every def whose
+ * editors are shipped, in registry (= menu) order. Pass the project's full
+ * field list (built-ins + the dynamic `cf:<id>` defs, via
+ * `buildAdvancedFilterFieldDefs`); defaults to the built-ins. The filter is
+ * the registry-driven guard: a field whose operator set needs an unshipped
+ * editor kind is dropped (none remain after 6.1.5, but a future operator/
+ * editor stays gated until its row lands). */
 export function advancedBuilderFields(
   fields: ReadonlyArray<FilterFieldDef> = FILTER_FIELDS,
 ): FilterFieldDef[] {
   return fields.filter((def) =>
-    def.operators.every((op) => BUILT_IN_EDITOR_KINDS.has(filterValueEditorKind(def, op))),
+    def.operators.every((op) => SUPPORTED_EDITOR_KINDS.has(filterValueEditorKind(def, op))),
   );
 }
 
@@ -192,14 +200,32 @@ export function rowCondition(row: AdvancedBuilderRow): FilterCondition {
   return { field: row.field, operator: row.operator, value: row.value };
 }
 
-/** True when the row validates against the registry for its (field, operator)
- * pair — the live-apply gate. Pending shapes (null / empty list / blank text /
+/**
+ * True when the row validates for its (field, operator, value) — the
+ * live-apply gate. Pending shapes (null / empty list / blank text /
  * half-filled range) all fail validation, which is exactly the designed
  * pending semantics; zero-arity operators (is empty / is not empty) are
- * complete with no value. */
-export function isRowComplete(row: AdvancedBuilderRow): boolean {
+ * complete with no value.
+ *
+ * `def` is the row's RESOLVED field def (Subtask 6.1.5): the built-in fields
+ * resolve through the static registry, but a dynamic `cf:<id>` field does NOT,
+ * so the builder passes the def it resolved from the project's definitions.
+ * `def === null` is a STALE FIELD (a custom field deleted out from under a
+ * URL/session) — never "complete" (its editor can't render), but kept in the
+ * applied AST by {@link astFromRows} so the condition isn't silently dropped.
+ * Omitting `def` falls back to the static registry (the built-in-only path the
+ * 6.1.1/6.1.4 tests use). A stale VALUE (a deleted option/label id) still
+ * passes — the value is structurally valid; staleness compiles to
+ * match-nothing server-side and is orthogonal to completeness.
+ */
+export function isRowComplete(row: AdvancedBuilderRow, def?: FilterFieldDef | null): boolean {
   try {
-    validateFilterCondition(rowCondition(row));
+    if (def === undefined) {
+      validateFilterCondition(rowCondition(row));
+    } else {
+      if (def === null) return false;
+      validateResolvedCondition(def, rowCondition(row));
+    }
     return true;
   } catch (err) {
     if (err instanceof FilterValidationError) return false;
@@ -207,15 +233,34 @@ export function isRowComplete(row: AdvancedBuilderRow): boolean {
   }
 }
 
-/** The AST the builder's complete rows currently say — what live-apply
- * writes to the URL (pending rows excluded). */
+/** Resolve a field's def for the apply gate — built-ins via the static
+ * registry, dynamic `cf:<id>` via the caller's resolver. */
+export type AdvancedFieldResolver = (field: FilterFieldId) => FilterFieldDef | null;
+
+/** True when a row should ride the applied AST (the URL + count + results):
+ * a complete row, OR a stale CUSTOM-FIELD row (`def === null` for a `cf:<id>`)
+ * — kept so a shared/saved URL whose field was deleted compiles to
+ * match-nothing instead of being silently dropped on the next edit (the 6.2
+ * saved-filter durability rule; the row shows the stale notice). */
+function isRowApplied(row: AdvancedBuilderRow, resolveDef?: AdvancedFieldResolver): boolean {
+  if (!resolveDef) return isRowComplete(row);
+  const def = resolveDef(row.field);
+  if (def === null) return customFieldIdOfFilterField(row.field) !== null;
+  return isRowComplete(row, def);
+}
+
+/** The AST the builder's applied rows currently say — what live-apply writes
+ * to the URL (pending rows excluded). With a `resolveDef` (Subtask 6.1.5),
+ * dynamic `cf:<id>` rows validate against their project def and stale-field
+ * rows are preserved; without one, the built-in static path. */
 export function astFromRows(
   combinator: FilterAst['combinator'],
   rows: AdvancedBuilderRow[],
+  resolveDef?: AdvancedFieldResolver,
 ): FilterAst {
   return {
     combinator,
-    conditions: rows.filter(isRowComplete).map(rowCondition),
+    conditions: rows.filter((row) => isRowApplied(row, resolveDef)).map(rowCondition),
   };
 }
 

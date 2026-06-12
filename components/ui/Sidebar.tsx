@@ -63,6 +63,13 @@ export interface SidebarItem {
   badge?: ReactNode;
   /** Marks the current route — gets `aria-current="page"` + active styling. */
   active?: boolean;
+  /**
+   * A designed-for, not-yet-built row (e.g. the settings area's Automation
+   * "Soon" slot). Renders as a non-interactive `<span aria-disabled>` with faint
+   * ink and no hover — its state is conveyed by the row's `badge`, not colour
+   * alone. The `href` is ignored.
+   */
+  disabled?: boolean;
 }
 
 export interface SidebarSection {
@@ -96,9 +103,28 @@ export interface SidebarProps {
 /** One nav row. Internal — composes Tooltip in collapsed mode. */
 function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boolean }) {
   const isActive = Boolean(item.active);
+  const isDisabled = Boolean(item.disabled);
+  const glyph = (
+    <span aria-hidden className="inline-flex [&_svg]:h-[18px] [&_svg]:w-[18px]">
+      {item.icon}
+    </span>
+  );
 
   if (collapsed) {
-    const link = (
+    // A disabled row is a non-interactive span (no href, no focus, no hover);
+    // the tooltip still surfaces its label so the icon-only rail stays legible.
+    const row = isDisabled ? (
+      <span
+        aria-disabled="true"
+        aria-label={item.label}
+        className={cn(
+          'mx-auto flex h-(--height-control) w-(--height-control) cursor-default select-none items-center justify-center rounded-(--radius-control)',
+          'text-(--el-text-faint)',
+        )}
+      >
+        {glyph}
+      </span>
+    ) : (
       <a
         href={item.href}
         aria-current={isActive ? 'page' : undefined}
@@ -112,15 +138,36 @@ function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boo
             'bg-(--el-sidebar-item-bg-active) text-(--el-accent) shadow-(--shadow-subtle) border border-(--el-sidebar-border)',
         )}
       >
-        <span aria-hidden className="inline-flex [&_svg]:h-[18px] [&_svg]:w-[18px]">
-          {item.icon}
-        </span>
+        {glyph}
       </a>
     );
     return (
       <Tooltip content={item.label} side="right">
-        {link}
+        {row}
       </Tooltip>
+    );
+  }
+
+  // Expanded, disabled — a faint non-interactive row; the badge ("Soon") carries
+  // the state in text, not colour alone (a11y).
+  if (isDisabled) {
+    return (
+      <span
+        aria-disabled="true"
+        className={cn(
+          'flex h-(--height-control) cursor-default select-none items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x)',
+          'font-sans text-sm text-(--el-text-faint)',
+        )}
+      >
+        <span
+          aria-hidden
+          className="inline-flex shrink-0 text-(--el-text-faint) [&_svg]:h-[18px] [&_svg]:w-[18px]"
+        >
+          {item.icon}
+        </span>
+        <span className="flex-1 truncate">{item.label}</span>
+        {item.badge ? <span className="shrink-0">{item.badge}</span> : null}
+      </span>
     );
   }
 
@@ -168,7 +215,7 @@ function SidebarSectionFrame({
   const rows = (
     <div className="flex flex-col gap-0.5">
       {section.items.map((item) => (
-        <SidebarNavItem key={item.href} item={item} collapsed={collapsed} />
+        <SidebarNavItem key={item.href || item.label} item={item} collapsed={collapsed} />
       ))}
     </div>
   );
@@ -184,7 +231,10 @@ function SidebarSectionFrame({
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
           )}
         >
-          <SectionLabel label={section.label} />
+          {/* Section captions sit on the sidebar surface (#f6f5f4), where the
+              default --el-text-muted undershoots WCAG AA at 11px; --el-text-secondary
+              is the AA-safe sidebar caption color. */}
+          <SectionLabel label={section.label} className="text-(--el-text-secondary)" />
           <ChevronDown
             aria-hidden
             className="h-3.5 w-3.5 text-(--el-text-muted) transition-transform group-data-[state=closed]:-rotate-90"
@@ -199,7 +249,10 @@ function SidebarSectionFrame({
 
   return (
     <div className="flex flex-col gap-1.5">
-      {section.label && !collapsed ? <SectionLabel label={section.label} className="px-2" /> : null}
+      {section.label && !collapsed ? (
+        // AA-safe sidebar caption color (see the collapsible branch above).
+        <SectionLabel label={section.label} className="px-2 text-(--el-text-secondary)" />
+      ) : null}
       {rows}
     </div>
   );

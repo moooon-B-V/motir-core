@@ -226,11 +226,12 @@ jobs:
       # script; here we run it explicitly because we don't run build.)
       - run: pnpm prisma migrate deploy
       - run: pnpm exec playwright install --with-deps chromium
-      # The at-scale journeys — board-at-scale (Story 3.5, Kanban) AND
-      # board-scrum-at-scale (Story 4.7, Scrum) — need the 3.5.1 cap/Done-age
-      # test seam configured, so they run in their own seam-set step below —
-      # exclude both here ("board(-scrum)?-at-scale" matches the two grep tags).
-      - run: pnpm test:e2e --grep-invert "board(-scrum)?-at-scale"
+      # The at-scale journeys — board-at-scale (Story 3.5, Kanban),
+      # board-scrum-at-scale (Story 4.7, Scrum) AND collab-at-scale (Story 5.6,
+      # the loaded issue) — self-seed heavy fixtures and run in their own
+      # cap-set steps below, so exclude all three here. The pattern matches the
+      # three grep tags: "board-at-scale", "board-scrum-at-scale", "collab-at-scale".
+      - run: pnpm test:e2e --grep-invert "(board(-scrum)?|collab)-at-scale"
       # Stories 3.5 + 4.7 — the cross-cutting board journeys AT SCALE (Kanban +
       # Scrum). The specs self-seed their fixtures (3.5.1 board-shaped · 4.7.1
       # sprint-shaped); these overrides (the 3.5.1 seam, forwarded to the dev
@@ -244,6 +245,19 @@ jobs:
         env:
           BOARD_ISSUE_CAP_OVERRIDE: '40'
           DONE_AGE_WINDOW_DAYS_OVERRIDE: '7'
+      # Story 5.6 (Subtask 5.6.3) — the collaboration-LOADED issue AT SCALE: the
+      # finding-#57 sentinel for Epic 5. The spec self-seeds the 5.6.1 fixture
+      # (`runCollabSeed()`) through the shipped services; these SEED_COLLAB_*
+      # overrides lower the heaviest knobs so the lane stays fast while every
+      # large collection still EXCEEDS its page size (comments 40 > 20,
+      # attachments 64 > 50, revisions 60+ > 20) so paging actually engages — the
+      # spec's beforeAll fails loud otherwise. workers=1, so the seed never races.
+      - name: E2E — collab at scale (Story 5.6)
+        run: pnpm test:e2e --grep "collab-at-scale"
+        env:
+          SEED_COLLAB_COMMENTS: '40'
+          SEED_COLLAB_CHURN_EDITS: '60'
+          SEED_COLLAB_SPREAD_ISSUES: '2'
       # Always upload the report — pass-runs are useful for debugging
       # flakes, and the report is small. The trace/video/screenshot
       # artifacts only exist for failures (config above), so a passing

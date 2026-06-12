@@ -98,7 +98,6 @@ test.describe('@smoke shell journeys', () => {
       { link: 'Work Items', url: '**/issues', heading: 'Work Items' },
       { link: 'Boards', url: '**/boards', heading: 'Boards' },
       { link: 'Reports', url: '**/reports', heading: 'Reports' },
-      { link: 'Settings', url: '**/settings/project', heading: 'Project settings' },
     ];
 
     for (const stop of stops) {
@@ -119,6 +118,20 @@ test.describe('@smoke shell journeys', () => {
         'page',
       );
     }
+
+    // Settings is the project-settings AREA entry (Story 6.5.2): clicking it SWAPS
+    // the project nav for the grouped settings rail — it's no longer a Primary-rail
+    // placeholder that merely gets an active mark. Verify the swap (the settings
+    // nav landmark appears, landing on Details) instead of a Primary-rail state.
+    await rail.getByRole('link', { name: 'Settings' }).click();
+    await page.waitForURL('**/settings/project');
+    await expect(page.getByRole('heading', { name: 'Details', exact: true })).toBeVisible();
+    const settingsRail = page.getByRole('navigation', { name: 'Project settings' });
+    await expect(settingsRail).toBeVisible();
+    await expect(settingsRail.getByRole('link', { name: 'Details' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
   });
 
   // ── 3. Collapse toggle persistence ────────────────────────────────────

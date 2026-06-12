@@ -28,9 +28,36 @@ export const chartColor = {
   average: 'var(--el-chart-average)',
   /** Axis-toned reference rule (the burndown's "today" vertical marker). */
   axis: 'var(--el-chart-axis)',
+  /** Distribution donut — the "None"/unset segment (always neutral grey, never a ramp slot). */
+  categoricalNone: 'var(--el-chart-cat-none)',
+  /** Created-vs-resolved — the created series line. */
+  created: 'var(--el-chart-created)',
+  /** Created-vs-resolved — the resolved series line. */
+  resolved: 'var(--el-chart-resolved)',
+  /** Difference fill where created outpaces resolved (backlog growing — red). */
+  deficit: 'var(--el-chart-deficit)',
+  /** Difference fill where resolved outpaces created (catching up — green). */
+  surplus: 'var(--el-chart-surplus)',
 } as const;
 
 export type ChartColor = (typeof chartColor)[keyof typeof chartColor];
+
+/**
+ * The categorical donut ramp (Story 6.3.4) — the distribution donut cycles
+ * these `--el-chart-cat-*` tokens in order for its segments. The "None"/unset
+ * group is NOT a ramp slot; it always uses `chartColor.categoricalNone`
+ * (neutral grey). Beyond the ramp length the donut rolls the remainder into a
+ * "+N more" legend row rather than repeating an indistinguishable hue.
+ */
+export const chartCategorical: readonly string[] = [
+  'var(--el-chart-cat-1)',
+  'var(--el-chart-cat-2)',
+  'var(--el-chart-cat-3)',
+  'var(--el-chart-cat-4)',
+  'var(--el-chart-cat-5)',
+  'var(--el-chart-cat-6)',
+  'var(--el-chart-cat-7)',
+];
 
 /** Margins around a chart's plot area (the band that holds axes + labels). */
 export interface ChartMargin {

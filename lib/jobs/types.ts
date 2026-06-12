@@ -124,6 +124,83 @@ export interface WorkItemTransitionedData {
   toStatusKey: string;
   /** The revision row recording the transition. */
   revisionId: string;
+  /**
+   * Automation provenance (Story 6.6 · Subtask 6.6.2). Set to the rule id when
+   * this transition was performed by an automation rule's `transition` action;
+   * absent on a user-driven move. The automation engine SKIPS any event
+   * carrying this — the verified Jira loop-prevention default (rules don't
+   * trigger rules). The 6.6.3 `transitioned`-trigger consumer reads it; the
+   * existing watcher/bell consumers ignore it.
+   */
+  viaAutomationRuleId?: string;
+}
+
+/**
+ * The `work-item/created` event payload (Story 6.6 · Subtask 6.6.2) — emitted
+ * AFTER a work-item create commits (never inside the tx: a rollback must not
+ * have fired a rule — the 5.1.2 rule), from the SHIPPED `workItemsService`
+ * create path. The automation engine's `created`-trigger consumer reads it; it
+ * is the same event the 5.7 stub anticipates for assignment notifications.
+ * Workspace-scoped; `projectId` lets the engine load the project's rules in one
+ * indexed read without re-fetching the item first.
+ */
+export interface WorkItemCreatedData {
+  workspaceId: string;
+  projectId: string;
+  workItemId: string;
+  /** The actor who created the item (a rule run is attributed to the rule
+   * owner, not this actor — the recorded 6.6 deviation). */
+  actorId: string;
+  /** Automation provenance — set when the create itself was performed by a
+   * rule action (none ship in 6.6.2, but the field exists so a future
+   * create-item action can't loop). The engine skips provenance-carrying
+   * events. */
+  viaAutomationRuleId?: string;
+}
+
+/**
+ * The `work-item/field.changed` event payload (Story 6.6 · Subtask 6.6.2) —
+ * emitted AFTER a free-form work-item UPDATE commits, carrying the built-in
+ * field ids that actually changed (computed from the 1.4.6 revision diff). The
+ * automation engine's `field_changed`-trigger consumer narrows by its
+ * configured field id against `changedFields`; `assignee` is the verified
+ * "assigned" preset. Status transitions DON'T ride this event — they ride
+ * `work-item/transitioned` from the typed-workflow path. Emitted only when at
+ * least one automatable built-in field (assignee / priority / dueDate /
+ * estimate) changed, so the event is never a no-op for the engine.
+ */
+export interface WorkItemFieldChangedData {
+  workspaceId: string;
+  projectId: string;
+  workItemId: string;
+  /** The actor who edited the item. */
+  actorId: string;
+  /** The changed built-in field ids — a subset of
+   * `AUTOMATION_FIELD_CHANGED_FIELDS` (assignee / priority / dueDate /
+   * estimate). Always non-empty (the emit gate). */
+  changedFields: string[];
+  /** The `work_item_revision` row recording the edit. */
+  revisionId: string;
+  /** Automation provenance — set when the edit was performed by a rule's
+   * `set_field` action; the engine skips provenance-carrying events (loop
+   * prevention). */
+  viaAutomationRuleId?: string;
+}
+
+/**
+ * The `filter-subscription/deliver` event payload (Story 6.2 · Subtask 6.2.5)
+ * — one per DUE subscription, enqueued by the hourly `system.filter-
+ * subscription-tick` cron so each delivery retries/dead-letters independently
+ * (the watcher fan-out shape). The consumer (savedFilterSubscriptionsService.
+ * deliver) resolves the filter AS the subscriber and enqueues the durable
+ * `email.send`. Workspace-scoped — the tick reads the denormalized
+ * `workspaceId` so it never touches the RLS-protected saved_filter.
+ */
+export interface FilterSubscriptionDeliverData {
+  workspaceId: string;
+  subscriptionId: string;
+  /** The per-occurrence email idempotency key — one mail per scheduled tick. */
+  occurrenceKey: string;
 }
 
 /**
@@ -141,10 +218,15 @@ export interface WorkItemTransitionedData {
 export interface JobEventDataMap {
   'system.daily-health-check': SystemScheduledData;
   'system.attachment-gc': SystemScheduledData;
+  'system.filter-subscription-tick': SystemScheduledData;
+  'system.automation-retention-sweep': SystemScheduledData;
+  'filter-subscription/deliver': FilterSubscriptionDeliverData;
   'email.send': EmailSendData;
   'work-item/comment.created': WorkItemCommentCreatedData;
   'work-item/mentioned': WorkItemMentionedData;
   'work-item/transitioned': WorkItemTransitionedData;
+  'work-item/created': WorkItemCreatedData;
+  'work-item/field.changed': WorkItemFieldChangedData;
 }
 
 /** Every registered event/job name. */

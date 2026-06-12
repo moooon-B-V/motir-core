@@ -21,3 +21,8 @@ export const AUTOMATION_RULE_NAME_MAX_LENGTH = 120;
  * number). The engine (6.6.2) enforces it; 6.6.1 ships the column + the
  * enable-resets-the-counter rule. */
 export const AUTOMATION_AUTO_DISABLE_THRESHOLD = 10;
+
+/** How long an execution-audit row is retained before the daily sweep deletes
+ * it (the verified Jira retention). The engine's `sweepExpiredExecutions`
+ * (6.6.2) enforces it. */
+export const AUTOMATION_EXECUTION_RETENTION_DAYS = 90;

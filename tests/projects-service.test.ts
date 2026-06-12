@@ -4,7 +4,11 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { ProjectNotFoundError, ProjectWorkspaceMismatchError } from '@/lib/projects/errors';
+import {
+  NotProjectAdminError,
+  ProjectNotFoundError,
+  ProjectWorkspaceMismatchError,
+} from '@/lib/projects/errors';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 import { truncateAuthTables } from './helpers/db';
 
@@ -71,18 +75,25 @@ describe('createProject — happy path', () => {
       name: 'Motir Core',
     });
 
-    // DTO shape: id / name / slug / identifier / archivedAt ONLY — never a
-    // raw Prisma row (no createdAt, no lastWorkItemNumber). archivedAt rides
-    // on the DTO so the shell can flag an archived active project (#29.2);
-    // a freshly created project is always non-archived (null).
+    // DTO shape: id / name / slug / identifier / archivedAt / accessLevel +
+    // the Story 6.8 avatar fields ONLY — never a raw Prisma row (no createdAt,
+    // no lastWorkItemNumber). archivedAt rides on the DTO so the shell can flag
+    // an archived active project (#29.2); a freshly created project is always
+    // non-archived (null). avatarIcon/avatarColor backfill to null (the
+    // mono-identifier rendering); `previousKeys` is NOT present here — it loads
+    // only on the details-surface read path (6.8), not on a plain create.
     expect(Object.keys(project).sort()).toEqual([
       'accessLevel',
       'archivedAt',
+      'avatarColor',
+      'avatarIcon',
       'id',
       'identifier',
       'name',
       'slug',
     ]);
+    expect(project.avatarIcon).toBeNull();
+    expect(project.avatarColor).toBeNull();
     expect(project.name).toBe('Motir Core');
     expect(project.slug).toBe('motir-core');
     expect(project.archivedAt).toBeNull();
@@ -616,6 +627,43 @@ describe('archiveProject + listProjects', () => {
 
     const archivedRow = await db.project.findUnique({ where: { id: drop.id } });
     expect(archivedRow?.archivedAt).not.toBeNull();
+  });
+
+  it('blocks archiveProject for a non-admin member but allows the workspace owner (admin-gated — Story 6.5.3)', async () => {
+    // The Details "Danger zone" (6.5.3) is admin-only in the UI; the archive
+    // write is independently admin-gated server-side so a non-admin who reaches
+    // the Server Action directly is rejected. A plain workspace member CAN
+    // browse an `open` project (canBrowse) but is not a project admin
+    // (canManage=false) → NotProjectAdminError. The owner is the always-pass
+    // tier and still archives.
+    const { owner, workspace } = await makeWorkspace('owner@example.com', 'Acme');
+    const member = await makeUser('member@example.com', 'Member');
+    await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
+    const project = await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'Existing',
+    });
+
+    await expect(
+      projectsService.archiveProject({
+        projectId: project.id,
+        workspaceId: workspace.id,
+        actorUserId: member.id,
+      }),
+    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    // Not archived by the rejected attempt.
+    const stillActive = await db.project.findUnique({ where: { id: project.id } });
+    expect(stillActive?.archivedAt).toBeNull();
+
+    // The owner (always-pass tier) archives successfully.
+    await projectsService.archiveProject({
+      projectId: project.id,
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+    });
+    const archived = await db.project.findUnique({ where: { id: project.id } });
+    expect(archived?.archivedAt).not.toBeNull();
   });
 
   it('archiving the same project a second time succeeds and is a no-op (re-stamps archivedAt)', async () => {

@@ -71,3 +71,13 @@ export class InvalidSavedFilterOwnerError extends Error {
     this.name = 'InvalidSavedFilterOwnerError';
   }
 }
+
+/** A subscribe request with an out-of-range hour / weekday, or a `weekly`
+ * schedule missing its day (→ 422). Subtask 6.2.5. */
+export class InvalidSubscriptionScheduleError extends Error {
+  readonly code = 'INVALID_SUBSCRIPTION_SCHEDULE' as const;
+  constructor(detail: string) {
+    super(detail);
+    this.name = 'InvalidSubscriptionScheduleError';
+  }
+}

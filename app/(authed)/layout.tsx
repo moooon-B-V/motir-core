@@ -50,20 +50,27 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
     ? await projectsService.getActiveProject(session.user.id, ctx.workspaceId)
     : null;
 
-  // The actor's EDIT capability on the active project (Story 6.4.6) — threaded
-  // into the client via ProjectAccessProvider so role-gated affordances (create
-  // buttons, board drag, the issue-detail field pickers) render disabled with a
-  // tooltip for a viewer / a member on a limited project. No active project →
-  // there's nothing to edit (the create affordances are hidden anyway).
-  const canEdit =
+  // The actor's settings-area capabilities on the active project — ONE round-trip
+  // (Subtask 6.5.2 `getSettingsCapabilities`) feeding two consumers:
+  //   * `canEdit` → ProjectAccessProvider (Story 6.4.6): role-gated affordances
+  //     (create buttons, board drag, the issue-detail field pickers) render
+  //     disabled with a tooltip for a viewer / a member on a limited project.
+  //   * `{ canBrowse, canManage }` → SidebarNav's settings-nav registry filter
+  //     when the rail is in the project-settings area (a non-browser sees no nav
+  //     entry; admin-only entries — Story 6.6 — gate on canManage).
+  // No active project → there's nothing to edit (the affordances are hidden) and
+  // no settings area to enter.
+  const settingsCaps =
     ctx && activeProject
-      ? (
-          await projectAccessService.getCapabilities(activeProject.id, {
-            userId: ctx.userId,
-            workspaceId: ctx.workspaceId,
-          })
-        ).canEdit
-      : false;
+      ? await projectAccessService.getSettingsCapabilities(activeProject.id, {
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        })
+      : null;
+  const canEdit = settingsCaps?.canEdit ?? false;
+  const settingsAccess = settingsCaps
+    ? { canBrowse: settingsCaps.canBrowse, canManage: settingsCaps.canManage }
+    : undefined;
 
   const activeWorkspaceId = ctx?.workspaceId ?? null;
 
@@ -103,6 +110,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                   projects={projects}
                   variant="rail"
                   readyCount={readyCount}
+                  settingsAccess={settingsAccess}
                 />
               }
             >
@@ -124,6 +132,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                 projects={projects}
                 variant="drawer"
                 readyCount={readyCount}
+                settingsAccess={settingsAccess}
               />
             </SidebarDrawer>
 
@@ -136,6 +145,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
               projects={projects}
               activeProjectId={activeProject?.id ?? null}
               hasProject={Boolean(activeProject)}
+              settingsAccess={settingsAccess}
             />
           </ProjectAccessProvider>
         </CreateIssueProvider>

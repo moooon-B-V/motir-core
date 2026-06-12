@@ -5,6 +5,7 @@ import {
   BuiltinSavedFilterImmutableError,
   InvalidSavedFilterNameError,
   InvalidSavedFilterOwnerError,
+  InvalidSubscriptionScheduleError,
   SavedFilterForbiddenError,
   SavedFilterNameConflictError,
   SavedFilterNotFoundError,
@@ -45,6 +46,7 @@ export function mapSavedFilterError(err: unknown): NextResponse | null {
   if (
     err instanceof InvalidSavedFilterNameError ||
     err instanceof InvalidSavedFilterOwnerError ||
+    err instanceof InvalidSubscriptionScheduleError ||
     err instanceof FilterValidationError
   ) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });

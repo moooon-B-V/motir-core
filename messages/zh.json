@@ -209,6 +209,29 @@
       "view": "查看工作项",
       "fallback": "或将此链接复制到浏览器中打开：",
       "reason": "你收到此邮件是因为你正在关注{identifier}。"
+    },
+    "filterSubscription": {
+      "subject": "“{filter}”{count, plural, =0 {没有结果} other {有 # 条结果}}",
+      "preview": "{filter} {count, plural, =0 {没有匹配的工作项} other {有 # 条匹配的工作项}}",
+      "greeting": "你好 {name}，",
+      "lede": "你在 {project} 中保存的筛选器「{filter}」匹配到 {count, plural, other {# 条工作项}}。",
+      "ledeEmpty": "你在 {project} 中保存的筛选器「{filter}」目前没有匹配到工作项。",
+      "truncated": "显示 {total} 条中的前 {shown} 条。打开筛选器查看全部。",
+      "view": "在 Motir 中查看",
+      "fallback": "或将此链接复制到浏览器：",
+      "reason": "你收到此邮件是因为你订阅了「{filter}」筛选器。",
+      "unsubscribe": "取消订阅此筛选器"
+    },
+    "automationRuleFailed": {
+      "subject": "你的自动化规则“{rule}”执行失败",
+      "preview": "自动化规则“{rule}”未能运行",
+      "greeting": "你好 {name}：",
+      "lede": "你的自动化规则“{rule}”上次运行时执行失败。",
+      "errorLabel": "错误：{detail}",
+      "autoDisabled": "它已达到连续失败上限，因此我们已将其关闭。请修复问题后重新启用以恢复运行。",
+      "view": "管理自动化规则",
+      "fallback": "或将此链接复制到浏览器：",
+      "reason": "你收到此邮件是因为你是该自动化规则的所有者。"
     }
   },
   "auth": {
@@ -544,6 +567,14 @@
     "advancedFootHint": "{count}/{cap}个条件 · 实时生效",
     "advancedCapReached": "条件数量已达上限（{cap}个），移除一个后才能继续添加。",
     "advancedPendingNote": "尚未生效——选择一个值后此条件才会启用。",
+    "advancedStaleNote": "该值在此项目中已不存在——此条件不会匹配任何内容。",
+    "advancedStaleFieldNote": "该字段已不存在——此条件不会匹配任何内容。",
+    "advancedStaleValue": "未知值",
+    "advancedFieldUnknownField": "未知字段",
+    "advancedGroupFields": "字段",
+    "advancedGroupCustomFields": "自定义字段",
+    "advancedGroupOther": "其他",
+    "advancedArchivedOption": "{label}（已归档）",
     "advancedRemoveCondition": "移除条件{n}",
     "advancedValuesAria": "{field}的值",
     "advancedAddValuePlaceholder": "添加…",
@@ -567,6 +598,8 @@
     "advancedFieldDue": "截止日期",
     "advancedFieldStoryPoints": "故事点",
     "advancedFieldEstimate": "预估工时",
+    "advancedFieldLabel": "标签",
+    "advancedFieldComponent": "模块",
     "advancedOpIsAnyOf": "为其中任一",
     "advancedOpIsNoneOf": "不为其中任一",
     "advancedOpIsEmpty": "为空",
@@ -775,6 +808,42 @@
     }
   },
   "settings": {
+    "nav": {
+      "eyebrow": "项目设置",
+      "backToProject": "返回{projectName}",
+      "soon": "即将推出",
+      "group": {
+        "general": "常规",
+        "access": "访问",
+        "work": "工作",
+        "automation": "自动化"
+      },
+      "details": "详情",
+      "members": "成员与访问",
+      "workflow": "工作流",
+      "board": "面板",
+      "estimation": "估算",
+      "fields": "字段",
+      "components": "组件",
+      "rules": "规则"
+    },
+    "area": {
+      "noProjectTitle": "未选择项目",
+      "noProjectDescription": "从切换器中选择一个项目，或从工作台创建一个项目，以管理其设置。"
+    },
+    "details": {
+      "title": "详情",
+      "subtitle": "项目名称、标识与头像。",
+      "cardTitle": "项目详情",
+      "roleAdmin": "管理员",
+      "roleReadOnly": "只读",
+      "fieldAvatar": "头像",
+      "fieldName": "名称",
+      "fieldKey": "标识",
+      "fieldWorkspace": "工作区",
+      "fieldCreated": "创建时间",
+      "editingSeam": "项目名称、标识与头像的编辑——以及更改项目标识并自动重定向旧标识——将随项目详情编辑功能一起推出。目前这些内容均为只读。"
+    },
     "workspace": {
       "empty": {
         "title": "还没有工作区",
@@ -1729,6 +1798,103 @@
       "deletedToast": "筛选器已删除",
       "errorTitle": "无法删除筛选器",
       "errorGeneric": "出了点问题，请重试。"
+    },
+    "dropdown": {
+      "label": "已保存",
+      "trigger": "已保存筛选器——应用、收藏或搜索",
+      "searchLabel": "查找筛选器",
+      "searchPlaceholder": "查找筛选器…",
+      "starred": "已收藏",
+      "mine": "我的筛选器",
+      "project": "项目筛选器",
+      "defaults": "默认",
+      "emptyStarred": "尚无收藏的筛选器——收藏筛选器即可固定在此。",
+      "emptyMine": "你还没有保存任何筛选器。",
+      "emptyProject": "尚无与此项目共享的筛选器。",
+      "viewAll": "查看全部筛选器",
+      "error": "无法加载筛选器，请重试。"
+    },
+    "save": {
+      "title": "保存筛选器",
+      "nameLabel": "名称",
+      "namePlaceholder": "筛选器名称",
+      "descriptionLabel": "描述（可选）",
+      "descriptionPlaceholder": "此筛选器用于什么？",
+      "visibilityLegend": "谁可以看到此筛选器？",
+      "duplicateName": "此项目中已存在名为“{name}”的筛选器。",
+      "submit": "保存筛选器",
+      "cancel": "取消",
+      "savedToast": "筛选器已保存",
+      "errorTitle": "无法保存筛选器",
+      "errorGeneric": "出了点问题，请重试。"
+    },
+    "applied": {
+      "barAria": "已应用的筛选器",
+      "edited": "已修改",
+      "save": "保存",
+      "saveAs": "另存为",
+      "discard": "放弃更改",
+      "savedToast": "筛选器已更新",
+      "overwriteError": "无法保存你的更改",
+      "nonOwnerTooltip": "只有拥有者（{owner}）才能覆盖此筛选器——「另存为」会创建你自己的副本。",
+      "chipAriaShared": "已应用的筛选器：{name}（已与项目共享）——打开已保存筛选器",
+      "chipAriaPrivate": "已应用的筛选器：{name}（私有）——打开已保存筛选器",
+      "chipAriaBuiltin": "已应用的筛选器：{name}（内置）——打开已保存筛选器"
+    },
+    "subscribeAction": "订阅…",
+    "subscribe": {
+      "title": "订阅「{name}」",
+      "loadError": "无法加载你的订阅，请重试。",
+      "frequencyLabel": "频率",
+      "frequency": {
+        "daily": "每天",
+        "weekdays": "工作日",
+        "weekly": "每周"
+      },
+      "dayLabel": "星期",
+      "timeLabel": "时间",
+      "hourOption": "{hour} UTC",
+      "weekday": {
+        "0": "星期日",
+        "1": "星期一",
+        "2": "星期二",
+        "3": "星期三",
+        "4": "星期四",
+        "5": "星期五",
+        "6": "星期六"
+      },
+      "explainer": "按工作区时区（UTC）将前 50 条结果和总数发送到你的邮箱。这是一份报告而非提醒——即使没有匹配项也会发送。",
+      "subscribe": "订阅",
+      "save": "保存更改",
+      "cancel": "取消",
+      "changeSchedule": "更改计划",
+      "unsubscribe": "取消订阅",
+      "subscribedTitle": "已订阅",
+      "summary": {
+        "daily": "每天 {time} UTC",
+        "weekdays": "工作日 {time} UTC"
+      },
+      "summaryWeekly": "每周{day} {time} UTC",
+      "savedToast": "已订阅「{name}」",
+      "unsubscribedToast": "已取消订阅「{name}」",
+      "saveError": "无法更新你的订阅，请重试。"
+    }
+  },
+  "unsubscribeFilters": {
+    "confirm": {
+      "title": "取消订阅此筛选器？",
+      "body": "你将不再收到此保存筛选器的定时结果邮件。",
+      "action": "取消订阅"
+    },
+    "done": {
+      "title": "已取消订阅",
+      "body": "你将不再收到此筛选器的邮件。你可以随时在「筛选器」目录中重新订阅。",
+      "action": "前往工作项"
+    },
+    "invalid": {
+      "title": "此链接无效",
+      "body": "此取消订阅链接格式有误或已被使用。如果你仍在收到邮件，请在「筛选器」目录中取消订阅。",
+      "action": "前往工作项"
     }
   }
 }

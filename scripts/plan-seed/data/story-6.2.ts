@@ -80,7 +80,7 @@ import type { PlanStory } from '../types';
 export const story_6_2: PlanStory = {
   id: '6.2',
   title: 'Saved filters',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     "Persist the 6.1 filter builder's state as **named saved filters**: a project-scoped " +
     '`saved_filter` entity owned by its creator, carrying the SAME versioned FilterAST envelope ' +
@@ -295,7 +295,7 @@ export const story_6_2: PlanStory = {
       id: '6.2.3',
       title:
         'Save + apply UI on /issues — Save/Save-as with dirty state, the filter dropdown (starred/mine/project/defaults), name chip, star toggle',
-      status: 'blocked',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
@@ -376,7 +376,7 @@ export const story_6_2: PlanStory = {
       id: '6.2.5',
       title:
         'Filter subscriptions — schedule schema + Inngest cron delivery (results email, 50-row cap, deep link) + subscribe/unsubscribe UI',
-      status: 'blocked',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
@@ -427,7 +427,7 @@ export const story_6_2: PlanStory = {
       id: '6.2.6',
       title:
         'Story tests — permission/visibility matrix + persist→resolve properties + the save→share→subscribe E2E + a11y sweep',
-      status: 'blocked',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,

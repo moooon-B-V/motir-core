@@ -8,6 +8,7 @@ import type {
   ResolvedSavedFilterDto,
   SavedFilterDependentsDto,
   SavedFilterPageDto,
+  SavedFilterSubscriptionDto,
   SavedFilterSummaryDto,
 } from '@/lib/dto/savedFilters';
 
@@ -89,6 +90,51 @@ export async function resolveFilter(
   return res.json() as Promise<ResolvedSavedFilterDto>;
 }
 
+export interface CreateFilterInput {
+  name: string;
+  description?: string | null;
+  visibility: 'private' | 'project';
+  /** The `?filter=v1:` param string the builder holds (one codec, two
+   * carriers) — the 6.2.1 POST persists it as the stored envelope. */
+  filter: string;
+}
+
+/** Create a saved filter from the current builder AST (the /issues-side
+ * Save / Save-as — Subtask 6.2.3). */
+export async function createFilter(
+  projectKey: string,
+  input: CreateFilterInput,
+): Promise<SavedFilterSummaryDto> {
+  const res = await ensureOk(
+    await fetch(base(projectKey), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+  );
+  const data = (await res.json()) as { filter: SavedFilterSummaryDto };
+  return data.filter;
+}
+
+/** Overwrite an existing filter's CRITERIA in place (the owner/admin Save —
+ * Subtask 6.2.3; no dialog). Distinct from {@link updateFilter}, which edits
+ * metadata only. */
+export async function overwriteFilterCriteria(
+  projectKey: string,
+  filterId: string,
+  filterParam: string,
+): Promise<SavedFilterSummaryDto> {
+  const res = await ensureOk(
+    await fetch(`${base(projectKey)}/${encodeURIComponent(filterId)}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ filter: filterParam }),
+    }),
+  );
+  const data = (await res.json()) as { filter: SavedFilterSummaryDto };
+  return data.filter;
+}
+
 export interface UpdateFilterInput {
   name?: string;
   description?: string | null;
@@ -155,6 +201,49 @@ export async function setStar(
   );
   const data = (await res.json()) as { filter: SavedFilterSummaryDto };
   return data.filter;
+}
+
+export type { SavedFilterSubscriptionDto };
+
+const subscriptionUrl = (projectKey: string, filterId: string) =>
+  `${base(projectKey)}/${encodeURIComponent(filterId)}/subscription`;
+
+export interface SubscribeInput {
+  schedule: 'daily' | 'weekdays' | 'weekly';
+  weekday?: number | null;
+  hour: number;
+}
+
+/** The actor's subscription to a filter, or null (not subscribed). */
+export async function getSubscription(
+  projectKey: string,
+  filterId: string,
+): Promise<SavedFilterSubscriptionDto | null> {
+  const res = await ensureOk(await fetch(subscriptionUrl(projectKey, filterId)));
+  const data = (await res.json()) as { subscription: SavedFilterSubscriptionDto | null };
+  return data.subscription;
+}
+
+/** Subscribe (or re-schedule) the actor to a filter. */
+export async function subscribe(
+  projectKey: string,
+  filterId: string,
+  input: SubscribeInput,
+): Promise<SavedFilterSubscriptionDto> {
+  const res = await ensureOk(
+    await fetch(subscriptionUrl(projectKey, filterId), {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+  );
+  const data = (await res.json()) as { subscription: SavedFilterSubscriptionDto };
+  return data.subscription;
+}
+
+/** Unsubscribe the actor from a filter (idempotent). */
+export async function unsubscribe(projectKey: string, filterId: string): Promise<void> {
+  await ensureOk(await fetch(subscriptionUrl(projectKey, filterId), { method: 'DELETE' }));
 }
 
 export interface ProjectMemberOption {

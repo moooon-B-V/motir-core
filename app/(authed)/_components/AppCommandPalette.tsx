@@ -20,6 +20,11 @@ import {
 import { CommandPalette, type CommandGroup } from '@/components/ui/CommandPalette';
 import { useTheme } from '@/lib/contexts/theme-context';
 import { signOut } from '@/lib/auth/client';
+import {
+  PROJECT_SETTINGS_ROUTES,
+  visibleSettingsNav,
+  type SettingsNavCapabilities,
+} from '@/lib/settings/projectSettingsNav';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
 import type { ThemePattern } from '@/lib/theme/types';
@@ -52,6 +57,12 @@ export interface AppCommandPaletteProps {
   activeProjectId: string | null;
   /** Whether an active project exists — gates the project-scoped nav actions. */
   hasProject: boolean;
+  /**
+   * The actor's settings-area capabilities (Subtask 6.5.2) — filters the
+   * per-section project-settings deep links to the ones they can open. Omitted
+   * when there's no active project (no settings sections are shown).
+   */
+  settingsAccess?: SettingsNavCapabilities;
 }
 
 export function AppCommandPalette({
@@ -60,8 +71,10 @@ export function AppCommandPalette({
   projects,
   activeProjectId,
   hasProject,
+  settingsAccess,
 }: AppCommandPaletteProps) {
   const t = useTranslations('shell');
+  const ts = useTranslations('settings');
   const { open, setOpen } = useCommandPalette();
   const { openCreateIssue, canCreate } = useCreateIssue();
   const router = useRouter();
@@ -167,13 +180,37 @@ export function AppCommandPalette({
       },
     );
   }
-  navActions.push({
-    id: 'nav-settings',
-    label: t('commandPalette.goToSettings'),
-    icon: <Settings />,
-    onSelect: () => go(hasProject ? '/settings/project' : '/settings/workspace'),
-  });
+  // Settings: without a project there's nothing project-scoped to configure, so a
+  // single "Go to settings" deep-links to the WORKSPACE settings. WITH a project,
+  // the per-section project-settings entries below replace it (the 6.5.2 registry).
+  if (!hasProject) {
+    navActions.push({
+      id: 'nav-settings',
+      label: t('commandPalette.goToSettings'),
+      icon: <Settings />,
+      onSelect: () => go('/settings/workspace'),
+    });
+  }
   groups.push({ heading: t('commandPalette.navigationHeading'), actions: navActions });
+
+  // Project settings — per-section deep links generated FROM the settings-nav
+  // registry (Subtask 6.5.2), filtered by the actor's access. A new settings page
+  // appears here automatically by adding a registry entry (no hand-kept list).
+  if (hasProject) {
+    const caps: SettingsNavCapabilities = settingsAccess ?? { canBrowse: false, canManage: false };
+    const settingsEntries = visibleSettingsNav(caps, PROJECT_SETTINGS_ROUTES);
+    if (settingsEntries.length > 0) {
+      groups.push({
+        heading: ts('nav.eyebrow'),
+        actions: settingsEntries.map((entry) => ({
+          id: `settings-${entry.id}`,
+          label: ts(entry.labelKey),
+          icon: <entry.icon />,
+          onSelect: () => go(entry.href),
+        })),
+      });
+    }
+  }
 
   // The active workspace/project isn't a switch target — show it by name with
   // a "Current" tag, and make selecting it a no-op (just closes the palette).

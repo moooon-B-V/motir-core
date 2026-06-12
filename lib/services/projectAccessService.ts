@@ -276,6 +276,29 @@ export const projectAccessService = {
   },
 
   /**
+   * The actor's PROJECT-SETTINGS-area capabilities — `{ canBrowse, canEdit,
+   * canManage }` in ONE `resolveInputs` round-trip (Story 6.5 · Subtask 6.5.2).
+   * Feeds the (authed) shell: `canEdit` drives the `ProjectAccessProvider`
+   * edit-affordance gating (unchanged), while `{ canBrowse, canManage }` drive
+   * the settings-nav registry's per-entry `access` predicates (a non-browser
+   * sees neither nav entry nor page; admin-only entries — Story 6.6 — gate on
+   * `canManage`). Replacing the bare `getCapabilities` call in the layout with
+   * this keeps the round-trip count at one. Throws only ProjectNotFoundError.
+   */
+  async getSettingsCapabilities(
+    projectId: string,
+    ctx: AccessActorContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ canBrowse: boolean; canEdit: boolean; canManage: boolean }> {
+    const inputs = await resolveInputs(projectId, ctx, tx);
+    return {
+      canBrowse: canBrowse(inputs),
+      canEdit: canEdit(inputs),
+      canManage: canManageProject(inputs),
+    };
+  },
+
+  /**
    * The actor's project-ADMIN capability — `{ canBrowse, canManage }`. The
    * non-throwing form, for the admin-only settings surfaces (automation rules,
    * Story 6.6) that render their nav entry + page only when `canManage`. Throws
