@@ -376,6 +376,24 @@
   --el-chart-plot: var(--color-surface-soft); /* plot background fill */
   --el-chart-grid: var(--color-border); /* gridlines */
   --el-chart-axis: var(--color-steel); /* axis line + tick labels */
+  /* Story 6.3 dashboards (6.3.4) — the categorical donut ramp + the
+     created/resolved series + the deficit/surplus difference fills. Same
+     growth pattern: map to existing Tier-0 vars, so the dark block re-skins
+     them automatically. The donut cycles cat-1..7; "None"/unset is always
+     cat-none (neutral grey); created/resolved read by line + legend label,
+     never colour alone (finding #35). */
+  --el-chart-cat-1: var(--color-primary); /* distribution donut segment 1 */
+  --el-chart-cat-2: var(--color-info); /* segment 2 */
+  --el-chart-cat-3: var(--color-success); /* segment 3 */
+  --el-chart-cat-4: var(--color-warning); /* segment 4 */
+  --el-chart-cat-5: var(--color-accent-teal); /* segment 5 */
+  --el-chart-cat-6: var(--color-accent); /* segment 6 */
+  --el-chart-cat-7: var(--color-charcoal); /* segment 7 (ramp length) */
+  --el-chart-cat-none: var(--color-stone); /* the "None" / unset group */
+  --el-chart-created: var(--color-info); /* created-vs-resolved: created line */
+  --el-chart-resolved: var(--color-success); /* created-vs-resolved: resolved line */
+  --el-chart-deficit: var(--color-destructive); /* fill where created > resolved */
+  --el-chart-surplus: var(--color-success); /* fill where resolved > created */
 
   /* ── Code/mono (used by /tokens reference route) ───────────────── */
   --el-code-bg: var(--color-muted);
