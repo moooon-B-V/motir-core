@@ -506,7 +506,7 @@ export const story_6_3: PlanStory = {
       id: '6.3.6',
       title:
         'Reports hub at /reports + the two built-in report pages (created-vs-resolved, status distribution) with the verified Jira configs',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
