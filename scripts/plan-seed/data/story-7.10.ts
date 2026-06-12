@@ -82,13 +82,42 @@ import type { PlanStory } from '../types';
  * `planned`), and the admin UI (7.10.6) depends on it and is `blocked`. No
  * improvised admin screen (notes.html #31 — the design-gate rule).
  *
- * **Scope (the seven cards).** the `Lesson` store schema + repo/service on the
+ * **The self-improving mechanism (the dogfood that closes the quality loop).**
+ * Capturing a lesson is only HALF the loop — a lesson the planner notes but
+ * nobody can act on is a private regret. So when the capture loop (7.10.4)
+ * records a mistake, motir-ai ALSO files a `kind: bug` work item INTO THE
+ * PROJECT (7.10.8) — the planning gap becomes a trackable, fixable, assignable
+ * item in the very backlog the planner manages. This is **Motir using Motir on
+ * Motir**: the planner files bugs about its OWN planning mistakes through the
+ * same write authority an agent uses. The mechanism is GENERAL (any tenant's
+ * project), but the FIRST / canonical instance is Motir's own planner, while
+ * building Motir, filing bugs into the live `motir` / `PROD` project — the
+ * dogfood that proves the whole learning loop end-to-end: mistake captured →
+ * `create_work_item` → a bug appears in the tracker the team already watches.
+ * It is the first self-improving mechanism in the system: the quality loop is
+ * demonstrated by turning the tool on itself.
+ *
+ * **The write path — the AI never writes directly (architecture #1).** Per the
+ * locked 7.1 boundary, motir-ai holds NO write credential to the plan tree; it
+ * REQUESTS a create through motir-core's write authority. The bug is filed via
+ * the SAME core-side path every other write rides: the MCP `create_work_item`
+ * tool (Story 7.8 — verified the `kind: bug` bug-logging tool, the "agents log
+ * bugs via the Motir MCP" protocol) and/or the 7.1.6 persist callback
+ * (`POST /api/internal/ai/plan-delta`, committed through `workItemsService`
+ * with every 6.4 permission + tenant guard). Both are motir-core authority; the
+ * AI proposes, core persists. So 7.10.8 depends BACKWARD on 7.8.5 (the
+ * `create_work_item` tool, 7.8 < 7.10 — no forward dep) and 7.10.4 (the capture
+ * that triggers it).
+ *
+ * **Scope (the eight cards).** the `Lesson` store schema + repo/service on the
  * motir-ai DB (7.10.1); the curated BASE lesson set ported from notes.html as
  * seed content (7.10.2, `type: content`); injecting the relevant lessons into
  * the planner at plan time inside the 7.3.2/7.4 loop (7.10.3); the capture loop
  * where a correction becomes a new tenant lesson (7.10.4); the lessons admin
  * view design (7.10.5) + the admin UI in motir-core (7.10.6); the test suite
- * over store + injection + capture (7.10.7).
+ * over store + injection + capture (7.10.7); and the self-improving auto-file-a-bug
+ * mechanism that turns a captured mistake into a `kind: bug` work item in the
+ * project (7.10.8).
  *
  * **Out of scope (named so they don't silently expand this story):** no vector
  * store / embedding retrieval (architecture #3 — lessons are structured records
@@ -127,15 +156,29 @@ export const story_7_10: PlanStory = {
     'memory*). Capture is two-way — the curated base (7.10.2, the manual seed) + ' +
     'the correction-capture loop (7.10.4, Rovo `/memory reflect`: "analyze the ' +
     'session to identify mistakes/inefficiencies and write them back").\n\n' +
+    '**The self-improving mechanism (Motir on Motir).** Capturing a lesson is only ' +
+    'half the loop — so when a mistake is captured (7.10.4), motir-ai ALSO files ' +
+    'a `kind: bug` work item INTO THE PROJECT (7.10.8), turning the planning gap ' +
+    'into a trackable, fixable backlog item. This is the **first self-improving ' +
+    'mechanism**: the planner files bugs about its OWN planning mistakes, closing ' +
+    'a quality loop by using Motir on Motir. The mechanism is GENERAL (any ' +
+    "project), but the canonical first instance is Motir's own planner, while " +
+    'building Motir, filing bugs into the live `motir` / `PROD` project — the ' +
+    'dogfood that proves the loop end-to-end (mistake captured → `create_work_item` ' +
+    '→ a bug appears in the tracker). The AI never writes directly (architecture ' +
+    '#1): the bug is requested through motir-core write authority — the 7.8.5 ' +
+    'MCP `create_work_item` tool and/or the 7.1.6 persist callback.\n\n' +
     '**This is an ENHANCEMENT — 7.3 does not hard-depend on it.** Generation ' +
     'runs with an empty lesson set; 7.10 makes it better, not possible. Every ' +
     'dep points BACKWARD at 7.1.3 (the motir-ai DB), 7.3.2 (the planner loop it ' +
-    'injects into), or same-story 7.10.x. Cross-story dep audit: PASSES.\n\n' +
+    'injects into), 7.8.5 (the create-work-item write path the self-improving bug ' +
+    'rides — 7.8 < 7.10), or same-story 7.10.x. Cross-story dep audit: PASSES.\n\n' +
     '**Scope:** the `Lesson` store schema + repo/service on motir-ai (7.10.1); ' +
     'the curated base set ported from notes.html (7.10.2, content); plan-time ' +
     'injection into the 7.3.2/7.4 loop (7.10.3); the correction → new tenant ' +
     'lesson capture loop (7.10.4); the lessons admin view design (7.10.5) + the ' +
-    'motir-core admin UI (7.10.6); the test suite (7.10.7).\n\n' +
+    'motir-core admin UI (7.10.6); the test suite (7.10.7); the self-improving ' +
+    'auto-file-a-bug-on-capture mechanism (7.10.8).\n\n' +
     '**Out of scope (named so they land elsewhere, not here):** a vector store / ' +
     'embedding retrieval (architecture #3 — lessons are STRUCTURED records ' +
     'injected into system context, ranked by scope + relevance heuristics, not ' +
@@ -175,6 +218,16 @@ export const story_7_10: PlanStory = {
     'the injection selection (relevant-in / irrelevant-out, scope precedence), ' +
     'and the capture path (a correction yields exactly one tenant lesson, bound ' +
     'to the right tenant, idempotent on a repeated identical correction).\n' +
+    '- **The self-improving loop (the dogfood).** Capture a mistake during a ' +
+    'planning run (the 7.10.4 path) → a NEW `kind: bug` work item appears in the ' +
+    "project's backlog describing the planning gap (filed through motir-core " +
+    'write authority — the 7.8.5 `create_work_item` tool / the 7.1.6 persist ' +
+    'callback, NOT a direct AI write), linked to the tenant lesson, reporter = ' +
+    'the planner identity. Re-capturing the SAME mistake does NOT file a second ' +
+    'bug (idempotent — one bug per distinct lesson). Run it against the live ' +
+    '`motir` / `PROD` project itself: the planner files a bug about its own ' +
+    'planning mistake into the tracker the team already watches (Motir on ' +
+    'Motir, the canonical first instance).\n' +
     '- **Open-core check (the recurring Epic-7 posture).** Confirm the `Lesson` ' +
     "table exists ONLY in motir-ai (no lessons table in motir-core's schema); " +
     'the admin UI reaches it solely over the 7.1 boundary (no `motir-ai` import ' +
@@ -473,6 +526,9 @@ export const story_7_10: PlanStory = {
         '## Context refs\n\n' +
         '- 7.10.1 — `lessonService` (the `captureFromCorrection` method lives ' +
         'here).\n' +
+        '- 7.10.8 — the self-improving mechanism that hooks this capture to also ' +
+        'file a `kind: bug` work item in the project (the dogfood loop; this ' +
+        'card stays focused on the lesson, 7.10.8 owns the bug-filing).\n' +
         '- Story 7.3 (stub) — the generate→approve review gate where a ' +
         'correction surfaces (the trigger).\n' +
         '- 7.2.2 (stub) — the planner LLM/SDK the distillation step uses.\n' +
@@ -690,6 +746,96 @@ export const story_7_10: PlanStory = {
         'convention motir-ai mirrors).\n' +
         '- 7.1.3 — the motir-ai test harness (real docker Postgres) this rides.',
       dependsOn: ['7.10.3', '7.10.4'],
+    },
+    {
+      id: '7.10.8',
+      title:
+        'Auto-file a `kind: bug` work item on mistake-capture — the self-improving loop (Motir on Motir)',
+      status: 'blocked',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 50,
+      descriptionMd:
+        'Close the OTHER half of the learning loop: when the capture loop ' +
+        '(7.10.4) records a planning mistake, ALSO file a `kind: bug` work item ' +
+        'into the project so the gap becomes trackable, fixable, and assignable ' +
+        'in the very backlog the planner manages. A lesson the planner notes but ' +
+        'nobody can act on is a private regret; a bug in the tracker is a ' +
+        'commitment. **This is the first self-improving mechanism in the system** — ' +
+        'the planner files bugs about its OWN planning mistakes, closing a ' +
+        'quality loop by using Motir on Motir.\n\n' +
+        '**General mechanism, canonical first instance.** The behavior is generic ' +
+        '(it fires for ANY tenant whose planner captures a mistake), but the ' +
+        'first and canonical instance is Motir’s OWN planner, while building ' +
+        'Motir, filing bugs into the live `motir` / `PROD` project — the dogfood ' +
+        'that proves the whole loop end-to-end: a mistake is captured → ' +
+        '`create_work_item` → a bug appears in the tracker the team already ' +
+        'watches. The demo IS the proof.\n\n' +
+        '**The write path — the AI never writes directly (architecture #1).** Per ' +
+        'the locked 7.1 boundary, motir-ai holds NO write credential to the plan ' +
+        'tree; it REQUESTS the create through motir-core’s write authority. ' +
+        'The bug is filed via the SAME core-side path every other write rides — ' +
+        'the **7.8.5 MCP `create_work_item` tool** (the verified `kind: bug` ' +
+        'bug-logging tool — the long-promised "agents log bugs via the Motir MCP" ' +
+        'protocol) and/or the **7.1.6 persist callback** ' +
+        '(`POST /api/internal/ai/plan-delta`, committed through ' +
+        '`workItemsService` with every 6.4 permission + tenant guard applied as ' +
+        'the requesting identity). motir-ai proposes; core persists. No direct AI ' +
+        'write, no bypassed validation, no new write authority invented here.\n\n' +
+        'Implement in motir-ai:\n\n' +
+        '- Hook `lessonService.captureFromCorrection` (7.10.4): after the tenant ' +
+        '`Lesson` is written, request a `kind: bug` work item whose `title` names ' +
+        'the mistake ("Planning gap: assumed a stack default without discovery"), ' +
+        'whose `descriptionMd` captures WHAT went wrong + the lesson’s ' +
+        '`why` / `howToApply` (so the bug is actionable), and whose reporter is ' +
+        'the planner identity. The bug is filed under a sensible parent (the ' +
+        'project’s planning/meta epic or story when one is resolvable; ' +
+        'otherwise project-root, honoring the kind-parent matrix the create ' +
+        'service enforces).\n' +
+        '- **Idempotency — one bug per distinct lesson, no dupes on re-capture.** ' +
+        'Re-capturing the same mistake (the 7.10.4 `sourceRef` dedup) must NOT ' +
+        'file a second bug. Record the filed work-item key on the `Lesson` (a ' +
+        '`bugWorkItemKey` field, or a side mapping) and short-circuit when it is ' +
+        'already set / the dedup matched a reinforced lesson — the store + the ' +
+        'tracker stay 1:1 with distinct lessons, not a junk drawer.\n' +
+        '- **Resilience.** Filing the bug is a follow-on side effect, NOT a gate ' +
+        'on capture: if the create request fails (core unreachable, a transient ' +
+        'error), the lesson is still captured and the bug-file is retried / ' +
+        'surfaced — a failed bug-file never loses the lesson (the capture loop ' +
+        'stays the source of truth; this is additive, like injection is).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- Capturing a mistake (7.10.4) files exactly ONE `kind: bug` work item ' +
+        'in that tenant’s project, via motir-core write authority (the 7.8.5 ' +
+        '`create_work_item` tool / the 7.1.6 persist callback) — NEVER a direct ' +
+        'motir-ai write to the plan tree; reporter = the planner identity; the ' +
+        'bug body carries the mistake + the lesson’s `why` / `howToApply`.\n' +
+        '- The bug is linked to its originating `Lesson` (the work-item key ' +
+        'recorded on the lesson); re-capturing the SAME mistake files NO second ' +
+        'bug (idempotent — one bug per distinct lesson, matching the 7.10.4 ' +
+        '`sourceRef` dedup).\n' +
+        '- The create honors the kind-parent matrix + 6.4 permission + ' +
+        '404-not-403 tenant guard the create service enforces (no bypassed ' +
+        'validation — it is the same path an agent uses).\n' +
+        '- A bug-file failure does NOT lose the captured lesson (capture is the ' +
+        'source of truth; the bug-file is a retried/surfaced side effect).\n' +
+        '- Dogfood: exercised against the live `motir` / `PROD` project — a ' +
+        'captured planning mistake yields a bug in PROD’s backlog (the ' +
+        'self-improving first instance, asserted at the integration level).\n\n' +
+        '## Context refs\n\n' +
+        '- 7.10.4 — `lessonService.captureFromCorrection` (the capture this hooks ' +
+        'onto; this card owns the bug-filing, 7.10.4 stays focused on the ' +
+        'lesson).\n' +
+        '- 7.8.5 — the MCP `create_work_item` tool (the `kind: bug` bug-logging ' +
+        'write path; 7.8 < 7.10, a backward dep).\n' +
+        '- 7.1.6 — the persist callback (`POST /api/internal/ai/plan-delta`, ' +
+        'committed through `workItemsService`) — the OTHER core-side write path ' +
+        'the AI already holds.\n' +
+        '- story-7.1.ts header §1 — one-directional writes (the AI never writes ' +
+        'the tree directly; core is the system of record).\n' +
+        '- story-7.8.ts header — the "agents log bugs via the Motir MCP" protocol ' +
+        '(notes.html #26 follow-ups) this mechanism fulfils for the planner ' +
+        'itself.',
+      dependsOn: ['7.10.4', '7.8.5'],
     },
   ],
 };
