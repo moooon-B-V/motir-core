@@ -346,7 +346,7 @@ export const story_6_8: PlanStory = {
       id: '6.8.4',
       title:
         'Editable Details page — name/avatar editing on the 6.5.3 landing, the change-key flow, previous keys + release, switcher chip, admin gating',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
