@@ -18,6 +18,7 @@ import {
   ProjectWorkspaceMismatchError,
 } from '@/lib/projects/errors';
 import { isValidAvatarColor, isValidAvatarIcon } from '@/lib/projects/avatar';
+import { resolveProjectByKeyWithAliasInTx } from '@/lib/projects/resolveByKey';
 import { toProjectDTO } from '@/lib/mappers/projectMappers';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { boardsService } from '@/lib/services/boardsService';
@@ -423,18 +424,40 @@ export const projectsService = {
    * role the wrapper is a behavioural no-op.
    */
   async getByKey(key: string, ctx: WorkspaceContext): Promise<ProjectDTO> {
-    const identifier = key.trim().toUpperCase();
-    const project = await withWorkspaceContext(ctx, async (tx) => {
-      const found = await projectRepository.findByIdentifier(ctx.workspaceId, identifier, tx);
-      if (!found) throw new ProjectNotFoundError(key);
-      // Project access gate (6.4.3): a non-browser (a non-member of a private
-      // project) gets ProjectAccessDeniedError('browse') → 404, indistinguishable
-      // from a missing project (no existence leak, same as the not-found above).
-      // Gated inside the tx so the membership reads share the RLS workspace GUC.
-      await projectAccessService.assertCanBrowse(found.id, ctx, tx);
-      return found;
+    const { project } = await projectsService.resolveByKey(key, ctx);
+    return project;
+  },
+
+  /**
+   * Alias-aware project-by-key resolution (Story 6.8 · Subtask 6.8.2) — the READ
+   * counterpart to the live-only write resolver (`resolveProjectByKeyInTx`,
+   * which the admin write path keeps alias-blind on purpose). Resolves the LIVE
+   * identifier first and the retired-key alias table on a miss — via the single
+   * central `resolveProjectByKeyWithAliasInTx`, so alias resolution lives in
+   * exactly ONE place — and returns the project DTO PLUS a `viaAlias` flag so the
+   * CALLER decides serve-vs-redirect: the `/api/projects/[key]` routes SERVE on
+   * an alias hit (old keys just work — the DTO carries the canonical identifier,
+   * the verified Jira REST behaviour), while the issue pages 308-redirect to the
+   * canonical URL. Browse-gated exactly like the old getByKey, so a non-browser
+   * reads as ProjectNotFoundError → 404 (no existence leak) whether the key is
+   * live or an alias — the gate runs inside the tx so its membership reads share
+   * the RLS workspace GUC. `getByKey` now delegates here, so the agent-dispatch
+   * endpoints transparently resolve retired keys too; the hot path stays a
+   * single project-row fetch (no alias query on a live hit).
+   */
+  async resolveByKey(
+    key: string,
+    ctx: WorkspaceContext,
+  ): Promise<{ project: ProjectDTO; viaAlias: boolean }> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const { project, viaAlias } = await resolveProjectByKeyWithAliasInTx(
+        key,
+        ctx.workspaceId,
+        tx,
+      );
+      await projectAccessService.assertCanBrowse(project.id, ctx, tx);
+      return { project: toProjectDTO(project), viaAlias };
     });
-    return toProjectDTO(project);
   },
 
   /**
