@@ -797,6 +797,29 @@
     }
   },
   "settings": {
+    "nav": {
+      "eyebrow": "项目设置",
+      "backToProject": "返回{projectName}",
+      "soon": "即将推出",
+      "group": {
+        "general": "常规",
+        "access": "访问",
+        "work": "工作",
+        "automation": "自动化"
+      },
+      "details": "详情",
+      "members": "成员与访问",
+      "workflow": "工作流",
+      "board": "面板",
+      "estimation": "估算",
+      "fields": "字段",
+      "components": "组件",
+      "rules": "规则"
+    },
+    "area": {
+      "noProjectTitle": "未选择项目",
+      "noProjectDescription": "从切换器中选择一个项目，或从工作台创建一个项目，以管理其设置。"
+    },
     "workspace": {
       "empty": {
         "title": "还没有工作区",

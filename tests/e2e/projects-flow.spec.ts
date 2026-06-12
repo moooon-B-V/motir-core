@@ -154,8 +154,11 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
 
   await archiveBtn.click();
   await expect(page.getByText('Project archived').first()).toBeVisible({ timeout: 5_000 });
-  // Active project should fall back to Marketing Site
-  await expect(page.getByRole('button', { name: 'Switch project' })).toContainText(
+  // Active project should fall back to Marketing Site. The project-settings AREA
+  // (Story 6.5.2) shows the back-to-project/identity header instead of the
+  // ProjectSwitcher, so the fallback surfaces in the settings rail itself (no
+  // extra navigation — this test is already near its time budget).
+  await expect(page.getByRole('navigation', { name: 'Project settings' })).toContainText(
     'Marketing Site',
   );
 

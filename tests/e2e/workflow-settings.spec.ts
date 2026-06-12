@@ -104,8 +104,9 @@ test('owner manages the workflow: defaults protected, custom status add + rename
 });
 
 // Finding #47: the workflow route shipped with no nav entry point and was
-// reachable only by typing the URL. The project-settings page now carries a
-// Workflow card that links to it — this proves discoverability through the UI,
+// reachable only by typing the URL. Story 6.5.2 turned the settings hub into the
+// settings AREA — the entry point is now the Workflow row in the grouped settings
+// rail (the hub card was retired). This proves discoverability through the UI,
 // without a page.goto to the workflow route.
 test('workflow editor is reachable from the project-settings page (finding #47)', async ({
   page,
@@ -116,8 +117,13 @@ test('workflow editor is reachable from the project-settings page (finding #47)'
   await page.goto('/settings/project');
   await expect(page.getByRole('heading', { name: 'Project settings' })).toBeVisible();
 
-  // The Workflow card is a navigation link; clicking it lands on the editor.
-  await page.getByRole('link', { name: /Workflow/ }).click();
+  // The Workflow entry in the settings rail navigates to the editor. Scope to the
+  // settings nav landmark + exact name so the "Back to {project}" link (the
+  // seeded project name can contain "Workflow") doesn't ambiguate the locator.
+  await page
+    .getByRole('navigation', { name: 'Project settings' })
+    .getByRole('link', { name: 'Workflow', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/settings\/project\/workflow$/);
   await expect(page.getByRole('heading', { name: 'Workflow' })).toBeVisible();
 });

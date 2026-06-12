@@ -4,17 +4,18 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ArchiveProjectCard } from './_components/ArchiveProjectCard';
-import { WorkflowSettingsCard } from './_components/WorkflowSettingsCard';
-import { BoardSettingsCard } from './_components/BoardSettingsCard';
-import { EstimationSettingsCard } from './_components/EstimationSettingsCard';
-import { FieldsSettingsCard } from './_components/FieldsSettingsCard';
-import { ComponentsSettingsCard } from './_components/ComponentsSettingsCard';
-import { MembersSettingsCard } from './_components/MembersSettingsCard';
 
-// Project settings — server component. Reads the active project context
-// and renders the cards. Only the archive card lands in 1.3.4; rename
-// + identifier-change land later. All mutations route through Server
-// Actions in app/(authed)/_project-actions.ts.
+// Project settings landing — server component. Story 6.5.2 turned the flat card
+// HUB this used to be into the settings AREA: the per-section navigation cards
+// (Workflow / Board / Estimation / Fields / Components / Members) are RETIRED —
+// the settings rail (SidebarNav, driven by the projectSettingsNav registry) owns
+// navigation now. The settings-area layout (../layout.tsx) guards no-project /
+// no-access for the whole area.
+//
+// This route IS the area's landing — the registry's `details` entry. Story 6.5.3
+// rebuilds it into the full read-only Details page (identity rows + the re-homed
+// Archive danger zone); for now it keeps the project header + the Archive card
+// (the only card that doesn't move into the nav — it moves into Details in 6.5.3).
 
 export default async function ProjectSettingsPage() {
   const session = await getSession();
@@ -24,12 +25,11 @@ export default async function ProjectSettingsPage() {
 
   const project = await getActiveProject();
   if (!project) {
-    // No active project — the user has no projects yet, or just archived
-    // the last one. The empty state on /dashboard owns the create CTA;
-    // here we surface a static hint so this route doesn't 404.
+    // Defensive — the area layout already renders the no-project empty state, but
+    // keep the route self-sufficient so it never 404s on its own.
     return (
       <div className="mx-auto max-w-[42rem]">
-        <EmptyState title={t('project.empty.title')} description={t('project.empty.description')} />
+        <EmptyState title={t('area.noProjectTitle')} description={t('area.noProjectDescription')} />
       </div>
     );
   }
@@ -40,18 +40,6 @@ export default async function ProjectSettingsPage() {
         <h1 className="font-serif text-3xl font-semibold text-(--el-text)">{t('project.title')}</h1>
         <p className="text-(--el-text-muted) font-sans text-sm">{t('project.subtitle')}</p>
       </header>
-
-      <WorkflowSettingsCard />
-
-      <BoardSettingsCard />
-
-      <EstimationSettingsCard />
-
-      <FieldsSettingsCard />
-
-      <ComponentsSettingsCard />
-
-      <MembersSettingsCard />
 
       <ArchiveProjectCard
         projectId={project.projectId}
