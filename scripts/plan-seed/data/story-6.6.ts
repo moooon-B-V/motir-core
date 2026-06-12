@@ -455,7 +455,7 @@ export const story_6_6: PlanStory = {
       id: '6.6.5',
       title:
         'Automation settings UI — rule list + when/if/then editor (registry-driven rows, enable/disable, caps, validation states)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
@@ -503,7 +503,7 @@ export const story_6_6: PlanStory = {
       id: '6.6.6',
       title:
         'Audit-log UI — per-rule execution log (status, error detail, pagination) + last-run surfacing + the auto-disabled banner wiring',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 25,
