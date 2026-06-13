@@ -39,6 +39,15 @@ const PORT = new URL(BASE_URL).port || '3000';
 const INNGEST_PORT = process.env['INNGEST_PORT'] ?? '8288';
 const INNGEST_BASE_URL = `http://localhost:${INNGEST_PORT}`;
 
+// The Inngest dev-server CLI is pulled via `npx` (it's a standalone binary, not
+// the `inngest` SDK dep). Default 'latest' keeps local `pnpm test:e2e`
+// unchanged, but CI pins INNGEST_CLI_VERSION to a fixed version: a pinned
+// `inngest-cli@<v>` is what lets the npx download be cached across runs/shards
+// (`@latest` re-resolves every time) — which also removes the cold-download CI
+// flake where the 120s webServer wait times out mid-download (Next "Ready" but
+// no :8288). See ci.yml's npx cache step.
+const INNGEST_CLI_VERSION = process.env['INNGEST_CLI_VERSION'] ?? 'latest';
+
 // Subtask 3.5.1 board load-model test seam: forward the cap / Done-age overrides
 // to the dev server ONLY when the run sets them, so a targeted
 // `BOARD_ISSUE_CAP_OVERRIDE=… pnpm test:e2e --grep board-at-scale` run can reach
@@ -202,7 +211,7 @@ export default defineConfig({
       // INNGEST_PORT (default :8288 — the SDK dev-mode default); a sibling
       // worktree run sets its own INNGEST_PORT so concurrent E2E runs no
       // longer collide on the executor (Subtask 5.4.11).
-      command: `npx --yes inngest-cli@latest dev -u http://localhost:${PORT}/api/inngest --no-discovery -p ${INNGEST_PORT}`,
+      command: `npx --yes inngest-cli@${INNGEST_CLI_VERSION} dev -u http://localhost:${PORT}/api/inngest --no-discovery -p ${INNGEST_PORT}`,
       url: INNGEST_BASE_URL,
       reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
       timeout: 120_000,

@@ -159,7 +159,26 @@ jobs:
       - run: pnpm test:coverage
 
   e2e:
-    name: Playwright E2E
+    # Sharded matrix (Subtask: E2E CI speedup). The suite is `workers: 1` /
+    # `fullyParallel: false` ON PURPOSE — every spec shares one Postgres and a
+    # global truncate, so parallel workers IN ONE PROCESS would race. We can't
+    # parallelize inside a job, so we parallelize ACROSS jobs: each matrix leg is
+    # its own runner with its OWN ephemeral `postgres:16-alpine` service
+    # container, so there is zero cross-leg DB contention (the local shared-:5433
+    # flake does not exist between CI jobs). Wall-clock goes from sum(all specs)
+    # to max(slowest leg).
+    #   • 4 "bulk" legs — the non-at-scale suite split by Playwright's native
+    #     `--shard=i/4` (it filters by --grep* first, then shards the result).
+    #   • 2 "at-scale" legs — board(-scrum)-at-scale and collab-at-scale, which
+    #     need distinct env overrides (issue-cap / seed knobs) and so can't share
+    #     a shard. They now run IN PARALLEL with the bulk legs instead of as the
+    #     trailing two steps of one serial job.
+    # The at-scale override env is supplied per-leg from the matrix; bulk legs
+    # leave those vars empty (''), which playwright.config.ts treats as unset
+    # (BOARD_LOAD_SEAM_ENV skips empty values) so the shipped 5,000/14 board
+    # constants and default collab seed apply — a bulk leg must NOT inherit an
+    # at-scale cap or it would skew the ordinary board specs.
+    name: Playwright E2E (${{ matrix.id }})
     runs-on: ubuntu-latest
     # Skip E2E on plan-seed and design PRs. A `seed/*` PR only edits
     # scripts/plan-seed/** (the plan data the seed loads — see MOTIR.md "Plan
@@ -173,6 +192,40 @@ jobs:
     # surfaces and there's no point burning Playwright minutes if `next
     # build` is red.
     needs: build
+    strategy:
+      # One leg failing must NOT cancel the others — we want the full E2E
+      # picture (and all Playwright reports) from a single run, not a race to
+      # the first red shard.
+      fail-fast: false
+      matrix:
+        include:
+          # The non-at-scale suite, split four ways. `--grep-invert` excludes the
+          # three at-scale tags; `--shard=i/4` then partitions what remains.
+          - id: bulk-1
+            args: '--grep-invert "(board(-scrum)?|collab)-at-scale" --shard=1/4'
+          - id: bulk-2
+            args: '--grep-invert "(board(-scrum)?|collab)-at-scale" --shard=2/4'
+          - id: bulk-3
+            args: '--grep-invert "(board(-scrum)?|collab)-at-scale" --shard=3/4'
+          - id: bulk-4
+            args: '--grep-invert "(board(-scrum)?|collab)-at-scale" --shard=4/4'
+          # Stories 3.5 + 4.7 — board journeys AT SCALE (Kanban + Scrum). The
+          # specs self-seed; these overrides lower the issue cap + Done-age
+          # window so the over-cap banner + Done-age trim are reachable with tens
+          # of rows instead of 5,000.
+          - id: board-at-scale
+            args: '--grep "board(-scrum)?-at-scale"'
+            board_issue_cap: '40'
+            done_age_window_days: '7'
+          # Story 5.6 — the collaboration-LOADED issue AT SCALE. These knobs keep
+          # the lane fast while every large collection still EXCEEDS its page size
+          # (comments 40>20, attachments 64>50, revisions 60+>20) so paging
+          # actually engages — the spec's beforeAll fails loud otherwise.
+          - id: collab-at-scale
+            args: '--grep "collab-at-scale"'
+            collab_comments: '40'
+            collab_churn_edits: '60'
+            collab_spread_issues: '2'
     services:
       postgres:
         image: postgres:16-alpine
@@ -206,6 +259,12 @@ jobs:
       EMAIL_OUTBOX_PATH: /tmp/motir-test-emails.jsonl
       E2E_TEST_OAUTH: '1'
       E2E_TEST_OAUTH_USER_PATH: /tmp/motir-test-oauth-user.json
+      # Pin the Inngest dev-server CLI version (playwright.config.ts reads this;
+      # it defaults to 'latest' for local runs). Pinning is what makes the npx
+      # download cacheable across legs/runs — `@latest` re-resolves every time —
+      # and removes the cold-download flake where the 120s webServer wait times
+      # out mid-download. Bump in lockstep with the `inngest` SDK when needed.
+      INNGEST_CLI_VERSION: 1.27.0
       # Skip the husky install postinstall — CI has no .git/hooks to wire.
       HUSKY: '0'
     steps:
@@ -225,47 +284,53 @@ jobs:
       # exist". (The `build` job runs this transitively via the build
       # script; here we run it explicitly because we don't run build.)
       - run: pnpm prisma migrate deploy
-      - run: pnpm exec playwright install --with-deps chromium
-      # The at-scale journeys — board-at-scale (Story 3.5, Kanban),
-      # board-scrum-at-scale (Story 4.7, Scrum) AND collab-at-scale (Story 5.6,
-      # the loaded issue) — self-seed heavy fixtures and run in their own
-      # cap-set steps below, so exclude all three here. The pattern matches the
-      # three grep tags: "board-at-scale", "board-scrum-at-scale", "collab-at-scale".
-      - run: pnpm test:e2e --grep-invert "(board(-scrum)?|collab)-at-scale"
-      # Stories 3.5 + 4.7 — the cross-cutting board journeys AT SCALE (Kanban +
-      # Scrum). The specs self-seed their fixtures (3.5.1 board-shaped · 4.7.1
-      # sprint-shaped); these overrides (the 3.5.1 seam, forwarded to the dev
-      # server by playwright.config.ts) lower the issue cap + Done-age window so
-      # the over-cap banner + Done-age trim are reachable with tens of rows
-      # instead of 5,000. Covers 3.5.2/3.5.3 (`board-at-scale`) and 4.7.2 — plus
-      # 4.7.3 once it lands (`board-scrum-at-scale`); workers=1, so the specs'
-      # DB resets never race.
-      - name: E2E — board at scale (Stories 3.5 + 4.7)
-        run: pnpm test:e2e --grep "board(-scrum)?-at-scale"
+      # Cache the Playwright browser binary across runs (and the matrix legs).
+      # Every leg re-pays `playwright install` otherwise — pure fixed overhead
+      # that sharding multiplies by the leg count. Keyed on the lockfile so a
+      # @playwright/test bump invalidates it; the OS apt deps aren't cacheable,
+      # so we still run install-deps on a hit (fast) and the full --with-deps
+      # download only on a miss.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
+      # Cache the npx-fetched inngest-cli (the dev-server binary spawned by
+      # playwright.config.ts's second webServer). Pinned via INNGEST_CLI_VERSION
+      # above, so the cache key is stable; restoring it skips the cold download
+      # that otherwise runs on every leg and is the documented 120s-timeout
+      # flake. npx stores fetched bins under ~/.npm/_npx.
+      - name: Cache inngest-cli (npx)
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm/_npx
+          key: ${{ runner.os }}-npx-inngest-cli-${{ env.INNGEST_CLI_VERSION }}
+      # ONE run step per matrix leg. `matrix.args` selects the slice (a
+      # --grep-invert+--shard bulk slice, or a --grep at-scale lane); the
+      # override env is per-leg and empty ('') on bulk legs — playwright.config
+      # treats empty as unset, so bulk legs keep the shipped board/collab
+      # defaults. workers=1, so this leg's own DB resets never race.
+      - name: Run E2E (${{ matrix.id }})
+        run: pnpm test:e2e ${{ matrix.args }}
         env:
-          BOARD_ISSUE_CAP_OVERRIDE: '40'
-          DONE_AGE_WINDOW_DAYS_OVERRIDE: '7'
-      # Story 5.6 (Subtask 5.6.3) — the collaboration-LOADED issue AT SCALE: the
-      # finding-#57 sentinel for Epic 5. The spec self-seeds the 5.6.1 fixture
-      # (`runCollabSeed()`) through the shipped services; these SEED_COLLAB_*
-      # overrides lower the heaviest knobs so the lane stays fast while every
-      # large collection still EXCEEDS its page size (comments 40 > 20,
-      # attachments 64 > 50, revisions 60+ > 20) so paging actually engages — the
-      # spec's beforeAll fails loud otherwise. workers=1, so the seed never races.
-      - name: E2E — collab at scale (Story 5.6)
-        run: pnpm test:e2e --grep "collab-at-scale"
-        env:
-          SEED_COLLAB_COMMENTS: '40'
-          SEED_COLLAB_CHURN_EDITS: '60'
-          SEED_COLLAB_SPREAD_ISSUES: '2'
-      # Always upload the report — pass-runs are useful for debugging
-      # flakes, and the report is small. The trace/video/screenshot
-      # artifacts only exist for failures (config above), so a passing
-      # run uploads only the html summary.
+          BOARD_ISSUE_CAP_OVERRIDE: ${{ matrix.board_issue_cap }}
+          DONE_AGE_WINDOW_DAYS_OVERRIDE: ${{ matrix.done_age_window_days }}
+          SEED_COLLAB_COMMENTS: ${{ matrix.collab_comments }}
+          SEED_COLLAB_CHURN_EDITS: ${{ matrix.collab_churn_edits }}
+          SEED_COLLAB_SPREAD_ISSUES: ${{ matrix.collab_spread_issues }}
+      # Always upload the report — pass-runs are useful for debugging flakes, and
+      # the report is small. The trace/video/screenshot artifacts only exist for
+      # failures (config above). The artifact name MUST be unique per leg or the
+      # matrix legs collide on upload (upload-artifact@v4+ errors on a dup name).
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.id }}
           path: out/playwright-report
           retention-days: 7
