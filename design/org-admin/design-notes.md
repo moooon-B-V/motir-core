@@ -115,8 +115,21 @@ have more than one"; Linear's single-workspace view is equally clean.)
     org-vs-workspace split that is 1:1 for them.
   - **At ≥2 workspaces:** the workspace-config sections **split out** into a
     per-workspace Settings surface (scoped by the active workspace), and the org
-    Settings page keeps only the org-scoped sections. Nothing in the data moves —
-    only which surface renders which sections.
+    Settings page keeps only the org-scoped sections. The existing workspace's
+    data does not move; the **new** workspace is **seeded by copying the source
+    workspace's config at creation** (see below).
+  - **"Inherit" is a BEHAVIOURAL ILLUSION, not a data relationship — there is NO
+    org→workspace config inheritance in the model.** Config is purely
+    `Workspace`-scoped; there are no org-level config defaults, no override rows,
+    and no runtime resolution. The inherited _feel_ is achieved by
+    **copy-on-create**: when a 2nd (or Nth) workspace is created, its config is
+    **seeded by copying the source workspace's** workflows / statuses / fields /
+    labels / components / automation / dashboards, so it opens already configured
+    like the first one. After that the workspaces are fully independent — either
+    can "overwrite" freely, with no link back. (Deliberately simpler than Jira's
+    shared-scheme live inheritance; we get the consistent-defaults UX without the
+    two-level config machinery. If real live inheritance is ever needed for
+    enterprise, it's an additive future change, not a migration.)
   - Suggested routes: `app/(authed)/settings/organization/page.tsx` (org-scoped:
     general + billing placeholder + danger zone) and
     `app/(authed)/settings/organization/members/page.tsx` (the paginated roster);

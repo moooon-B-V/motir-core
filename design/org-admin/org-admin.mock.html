@@ -1344,10 +1344,13 @@
                   <span>
                     Workflows &amp; statuses, custom fields, labels, components, automation and
                     dashboards are <strong>workspace-scoped</strong> (they live on the Workspace row
-                    underneath). With one workspace they appear in this single Settings home and
-                    save to that workspace; create a 2nd workspace and they move to a per-workspace
-                    Settings area. The data model is unchanged — only the surface collapses. These
-                    sections are owned by their own design areas and are not redrawn here.
+                    underneath — there is NO org→workspace config inheritance in the data). With one
+                    workspace they appear in this single Settings home and save to that workspace.
+                    Create a 2nd workspace and they split into a per-workspace Settings area; the
+                    new workspace is <strong>seeded by copying this one's config</strong> at
+                    creation, so it <em>looks</em> inherited — then both are independent and either
+                    can overwrite. These sections are owned by their own design areas and are not
+                    redrawn here.
                   </span>
                 </div>
               </div>
