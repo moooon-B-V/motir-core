@@ -28,6 +28,7 @@
 //   bucket unless the sentinel is in the list (an unassigned issue is
 //   assigned to "none of" any member list).
 
+import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { ISSUE_TYPES } from '@/lib/issues/parentRules';
 import {
   FILTER_BACKLOG_TOKEN,
@@ -58,6 +59,7 @@ export type FilterValueEditorKind =
   | 'kind-select'
   | 'status-select'
   | 'priority-select'
+  | 'type-select'
   | 'member-select'
   | 'sprint-select'
   | 'label-select'
@@ -151,6 +153,14 @@ export const FILTER_FIELDS: ReadonlyArray<FilterFieldDef> = [
   enumField('kind', 'kind-select', { valueWhitelist: ISSUE_TYPES }),
   enumField('status', 'status-select'),
   enumField('priority', 'priority-select', { valueWhitelist: PRIORITIES }),
+  // The work-item TYPE (Story 2.7) — a closed-set enum facet over the ten
+  // `WorkItemType` members (the fixed enum keeps it equality/`in`, never
+  // free-text). NULLABLE: epics/stories + every legacy row are `type = null`,
+  // so the empty pair (`is_empty`/`is_not_empty`) compiles to `IS NULL` /
+  // `IS NOT NULL` — the "type is null" / "untyped" bucket. `WORK_ITEM_TYPES`
+  // (lib/issues/executorDefaults — the 2.7.3 single source) is the whitelist
+  // the AST validation rejects unknown values against.
+  enumField('type', 'type-select', { nullable: true, valueWhitelist: WORK_ITEM_TYPES }),
   enumField('assignee', 'member-select', {
     nullable: true,
     emptySentinel: FILTER_UNASSIGNED_TOKEN,

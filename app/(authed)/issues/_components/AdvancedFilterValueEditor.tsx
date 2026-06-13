@@ -6,6 +6,7 @@ import { Component as ComponentIcon, TriangleAlert, UserX } from 'lucide-react';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { MultiSelectPicker, type MultiSelectOption } from '@/components/ui/MultiSelectPicker';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { ISSUE_TYPES, type IssueType } from '@/lib/issues/parentRules';
 import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import { DEFAULT_STATUS_KEYS } from '@/lib/workflows/defaultWorkflow';
@@ -350,6 +351,7 @@ export function AdvancedFilterValueEditor({
   const tType = useTranslations('labels.issueType');
   const tStatus = useTranslations('labels.defaultStatus');
   const tPriority = useTranslations('labels.priority');
+  const tWorkType = useTranslations('labels.workItemType');
   const [query, setQuery] = useState('');
 
   // The custom field this row filters on (for cf-option-select) — resolved
@@ -378,6 +380,15 @@ export function AdvancedFilterValueEditor({
           id: p,
           label: tPriority(p),
           glyph: PRIORITY_META[p].icon,
+        }));
+      case 'type-select':
+        // The ten work-item TYPE members (Story 2.7). Label-only here — the
+        // hued per-type chip (the `--el-type-*` treatment + the create/detail
+        // picker) is owned by 2.7.4; the filter facet just needs the closed
+        // set with its labels.
+        return WORK_ITEM_TYPES.map((wt) => ({
+          id: wt,
+          label: tWorkType(wt),
         }));
       case 'member-select': {
         const options = members.map((m) => ({
@@ -419,6 +430,7 @@ export function AdvancedFilterValueEditor({
     tType,
     tStatus,
     tPriority,
+    tWorkType,
   ]);
 
   const valuesAria = t('advancedValuesAria', { field: fieldLabel });
@@ -446,6 +458,7 @@ export function AdvancedFilterValueEditor({
     case 'kind-select':
     case 'status-select':
     case 'priority-select':
+    case 'type-select':
     case 'member-select':
     case 'sprint-select':
     case 'component-select':
