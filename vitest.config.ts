@@ -2,6 +2,7 @@ import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { config as loadEnv } from 'dotenv';
+import { TEST_DB_WORKERS } from './tests/helpers/parallelDb';
 
 // Load .env into process.env before Vitest evaluates the test files. Next.js
 // does this automatically at runtime; Vitest does not. Without this load,
@@ -30,14 +31,26 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.{ts,tsx}'],
-    // Global setup: stub inngest.send to a no-op so the unconditional
-    // `work-item/created` + `work-item/field.changed` emits (Subtask 6.6.2)
-    // don't throw on the keyless test client. Event-asserting tests re-spy.
-    setupFiles: ['./tests/helpers/inngestSetup.ts'],
-    // DB-backed tests share connections to the local Postgres; running
-    // them in parallel forks would cause cross-test row interference.
-    // Serial is fine — total suite is small.
-    fileParallelism: false,
+    // Per-worker database isolation (Story 10.4.1). `globalDb` clones the
+    // migrated base DB into one `…_test_wN` database PER worker before any
+    // worker forks; `perWorkerDb` (FIRST setupFile — must run before
+    // `inngestSetup`, which imports `@/lib/db`) rebinds DATABASE_URL to this
+    // worker's clone before the `db` singleton reads it. That isolation is what
+    // makes `fileParallelism: true` safe — each worker truncates only its OWN
+    // database. See tests/helpers/parallelDb.ts for the shared wiring.
+    globalSetup: ['./tests/setup/globalDb.ts'],
+    // Setup order matters: perWorkerDb MUST precede inngestSetup. inngestSetup
+    // stubs inngest.send to a no-op so the unconditional `work-item/created` +
+    // `work-item/field.changed` emits (Subtask 6.6.2) don't throw on the
+    // keyless test client. Event-asserting tests re-spy.
+    setupFiles: ['./tests/helpers/perWorkerDb.ts', './tests/helpers/inngestSetup.ts'],
+    // Cross-FILE parallelism is now safe (each worker has its own DB, above).
+    // `sequence.concurrent` stays false so test()s WITHIN a file still run
+    // sequentially against that worker's single connection. `maxWorkers` is
+    // pinned to the worker-DB count (Vitest 4 top-level option) so
+    // VITEST_POOL_ID never exceeds a provisioned database.
+    fileParallelism: true,
+    maxWorkers: TEST_DB_WORKERS,
     sequence: {
       concurrent: false,
     },
