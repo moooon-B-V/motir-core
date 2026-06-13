@@ -314,6 +314,14 @@ export function Combobox<T extends string>({
   }
 
   const activeId = filtered.length > 0 ? optionId(active) : undefined;
+  // A `role="listbox"` MUST own `role="option"` children, so the listbox role
+  // only applies when options are actually rendered. While loading or with no
+  // matches the panel holds a status message instead — present it as a
+  // `role="status"` live region (announced to AT, and not an empty/childless
+  // listbox, which is a critical `aria-required-children` axe violation). The
+  // empty state is the link picker's DEFAULT on-open state since the 6.9.2
+  // query-driven retrofit, so this is now reachable on every open.
+  const hasOptions = !loading && filtered.length > 0;
 
   // Portal out to escape a short table's overflow:hidden — UNLESS we're inside a
   // focus-trapping dialog, where an inline menu is required (see the `mounted`
@@ -346,11 +354,11 @@ export function Combobox<T extends string>({
       <div
         ref={listRef}
         id={listId}
-        role="listbox"
+        role={hasOptions ? 'listbox' : 'status'}
         aria-label={label}
-        tabIndex={searchable ? -1 : 0}
-        aria-activedescendant={searchable ? undefined : activeId}
-        onKeyDown={searchable ? undefined : onListKeyDown}
+        tabIndex={hasOptions && !searchable ? 0 : -1}
+        aria-activedescendant={hasOptions && !searchable ? activeId : undefined}
+        onKeyDown={hasOptions && !searchable ? onListKeyDown : undefined}
         // Portaled menu caps its height to the measured viewport space (inline
         // style wins over max-h-64); the inline (in-dialog) menu keeps max-h-64.
         style={inDialog ? undefined : { maxHeight: listMaxHeight }}
@@ -394,7 +402,10 @@ export function Combobox<T extends string>({
                   {opt.icon ? <span aria-hidden>{opt.icon}</span> : null}
                   <span className="truncate">{opt.label}</span>
                   {opt.secondary ? (
-                    <span className="text-(--el-text-muted) ml-auto truncate text-xs">
+                    // --el-text-secondary, not -muted: muted (#787671) fails AA
+                    // (4.16:1) on the panel surface (#f6f5f4) at this 12px size
+                    // (the sidebar-caption contrast lesson) — secondary clears it.
+                    <span className="text-(--el-text-secondary) ml-auto truncate text-xs">
                       {opt.secondary}
                     </span>
                   ) : null}
@@ -466,7 +477,8 @@ export function Combobox<T extends string>({
             {selected.icon ? <span aria-hidden>{selected.icon}</span> : null}
             <span className="text-(--el-text) truncate">{selected.label}</span>
             {selected.secondary ? (
-              <span className="text-(--el-text-muted) ml-auto truncate text-xs">
+              // -secondary, not -muted: AA on the trigger surface at 12px (as above).
+              <span className="text-(--el-text-secondary) ml-auto truncate text-xs">
                 {selected.secondary}
               </span>
             ) : null}
