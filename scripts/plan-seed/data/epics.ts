@@ -1034,7 +1034,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Issue detail page overflows the viewport horizontally when the parent-breadcrumb eyebrow is long — right-rail controls scroll off-screen',
-        status: 'in_progress',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
