@@ -277,7 +277,7 @@ export const story_6_10: PlanStory = {
       id: '6.10.2',
       title:
         'Decision — the `Organization` model as top tier + the billing-entity decision + org roles vs 6.4 workspace roles',
-      status: 'in_progress',
+      status: 'done',
       type: 'decision',
       executor: 'coding_agent',
       estimateMinutes: 45,
