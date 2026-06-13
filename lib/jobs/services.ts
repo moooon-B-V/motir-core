@@ -6,6 +6,7 @@ import { usersService } from '@/lib/services/usersService';
 import { emailService } from '@/lib/services/emailService';
 import { mentionNotificationsService } from '@/lib/services/mentionNotificationsService';
 import { watcherNotificationsService } from '@/lib/services/watcherNotificationsService';
+import { notificationFanInService } from '@/lib/services/notificationFanInService';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
 import { automationEngineService } from '@/lib/services/automationEngineService';
@@ -30,6 +31,7 @@ export const jobServices = {
   email: emailService,
   mentionNotifications: mentionNotificationsService,
   watcherNotifications: watcherNotificationsService,
+  notificationFanIn: notificationFanInService,
   attachments: attachmentsService,
   savedFilterSubscriptions: savedFilterSubscriptionsService,
   automationEngine: automationEngineService,
