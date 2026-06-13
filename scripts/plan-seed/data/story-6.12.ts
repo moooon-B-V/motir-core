@@ -551,25 +551,35 @@ export const story_6_12: PlanStory = {
         'stats + CTAs, no body) — NEVER a blank page. `publicOverviewMd` is ' +
         'served via the public projection (public-safe field).\n' +
         '- **Seed Motir’s OWN overview (canonical copy):** the `db:seed` loader ' +
-        'sets the `motir` project’s `publicOverviewMd` to the canonical ' +
-        'self-improving README so the live public tenant renders real copy (not ' +
-        'the empty fallback). The twist (Yue): *you are viewing Motir inside ' +
-        'Motir, so Motir is self-improving — the bugs/ideas submitted here are ' +
-        'picked up by Motir to build Motir.* The exact Markdown (mirrors the ' +
-        '6.12.1 Panel 1 copy): tagline *"The AI-native project manager — ' +
-        'planned, tracked, and shipped inside itself. You’re looking at Motir, ' +
-        'in Motir: every bug and idea here is picked up by Motir to build the ' +
-        'next version of Motir."*; **## You’re looking at Motir, inside Motir** ' +
-        '(we dogfood completely — every feature here started as a work item on this ' +
-        'board and shipped via the same agents that turn work items into code); ' +
-        '**## A self-improving loop — and you’re in it** (the bugs you report + ' +
-        'ideas you upvote land in triage, get planned as work items here, and ' +
-        'are picked up by Motir to build the next Motir — you’re shaping the ' +
-        'roadmap), then the 4-step loop: *submit → enters triage → planned as a ' +
-        'work item → Motir’s coding agents open a PR → ships as Done on this ' +
-        'roadmap*; **## Contribute** (Submit a request — feeds the loop; the PM ' +
-        'core is GPL-3.0 on GitHub). This copy is the design’s ' +
-        '`design/public-projects/` Panel 1 text 1:1.\n' +
+        'sets the `motir` project’s `publicOverviewMd` to the canonical README so ' +
+        'the live public tenant renders real copy (not the empty fallback). ' +
+        'Motir is framed as THREE LAYERS, end to end — NOT "AI project ' +
+        'management" (Yue): (1) an AI planner, (2) an AI-native, MCP-native ' +
+        'project tracker (`motir-core`), (3) a hosted AI coding agent; that ' +
+        'end-to-end loop is the unique part. The headline idea is **"vibe ' +
+        'project"** (by analogy to vibe coding). The exact Markdown (mirrors the ' +
+        '6.12.1 Panel 1 copy 1:1): tagline *"Vibe your whole project. Bring an ' +
+        'idea — Motir’s three AI layers plan it, track it, and ship it, end to ' +
+        'end. You’re looking at Motir, built in Motir."*; **PART 1 — the ' +
+        'self-improving loop**: *## You’re looking at Motir, inside Motir* (we ' +
+        'dogfood completely — every feature here started as a work item on this ' +
+        'board and shipped by the same coding agent that turns work items into ' +
+        'code) + *## A self-improving loop — and you’re in it* (the bugs you ' +
+        'report + ideas you upvote land in triage, get planned as work items ' +
+        'here, and are picked up by Motir to build the next Motir) + the 4-step ' +
+        'loop *submit → triage → planned as a work item → the coding agent opens ' +
+        'a PR → ships as Done*; **PART 2 — *## Vibe project***: *you’ve heard of ' +
+        'vibe coding (describe what you want, the AI writes the code) — Motir ' +
+        'does that for an entire project; you bring the idea, the three layers ' +
+        'carry it intent→shipped:* **an AI planner** (chat → a structured plan: ' +
+        'epics, stories, work items, dependencies), **an AI-native tracker** ' +
+        '(boards / sprints / system of record, **MCP-native** so your own agents ' +
+        'and tools read+write Motir directly), **a hosted coding agent** (picks ' +
+        'up work items and ships the code, no setup); closing *"no other tool ' +
+        'runs the whole loop end to end — that’s a vibe project."*; then **## ' +
+        'Contribute** (Submit a request — feeds the loop; the PM core is GPL-3.0 ' +
+        'on GitHub). This copy is the design’s `design/public-projects/` Panel 1 ' +
+        'text 1:1.\n' +
         '- **The view UI:** render the read-only board + work item list with the ' +
         '"public project" framing (banner/chip) and the signed-in cross-org ' +
         'viewer’s identity; NO create / move / assign / status / drag ' +
