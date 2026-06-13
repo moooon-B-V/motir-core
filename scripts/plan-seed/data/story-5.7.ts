@@ -357,7 +357,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.3',
       title:
         'In-app notification fan-in job — a 1.6-pipeline consumer of the SHIPPED 5.1.6 events writing `Notification` rows (actor-excluded, mention-deduped, EXTENSIBLE for 5.4/6.6)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
