@@ -486,7 +486,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.5',
       title:
         'The bell + unread badge + notification drawer in the shell header — live count, deep links, mark-read on open (no whole-tree refresh)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
