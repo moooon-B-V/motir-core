@@ -575,7 +575,7 @@ export const story_2_7: PlanStory = {
       id: '2.7.7',
       title:
         'Vitest — schema + default map + picker default-seeding + loader mapping + filter facet',
-      status: 'planned',
+      status: 'blocked',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 50,
@@ -623,7 +623,7 @@ export const story_2_7: PlanStory = {
         '- `motir-core/CLAUDE.md` § tests-use-real-Postgres + § coverage gate.\n' +
         '- `motir-core/lib/services/workItemsService.ts` + the FilterAST ' +
         'translator — the units asserted against.',
-      dependsOn: ['2.7.3'],
+      dependsOn: ['2.7.3', '2.7.4', '2.7.5', '2.7.6'],
     },
     {
       id: '2.7.8',
