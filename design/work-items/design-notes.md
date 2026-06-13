@@ -2169,3 +2169,166 @@ control/badge`, `--spacing-control/input/chip/icon-btn/tooltip/btn-*`,
 - "Viewed recently" (no view-history substrate).
 - A "Filters" primary sidebar item (the site-global Jira shape; revisit if a
   use case lands).
+
+---
+
+## Work-item type + executor picker (Story 2.7 · 2.7.1 → 2.7.4)
+
+Asset: `design/work-items/type-executor-picker.mock.html` (four panels; toggle
+dark for token parity). The design for two NEW structural fields promoted from
+plan PROSE to UI — `type` (a fixed ten-member `WorkItemType` enum, leaf-only)
+and `executor` (`coding_agent | human`, seeded from a type→executor default
+map). The picker is a NEW element on TWO existing surfaces — the issue **create
+modal** (2.3.3) and the issue **detail rail** (2.4). The code subtask is 2.7.4
+(blocked on this design gate + on the 2.7.3 schema).
+
+### The mirror, and why this is a sibling control (not a replacement)
+
+Verified in 2.7.2 (Atlassian): Jira's "issue type" IS the kind hierarchy
+(epic/story/task/sub-task/bug) and routing-WHO is the **assignee** field (a
+Rovo agent "shows up as an assignee"). Motir splits the axes — `type` (what
+NATURE of work) + `executor` (who) — for the Epic-7 dispatch use case. So the
+control is drawn as a **sibling of the kind/assignee affordances**, never a
+replacement for kind: in the create modal it is its own `Type` field row
+(after Kind/Title), and on the detail rail its own `Type` + `Executor` rows
+alongside Status/Assignee.
+
+### Placement
+
+- **Create modal (panel 1).** A new `Type` field row, then an `Executor` row,
+  inserted after the existing Kind + Title rows (before the rest of the
+  optional fields). Both rows render **only when the chosen kind is a leaf**
+  (task / subtask / bug) — absent for epic / story (panel 2d). The `Type`
+  field is the shipped `Combobox`; because the modal is a `role="dialog"`, its
+  menu renders **inline** (the Combobox in-dialog branch), not portaled.
+- **Detail rail (panel 3).** Two new rail rows — `Type` (the hued chip) and
+  `Executor` (the agent/person indicator) — in the metadata column beside
+  Status / Assignee, each **inline-editable** (the 2.5.5 pattern: the static
+  chip/indicator IS the click target, opening the same picker in place).
+
+### The type picker — Combobox (panel 1; 2.7.4)
+
+- The shipped `Combobox` (`components/ui/Combobox.tsx`), `searchable={false}`
+  (a fixed, closed set of ten — no type-ahead), exactly like the existing
+  kind `TypePicker`. Each option row = the type's **saturated `--el-type-*`
+  glyph** (mirroring `IssueTypeIcon`) + its label; the selected row carries the
+  trailing `Check`. The trigger shows the chosen glyph + label + the
+  `ChevronsUpDown` affordance, or the `Set a type` placeholder when null.
+- **The ten members, in menu order:** Code · Design · Test · Content ·
+  Research · Review · Decision · Deploy · Manual · Chore (the 2.7.2 enum order;
+  the "doing" types first, the meta/admin types last).
+
+### The executor control — Segmented (panels 1–2; 2.7.4)
+
+- The shipped `Segmented` (`components/ui/Segmented.tsx`), a two-option group:
+  `Coding agent` (bot glyph) | `Human` (person glyph). The pressed option gets
+  the raised `--el-page-bg` fill + `--shadow-subtle`; its leading glyph takes
+  `--el-accent` (the Segmented contract).
+- **Default-seeding (panel 2a/2b).** Choosing a type SEEDS the executor from
+  the 2.7.3 `defaultExecutorForType` helper (the single source — the UI never
+  re-states the map): `code` → `coding_agent`, `manual` → `human`, etc. The
+  seed is **not a lock** — the user can flip it and the override sticks
+  (panel 2b shows Manual seeding Human, then overridden to Coding agent).
+- **Unset (panel 2c).** `type` is nullable; the trigger shows `Set a type` and
+  the executor control is dormant until a type seeds it.
+
+### The type chip + executor indicator — detail rail (panel 3; 2.7.4)
+
+- **Type chip** — the `Pill` recipe: the type's hue in a **`color-mix` tint
+  BACKGROUND** + `--el-text-strong` label (AA, finding #35 — never a
+  page-level tint) + the saturated `--el-type-*` glyph. A single saturated
+  `--el-type-*` token therefore yields BOTH the glyph hue and the chip tint
+  (`color-mix(in srgb, var(--el-type-X) 14%, var(--el-page-bg))`; the two grey
+  meta-types use 18% so the near-neutral tint still reads) — so no ten separate
+  `--el-tint-*` pairs are needed.
+- **Executor indicator** — a compact bot/person glyph (`--el-text-secondary`)
+  - label, read-only until clicked.
+- **Null leaf (panel 3c).** A quiet dashed `Set a type` affordance; no executor
+  row appears until a type is set.
+
+### The ten-type hue map (panel 4 — decided once here)
+
+Proposed as ten new Tier-3 `--el-type-{code…chore}` tokens (2.7.4 adds them to
+`globals.css`, the per-component token-growth pattern — the per-TYPE palette
+parallel to the existing per-KIND `--el-type-{epic…subtask}`). **No new Tier-0
+colour is needed:** the seven "produces an artifact" types take the seven
+saturated hues; the three "meta / admin" types (decision, manual, chore) take
+the three greys — desaturation is semantically apt.
+
+| Type       | `--el-type-*` → Tier-0      | Glyph (lucide)  | Executor default       |
+| ---------- | --------------------------- | --------------- | ---------------------- |
+| `code`     | `--color-info` (blue)       | code            | coding_agent           |
+| `design`   | `--color-accent` (pink)     | pencil          | either (default agent) |
+| `test`     | `--color-success` (green)   | flask-conical   | coding_agent           |
+| `content`  | `--color-accent-teal`       | file-text       | either (default agent) |
+| `research` | `--color-primary` (purple)  | lightbulb       | either (default agent) |
+| `review`   | `--color-accent-orange`     | clipboard-check | human                  |
+| `deploy`   | `--color-destructive` (red) | rocket          | coding_agent           |
+| `decision` | `--color-charcoal` (ink)    | scale           | human                  |
+| `manual`   | `--color-stone` (grey)      | hand            | human                  |
+| `chore`    | `--color-slate` (grey)      | wrench          | either (default agent) |
+
+`deploy` → red is the one semantic stretch (production/ship = high-stakes); the
+glyph (rocket) disambiguates it from the `bug` KIND, which also uses red but
+appears in a different control. The default-executor column is the single map
+2.7.2 fixes and 2.7.3's `defaultExecutorForType` encodes.
+
+### Copy strings
+
+- **Type labels (10):** `Code` · `Design` · `Test` · `Content` · `Research` ·
+  `Review` · `Decision` · `Deploy` · `Manual` · `Chore`.
+- **Executor labels (2):** `Coding agent` · `Human`.
+- **Empty / field:** field labels `Type`, `Executor`; the unset placeholder +
+  the dashed detail affordance both read `Set a type`.
+- All copy goes in the issues i18n namespace (the same locale set the app
+  ships — 2.7.4 AC); labels match the enum gloss in
+  `docs/decisions/work-item-type-taxonomy.md` (2.7.2).
+
+### Tokens / a11y
+
+- Colour only via Tier-3 `--el-*`: the ten per-type hues = the new
+  `--el-type-{code…chore}` (glyph) + a `color-mix` tint of the same token (chip
+  background) with `--el-text-strong` (AA, finding #35, and never colour alone
+  — the glyph SHAPE + the label carry the type); the executor glyph =
+  `--el-text-secondary`, the active segment glyph = `--el-accent`. No
+  page-level tint.
+- Shape via element-semantic tokens only (`--radius-input/card/control/btn/
+badge`, `--spacing-control/chip-*`, `--height-control`,
+  `--shadow-elevated/subtle/modal`) — every surface reshapes under
+  `data-display-style`.
+- **No new primitive** — Combobox + Segmented + Pill (chip) + the
+  `IssueTypeIcon`-adjacent glyph + the modal/rail grammars cover every element.
+- A11y: the type picker is the Combobox's labelled `role="combobox"` →
+  `role="listbox"` of `role="option"` rows (keyboard-complete per its own bar);
+  the executor control is Segmented's labelled `role="group"` of `aria-pressed`
+  buttons; the inline-edit chips are keyboard-activatable triggers that open
+  the same pickers; type/executor controls carry aria-labels. Light + dark
+  parity via the token flip (toggle in the mock).
+
+### Out of scope (documented extension slots)
+
+- **Per-type PROMPT generation** that keys off `type` — Story 7.6 (the
+  total-function generator the fixed enum exists to support).
+- **The AI dispatch surface** that routes by `executor` (agent-dispatch vs
+  human-assign) — Story 7.6 / 7.7.
+- **Adding an eleventh type** — an explicit enum addition + migration (+ a new
+  `--el-type-*` token), never an ad-hoc free-text string (the closed set is the
+  whole point).
+- **Bulk type/executor edit** from the list/board (the single-item picker
+  ships; multi-select bulk edit is a later list-surface extension).
+- Any change to the **kind-parent grammar** — `type` is orthogonal to `kind`
+  and never affects parenting.
+
+### Primitives composed (no hand-rolling)
+
+- **Type picker** → `Combobox` (`components/ui/Combobox.tsx`, in-dialog inline
+  menu).
+- **Executor control** → `Segmented` (`components/ui/Segmented.tsx`).
+- **Type chip** → the `Pill` tint-background recipe + the `IssueTypeIcon`
+  saturated glyph.
+- **Type glyphs** → the `IssueTypeIcon` hue pattern extended to the ten
+  `--el-type-*` TYPE tokens.
+- **Modal / rail chrome** → the shipped `Modal` + the detail-rail metadata-row
+  grammar.
+- If a genuinely new primitive is ever needed, that is a NEW `design/` subtask
+  — not a 2.7.4 code workaround.
