@@ -32,6 +32,16 @@ the 6.4 workspace `MemberRole`: an org owner/admin administers the org and is
 granted admin on **every** workspace under it; an org member belongs to the org
 but is governed inside each workspace by their workspace role.
 
+**Membership direction is ASYMMETRIC (Yue).** Adding a user to a **workspace**
+auto-creates their **org membership** (you can't be in a workspace without being
+in its org — the upward invariant). Adding a user to the **org** does **not** put
+them in any workspace: a plain org member reaches only the workspaces they're
+**explicitly** added to (an org owner/admin still spans all _by role_). So an
+**"org-only" member in zero workspaces is a valid state** (e.g. a billing admin) —
+the roster shows "No workspaces" for them. Removing someone from the org revokes
+all their workspace access; removing them from a workspace leaves the org
+membership intact.
+
 ### Mirror product (rung 1 — cited, not asserted)
 
 - **Atlassian / Jira Cloud** — the Organization is the topmost structure; it

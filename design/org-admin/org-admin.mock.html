@@ -1380,7 +1380,8 @@
     <div class="panel-label">
       3 · Cross-workspace member management (populated, PAGINATED) — everyone across the org’s
       workspaces with their org role + which workspaces they belong to; add / remove / change role.
-      The roster paginates (at-scale — NOT load-all; finding #57).
+      Includes an "org-only" member (in the org, in zero workspaces — valid; e.g. a billing admin),
+      shown as "No workspaces". The roster paginates (at-scale — NOT load-all; finding #57).
     </div>
     <div class="panel">
       <div class="stage">
@@ -1475,6 +1476,21 @@
                   <button class="btn btn-ghost btn-sm">Remove</button>
                 </div>
                 <!-- row: invited (pending) -->
+                <!-- org-only member — in the org, in ZERO workspaces (valid; e.g. a billing admin) -->
+                <div class="mrow">
+                  <span class="avatar">P</span>
+                  <span class="minfo">
+                    <span class="mname">Priya Anand</span>
+                    <span class="memail">priya@motir.co</span>
+                  </span>
+                  <span class="ws-chips">
+                    <span style="font-size: 12px; color: var(--el-text-faint)">No workspaces</span>
+                  </span>
+                  <span class="cbx role"
+                    >Admin <svg viewBox="0 0 24 24" class="chev"><use href="#i-updown" /></svg
+                  ></span>
+                  <button class="btn btn-ghost btn-sm">Remove</button>
+                </div>
                 <div class="mrow">
                   <span
                     class="avatar"
@@ -1496,7 +1512,7 @@
               </div>
               <!-- PAGINATION — at-scale, NOT load-all -->
               <div class="card-foot">
-                <span>Showing 1–5 of 14</span>
+                <span>Showing 1–6 of 14</span>
                 <span class="pager">
                   <span class="pbtn is-disabled"
                     ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Prev</span
@@ -1613,8 +1629,11 @@
             <div class="note info" style="margin-top: 14px">
               <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
               <span
-                >Org membership gates workspace access: someone removed from the organization loses
-                access to every workspace under it.</span
+                >Adding someone to the organization does <strong>not</strong> add them to any
+                workspace — they’ll need to be added to a workspace to work in it (owners/admins
+                reach all by role). Adding someone to a <strong>workspace</strong> makes them an org
+                member automatically. Removing them from the org removes access to every
+                workspace.</span
               >
             </div>
           </div>
