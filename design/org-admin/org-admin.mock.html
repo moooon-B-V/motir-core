@@ -29,13 +29,26 @@
           EmptyState + ErrorState family (the empty / fetch-error / forbidden
           states), Skeleton (the loading roster), Tooltip (the read-only
           explainer), a paginated list pattern (the at-scale roster).
-        • The org switcher MIRRORS the shipped WorkspaceSwitcher
-          (app/(authed)/_components/WorkspaceSwitcher.tsx): a ghost Button +
-          ChevronDown trigger opening a Popover list with a Check on the active
-          row + a Pill for the role. It sits as the LEFTMOST context control in
-          the TopNav (app/(authed)/_components/TopNav.tsx), to the LEFT of the
-          workspace switcher, so the context breadcrumb reads
-          Org › Workspace (› Project, which lives in the sidebar header).
+        • PROGRESSIVE DISCLOSURE is the governing rule of the shell chrome.
+          The data model ALWAYS has all three tiers (Org → Workspace →
+          Project) so there is never a migration; the UI reveals a tier only
+          when it offers a choice (count > 1). Concretely:
+            – The ORG is ALWAYS shown as the top-left anchor in the TopNav
+              (app/(authed)/_components/TopNav.tsx) — a ghost Button +
+              ChevronDown opening a menu (settings / members / billing /
+              new workspace / + the switch-org list). Auto-created at signup,
+              renameable. A one-person company (OPC) is just an org of one —
+              there is NO separate "individual" mode to detect.
+            – The WORKSPACE switcher is HIDDEN until the org has a 2nd
+              workspace; then it appears to the RIGHT of the org (Acme ›
+              Engineering), mirroring the shipped WorkspaceSwitcher
+              (app/(authed)/_components/WorkspaceSwitcher.tsx). One workspace
+              is implicit and never shown.
+            – The PROJECT switcher always lives in the sidebar header (1.5.3),
+              unchanged.
+          So only TWO count-driven reveals exist: workspace at ws #2, and the
+          org's "switch organization" section at org #2. Everything else is
+          steady chrome.
 
       Mirror product = org-above-workspace admin (rung 1, cited not asserted):
         • Atlassian / Jira Cloud — the Organization is the topmost structure;
@@ -66,10 +79,13 @@
           platform-staff concept, NOT this tenant org-admin.
 
       Covers (multi-panel — review EACH):
-        (1) the ORG SWITCHER in the shell — single-org quiet-label case +
-            multi-org dropdown open, showing the Org › Workspace nesting
+        (1) PROGRESSIVE DISCLOSURE in the shell — org always shown; workspace
+            switcher appears only at ws #2; the org menu open (its switch-org
+            section shown only at org #2). The OPC / small-org / multi-ws /
+            multi-org ladder, all from the same component.
         (2) ORG SETTINGS (populated) — name / slug / metadata + the passive
-            billing-later placeholder
+            billing-later placeholder; at one workspace this IS the whole
+            Settings home (no separate workspace-settings surface yet)
         (3) CROSS-WORKSPACE MEMBER MANAGEMENT (populated, PAGINATED) — the
             roster across the org's workspaces with org-role + workspace chips
             + add / remove / change-role; a page bar (NOT load-all)
@@ -1038,28 +1054,27 @@
       </button>
     </div>
 
-    <!-- ════════════════ PANEL 1 — the org switcher in the shell ════════════════ -->
+    <!-- ════════════════ PANEL 1 — progressive disclosure of the tiers in the shell ════════════════ -->
     <div class="panel-label">
-      1 · The org switcher in the shell (TopNav, leftmost) — single-org QUIET LABEL (no dropdown) ·
-      multi-org DROPDOWN OPEN. Nests ABOVE the workspace switcher, so context reads Org › Workspace.
+      1 · Progressive disclosure — the ORG is ALWAYS shown in the header; the WORKSPACE layer is
+      HIDDEN until a 2nd workspace exists; the PROJECT lives in the sidebar. No "individual" mode —
+      a one-person company (OPC) is just an org of one. Two count-driven reveals only.
     </div>
     <div class="panel">
       <div class="stage">
+        <!-- LADDER ROW A + B — header at 1 workspace vs 2+ workspaces -->
         <div class="grid-2" style="gap: 0">
-          <!-- single-org: quiet label, NOT a dropdown -->
+          <!-- A · org with ONE workspace (individual OPC OR small org — SAME header) -->
           <div style="border-right: 1px solid var(--el-border)">
             <div class="topnav">
               <div class="left">
-                <span class="quiet" aria-label="Organization (single org)">
-                  <span class="org-ava">M</span>
-                  moooon
-                </span>
-                <span class="ctx-sep">›</span>
-                <!-- the existing WorkspaceSwitcher trigger -->
-                <button class="trigger">
-                  <span class="tlabel">moooon</span>
+                <!-- ORG always shown; chevron opens its menu (settings/members/billing/etc.) -->
+                <button class="trigger" aria-label="Organization menu">
+                  <span class="org-ava">A</span>
+                  <span class="tlabel">Acme</span>
                   <svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
                 </button>
+                <!-- NO workspace here: a single workspace is implicit, never shown -->
               </div>
               <div class="right">
                 <span class="mini-search"
@@ -1068,33 +1083,57 @@
                 <span class="avatar" style="width: 28px; height: 28px; font-size: 11px">Z</span>
               </div>
             </div>
+            <!-- sidebar header stub — the PROJECT switcher lives here (1.5.3), unchanged -->
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 12px 20px;
+                border-bottom: 1px solid var(--el-border-soft);
+              "
+            >
+              <span style="font-size: 11px; color: var(--el-text-faint)">sidebar ›</span>
+              <button class="trigger" style="max-width: 200px">
+                <span
+                  class="org-ava"
+                  style="background: var(--el-tint-sky); border-radius: var(--radius-control)"
+                  >MA</span
+                >
+                <span class="tlabel">Mobile App</span>
+                <svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+              </button>
+            </div>
             <p
               style="
                 font-size: 12px;
                 color: var(--el-text-muted);
-                padding: 14px 20px 22px;
+                padding: 12px 20px 20px;
                 line-height: 1.5;
                 margin: 0;
               "
             >
-              <strong style="color: var(--el-text-secondary)">Single-org member.</strong> The org is
-              shown as a quiet, non-interactive label (no chevron) — there is nothing to switch to.
-              The workspace switcher to its right is unchanged.
+              <strong style="color: var(--el-text-secondary)">1 org · 1 workspace.</strong> The org
+              name (<strong>Acme</strong>) is always the top-left anchor — renameable, auto-created
+              at signup. The <strong>workspace is not shown at all</strong> (one workspace is
+              implicit). Identical header whether Acme is a one-person company or a 10-person team —
+              there is no "individual" mode to detect.
             </p>
           </div>
 
-          <!-- multi-org: dropdown OPEN -->
+          <!-- B · org with a SECOND workspace → the workspace switcher appears -->
           <div>
             <div class="topnav">
               <div class="left">
-                <button class="trigger" aria-label="Switch organization">
-                  <span class="org-ava">M</span>
-                  <span class="tlabel">moooon</span>
+                <button class="trigger" aria-label="Organization menu">
+                  <span class="org-ava">A</span>
+                  <span class="tlabel">Acme</span>
                   <svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
                 </button>
                 <span class="ctx-sep">›</span>
-                <button class="trigger">
-                  <span class="tlabel">moooon</span>
+                <!-- workspace switcher — appears ONLY now that a 2nd workspace exists -->
+                <button class="trigger" aria-label="Switch workspace">
+                  <span class="tlabel">Engineering</span>
                   <svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
                 </button>
               </div>
@@ -1102,48 +1141,102 @@
                 <span class="avatar" style="width: 28px; height: 28px; font-size: 11px">Z</span>
               </div>
             </div>
-            <div style="padding: 0 20px 22px">
-              <div class="menu" style="width: 300px">
-                <div class="menu-head">Organizations</div>
-                <div class="opt sel active">
-                  <svg viewBox="0 0 24 24" class="ck"><use href="#i-check" /></svg>
-                  <span class="org-ava">M</span>
-                  <span class="ot"
-                    ><span class="nm">moooon</span><span class="od">3 workspaces</span></span
-                  >
-                  <span class="pill pill-owner"
-                    ><svg viewBox="0 0 24 24"><use href="#i-crown" /></svg>Owner</span
-                  >
-                </div>
-                <div class="opt">
-                  <svg viewBox="0 0 24 24" class="ck"><use href="#i-check" /></svg>
-                  <span class="org-ava" style="background: var(--el-tint-sky)">A</span>
-                  <span class="ot"
-                    ><span class="nm">Acme Labs</span><span class="od">1 workspace</span></span
-                  >
-                  <span class="pill pill-admin">Admin</span>
-                </div>
-                <div class="opt">
-                  <svg viewBox="0 0 24 24" class="ck"><use href="#i-check" /></svg>
-                  <span class="org-ava" style="background: var(--el-tint-mint)">N</span>
-                  <span class="ot"
-                    ><span class="nm">Northwind Co</span><span class="od">2 workspaces</span></span
-                  >
-                  <span class="pill pill-member">Member</span>
-                </div>
-                <div class="menu-sep"></div>
-                <div class="opt">
-                  <svg viewBox="0 0 24 24" class="li"><use href="#i-settings" /></svg>
-                  <span class="ot"><span class="nm">Organization settings</span></span>
-                </div>
-                <div class="opt">
-                  <svg viewBox="0 0 24 24" class="li"><use href="#i-plus" /></svg>
-                  <span class="ot"><span class="nm">Create organization</span></span>
-                </div>
-                <p class="opt-foot">
-                  Switching an org re-scopes the workspace switcher to that org’s workspaces.
-                </p>
-              </div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 12px 20px;
+                border-bottom: 1px solid var(--el-border-soft);
+              "
+            >
+              <span style="font-size: 11px; color: var(--el-text-faint)">sidebar ›</span>
+              <button class="trigger" style="max-width: 200px">
+                <span
+                  class="org-ava"
+                  style="background: var(--el-tint-sky); border-radius: var(--radius-control)"
+                  >MA</span
+                >
+                <span class="tlabel">Mobile App</span>
+                <svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+              </button>
+            </div>
+            <p
+              style="
+                font-size: 12px;
+                color: var(--el-text-muted);
+                padding: 12px 20px 20px;
+                line-height: 1.5;
+                margin: 0;
+              "
+            >
+              <strong style="color: var(--el-text-secondary)">2+ workspaces.</strong> The moment a
+              2nd workspace is created, the workspace switcher appears to the right of the org, and
+              the context reads <strong>Acme › Engineering</strong>. Switching the workspace
+              re-scopes the project switcher in the sidebar. This is the ONLY thing that makes the
+              middle tier visible.
+            </p>
+          </div>
+        </div>
+
+        <!-- LADDER ROW C — the org menu OPEN (the Acme ▾ button) -->
+        <div style="border-top: 1px solid var(--el-border); padding: 18px 20px 22px">
+          <p style="font-size: 12px; color: var(--el-text-muted); margin: 0 0 12px">
+            <strong style="color: var(--el-text-secondary)"
+              >C · the “Acme ▾” org menu, open.</strong
+            >
+            One menu behind the org name. The <em>Switch organization</em> section is present ONLY
+            when the account belongs to ≥2 orgs (the 2nd count-driven reveal); a single-org user
+            just sees the manage + create rows.
+          </p>
+          <div class="menu" style="width: 320px; margin: 0">
+            <div class="menu-head">Acme</div>
+            <div class="opt">
+              <svg viewBox="0 0 24 24" class="li"><use href="#i-settings" /></svg>
+              <span class="ot"><span class="nm">Settings</span></span>
+            </div>
+            <div class="opt">
+              <svg viewBox="0 0 24 24" class="li"><use href="#i-users" /></svg>
+              <span class="ot"><span class="nm">Members</span></span>
+            </div>
+            <div class="opt">
+              <svg viewBox="0 0 24 24" class="li"><use href="#i-sparkle" /></svg>
+              <span class="ot"
+                ><span class="nm">Billing &amp; usage</span
+                ><span class="od">Coming soon</span></span
+              >
+            </div>
+            <div class="opt">
+              <svg viewBox="0 0 24 24" class="li"><use href="#i-plus" /></svg>
+              <span class="ot"
+                ><span class="nm">New workspace</span
+                ><span class="od">Adds the workspace switcher</span></span
+              >
+            </div>
+            <div class="menu-sep"></div>
+            <!-- present ONLY when account is in ≥2 orgs -->
+            <div class="menu-head">Switch organization · shown only at 2+ orgs</div>
+            <div class="opt sel active">
+              <svg viewBox="0 0 24 24" class="ck"><use href="#i-check" /></svg>
+              <span class="org-ava">A</span>
+              <span class="ot"
+                ><span class="nm">Acme</span><span class="od">1 workspace</span></span
+              >
+              <span class="pill pill-owner"
+                ><svg viewBox="0 0 24 24"><use href="#i-crown" /></svg>Owner</span
+              >
+            </div>
+            <div class="opt">
+              <svg viewBox="0 0 24 24" class="ck"><use href="#i-check" /></svg>
+              <span class="org-ava" style="background: var(--el-tint-mint)">N</span>
+              <span class="ot"
+                ><span class="nm">Northwind Co</span><span class="od">2 workspaces</span></span
+              >
+              <span class="pill pill-member">Member</span>
+            </div>
+            <div class="opt">
+              <svg viewBox="0 0 24 24" class="li"><use href="#i-plus" /></svg>
+              <span class="ot"><span class="nm">Create organization</span></span>
             </div>
           </div>
         </div>
@@ -1153,7 +1246,9 @@
     <!-- ════════════════ PANEL 2 — org settings (populated) ════════════════ -->
     <div class="panel-label">
       2 · Organization settings (populated) — org name / slug / metadata an org owner controls. The
-      billing slot is a PASSIVE placeholder only (billing is 7.12.5 / Epic 8, not built here).
+      billing slot is a PASSIVE placeholder only (billing is 7.12.5 / Epic 8, not built here). At
+      ONE workspace this IS the whole Settings home (no separate "workspace settings" surface); a
+      dedicated per-workspace settings split appears only once a 2nd workspace exists.
     </div>
     <div class="panel">
       <div class="stage">

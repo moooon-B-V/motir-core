@@ -15,8 +15,12 @@ primitives — no Pencil→code gap.
 
 Story 6.10 introduces the missing **top tenancy tier** above the workspace — the
 **`Organization`** (the root account a customer signs up as, the parent of N
-workspaces, and the **billing entity** credits + usage roll up to). The org-admin
-surfaces are the **tenant** owner/admin's controls for that tier:
+workspaces, and the **billing entity** credits + usage roll up to). It is
+**auto-created at signup and renameable**; every customer is an org from day one,
+so a one-person company (**OPC**) and an enterprise share one model and one set
+of surfaces — the difference is purely **progressive disclosure** (see the rule
+below), not a separate "individual" product. The org-admin surfaces are the
+**tenant** owner/admin's controls for that tier:
 
 - the **org switcher** in the app shell,
 - **org settings** (name / slug / metadata),
@@ -60,22 +64,50 @@ team-container under it.
 
 ---
 
+## ⚠️ Progressive disclosure — the governing rule of the shell chrome
+
+The data model **always** carries all three tiers (`Organization → Workspace →
+Project`), auto-created at signup, so there is **never a migration** as a
+customer grows. The **UI reveals a tier only when it offers a choice** — i.e.
+when its count is at least two. "Scale" is not a mode the product detects; it
+emerges from counts. There is **no "individual" branch**: a one-person company
+(**OPC**) is just an organization with one member.
+
+| Tier             | When it shows in the header                                                                                                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Organization** | **Always** — the top-left anchor (a `Button` + `ChevronDown` opening its menu). Auto-created at signup, renameable. The menu's **"Switch organization" section appears only when the account belongs to ≥2 orgs.** |
+| **Workspace**    | **Hidden until the org has a 2nd workspace.** One workspace is implicit and never shown. At ws #2 the workspace switcher appears to the RIGHT of the org (`Acme › Engineering`).                                   |
+| **Project**      | **Always** — in the sidebar header (1.5.3), unchanged. Switching the workspace re-scopes it.                                                                                                                       |
+
+So **only two count-driven reveals exist**: the workspace switcher at ws #2, and
+the org menu's switch-org section at org #2. The same components render every
+scale — OPC, small org, multi-workspace org, multi-org enterprise — by hiding any
+tier whose count is 1. (Mirror: Atlassian shows the org picker "only when you
+have more than one"; Linear's single-workspace view is equally clean.)
+
 ## Where it lives
 
-- **Org switcher** — a new client component (mirror
+- **Org control** — a new client component (mirror
   `app/(authed)/_components/WorkspaceSwitcher.tsx`) rendered in the **TopNav**
-  (`app/(authed)/_components/TopNav.tsx`) as the **leftmost** context control in
-  the left cluster, **to the LEFT of the workspace switcher**. The context
-  breadcrumb then reads **Org › Workspace** (the project switcher stays in the
-  sidebar header, so the full chain is Org › Workspace › Project). A `›`
-  separator (`--el-text-faint`) sits between the org and workspace triggers.
-- **Org settings + members** — a new **org-scoped settings area** distinct from
-  the existing workspace settings (`app/(authed)/settings/workspace/*`). Suggested
-  routes: `app/(authed)/settings/organization/page.tsx` (general + billing
-  placeholder + danger zone) and `app/(authed)/settings/organization/members/page.tsx`
-  (the paginated roster). Both are reached from the switcher's "Organization
-  settings" item and are **org-owner/admin gated** (404-not-403 for a non-org
-  member; a forbidden treatment for an org member who lacks admin — panel 5d).
+  (`app/(authed)/_components/TopNav.tsx`) as the **leftmost** anchor, ALWAYS
+  present. It is a menu button (org avatar + name + `ChevronDown`), not only a
+  switcher: the menu carries **Settings · Members · Billing & usage (Coming
+  soon) · New workspace**, then — **only when the account is in ≥2 orgs** — a
+  **"Switch organization"** section (the org list + **Create organization**).
+- **Workspace switcher** — the shipped `WorkspaceSwitcher`, rendered to the
+  RIGHT of the org with a `›` separator (`--el-text-faint`) **only when the
+  active org has ≥2 workspaces**. Below that threshold it is not rendered at
+  all. So the header reads `Acme` (1 ws) → `Acme › Engineering` (2+ ws).
+- **Org settings + members** — an **org-scoped settings area**. **At one
+  workspace this IS the whole Settings home** (no separate "workspace settings"
+  surface — that split appears only once a 2nd workspace exists, to avoid
+  confusing a small team with an org-vs-workspace settings distinction that is
+  1:1 for them). Suggested routes: `app/(authed)/settings/organization/page.tsx`
+  (general + billing placeholder + danger zone) and
+  `app/(authed)/settings/organization/members/page.tsx` (the paginated roster).
+  Reached from the org menu's Settings/Members items and **org-owner/admin
+  gated** (404-not-403 for a non-org member; a forbidden treatment for an org
+  member who lacks admin — panel 5d).
 
 The page shells reuse the `/issues` + workspace-settings grammar: a serif `h2`
 title + a muted subtitle, then a `stack` of `Card`s.
@@ -84,29 +116,32 @@ title + a muted subtitle, then a `stack` of `Card`s.
 
 ## Panels (review EACH — mistake #31)
 
-### Panel 1 — the org switcher in the shell
+### Panel 1 — progressive disclosure in the shell
 
-Two cases, side by side:
+The panel is a **ladder** demonstrating the count-driven reveal (above), not a
+single switcher state:
 
-- **Single-org member (left).** The org is a **quiet, non-interactive label** —
-  an org avatar chip + the org name, **no chevron** (there is nothing to switch
-  to). The workspace switcher to its right is unchanged. _Rationale:_ mirrors the
-  `WorkspaceSwitcher`'s own empty/degenerate handling — never show a dropdown
-  affordance with one option.
-- **Multi-org member (right).** A ghost **`Button` + `ChevronDown`** trigger
-  (org avatar + name) opening a **`Popover`** that lists the orgs, with:
-  - a **mono uppercase "Organizations" heading** (the `WorkspaceSwitcher` heading
-    grammar),
-  - one row per org: a `Check` (`--el-accent`, visible only on the **active**
-    org) + the org avatar + name + "{n} workspaces" sub + the viewer's **org-role
-    `Pill`** (owner/admin/member),
-  - a separator, then **"Organization settings"** (gear) and **"Create
-    organization"** (plus) items,
-  - a foot note: _"Switching an org re-scopes the workspace switcher to that
-    org's workspaces."_
+- **A · 1 org · 1 workspace (top-left).** The header shows **only the org**
+  (`Acme ▾`) as the top-left anchor; the **workspace is not shown at all**. The
+  sidebar header carries the **project** switcher (`Mobile App ▾`). _This is the
+  identical header for an OPC and for a 10-person small org — there is no
+  individual mode._
+- **B · 2+ workspaces (top-right).** The workspace switcher has appeared to the
+  RIGHT of the org with a `›` separator (`Acme › Engineering`). This is the ONLY
+  thing that surfaces the middle tier. Switching it re-scopes the sidebar project
+  switcher.
+- **C · the `Acme ▾` org menu, open (bottom).** One menu behind the org name:
+  - **Settings · Members · Billing & usage (Coming soon) · New workspace** ("Adds
+    the workspace switcher" — the discoverable path to reveal tier 2),
+  - then a separator and the **"Switch organization"** section — **rendered only
+    when the account is in ≥2 orgs**: one row per org with a `Check`
+    (`--el-accent`, on the active org) + org avatar + "{n} workspaces" + the
+    viewer's **org-role `Pill`**, plus **Create organization**.
 
-**Placement is the load-bearing decision:** org switcher **left of** the
-workspace switcher, both in the TopNav left cluster, nesting `Org › Workspace`.
+**The load-bearing rule:** org is permanent top-left chrome; workspace is hidden
+until ws #2; the org's switch-org list is hidden until org #2. (No "quiet label
+vs dropdown" branch — the org is always a menu button; what its menu _contains_
+is what scales.)
 
 ### Panel 2 — org settings (populated)
 
@@ -237,10 +272,11 @@ to confirm token parity (every colour flips through Tier-0 under `--el-*`).
 
 ## Copy strings (en — the `orgAdmin` i18n namespace 6.10.5 adds)
 
-- Switcher: heading **"Organizations"**; per-org sub **"{count} workspaces"**;
-  items **"Organization settings"**, **"Create organization"**; foot
-  **"Switching an org re-scopes the workspace switcher to that org's
-  workspaces."**
+- Org menu: items **"Settings"**, **"Members"**, **"Billing & usage"** /
+  **"Coming soon"**, **"New workspace"** ("Adds the workspace switcher"); the
+  switch-org section (≥2 orgs only) heading **"Switch organization"**, per-org
+  sub **"{count} workspace(s)"**, **"Create organization"**. Workspace switcher
+  (≥2 ws only) reuses the shipped `shell.workspaceSwitcher` strings.
 - Settings: **"Organization settings"** (title); **"Manage the {org}
   organization — the account your workspaces live under. Only organization owners
   and admins can change these."** (subtitle); fields **"Organization name"**,
