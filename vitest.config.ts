@@ -80,6 +80,14 @@ export default defineConfig({
         'lib/repositories/notificationPreferenceRepository.ts',
         'lib/mappers/notificationPreferenceMappers.ts',
         'lib/notifications/preferences.ts',
+        // Story 5.7 · Subtask 5.7.7 — the in-app model + fan-in + read/mark API
+        // service/repo/job logic (5.7.2–5.7.4) joins the gate, completing the
+        // story's coverage contract (the 5.7.6 preference layer is gated above).
+        'lib/repositories/notificationRepository.ts',
+        'lib/services/notificationsService.ts',
+        'lib/services/notificationFanInService.ts',
+        'lib/jobs/definitions/notificationFanIn.ts',
+        'lib/notifications/errors.ts',
         'lib/services/workItemsService.ts',
         'lib/services/backlogService.ts',
         'lib/repositories/workItemRepository.ts',
@@ -186,6 +194,12 @@ export default defineConfig({
         },
         'lib/mappers/notificationPreferenceMappers.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/notifications/preferences.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 5.7 · Subtask 5.7.7 — the in-app model + fan-in + read/mark API gate.
+        'lib/repositories/notificationRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/notificationsService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/notificationFanInService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/jobs/definitions/notificationFanIn.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/notifications/errors.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/workItemsService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/backlogService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workItemRepository.ts': { branches: 90, functions: 90, lines: 90 },
