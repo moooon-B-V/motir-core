@@ -217,7 +217,7 @@ export const story_6_13: PlanStory = {
       id: '6.13.1',
       title:
         'Design — the project square: the gallery/explore page (cards), the search bar, category/tag filters, the sort/rank tabs, the shell entry',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 50,
