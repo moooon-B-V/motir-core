@@ -2406,6 +2406,255 @@ export const EPICS: EpicMeta[] = [
           'binder copy.',
       },
       {
+        id: 'bug-sprint-report-incomplete-list-zero-after-carry-over',
+        kind: 'bug',
+        title:
+          'Sprint report on a COMPLETED sprint reads CURRENT membership for the "Issues not completed" list/count — so after carry-over moves the unfinished items out, the report shows 0 (Jira freezes the at-completion snapshot)',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** sprint report read — `sprintsService.getSprintReport` ' +
+          '(`lib/services/sprintsService.ts:518-580`), the standalone closed-sprint report page ' +
+          '(`app/(authed)/sprints/[id]/report/page.tsx`), and indirectly the Reports hub Agile ' +
+          'Sprint-report card (the standalone page is its destination) · **Code surface owned ' +
+          'by:** Story 4.4 (Subtask 4.4.4 `getSprintReport` + 4.4.3 `completeSprint` carry-over) ' +
+          '· **Status:** open · **Reported by:** Yue.\n\n' +
+          'Complete a sprint with unfinished items and choose to carry them over to the next ' +
+          'sprint (or the backlog). Then open `/sprints/<that-just-completed-sprint-id>/report` ' +
+          '— Jira\'s closed-sprint report equivalent. The **"Issues not completed in this ' +
+          'sprint"** section shows **0** with the empty-state copy ("Everything in scope was ' +
+          'completed" or similar), and the not-completed list is empty. But the user knows real ' +
+          "unfinished items existed at sprint completion (the complete-sprint dialog's carry-over " +
+          'chooser told them so, and the items now sit in the next sprint / backlog). The report ' +
+          "is silently lying about the sprint's outcome.\n\n" +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, in `/backlog` start a sprint ' +
+          'with 5 issues, mark 3 as done, click **Complete sprint** → carry the 2 unfinished to ' +
+          '"Backlog" → confirm. The success-state modal correctly shows "2 not completed" with ' +
+          'each row labelled "→ Backlog" (PRE-MOVE snapshot — see "Why the success modal looks ' +
+          'right" below). Now reload, click **Open full report** on the same modal (or navigate ' +
+          'directly to `/sprints/<id>/report`). The **standalone** report says **0 not ' +
+          'completed**, the list is empty, but the points block still shows `committed: 5pts · ' +
+          'completed: 3pts · notCompleted: 2pts` (because points use the immutable baseline + ' +
+          'live rollup difference — see "What the report gets right" below). Net: a real Jira ' +
+          'closed-sprint report would show the 2 unfinished items with "→ Backlog" labels; ' +
+          "Motir's shows nothing.\n\n" +
+          "**Mirror product (decision-authority rung 1).** Jira's **Sprint Report** for a " +
+          'closed sprint is documented to display:\n\n' +
+          '- **Completed Issues** — issues that were in the sprint at completion AND reached a ' +
+          'done status\n' +
+          '- **Issues Not Completed in this Sprint** — issues that were in the sprint at ' +
+          'completion BUT did NOT reach done; each row carries a destination tag showing where ' +
+          'it was moved (`→ Backlog` / `→ <Next Sprint>`)\n' +
+          '- **Issues Removed From Sprint** — items pulled out manually BEFORE completion ' +
+          '(distinct from carry-over)\n' +
+          '- **Added After Sprint Started** — the scope-change figure\n\n' +
+          'Crucially, Jira **freezes the at-completion membership snapshot** for the closed ' +
+          'sprint report. Subsequently moving the carried-over items in the destination sprint, ' +
+          "archiving them, or even deleting them does NOT change what the closed sprint's report " +
+          "says — the closed sprint's history is immutable. This is the same posture Motir's " +
+          'OWN code already takes for points (the immutable `committedPoints` baseline locked ' +
+          'by `startSprint` in 4.4.2 — explicitly named in `sprintsService.ts:499-503` as "the ' +
+          'IMMUTABLE `committed` baseline preserves the original scope") — but the LIST / COUNT ' +
+          'silently drift to live membership in the same read. The two halves of the same DTO ' +
+          'tell different stories.\n\n' +
+          '**Root cause (high confidence — current-membership reads where historical were needed).** ' +
+          '`sprintsService.getSprintReport` (`lib/services/sprintsService.ts:538-559`) builds the ' +
+          '`incomplete` count + page via:\n\n' +
+          '```ts\n' +
+          'workItemRepository.countSprintIssuesByDoneMembership(id, ctx.workspaceId, {\n' +
+          '  statusKeys: doneStatusKeys,\n' +
+          '  include: false, // not-done\n' +
+          '});\n' +
+          'workItemRepository.findSprintIssuesByDoneMembership(id, ctx.workspaceId, {\n' +
+          '  statusKeys: doneStatusKeys,\n' +
+          '  include: false,\n' +
+          '  take,\n' +
+          '  cursor: options.incompleteCursor,\n' +
+          '});\n' +
+          '```\n\n' +
+          'Both helpers read **current `work_item.sprintId` membership** from the `workItem` ' +
+          'table. After `completeSprint` (`sprintsService.ts:330-460`) routes the unfinished ' +
+          "issues out (4.4.3 sets each carried-over item's `sprintId` to the destination), " +
+          '`workItem.sprintId !== <closed-sprint-id>` for those items, so they no longer match ' +
+          'the membership filter → `incompleteCount = 0`, `incompleteRows = []`. The same code ' +
+          'path works correctly for an **ACTIVE** sprint (membership IS the live truth there) ' +
+          'and for an active-sprint LIVE PREVIEW from inside the complete-sprint modal (the ' +
+          'modal fetches the report BEFORE calling complete — `CompleteSprintDialog.tsx:87-105` ' +
+          '— so at fetch time membership still holds). The post-completion reload is when the ' +
+          'drift surfaces.\n\n' +
+          'The `sprintsService.ts:487-495` comment LITERALLY DOCUMENTS the bug as if it were the ' +
+          'design: *"On a COMPLETED sprint, 4.4.3 has already carried the unfinished issues OUT, ' +
+          'so the report shows what SHIPPED and stayed, while the IMMUTABLE `committed` baseline ' +
+          'preserves the original scope (committed − completed = how much went unfinished) and ' +
+          'the carry-over already routed those issues."* This is a planner-side judgment call ' +
+          'that diverges from rung 1 with no documented use case — the comment is the smoking ' +
+          'gun, not the defence. Per the decision-authority ladder, rung 1 (Jira) wins; the ' +
+          'comment\'s framing is exactly the "AC satisfied by letter, mirror-product intent ' +
+          'violated" anti-pattern this PR captured in [[bug-reports-hub-agile-cards-collapse-to' +
+          '-one-url]] and [[bug-notification-pref-transitioned-still-disabled-after-5-4-shipped]].\n\n' +
+          "**Why the success modal LOOKS right** (and isn't a contradicting data point). " +
+          '`CompleteSprintDialog.tsx:87-105` fetches the report **BEFORE** `completeSprint` ' +
+          'runs (`useEffect` runs on mount/open; `handleComplete` fires on submit, AFTER the ' +
+          'fetch has populated `report`). The success-state `<SprintReport report={report} ' +
+          'carryOverLabel={…}>` reuses that PRE-MOVE snapshot and re-renders the same row list ' +
+          'with a "→ {destination}" badge per row (see `SprintReport.tsx:295-336` — the ' +
+          '`carryOverLabel` prop branch). This is correct for the modal — and is exactly the ' +
+          'SHAPE the standalone page must reproduce — but it works by **timing accident**, not ' +
+          "by data design: if a parallel session's complete races the modal's fetch, the modal " +
+          'would lose its snapshot too. The standalone page has no such timing window, so it ' +
+          'NEVER sees the snapshot.\n\n' +
+          "**What the report gets right (don't regress).** Several pieces of the report " +
+          'already use historical / immutable data and must keep doing so:\n\n' +
+          '- **`points.committed`** = `sprint.committedPoints`, the immutable baseline locked at ' +
+          '`startSprint` (4.4.2). Unchanged.\n' +
+          '- **`points.completed` + `points.notCompleted`** = the live rollup difference ' +
+          '(`estimationService.rollupForSprint`). For an ACTIVE sprint this is the live truth; ' +
+          'for a COMPLETED sprint this currently rolls up the items STILL in the sprint (the ' +
+          'completed ones) — which gives the right `completed` figure but the wrong ' +
+          '`notCompleted` (it would compute `0 not-completed-still-in-sprint` and then derive ' +
+          '`notCompleted = committed - completed` for the missing-points number; verify which ' +
+          'branch the rollup actually uses, and align with the new historical-list contract).\n' +
+          '- **`addedAfterStart`** = `workItemRevisionRepository.countItemsAddedToSprintAfter` — ' +
+          'already revision-trail based (`sprintsService.ts:564-569`). Unchanged. This is the ' +
+          'proof that the infrastructure to read historical membership EXISTS in the codebase; ' +
+          'the fix extends it.\n\n' +
+          '**Fix shape — read at-completion membership for completed sprints, keep current ' +
+          "membership for active ones.** The split is `sprint.state`-driven: an active sprint's " +
+          '"incomplete" IS the live not-done items (their membership is current); a completed ' +
+          'sprint\'s "incomplete" is whatever was in the sprint at `sprint.completedAt`.\n\n' +
+          '1. **`workItemRepository`** — add two new helpers (or a `pointInTime?: Date` option ' +
+          'on the existing pair):\n' +
+          '   - `findSprintIssuesAtCompletion(sprintId, workspaceId, { atDate: sprint.completedAt, ' +
+          'statusKeys, include, take, cursor })` — reads the `work_item_revision` trail to ' +
+          "rebuild the membership SET at `atDate`, joins each item's status AT THAT TIME (so " +
+          '"done at completion" is the correct status snapshot, not today\'s), and returns the ' +
+          'page. Mirror the `countItemsAddedToSprintAfter` posture (`workItemRevisionRepository.ts:' +
+          '112-130`) — same `work_item_revision`-based read, different query shape.\n' +
+          '   - `countSprintIssuesAtCompletion(sprintId, workspaceId, { atDate, statusKeys, ' +
+          'include })` — the count variant.\n' +
+          '2. **`sprintsService.getSprintReport`** — branch on `sprint.state`:\n' +
+          '   ```ts\n' +
+          "   if (sprint.state === 'complete' && sprint.completedAt) {\n" +
+          '     // historical reads — at-completion snapshot\n' +
+          '     [completedCount, incompleteCount, completedRows, incompleteRows] = await ' +
+          'Promise.all([\n' +
+          '       countSprintIssuesAtCompletion(id, ws, { atDate: sprint.completedAt, statusKeys, ' +
+          'include: true }),\n' +
+          '       countSprintIssuesAtCompletion(id, ws, { atDate: sprint.completedAt, statusKeys, ' +
+          'include: false }),\n' +
+          '       findSprintIssuesAtCompletion(id, ws, { atDate: sprint.completedAt, statusKeys, ' +
+          'include: true, take, cursor: completedCursor }),\n' +
+          '       findSprintIssuesAtCompletion(id, ws, { atDate: sprint.completedAt, statusKeys, ' +
+          'include: false, take, cursor: incompleteCursor }),\n' +
+          '     ]);\n' +
+          '   } else {\n' +
+          '     // active sprint — current membership (existing path, unchanged)\n' +
+          '   }\n' +
+          '   ```\n' +
+          '3. **Carry-over destination per row** — each not-completed row needs a ' +
+          "`carryOverTo: { kind: 'backlog' } | { kind: 'sprint', name: string }` field on the " +
+          '`SprintReportPageRowDto` so the standalone page can render the "→ Backlog" / ' +
+          '"→ <Sprint name>" badge per Jira. Source: the revision trail entry that moved the ' +
+          'item out of this sprint (the `sprintId` change right after `sprint.completedAt`). ' +
+          "The DTO already accommodates a destination via the modal's `carryOverLabel` prop on " +
+          '`SprintReport` (line 91 of SprintReport.tsx) — extend the DTO so the destination is ' +
+          "PER ROW and authoritative (the modal's single-label-for-all was a shortcut because " +
+          'the modal knew the user just chose one destination — Jira allows different ' +
+          'destinations per row over time, e.g. some carried, some manually removed later).\n' +
+          "4. **`SprintReport.tsx` consumer** — pass each row's destination through " +
+          '`ReportIssueRow` (currently `carryOverLabel` is a single string for ALL rows; promote ' +
+          'to per-row from the DTO). The modal continues to pass its single label as a fallback ' +
+          "for the PRE-MOVE snapshot case where the DTO doesn't carry destinations yet.\n" +
+          '5. **`points.notCompleted` for completed sprints** — re-derive from the at-completion ' +
+          'snapshot too, so the points and the list AGREE. Currently for a completed sprint ' +
+          'with carry-over the live rollup says `completed = 3, remaining = 0` → ' +
+          '`notCompleted = 0`, contradicting the immutable `committed = 5`. Either compute ' +
+          '`notCompleted = committed - completed` (the rough-but-correct fallback the comment ' +
+          'already gestures at), OR — better — sum story points across the at-completion ' +
+          'incomplete set (matches the new list exactly).\n\n' +
+          "**What's out of scope for this bug:** rewriting the active-sprint path (it works), " +
+          'restructuring `completeSprint` (no carry-over logic change), changing the ' +
+          'work-item-revision schema (the trail already records sprint changes — verify before ' +
+          'building the historical reader). The modal-success-state PRE-MOVE snapshot path stays ' +
+          'as a sensible "we just made the move, here\'s what we just moved" UI affordance — but ' +
+          'after the fix, even a fresh fetch into the standalone page reproduces the same shape ' +
+          'via the new historical reader. If the revision trail does not record sprint-membership ' +
+          "changes today (verify in `workItemsService.update*`), that's an out-of-scope " +
+          "prerequisite — log a separate finding and gate this bug's fix on that landing.\n\n" +
+          '## Acceptance criteria\n\n' +
+          '- For a **COMPLETED** sprint where the user carried N unfinished items out, ' +
+          '`GET /api/sprints/<id>/report` returns `incomplete.totalCount = N`, ' +
+          '`incomplete.items.length = min(N, take)`, with each item being the same one that was ' +
+          'unfinished at `sprint.completedAt`.\n' +
+          '- Each not-completed row in the DTO carries a per-row carry-over destination ' +
+          '(`backlog` / `{ sprintId, name }`) derived from the revision trail. The standalone ' +
+          'page renders the "→ Backlog" / "→ <Sprint name>" badge per row (matching the ' +
+          "modal's `carryOverLabel` posture and Jira).\n" +
+          '- For an **ACTIVE** sprint the read path is **unchanged** (current membership; the ' +
+          'live preview the complete-sprint modal already consumes stays byte-identical).\n' +
+          '- `points.completed` and `points.notCompleted` on a completed sprint AGREE with the ' +
+          'incomplete-list count: `notCompleted == committed - completed` (or, equivalently, ' +
+          'equals the sum of story-points across the at-completion incomplete set). No more ' +
+          'self-contradicting DTO.\n' +
+          '- A regression test (integration, real Postgres): start sprint A with 5 issues, ' +
+          'complete 3, carry 2 to Sprint B, complete A. Assert `GET /api/sprints/<A>/report` ' +
+          'returns `incomplete.totalCount = 2`, the 2 items carry `carryOverTo = { kind: ' +
+          '"sprint", name: "B" }`, and that subsequently moving one of those items in Sprint B ' +
+          "(or to the backlog, or deleting it) does NOT change Sprint A's report (immutability " +
+          'guarantee).\n' +
+          "- The standalone page's i18n strings (`sprintReport.sectionNotCompleted`, the empty-" +
+          'state copy) are unchanged. The "Issues removed from sprint" Jira concept (items ' +
+          'pulled out BEFORE completion) is captured as a follow-up, not part of this fix — log ' +
+          "a finding if the revision trail doesn't already distinguish it.\n" +
+          '- 4-layer respected: new repository helpers (single Prisma `$queryRaw` calls per the ' +
+          'existing revision-trail pattern), service composes them in `getSprintReport`, no ' +
+          'changes in route layer.\n\n' +
+          '## Context refs\n\n' +
+          '- `lib/services/sprintsService.ts:487-580` — `getSprintReport` (the fix site) + the ' +
+          'docstring comment that names the current behaviour as if it were the design (the ' +
+          'smoking gun)\n' +
+          '- `lib/services/sprintsService.ts:330-460` — `completeSprint` carry-over (where the ' +
+          'membership move happens; informs the revision-trail query that rebuilds the snapshot)\n' +
+          '- `lib/repositories/workItemRepository.ts` — `countSprintIssuesByDoneMembership` + ' +
+          '`findSprintIssuesByDoneMembership` (the current-membership readers; the new ' +
+          '`*AtCompletion` variants live alongside)\n' +
+          '- `lib/repositories/workItemRevisionRepository.ts:112-130` ' +
+          '(`countItemsAddedToSprintAfter`) — the existing revision-trail-based reader; the ' +
+          'pattern to mirror for `findSprintIssuesAtCompletion` / `countSprintIssuesAtCompletion`\n' +
+          '- `app/(authed)/backlog/_components/CompleteSprintDialog.tsx:87-105, 130-180` — the ' +
+          "success modal's PRE-MOVE-snapshot fetch + single-label `carryOverLabel` (the shape " +
+          'the per-row destination DTO field generalises)\n' +
+          '- `app/(authed)/backlog/_components/SprintReport.tsx:295-336` — `ReportIssueRow` ' +
+          '(consumes `carryOverLabel`; promote to per-row from the DTO)\n' +
+          '- `app/(authed)/sprints/[id]/report/page.tsx` — the standalone report (the surface ' +
+          'that exhibits the bug)\n' +
+          '- `lib/dto/sprints.ts:81-150` — `SprintReportDto` (extend with per-row carry-over)\n' +
+          '- Jira docs: closed-sprint Sprint Report (the rung-1 reference for the at-completion ' +
+          'snapshot + the per-row destination tag)\n' +
+          '- Sibling Epic-6 bugs in this PR: ' +
+          '[[bug-sprint-report-modal-clipped-burndown]], ' +
+          '[[bug-sprint-report-charts-misaligned-burndown-missing-chart-sub]] (also touch the ' +
+          'sprint-report seam; the modal-clip bug is on the same modal whose PRE-MOVE snapshot ' +
+          'is doing the right thing today). ' +
+          '[[bug-reports-hub-agile-cards-collapse-to-one-url]] proposes a `/reports/burndown` + ' +
+          '`/reports/velocity` split; the Sprint-report card destination ' +
+          '(`/sprints/<id>/report`) is unchanged by this bug but its contents become CORRECT.\n\n' +
+          '**Refactor signal — DTO whose fields read from different time horizons.** This is the ' +
+          'second instance of "the same DTO has fields computed from different snapshots and ' +
+          'they tell contradictory stories" — first was Story 5.4 vs the notification matrix ' +
+          "guard (the runtime ships, the UI guard doesn't flip — different time horizons of " +
+          "the same feature). Here it's within ONE DTO: `committed` is at-start-snapshot, " +
+          '`notCompleted points` is live-rollup, `incomplete list/count` is live-membership. ' +
+          'Three different time horizons. The right structural fix is to make the read function ' +
+          "declare its `at: 'start' | 'completion' | 'now'` snapshot stance ONCE and apply " +
+          'it consistently to every field — the function signature itself enforces internal ' +
+          'consistency. Not in scope for this bug (the fix is to make the closed-sprint read ' +
+          "fully `at: 'completion'`); captured as the refactor signal for a future " +
+          '`reportsSnapshotAt(sprintId, when)` extraction across sprint and (eventually) board ' +
+          'reports.',
+      },
+      {
         id: 'bug-sprint-report-modal-clipped-burndown',
         kind: 'bug',
         title:
