@@ -102,10 +102,10 @@ function rule(over: Partial<AutomationRuleSummaryDto> = {}): AutomationRuleSumma
     id: 'r1',
     name: 'Bug verification handoff',
     enabled: true,
-    trigger: { type: 'transitioned', fromStatusId: null, toStatusId: 's3' },
+    trigger: { type: 'transitioned', fromStatusId: null, toStatusId: 'done' },
     condition: null,
     conditionError: null,
-    actions: [{ type: 'transition', toStatusId: 's2' }],
+    actions: [{ type: 'transition', toStatusId: 'review' }],
     owner: { id: 'u1', name: 'Zhu Yue' },
     consecutiveFailureCount: 0,
     autoDisableThreshold: 10,
@@ -251,7 +251,8 @@ describe('AutomationRuleEditor — registry-driven when/if/then', () => {
       target: { value: 'Move to review' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Add action' }));
-    // The default action is "transition" — set its target status.
+    // The default action is "transition" — set its target status. The option's
+    // value is the status KEY ('review'), the unit the engine + updateStatus use.
     fireEvent.click(screen.getByRole('combobox', { name: 'Target status' }));
     fireEvent.click(screen.getByRole('option', { name: 'In Review' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save rule' }));
@@ -261,6 +262,6 @@ describe('AutomationRuleEditor — registry-driven when/if/then', () => {
     const body = JSON.parse(call![1].body) as Record<string, unknown>;
     expect(body.name).toBe('Move to review');
     expect(body.triggerType).toBe('created');
-    expect(body.actions).toEqual([{ type: 'transition', toStatusId: 's2' }]);
+    expect(body.actions).toEqual([{ type: 'transition', toStatusId: 'review' }]);
   });
 });

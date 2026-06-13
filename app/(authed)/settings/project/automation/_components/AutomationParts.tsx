@@ -101,10 +101,17 @@ export function RuleSwitch({
   );
 }
 
-/** Status-target Combobox options (each with its colour dot). */
+/** Status-target Combobox options (each with its colour dot). The value is the
+ * status KEY, not the row id: a rule's stored `triggerConfig.toStatusId` /
+ * `fromStatusId` and a `transition` action's `toStatusId` all hold the status
+ * KEY — that's the unit the engine narrows transitioned events by
+ * (`config.toStatusId === event.toStatusKey`, automationEngineService) and the
+ * unit `workItemsService.updateStatus` accepts. Storing the row id here meant a
+ * UI-authored transitioned rule never matched and a transition action always
+ * failed (the key/id mismatch). */
 export function statusOptions(statuses: WorkflowStatusDto[]): ComboboxOption<string>[] {
   return statuses.map((s) => ({
-    value: s.id,
+    value: s.key,
     label: s.label,
     icon: <StatusDot status={s} />,
   }));
