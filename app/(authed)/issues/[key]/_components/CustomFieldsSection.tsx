@@ -1,10 +1,9 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { Calendar, ChevronDown } from 'lucide-react';
-import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
+import type { CustomFieldValueDto, CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { Locale } from '@/lib/i18n/locales';
 import { cn } from '@/lib/utils/cn';
@@ -22,10 +21,15 @@ import { setCustomFieldValueAction } from '../customFieldActions';
 // the "Show more fields (N)" disclosure (the verified Jira hide-when-empty
 // rule). The chevron toggles the per-type inline editor (Input / DatePicker /
 // Combobox / member Combobox); commits go through the dedicated
-// setCustomFieldValueAction, a 422 keeps the editor open with the rose-tint
-// inline error, and a success refreshes the route (the rail's pattern). With
-// no definitions the section renders nothing — the rail is byte-identical to
-// a pre-5.3 build.
+// setCustomFieldValueAction. The commit is OPTIMISTIC: the picked value is
+// shown at once via a per-field override and the success response is taken as
+// the confirmation — the card KEEPS the optimistic value, with no
+// router.refresh() (a field-update success path must not whole-tree-refresh,
+// or the re-read reverts the cell before the write has propagated — the
+// inline-edit revert bug, `bug-inline-status-revert-on-second-edit`). A 422
+// snaps the override back and reopens the editor with the rose-tint inline
+// error. With no definitions the section renders nothing — the rail is
+// byte-identical to a pre-5.3 build.
 
 const NONE = '__none__';
 // Long option sets get the type-ahead filter; a short set opens straight to
@@ -53,7 +57,6 @@ function ErrorBox({ children }: { children: string }) {
 }
 
 export function CustomFieldsSection({ workItemId, fields, members }: CustomFieldsSectionProps) {
-  const router = useRouter();
   const t = useTranslations('issueViews');
   const locale = useLocale() as Locale;
   const { canEdit } = useProjectAccess();
@@ -63,6 +66,10 @@ export function CustomFieldsSection({ workItemId, fields, members }: CustomField
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  // Per-field optimistic overrides, keyed by field id. A key present here wins
+  // over the server prop until a re-read (a fresh navigation) supplies a new
+  // prop set — the success-keeps-optimistic half of the inline-edit pattern.
+  const [overrides, setOverrides] = useState<Record<string, CustomFieldValueDto | null>>({});
 
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale, { maximumFractionDigits: 10 }),
@@ -71,8 +78,13 @@ export function CustomFieldsSection({ workItemId, fields, members }: CustomField
 
   if (fields.length === 0) return null;
 
-  const valued = fields.filter((f) => f.value !== null);
-  const empty = fields.filter((f) => f.value === null);
+  const effFields = fields.map((f) =>
+    Object.prototype.hasOwnProperty.call(overrides, f.id)
+      ? { ...f, value: overrides[f.id] ?? null }
+      : f,
+  );
+  const valued = effFields.filter((f) => f.value !== null);
+  const empty = effFields.filter((f) => f.value === null);
 
   function openEditor(field: CustomFieldWithValueDto) {
     setError(null);
@@ -91,18 +103,60 @@ export function CustomFieldsSection({ workItemId, fields, members }: CustomField
     setError(null);
   }
 
+  // Build the display-ready value a raw commit input resolves to, so the card
+  // can render the new value optimistically without a re-read. `null` clears;
+  // select/user resolve their label from the field's own option set / member
+  // list (the same data the picker drew from).
+  function optimisticValue(
+    field: CustomFieldWithValueDto,
+    next: string | null,
+  ): CustomFieldValueDto | null {
+    if (next === null) return null;
+    const base: CustomFieldValueDto = {
+      text: null,
+      number: null,
+      date: null,
+      option: null,
+      user: null,
+    };
+    switch (field.fieldType) {
+      case 'text':
+        return { ...base, text: next };
+      case 'number': {
+        const n = Number(next);
+        return { ...base, number: Number.isFinite(n) ? n : null };
+      }
+      case 'date':
+        return { ...base, date: next };
+      case 'select':
+        return { ...base, option: field.options.find((o) => o.id === next) ?? null };
+      case 'user': {
+        const m = members.find((mm) => mm.userId === next);
+        return { ...base, user: m ? { id: m.userId, name: m.name, image: null } : null };
+      }
+    }
+  }
+
   // One commit path for every type: null clears, a string carries the raw
   // input (the service is the validation authority — a bad number or an
-  // archived option comes back as the inline 422, with the editor kept open).
+  // archived option comes back as the inline 422). The commit is optimistic:
+  // close the editor, show the new value at once via an override, and KEEP it
+  // on success (the 200 is the confirmation — no router.refresh()). A failure
+  // snaps the override back and reopens the editor with the inline error.
   function commit(field: CustomFieldWithValueDto, next: string | null) {
     setError(null);
+    closeEditor();
+    setOverrides((o) => ({ ...o, [field.id]: optimisticValue(field, next) }));
     startTransition(async () => {
       const res = await setCustomFieldValueAction({ workItemId, fieldId: field.id, value: next });
-      if (res.ok) {
-        closeEditor();
-        router.refresh();
-      } else {
+      if (!res.ok) {
+        setOverrides((o) => {
+          const nextOverrides = { ...o };
+          delete nextOverrides[field.id];
+          return nextOverrides;
+        });
         setError(res.error);
+        setEditingId(field.id);
       }
     });
   }

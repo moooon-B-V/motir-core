@@ -6,16 +6,15 @@ import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 
 // The rail's custom-field cards (Subtask 5.3.7) commit through the dedicated
-// Server Action + refresh the route; stub the action and the router so the
-// section drives in isolation against design/work-items/custom-fields.mock.html.
-const { setSpy, refreshSpy } = vi.hoisted(() => ({
+// Server Action and KEEP the optimistic value on success (no router.refresh —
+// the inline-edit pattern); stub the action so the section drives in isolation
+// against design/work-items/custom-fields.mock.html.
+const { setSpy } = vi.hoisted(() => ({
   setSpy: vi.fn(),
-  refreshSpy: vi.fn(),
 }));
 vi.mock('@/app/(authed)/issues/[key]/customFieldActions', () => ({
   setCustomFieldValueAction: setSpy,
 }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: refreshSpy }) }));
 
 import { CustomFieldsSection } from '@/app/(authed)/issues/[key]/_components/CustomFieldsSection';
 import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
@@ -194,7 +193,7 @@ describe('CustomFieldsSection — "Show more fields" disclosure (mock panel 3)',
 });
 
 describe('CustomFieldsSection — inline editors (mock panel 2)', () => {
-  it('commits an edited text value on blur and refreshes on success', async () => {
+  it('commits an edited text value on blur and KEEPS the optimistic value on success', async () => {
     setSpy.mockResolvedValue({ ok: true });
     renderSection([makeField()]);
 
@@ -210,8 +209,11 @@ describe('CustomFieldsSection — inline editors (mock panel 2)', () => {
         value: 'New Co',
       }),
     );
-    await waitFor(() => expect(refreshSpy).toHaveBeenCalled());
-    expect(screen.queryByRole('textbox', { name: 'Customer' })).toBeNull(); // editor closed
+    // Editor closes and the new value stays on the card — the 200 IS the
+    // confirmation, so there is NO whole-tree refresh that would revert it.
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Customer' })).toBeNull());
+    expect(screen.getByText('New Co')).toBeTruthy();
+    expect(screen.queryByText('Acme GmbH')).toBeNull();
   });
 
   it('clears the value when the input is emptied', async () => {
@@ -238,7 +240,7 @@ describe('CustomFieldsSection — inline editors (mock panel 2)', () => {
     expect(setSpy).not.toHaveBeenCalled();
   });
 
-  it('keeps the editor open with the role="alert" inline error on a 422, without refreshing', async () => {
+  it('snaps the value back and reopens the editor with the role="alert" inline error on a 422', async () => {
     setSpy.mockResolvedValue({ ok: false, error: 'Enter a number — e.g. 12.5.' });
     renderSection([
       makeField({
@@ -256,8 +258,7 @@ describe('CustomFieldsSection — inline editors (mock panel 2)', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toBe('Enter a number — e.g. 12.5.');
-    expect(screen.getByRole('textbox', { name: 'Effort' })).toBeTruthy(); // still editing
-    expect(refreshSpy).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'Effort' })).toBeTruthy(); // reopened on error
   });
 
   it('select editor excludes archived options, offers None first, and commits a pick', async () => {

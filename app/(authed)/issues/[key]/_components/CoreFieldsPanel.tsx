@@ -117,25 +117,55 @@ export function CoreFieldsPanel({
   const [estimate, setEstimate] = useState(
     item.estimateMinutes != null ? String(item.estimateMinutes) : '',
   );
+  // Optimistic field overrides (the inline-edit rule, bug-inline-status-revert):
+  // a picked value displays immediately and the action RESPONSE is the
+  // confirmation, so we KEEP it — never router.refresh() on success, which
+  // re-reads the not-yet-propagated server tree and reverts this cell AND any
+  // sibling optimistic state on the page (the estimation/watch flakes). Cleared
+  // back to the server value only on error / a stale-conflict re-read.
+  const [overrides, setOverrides] = useState<Partial<WorkItemDto>>({});
+  // The picked parent's display label: the relational field can't derive its
+  // identifier/title from the id alone, so the picker hands it over (`undefined`
+  // = no pending change → show the server `parent`).
+  const [parentOverride, setParentOverride] = useState<
+    Pick<WorkItemSummaryDto, 'identifier' | 'title'> | null | undefined
+  >(undefined);
+  const eff = { ...item, ...overrides };
+  const effParent = parentOverride !== undefined ? parentOverride : parent;
 
-  const typeMeta = ISSUE_TYPE_META[item.kind];
-  const reporter = members.find((m) => m.userId === item.reporterId);
-  const assignee = members.find((m) => m.userId === item.assigneeId);
-  const statusMeta = workflow.statuses.find((s) => s.key === item.status);
+  const typeMeta = ISSUE_TYPE_META[eff.kind];
+  const reporter = members.find((m) => m.userId === eff.reporterId);
+  const assignee = members.find((m) => m.userId === eff.assigneeId);
+  const statusMeta = workflow.statuses.find((s) => s.key === eff.status);
+
+  // Drop the optimistic override for the given field keys (on error / stale).
+  function revert(keys: string[]) {
+    setOverrides((o) => {
+      const next = { ...o };
+      for (const k of keys) delete next[k as keyof WorkItemDto];
+      return next;
+    });
+    if (keys.includes('parentId')) setParentOverride(undefined);
+  }
 
   const toggle = (key: EditableKey) => setEditing((cur) => (cur === key ? null : key));
 
   function patch(input: Omit<UpdateIssueInput, 'id' | 'expectedUpdatedAt'>) {
     setEditing(null);
+    setOverrides((o) => ({ ...o, ...input }));
     startTransition(async () => {
       const res = await updateIssueAction({ id: item.id, expectedUpdatedAt: updatedAt, ...input });
       if (res.ok) {
+        // The 200 IS the confirmation — keep the optimistic value, no refresh.
         setUpdatedAt(res.updatedAt);
-        router.refresh();
       } else if (res.stale) {
+        // A genuine conflict (someone else edited): drop our optimistic value
+        // and re-read the server's newer state — the one place a refresh is right.
+        revert(Object.keys(input));
         toast({ variant: 'error', title: t('changedElsewhereRefreshing') });
         router.refresh();
       } else {
+        revert(Object.keys(input));
         toast({ variant: 'error', title: res.error });
       }
     });
@@ -143,13 +173,14 @@ export function CoreFieldsPanel({
 
   function changeStatus(toStatusKey: string) {
     setEditing(null);
-    if (toStatusKey === item.status) return;
+    if (toStatusKey === eff.status) return;
+    setOverrides((o) => ({ ...o, status: toStatusKey }));
     startTransition(async () => {
       const res = await changeStatusAction({ id: item.id, toStatusKey });
       if (res.ok) {
         setUpdatedAt(res.updatedAt);
-        router.refresh();
       } else {
+        revert(['status']);
         toast({ variant: 'error', title: res.error });
       }
     });
@@ -161,19 +192,19 @@ export function CoreFieldsPanel({
   function commitDue(next: string | null) {
     setDueDate(next ?? '');
     const iso = next ? new Date(`${next}T00:00:00.000Z`).toISOString() : null;
-    if (iso !== item.dueDate) patch({ dueDate: iso });
+    if (iso !== eff.dueDate) patch({ dueDate: iso });
     else setEditing(null);
   }
   // Estimate stays a free-text field: commits on blur AND when the chevron
   // collapses it (the chevron no longer blurs the input).
   function commitEstimate() {
     const next = estimate === '' ? null : Number(estimate);
-    if (next !== item.estimateMinutes) patch({ estimateMinutes: next });
+    if (next !== eff.estimateMinutes) patch({ estimateMinutes: next });
     else setEditing(null);
   }
 
   const muted = (text: string) => <span className="text-(--el-text-secondary) italic">{text}</span>;
-  const priorityPill = PRIORITY_META[item.priority];
+  const priorityPill = PRIORITY_META[eff.priority];
 
   return (
     <div className="flex flex-col gap-3">
@@ -187,27 +218,27 @@ export function CoreFieldsPanel({
             statuses={workflow.statuses}
             transitions={workflow.transitions}
             policyMode={workflow.policyMode}
-            value={item.status}
+            value={eff.status}
             onChange={changeStatus}
             disabled={isPending || readOnly}
           />
         ) : statusMeta ? (
           <Pill status={STATUS_TONE[statusMeta.category]}>{statusMeta.label}</Pill>
         ) : (
-          <Pill tone="neutral">{item.status}</Pill>
+          <Pill tone="neutral">{eff.status}</Pill>
         )}
       </FieldCard>
 
       <FieldCard label={t('type')} editing={editing === 'type'} onToggle={() => toggle('type')}>
         {editing === 'type' ? (
           <TypePicker
-            value={item.kind as IssueType}
+            value={eff.kind as IssueType}
             onChange={(kind) => patch({ kind: kind as WorkItemKindDto })}
             disabled={isPending || readOnly}
           />
         ) : (
           <span className="flex items-center gap-1.5">
-            <IssueTypeIcon type={item.kind as IssueType} className="h-4 w-4" />
+            <IssueTypeIcon type={eff.kind as IssueType} className="h-4 w-4" />
             {typeMeta.label}
           </span>
         )}
@@ -220,14 +251,14 @@ export function CoreFieldsPanel({
       >
         {editing === 'priority' ? (
           <PriorityPicker
-            value={item.priority}
+            value={eff.priority}
             onChange={(priority) => patch({ priority })}
             disabled={isPending || readOnly}
           />
         ) : (
           <Pill {...priorityPill.pill}>
             <priorityPill.icon className="h-3 w-3" aria-hidden />
-            {tl('priority.' + item.priority)}
+            {tl('priority.' + eff.priority)}
           </Pill>
         )}
       </FieldCard>
@@ -240,7 +271,7 @@ export function CoreFieldsPanel({
         {editing === 'assignee' ? (
           <AssigneePicker
             members={members}
-            value={item.assigneeId}
+            value={eff.assigneeId}
             onChange={(userId) => patch({ assigneeId: userId })}
             disabled={isPending || readOnly}
           />
@@ -273,20 +304,25 @@ export function CoreFieldsPanel({
       >
         {editing === 'parent' ? (
           <ParentPicker
-            childType={item.kind as IssueType}
-            value={item.parentId}
-            onChange={(parentId) => patch({ parentId })}
+            childType={eff.kind as IssueType}
+            value={eff.parentId}
+            onChange={(parentId, picked) => {
+              // The picker hands over the chosen parent's label so the display
+              // shows it immediately (optimistic) without a server re-read.
+              setParentOverride(picked ?? null);
+              patch({ parentId });
+            }}
             disabled={isPending || readOnly}
           />
-        ) : parent ? (
+        ) : effParent ? (
           <Link
-            href={`/issues/${parent.identifier}`}
+            href={`/issues/${effParent.identifier}`}
             className="flex items-center gap-1.5 hover:underline"
           >
             <span className="text-(--el-text-secondary) font-mono text-xs">
-              {parent.identifier}
+              {effParent.identifier}
             </span>
-            <span className="truncate">{parent.title}</span>
+            <span className="truncate">{effParent.title}</span>
           </Link>
         ) : (
           muted(t('none'))
@@ -327,10 +363,10 @@ export function CoreFieldsPanel({
             disabled={isPending || readOnly}
             autoOpen
           />
-        ) : item.dueDate ? (
+        ) : eff.dueDate ? (
           <span className="flex items-center gap-1.5">
             <Calendar className="h-4 w-4 text-(--el-text-secondary)" aria-hidden />
-            {formatDate(item.dueDate, locale)}
+            {formatDate(eff.dueDate, locale)}
           </span>
         ) : (
           muted(t('noDueDate'))
@@ -367,10 +403,10 @@ export function CoreFieldsPanel({
             disabled={isPending || readOnly}
             autoFocus
           />
-        ) : item.estimateMinutes != null ? (
+        ) : eff.estimateMinutes != null ? (
           <span className="flex items-center gap-1.5">
             <Clock className="h-4 w-4 text-(--el-text-secondary)" aria-hidden />
-            {formatDurationMinutes(item.estimateMinutes)}
+            {formatDurationMinutes(eff.estimateMinutes)}
           </span>
         ) : (
           muted(t('noEstimate'))
