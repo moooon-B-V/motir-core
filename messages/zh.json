@@ -1604,7 +1604,6 @@
     "boardTypeLabel": "看板类型",
     "boardTypeKanban": "看板",
     "boardTypeScrum": "Scrum",
-    "epic4Badge": "篇章4",
     "newBoardSeedHint": "新看板会按项目工作流生成默认列，创建后即可使用。",
     "createBoard": "创建看板",
     "deleteBoardTitle": "删除“{name}”？",

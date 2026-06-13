@@ -153,6 +153,50 @@ describe('BoardSwitcher (3.7.4) — create', () => {
     await waitFor(() => expect(String(push.mock.calls.at(-1)?.[0])).toContain('board=b-new'));
   });
 
+  it('creates a Scrum board when the Scrum type is selected (POST {type:scrum})', async () => {
+    stubFetch(TWO_BOARDS);
+    render(<BoardSwitcher />);
+    fireEvent.click(await screen.findByTestId('board-switcher-trigger'));
+    fireEvent.click(await screen.findByTestId('board-switcher-new'));
+
+    const name = (await screen.findByTestId('board-new-name')) as HTMLInputElement;
+    fireEvent.change(name, { target: { value: 'Sprint board' } });
+
+    // The Scrum tile is a real, enabled radio option (the "Epic 4" seam is gone).
+    const scrumTile = screen.getByTestId('board-type-scrum');
+    expect(scrumTile.getAttribute('aria-disabled')).toBeNull();
+    expect(scrumTile.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(scrumTile);
+    expect(scrumTile.getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByTestId('board-type-kanban').getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(screen.getByTestId('board-new-submit'));
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(
+        ([url, opts]) => String(url) === '/api/boards' && opts?.method === 'POST',
+      );
+      expect(post).toBeTruthy();
+      expect(JSON.parse(post![1].body)).toMatchObject({ name: 'Sprint board', type: 'scrum' });
+    });
+  });
+
+  it('selects the type via arrow keys (radiogroup roving focus)', async () => {
+    stubFetch(TWO_BOARDS);
+    render(<BoardSwitcher />);
+    fireEvent.click(await screen.findByTestId('board-switcher-trigger'));
+    fireEvent.click(await screen.findByTestId('board-switcher-new'));
+
+    const kanbanTile = await screen.findByTestId('board-type-kanban');
+    const scrumTile = screen.getByTestId('board-type-scrum');
+    // Kanban is the default selection; ArrowRight moves to Scrum, ArrowLeft back.
+    expect(kanbanTile.getAttribute('aria-checked')).toBe('true');
+    fireEvent.keyDown(kanbanTile, { key: 'ArrowRight' });
+    expect(scrumTile.getAttribute('aria-checked')).toBe('true');
+    fireEvent.keyDown(scrumTile, { key: 'ArrowLeft' });
+    expect(kanbanTile.getAttribute('aria-checked')).toBe('true');
+  });
+
   it('blocks an empty name client-side (no POST)', async () => {
     stubFetch(TWO_BOARDS);
     render(<BoardSwitcher />);
