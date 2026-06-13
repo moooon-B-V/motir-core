@@ -555,7 +555,7 @@ export const story_6_12: PlanStory = {
         'the live public tenant renders real copy (not the empty fallback). ' +
         'Motir is framed as THREE LAYERS, end to end — NOT "AI project ' +
         'management" (Yue): (1) an AI planner, (2) an AI-native, MCP-native ' +
-        'project tracker (`motir-core`), (3) a hosted AI coding agent; that ' +
+        'project manager (`motir-core`), (3) a hosted AI coding agent; that ' +
         'end-to-end loop is the unique part. The headline idea is **"vibe ' +
         'project"** (by analogy to vibe coding). The exact Markdown (mirrors the ' +
         '6.12.1 Panel 1 copy 1:1): tagline *"Vibe your whole project. Bring an ' +
@@ -572,7 +572,7 @@ export const story_6_12: PlanStory = {
         'vibe coding (describe what you want, the AI writes the code) — Motir ' +
         'does that for an entire project; you bring the idea, the three layers ' +
         'carry it intent→shipped:* **an AI planner** (chat → a structured plan: ' +
-        'epics, stories, work items, dependencies), **an AI-native tracker** ' +
+        'epics, stories, work items, dependencies), **an AI-native project manager** ' +
         '(boards / sprints / system of record, **MCP-native** so your own agents ' +
         'and tools read+write Motir directly), **a hosted coding agent** (picks ' +
         'up work items and ships the code, no setup); closing *"no other tool ' +
