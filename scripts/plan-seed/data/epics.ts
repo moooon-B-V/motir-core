@@ -1918,6 +1918,165 @@ export const EPICS: EpicMeta[] = [
           'overflow-escape primitive instead of a third branch.',
       },
       {
+        id: 'bug-notification-pref-transitioned-still-disabled-after-5-4-shipped',
+        kind: 'bug',
+        title:
+          'Notification preferences: the "An item you\'re watching changes status" row is still drawn disabled with "Soon" + "Available once issue-watching ships (Story 5.4)" copy, but Story 5.4 (issue-watching) shipped — the row should be settable',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** account settings notification matrix ' +
+          '(`/settings/account` — Subtask 5.7.6, `NotificationPreferencesCard.tsx`) · ' +
+          '**Code surface owned by:** Story 5.7 (matrix UI · Subtask 5.7.6) + Story 5.4 ' +
+          '(the seam that should have been closed when 5.4 shipped — the seam owner) · ' +
+          '**Status:** open · **Reported by:** Yue.\n\n' +
+          'On `/settings/account` the notification-preferences matrix shows four event-type rows: ' +
+          "**Mentioned**, **Commented on an item you're involved in**, **Assigned to you**, and " +
+          "**An item you're watching changes status**. The fourth row renders **disabled** with a " +
+          'lavender **“Soon”** tag and the helper text **“Available once issue-watching ships ' +
+          '(Story 5.4).”** Both Email and In-app switches are greyed out and unclickable. The user ' +
+          'has no way to opt out of (or back into) the watcher-transition email + in-app fan-in.\n\n' +
+          '**But Story 5.4 (Labels, components, watchers) is `done`**. Watching is shipped end-to-' +
+          'end: the `WatchControl` (`Subtask 5.4.9`) is live on the issue detail rail; the watcher ' +
+          'CRUD routes ship (`PUT/DELETE /api/work-items/[id]/watch`); `workItemsService.updateStatus` ' +
+          '(`lib/services/workItemsService.ts:1178`) and `boardsService` ' +
+          '(`lib/services/boardsService.ts:529`) BOTH emit `work-item/transitioned` events on every ' +
+          'status change; the 5.7.3 in-app fan-in (`notificationFanInService.ts:141`) and the ' +
+          '5.1.6 email job already consume `transitioned` and deliver to watchers ' +
+          '(`watcherNotificationsService.ts`). The transitioned NOTIFICATIONS are live for every ' +
+          'watcher right now. **Only the preference-matrix guard never flipped from `settable: ' +
+          'false` to `settable: true` when 5.4 landed.** Class: "post-prerequisite-ships, forgotten ' +
+          'flip" — Story 5.4\'s definition-of-done didn\'t include "close the seams that named you ' +
+          'as the gate."\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open `/settings/account`, scroll ' +
+          'to the **Notifications** card. Observe the fourth row "An item you\'re watching ' +
+          'changes status" renders greyed with a "Soon" / 即将推出 chip; the Email and In-app ' +
+          '`Switch`es are `disabled`. The aria-label reads "Email for An item you\'re watching ' +
+          'changes status (coming soon)". Now, in another browser tab, watch any work item (issue ' +
+          'detail page → 👁 Watch), have a teammate transition that item to Done, and observe in ' +
+          '`/notifications` that the user RECEIVES the transitioned notification — the channel is ' +
+          'live, but the user cannot configure it.\n\n' +
+          '**User impact.** A watcher who does NOT want transition emails (e.g. they watch many ' +
+          'items for read-only triage) has NO control: the row is hard-disabled, and the service ' +
+          'rejects writes with `NotificationEventTypeNotSettableError` (`notificationPreferences' +
+          'Service.ts:70`). Their only escapes are unwatching every item or hiding by email-' +
+          'client filter — both worse than a preference toggle that already exists in design and ' +
+          'in service. This is missing a user CONTROL over real notifications the system is ' +
+          'actively sending — not cosmetic.\n\n' +
+          '**Root cause (high confidence — one-line seam in three files).**\n\n' +
+          '- `lib/notifications/preferences.ts:70-75` — the `NOTIFICATION_PREFERENCE_EVENT_TYPES` ' +
+          'row for `transitioned` is `{ settable: false, defaults: { email: true, in_app: true } }`. ' +
+          'The source comment at line 70 documents the intent: *"Story 5.4 seam — drawn disabled, ' +
+          'rejected on write, until issue-watching ships."* It must flip to `settable: true`. ' +
+          "Defaults are already correct (both channels ON, mirroring Jira's personal-notification-" +
+          'settings shape) so the resolver does the right thing the moment the flag flips.\n' +
+          '- `messages/en.json:1415-1418` (`settings.account.notifications.events.transitioned`) — ' +
+          '`label: "An item you\'re watching changes status"` (KEEP), `desc: "Available once ' +
+          'issue-watching ships (Story 5.4)."` — must be replaced with a real description matching ' +
+          'the shipped event semantics, e.g. **"Someone changes the status of an item you watch ' +
+          '(including transitions to done or back open)."** (mirror the design copy + the other ' +
+          "three rows' style — present-tense, user-impact-named).\n" +
+          '- `messages/zh.json:1415-1418` — the matching zh `desc: "在事项关注功能上线后可用（故事 ' +
+          '5.4）。"` must be replaced with a translated version of the new en copy. (Both locales ' +
+          'must flip together; the existing convention is the matrix rows are translated in ' +
+          "lockstep — search `transitioned` in both files and update each.) Verify the row's " +
+          'aria-label flips from `cellAriaSoon` to `cellAria` automatically once `settable` is ' +
+          '`true` — the existing `NotificationPreferencesCard.tsx:192-194` branches on ' +
+          '`row.settable`, so no UI change.\n\n' +
+          '**Service contract — verify before flipping.** ' +
+          '`notificationPreferencesService.set` (`lib/services/notificationPreferencesService.ts:70`) ' +
+          'rejects with `NotificationEventTypeNotSettableError` for non-settable types. Once ' +
+          '`transitioned` flips to `settable: true`, writes will go through and the existing ' +
+          'channel-gate resolver (consulted by both the 5.7.3 in-app fan-in AND the 5.1.6 email ' +
+          "job — per the `preferences.ts` header comment) will honor the user's pick. Confirm the " +
+          'fan-in actually consults the matrix for `transitioned` (not just `mentioned` / ' +
+          '`commented` / `assigned`) — the `notificationFanInService.ts:141` comment claims 5.4 ' +
+          'extends the resolver with `transitioned`, but the bug fix MUST verify with a test that ' +
+          "flipping the user's `transitioned · email` cell to `off` actually suppresses the " +
+          'watcher transition email (otherwise the toggle is just decorative — a worse defect than ' +
+          'the disabled-with-Soon state).\n\n' +
+          '**Fix shape (minimal, no follow-up).**\n\n' +
+          '1. `lib/notifications/preferences.ts` — flip `settable: false` → `settable: true` on the ' +
+          '`transitioned` row; rewrite the line-70 comment from "Story 5.4 seam — drawn disabled ' +
+          '… until issue-watching ships" to a one-line "Watcher transition events (Story 5.4 — ' +
+          "shipped); fanned in by 5.7.3 + 5.1.6, gated by the user's `transitioned · {channel}` " +
+          'cell."\n' +
+          '2. `messages/en.json` + `messages/zh.json` — replace the `transitioned.desc` strings ' +
+          'with real present-tense copy describing the live event (mirror the existing three ' +
+          "rows' style).\n" +
+          '3. Add a test that asserts: (a) ' +
+          '`notificationPreferencesService.set({ eventType: "transitioned", channel: "email", ' +
+          'enabled: false })` SUCCEEDS for a user (currently throws `NotificationEventType' +
+          'NotSettableError`); (b) once that cell is `off`, ' +
+          '`watcherNotificationsService` does NOT deliver the email for a `work-item/transitioned` ' +
+          'event the user would otherwise receive; (c) the matrix DTO returned by ' +
+          '`GET /api/notification-preferences` reports `settable: true` for the `transitioned` ' +
+          'row. The first two are integration-tier (real DB, mirror the existing fan-in tests); ' +
+          'the third is a one-line DTO assertion or component test.\n' +
+          '4. Audit the rest of the repo for similar stale "ships (Story X)" guards. The current ' +
+          'sweep (`grep "Available once" + "settable: false" + "until …ships"` across `app ' +
+          'components lib messages`) finds only this row — but the audit is itself the rule, not ' +
+          'this single hit.\n\n' +
+          'No DB migration; no schema change; no Modal/Card/Switch primitive change; no service-' +
+          'method signature change; no shape/colour token churn — purely a flag flip + copy + ' +
+          'test. Story 5.4 already paid for the runtime contract; the bug is one boolean + two ' +
+          'strings + one assertion.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- The `/settings/account` notification matrix `transitioned` row is **enabled**: both ' +
+          'Email and In-app `Switch`es are clickable; the lavender "Soon" / 即将推出 tag is ' +
+          'absent; the helper text reads the new real copy (en + zh both updated).\n' +
+          "- The row's aria-label is `cellAria` (not `cellAriaSoon`) — falls out of " +
+          '`NotificationPreferencesCard.tsx:192-194` once `row.settable` is `true`.\n' +
+          '- The user can toggle each cell; the response is honored and the cell trusts it ' +
+          '(no `router.refresh` regression — the existing inline-toggle contract holds).\n' +
+          '- `notificationPreferencesService.set` no longer throws ' +
+          '`NotificationEventTypeNotSettableError` for `eventType: "transitioned"`.\n' +
+          '- When the user sets `transitioned · email` to `off`, a subsequent ' +
+          '`work-item/transitioned` event the user would otherwise receive (because they watch ' +
+          'the item) does NOT deliver the email — verified by an integration test against the ' +
+          'real `watcherNotificationsService`. Same for `in_app` and the 5.7.3 fan-in.\n' +
+          '- Existing three rows (mentioned / commented / assigned) keep current behaviour ' +
+          '(defaults, toggle paths, AA contrast). No regression in the other surfaces ' +
+          'consuming `NOTIFICATION_PREFERENCE_EVENT_TYPES` (the resolver, the matrix DTO, the ' +
+          'fan-in).\n' +
+          '- A one-line note in `notes.html` (or `PRODECT_FINDINGS.md`) documents the ' +
+          '"post-prerequisite-ships, forgotten flip" anti-pattern + the audit grep that catches ' +
+          'it — so a future Story-X completion checklist includes "close the seams named after ' +
+          'you." (Planner-side meta, not a code change — out of scope here but logged as a ' +
+          'finding in the PR body.)\n\n' +
+          '## Context refs\n\n' +
+          '- `lib/notifications/preferences.ts:70-75` — the seam (the one-line flip)\n' +
+          '- `messages/en.json:1415-1418`, `messages/zh.json:1415-1418` — the matching i18n copy ' +
+          '(both locales)\n' +
+          '- `app/(authed)/settings/account/_components/NotificationPreferencesCard.tsx:139-175` ' +
+          '— the row renderer (no change; branches on `row.settable` already)\n' +
+          '- `lib/services/notificationPreferencesService.ts:70` — the ' +
+          '`NotificationEventTypeNotSettableError` throw that gates writes today\n' +
+          '- `lib/services/workItemsService.ts:1178`, `lib/services/boardsService.ts:529` — the ' +
+          '`work-item/transitioned` event emitters (proof that the runtime side shipped with 5.4)\n' +
+          '- `lib/services/notificationFanInService.ts:141` — the 5.7.3 fan-in side that consumes ' +
+          "`transitioned`; verify the channel-gate is consulted (or wire it if it isn't — part of " +
+          'the fix)\n' +
+          '- `lib/services/watcherNotificationsService.ts` — the email-side fan-out; verify the ' +
+          'gate is consulted\n' +
+          '- Story 5.4 (Labels, components, watchers) — `done`; Subtasks 5.4.4 (watcher CRUD), ' +
+          '5.4.5 (transitioned event), 5.4.9 (`WatchControl`) all shipped\n' +
+          '- Sibling family: `bug-automation-editor-status-id-not-key` (Epic 6 sibling — also a ' +
+          '"editor said one thing, runtime contract said another" cross-layer defect; this is ' +
+          'the time-shifted variant where the contract evolved and the editor seam was not flipped ' +
+          'with it)\n\n' +
+          '**Refactor signal.** This is the FIRST documented "post-prerequisite-ships, forgotten ' +
+          'seam-flip" bug. The seam was correctly placed and correctly named (the comment cited ' +
+          'Story 5.4 by id) — the failure was that landing 5.4 didn\'t include a "search for ' +
+          'seams that named me" pass. Cheap catch: an audit grep ' +
+          '(`grep -rn "ships (Story\\|Available once\\|until.*ships"`) added to the planner\'s ' +
+          'Story-completion `motir mark <id> done` checklist would prevent the next instance. Not ' +
+          'in scope for this bug; the rule of one fires at "log it as a recurring class" not "fix ' +
+          'the planner runbook." If a second occurrence surfaces in another epic, promote the ' +
+          'audit grep to a CI lint.',
+      },
+      {
         id: 'bug-sprint-report-modal-clipped-burndown',
         kind: 'bug',
         title:
