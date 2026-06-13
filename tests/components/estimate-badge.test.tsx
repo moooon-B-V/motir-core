@@ -134,7 +134,7 @@ describe('EstimateBadge — picker', () => {
 });
 
 describe('EstimateBadge — write', () => {
-  it('PATCHes the picked value and refreshes on success', async () => {
+  it('PATCHes the picked value and KEEPS the optimistic value on success (no whole-tree refresh)', async () => {
     renderBadge(<EstimateBadge itemId="wi_1" storyPoints={5} />);
     fireEvent.click(screen.getByRole('button', { name: 'Story points: 5 — edit' }));
     fireEvent.click(await screen.findByRole('button', { name: '8 story points' }));
@@ -144,7 +144,12 @@ describe('EstimateBadge — write', () => {
     expect(url).toBe('/api/work-items/wi_1/estimate');
     expect(init.method).toBe('PATCH');
     expect(JSON.parse(init.body)).toEqual({ points: 8 });
-    await waitFor(() => expect(refreshSpy).toHaveBeenCalled());
+    // The 200 IS the confirmation: the badge keeps the committed value (8), and
+    // it does NOT router.refresh() — a field-update success path must not
+    // whole-tree-refresh, or the re-read reverts the badge before the write has
+    // propagated (the inline-edit revert bug / the estimation E2E flake).
+    await waitFor(() => expect(screen.getByText('8')).toBeTruthy());
+    expect(refreshSpy).not.toHaveBeenCalled();
     expect(toastSpy).not.toHaveBeenCalled();
   });
 

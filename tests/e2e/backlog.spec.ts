@@ -136,12 +136,24 @@ test.describe('backlog — grooming session (4.2.6)', () => {
     const before = await backlogOrder(page);
     expect(before[0]).toBe(first);
 
+    // Arm the persist-watch BEFORE the drop so we can't miss it: the reorder
+    // POSTs the new rank to /api/work-items/<id>/rank. Awaiting the 200 before
+    // reloading closes the flake where `page.reload()` raced the in-flight write
+    // and read the pre-drag order back.
+    const rankWrite = page.waitForResponse(
+      (r) => /\/api\/work-items\/[^/]+\/rank$/.test(r.url()) && r.request().method() === 'POST',
+      { timeout: 10_000 },
+    );
     await pointerDrag(page, backlogRow(page, first), backlogRow(page, third));
 
     // It left the top slot (moved down between its new neighbours).
     await expect
       .poll(async () => (await backlogOrder(page))[0], { timeout: 10_000 })
       .not.toBe(first);
+
+    // The rank write committed (200) — only now is the reload guaranteed to read
+    // the reordered list rather than racing the optimistic UI.
+    expect((await rankWrite).status()).toBe(200);
 
     // Persisted: the new order is the same after a full reload.
     const afterDrag = await backlogOrder(page);

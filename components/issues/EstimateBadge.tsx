@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Hash, X } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
@@ -141,13 +140,13 @@ function EstimateBadgeEditor({
   className?: string;
 }) {
   const t = useTranslations('estimation');
-  const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
-  // Optimistic override: `undefined` = no pending write (show the server value);
-  // `number | null` = the value we optimistically committed, snapped back to
-  // `undefined` on error (so the server value re-shows after router.refresh).
+  // Optimistic override: `undefined` = show the server value; `number | null` =
+  // the value we committed (kept after a successful write — the response is the
+  // confirmation), snapped back to `undefined` ONLY on error so the server
+  // value re-shows.
   const [override, setOverride] = useState<number | null | undefined>(undefined);
   const [draft, setDraft] = useState('');
 
@@ -176,10 +175,13 @@ function EstimateBadgeEditor({
           toast({ variant: 'error', title: body?.error ?? t('saveError') });
           return;
         }
-        // Server value now authoritative; clear the override and revalidate so
-        // every other surface picks up the new estimate.
-        setOverride(undefined);
-        router.refresh();
+        // Success: the 200 IS the confirmation, so KEEP the optimistic value
+        // (the override stays = `next`). Do NOT clear it back to the server
+        // prop + router.refresh() — the refresh re-reads the RSC payload before
+        // the write has propagated and momentarily reverts the badge to its
+        // pre-edit value (the inline-edit revert bug: a field-update success
+        // path must never whole-tree-refresh). Sibling surfaces pick up the new
+        // estimate on their next load / on reload.
       } catch {
         setOverride(undefined);
         toast({ variant: 'error', title: t('saveError') });
