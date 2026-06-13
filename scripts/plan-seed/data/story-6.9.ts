@@ -153,7 +153,7 @@ export const story_6_9: PlanStory = {
       id: '6.9.2',
       title:
         'Link/blocker picker retrofit — candidate read becomes query-driven server-side (closes finding #98); both link surfaces',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
