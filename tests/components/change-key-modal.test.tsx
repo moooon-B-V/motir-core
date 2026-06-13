@@ -44,7 +44,7 @@ describe('ChangeKeyModal', () => {
     renderModal();
     fireEvent.change(screen.getByLabelText('New key'), { target: { value: 'NIF' } });
     expect(screen.getByText('Available')).toBeTruthy();
-    expect(screen.getByText(/Every issue identifier becomes/)).toBeTruthy();
+    expect(screen.getByText(/Every work item identifier becomes/)).toBeTruthy();
     expect(screen.getByText(/links keep working/)).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Change key' }) as HTMLButtonElement).disabled).toBe(
       false,

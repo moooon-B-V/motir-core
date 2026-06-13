@@ -127,7 +127,7 @@ describe('sprintsService.completeSprint', () => {
     expect(page.items.map((i) => i.id)).toEqual([a, b]);
   });
 
-  it('completes a sprint with no incomplete issues (no-op carry-over)', async () => {
+  it('completes a sprint with no incomplete work items (no-op carry-over)', async () => {
     const fx = await makeWorkItemFixture();
     const sprint = await sprintsService.createSprint(fx.projectId, {}, fx.ctx);
     const [a, b] = await seedSprintIssues(fx, sprint.id, 2);

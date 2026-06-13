@@ -102,7 +102,7 @@ describe('sprintsService.getSprintReport', () => {
     await setPoints(a, 3);
     await setPoints(b, 2);
     await setPoints(c, 5);
-    await sprintsService.startSprint(sprint.id, {}, fx.ctx); // baseline 10 pts / 3 issues
+    await sprintsService.startSprint(sprint.id, {}, fx.ctx); // baseline 10 pts / 3 work items
     await markDone(a); // a ships; b + c do not
     await sprintsService.completeSprint(sprint.id, { carryOverTo: 'backlog' }, fx.ctx);
 

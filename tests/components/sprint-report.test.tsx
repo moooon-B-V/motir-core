@@ -13,7 +13,7 @@ import type { RankedIssuePageDto } from '@/lib/dto/backlog';
 // (design/sprints/sprint-lifecycle.mock.html panels 6–7) used by BOTH the
 // complete-modal success state and the standalone /sprints/[id]/report page. Pure
 // component — assert the points rollup, the scope-change line, the completed /
-// not-completed lists (bounded + a "View all in Issues" deep-link), the unestimated
+// not-completed lists (bounded + a "View all in Work Items" deep-link), the unestimated
 // "—" presentation, the carry-over "→ destination" chip, and the Story-4.6 analytics
 // charts (4.6.5 burndown + 4.6.6 velocity) — against the real English catalog via
 // renderWithIntl. The deep burndown/velocity coverage is Subtask 4.6.7's; these are
@@ -104,13 +104,13 @@ describe('SprintReport (4.4.6)', () => {
     expect(screen.getByText('42')).toBeTruthy();
     expect(screen.getByText('29')).toBeTruthy();
     expect(screen.getByText('13')).toBeTruthy();
-    // Scope change ("2 issues added after the sprint started").
-    expect(screen.getByText(/2 issues added after the sprint started/)).toBeTruthy();
+    // Scope change ("2 work items added after the sprint started").
+    expect(screen.getByText(/2 work items added after the sprint started/)).toBeTruthy();
     // Both lists render their rows with the work-items row vocabulary.
     expect(screen.getByTestId('report-row-PROD-241')).toBeTruthy();
     expect(screen.getByTestId('report-row-PROD-244')).toBeTruthy();
     // Bounded — each section deep-links to the /issues navigator filtered to the sprint.
-    const viewAll = screen.getAllByRole('link', { name: /View all in Issues/ });
+    const viewAll = screen.getAllByRole('link', { name: /View all in Work Items/ });
     expect(viewAll.length).toBe(2);
     expect(viewAll[0]!.getAttribute('href')).toBe('/issues?sprint=sp6');
     // The Story-4.6 burndown section (4.6.5): with no server-fed series, the
@@ -157,7 +157,7 @@ describe('SprintReport (4.4.6)', () => {
         statusByKey={statusByKey}
       />,
     );
-    expect(screen.getByText('No incomplete issues.')).toBeTruthy();
+    expect(screen.getByText('No incomplete work items.')).toBeTruthy();
   });
 });
 

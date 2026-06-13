@@ -117,9 +117,9 @@ test.describe('backlog — grooming session (4.2.6)', () => {
     // The seeded sprint issue + a backlog issue both render.
     await expect(row(page, seed.sprintIssues[0]!.identifier)).toBeVisible();
     await expect(row(page, seed.backlogIssues[0]!.identifier)).toBeVisible();
-    // The "View all issues" toolbar link deep-links to the issue navigator
+    // The "View all work items" toolbar link deep-links to the issue navigator
     // (Jira "View in Issue Navigator") — NOT a flat list rebuilt here.
-    await expect(page.getByRole('link', { name: 'View all issues' })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'View all work items' })).toHaveAttribute(
       'href',
       /\/issues/,
     );

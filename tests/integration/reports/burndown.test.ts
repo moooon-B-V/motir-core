@@ -95,7 +95,7 @@ describe('reportsService.getBurndownSeries — derivation', () => {
     await place(b.id, sprint.id, 'done', 8);
     await place(c.id, sprint.id, 'todo', 3);
     await place(d.id, sprint.id, 'todo', 4);
-    // Locked baseline = A+B+C at start (16 pts / 3 issues); D is NOT in it.
+    // Locked baseline = A+B+C at start (16 pts / 3 work items); D is NOT in it.
     await stampSprint(sprint.id, {
       state: 'complete',
       startDate: utcDay(2026, 6, 1),

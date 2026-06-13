@@ -160,7 +160,7 @@ test('@smoke history journey: manufactured trail → designed sentences, noise p
   expect(raw).toBeGreaterThan(9);
 
   // Default sort is oldest-first: the created anchor leads the feed.
-  await expect(feed.locator('> li').first()).toContainText('created the issue');
+  await expect(feed.locator('> li').first()).toContainText('created the work item');
 
   // Spot-asserts, per change type (the 5.5.3 row grammar):
   // status — the workflow LABEL Pill pair, never raw keys.
@@ -180,7 +180,7 @@ test('@smoke history journey: manufactured trail → designed sentences, noise p
   await expect(feed.getByText('None', { exact: true }).first()).toBeVisible();
   // sprint move — the resolved NAME (its rank half stays suppressed). The
   // row carries the name twice by design (sentence + values line) — .first().
-  await expect(feed.getByText(/moved this issue to/)).toBeVisible();
+  await expect(feed.getByText(/moved this work item to/)).toBeVisible();
   await expect(feed.getByText(made.sprintName, { exact: true }).first()).toBeVisible();
   // attachment — the recorded filename.
   await expect(feed.getByText(made.attachmentName, { exact: true })).toBeVisible();
@@ -197,7 +197,7 @@ test('@smoke history journey: manufactured trail → designed sentences, noise p
   await page.getByRole('button', { name: 'Sort activity, oldest first' }).click();
   await expect(page.getByRole('button', { name: 'Sort activity, newest first' })).toBeVisible();
   await expect(feed.locator('> li').first()).toContainText('deleted a comment');
-  await expect(feed.locator('> li').last()).toContainText('created the issue');
+  await expect(feed.locator('> li').last()).toContainText('created the work item');
 
   // ── The All tab: true-order interleave, each entry in its native grammar ──
   await switchTab(page, 'All');
@@ -209,7 +209,7 @@ test('@smoke history journey: manufactured trail → designed sentences, noise p
   // The flipped order PERSISTED across the tab switch (newest first): the
   // comment deletion — a history entry — leads; the created anchor closes.
   await expect(all.locator('> li').first()).toContainText('deleted a comment');
-  await expect(all.locator('> li').last()).toContainText('created the issue');
+  await expect(all.locator('> li').last()).toContainText('created the work item');
 
   // The live comment interleaves in its NATIVE grammar — body + live action
   // row — among the quiet history rows; the deleted one appears exactly once

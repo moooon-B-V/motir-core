@@ -218,7 +218,7 @@ test.describe('charts (4.6.7)', () => {
     // The burndown renders on the issue-count axis (the degraded statistic),
     // and the velocity window now spans 3 completed sprints with Gamma's 0s —
     // every figure stays a number, never NaN, and no chart error state shows.
-    await expect(page.getByText('Issues remaining', { exact: true })).toBeVisible();
+    await expect(page.getByText('Work items remaining', { exact: true })).toBeVisible();
     await expect(page.getByText('Last 3 completed sprints').first()).toBeVisible();
     await expect(page.getByText("Couldn't load the chart")).toHaveCount(0);
     await expect(page.locator('body')).not.toContainText('NaN');

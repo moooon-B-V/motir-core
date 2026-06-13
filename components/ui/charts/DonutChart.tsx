@@ -13,7 +13,7 @@ export interface DonutChartProps {
   description: string;
   /** Optional short `aria-label`; the `<desc>` carries the detail. */
   ariaLabel?: string;
-  /** Noun for the centre-hole total, e.g. "issues" → "80 issues". */
+  /** Noun for the centre-hole total, e.g. "work items" → "80 work items". */
   totalNoun?: string;
   /** Column header for the data-table group column (e.g. "Status"). */
   statisticLabel?: string;

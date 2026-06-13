@@ -303,7 +303,7 @@ test('@smoke the PM admin-creates components, assigns them, a defaulted create a
   // ── Delete API via the MOVE branch: carriers repoint to Web, issues
   // untouched; the holder already carrying Web keeps ONE (the dup skip) ──────
   await gotoComponentsSettings(page);
-  await expect(componentRows.nth(0)).toContainText('2 issues');
+  await expect(componentRows.nth(0)).toContainText('2 work items');
   await page.getByRole('button', { name: 'Delete API', exact: true }).click();
   const confirm = page.getByRole('dialog');
   // .last(): the Modal renders an sr-only Radix title PLUS the visible serif
