@@ -108,7 +108,7 @@ export const story_6_9: PlanStory = {
       id: '6.9.1',
       title:
         'Reusable server-side issue quick-search read — key + title (trgm), workspace + 6.4-permission scoped, bounded + relevance-ordered',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
@@ -153,7 +153,7 @@ export const story_6_9: PlanStory = {
       id: '6.9.2',
       title:
         'Link/blocker picker retrofit — candidate read becomes query-driven server-side (closes finding #98); both link surfaces',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
