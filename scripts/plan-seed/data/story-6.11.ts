@@ -229,7 +229,7 @@ export const story_6_11: PlanStory = {
       id: '6.11.2',
       title:
         'Decision — the triage model: work_item + `triage` state, read-exclusion, promote/decline/merge semantics',
-      status: 'in_progress',
+      status: 'done',
       type: 'decision',
       executor: 'coding_agent',
       estimateMinutes: 45,
@@ -305,7 +305,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.3',
       title: 'Schema + the read-exclusion-everywhere invariant',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 70,
