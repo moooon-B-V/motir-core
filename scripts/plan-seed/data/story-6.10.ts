@@ -19,30 +19,51 @@ import type { PlanStory } from '../types';
  *
  * **The verified mirror — org→workspace hierarchy with org-level billing (rung
  * 1, cited not asserted).**
- *   - **Atlassian / Jira Cloud.** The **Organization** is the topmost
- *     structure; it "provides a layer that controls licensing, **billing** and
- *     security" across every site/product. The **org admin** is the highest
- *     level of admin and "also see[s] the billing details" — site admins below
- *     do not. All org administration (users, billing, multiple sites) is
- *     handled at admin.atlassian.com. Motir's `Organization` = Atlassian's org
- *     (the billing/identity root); Motir's `Workspace` ≈ Atlassian's site (the
- *     product container under it). (Atlassian Community "Jira's Structure —
- *     Orgs, Sites, Spaces" + "What is different between org admin, site admin
- *     and product admin" + Atlassian Support "types of admin roles".)
- *   - **Linear.** A workspace is "the home for all issues and interactions in
- *     an organization"; the workspace **Owner** role is the one carrying "the
- *     most sensitive settings like **billing**, security, and audit logs", and
- *     members belong to one-or-many teams under it. Linear keeps billing at the
- *     org/workspace ROOT (separate workspaces have "separate billing plans"),
- *     which is exactly Motir's "credits/usage roll up to the org" decision.
- *     (Linear Docs — Workspaces, Members and roles.)
- *   So the durable shape both rung-1 mirrors share: a single root tenant that
- *   OWNS billing + cross-product/cross-workspace membership, with workspaces
- *   (Atlassian "sites" / Linear "teams-in-a-workspace") nested under it. Motir
- *   adopts that: `Organization` is the billing/identity root, `Workspace` the
- *   product container, the 6.4 `MemberRole` stays the WORKSPACE-scoped role and
- *   a NEW org-scoped owner/admin role sits above it (mirroring Atlassian's
- *   org-admin-above-site-admin split / Linear's Owner-above-Admin split).
+ *   - **Atlassian / Jira Cloud — the mirror for BOTH the two-level NESTING and
+ *     org-level billing (verified June 2026, checked not asserted).** The
+ *     **Organization** is the topmost structure; it "provides a layer that
+ *     controls licensing, **billing** and security" across every site/product.
+ *     The **org admin** is the highest level of admin and "also see[s] the
+ *     billing details" — site admins below do not. **An Atlassian org may have
+ *     ONE OR MULTIPLE sites under it** (a site holds the app instances; each
+ *     site runs one instance of each app), and **a single account exists at the
+ *     org level and can hold access to many sites within the org** — this is the
+ *     exact shape of Motir's `Organization` → N `Workspace`. So Motir's
+ *     `Organization` = Atlassian's org (the billing/identity root) and Motir's
+ *     `Workspace` ≈ Atlassian's **site** (the container under the org). All org
+ *     administration (users, billing, multiple sites) is handled at
+ *     admin.atlassian.com; a person who is org admin of more than one org picks
+ *     an org from a switcher there. (Atlassian Community "Jira's Structure —
+ *     Orgs, Sites, Spaces" + "Bring multiple cloud sites under one
+ *     Organisation"; Atlassian Support "Navigate Atlassian Administration" +
+ *     "Switch between multiple Atlassian accounts" + "types of admin roles";
+ *     resolution.de "Organizations and Sites".)
+ *   - **Linear — the mirror for org-level BILLING ONLY, NOT for the nesting (a
+ *     Linear workspace ≈ a Motir ORGANIZATION, not a Motir workspace).** A
+ *     Linear **workspace** is "the home for all issues and interactions in an
+ *     organization" — i.e. the workspace IS Linear's org-root; the workspace
+ *     **Owner** role carries "the most sensitive settings like **billing**,
+ *     security, and audit logs", and separate workspaces have "separate billing
+ *     plans". That backs Motir's "credits/usage roll up to the root tenant"
+ *     decision. **But Linear has NO sub-workspace tier:** its **teams** live
+ *     inside a single workspace and are NOT workspaces (a Linear team is closer
+ *     to a Motir project/group than to a Motir workspace), so Linear does NOT
+ *     demonstrate the org→workspace nesting — only the billing-at-root point.
+ *     One Linear account can belong to many workspaces and switch between them,
+ *     but each such workspace is an independent root, which is "one account in
+ *     many ORGANIZATIONS" in Motir's terms, not one org owning many workspaces.
+ *     (Linear Docs — Workspaces; Concepts; Members and roles.)
+ *   So the durable shape: a single root tenant that OWNS billing + cross-
+ *   workspace membership, with workspaces nested under it. **The NESTING is
+ *   mirrored by Atlassian (org → multiple sites); Linear backs only the
+ *   billing-at-root half** (its workspace maps to Motir's org). Motir adopts the
+ *   Atlassian shape: `Organization` is the billing/identity root, `Workspace`
+ *   the container under it (the Atlassian "site"), the 6.4 `MemberRole` stays
+ *   the WORKSPACE-scoped role, and a NEW org-scoped owner/admin role sits above
+ *   it (mirroring Atlassian's org-admin-above-site-admin split). A single
+ *   account may belong to MULTIPLE organizations (verified above) — so
+ *   `OrganizationMembership` is a many-to-many User↔Organization join and the
+ *   shell carries an org switcher for the multi-org case.
  *
  * **The billing-entity decision (Yue, locked).** Credits + usage roll up to the
  * `Organization`. 7.12 currently keys its `CreditLedger` to the workspace/
@@ -104,9 +125,13 @@ export const story_6_10: PlanStory = {
     '`WorkspaceMembership`.\n' +
     '- **`Organization` → N `Workspace` → Project.** Today `Workspace` is the ' +
     'top tier with no parent; 6.10 adds `Workspace.organizationId` so every ' +
-    'workspace belongs to exactly one org. The mirror (Atlassian org→site, ' +
-    'Linear workspace-root→teams) puts billing + cross-workspace membership at ' +
-    'this root.\n' +
+    'workspace belongs to exactly one org. **This two-level nesting mirrors ' +
+    'Atlassian (one org → ONE OR MULTIPLE sites; Motir `Workspace` ≈ Atlassian ' +
+    'site) — verified June 2026.** Linear does NOT have this nesting (a Linear ' +
+    'workspace IS its org-root and maps to a Motir *organization*, not a ' +
+    'workspace; Linear teams live inside one workspace and are not workspaces), ' +
+    'so Linear backs only the billing-at-root half. A single account may belong ' +
+    'to multiple orgs, so membership is a many-to-many join.\n' +
     '- **Org membership gates workspace access; an org owner/admin role sits ' +
     'ABOVE the 6.4 workspace `MemberRole`.** The 6.4 role stays the ' +
     'workspace-scoped role; a NEW org-scoped owner/admin extends it (mirroring ' +
@@ -299,12 +324,19 @@ export const story_6_10: PlanStory = {
         '2. **The hierarchy.** `Organization` → N `Workspace` → Project. ' +
         '`Workspace` today has no parent; the decision adds ' +
         '`Workspace.organizationId` (every workspace belongs to exactly one ' +
-        'org). Cite the mirror: Atlassian org→site→space (org controls ' +
-        'licensing/billing/security across sites), Linear ' +
-        'workspace-root→teams (the workspace Owner holds billing). Motir’s ' +
-        '`Organization` = the Atlassian org / Linear workspace-root (the ' +
-        'billing+identity root); Motir’s `Workspace` ≈ Atlassian site / a ' +
-        'Linear team-container.\n' +
+        'org). **Cite the NESTING mirror precisely — it is Atlassian, NOT ' +
+        'Linear:** an Atlassian org has ONE OR MULTIPLE sites under it and a ' +
+        'single account can hold access to many sites within the org, so ' +
+        'Motir’s `Organization` = the Atlassian org and Motir’s `Workspace` ≈ ' +
+        'an Atlassian **site** (verified June 2026). **Linear does NOT have ' +
+        'this nesting:** a Linear workspace IS its org-root (it maps to a Motir ' +
+        '*organization*, not a workspace) and Linear teams are intra-workspace ' +
+        'groups, not workspaces — so cite Linear ONLY for billing-at-the-root ' +
+        '(the workspace Owner holds billing; separate workspaces bill ' +
+        'separately), never for the org→workspace nesting. Record that a single ' +
+        'account may belong to multiple orgs (Atlassian org switcher; Linear ' +
+        'multi-workspace), so `OrganizationMembership` is a many-to-many ' +
+        'User↔Organization join, not 1:1.\n' +
         '3. **The org is THE BILLING ENTITY (Yue, locked).** Credits + usage ' +
         'roll up to the `Organization`. Record that the ORCHESTRATOR re-keys ' +
         '7.12’s `CreditLedger` to the org and that metering rows ' +
@@ -332,8 +364,10 @@ export const story_6_10: PlanStory = {
         '## Acceptance criteria\n\n' +
         '- `motir-core/docs/decisions/organization-tier.md` exists and fixes ' +
         'all five sections, naming `Organization` (NOT `Account`) and citing ' +
-        'the Atlassian + Linear org→workspace + org-billing mirror (cited, ' +
-        'not asserted).\n' +
+        'the mirror PRECISELY: **Atlassian (org → one-or-multiple sites) for ' +
+        'the org→workspace NESTING; Linear (workspace-root billing) for the ' +
+        'billing-at-root half only — a Linear workspace maps to a Motir org, ' +
+        'NOT a Motir workspace** (cited, not asserted).\n' +
         '- It states plainly that the org is the billing entity AND that 6.10 ' +
         'ships no credit/usage view + takes no dep on 7.12 (the re-keying is ' +
         'the orchestrator’s; the view is 7.12.5).\n' +
