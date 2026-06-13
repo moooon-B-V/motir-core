@@ -16,7 +16,10 @@ export const workspaceRepository = {
   },
 
   async create(
-    data: { name: string; slug: string },
+    // Story 6.10: a workspace is non-nullably nested under an Organization, so
+    // organizationId is required here. The service creates/resolves the org and
+    // passes its id (see workspacesService.insertWorkspaceWithOwner).
+    data: { name: string; slug: string; organizationId: string },
     tx: Prisma.TransactionClient,
   ): Promise<Workspace> {
     return tx.workspace.create({ data });

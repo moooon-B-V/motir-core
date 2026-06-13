@@ -2,9 +2,12 @@ import { type MemberRole, Prisma, type Workspace, type WorkspaceMembership } fro
 import { db } from '@/lib/db';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { WORKSPACE_ROLE } from '@/lib/workspaces/roles';
+import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import {
   AlreadyMemberError,
   LastMemberError,
@@ -79,7 +82,30 @@ async function insertWorkspaceWithOwner(
   input: { name: string; slug: string; ownerUserId: string },
   tx: Prisma.TransactionClient,
 ): Promise<{ workspace: Workspace; membership: WorkspaceMembership }> {
-  const workspace = await workspaceRepository.create({ name: input.name, slug: input.slug }, tx);
+  // Story 6.10: every workspace lives under an Organization (the root tenancy
+  // tier — Workspace.organizationId is non-nullable). Until 6.10.4 wires the
+  // org-context + the "create 2nd+ workspaces under the ACTIVE org" routing, a
+  // brand-new workspace mints its OWN default org with the creator as org owner
+  // — the same one-org-per-workspace shape the 6.10.3 migration backfill gives
+  // every pre-existing workspace (an org of one / OPC). The org reuses the
+  // workspace's name + globally-unique slug; the slug-retry loop in the callers
+  // covers an org.slug collision exactly as it covers a workspace.slug one.
+  const organization = await organizationRepository.create(
+    { name: input.name, slug: input.slug },
+    tx,
+  );
+  await organizationMembershipRepository.create(
+    {
+      organizationId: organization.id,
+      userId: input.ownerUserId,
+      role: ORGANIZATION_ROLE.owner,
+    },
+    tx,
+  );
+  const workspace = await workspaceRepository.create(
+    { name: input.name, slug: input.slug, organizationId: organization.id },
+    tx,
+  );
   // The workspace creator is its OWNER — the privileged tier the 1.6.5 operator
   // dashboard's replay gate keys off. Invited members default to `member`
   // (workspacesService.addMember). This is what the function name has always
@@ -132,8 +158,10 @@ export const workspacesService = {
         });
       } catch (err) {
         if (isUniqueViolation(err)) {
-          // Can only be the workspace.slug collision (workspace.id was
-          // freshly minted, so the membership unique can't fire here).
+          // A slug collision — on either organization.slug or workspace.slug
+          // (Story 6.10 reuses the same slug for the auto-created org). The ids
+          // were freshly minted, so the membership uniques can't fire here.
+          // Retry with a new suffixed slug.
           continue;
         }
         throw err;

@@ -245,8 +245,13 @@ test('@smoke cross-workspace isolation: jobs from another workspace are not visi
       },
     });
   }
+  // Story 6.10: a workspace is nested under an Organization (organizationId is
+  // non-nullable), so mint a parent org for this isolation fixture first.
+  const orgB = await db.organization.create({
+    data: { name: 'Isolation B', slug: 'jf-iso-b-org' },
+  });
   const workspaceB = await db.workspace.create({
-    data: { name: 'Isolation B', slug: 'jf-iso-b' },
+    data: { name: 'Isolation B', slug: 'jf-iso-b', organizationId: orgB.id },
   });
   await db.workspaceMembership.create({
     data: {
