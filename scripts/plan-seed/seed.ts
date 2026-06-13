@@ -34,7 +34,7 @@
  */
 /* eslint-disable no-console -- a CLI script: console IS its output surface */
 import '../_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads (helper is in scripts/, one level up)
-import type { Prisma, WorkItemPriority } from '@prisma/client';
+import type { Prisma, SprintState, WorkItemPriority } from '@prisma/client';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -43,8 +43,10 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { sprintRepository } from '@/lib/repositories/sprintRepository';
+import { keyForAppend } from '@/lib/workItems/positioning';
 import { PLAN } from './data';
-import { PLAN_STATUS_MAP, type PlanItem } from './types';
+import { PLAN_STATUS_MAP, type PlanItem, type PlanLeafKind, type PlanStatus } from './types';
 
 const SEED_PASSWORD = '!QAZ1qaz';
 const SEED_WORKSPACE_NAME = 'moooon';
@@ -84,6 +86,14 @@ function hash(s: string): number {
 /** Deterministically pick an element of `arr` keyed by `key`. */
 function pick<T>(arr: readonly T[], key: string): T {
   return arr[hash(key) % arr.length]!;
+}
+
+/** The story-point estimates a sprinted leaf can carry — a Fibonacci spread. */
+const STORY_POINTS: readonly number[] = [1, 2, 3, 5, 8];
+
+/** Deterministic Fibonacci story-point estimate for a plan id (stable across reseeds). */
+function storyPointsFor(planId: string): number {
+  return pick(STORY_POINTS, `${planId}:points`);
 }
 
 /** Compose the work-item description: a metadata blockquote + the card prose. */
@@ -327,8 +337,39 @@ async function main() {
     links++;
   }
 
+  // ── Sprint pass: realistic sprints + leaf assignments (additive) ──────────
+  // A coding-agent-cadence project runs SHORT, consecutive sprints (~3–5 days),
+  // the most recent ending ~now. We create a handful of `complete`/`active`/
+  // `planned` sprints in `motir` and bucket LEAF items (subtask/task/bug — never
+  // epics/stories) into them by status, matching the work to the sprint state:
+  //   • complete → `done` leaves (what was "built" in that window);
+  //   • active   → mostly in_progress/todo (+ a couple done);
+  //   • planned  → todo/blocked (upcoming).
+  // Everything is DETERMINISTIC (PLAN order + the `hash`/`pick` helpers, no
+  // Math.random) and IDEMPOTENT (the clear pass drops the workspace, so a reseed
+  // rebuilds identically). Most leaves are LEFT in the backlog — realistic.
+  //
+  // Each assigned issue gets: a valid fractional-index `backlogRank` (minted via
+  // `keyForAppend`, chained per-sprint — NEVER a padded number, which would break
+  // drag-reorder) and a Fibonacci `storyPoints` estimate (the `hash` of its plan
+  // id). The sprint's `committedPoints`/`committedIssueCount` snapshot = the sum/
+  // count over its assigned items, so velocity/burndown read real data
+  // (project.estimationStatistic defaults to `story_points`).
+  const sprintSummary = await runSprintPass({
+    workspaceId: workspace.id,
+    projectId: project.id,
+    idMap,
+  });
+
   console.log(`\n✅ Seeded ${created} work items, ${links} dependency links.`);
   if (dangling) console.log(`   (${dangling} depends_on edge(s) referenced unknown ids — skipped)`);
+  console.log(
+    `🏃 Seeded ${sprintSummary.sprintCount} sprints ` +
+      `(${sprintSummary.completeCount} complete, ${sprintSummary.activeCount} active, ` +
+      `${sprintSummary.plannedCount} planned) · ${sprintSummary.assignedCount} issues assigned · ` +
+      `${sprintSummary.pointed} story-pointed.`,
+  );
+  for (const line of sprintSummary.lines) console.log(`   ${line}`);
   console.log('────────────────────────────────────────────────────────');
   console.log(`  Sign in:   ${OWNER_EMAIL} / ${SEED_PASSWORD}  (project manager)`);
   console.log(`  Team:      ${SEED_USERS.map((u) => u.email).join(', ')}`);
@@ -340,6 +381,260 @@ async function main() {
   console.log(`  Project:   access=open · ${OWNER_EMAIL}=admin, rest=member (Story 6.4)`);
   console.log('  Open the project to browse the plan as an issue tree.');
   console.log('────────────────────────────────────────────────────────');
+}
+
+// ─── Sprint pass ────────────────────────────────────────────────────────────
+
+/** A resolved LEAF plan card (subtask/task/bug) with its created work_item id. */
+interface SprintLeaf {
+  planId: string;
+  workItemId: string;
+  status: PlanStatus;
+  kind: PlanLeafKind;
+}
+
+/** One sprint to create, with the plan statuses + batch size it draws items from. */
+interface SprintSpec {
+  name: string;
+  goal: string;
+  state: SprintState;
+  /** Days from "now": sprint window [now+startOffset, now+endOffset]. */
+  startOffsetDays: number | null;
+  endOffsetDays: number | null;
+  /** Plan statuses this sprint's items are drawn from, in preference order. */
+  drawFrom: PlanStatus[];
+  /** How many leaves to pull into the sprint. */
+  size: number;
+}
+
+/** The day in ms — for the consecutive short-sprint windows. */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The sprint plan: ~3 complete + 1 active + ~2 planned, consecutive ~4-day
+ * windows with the most recent ACTIVE one ending a few days out (the active
+ * sprint started ~2 days ago). Complete windows march backwards from the active
+ * sprint's start; planned windows march forward from the active sprint's end.
+ * Offsets are in days relative to "now" — deterministic given the run time
+ * (dates are realistic, not reproducible-to-the-ms, which is expected of a
+ * time-anchored seed). `drawFrom` matches the work to the state.
+ */
+const SPRINT_SPECS: readonly SprintSpec[] = [
+  // Three completed sprints (oldest → newest), each a past ~4-day window.
+  {
+    name: 'Sprint 1 · Foundations',
+    goal: 'Stand up auth, workspaces, and the project shell.',
+    state: 'complete',
+    startOffsetDays: -14,
+    endOffsetDays: -10,
+    drawFrom: ['done'],
+    size: 14,
+  },
+  {
+    name: 'Sprint 2 · Issue tree',
+    goal: 'Ship the epic→story→task tree and the issue detail view.',
+    state: 'complete',
+    startOffsetDays: -10,
+    endOffsetDays: -6,
+    drawFrom: ['done'],
+    size: 12,
+  },
+  {
+    name: 'Sprint 3 · Boards & workflow',
+    goal: 'Land the board, columns, and the workflow status model.',
+    state: 'complete',
+    startOffsetDays: -6,
+    endOffsetDays: -2,
+    drawFrom: ['done'],
+    size: 10,
+  },
+  // The single active sprint — started ~2 days ago, ends ~2 days out.
+  {
+    name: 'Sprint 4 · Sprints & backlog',
+    goal: 'Sprint entity, backlog ranking, velocity, and burndown.',
+    state: 'active',
+    startOffsetDays: -2,
+    endOffsetDays: 2,
+    drawFrom: ['in_progress', 'planned', 'done'],
+    size: 10,
+  },
+  // Two planned sprints — upcoming work, future windows.
+  {
+    name: 'Sprint 5 · Reports & filters',
+    goal: 'Saved filters, the report builder, and dashboards.',
+    state: 'planned',
+    startOffsetDays: 2,
+    endOffsetDays: 6,
+    drawFrom: ['planned', 'blocked'],
+    size: 8,
+  },
+  {
+    name: 'Sprint 6 · Native rewrite polish',
+    goal: 'Localization polish and the design-system pass.',
+    state: 'planned',
+    startOffsetDays: 6,
+    endOffsetDays: 10,
+    drawFrom: ['planned', 'blocked'],
+    size: 8,
+  },
+];
+
+/**
+ * Create the sprints + assign leaves. Walks PLAN in order (deterministic) to
+ * collect the LEAF cards (subtask/task/bug — epics/stories are CONTAINERS, never
+ * sprinted), buckets them by plan status, then fills each `SprintSpec` from its
+ * preferred statuses without reusing an item. Per assigned item: a Fibonacci
+ * `storyPoints` + a chained fractional-index `backlogRank` (per sprint). The
+ * sprint's committed snapshot = the sum/count over its assigned items.
+ */
+async function runSprintPass(args: {
+  workspaceId: string;
+  projectId: string;
+  idMap: Map<string, string>;
+}): Promise<{
+  sprintCount: number;
+  completeCount: number;
+  activeCount: number;
+  plannedCount: number;
+  assignedCount: number;
+  pointed: number;
+  lines: string[];
+}> {
+  const { workspaceId, projectId, idMap } = args;
+
+  // The set of work_item ids actually created as LEAF kinds (subtask/bug/task).
+  // We gate the resolved ids against THIS rather than trusting the plan kind: a
+  // couple of plan ids collide between a story and a leaf in the source data
+  // (e.g. story `1.0.5` "Design system & brand" vs leaf `1.0.5` "Vercel link"),
+  // so an `idMap` lookup for such an id can resolve to the STORY's work_item.
+  // Filtering on the real `work_item.kind` guarantees a CONTAINER (epic/story)
+  // is never sprinted, whatever the colliding plan id resolved to.
+  const leafKindRows = await db.workItem.findMany({
+    where: { projectId, kind: { in: ['subtask', 'bug', 'task'] } },
+    select: { id: true },
+  });
+  const leafWorkItemIds = new Set(leafKindRows.map((r) => r.id));
+
+  // Collect every LEAF in PLAN order (stable), resolving the created id.
+  const LEAF_KINDS: ReadonlySet<PlanLeafKind> = new Set(['subtask', 'bug', 'task']);
+  const leaves: SprintLeaf[] = [];
+  const seen = new Set<string>(); // de-dupe colliding plan ids → one work_item once
+  const addLeaf = (item: PlanItem, defaultKind: PlanLeafKind) => {
+    const kind = item.kind ?? defaultKind;
+    if (!LEAF_KINDS.has(kind)) return;
+    const workItemId = idMap.get(item.id);
+    if (!workItemId) return; // never-created id (shouldn't happen) — skip
+    if (!leafWorkItemIds.has(workItemId)) return; // resolved to a container — skip
+    if (seen.has(workItemId)) return; // already bucketed (id collision) — skip
+    seen.add(workItemId);
+    leaves.push({ planId: item.id, workItemId, status: item.status, kind });
+  };
+  for (const epic of PLAN) {
+    for (const story of epic.stories) for (const item of story.items) addLeaf(item, 'subtask');
+    for (const item of epic.items ?? []) addLeaf(item, 'bug');
+  }
+
+  // Bucket by plan status; we draw from these without reuse (a consumed leaf is
+  // removed from the head of its bucket, so no item lands in two sprints).
+  const buckets: Record<PlanStatus, SprintLeaf[]> = {
+    done: [],
+    in_progress: [],
+    planned: [],
+    blocked: [],
+  };
+  for (const leaf of leaves) buckets[leaf.status].push(leaf);
+
+  /** Pull up to `n` leaves preferring `statuses` in order; consumes from buckets. */
+  const draw = (statuses: PlanStatus[], n: number): SprintLeaf[] => {
+    const out: SprintLeaf[] = [];
+    for (const status of statuses) {
+      while (out.length < n && buckets[status].length > 0) {
+        out.push(buckets[status].shift()!);
+      }
+      if (out.length >= n) break;
+    }
+    return out;
+  };
+
+  const now = Date.now();
+  const at = (offsetDays: number | null): Date | null =>
+    offsetDays === null ? null : new Date(now + offsetDays * DAY_MS);
+
+  let sequence = 0;
+  let assignedCount = 0;
+  let pointed = 0;
+  const lines: string[] = [];
+  const counts = { complete: 0, active: 0, planned: 0 };
+
+  for (const spec of SPRINT_SPECS) {
+    sequence += 1;
+    const seq = sequence;
+    const items = draw(spec.drawFrom, spec.size);
+    counts[spec.state] += 1;
+
+    // Snapshot: committed points = Σ storyPoints over the assigned items,
+    // committed issue count = the item count. Computed up-front so the create
+    // can stamp it (the complete/active sprints carry a real "Committed" line).
+    const points = items.map((leaf) => storyPointsFor(leaf.planId));
+    const committedPoints = points.reduce((sum, p) => sum + p, 0);
+    const committedIssueCount = items.length;
+
+    const startDate = at(spec.startOffsetDays);
+    const endDate = at(spec.endOffsetDays);
+    // A completed sprint completed at its window end; active/planned have none.
+    const completedAt = spec.state === 'complete' ? endDate : null;
+
+    await db.$transaction(async (tx: Prisma.TransactionClient) => {
+      const sprint = await sprintRepository.create(
+        {
+          workspaceId,
+          projectId,
+          name: spec.name,
+          goal: spec.goal,
+          state: spec.state,
+          startDate,
+          endDate,
+          completedAt,
+          // Only the complete + active sprints carry a committed baseline (a
+          // planned sprint has not been started, so its baseline is null — Jira
+          // shape); the assignments below still rank into all of them.
+          committedPoints: spec.state === 'planned' ? null : committedPoints,
+          committedIssueCount: spec.state === 'planned' ? null : committedIssueCount,
+          sequence: seq,
+        },
+        tx,
+      );
+
+      // Assign each item: chain a valid fractional-index backlogRank per sprint
+      // (keyForAppend(prev) — NEVER a padded number) + a Fibonacci storyPoints.
+      let prevRank: string | null = null;
+      for (let i = 0; i < items.length; i++) {
+        const leaf = items[i]!;
+        const rank = keyForAppend(prevRank);
+        prevRank = rank;
+        await workItemRepository.setSprint(leaf.workItemId, sprint.id, tx);
+        await workItemRepository.setBacklogRank(leaf.workItemId, rank, tx);
+        await workItemRepository.setStoryPoints(leaf.workItemId, points[i]!, tx);
+      }
+    });
+
+    assignedCount += items.length;
+    pointed += items.length;
+    lines.push(
+      `${spec.name} [${spec.state}] — ${items.length} issues, ` +
+        `${committedPoints} pts (seq ${seq})`,
+    );
+  }
+
+  return {
+    sprintCount: SPRINT_SPECS.length,
+    completeCount: counts.complete,
+    activeCount: counts.active,
+    plannedCount: counts.planned,
+    assignedCount,
+    pointed,
+    lines,
+  };
 }
 
 main()
