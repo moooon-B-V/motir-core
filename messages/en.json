@@ -2425,5 +2425,39 @@
     "colAssignee": "Assignee",
     "assigned": "Assigned",
     "unassigned": "Unassigned"
+  },
+  "notifications": {
+    "bellAria": "{count, plural, =0 {Notifications, no unread} other {Notifications, # unread}}",
+    "title": "Notifications",
+    "filterLabel": "Filter notifications",
+    "tabs": {
+      "direct": "Direct",
+      "watching": "Watching"
+    },
+    "watchingDisabledTooltip": "Watching — available once issue-watching ships",
+    "options": "Notification options",
+    "markAllRead": "Mark all as read",
+    "settings": "Notification settings",
+    "showMore": "Show more",
+    "showMoreCount": "Show more ({count} older)",
+    "markRead": "Mark as read",
+    "empty": {
+      "title": "You're all caught up",
+      "body": "No notifications yet. Mentions, comments, and assignments will land here."
+    },
+    "error": {
+      "title": "Couldn't load notifications",
+      "body": "Something went wrong fetching your feed.",
+      "retry": "Try again"
+    },
+    "actorFallback": "Someone",
+    "summary": {
+      "mentioned": "<s>{actor}</s> mentioned you on <s>{key}</s>",
+      "commented": "<s>{actor}</s> commented on <s>{key}</s>",
+      "assigned": "<s>{actor}</s> assigned you <s>{key}</s>",
+      "transitioned": "<s>{actor}</s> moved <s>{key}</s> to {status}",
+      "generic": "<s>{actor}</s> updated <s>{key}</s>",
+      "genericNoKey": "<s>{actor}</s> sent you a notification"
+    }
   }
 }
