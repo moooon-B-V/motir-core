@@ -538,6 +538,71 @@ carries the same definition-of-done for the planner side.)
 
 ---
 
+## ⚠️ E2E tests wait on the AUTHORITATIVE signal — never race optimistic / async UI
+
+**EXTREMELY IMPORTANT: a Playwright assertion against an OPTIMISTIC or
+eventually-consistent surface MUST wait on a deterministic completion signal
+before the next step — the network response (its status AND body), an
+authoritative committed-state read, or a real component state. NEVER assert,
+`reload()`, or act on the optimistic UI alone and lean on Playwright's implicit
+assertion auto-retry to "catch up." Auto-retry masks the race locally and on a
+fast runner; it fails under CI load — exactly where it is least debuggable.**
+
+A flaky spec is not a private cost: PR CI checks out the branch **merged with
+`main`**, so one flaky spec on `main` red-lights _every_ open PR's CI
+intermittently. Treat a flaky test as a release blocker, never merge one that's
+"green most of the time," and when a PR's only red is a spec it didn't touch,
+suspect an inherited `main` flake before blaming the diff (reproduce in
+isolation first). This rule was adopted after five specs flaked from the same
+shape (`bug-e2e-suite-flaky-specs`; the lesson is `notes.html` mistake #37).
+
+### The discipline, by operation
+
+- **After a mutation** (a `POST`/`PATCH` write), `await page.waitForResponse(…)`
+  for that endpoint's **200** before `reload()` or before asserting the
+  persisted value. The optimistic UI flips instantly; the reload reads the
+  server, so without the wait the reload races the in-flight write and reads the
+  PRE-write state. (Arm the `waitForResponse` BEFORE the action so it can't be
+  missed.)
+- **After a lazy-load** ("Show more" / pagination / a windowed fetch), `await`
+  the fetch response before asserting the new count/rows — never `toHaveCount`
+  straight after the click.
+- **For a drag (dnd-kit)**, assert the **committed** action — the move
+  response's body (right column/slot) or an authoritative reload — and RETRY the
+  gesture until it commits; never trust the drop's apparent target.
+  `closestCorners` can resolve `over` to a stale element at release, so the move
+  POSTs the wrong target → a rejected (422) move. A rejected move changes
+  nothing server-side, so re-dragging is safe.
+- **Fixed `waitForTimeout` is a smell** — it's a guess, not a signal. Wait on
+  the response, a DOM/role state, or `expect.poll` of an authoritative read.
+
+### The app side (so tests CAN be deterministic)
+
+- **Optimistic mutations must sequence-guard their reconciles.** Rapid or
+  overlapping actions (a shortcut pressed repeatedly, a composite click firing
+  while a prior action is in flight) resolve out of order; an older response's
+  state update must not clobber the newest optimistic state. Stamp each action
+  with an incrementing `seq` ref and apply a reconcile only when it's still the
+  latest (the `WatchControl` toggle mirrors the `fetchSeq` guard the same
+  component already used for stale list reads).
+- **Concurrency paths translate raw DB races to typed errors.** A `$transaction`
+  that can lose a unique-constraint race must catch the `P2002` and rethrow a
+  typed domain error (e.g. `changeKey` → `IdentifierTakenError`) so a raw DB
+  error never escapes the service — and a concurrency TEST must accept every
+  legitimate race outcome, not a single one.
+
+### Do / Don't
+
+- ✅ `const w = page.waitForResponse(r => /…\/rank$/.test(r.url()) && r.request().method()==='POST'); await drag(); expect((await w).status()).toBe(200); await page.reload();`
+- ✅ Verify a dnd move via its response body / a post-reload authoritative read; retry until committed.
+- ✅ Guard optimistic reconciles with a `seq` ref; translate `P2002` to a typed error.
+- ❌ `await action(); await page.reload(); expect(persisted).to…` with no response wait.
+- ❌ `await showMore.click(); await expect(list).toHaveCount(100);` (races the fetch).
+- ❌ `await page.waitForTimeout(500)` as a synchronisation mechanism.
+- ❌ Merging a spec that passes only intermittently — it taxes every open PR via merge-with-main CI.
+
+---
+
 ## Project conventions (non-architecture)
 
 - **Manual merge mode.** Subtask PRs open as drafts targeting `main`; the
