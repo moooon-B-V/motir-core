@@ -1825,6 +1825,81 @@ export const EPICS: EpicMeta[] = [
       'cutover, ToS + privacy policy, transactional email, basic analytics, production deploy, ' +
       'domain + SSL, onboarding, and day-1 admin tools. Most of this is human subtasks ' +
       "running through Motir's own queue. (Formerly Epic 5.)",
+    items: [
+      {
+        id: 'bug-e2e-suite-flaky-specs',
+        kind: 'bug',
+        title:
+          'E2E suite has flaky specs that intermittently red CI on unrelated PRs (drag-reorder reload, at-scale cursor paging, inline-edit reload, watch-popover hydration)',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 8 (cross-cutting test-suite stability — a green, ' +
+          'reliable CI is a launch gate) · **Surfaces:** the Playwright E2E job (`tests/e2e/*`) · ' +
+          '**Status:** open · **Reported by:** Yue.\n\n' +
+          'The `Playwright E2E` CI job is **flaky** — a handful of specs fail intermittently from ' +
+          'timing/hydration races, not from real product regressions. Because PR CI runs each ' +
+          "branch MERGED with `main`, a flaky spec reds **any** open PR's E2E job regardless of " +
+          'what that PR changed, forcing blind re-runs (observed blocking #836 and #864). The ' +
+          'app behaviour under test is correct; the **tests** race the UI.\n\n' +
+          '**Observed (PR #864 E2E run — `195 passed`, `4 flaky`, `1 failed`):**\n' +
+          '1. `tests/e2e/labels-components-watch.spec.ts:341` — `@smoke watching: auto-watch on ' +
+          'create, the W shortcut + typing guard, the popover roster, admin add, and the watcher ' +
+          'emails`. **Failed all retries** this run: `expect(watch).toHaveAttribute(' +
+          "'aria-pressed', 'false')` got `'true'` — the auto-watch-on-create state / popover " +
+          'mounts before the assertion settles (hydration race; the first interaction on a ' +
+          'freshly-loaded page is swallowed — the finding-#89 pattern).\n' +
+          '2. `tests/e2e/attachments.spec.ts:228` — `at scale the read stays cursor-paged: 50 + ' +
+          '"Show more" … (finding #57)`. Flaky: `expect(list.getByRole(\'listitem\')).toHaveCount' +
+          '(100)` got `50` — the assertion races the lazy-load / "Show more" fetch (assert on the ' +
+          'response/loaded state, not a fixed count after a click).\n' +
+          '3. `tests/e2e/backlog.spec.ts:128` — `grooming session › drag-reorder a backlog row ' +
+          'writes a single rank and the order survives reload`. Flaky: the post-reload order ' +
+          "doesn't match the expected order — the dnd-kit reorder's persist PATCH races (the " +
+          'reorder-drag vs viewport-bottom autoscroll class of bug: capture bbox after scrolling ' +
+          'the target into view, drop on a concrete target, and `waitForResponse(PATCH→200)` ' +
+          'BEFORE reloading).\n' +
+          '4. `tests/e2e/dashboards.spec.ts:181` — `dashboards @smoke › A — create a workspace ' +
+          'dashboard, add three widgets, switch layout, drag, reload persists`. Flaky: ' +
+          '`expect((await moveResp).status()).toBe(200)` — the layout-move PATCH never fires / is ' +
+          'still pending when awaited (same dnd persist race as #3).\n' +
+          '5. `tests/e2e/estimation.spec.ts:89` — `estimate a backlog story via the inline picker ' +
+          '— the badge updates and survives reload`. Flaky: ' +
+          '`toHaveAccessibleName(...)` still reads the pre-estimate "Set story points" — the ' +
+          'inline-edit commit / reload races (assert the persisted value via the success response ' +
+          'before reload).\n\n' +
+          '**Root-cause themes (verify per spec in the fix).** All five are TEST-side timing ' +
+          'races, not product bugs: (a) **hydration churn swallowing the first click/keypress** on ' +
+          'a freshly-loaded page — retry the load-time interaction / wait for a hydration signal; ' +
+          '(b) **dnd-kit reorder persist** — scroll the target into view, drop on a concrete ' +
+          'target element (never empty space), `waitForResponse(PATCH→200)` before asserting or ' +
+          'reloading; (c) **at-scale lazy-load / reload reads** — wait for the network response or ' +
+          'a settled DOM signal, never a fixed count or bare `waitForTimeout`. These match the ' +
+          'recurring gotchas already learned on this suite (the reorder-drag/autoscroll bug, the ' +
+          'cold-route/sign-in/hydration lane notes).\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- Each of the five listed specs is hardened so it passes **5 consecutive full CI E2E ' +
+          'runs with zero flakes** (not a single green run — re-run to prove it).\n' +
+          '- Fixes are TEST-side: replace fixed sleeps with state/response waits; retry ' +
+          'load-time interactions (click/keypress) that hydration can swallow; for dnd, scroll the ' +
+          'target into view + drop on a concrete target + `waitForResponse(PATCH 200)` before ' +
+          'asserting/reloading.\n' +
+          '- **No product-code change** unless the investigation surfaces a REAL app race (e.g. an ' +
+          'optimistic update that does not reconcile) — if so, fix it and note it explicitly; ' +
+          'otherwise the app is correct and only the specs change.\n' +
+          '- The `@axe` / a11y and data assertions the specs already make are preserved (harden ' +
+          'the timing, do not weaken the coverage).\n\n' +
+          '## Context refs\n\n' +
+          '- `tests/e2e/labels-components-watch.spec.ts` (≈ line 341 — the watch @smoke journey)\n' +
+          '- `tests/e2e/attachments.spec.ts` (≈ line 228 — at-scale cursor paging, finding #57)\n' +
+          '- `tests/e2e/backlog.spec.ts` (≈ line 128 — grooming drag-reorder survives reload)\n' +
+          '- `tests/e2e/dashboards.spec.ts` (≈ line 181 — layout drag + reload persists)\n' +
+          '- `tests/e2e/estimation.spec.ts` (≈ line 89 — inline estimate survives reload)\n' +
+          '- `tests/e2e/_helpers/*` (the shared `signIn` / `db-reset` harness) + ' +
+          '`playwright.config.ts` (retries, webServer) — the place to add a shared ' +
+          'hydration-ready / drag + persist helper rather than fixing each spec ad hoc',
+      },
+    ],
   },
   {
     id: '9',
