@@ -26,6 +26,22 @@
       "bug": "缺陷",
       "subtask": "子任务"
     },
+    "workItemType": {
+      "code": "代码",
+      "design": "设计",
+      "test": "测试",
+      "content": "内容",
+      "research": "调研",
+      "review": "评审",
+      "decision": "决策",
+      "deploy": "部署",
+      "manual": "手动",
+      "chore": "杂务"
+    },
+    "executor": {
+      "coding_agent": "编码代理",
+      "human": "人工"
+    },
     "priority": {
       "highest": "最高",
       "high": "高",
@@ -388,6 +404,8 @@
       "titleTooLong": "标题不能超过 {max} 个字符。",
       "created": "{identifier} 已创建",
       "type": "类型",
+      "workItemType": "工作类型",
+      "executor": "执行者",
       "parent": "父级",
       "titleLabel": "标题",
       "titlePlaceholder": "用一句话概括这项工作",
@@ -515,6 +533,9 @@
     "removeLink": "移除关联",
     "status": "状态",
     "type": "类型",
+    "workItemType": "工作类型",
+    "executor": "执行者",
+    "setType": "设置类型",
     "priority": "优先级",
     "assignee": "负责人",
     "reporter": "创建人",
@@ -772,6 +793,13 @@
   "ui": {
     "typePicker": {
       "label": "类型"
+    },
+    "workItemTypePicker": {
+      "label": "工作类型",
+      "placeholder": "设置类型"
+    },
+    "executorPicker": {
+      "label": "执行者"
     },
     "priorityPicker": {
       "label": "优先级"

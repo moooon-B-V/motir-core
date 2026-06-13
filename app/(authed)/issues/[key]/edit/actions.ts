@@ -13,7 +13,12 @@ import {
   UnknownStatusError,
   WorkItemError,
 } from '@/lib/workItems/errors';
-import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
+import type {
+  ExecutorDto,
+  WorkItemKindDto,
+  WorkItemPriorityDto,
+  WorkItemTypeDto,
+} from '@/lib/dto/workItems';
 
 // Server Actions for the issue edit form (Subtask 2.3.6). Two DISTINCT paths —
 // the whole point of closing finding #46: non-status fields go through
@@ -52,6 +57,13 @@ export interface UpdateIssueInput {
   priority?: WorkItemPriorityDto;
   dueDate?: string | null;
   estimateMinutes?: number | null;
+  // Work-item TYPE + EXECUTOR (Story 2.7). The detail-rail inline picker
+  // (2.7.4) sends `type` (seeding `executor` when none is set yet) or
+  // `executor` alone (an override). `updateWorkItem` owns the leaf-only +
+  // seed-if-absent rules (2.7.3); a `type`/`executor` on a non-leaf kind is
+  // rejected there with a typed error the catch below surfaces.
+  type?: WorkItemTypeDto | null;
+  executor?: ExecutorDto | null;
 }
 
 export type IssueActionResult =
@@ -84,6 +96,8 @@ export async function updateIssueAction(input: UpdateIssueInput): Promise<IssueA
         priority: input.priority,
         dueDate: input.dueDate,
         estimateMinutes: input.estimateMinutes,
+        type: input.type,
+        executor: input.executor,
       },
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       { expectedUpdatedAt: input.expectedUpdatedAt },
