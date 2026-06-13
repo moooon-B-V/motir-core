@@ -1917,6 +1917,155 @@ export const EPICS: EpicMeta[] = [
           'data-grid or a drawer panel with its own focus scope), unify behind a single ' +
           'overflow-escape primitive instead of a third branch.',
       },
+      {
+        id: 'bug-sprint-report-modal-clipped-burndown',
+        kind: 'bug',
+        title:
+          'Complete-sprint success modal: SprintReport bypasses Modal.Body, so the burndown section is clipped off the bottom with no scroll affordance',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** complete-sprint flow success state ' +
+          '(`app/(authed)/backlog/_components/CompleteSprintDialog.tsx:183-213`, Subtask 4.4.1 ' +
+          'modal) rendering the shared `SprintReport` body ' +
+          '(`app/(authed)/backlog/_components/SprintReport.tsx`, Subtask 4.4.6) + the modal ' +
+          'primitive (`components/ui/Modal.tsx`, Subtask 1.0.5) · **Code surface owned by:** ' +
+          'Story 4.4 (Sprint completion + report) · **Status:** open · **Reported by:** Yue.\n\n' +
+          'On the **complete-sprint success modal** (the post-`POST /api/sprints/[id]/complete` ' +
+          'success state — the modal whose title is `{sprint.name} 报告` / `{sprint.name} report`), ' +
+          'the bottom of the report is **clipped off** with no scrollbar. The 3-up points rollup, ' +
+          'scope-change line, completed section, and the start of the not-completed list are ' +
+          'visible; the **燃尽图 (burndown) section** is rendered but cut off at the modal’s ' +
+          'bottom edge — the chart legend bar (`理想线 · 剩余 · 新增范围`) is partly visible, the ' +
+          'chart itself is not, and the velocity chart (`size="lg"` modal also renders the side-by-' +
+          'side analytics row, design panel 5) is unreachable. The modal panel sits at its ' +
+          '`max-h-[90vh]` cap; the user has no way to see the rest of the body short of opening ' +
+          'the standalone `/sprints/[id]/report` page via the “Open full report” footer link.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open the `moooon` / `motir` ' +
+          'project → `/backlog`, click **Complete sprint** on an active sprint (Sprint 4 in the ' +
+          'reported screenshot — “Sprint 4 · Sprints & backlog”). Pick any carry-over destination, ' +
+          'submit. The success-state modal opens with title `{sprint.name} 报告`. At typical ' +
+          'laptop heights (≤ ~900px) observe that the modal grows to `max-h-[90vh]`, the body ' +
+          'panel is cropped at that height, and the analytics row at the bottom of `SprintReport` ' +
+          '(the burndown + velocity charts) is partly or fully outside the modal viewport with NO ' +
+          'scroll affordance on the body. The modal’s body does not scroll; the page behind it ' +
+          'does not scroll; the content is just clipped.\n\n' +
+          '**Root cause (high confidence — single-line miss in the success-state render).** ' +
+          '`Modal` (`components/ui/Modal.tsx:34-47, 188-224`) caps the panel at ' +
+          '`flex max-h-[90vh] flex-col overflow-hidden` and delegates body scrolling to its ' +
+          '`Modal.Body` subcomponent (`flex min-h-0 flex-1 flex-col overflow-y-auto`). A consumer ' +
+          'that passes long content as a DIRECT child of `<Modal>` (without `Modal.Body`) inherits ' +
+          'the cap WITHOUT the scroll recipe — the inner column lays out at its natural height, ' +
+          'the panel’s `overflow-hidden` clips it, and nothing scrolls.\n\n' +
+          'The success state in `CompleteSprintDialog.tsx:185-213` is exactly this shape — ' +
+          '`<Modal …><SprintReport … /><Modal.Footer>…</Modal.Footer></Modal>`. `SprintReport` ' +
+          'returns a `<div className="flex flex-col gap-4">…</div>` with the meta line, points ' +
+          'rollup, scope-change row, two `ReportSection` lists, and the analytics row — easily ' +
+          'taller than 90vh once the not-completed list has any rows and the burndown’s chart ' +
+          'block is present. The form state of the SAME modal (the carry-over chooser, ' +
+          '`CompleteSprintDialog.tsx:217-364`) DOES wrap its body in `<Modal.Body>` and scrolls ' +
+          'correctly when fields stack — the success state is the asymmetric miss.\n\n' +
+          'The standalone `/sprints/[id]/report` page ' +
+          '(`app/(authed)/sprints/[id]/report/page.tsx`) does NOT have this bug because it is a ' +
+          'normal authed page route — the document scrolls — so the same `SprintReport` component ' +
+          'renders fully there. This is what makes the success-state modal the only affected ' +
+          'surface.\n\n' +
+          '**Class.** Third documented “long content in a `Modal` with `overflow-hidden` cap but ' +
+          'no `Modal.Body` scroll seam” shape — sibling family with ' +
+          '`bug-inline-edit-clipped-when-table-short` (table overflow, fixed via body-portal) and ' +
+          '`bug-combobox-menu-clipped-inside-modal` (Combobox listbox clipped by modal). Those two ' +
+          'are popover-in-clip-box defects; this one is body-in-clip-box (the simpler shape). The ' +
+          '`Modal.Body` recipe already exists for exactly this case; the success state simply ' +
+          'doesn’t reach for it.\n\n' +
+          '**Fix shapes (decide at fix time — listed by likely durability):**\n' +
+          '1. **Wrap `<SprintReport>` in `<Modal.Body>` in `CompleteSprintDialog`’s success ' +
+          'state** (minimal, contained). Replace ' +
+          '`<SprintReport report={report} sprint={completedSprint} statusByKey={statusByKey} ' +
+          'carryOverLabel={carryOverLabel} />` with ' +
+          '`<Modal.Body className="gap-4"><SprintReport … /></Modal.Body>` so the body fills the ' +
+          'remaining column height (panel cap minus title + footer) and scrolls internally; the ' +
+          '`Modal.Footer` stays pinned, and the analytics row is reachable. Mirrors the carry-over ' +
+          'form-state branch of the SAME component (`CompleteSprintDialog.tsx:231-340`) — same ' +
+          'modal, same recipe, just applied to the success branch too. (The `gap-4` className is ' +
+          'carried over from `SprintReport`’s outer `<div>`, which can then drop its own ' +
+          '`flex flex-col gap-4` wrapper if desired — or keep it; both work, the outer is a ' +
+          'no-op once the body is a flex column.)\n' +
+          '2. **Make `Modal` scroll its direct children by default** (broader; would also pre-empt ' +
+          'a future fourth occurrence). Change the panel from `overflow-hidden` to a layout where ' +
+          'the child column is itself scrollable, e.g. apply ' +
+          '`overflow-y-auto` to the panel and keep `overflow-hidden` only on the cross-axis, or ' +
+          'add a default `min-h-0 flex-1 overflow-y-auto` wrapper around `children` (excluding ' +
+          'the `Modal.Footer` slot, which must stay pinned). Higher-risk — would change layout ' +
+          'semantics for every existing Modal consumer (e.g. the create-issue modal’s expandable ' +
+          'Explanation already relies on the current cap shape) and the focus-ring inset recipe ' +
+          'lives on `Modal.Body`, not the panel. Probably not worth it for a one-call-site miss.\n' +
+          '3. **Lint/jsx-typecheck** that long-content modals use `Modal.Body`. Too narrow to be a ' +
+          'real rule (a short modal correctly omits `Modal.Body`); reserve for the rule-of-three ' +
+          'footer below.\n\n' +
+          '**Recommended:** fix 1. One-line change at the success-state site; no Modal API ' +
+          'change; the existing `Modal.Body` recipe is exactly the seam that was meant to be ' +
+          'used. Fix 2 is overreach for a single missed wrapper. Coverage gap that let it ship: ' +
+          'no Playwright assertion on the success-state modal’s body scrollability with a ' +
+          'long carry-over list — the carry-over form state was tested for scroll (mounted ' +
+          '`Modal.Body`), the success state was not.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- On a viewport whose height is ≤ ~900px (typical laptop), opening the complete-sprint ' +
+          'success modal with a sprint whose report body exceeds the modal’s `max-h-[90vh]` cap ' +
+          '(any sprint with a few not-completed issues + the burndown rendered) shows a scrollable ' +
+          'body: the burndown + velocity analytics row is reachable by scrolling inside the ' +
+          'modal, NOT clipped at the bottom edge.\n' +
+          '- The fix is at the `CompleteSprintDialog` success-state call site ' +
+          '(`<Modal.Body>` wrapping `<SprintReport>`) — not a workaround inside `SprintReport` and ' +
+          'not a change to the `Modal` primitive — so the `/sprints/[id]/report` standalone page ' +
+          'is unaffected (it remains a normal scrolling page).\n' +
+          '- The `Modal.Footer` (Open full report + Done) stays PINNED at the bottom of the ' +
+          'panel as the body scrolls.\n' +
+          '- The focus-ring inset recipe (`Modal.Body`’s `-m-1.5 p-1.5`) is preserved — any ' +
+          '`Input`/control inside the report keeps its 4px focus-ring overhang from being clipped.\n' +
+          '- The carry-over FORM state of the same modal is unchanged (it already uses ' +
+          '`Modal.Body`); no regression there.\n' +
+          '- A Playwright regression asserts the success-state modal’s body is scrollable when ' +
+          'the report content exceeds the panel height: measure ' +
+          '`bodyEl.scrollHeight > bodyEl.clientHeight`, scroll to the bottom, and assert the ' +
+          'burndown section is visible (`getBoundingClientRect().bottom <= dialogRect.bottom`). ' +
+          'Same geometry-not-CSS posture as the sibling overflow bugs ' +
+          '(`bug-issue-detail-eyebrow-overflows-viewport`, ' +
+          '`bug-combobox-menu-clipped-inside-modal`).\n' +
+          '- next-intl strings unchanged; no service / DTO / route / DB change; AA contrast ' +
+          'preserved; shape + colour tokens unchanged.\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/backlog/_components/CompleteSprintDialog.tsx:182-213` — the ' +
+          'success-state render (the fix site); compare with ' +
+          '`CompleteSprintDialog.tsx:231-340` (the form state already wraps in `Modal.Body`)\n' +
+          '- `app/(authed)/backlog/_components/SprintReport.tsx` (Subtask 4.4.6) — the shared ' +
+          'presentational body; rendered identically here and on the standalone page\n' +
+          '- `components/ui/Modal.tsx:34-47` (`contentVariants`, `flex max-h-[90vh] flex-col ' +
+          'overflow-hidden`) + `Modal.tsx:188-224` (`ModalBody` — the `flex-1 overflow-y-auto` ' +
+          'scroll recipe + the `-m-1.5 p-1.5` focus-ring inset) — the primitive whose seam this ' +
+          'fix reaches for\n' +
+          '- `app/(authed)/sprints/[id]/report/page.tsx` — the standalone closed-sprint report ' +
+          'page; reference case where document scroll already works (no fix needed)\n' +
+          '- `design/sprints/sprint-lifecycle.mock.html` panels 6–7 + ' +
+          '`design/reports/charts.mock.html` panel 5 — the design intent: the analytics row is ' +
+          'PART of the report body, not a hidden overflow\n' +
+          '- `bug-inline-edit-clipped-when-table-short`, ' +
+          '`bug-combobox-menu-clipped-inside-modal` (sibling family) — popover-shape clip-box ' +
+          'defects in the same overflow-hidden family; this is the body-shape sibling\n' +
+          '- `motir-core/CLAUDE.md` — the colour + shape token rules (a `Modal.Body` wrap ' +
+          'introduces no new tokens; this is purely a layout fix)\n\n' +
+          '**Refactor signal (rule of three).** This is now the **third** documented occurrence ' +
+          'of “Modal’s `overflow-hidden` panel clips content because the consumer didn’t reach ' +
+          'for the `Modal.Body` scroll seam.” The first two ' +
+          '(`bug-inline-edit-clipped-when-table-short`, `bug-combobox-menu-clipped-inside-modal`) ' +
+          'were popovers inside the cap; this one is the BODY itself. The `Modal.Body` opt-in ' +
+          'shape is documented but easy to skip — a long-body modal that ships without it is ' +
+          'this defect. Consider, in a follow-up Subtask: (a) a `<Modal scrollBody>` opt-out ' +
+          'inverse where the default IS `Modal.Body` and a consumer that wants raw children ' +
+          'opts out, OR (b) a Storybook/RTL render test that mounts every existing ' +
+          '`<Modal>` consumer with synthetic long content + asserts no clipping. Not in scope ' +
+          'for this bug; the rule of three is the trigger for the refactor pass.',
+      },
     ],
   },
   {
