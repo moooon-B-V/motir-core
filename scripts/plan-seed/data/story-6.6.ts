@@ -117,7 +117,7 @@ import type { PlanStory } from '../types';
 export const story_6_6: PlanStory = {
   id: '6.6',
   title: 'Automation rules',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'The when/then rule engine, project-scoped: a rule = **one trigger → one flat condition ' +
     'group → an ordered action list**, evaluated asynchronously off the channel-agnostic job ' +
@@ -539,7 +539,7 @@ export const story_6_6: PlanStory = {
       id: '6.6.7',
       title:
         'Story tests — engine matrix + loop/idempotency/auto-disable proofs + the author→fire→audit E2E + a11y sweep',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
