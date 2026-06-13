@@ -980,7 +980,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Automation editor stores the status ROW ID (not the key) → every UI-authored transitioned-trigger rule never fires, and every transition action always fails',
-        status: 'in_progress',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 · **Surfaces:** automation rule editor ' +
