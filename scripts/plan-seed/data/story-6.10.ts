@@ -458,7 +458,7 @@ export const story_6_10: PlanStory = {
       id: '6.10.3',
       title:
         'Schema — `Organization` + `OrganizationMembership` + `Workspace.organizationId` + migration + backfill',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 65,
