@@ -1979,7 +1979,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'E2E suite has flaky specs that intermittently red CI on unrelated PRs (drag-reorder reload, at-scale cursor paging, inline-edit reload, watch-popover hydration)',
-        status: 'in_progress',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 8 (cross-cutting test-suite stability — a green, ' +
@@ -2045,7 +2045,19 @@ export const EPICS: EpicMeta[] = [
           '- `tests/e2e/estimation.spec.ts` (≈ line 89 — inline estimate survives reload)\n' +
           '- `tests/e2e/_helpers/*` (the shared `signIn` / `db-reset` harness) + ' +
           '`playwright.config.ts` (retries, webServer) — the place to add a shared ' +
-          'hydration-ready / drag + persist helper rather than fixing each spec ad hoc',
+          'hydration-ready / drag + persist helper rather than fixing each spec ad hoc\n\n' +
+          '**Closed (2026-06-13): PR #873 merged.** All five specs were fixed at the ROOT — ' +
+          'each now waits on the AUTHORITATIVE completion signal instead of racing the ' +
+          'optimistic / async UI: drag-reorder and inline-edit assert the write `response` ' +
+          '(status + body) before `reload()`; at-scale paging awaits the lazy-load fetch ' +
+          'before asserting counts; dnd moves retry until the move commits (closestCorners ' +
+          'can resolve a stale `over`); the watch toggle got a `seq` guard so an older ' +
+          'reconcile can’t clobber the newest optimistic state, and the watch-popover ' +
+          'click is retried past hydration churn. The discipline was codified as a ' +
+          'CLAUDE.md rule (“E2E tests wait on the AUTHORITATIVE signal”, PR #874) and ' +
+          'notes.html mistake #37 so the shape doesn’t recur. Verified green in CI; the ' +
+          'EstimateBadge optimistic-keep fix that the estimation spec needed shipped in the ' +
+          'same PR.',
       },
     ],
   },
