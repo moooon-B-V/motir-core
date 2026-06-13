@@ -562,8 +562,8 @@ export const story_6_12: PlanStory = {
         'idea — Motir’s three AI layers plan it, track it, and ship it, end to ' +
         'end. You’re looking at Motir, built in Motir."*; **PART 1 — the ' +
         'self-improving loop**: *## You’re looking at Motir, inside Motir* (we ' +
-        'dogfood completely — every feature here started as a work item on this ' +
-        'board and shipped by the same coding agent that turns work items into ' +
+        'build Motir with Motir — every feature here started as a work item on ' +
+        'this board and shipped by the same coding agent that turns work items into ' +
         'code) + *## A self-improving loop — and you’re in it* (the bugs you ' +
         'report + ideas you upvote land in triage, get planned as work items ' +
         'here, and are picked up by Motir to build the next Motir) + the 4-step ' +
