@@ -162,7 +162,8 @@ export const story_6_10: PlanStory = {
     'every-workspace→a-default-org (6.10.3); the org-scoped services + access ' +
     'gating (6.10.4); the org admin UI — settings + cross-workspace members + ' +
     'the shell org switcher (6.10.5); the seed loader modelling the `moooon` ' +
-    'org (6.10.6); vitest (6.10.7); e2e (6.10.8).\n\n' +
+    'org (6.10.6); vitest (6.10.7); e2e (6.10.8); copy-on-create config clone ' +
+    'for new workspaces (6.10.9).\n\n' +
     '**Out of scope (named so they land in their owning story, not here):** ' +
     'the customer org usage/credit DISPLAY (**7.12.5** — a forward story; ' +
     'wiring it here would be a forward dep, forbidden); the Motir-internal ' +
@@ -571,16 +572,11 @@ export const story_6_10: PlanStory = {
         'tier-less user. Mirror the shape of the 6.10.3 backfill (which does the ' +
         'same for pre-existing workspaces); the org name defaults from the ' +
         'user/company and is renameable.\n' +
-        '- **Copy-on-create when adding a workspace (the "looks-inherited" ' +
-        'behaviour, 6.10.2 §6e).** Extend the existing create-workspace flow so a ' +
-        'NEW workspace is **seeded by copying the source workspace’s config** ' +
-        '(workflows/statuses, custom fields, labels, components, automation, ' +
-        'dashboards) in the same transaction — so it opens already configured ' +
-        'like the first workspace, then diverges freely. **NOT a data-inheritance ' +
-        'layer** (no org-level config, no override rows, no runtime resolution) — ' +
-        'a one-time deep copy at creation. NOTE: this deep copy spans many ' +
-        'config tables and may be split into its own subtask when 6.10 is ' +
-        'expanded for execution.\n\n' +
+        '- **(Make the create-workspace path org-aware** so a new workspace is ' +
+        'created under the active org with the creator as a member. The ' +
+        '**copy-on-create deep-copy** of the source workspace’s config — the ' +
+        '"looks-inherited" behaviour, 6.10.2 §6e — is its OWN subtask **6.10.9**, ' +
+        'which extends this flow; do not inline it here.)\n\n' +
         '**The access gate (the load-bearing change).** Extend the existing ' +
         'workspace access check so that reaching a workspace requires the ' +
         'session user to be a member of the workspace’s ORG (org membership ' +
@@ -874,6 +870,73 @@ export const story_6_10: PlanStory = {
         'run-harness + selector conventions to mirror.\n' +
         '- 6.10.6 — the seeded `moooon` org + members the flow runs against.',
       dependsOn: ['6.10.5'],
+    },
+    {
+      id: '6.10.9',
+      title:
+        'Copy-on-create — seed a new workspace’s config from the source workspace (the "looks-inherited" behaviour)',
+      status: 'blocked',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 75,
+      descriptionMd:
+        'Make a newly-created workspace open **already configured like the ' +
+        'workspace it was created from**, so multi-workspace *looks* inherited — ' +
+        'WITHOUT any data-inheritance layer (6.10.2 §6e). When a user creates a ' +
+        '2nd+ workspace under an org, **deep-copy the source workspace’s config** ' +
+        'into the new workspace in the SAME transaction as the workspace ' +
+        'creation; thereafter the workspaces are fully independent and either ' +
+        'can overwrite. There are NO org-level config defaults, NO override ' +
+        'rows, and NO runtime resolution — config stays purely ' +
+        '`Workspace`-scoped; this is a one-time snapshot at creation.\n\n' +
+        '**Why its own subtask.** The copy spans MANY `workspaceId`-scoped ' +
+        'config tables, each with intra-workspace references that must be ' +
+        'remapped to the new workspace’s rows (e.g. a board column points at a ' +
+        'workflow status; an automation rule references a field/label) — a ' +
+        'naive row-copy that keeps old ids would cross-link the two workspaces. ' +
+        'So it needs a dedicated, carefully-ordered clone with an old→new id ' +
+        'map, not a one-liner folded into 6.10.4.\n\n' +
+        '**What to copy (the workspace-config surface):** workflow statuses + ' +
+        'transitions, custom field definitions, labels, components, board(s) + ' +
+        'board columns + column→status mappings, automation rules, dashboards, ' +
+        'and saved filters — i.e. the `workspaceId`-scoped config models, NOT ' +
+        'the work items / sprints / comments (content, never copied). The source ' +
+        'workspace = the org’s existing workspace the user is creating from (for ' +
+        'the first split, the sole existing workspace); document the selection.\n\n' +
+        '**4-layer (motir-core/CLAUDE.md).** A `workspacesService` flow ' +
+        '(extending the existing create-workspace path that 6.10.4 made ' +
+        'org-aware) wraps the create + the clone in ONE `prisma.$transaction`; ' +
+        'each table’s rows are copied via its repository (writes require `tx`); ' +
+        'the old→new id map is built in the service. Returns the new workspace ' +
+        'DTO. Idempotency is not required (each create is a fresh workspace), but ' +
+        'the clone must be ALL-or-nothing (one tx).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- Creating a workspace under an org with an existing workspace produces ' +
+        'a new workspace whose workflow statuses/transitions, custom fields, ' +
+        'labels, components, board(s)+columns+column→status mappings, automation ' +
+        'rules, dashboards and saved filters MATCH the source at creation time.\n' +
+        '- **No cross-linking:** every copied row references the NEW workspace’s ' +
+        'rows (the id map is applied) — e.g. a copied board column points at the ' +
+        'copied status, never the source workspace’s; editing one workspace’s ' +
+        'config does not affect the other.\n' +
+        '- Work items, sprints, comments and other CONTENT are NOT copied (only ' +
+        'config).\n' +
+        '- The whole create+clone is ONE transaction (all-or-nothing); the ' +
+        'service owns it, repositories are single-op with required `tx`.\n' +
+        '- No org-level config / override / resolution is introduced (config ' +
+        'stays `Workspace`-scoped — the copy is a one-time snapshot).\n\n' +
+        '## Context refs\n\n' +
+        '- 6.10.2 §6e — the copy-on-create decision (no data inheritance).\n' +
+        '- 6.10.4 — the org-aware create-workspace flow this extends + the ' +
+        'signup auto-provision (the first workspace) it mirrors.\n' +
+        '- `motir-core/prisma/schema.prisma` — the `workspaceId`-scoped config ' +
+        'models to clone (workflowStatuses/transitions, customFieldDefinitions, ' +
+        'labels, components, boards/boardColumns/boardColumnStatuses, ' +
+        'automationRules, dashboards, savedFilters) + their intra-workspace FKs ' +
+        'to remap.\n' +
+        '- `motir-core/CLAUDE.md` § 4-layer (service owns the tx; repos ' +
+        'single-op, required `tx` on writes).',
+      dependsOn: ['6.10.4'],
     },
   ],
 };
