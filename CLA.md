@@ -12,7 +12,7 @@ sign once; it then applies to all of your future contributions to Motir.
 
 This agreement grants Motir Inc. the rights it needs to maintain the project
 under its open-source license and to keep the project's future licensing options
-open. **You retain the copyright to your contribution** — this is a *license*, not
+open. **You retain the copyright to your contribution** — this is a _license_, not
 an assignment.
 
 This text is the Apache Software Foundation's Individual Contributor License
