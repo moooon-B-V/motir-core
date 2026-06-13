@@ -39,7 +39,7 @@ import type { PlanStory } from '../types';
  * for attribution + rate-limiting.
  *
  * **What is VISIBLE vs HIDDEN on the public view (locked).** A public viewer
- * sees the read-only board / issue list and the public ROADMAP (status-grouped
+ * sees the read-only board / work item list and the public ROADMAP (status-grouped
  * public-facing items). They do NOT see internal-only fields — **assignees,
  * estimates, and internal comments are HIDDEN** (the decision 6.12.2 fixes the
  * exact set; the durable shape is a public PROJECTION that strips internal
@@ -97,13 +97,13 @@ import type { PlanStory } from '../types';
  * second access policy.
  *
  * **Scale (finding #57).** A public project is an unbounded, internet-facing
- * read surface: the public board/issue list, the roadmap columns, and the
+ * read surface: the public board/work item list, the roadmap columns, and the
  * request list are ALL paginated / cursor'd (never load-all), the submit path is
  * rate-limited + abuse-guarded per the 6.11 precedent, and one-vote-per-account
  * is enforced server-side (not a client toggle).
  *
  * **Design gate.** New user-facing surfaces ship here — the public read-only
- * project view (board/issues), the public roadmap, the public submission +
+ * project view (board/work items), the public roadmap, the public submission +
  * upvote + comment surfaces, and the "make public" toggle + share-link in
  * project settings. So the FIRST subtask (6.12.1) is a `design` card producing
  * the multi-panel mock + design-notes under `design/public-projects/`, composing
@@ -153,7 +153,7 @@ export const story_6_12: PlanStory = {
     'for every normal write). No create/move/assign/status affordance appears ' +
     'on the public surface.\n' +
     '- **Visible vs hidden.** The public view shows the read-only board / ' +
-    'issue list + the public ROADMAP (status-grouped). Internal-only fields — ' +
+    'work item list + the public ROADMAP (status-grouped). Internal-only fields — ' +
     '**assignees, estimates, internal comments** — are HIDDEN via a public ' +
     'PROJECTION that strips them at the read layer (not merely a hidden UI).\n' +
     '- **The proven portal set (adopted from the mirror).** Beyond view + ' +
@@ -169,13 +169,27 @@ export const story_6_12: PlanStory = {
     'pre-check) and 6.11.3’s queue (adding the vote-count sort); it adds no ' +
     'second submissions table and no second access policy.\n\n' +
     '**Scope:** the public-surface design (6.12.1); the `public`-access-level ' +
-    'semantics decision (6.12.2); the schema + access-check extension + ' +
-    'migration (6.12.3); the public read-only project view, internal fields ' +
-    'hidden (6.12.4); cross-account submit-to-triage + duplicate detection ' +
-    '(6.12.5); upvoting + comments on public requests (6.12.6); the public ' +
-    'roadmap view with status tracking (6.12.7); the "make public" toggle + ' +
-    'the shareable public link in project settings (6.12.8); the access + ' +
-    'dedupe + voting tests (6.12.9); the cross-org e2e (6.12.10).\n\n' +
+    'semantics decision (6.12.2); the schema + access-check extension + the ' +
+    '`publicOverviewMd` project field + migration (6.12.3); the public ' +
+    'read-only project view + the OVERVIEW/README landing (the default public ' +
+    'tab), internal fields hidden (6.12.4); cross-account submit-to-triage + ' +
+    'duplicate detection (6.12.5); upvoting + comments on public requests ' +
+    '(6.12.6); the public roadmap view with status tracking (6.12.7); the ' +
+    '"make public" toggle + the shareable public link + the Overview/README ' +
+    'authoring editor in project settings (6.12.8); the access + dedupe + ' +
+    'voting tests (6.12.9); the cross-org e2e (6.12.10).\n\n' +
+    '**The public OVERVIEW / README (Yue, design iteration 2026-06-13).** The ' +
+    'public landing leads with a modern, GitHub-README-style project intro — a ' +
+    'hero (logo + name + tagline + at-a-glance stats + CTAs) + an authored ' +
+    'Markdown body + a links/stats sidebar — and is the DEFAULT public tab ' +
+    '(rung 1: GitHub puts the README on the repo home; Canny / Productboard / ' +
+    'Plane / OpenProject public projects open on an about/overview, not the raw ' +
+    'board). The content is a new nullable `project.publicOverviewMd` Markdown ' +
+    'field (a public-safe field in the public projection), authored by the ' +
+    'project admin via the shipped `MarkdownEditor` in settings and rendered ' +
+    'read-only via `MarkdownView`; an empty field falls back to a slim ' +
+    'auto-intro (never a blank page). Design: `design/public-projects/` Panel ' +
+    '1 (6.12.1, the design gate — DONE).\n\n' +
     '**Out of scope (named so they land in their own story, not here):** ' +
     'ANONYMOUS / logged-out public access (a future story — needs ' +
     'anonymous-identity + heavier abuse controls); a fully custom-branded / ' +
@@ -194,10 +208,10 @@ export const story_6_12: PlanStory = {
     'private.\n' +
     '- **Cross-org read (the load-bearing check).** Sign in as a SECOND Motir ' +
     'account in a DIFFERENT org with NO membership in the public project’s org/' +
-    'workspace. Open the public link → the read-only board / issue list + the ' +
+    'workspace. Open the public link → the read-only board / work item list + the ' +
     'public roadmap render; there are NO edit affordances (no create / move / ' +
     'assign / status controls); **assignees, estimates, and internal comments ' +
-    'are absent** from every issue. Confirm the SAME second account hitting a ' +
+    'are absent** from every work item. Confirm the SAME second account hitting a ' +
     'NON-public project of that org gets 404-not-403 (not forbidden), proving ' +
     'public is the only cross-org read exception.\n' +
     '- **Submit + duplicate detection.** As the second account, submit a ' +
@@ -253,10 +267,10 @@ export const story_6_12: PlanStory = {
         'shape.\n\n' +
         'The surfaces to draw (every panel — the multi-panel rule, mistake ' +
         '#31):\n\n' +
-        '- **Panel 1 — the public read-only project view (board / issues).** ' +
-        'The board columns + issue list as a NON-member sees them: read-only, ' +
+        '- **Panel 1 — the public read-only project view (board / work items).** ' +
+        'The board columns + work item list as a NON-member sees them: read-only, ' +
         'with NO edit affordances (no create / move / assign / status control, ' +
-        'no drag handles). INTERNAL fields are absent — draw an issue card / ' +
+        'no drag handles). INTERNAL fields are absent — draw a work item card / ' +
         'row WITHOUT assignee, WITHOUT estimate, and note that internal ' +
         'comments are not shown. Make the "you are viewing a public project" ' +
         'framing explicit (a banner / chip), and show the signed-in ' +
@@ -305,7 +319,7 @@ export const story_6_12: PlanStory = {
         'referencing ONLY `--el-*` + `[data-display-style]` tokens (no Tier-0 ' +
         '`--color-*`, no hand-rolled spacing/radius) + shipped ' +
         '`components/ui/*`.\n' +
-        '- The public board/issue panel shows NO edit affordances and NO ' +
+        '- The public board/work item panel shows NO edit affordances and NO ' +
         'internal fields (assignee / estimate / internal comments absent); the ' +
         'public-project framing (banner/chip) is drawn.\n' +
         '- The roadmap is drawn status-grouped (submitted → planned → in ' +
@@ -379,11 +393,11 @@ export const story_6_12: PlanStory = {
         '**assignees, estimates, and internal comments are HIDDEN** ' +
         '(decide explicitly which comments are "internal" vs ' +
         'public-request comments — the public-request comment thread from ' +
-        '6.12.6 IS public; the issue’s internal discussion is not). Fix that ' +
+        '6.12.6 IS public; the work item’s internal discussion is not). Fix that ' +
         'the stripping is a PUBLIC PROJECTION at the read layer (a dedicated ' +
         'read shape / DTO that never includes the hidden fields), NOT a UI that ' +
         'fetches everything and hides it (which would leak over the wire). ' +
-        'Enumerate what IS visible: issue key/title/kind/status/description, ' +
+        'Enumerate what IS visible: work item key/title/kind/status/description, ' +
         'board columns, the public roadmap, vote counts, public-request ' +
         'comments.\n' +
         '5. **Account-required, not anonymous.** Fix that a viewer MUST be a ' +
@@ -457,6 +471,12 @@ export const story_6_12: PlanStory = {
         '(to `work_item` + `User`) per the CLAUDE.md FK-as-`@relation` rule — ' +
         'NO raw-SQL-only FK (6.12.6 uses it, but the model lands with the ' +
         'access foundation so the schema is coherent in one migration).\n' +
+        '- **`publicOverviewMd` (the public Overview/README field):** add a ' +
+        'nullable `String?` column `publicOverviewMd` to `project` (Markdown ' +
+        'authored by the admin in 6.12.8, rendered on the public Overview tab in ' +
+        '6.12.4). It lands in THIS migration so the schema is coherent in one ' +
+        'shot; it is a public-safe field included in the public projection ' +
+        '(6.12.4) only when the project is public.\n' +
         '- **Access-check extension (the single auditable branch):** extend ' +
         '`canBrowse` so that when a project is `public`, it returns true for ' +
         'ANY authenticated user — bypassing the 6.10 org/workspace membership ' +
@@ -473,8 +493,9 @@ export const story_6_12: PlanStory = {
         'repository, the access policy in the service layer (extend the ' +
         'existing `projectAccessService`), no raw Prisma in routes.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- The migration adds `public` to `ProjectAccessLevel` and the ' +
-        '`PublicRequestVote` join (every FK an `@relation` on both sides); ' +
+        '- The migration adds `public` to `ProjectAccessLevel`, the ' +
+        '`PublicRequestVote` join (every FK an `@relation` on both sides), and ' +
+        'the nullable `project.publicOverviewMd` Markdown column; ' +
         '`prisma migrate dev` reports no drift; no existing project’s level ' +
         'changes.\n' +
         '- `canBrowse` returns true for ANY authenticated user on a `public` ' +
@@ -503,7 +524,7 @@ export const story_6_12: PlanStory = {
     {
       id: '6.12.4',
       title:
-        'Public read-only project view (board / issues) — internal fields hidden, no edit affordances',
+        'Public read-only project view (overview/README landing + board / work items) — internal fields hidden, no edit affordances',
       status: 'blocked',
       type: 'code',
       executor: 'coding_agent',
@@ -511,16 +532,59 @@ export const story_6_12: PlanStory = {
       descriptionMd:
         'Build the public read-only project view per the 6.12.1 design, over ' +
         'the 6.12.3 access extension. A cross-org authenticated viewer opens a ' +
-        'public project and sees the board columns + issue list READ-ONLY, with ' +
+        'public project and sees the board columns + work item list READ-ONLY, with ' +
         'INTERNAL fields hidden and NO edit affordances.\n\n' +
         '- **The public PROJECTION (the load-bearing correctness):** the read ' +
         'goes through a dedicated public read shape / DTO (per 6.12.2) that ' +
         'NEVER includes the hidden internal fields — **assignees, estimates, ' +
         'internal comments are stripped at the read/service layer**, not ' +
         'fetched-then-hidden (so nothing internal crosses the wire). What IS ' +
-        'returned: issue key / title / kind / status / description, board ' +
+        'returned: work item key / title / kind / status / description, board ' +
         'columns, ordering — the public-safe fields only.\n' +
-        '- **The view UI:** render the read-only board + issue list with the ' +
+        '- **The OVERVIEW / README landing (the DEFAULT public tab, per the ' +
+        '6.12.1 Panel 1 design):** the read-only nav is ' +
+        'Overview / Board / Work items / Roadmap, and Overview is the landing. ' +
+        'Render the modern intro — a hero (logo + project name + tagline + ' +
+        'at-a-glance stats + CTAs) + the authored `publicOverviewMd` body via ' +
+        'the shipped `MarkdownView` + a links / at-a-glance sidebar. When ' +
+        '`publicOverviewMd` is empty, fall back to a slim auto-intro (name + ' +
+        'stats + CTAs, no body) — NEVER a blank page. `publicOverviewMd` is ' +
+        'served via the public projection (public-safe field).\n' +
+        '- **Seed Motir’s OWN overview (canonical copy):** the `db:seed` loader ' +
+        'sets the `motir` project’s `publicOverviewMd` to the canonical README so ' +
+        'the live public tenant renders real copy (not the empty fallback). ' +
+        'Motir is framed as THREE LAYERS, end to end — NOT "AI project ' +
+        'management" (Yue): (1) an AI planner, (2) an AI-native, MCP-native ' +
+        'project manager (`motir-core`), (3) a hosted AI coding agent; that ' +
+        'end-to-end loop is the unique part. The headline idea is **"vibe ' +
+        'project"** (by analogy to vibe coding). The exact Markdown (mirrors the ' +
+        '6.12.1 Panel 1 copy 1:1): tagline *"Vibe your whole project. Bring an ' +
+        'idea — Motir’s three AI layers plan it, track it, and ship it, end to ' +
+        'end. You’re looking at Motir, built in Motir."*; **PART 1 — the ' +
+        'self-improving loop**: *## You’re looking at Motir, inside Motir* (we ' +
+        'build Motir with Motir — every feature here started as a work item on ' +
+        'this board and shipped by the same coding agent that turns work items into ' +
+        'code) + *## A self-improving loop — and you’re in it* (the bugs you ' +
+        'report + ideas you upvote land in triage, get planned as work items ' +
+        'here, and are picked up by Motir to build the next Motir) + the 4-step ' +
+        'loop *submit → triage → planned as a work item → the coding agent opens ' +
+        'a PR → ships as Done*; **PART 2 — *## Vibe project***: *you’ve heard of ' +
+        'vibe coding (describe what you want, the AI writes the code) — a vibe ' +
+        'project takes that to the WHOLE project: not just the code, but the ' +
+        'design, marketing, legal, research — everything it takes to ship. You ' +
+        'bring the intent, the three layers carry it idea→shipped:* **an AI ' +
+        'planner** (chat → a structured plan: epics, stories, and work items of ' +
+        'every kind — design / marketing / legal / engineering — with ' +
+        'dependencies), **an AI-native project manager** (boards / sprints / ' +
+        'system of record, **MCP-native** so your own agents and tools ' +
+        'read+write Motir directly), **a hosted coding agent** (picks up the ' +
+        'engineering work items and ships the code, no setup); closing *"you ' +
+        'stay at the level of intent; Motir plans, tracks, and ships the whole ' +
+        'thing — code and everything around it. That’s a vibe project."*; then **## ' +
+        'Contribute** (Submit a request — feeds the loop; the PM core is GPL-3.0 ' +
+        'on GitHub). This copy is the design’s `design/public-projects/` Panel 1 ' +
+        'text 1:1.\n' +
+        '- **The view UI:** render the read-only board + work item list with the ' +
         '"public project" framing (banner/chip) and the signed-in cross-org ' +
         'viewer’s identity; NO create / move / assign / status / drag ' +
         'affordances anywhere (the public surface is view-only besides the ' +
@@ -534,9 +598,11 @@ export const story_6_12: PlanStory = {
         'the public projection; the projection lives in the service/repository ' +
         'read layer so no future read can leak internal fields.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- A cross-org authenticated viewer opens a public project and sees the ' +
-        'read-only board + issue list rendering the 6.12.1 design; a non-public ' +
-        'project stays 404 cross-org.\n' +
+        '- A cross-org authenticated viewer opens a public project and lands on ' +
+        'the OVERVIEW/README tab (hero + the `publicOverviewMd` `MarkdownView` ' +
+        'body + links/stats sidebar; empty → the slim auto-intro), and can ' +
+        'switch to the read-only board + work item list — all rendering the 6.12.1 ' +
+        'design; a non-public project stays 404 cross-org.\n' +
         '- The public projection strips assignees, estimates, and internal ' +
         'comments at the read layer (verified: the hidden fields are absent ' +
         'from the response payload, not merely hidden in the DOM).\n' +
@@ -548,7 +614,7 @@ export const story_6_12: PlanStory = {
         '## Context refs\n\n' +
         '- 6.12.1 (design asset — required), 6.12.3 (the access extension + ' +
         '`canBrowse` cross-org + the projection contract).\n' +
-        '- `motir-core/lib/services/workItemsService.ts` + the board / issue ' +
+        '- `motir-core/lib/services/workItemsService.ts` + the board / work item ' +
         'read paths — the reads the public projection derives from.\n' +
         '- `motir-core/components/ui/*` + `app/globals.css` token layers; ' +
         '`motir-core/CLAUDE.md` § 4-layer + § colour/shape tokens.',
@@ -644,7 +710,7 @@ export const story_6_12: PlanStory = {
         'comment to the public request, attributed to the signed-in cross-org ' +
         'account, gated by `canCommentPublicRequest` — NOT `canEdit`. These ' +
         'PUBLIC-REQUEST comments are visible on the public surface (distinct ' +
-        'from the issue’s INTERNAL comments, which the 6.12.4 projection hides ' +
+        'from the work item’s INTERNAL comments, which the 6.12.4 projection hides ' +
         '— 6.12.2 fixes that line). Reuse the existing comment ' +
         'model/service where the request is a `work_item` with a comment ' +
         'thread; mark the public-request comments as public-visible.\n\n' +
@@ -661,7 +727,7 @@ export const story_6_12: PlanStory = {
         '(no lost update).\n' +
         '- A signed-in cross-org account comments on a public request → the ' +
         'comment is attributed + public-visible; gated by ' +
-        '`canCommentPublicRequest`, NOT `canEdit`; the issue’s internal ' +
+        '`canCommentPublicRequest`, NOT `canEdit`; the work item’s internal ' +
         'comments remain hidden by the 6.12.4 projection.\n' +
         '- 4-layer respected (vote/comment writes through a service → ' +
         'repository / `workItemsService`; no raw Prisma in routes).\n\n' +
@@ -738,11 +804,12 @@ export const story_6_12: PlanStory = {
     },
     {
       id: '6.12.8',
-      title: 'Project settings — the "make public" toggle + the shareable public link',
+      title:
+        'Project settings — the "make public" toggle + the shareable public link + the Overview/README editor',
       status: 'blocked',
       type: 'code',
       executor: 'coding_agent',
-      estimateMinutes: 45,
+      estimateMinutes: 55,
       descriptionMd:
         'Extend project settings with the FOUR-level Access control + the ' +
         'shareable public link, per the 6.12.1 design, over the 6.12.3 access ' +
@@ -761,6 +828,19 @@ export const story_6_12: PlanStory = {
         'it still requires sign-in (account-required, not an unauthenticated ' +
         'bypass); decide the slug model so a project can rotate/disable its ' +
         'public link without changing the project key.\n' +
+        '- **The Overview/README editor — a DEDICATED "Edit overview" view ' +
+        '(per the 6.12.1 Panel 7 design): a split `MarkdownEditor` (left) + a ' +
+        'LIVE `MarkdownView` PREVIEW (right) of the public landing**, reached ' +
+        'from an "Edit overview" entry point in settings (Panel 6) — NOT a ' +
+        'cramped in-settings box. It edits the `project.publicOverviewMd` field ' +
+        '(6.12.3) ONLY (the README body); the hero name/stats are auto and the ' +
+        'Links sidebar pulls from existing project fields (website / repo / ' +
+        'docs), so NO new schema beyond `publicOverviewMd`. The preview renders ' +
+        'with the SAME `MarkdownView` the public tab (6.12.4) uses, so what the ' +
+        'admin sees is what ships. Project-admin-gated; Save persists through a ' +
+        'service method (the success-response-is-confirmation rule — no ' +
+        'whole-tree refresh). A note states it shows on the public Overview tab ' +
+        'and is hidden while the project is not public.\n' +
         '- **Design-system compliance:** ONLY `--el-*` + `[data-display-' +
         'style]` tokens + shipped `components/ui/*`; the access-level copy + ' +
         'the account-required note per the 6.12.1 design; inline edits follow ' +
@@ -778,6 +858,12 @@ export const story_6_12: PlanStory = {
         'copy / disable / rotate; the link requires sign-in (account-required, ' +
         'no unauthenticated bypass); rotating/disabling does not change the ' +
         'project key.\n' +
+        '- The dedicated "Edit overview" view (split `MarkdownEditor` + live ' +
+        '`MarkdownView` preview), reached from the settings entry point, persists ' +
+        '`publicOverviewMd` (body only) via a service method ' +
+        '(success-response-is-confirmation, no whole-tree refresh), ' +
+        'project-admin-gated; the preview matches the public Overview tab ' +
+        '(6.12.4) render; no new schema beyond `publicOverviewMd`.\n' +
         '- Only `--el-*` + `[data-display-style]` tokens + shipped ' +
         'primitives; matches the 6.12.1 design; inline edits use the ' +
         'success-response-is-confirmation pattern.\n' +
@@ -866,7 +952,7 @@ export const story_6_12: PlanStory = {
         'project settings (6.12.8) and copy the shareable public link.\n' +
         '2. Sign in as a SECOND, seeded Motir account in a DIFFERENT org with ' +
         'NO membership in the public project’s org/workspace. Open the public ' +
-        'link → the read-only board / issue list + the public roadmap render; ' +
+        'link → the read-only board / work item list + the public roadmap render; ' +
         'assert there are NO edit affordances and that ' +
         '**assignees / estimates / internal comments are absent**.\n' +
         '3. Submit a feature request whose title matches an EXISTING public ' +
@@ -887,7 +973,7 @@ export const story_6_12: PlanStory = {
         'account.\n\n' +
         '## Acceptance criteria\n\n' +
         '- The second (different-org) account opens the public project ' +
-        'read-only: board / issues / roadmap render, no edit affordances, ' +
+        'read-only: board / work items / roadmap render, no edit affordances, ' +
         'internal fields (assignee / estimate / internal comments) absent.\n' +
         '- Submitting a matching-title request surfaces the dedupe and the ' +
         '"upvote this instead" path (vote increments, no duplicate); a comment ' +
