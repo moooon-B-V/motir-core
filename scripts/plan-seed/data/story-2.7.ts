@@ -327,7 +327,7 @@ export const story_2_7: PlanStory = {
       id: '2.7.3',
       title:
         'Schema — WorkItemType enum + nullable work_item.type + executor field + migration + default helper',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
@@ -393,7 +393,7 @@ export const story_2_7: PlanStory = {
     {
       id: '2.7.4',
       title: 'The type/executor picker UI (create modal + detail rail) + per-type hue tokens',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 65,
@@ -464,7 +464,7 @@ export const story_2_7: PlanStory = {
       id: '2.7.5',
       title:
         'Seed loader — map PlanItem.type/executor to the structured fields (stop emitting prose)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 40,
@@ -522,7 +522,7 @@ export const story_2_7: PlanStory = {
     {
       id: '2.7.6',
       title: 'Epic-6 filter integration — `type` becomes a filterable field in the 6.1.1 FilterAST',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 45,
@@ -575,7 +575,7 @@ export const story_2_7: PlanStory = {
       id: '2.7.7',
       title:
         'Vitest — schema + default map + picker default-seeding + loader mapping + filter facet',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 50,
