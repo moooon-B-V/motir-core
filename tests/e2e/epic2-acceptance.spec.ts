@@ -128,7 +128,9 @@ test('@smoke Epic-2 acceptance journey: create (type-parent rule) → detail →
 
   // Pick kind = Sub-task → the parent picker must offer the Task but NOT the
   // Epic (a Sub-task requires a story/task/bug parent; an epic is never legal).
-  await page.getByRole('combobox', { name: 'Type' }).click();
+  // `exact` so this matches the KIND picker ("Type") and not the new leaf-only
+  // "Work type" combobox (2.7.4) — Playwright's name match is substring.
+  await page.getByRole('combobox', { name: 'Type', exact: true }).click();
   await page.getByRole('option', { name: 'Sub-task' }).click();
   await page.getByRole('combobox', { name: 'Parent' }).click();
   await expect(page.getByRole('option', { name: /Parent task/ })).toBeVisible();

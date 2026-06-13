@@ -177,8 +177,10 @@ test.describe('@a11y shell accessibility', () => {
     ).toEqual([]);
 
     // Open the Type picker so the expanded listbox is in the swept DOM.
-    await page.getByRole('combobox', { name: 'Type' }).click();
-    await expect(page.getByRole('listbox', { name: 'Type' })).toBeVisible();
+    // `exact` so it's the KIND picker ("Type"), not the new "Work type"
+    // combobox (2.7.4) — Playwright's accessible-name match is substring.
+    await page.getByRole('combobox', { name: 'Type', exact: true }).click();
+    await expect(page.getByRole('listbox', { name: 'Type', exact: true })).toBeVisible();
 
     const listboxResults = await new AxeBuilder({ page })
       .withTags(WCAG_TAGS)

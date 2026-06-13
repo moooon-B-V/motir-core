@@ -35,8 +35,12 @@
       "review": "评审",
       "decision": "决策",
       "deploy": "部署",
-      "manual": "人工",
+      "manual": "手动",
       "chore": "杂务"
+    },
+    "executor": {
+      "coding_agent": "编码智能体",
+      "human": "人工"
     },
     "priority": {
       "highest": "最高",
@@ -400,6 +404,8 @@
       "titleTooLong": "标题不能超过 {max} 个字符。",
       "created": "{identifier} 已创建",
       "type": "类型",
+      "workItemType": "工作类型",
+      "executor": "执行者",
       "parent": "父级",
       "titleLabel": "标题",
       "titlePlaceholder": "用一句话概括这项工作",
@@ -527,6 +533,9 @@
     "removeLink": "移除关联",
     "status": "状态",
     "type": "类型",
+    "workItemType": "工作类型",
+    "executor": "执行者",
+    "setType": "设置类型",
     "priority": "优先级",
     "assignee": "负责人",
     "reporter": "创建人",
@@ -785,6 +794,13 @@
   "ui": {
     "typePicker": {
       "label": "类型"
+    },
+    "workItemTypePicker": {
+      "label": "工作类型",
+      "placeholder": "设置类型"
+    },
+    "executorPicker": {
+      "label": "执行者"
     },
     "priorityPicker": {
       "label": "优先级"
@@ -1710,7 +1726,7 @@
     "popover": {
       "title": "什么是「就绪」？",
       "body1": "当阻塞某个工作项的所有工作项都已完成时，它即为<strong>就绪</strong>——它没有未完成的阻塞项，现在就可以开始。",
-      "body2": "点击任意行的 <code>复制</code>，即可将其 <code>motir run PROD-…</code> 命令复制到剪贴板，然后粘贴到你自己的编码代理中来派发工作。"
+      "body2": "点击任意行的 <code>复制</code>，即可将其 <code>motir run PROD-…</code> 命令复制到剪贴板，然后粘贴到你自己的编码智能体中来派发工作。"
     },
     "empty": {
       "title": "暂无可开始的工作项",

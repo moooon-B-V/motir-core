@@ -105,6 +105,25 @@ export const notificationRepository = {
   },
 
   /**
+   * How many notifications (read AND unread) a recipient holds — the drawer's
+   * "N notifications" total, optionally narrowed to one tab (`direct` |
+   * `watching`) so it matches the active filter (the 5.7.4
+   * `listNotifications` page total). Distinct from `countUnreadByRecipient`,
+   * which is the badge's unread-only aggregate. Read-only → `db` singleton.
+   */
+  async countByRecipient(
+    recipientUserId: string,
+    options: { category?: Prisma.NotificationWhereInput['category'] } = {},
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const client = tx ?? db;
+    const { category } = options;
+    return client.notification.count({
+      where: { recipientUserId, ...(category ? { category } : {}) },
+    });
+  },
+
+  /**
    * Mark ONE notification read (sets `read_at`). Required `tx` — a mark-read
    * write rides the service transaction that also re-reads the fresh unread
    * count to return. The service gates ownership (reads `findById` first; a
