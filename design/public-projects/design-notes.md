@@ -11,7 +11,7 @@ so the code subtasks compose the same primitives — no Pencil→code gap.
 | Surface                       | Asset                       | Gates                                                   |
 | ----------------------------- | --------------------------- | ------------------------------------------------------- |
 | **Public Overview / README**  | `public-projects.mock.html` | **6.12.4** (render) + **6.12.8** (the authoring editor) |
-| **Public read-only view**     | `public-projects.mock.html` | **6.12.4** (board / issues, internal fields hidden)     |
+| **Public read-only view**     | `public-projects.mock.html` | **6.12.4** (board / work items, internal fields hidden) |
 | **Public roadmap**            | `public-projects.mock.html` | **6.12.7** (status-grouped, vote-counted, paginated)    |
 | **Submit + duplicate detect** | `public-projects.mock.html` | **6.12.5** (the form) + **6.12.6** (the upvote target)  |
 | **Request detail**            | `public-projects.mock.html` | **6.12.6** (upvote + comments on public requests)       |
@@ -35,11 +35,11 @@ checked explicitly, never a `canEdit` relaxation.
 Three invariants this asset draws and `design-notes` states in writing:
 
 1. **Internal fields are ABSENT** from the public view — **assignees, estimates,
-   and internal issue comments** are stripped by a public PROJECTION at the read
+   and internal work-item comments** are stripped by a public PROJECTION at the read
    layer (NOT fetched-then-hidden). The public board card is the shipped board
    card (`design/boards/board.mock.html`) **minus the assignee avatar + the
    story-point estimate + the drag grip**. (Public-_request_ comments from
-   Panel 4 ARE public — distinct from an issue's internal discussion.)
+   Panel 4 ARE public — distinct from a work item's internal discussion.)
 2. **NO edit affordances** anywhere on the public surface — no create / move /
    assign / status / drag. The only interactive elements are Submit-a-request,
    Upvote, and Comment.
@@ -64,7 +64,7 @@ duplicate-detection portal set.
    **board** (To Do / In Progress / In Review / Done) as a NON-member cross-org
    viewer sees it: NO edit affordances, INTERNAL fields absent, the public-project
    BANNER + the signed-in cross-org viewer identity, a read-only Overview / Board
-   / Issues / Roadmap nav.
+   / Work items / Roadmap nav.
 3. **(3)** the public **roadmap** — status-grouped columns (submitted → planned →
    in progress → done) with vote counts + per-column pagination.
 4. **(4)** **submit a request + DUPLICATE DETECTION** — the form (type toggle,
@@ -121,9 +121,12 @@ Shipped) above a hairline.
 ### The body + sidebar (`.ov-grid`, 1fr + 312px)
 
 - **Main** — the authored README (`.md`, the `MarkdownView` render): `h3`
-  sections, paragraphs, a **check-marked feature list** (`--el-success` ticks), a
-  **product-screenshot** placeholder (a browser-chrome frame + tinted panes), and
-  a "How to contribute" section linking to submit.
+  sections + paragraphs carrying the **self-improving twist** ("You're looking at
+  Motir, inside Motir" + "A self-improving loop — and you're in it"), a **numbered
+  loop** (`ol.loop`, accent number badges: submit → triage → plan → agent PR →
+  ships as Done), a **product-screenshot** placeholder (browser-chrome frame +
+  tinted panes), and a **"Contribute"** section linking to submit. (Motir's own
+  project seeds this exact copy as `publicOverviewMd`; see the Copy index.)
 - **Sidebar** (`.ov-side`) — a **Links** `side-card` (Website / Docs / Source /
   Changelog, each an external-link row), an **At a glance** stat grid, and a
   **CTA card** ("Have an idea? → Submit a request") with the same accent wash.
@@ -146,8 +149,8 @@ roadmap / external links). The authoring editor lives in Panel 6 (settings).
 - **Public banner** (`.pub-banner`, full-width `--el-public-banner-bg`): the
   explicit framing — _"You're viewing a public project. Anyone signed in to Motir
   can view it and submit, upvote, or comment on requests."_ + a `lock`-glyph
-  **"View-only — you can't edit issues"** note.
-- **Sub-bar nav** (`.seg`, a read-only `Segmented`): **Board / Issues / Roadmap**
+  **"View-only — you can't edit work items"** note.
+- **Sub-bar nav** (`.seg`, a read-only `Segmented`): **Board / Work items / Roadmap**
   (Board active) + the primary **"Submit a request"** button (`globe`/`plus`).
   The nav switches read views only — it is not an edit affordance.
 
@@ -155,9 +158,9 @@ roadmap / external links). The authoring editor lives in Panel 6 (settings).
 
 Mirrors `design/boards/board.mock.html` — same `.col` / `.col-head` /
 `.col-count` / `.bcard` grammar — but each card carries **only**
-`IssueTypeIcon` (kind hue) + the issue key + the title + the priority `Pill`.
+`IssueTypeIcon` (kind hue) + the work item key + the title + the priority `Pill`.
 **No assignee Avatar, no `pts` estimate, no `grip` drag handle.** The cards are
-`<a>` (navigable to the read-only issue), never draggable. A bottom note states
+`<a>` (navigable to the read-only work item), never draggable. A bottom note states
 the omissions are a read-layer projection (not DOM-hidden). 6.12.4 renders this
 projection paginated / lazy (the at-scale rule).
 
@@ -225,7 +228,7 @@ disabled resting state).
 - **`.req-body`**: the request description.
 - **Comments** (`.comment` rows): each an Avatar + author + **org label** (the
   cross-org attribution) + relative time + the body. These are **public-request
-  comments** (visible) — distinct from an issue's internal comments (hidden by
+  comments** (visible) — distinct from a work item's internal comments (hidden by
   the Panel-1 projection).
 - **Composer** (`.composer`): the viewer's Avatar + a `Textarea` + a primary
   **"Comment"** button. Gated by `canCommentPublicRequest`.
@@ -270,25 +273,25 @@ disabled resting state).
 
 ## Colour roles (every colour via `--el-*` — no Tier-0 `--color-*`)
 
-| Element                         | Token                                                                              |
-| ------------------------------- | ---------------------------------------------------------------------------------- |
-| Public chip / banner background | `--el-public-banner-bg` (→ `--color-tint-sky`)                                     |
-| Public chip / banner text       | `--el-public-banner-text` (→ `--color-charcoal`, AA ~10:1 on the sky tint)         |
-| Public-chip / banner glyph      | `--el-info`                                                                        |
-| Upvote control (resting)        | `--el-page-bg` + `--el-border`; count text `--el-text-strong`                      |
-| Upvote control (voted)          | `--el-vote-active-bg` (→ `--color-primary`) + `--el-vote-active-text`              |
-| Roadmap status headers          | `--el-roadmap-{submitted,planned,progress,done}` (→ peach / lavender / sky / mint) |
-| Status header / org text        | `--el-text-strong` on the tint (AA-safe)                                           |
-| Issue-type icon (board / kind)  | `--el-type-{task,bug,story,epic}`                                                  |
-| Priority pills                  | rose (`--el-tint-rose`+`--el-danger` glyph) / yellow / neutral, text `-strong`     |
-| Selected access option          | `--el-accent` border + `color-mix(--el-accent 7%)` tint                            |
-| Disable link button             | `btn-danger` (`--el-tint-rose` bg + `--el-text-strong`, `--el-danger` glyph)       |
-| Rate-limit banner               | `--el-tint-yellow` + `--el-text-strong`, `--el-warning` glyph                      |
-| Success confirmation badge      | `--el-tint-mint` + `--el-success`                                                  |
-| Error glyph                     | `--el-tint-rose` + `--el-danger`                                                   |
-| Overview hero corner washes     | `--el-hero-wash-a` (→ lavender) + `--el-hero-wash-b` (→ sky), over `--el-page-bg`  |
-| Hero logo / CTA card accent     | `--el-accent` + `--el-accent-text`; stats text `--el-text` (serif)                 |
-| README feature-list ticks       | `--el-success`; links `--el-link`                                                  |
+| Element                          | Token                                                                              |
+| -------------------------------- | ---------------------------------------------------------------------------------- |
+| Public chip / banner background  | `--el-public-banner-bg` (→ `--color-tint-sky`)                                     |
+| Public chip / banner text        | `--el-public-banner-text` (→ `--color-charcoal`, AA ~10:1 on the sky tint)         |
+| Public-chip / banner glyph       | `--el-info`                                                                        |
+| Upvote control (resting)         | `--el-page-bg` + `--el-border`; count text `--el-text-strong`                      |
+| Upvote control (voted)           | `--el-vote-active-bg` (→ `--color-primary`) + `--el-vote-active-text`              |
+| Roadmap status headers           | `--el-roadmap-{submitted,planned,progress,done}` (→ peach / lavender / sky / mint) |
+| Status header / org text         | `--el-text-strong` on the tint (AA-safe)                                           |
+| Work-item type icon (board/kind) | `--el-type-{task,bug,story,epic}`                                                  |
+| Priority pills                   | rose (`--el-tint-rose`+`--el-danger` glyph) / yellow / neutral, text `-strong`     |
+| Selected access option           | `--el-accent` border + `color-mix(--el-accent 7%)` tint                            |
+| Disable link button              | `btn-danger` (`--el-tint-rose` bg + `--el-text-strong`, `--el-danger` glyph)       |
+| Rate-limit banner                | `--el-tint-yellow` + `--el-text-strong`, `--el-warning` glyph                      |
+| Success confirmation badge       | `--el-tint-mint` + `--el-success`                                                  |
+| Error glyph                      | `--el-tint-rose` + `--el-danger`                                                   |
+| Overview hero corner washes      | `--el-hero-wash-a` (→ lavender) + `--el-hero-wash-b` (→ sky), over `--el-page-bg`  |
+| Hero logo / CTA card accent      | `--el-accent` + `--el-accent-text`; stats text `--el-text` (serif)                 |
+| README feature-list ticks        | `--el-success`; links `--el-link`                                                  |
 
 **Palette, not grey-only (finding #54):** the roadmap uses four distinct status
 tints, the upvote uses the accent, kinds use their type hues, the Overview hero +
@@ -326,8 +329,8 @@ swap layer must reach every element).
 
 - Public chip: **"Public"** · banner: **"You're viewing a public project. Anyone
   signed in to Motir can view it and submit, upvote, or comment on requests."** ·
-  **"View-only — you can't edit issues"**.
-- Nav: **"Overview" / "Board" / "Issues" / "Roadmap"** · **"Submit a request"**.
+  **"View-only — you can't edit work items"**.
+- Nav: **"Overview" / "Board" / "Work items" / "Roadmap"** · **"Submit a request"**.
 - Overview: meta pills **"Open source" / "GPL-3.0" / "Project management"** ·
   CTAs **"View the roadmap" / "Submit a request" / "GitHub"** · stat labels
   **"Public requests" / "Upvotes" / "Planned" / "Shipped"** · sidebar

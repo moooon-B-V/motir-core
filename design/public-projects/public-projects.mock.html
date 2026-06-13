@@ -15,7 +15,7 @@
       No design/public-projects/ asset existed; the 6.12.1 design gate produces
       this FIRST. It is the layout source of truth for every UI code subtask in
       Story 6.12 that carries 6.12.1 in dependsOn (all `blocked` until it lands):
-        - 6.12.4 — the public read-only project view (board / issues) + the
+        - 6.12.4 — the public read-only project view (board / work items) + the
                    public OVERVIEW/README landing, internal fields hidden, no
                    edit affordances.
         - 6.12.6 — upvote + comments on public requests.
@@ -465,7 +465,7 @@
         background: var(--el-tint-peach);
       }
 
-      /* issue-type icon hue */
+      /* work-item-type icon hue */
       .type-icon {
         display: inline-flex;
       }
@@ -1823,7 +1823,8 @@
           >
           <span class="dot">·</span>
           <span class="readonly-note"
-            ><svg class="ic"><use href="#i-lock" /></svg> View-only — you can't edit issues</span
+            ><svg class="ic"><use href="#i-lock" /></svg> View-only — you can't edit work
+            items</span
           >
         </div>
 
@@ -1836,7 +1837,7 @@
               <svg class="ic"><use href="#i-columns" /></svg> Board
             </button>
             <button>
-              <svg class="ic"><use href="#i-list" /></svg> Issues
+              <svg class="ic"><use href="#i-list" /></svg> Work items
             </button>
             <button>
               <svg class="ic"><use href="#i-route" /></svg> Roadmap
@@ -1904,9 +1905,9 @@
                 <h3>You're looking at Motir, inside Motir</h3>
                 <p>
                   This is Motir's own project — the live board, roadmap, and backlog we use to build
-                  Motir. We dogfood completely: every feature here started as an issue on this
+                  Motir. We dogfood completely: every feature here started as a work item on this
                   board, moved through these columns, and was shipped by the same agents that turn
-                  issues into code.
+                  work items into code.
                 </p>
 
                 <h3>A self-improving loop — and you're in it</h3>
@@ -2034,7 +2035,8 @@
           >
           <span class="dot">·</span>
           <span class="readonly-note"
-            ><svg class="ic"><use href="#i-lock" /></svg> View-only — you can't edit issues</span
+            ><svg class="ic"><use href="#i-lock" /></svg> View-only — you can't edit work
+            items</span
           >
         </div>
 
@@ -2048,7 +2050,7 @@
               <svg class="ic"><use href="#i-columns" /></svg> Board
             </button>
             <button>
-              <svg class="ic"><use href="#i-list" /></svg> Issues
+              <svg class="ic"><use href="#i-list" /></svg> Work items
             </button>
             <button>
               <svg class="ic"><use href="#i-route" /></svg> Roadmap
@@ -2061,7 +2063,7 @@
 
         <!-- the board: shipped board card MINUS assignee + estimate, NO drag handle -->
         <div class="board">
-          <section class="col" aria-label="To Do, 6 issues">
+          <section class="col" aria-label="To Do, 6 work items">
             <div class="col-head">
               <span class="nm">To Do</span><span class="col-count">6</span>
             </div>
@@ -2097,7 +2099,7 @@
             </div>
           </section>
 
-          <section class="col" aria-label="In Progress, 3 issues">
+          <section class="col" aria-label="In Progress, 3 work items">
             <div class="col-head">
               <span class="nm">In Progress</span><span class="col-count">3</span>
             </div>
@@ -2119,7 +2121,7 @@
             </div>
           </section>
 
-          <section class="col" aria-label="In Review, 2 issues">
+          <section class="col" aria-label="In Review, 2 work items">
             <div class="col-head">
               <span class="nm">In Review</span><span class="col-count">2</span>
             </div>
@@ -2139,7 +2141,7 @@
             </div>
           </section>
 
-          <section class="col" aria-label="Done, 41 issues">
+          <section class="col" aria-label="Done, 41 work items">
             <div class="col-head">
               <span class="nm">Done</span><span class="col-count">41</span>
             </div>
@@ -2165,7 +2167,7 @@
       <p class="readonly-note" style="margin: 12px 2px 0">
         <svg class="ic"><use href="#i-eye-off" /></svg> Note for 6.12.4 — the cards above carry NO
         assignee avatar and NO story-point estimate (stripped by the public projection at the read
-        layer, not hidden in the DOM); internal issue comments are not shown.
+        layer, not hidden in the DOM); internal work-item comments are not shown.
       </p>
     </div>
 
@@ -2434,8 +2436,8 @@
         </div>
 
         <p class="req-body">
-          A full dark theme that follows the OS preference, covering the board, the issue detail,
-          and the public roadmap. Right now the roadmap embed is bright white at night.
+          A full dark theme that follows the OS preference, covering the board, the work-item
+          detail, and the public roadmap. Right now the roadmap embed is bright white at night.
         </p>
 
         <div class="divider"></div>
@@ -2883,7 +2885,7 @@
           <path d="M9 3v18" />
           <path d="M15 3v18" />
         </g>
-        <!-- list (issues) -->
+        <!-- list (work items) -->
         <g
           id="i-list"
           fill="none"
