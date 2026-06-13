@@ -948,7 +948,7 @@ export const story_6_10: PlanStory = {
       id: '6.10.10',
       title:
         'Design — the create-workspace flow: the dialog + copy-on-create source picker + the tier-2 first-reveal + states',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 45,
