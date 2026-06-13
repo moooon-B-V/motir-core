@@ -370,11 +370,23 @@ export const story_6_10: PlanStory = {
         'precedence rule (how an org role composes with a workspace role at an ' +
         'access check) — mirror Atlassian org-admin-above-site-admin / Linear ' +
         'Owner-above-Admin.\n' +
-        '5. **Access gating + the backfill semantics.** Fix that org ' +
-        'membership GATES workspace access (a workspace is reachable only by a ' +
-        'member of its org), the 404-not-403 cross-tenant posture is ' +
-        'preserved, and the migration BACKFILL rule: each existing workspace ' +
-        'gets its OWN default org (1:1, named from the workspace) and the ' +
+        '5. **Access gating + membership DIRECTION + the backfill semantics.** ' +
+        'Fix that org membership GATES workspace access (a workspace is ' +
+        'reachable only by a member of its org) and the 404-not-403 cross-tenant ' +
+        'posture is preserved. **Membership direction is ASYMMETRIC (Yue):** ' +
+        '(i) adding a user to a WORKSPACE auto-creates their ' +
+        '`OrganizationMembership` (role `member`) if absent — you cannot be in a ' +
+        'workspace without being in its org (UPWARD auto-join, an enforced ' +
+        'invariant); (ii) adding a user to the ORG creates NO workspace ' +
+        'membership — a plain org member reaches only the workspaces they are ' +
+        'EXPLICITLY added to (an org owner/admin still spans all workspaces by ' +
+        'role, per §4), so "org-only" members in ZERO workspaces are a valid ' +
+        'state (e.g. a billing admin). (iii) Removing from the org cascades ' +
+        'loss of all its workspace access (the gate); removing from a workspace ' +
+        'does NOT remove the org membership. The migration BACKFILL rule: each ' +
+        'existing workspace gets its OWN default org (1:1, named from the ' +
+        'workspace), every existing workspace member also becomes an org member ' +
+        '(the upward invariant applied to legacy rows), and the ' +
         'seeding/owning user becomes that org’s owner — so no existing data is ' +
         'orphaned and the gate holds for legacy rows.\n' +
         '6. **Progressive disclosure + auto-provisioning (the scale principle, ' +
@@ -538,6 +550,17 @@ export const story_6_10: PlanStory = {
         'rule). Each write-flow is ONE `prisma.$transaction`; returns DTOs via ' +
         '`lib/mappers/*` (never raw Prisma); throws typed errors from ' +
         '`lib/organizations/errors.ts` the route maps to HTTP.\n' +
+        '- **Membership DIRECTION (6.10.2 §5, asymmetric — enforce in the ' +
+        'service, NOT scattered):** adding a user to the ORG creates ONLY an ' +
+        '`OrganizationMembership` — NO workspace membership (org-only members in ' +
+        'zero workspaces are valid; a plain org member reaches only workspaces ' +
+        'they’re explicitly added to). Conversely the **add-to-WORKSPACE** flow ' +
+        '(extending the existing `WorkspaceMembership` create) MUST auto-create ' +
+        'the user’s `OrganizationMembership` (role `member`) in that workspace’s ' +
+        'org if absent — the UPWARD invariant (you cannot be in a workspace ' +
+        'without being in its org), in the SAME transaction. Removing from the ' +
+        'org cascades loss of workspace access (gate); removing from a workspace ' +
+        'leaves the org membership intact.\n' +
         '- Resolving the ACTIVE org for a session (for the switcher) + listing ' +
         'the orgs a user belongs to.\n' +
         '- **Auto-provision on signup (the progressive-disclosure principle, ' +
@@ -763,6 +786,12 @@ export const story_6_10: PlanStory = {
         'workspace under the org (the role composes above the 6.4 ' +
         '`MemberRole`); an org MEMBER falls back to their per-workspace ' +
         'role.\n' +
+        '- **Membership direction (6.10.2 §5):** adding a user to a WORKSPACE ' +
+        'auto-creates their org membership (assert the `OrganizationMembership` ' +
+        'row appears); adding a user to the ORG creates NO workspace membership ' +
+        '(assert an org-only member reaches zero workspaces until explicitly ' +
+        'added); removing from the org revokes all workspace access while ' +
+        'removing from a workspace leaves the org membership intact.\n' +
         '- The cross-workspace member listing returns members across the ' +
         'org’s workspaces and PAGINATES (assert a page boundary, not a ' +
         'full-table load — the at-scale rule).\n' +
