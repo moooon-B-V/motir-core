@@ -393,7 +393,7 @@ export const story_2_7: PlanStory = {
     {
       id: '2.7.4',
       title: 'The type/executor picker UI (create modal + detail rail) + per-type hue tokens',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 65,
@@ -575,7 +575,7 @@ export const story_2_7: PlanStory = {
       id: '2.7.7',
       title:
         'Vitest — schema + default map + picker default-seeding + loader mapping + filter facet',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 50,
@@ -629,7 +629,7 @@ export const story_2_7: PlanStory = {
       id: '2.7.8',
       title:
         'Playwright E2E — create a typed work item (pick type + executor), filter the list by type',
-      status: 'blocked',
+      status: 'planned',
       type: 'e2e',
       executor: 'coding_agent',
       estimateMinutes: 40,
