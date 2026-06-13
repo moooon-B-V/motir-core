@@ -738,7 +738,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Cannot create a Scrum board — the create-board dialog’s Scrum type option is permanently disabled (stale "Epic 4" seam left over after Story 4.5 shipped)',
-        status: 'in_progress',
+        status: 'done',
         type: 'bug',
         executor: 'coding_agent',
         estimateMinutes: 25,
