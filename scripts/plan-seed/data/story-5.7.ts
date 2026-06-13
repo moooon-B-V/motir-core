@@ -547,7 +547,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.6',
       title:
         'Per-user notification preferences — `NotificationPreference` model + the settings page (Jira shape); the channel gate BOTH the 5.7.3 in-app job AND the DONE 5.1.6 email job honour',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 38,
@@ -613,7 +613,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.7',
       title:
         'Vitest — `Notification` model + fan-in recipients (actor-excluded, mention-deduped, registry-extensible) + the read/mark API + preference gating',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
