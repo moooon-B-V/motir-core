@@ -123,9 +123,12 @@ test('@smoke history journey: manufactured trail → designed sentences, noise p
   await page.getByRole('option', { name: 'In Progress' }).click();
   await expect(page.getByText('In Progress', { exact: true })).toBeVisible();
 
-  // Link the blocker (the default Blocked-by relationship).
+  // Link the blocker (the default Blocked-by relationship). The picker is
+  // query-driven (Subtask 6.9.2 — closes finding #98): TYPE to load candidates,
+  // it no longer prefetches a window.
   await page.getByRole('button', { name: 'Link work item' }).click();
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
+  await page.getByRole('combobox', { name: /Search by identifier or title/ }).fill('Blocker');
   await page.getByRole('option', { name: /Blocker issue/ }).click();
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(page.getByRole('link', { name: /Blocker issue/ })).toBeVisible();
