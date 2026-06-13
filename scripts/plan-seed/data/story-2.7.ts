@@ -464,7 +464,7 @@ export const story_2_7: PlanStory = {
       id: '2.7.5',
       title:
         'Seed loader — map PlanItem.type/executor to the structured fields (stop emitting prose)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 40,
