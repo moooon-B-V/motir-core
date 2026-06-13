@@ -51,7 +51,7 @@ import type { PlanStory } from '../types';
 export const story_10_4: PlanStory = {
   id: '10.4',
   title: 'Test infrastructure & CI performance',
-  status: 'planned',
+  status: 'in_progress',
   gitBranch: 'feat/PROD-10.4-test-infra-ci-performance',
   descriptionMd:
     'The OPS surface for the build pipeline itself (Epic 10): keep CI fast as ' +
@@ -101,7 +101,7 @@ export const story_10_4: PlanStory = {
     {
       id: '10.4.1',
       title: 'Parallelize the Vitest integration suite via per-worker database isolation',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 90,
