@@ -828,13 +828,19 @@ export const story_6_12: PlanStory = {
         'it still requires sign-in (account-required, not an unauthenticated ' +
         'bypass); decide the slug model so a project can rotate/disable its ' +
         'public link without changing the project key.\n' +
-        '- **The Overview/README editor (per the 6.12.1 Panel 6 design):** a ' +
-        '`MarkdownEditor` authoring the `project.publicOverviewMd` field ' +
-        '(6.12.3) that renders on the public Overview tab (6.12.4). ' +
-        'Project-admin-gated; inline-save through a service method (the ' +
-        'success-response-is-confirmation rule — no whole-tree refresh). A note ' +
-        'states it shows on the public Overview tab and is hidden while the ' +
-        'project is not public.\n' +
+        '- **The Overview/README editor — a DEDICATED "Edit overview" view ' +
+        '(per the 6.12.1 Panel 7 design): a split `MarkdownEditor` (left) + a ' +
+        'LIVE `MarkdownView` PREVIEW (right) of the public landing**, reached ' +
+        'from an "Edit overview" entry point in settings (Panel 6) — NOT a ' +
+        'cramped in-settings box. It edits the `project.publicOverviewMd` field ' +
+        '(6.12.3) ONLY (the README body); the hero name/stats are auto and the ' +
+        'Links sidebar pulls from existing project fields (website / repo / ' +
+        'docs), so NO new schema beyond `publicOverviewMd`. The preview renders ' +
+        'with the SAME `MarkdownView` the public tab (6.12.4) uses, so what the ' +
+        'admin sees is what ships. Project-admin-gated; Save persists through a ' +
+        'service method (the success-response-is-confirmation rule — no ' +
+        'whole-tree refresh). A note states it shows on the public Overview tab ' +
+        'and is hidden while the project is not public.\n' +
         '- **Design-system compliance:** ONLY `--el-*` + `[data-display-' +
         'style]` tokens + shipped `components/ui/*`; the access-level copy + ' +
         'the account-required note per the 6.12.1 design; inline edits follow ' +
@@ -852,10 +858,12 @@ export const story_6_12: PlanStory = {
         'copy / disable / rotate; the link requires sign-in (account-required, ' +
         'no unauthenticated bypass); rotating/disabling does not change the ' +
         'project key.\n' +
-        '- The Overview/README `MarkdownEditor` persists `publicOverviewMd` via ' +
-        'a service method (success-response-is-confirmation, no whole-tree ' +
-        'refresh), project-admin-gated; its content renders on the public ' +
-        'Overview tab (6.12.4).\n' +
+        '- The dedicated "Edit overview" view (split `MarkdownEditor` + live ' +
+        '`MarkdownView` preview), reached from the settings entry point, persists ' +
+        '`publicOverviewMd` (body only) via a service method ' +
+        '(success-response-is-confirmation, no whole-tree refresh), ' +
+        'project-admin-gated; the preview matches the public Overview tab ' +
+        '(6.12.4) render; no new schema beyond `publicOverviewMd`.\n' +
         '- Only `--el-*` + `[data-display-style]` tokens + shipped ' +
         'primitives; matches the 6.12.1 design; inline edits use the ' +
         'success-response-is-confirmation pattern.\n' +
