@@ -801,6 +801,7 @@
       "searchPlaceholder": "Search a work item…",
       "searchByIdentifierOrTitle": "Search by identifier or title…",
       "noMatchingIssues": "No matching work items.",
+      "typeToSearch": "Type to search work items…",
       "add": "Add"
     },
     "readiness": {

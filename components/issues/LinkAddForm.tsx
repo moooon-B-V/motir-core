@@ -24,11 +24,19 @@ export interface LinkAddFormProps {
   /** The chosen relationship + its setter (the kind selector). */
   relationship: RelationshipKind;
   onRelationshipChange: (relationship: RelationshipKind) => void;
-  /** The candidate target issues for the search Combobox. */
+  /** The candidate target issues for the search Combobox (the server's result
+   * for the current `query` — 6.9.2 server-search). */
   options: ComboboxOption<string>[];
   /** The selected target id (null until one is picked) + its setter. */
   targetId: string | null;
   onTargetChange: (targetId: string | null) => void;
+  /** The controlled search query + setter (6.9.2) — the wrapper debounces its
+   * server fetch off `onQueryChange`; the Combobox stops filtering client-side. */
+  query: string;
+  onQueryChange: (query: string) => void;
+  /** Listbox empty state — the wrapper swaps it for a "type to search" prompt
+   * while the query is below the search minimum, else "no matching issues". */
+  emptyText: string;
   /** Candidate fetch in flight (drives the Combobox spinner). */
   loading?: boolean;
   /** Inline error (typed-link rejection or a candidate-load failure). */
@@ -49,6 +57,9 @@ export function LinkAddForm({
   options,
   targetId,
   onTargetChange,
+  query,
+  onQueryChange,
+  emptyText,
   loading,
   error,
   onSubmit,
@@ -81,10 +92,12 @@ export function LinkAddForm({
             value={targetId}
             onChange={(v) => onTargetChange(v)}
             searchable
+            query={query}
+            onQueryChange={onQueryChange}
             placeholder={t('linkAddForm.searchPlaceholder')}
             searchPlaceholder={t('linkAddForm.searchByIdentifierOrTitle')}
             loading={loading}
-            emptyText={t('linkAddForm.noMatchingIssues')}
+            emptyText={emptyText}
           />
         </div>
         <div className="ml-auto flex items-center gap-2">

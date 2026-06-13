@@ -168,20 +168,22 @@ describe('createWorkItem with links (2.4.10)', () => {
   });
 });
 
-describe('listCreateLinkCandidates (2.4.10)', () => {
-  it('returns the workspace items (cross-project) and excludes archived ones', async () => {
+describe('listCreateLinkCandidates (2.4.10; server-search since 6.9.2)', () => {
+  it('returns the workspace items matching the query (cross-project) and excludes archived ones', async () => {
     const fx = await makeWorkItemFixture();
     const a = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'Candidate A' },
+      { projectId: fx.projectId, kind: 'task', title: 'Candidate A node' },
       fx.ctx,
     );
     const archived = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'Archived one' },
+      { projectId: fx.projectId, kind: 'task', title: 'Archived node' },
       fx.ctx,
     );
     await db.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
 
-    const candidates = await workItemsService.listCreateLinkCandidates(fx.ctx);
+    // Query-driven since 6.9.2 — both titles share the "node" token; the archived
+    // one is still filtered out by the read.
+    const candidates = await workItemsService.listCreateLinkCandidates('node', fx.ctx);
     const ids = candidates.map((c) => c.id);
     expect(ids).toContain(a.id);
     expect(ids).not.toContain(archived.id);
@@ -191,11 +193,11 @@ describe('listCreateLinkCandidates (2.4.10)', () => {
     const ws1 = await makeWorkItemFixture({ name: 'One', identifier: 'ONE' });
     const ws2 = await makeWorkItemFixture({ name: 'Two', identifier: 'TWO' });
     const foreign = await workItemsService.createWorkItem(
-      { projectId: ws2.projectId, kind: 'task', title: 'Foreign' },
+      { projectId: ws2.projectId, kind: 'task', title: 'Foreign node' },
       ws2.ctx,
     );
 
-    const candidates = await workItemsService.listCreateLinkCandidates(ws1.ctx);
+    const candidates = await workItemsService.listCreateLinkCandidates('node', ws1.ctx);
     expect(candidates.map((c) => c.id)).not.toContain(foreign.id);
   });
 });

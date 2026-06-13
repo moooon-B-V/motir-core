@@ -24,14 +24,16 @@ import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 export type LinkActionResult = { ok: true } | { ok: false; error: string };
 
 /**
- * Candidate target issues for the picker, for a given relationship (the picker
- * refetches when the relationship changes — the already-linked exclusion is
- * direction-aware). The current item is gated to the caller's workspace inside
- * the service.
+ * Candidate target issues for the picker, server-searched by `query` (key +
+ * title, 6.9.2 — the picker's Combobox fetches this per keystroke; an empty /
+ * short query returns `[]`). Refetches when the relationship changes too — the
+ * already-linked exclusion is direction-aware. The current item is gated to the
+ * caller's workspace inside the service.
  */
 export async function listLinkCandidatesAction(
   currentItemId: string,
   relationship: RelationshipKind,
+  query: string,
 ): Promise<{ ok: true; candidates: WorkItemSummaryDto[] } | { ok: false; error: string }> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
@@ -42,10 +44,12 @@ export async function listLinkCandidatesAction(
     return { ok: false, error: t('actions.unknownRelationship') };
 
   try {
-    const candidates = await workItemsService.listLinkCandidates(currentItemId, relationship, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
+    const candidates = await workItemsService.listLinkCandidates(
+      currentItemId,
+      relationship,
+      query,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
     return { ok: true, candidates };
   } catch (err) {
     const msg = linkErrorMessage(err, t);

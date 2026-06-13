@@ -397,27 +397,6 @@ export const workItemRepository = {
   },
 
   /**
-   * Candidate work items for the link picker (Subtask 2.4.9): non-archived
-   * items in the WORKSPACE (cross-project — the link model allows cross-project
-   * links), excluding `excludeIds` (the current item + the ones already linked
-   * by the chosen relationship). Bounded to `limit` newest-first; the picker's
-   * Combobox filters this set by identifier/title client-side (full server
-   * search is Epic 6). Explicit `workspaceId` gate — the primary tenant filter
-   * (finding #26; RLS is inert under the dev/CI superuser). Read-only → `db`.
-   */
-  async findLinkCandidates(
-    workspaceId: string,
-    excludeIds: string[],
-    limit: number,
-  ): Promise<WorkItem[]> {
-    return db.workItem.findMany({
-      where: { workspaceId, archivedAt: null, id: { notIn: excludeIds } },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-    });
-  },
-
-  /**
    * Reusable server-side quick-search read (Subtask 6.9.1) — the single read
    * both link pickers (6.9.2) and, later, the cmd-K palette consume. Returns
    * non-archived work items in the WORKSPACE, restricted to `projectIds` (the

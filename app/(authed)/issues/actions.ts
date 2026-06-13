@@ -140,19 +140,22 @@ export type ListCreateLinkCandidatesResult =
 
 /**
  * Candidate target issues for the create modal's "Linked issues" picker
- * (Subtask 2.4.10): every non-archived item in the active workspace
- * (cross-project — the link model allows it). No current item to exclude (the
- * issue isn't created yet); the modal excludes already-pending targets
- * client-side and the Combobox filters by identifier/title. Resolves the active
- * project server-side, same as createIssueAction.
+ * (Subtask 2.4.10; server-search since 6.9.2): the 6.9.1 quick-search by `query`
+ * (key + title, workspace + 6.4-permission-scoped, bounded) — the Combobox
+ * fetches this per keystroke, an empty / short query returns `[]`. No current
+ * item to exclude (the issue isn't created yet); the modal drops already-pending
+ * targets client-side. Resolves the active project server-side, like
+ * createIssueAction.
  */
-export async function listCreateLinkCandidatesAction(): Promise<ListCreateLinkCandidatesResult> {
+export async function listCreateLinkCandidatesAction(
+  query: string,
+): Promise<ListCreateLinkCandidatesResult> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
   const ctx = await getActiveProject();
   if (!ctx) return { ok: false, error: (await getErrorsTranslator())('actions.pickProjectFirst') };
 
-  const candidates = await workItemsService.listCreateLinkCandidates({
+  const candidates = await workItemsService.listCreateLinkCandidates(query, {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });

@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { CircleAlert, X } from 'lucide-react';
 import { LinkAddForm } from '@/components/issues/LinkAddForm';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Pill } from '@/components/ui/Pill';
 import { SectionLabel } from '@/components/ui/SectionLabel';
+import { useLinkCandidateSearch } from '@/hooks/useLinkCandidateSearch';
 import type { ComboboxOption } from '@/components/ui/Combobox';
 import type { RelationshipKind } from '@/lib/dto/workItemLinks';
 import type { IssueType } from '@/lib/issues/parentRules';
@@ -20,7 +21,10 @@ import { listCreateLinkCandidatesAction } from '../issues/actions';
 // rather than writing immediately — the new issue has no id yet, so the links
 // are written WHEN the issue is created (atomically, in createWorkItem's
 // transaction). The pending list is owned by the modal (it submits + resets it);
-// this component owns only the in-progress selection + the candidate fetch.
+// this component owns only the in-progress selection + the candidate fetch. The
+// candidate read is the 6.9.1 server quick-search (Subtask 6.9.2 — closes finding
+// #98): the Combobox is query-driven (debounced per keystroke via
+// `useLinkCandidateSearch`), not a newest-50 window loaded once on mount.
 
 export interface PendingLink {
   targetId: string;
@@ -46,51 +50,40 @@ export function CreateIssueLinksField({
 }: CreateIssueLinksFieldProps) {
   const t = useTranslations('shell');
   const tl = useTranslations('labels');
+  const tUi = useTranslations('ui');
   const [relationship, setRelationship] = useState<RelationshipKind>('blocked_by');
   const [targetId, setTargetId] = useState<string | null>(null);
-  const [candidates, setCandidates] = useState<WorkItemSummaryDto[]>([]);
-  // Starts true — the mount effect fires the fetch immediately (setting it false
-  // synchronously inside the effect is the cascading-render anti-pattern lint
-  // forbids, so the initial value carries the loading state instead).
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Fetch the workspace candidate set once when the section mounts (the modal
-  // opens). The current item doesn't exist yet, so there's nothing to refetch
-  // per relationship — the per-relationship pending exclusion is client-side.
-  useEffect(() => {
-    let active = true;
-    listCreateLinkCandidatesAction().then((res) => {
-      if (!active) return;
-      setLoading(false);
-      if (res.ok) setCandidates(res.candidates);
-      else setLoadError(res.error);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
+  // Server-search: per-keystroke debounced fetch. The current item doesn't exist
+  // yet, so there's nothing to exclude server-side; the per-relationship pending
+  // exclusion stays client-side (below).
+  const search = useLinkCandidateSearch({ fetcher: listCreateLinkCandidatesAction });
 
   // Candidates minus those already pending FOR THIS relationship — the same
   // (target, relationship) pair can't be added twice (the unique constraint
   // backstops a forged dup), but the same target under a different relationship
   // is allowed.
-  const options: ComboboxOption<string>[] = candidates
+  const options: ComboboxOption<string>[] = search.candidates
     .filter((c) => !links.some((l) => l.targetId === c.id && l.relationship === relationship))
     .map((c) => ({
       value: c.id,
       label: c.title,
       secondary: c.identifier,
-      keywords: c.identifier,
       icon: <IssueTypeIcon type={c.kind as IssueType} className="h-4 w-4" />,
     }));
 
   function add() {
     if (!targetId) return;
-    const item = candidates.find((c) => c.id === targetId);
+    const item = search.candidates.find((c) => c.id === targetId);
     if (!item) return;
     onChange([...links, { targetId, relationship, item }]);
     setTargetId(null);
+  }
+
+  // A new search invalidates a prior pick — typing clears the stale selection.
+  function changeQuery(query: string) {
+    setTargetId(null);
+    search.setQuery(query);
   }
 
   function changeRelationship(rel: RelationshipKind) {
@@ -153,8 +146,13 @@ export function CreateIssueLinksField({
         options={options}
         targetId={targetId}
         onTargetChange={setTargetId}
-        loading={loading}
-        error={loadError}
+        query={search.query}
+        onQueryChange={changeQuery}
+        emptyText={
+          search.tooShort ? tUi('linkAddForm.typeToSearch') : tUi('linkAddForm.noMatchingIssues')
+        }
+        loading={search.loading}
+        error={search.error}
         onSubmit={add}
       />
 

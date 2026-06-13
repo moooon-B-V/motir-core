@@ -100,6 +100,17 @@ export interface ComboboxProps<T extends string> {
    * leave edit mode and return to the static pill/avatar (Subtask 2.5.5).
    */
   onClose?: () => void;
+  /**
+   * Server-driven search mode (Subtask 6.9.2 — the link picker). When
+   * `onQueryChange` is provided the type-ahead query is CONTROLLED by the parent
+   * (`query`) and client-side filtering is SKIPPED — `options` is taken as the
+   * server's authoritative result for the current query (the parent debounces
+   * its fetch off `onQueryChange`, the same contract as `MultiSelectPicker`).
+   * Omit both for the default self-filtering behaviour. The parent owns the
+   * query lifecycle, so opening the menu does NOT reset it.
+   */
+  query?: string;
+  onQueryChange?: (query: string) => void;
 }
 
 export function Combobox<T extends string>({
@@ -118,9 +129,17 @@ export function Combobox<T extends string>({
   className,
   autoOpen = false,
   onClose,
+  query: controlledQuery,
+  onQueryChange,
 }: ComboboxProps<T>) {
   const [open, setOpen] = useState(autoOpen);
-  const [query, setQuery] = useState('');
+  // Server-driven mode (6.9.2): when `onQueryChange` is provided the query is
+  // controlled by the parent and client filtering is bypassed (the server's
+  // `options` are authoritative). Otherwise the query is internal state.
+  const serverFiltered = onQueryChange !== undefined;
+  const [internalQuery, setInternalQuery] = useState('');
+  const query = serverFiltered ? (controlledQuery ?? '') : internalQuery;
+  const setQuery = (q: string) => (serverFiltered ? onQueryChange(q) : setInternalQuery(q));
   const [activeIndex, setActiveIndex] = useState(0);
   // The menu is portaled to <body> when the picker sits in a normal scroll
   // context, so it escapes a short table's overflow:hidden
@@ -147,7 +166,10 @@ export function Combobox<T extends string>({
   const menuRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
-    if (!searchable || query.trim() === '') return options;
+    // Server-driven mode: `options` is already the query's result — never filter
+    // it again client-side (a substring re-filter would hide trigram / token
+    // matches the server legitimately returned).
+    if (serverFiltered || !searchable || query.trim() === '') return options;
     const needle = query.trim().toLowerCase();
     return options.filter(
       (o) =>
@@ -155,7 +177,7 @@ export function Combobox<T extends string>({
         (o.secondary ? o.secondary.toLowerCase().includes(needle) : false) ||
         (o.keywords ? o.keywords.toLowerCase().includes(needle) : false),
     );
-  }, [options, query, searchable]);
+  }, [options, query, searchable, serverFiltered]);
 
   const selected = value != null ? (options.find((o) => o.value === value) ?? null) : null;
 
@@ -234,7 +256,10 @@ export function Combobox<T extends string>({
   }, [active, open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openMenu() {
-    setQuery('');
+    // Uncontrolled mode resets its own type-ahead on open; server-driven mode
+    // leaves the query to the parent (it owns the lifecycle — resets on form
+    // open / relationship change), so reopening keeps the current results.
+    if (!serverFiltered) setInternalQuery('');
     const sel = value != null ? options.findIndex((o) => o.value === value) : -1;
     setActiveIndex(sel >= 0 ? sel : 0);
     setOpen(true);
