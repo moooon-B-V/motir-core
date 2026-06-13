@@ -10,7 +10,7 @@ export const EPICS: EpicMeta[] = [
   {
     id: '1',
     title: 'Foundation',
-    status: 'in_progress',
+    status: 'done',
     descriptionMd:
       'The architectural floor every other epic stands on: **project bootstrap**, **design ' +
       'system & brand**, authentication, multi-tenant workspaces, projects, the work-item schema, ' +
@@ -24,7 +24,7 @@ export const EPICS: EpicMeta[] = [
         id: '1.7',
         kind: 'task',
         title: 'Set up CLA Assistant + commit Apache ICLA on motir-core',
-        status: 'planned',
+        status: 'done',
         type: 'manual',
         executor: 'human',
         estimateMinutes: 30,
@@ -41,7 +41,7 @@ export const EPICS: EpicMeta[] = [
           'should economics ever break (HashiCorp/Elastic/Redis/MongoDB all eventually exercised ' +
           'theirs, each one made possible by a CLA they had in place from earlier).\n\n' +
           '**Template chosen by the planner: Apache ICLA (a LICENSE, not an assignment).** Apache ' +
-          'ICLA grants Motir Inc. a broad license to the contribution; the contributor retains ' +
+          'ICLA grants moooon B.V. a broad license to the contribution; the contributor retains ' +
           'their copyright. This is contributor-friendly (low friction, the de-facto industry ' +
           'standard for individual contributions) AND broad enough to permit a future ' +
           'BSL/SSPL/source-available relicense — the rights granted include sublicensing, which ' +
@@ -57,11 +57,11 @@ export const EPICS: EpicMeta[] = [
           '(2) Authorize CLA Assistant on `moooon-B-V/motir-core` (motir-ai is private and ' +
           "won't have outside contributors — skip it). (3) Paste the Apache ICLA text " +
           '(https://www.apache.org/licenses/icla.pdf — convert to plain text), modified to name ' +
-          '**"Motir Inc."** as the receiving party in §1. Save. CLA Assistant now hooks every ' +
+          '**"moooon B.V."** as the receiving party in §1. Save. CLA Assistant now hooks every ' +
           'PR on motir-core: it comments asking outside contributors to sign, and adds a ' +
           'required status check that turns green only once signed. (4) On a `seed/cla-setup` ' +
           'branch in motir-core, commit **`motir-core/CLA.md`** (the Apache ICLA text + a ' +
-          "short preamble naming Motir Inc. and linking to CLA Assistant's signing flow) AND " +
+          "short preamble naming moooon B.V. and linking to CLA Assistant's signing flow) AND " +
           'either create `motir-core/CONTRIBUTING.md` or amend the existing one with a short ' +
           'paragraph: *"By opening a PR, you\'ll be asked to sign our CLA via CLA Assistant. This ' +
           "grants us the rights we need to maintain the project's open-source license and to " +
@@ -76,7 +76,7 @@ export const EPICS: EpicMeta[] = [
           '- CLA Assistant is installed and active on `moooon-B-V/motir-core` (visible in the ' +
           "repo's installed-apps list and in CLA Assistant's dashboard).\n" +
           '- `motir-core/CLA.md` exists at repo root, contains Apache ICLA text adapted to ' +
-          'name Motir Inc. as the receiving party.\n' +
+          'name moooon B.V. as the receiving party.\n' +
           '- `motir-core/CONTRIBUTING.md` carries a paragraph naming the CLA requirement and ' +
           'pointing contributors at the signing flow.\n' +
           '- A throwaway PR from an unsigned account demonstrates the bot comments + the ' +
@@ -98,7 +98,7 @@ export const EPICS: EpicMeta[] = [
         explanationMd:
           'The CLA is the legal floor under the open-core moat. The license boundary rule ' +
           '(`motir-core` GPL-3.0 calling `motir-ai` closed over HTTP) survives only if ' +
-          'Motir Inc. retains enough rights over `motir-core` to relicense if the open-core ' +
+          'moooon B.V. retains enough rights over `motir-core` to relicense if the open-core ' +
           'economics ever require it. Without a CLA, every outside contributor holds a copyright ' +
           'fragment we cannot unilaterally move — and the relicense option dies. With a CLA from ' +
           "day one, the option stays alive for the project's full lifetime at zero ongoing cost.",
