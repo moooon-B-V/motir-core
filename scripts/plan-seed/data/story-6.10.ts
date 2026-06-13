@@ -534,7 +534,7 @@ export const story_6_10: PlanStory = {
       id: '6.10.4',
       title:
         'Org-scoped services + access gating — org membership gates workspace access; org owner/admin extends 6.4 roles',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 70,
@@ -624,7 +624,7 @@ export const story_6_10: PlanStory = {
       id: '6.10.5',
       title:
         'Org admin UI — org settings, cross-workspace member management, the org switcher in the shell',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 70,
@@ -763,7 +763,7 @@ export const story_6_10: PlanStory = {
     {
       id: '6.10.7',
       title: 'Vitest — org model + membership gating + backfill',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 50,
@@ -878,7 +878,7 @@ export const story_6_10: PlanStory = {
       id: '6.10.9',
       title:
         'Copy-on-create — seed a new workspace’s config from the source workspace (the "looks-inherited" behaviour)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 75,
