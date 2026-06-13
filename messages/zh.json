@@ -39,7 +39,7 @@
       "chore": "杂务"
     },
     "executor": {
-      "coding_agent": "编码代理",
+      "coding_agent": "编码智能体",
       "human": "人工"
     },
     "priority": {
@@ -1689,7 +1689,7 @@
     "popover": {
       "title": "什么是「就绪」？",
       "body1": "当阻塞某个工作项的所有工作项都已完成时，它即为<strong>就绪</strong>——它没有未完成的阻塞项，现在就可以开始。",
-      "body2": "点击任意行的 <code>复制</code>，即可将其 <code>motir run PROD-…</code> 命令复制到剪贴板，然后粘贴到你自己的编码代理中来派发工作。"
+      "body2": "点击任意行的 <code>复制</code>，即可将其 <code>motir run PROD-…</code> 命令复制到剪贴板，然后粘贴到你自己的编码智能体中来派发工作。"
     },
     "empty": {
       "title": "暂无可开始的工作项",
