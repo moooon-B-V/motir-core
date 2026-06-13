@@ -112,7 +112,8 @@
       "ASSIGNEE_NOT_IN_WORKSPACE": "负责人不是该工作区的成员。",
       "UNKNOWN_STATUS": "状态“{statusKey}”不属于该项目的工作流。",
       "ILLEGAL_TRANSITION": "非法的状态流转：“{from}” → “{to}”。",
-      "STALE_WORK_ITEM": "此工作项已被他人编辑。请刷新后重试。"
+      "STALE_WORK_ITEM": "此工作项已被他人编辑。请刷新后重试。",
+      "TYPE_NOT_ALLOWED_ON_KIND": "只能为任务、子任务或缺陷设置类型和执行者，史诗和故事不可设置。"
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "只有项目管理员才能编辑工作流。",
@@ -715,6 +716,8 @@
       "dueDate": "截止日期",
       "estimateMinutes": "预估工时",
       "storyPoints": "故事点",
+      "type": "工作类型",
+      "executor": "执行者",
       "descriptionMd": "描述",
       "explanationMd": "说明",
       "explanationSource": "说明来源",

@@ -112,7 +112,8 @@
       "ASSIGNEE_NOT_IN_WORKSPACE": "The assignee is not a member of this workspace.",
       "UNKNOWN_STATUS": "Unknown status \"{statusKey}\" for this project's workflow.",
       "ILLEGAL_TRANSITION": "Illegal status transition: \"{from}\" → \"{to}\".",
-      "STALE_WORK_ITEM": "This work item was edited by someone else. Refresh and try again."
+      "STALE_WORK_ITEM": "This work item was edited by someone else. Refresh and try again.",
+      "TYPE_NOT_ALLOWED_ON_KIND": "A type and executor can only be set on a task, subtask, or bug — not on an epic or story."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Only a project admin can edit the workflow.",
@@ -715,6 +716,8 @@
       "dueDate": "Due date",
       "estimateMinutes": "Estimate",
       "storyPoints": "Story points",
+      "type": "Work type",
+      "executor": "Executor",
       "descriptionMd": "Description",
       "explanationMd": "Explanation",
       "explanationSource": "Explanation source",

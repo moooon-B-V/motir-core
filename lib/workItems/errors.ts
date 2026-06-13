@@ -25,7 +25,8 @@ export type WorkItemErrorTag =
   | 'ASSIGNEE_NOT_IN_WORKSPACE'
   | 'UNKNOWN_STATUS'
   | 'ILLEGAL_TRANSITION'
-  | 'STALE_WORK_ITEM';
+  | 'STALE_WORK_ITEM'
+  | 'TYPE_NOT_ALLOWED_ON_KIND';
 
 /**
  * Base class for every work-items typed error. Concrete subclasses set a
@@ -204,6 +205,24 @@ export class StaleWorkItemError extends WorkItemError {
   constructor() {
     super('This issue was edited by someone else. Refresh and try again.');
     this.name = 'StaleWorkItemError';
+  }
+}
+
+/**
+ * A `type` / `executor` was set on a work item whose `kind` is a CONTAINER
+ * (epic / story), not an executable leaf (Story 2.7 · Subtask 2.7.3). `type`
+ * is the nature of executable work and is leaf-only by the 2.7.2 ADR; epics
+ * and stories organise work, they don't execute it. A client error → 422
+ * (the route layer's blanket `WorkItemError` mapping). There is no DB-trigger
+ * backstop for this rule (a single nullable column can't express "only on
+ * these kinds"), so this service-layer assertion is the primary guard.
+ */
+export class TypeNotAllowedOnKindError extends WorkItemError {
+  readonly tag = 'TYPE_NOT_ALLOWED_ON_KIND' as const;
+  readonly code = 'TYPE_NOT_ALLOWED_ON_KIND' as const;
+  constructor(kind: string) {
+    super(`A ${kind} cannot carry a type or executor (those are leaf-only).`);
+    this.name = 'TypeNotAllowedOnKindError';
   }
 }
 

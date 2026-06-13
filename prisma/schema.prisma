@@ -565,6 +565,20 @@ model WorkItem {
   reporterId        String
   dueDate           DateTime?
   estimateMinutes   Int?
+  // Work-item TYPE + EXECUTOR (Story 2.7 · Subtask 2.7.3) — the nature of the
+  // executable work (`code` / `design` / `decision` / …) and WHO does it
+  // (`coding_agent` | `human`). Both NULLABLE and DISTINCT from `kind`: only
+  // executable LEAVES (task / subtask / bug) carry a type — every epic/story
+  // and every pre-2.7 legacy row is `null`. Leaf-only is a SEMANTIC rule the
+  // service enforces (`workItemsService` rejects a type/executor on an
+  // epic/story), NOT a DB constraint a single nullable column can express.
+  // `executor` is seeded from the type→executor default map
+  // (`lib/issues/executorDefaults.ts`) when a type is first chosen, and stays
+  // overridable. The split exists for the Epic-7 AI dispatch layer (route by
+  // `type` → prompt template; by `executor` → agent-dispatch vs human-assign);
+  // see docs/decisions/work-item-type-taxonomy.md (the 2.7.2 ADR).
+  type              WorkItemType?
+  executor          Executor?
   // The agile STORY-POINT estimate (Story 4.3) — SEPARATE from the `estimateMinutes`
   // TIME estimate above; both columns coexist and the project's `estimationStatistic`
   // config picks which one is THE planning estimate the surfaces display + roll up.
@@ -781,6 +795,43 @@ enum WorkItemExplanationSource {
   user_edited
 
   @@map("work_item_explanation_source")
+}
+
+/// The NATURE of a piece of executable work (Story 2.7 · Subtask 2.7.3) —
+/// DISTINCT from `WorkItemKind` (the structural hierarchy) and carried only on
+/// executable leaves (task / subtask / bug). A FIXED ten-member enum, in this
+/// canonical order, frozen by the 2.7.2 ADR
+/// (docs/decisions/work-item-type-taxonomy.md): fixed (not free text) so Story
+/// 7.6's per-type prompt generator is a TOTAL function over it (a `switch` with
+/// no `default` hole) and the 2.7.6 filter facet is a closed set. Extensible
+/// later ONLY by an explicit enum addition + migration, never by ad-hoc
+/// strings. Each member's authoritative one-line gloss lives in the ADR.
+enum WorkItemType {
+  code
+  design
+  test
+  content
+  research
+  review
+  decision
+  deploy
+  manual
+  chore
+
+  @@map("work_item_type")
+}
+
+/// WHO executes a piece of work (Story 2.7 · Subtask 2.7.3). Nullable, set
+/// alongside `type`: when a type is first chosen, `executor` is seeded from the
+/// type→executor default map (`lib/issues/executorDefaults.ts`,
+/// `defaultExecutorForType`) and stays overridable. The Epic-7 AI dispatch
+/// layer routes on this — `coding_agent` → dispatch to a coding agent,
+/// `human` → assign to a person.
+enum Executor {
+  coding_agent
+  human
+
+  @@map("executor")
 }
 
 /// A per-project, customizable issue status (Story 2.2). Every project owns an

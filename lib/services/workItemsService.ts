@@ -11,6 +11,7 @@ import {
 import type { FilterAst } from '@/lib/filters/ast';
 import { customFieldOptionRepository } from '@/lib/repositories/customFieldOptionRepository';
 import { assertValidParent, allowedParentKinds, type IssueType } from '@/lib/issues/parentRules';
+import { defaultExecutorForType, isTypeableKind } from '@/lib/issues/executorDefaults';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
@@ -40,6 +41,7 @@ import {
   NoInitialStatusError,
   ReporterNotInWorkspaceError,
   StaleWorkItemError,
+  TypeNotAllowedOnKindError,
   UnknownStatusError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
@@ -88,12 +90,14 @@ import {
 import { extractContextRefs } from '@/lib/markdown/contextRefs';
 import type {
   CreateWorkItemInput,
+  ExecutorDto,
   IssueDetailDto,
   ProjectTreeFilter,
   RelationshipLinkDto,
   UpdateWorkItemInput,
   WorkItemDto,
   WorkItemKindDto,
+  WorkItemTypeDto,
   PagedIssueListDto,
   WorkItemRevisionDto,
   WorkItemSummaryDto,
@@ -143,6 +147,46 @@ async function assertReporterMember(userId: string, workspaceId: string): Promis
 async function assertAssigneeMember(userId: string, workspaceId: string): Promise<void> {
   const m = await workspaceMembershipRepository.findByUserAndWorkspace(userId, workspaceId);
   if (!m) throw new AssigneeNotInWorkspaceError();
+}
+
+/**
+ * Leaf-only enforcement for `type` / `executor` (Story 2.7 · the 2.7.2 ADR).
+ * `type` is the nature of EXECUTABLE work, so only the leaf kinds
+ * (task / subtask / bug — `isTypeableKind`) may carry a type or executor;
+ * epics + stories are containers. A single nullable column can't express this,
+ * so the service is the PRIMARY guard (no DB-trigger backstop). Throws
+ * `TypeNotAllowedOnKindError` (→ 422) when a non-typeable kind would end up
+ * with a non-null type or executor; clearing both to null is legal on any kind.
+ * Called with the EFFECTIVE post-write values so it catches both "set a type on
+ * a story" and "convert a typed leaf into a story without clearing its type".
+ */
+function assertTypeKindConsistent(
+  kind: WorkItemKindDto,
+  type: WorkItemTypeDto | null,
+  executor: ExecutorDto | null,
+): void {
+  if ((type !== null || executor !== null) && !isTypeableKind(kind)) {
+    throw new TypeNotAllowedOnKindError(kind);
+  }
+}
+
+/**
+ * Resolve the executor a create/update should persist, given the resulting
+ * `type`, any explicitly-supplied executor, and the row's CURRENT executor.
+ * SEED-IF-ABSENT (the 2.7.2 ADR "executor is seeded when a type is first
+ * chosen, and overridable"): an explicit executor always wins; otherwise, when
+ * a non-null `type` lands on a row that has no executor yet, seed from
+ * `defaultExecutorForType`. An existing executor (a prior override) is never
+ * clobbered by a bare type change, and a null type never auto-sets an executor.
+ */
+function resolveExecutor(
+  type: WorkItemTypeDto | null,
+  explicit: ExecutorDto | null | undefined,
+  current: ExecutorDto | null,
+): ExecutorDto | null {
+  if (explicit !== undefined) return explicit;
+  if (type !== null && current === null) return defaultExecutorForType(type);
+  return current;
 }
 
 /** Stable, deterministic ordering for summary lists resolved via findByIds. */
@@ -201,6 +245,11 @@ function buildCreatedDiff(row: WorkItem): Record<string, DiffCell> {
   set('reporterId', row.reporterId);
   set('dueDate', row.dueDate ? row.dueDate.toISOString() : null);
   set('estimateMinutes', row.estimateMinutes);
+  // Type + executor (Story 2.7): the `set` helper skips nulls, so an untyped
+  // leaf / a container leaves the diff unchanged from pre-2.7; a typed create
+  // records the chosen type + (seeded or explicit) executor.
+  set('type', row.type);
+  set('executor', row.executor);
   // sprintId is null for a backlog create (the `set` helper skips nulls, so the
   // diff is unchanged from pre-4.2.2 for the common case); it is captured only
   // when the issue is born directly in a sprint (Subtask 4.2.2 create-into-
@@ -513,6 +562,15 @@ export const workItemsService = {
       }
     }
 
+    // Type + executor (Story 2.7): leaf-only — a type/executor on an epic/story
+    // is rejected here (no DB-trigger backstop). Executor is seeded from the
+    // type→executor default when a type is supplied without one (seed-if-absent;
+    // a new row's current executor is null). Validated BEFORE the key-allocation
+    // transaction so a denied create never burns a work-item key.
+    const itemType = input.type ?? null;
+    const itemExecutor = resolveExecutor(itemType, input.executor, null);
+    assertTypeKindConsistent(input.kind, itemType, itemExecutor);
+
     // Initial status (Subtask 2.2.4): a new item lands in the project's
     // workflow initial status — there's no "from" status to validate against
     // on a brand-new row, so this bypasses transition validation. The pre-2.2.4
@@ -626,6 +684,10 @@ export const workItemsService = {
         reporterId: ctx.userId,
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         estimateMinutes: input.estimateMinutes ?? null,
+        // Work-item type + executor (Story 2.7) — leaf-only validated + executor
+        // seeded above; nulls for an untyped leaf or a container kind.
+        type: itemType,
+        executor: itemExecutor,
         sprintId: targetSprintId,
         position,
         backlogRank,
@@ -798,6 +860,8 @@ export const workItemsService = {
       'priority',
       'dueDate',
       'estimateMinutes',
+      'type',
+      'executor',
     ];
     const anyFieldProvided = PATCH_KEYS.some((k) => patch[k] !== undefined);
     if (!anyFieldProvided) {
@@ -968,6 +1032,26 @@ export const workItemsService = {
       if (parentChanged) {
         update.parentId = patch.parentId;
         diff.parentId = { from: current.parentId, to: patch.parentId };
+      }
+
+      // ── Type / executor (Story 2.7) ───────────────────────────────────
+      // Leaf-only with seed-if-absent for the executor (assertTypeKindConsistent
+      // + resolveExecutor). Validated against the EFFECTIVE post-patch kind, so
+      // converting a typed leaf into a container WITHOUT clearing its type is
+      // rejected (TypeNotAllowedOnKindError → 422) just like setting a type on a
+      // story. A bare `type` change seeds the executor only when the row had
+      // none; an explicit executor always wins and is never clobbered.
+      const nextType: WorkItemTypeDto | null = patch.type !== undefined ? patch.type : current.type;
+      const nextExecutor = resolveExecutor(nextType, patch.executor, current.executor);
+      assertTypeKindConsistent(nextKind, nextType, nextExecutor);
+
+      if (patch.type !== undefined && patch.type !== current.type) {
+        update.type = patch.type;
+        diff.type = { from: current.type, to: patch.type };
+      }
+      if (nextExecutor !== current.executor) {
+        update.executor = nextExecutor;
+        diff.executor = { from: current.executor, to: nextExecutor };
       }
 
       if (Object.keys(diff).length === 0) {
