@@ -633,3 +633,24 @@ shape (`bug-e2e-suite-flaky-specs`; the lesson is `notes.html` mistake #37).
   `/Users/yuezhu/projects/prodect/prodect_plan/PRODECT_FINDINGS.md`,
   not into a CLAUDE.md or MOTIR.md update. The planner promotes
   findings into future Subtasks during replan passes.
+- **A failed test (or a surfaced bug) is DEBUGGED before it is re-run — never
+  rerun-first on the assumption it is flaky.** Read the actual failure (the
+  assertion / locator / stack, not just the summary) and find the root cause
+  FIRST. A real failure that gets masked by a green re-run is worse than a red
+  one. Then split on cause:
+  - **Caused by the change you're making this session** → it is a real
+    regression: FIX it in the same PR (it's part of completing the change). A
+    contract change (e.g. an API/route/UI-interaction that every caller must
+    now adopt) means EVERY consumer — app code AND every test that drives it —
+    must be updated; grep the whole repo for the surface and fix them all, don't
+    stop at the first failing file. (Example: 6.9.2 made the link picker
+    query-driven; `issue-detail-flow` was updated but `activity.spec` was not,
+    so its option-click timed out at 120s — a real bug the first pass missed.)
+  - **A pre-existing bug in already-shipped code** (the failure reproduces on
+    `main` without your change) → do NOT absorb it into the current PR and do
+    NOT just rerun past it: log it as a **bug work item** in the plan seed (the
+    bug-logging `seed/*` PR with the `[reseed]` marker) so it's tracked, and
+    surface it in the PR body — the same protocol as an out-of-scope finding.
+  - **Genuinely flaky** (non-deterministic, root cause understood and unrelated
+    to your change) → only THEN is a re-run appropriate; say so explicitly with
+    the evidence, don't let "probably flaky" be the default.
