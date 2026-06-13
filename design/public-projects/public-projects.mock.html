@@ -1564,6 +1564,34 @@
         color: var(--el-text);
         font-weight: 600;
       }
+      /* the self-improving loop — numbered accent badges */
+      .md ol.loop {
+        counter-reset: loop;
+        list-style: none;
+        margin: 2px 0 16px;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .md ol.loop li {
+        counter-increment: loop;
+        align-items: center;
+      }
+      .md ol.loop li::before {
+        content: counter(loop);
+        width: 22px;
+        height: 22px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 12px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
       .md a {
         color: var(--el-link);
         text-decoration: none;
@@ -1834,9 +1862,9 @@
               </div>
             </div>
             <p class="tagline">
-              The AI-native project manager — plan work in chat, track it on real boards and
-              sprints, and ship it with coding agents. We build Motir in the open: this is our live
-              backlog, roadmap, and request portal.
+              The AI-native project manager — planned, tracked, and shipped inside itself. You're
+              looking at Motir, in Motir: every bug and idea here is picked up by Motir to build the
+              next version of Motir.
             </p>
             <div class="hero-actions">
               <button class="btn btn-primary btn-lg">
@@ -1873,51 +1901,39 @@
             <!-- the authored README body (MarkdownView) -->
             <div class="ov-main">
               <div class="md">
-                <h3>About this project</h3>
+                <h3>You're looking at Motir, inside Motir</h3>
                 <p>
-                  Motir is a complete project-management tool — a Jira / Linear alternative for
-                  small teams — with two AI layers bolted on: planning (describe what you want in
-                  chat → a structured issue tree) and coding (issues become agent-ready work). The
-                  PM core stands alone and is fully open source.
+                  This is Motir's own project — the live board, roadmap, and backlog we use to build
+                  Motir. We dogfood completely: every feature here started as an issue on this
+                  board, moved through these columns, and was shipped by the same agents that turn
+                  issues into code.
                 </p>
-                <p>What you can do from this public project:</p>
-                <ul>
-                  <li>
-                    <svg class="ic"><use href="#i-check-check" /></svg>
-                    <span><b>Browse</b> the live board, backlog, and public roadmap.</span>
-                  </li>
-                  <li>
-                    <svg class="ic"><use href="#i-check-check" /></svg>
-                    <span
-                      ><b>Submit</b> a bug or feature request — it goes straight to our
-                      triage.</span
-                    >
-                  </li>
-                  <li>
-                    <svg class="ic"><use href="#i-check-check" /></svg>
-                    <span
-                      ><b>Upvote &amp; comment</b> on requests to tell us what matters most.</span
-                    >
-                  </li>
-                </ul>
+
+                <h3>A self-improving loop — and you're in it</h3>
+                <p>
+                  This is also our public feedback portal, and it's not a suggestion box that goes
+                  nowhere. The bugs you report and the ideas you upvote land in Motir's triage, get
+                  planned as work items right here, and are picked up by Motir to build the next
+                  version of Motir. You're not just watching the roadmap — you're shaping it.
+                </p>
+                <ol class="loop">
+                  <li><span>You submit a bug or an idea — it enters our triage.</span></li>
+                  <li><span>We plan it as a work item on this board.</span></li>
+                  <li><span>Motir's coding agents turn it into a pull request.</span></li>
+                  <li><span>It ships — and lands as Done on this very roadmap.</span></li>
+                </ol>
 
                 <div class="shot" aria-label="Product screenshot">
                   <div class="bar"><i></i><i></i><i></i></div>
                   <div class="pane"><span></span><span></span><span></span><span></span></div>
                 </div>
 
-                <h3>Why we build in the open</h3>
-                <p>
-                  Our roadmap is public because the people who use Motir should shape it. Every
-                  request here is read by the team, and the highest-voted ideas move up the queue.
-                  Follow along, or jump in.
-                </p>
-
-                <h3>How to contribute</h3>
+                <h3>Contribute</h3>
                 <p>
                   Found a bug or have an idea?
-                  <a href="#">Submit a request</a> — no setup, just your Motir account. Prefer code?
-                  The PM core is GPL-3.0 on <a href="#">GitHub</a>.
+                  <a href="#">Submit a request</a> — a minute of your time feeds straight into the
+                  loop. Want to go deeper? The PM core is open source (GPL-3.0) on
+                  <a href="#">GitHub</a>.
                 </p>
               </div>
             </div>

@@ -333,8 +333,17 @@ swap layer must reach every element).
   **"Public requests" / "Upvotes" / "Planned" / "Shipped"** · sidebar
   **"Links"** (**"Website" / "Documentation" / "Source (GPL-3.0)" / "Changelog"**)
   · **"At a glance"** · CTA card **"Have an idea?"** / **"Tell us what to build
-  next. It takes a minute and goes straight to the team."** (the body itself is
-  the admin-authored `publicOverviewMd`, not fixed copy). Settings editor:
+  next. It takes a minute and goes straight to the team."** The body is the
+  admin-authored `publicOverviewMd` (not fixed product copy) — but **Motir's OWN
+  project seeds a canonical README** with the self-improving twist (tagline _"The
+  AI-native project manager — planned, tracked, and shipped inside itself. You're
+  looking at Motir, in Motir: every bug and idea here is picked up by Motir to
+  build the next version of Motir."_; sections _"You're looking at Motir, inside
+  Motir"_, _"A self-improving loop — and you're in it"_ + the 4-step loop
+  [submit → triage → plan → agent PR → ships as Done], _"Contribute"_). This
+  canonical copy is seeded onto the `motir` project's `publicOverviewMd` (see
+  story-6.12.ts § 6.12.4 + the seed loader), so the live tenant renders it.
+  Settings editor:
   **"Project overview (public landing)"** · **"A README-style intro shown on the
   project's public Overview tab. Markdown — headings, lists, links, and images."**
   · **"This shows on the public Overview tab — the first thing a visitor sees.
