@@ -716,6 +716,8 @@
       "dueDate": "Due date",
       "estimateMinutes": "Estimate",
       "storyPoints": "Story points",
+      "type": "Work type",
+      "executor": "Executor",
       "descriptionMd": "Description",
       "explanationMd": "Explanation",
       "explanationSource": "Explanation source",

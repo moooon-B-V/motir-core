@@ -314,6 +314,10 @@ const REGISTRY: Record<string, RegistryEntry> = {
   priority: textField(),
   explanationSource: textField(),
   estimateMinutes: textField(),
+  // Work-item type + executor (Story 2.7) — plain enum scalars, rendered like
+  // kind/priority (a "changed type code → design" / "changed executor …" entry).
+  type: textField(),
+  executor: textField(),
   storyPoints: textField(),
   projectId: textField(),
   // -- body fields: edit recorded, content never inlined --------------------

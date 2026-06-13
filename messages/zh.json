@@ -716,6 +716,8 @@
       "dueDate": "截止日期",
       "estimateMinutes": "预估工时",
       "storyPoints": "故事点",
+      "type": "工作类型",
+      "executor": "执行者",
       "descriptionMd": "描述",
       "explanationMd": "说明",
       "explanationSource": "说明来源",
