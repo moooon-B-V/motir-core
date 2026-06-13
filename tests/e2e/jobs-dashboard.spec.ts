@@ -117,8 +117,13 @@ test('@smoke jobs dashboard: a run in another workspace is NOT visible', async (
   await signUp(page, USER_EMAIL);
 
   // Seed a run under a DIFFERENT workspace the user is not a member of.
+  // Story 6.10: a workspace is nested under an Organization (organizationId is
+  // non-nullable), so mint a parent org for this foreign-tenant fixture first.
+  const foreignOrg = await db.organization.create({
+    data: { name: 'Foreign WS', slug: 'foreign-ws-e2e-org' },
+  });
   const foreign = await db.workspace.create({
-    data: { name: 'Foreign WS', slug: 'foreign-ws-e2e' },
+    data: { name: 'Foreign WS', slug: 'foreign-ws-e2e', organizationId: foreignOrg.id },
   });
   await seedFailedRun(foreign.id);
 

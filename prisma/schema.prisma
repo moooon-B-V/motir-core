@@ -64,6 +64,10 @@ model User {
   accounts                  Account[]
   sessions                  Session[]
   workspaceMemberships      WorkspaceMembership[]
+  // Back-relation for OrganizationMembership (Story 6.10). A user belongs to
+  // many organizations (the root tenancy tier) — Cascade on the FK: deleting a
+  // user removes their org-membership rows, mirroring workspaceMemberships.
+  organizationMemberships   OrganizationMembership[]
   // Back-relations for WorkItem (Story 1.4). A user reports many work items
   // (reporter — Restrict on the FK: a user with reported issues on record
   // cannot be hard-deleted) and can be assigned many (assignee — SetNull on
@@ -193,19 +197,83 @@ model Verification {
   @@map("verification")
 }
 
+/// The ROOT tenancy tier (Story 6.10) — the account a customer signs up as, the
+/// parent of N workspaces, and THE BILLING ENTITY credits + usage roll up to
+/// (the orchestrator re-keys 7.12's ledger to the org separately; 6.10 ships no
+/// credit view and takes no dep on 7.12). This is the NEW top tier above
+/// `Workspace` — it is NOT Better-Auth's `Account` model, which is the OAuth/
+/// credential auth-provider link (the name is taken; entangling billing tenancy
+/// with auth links is exactly what naming this `Organization` avoids — see
+/// docs/decisions/organization-tier.md). The two-level Organization → N
+/// Workspace nesting mirrors Atlassian (one org → one-or-multiple sites; a Motir
+/// `Workspace` ≈ an Atlassian site), verified June 2026. A single user may
+/// belong to MANY orgs, so `OrganizationMembership` is a many-to-many join and
+/// the shell carries an org switcher (6.10.5). `slug` is a URL-safe handle,
+/// unique globally (mirrors `Workspace.slug`).
+///
+/// RLS: a tenant-root table, modelled exactly like `workspace` — INSERT
+/// establishes a tenant (authorized at the app layer, gated by no policy),
+/// SELECT admits the active-org context OR any org the user is a member of (so
+/// the switcher can list them before any org context is set), UPDATE/DELETE
+/// require the active-org GUC. The `app.organization_id` GUC is resolved by
+/// 6.10.4's org-context layer; until then the membership disjunction covers
+/// reads. See the add_organization_tier migration.
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships OrganizationMembership[]
+  workspaces  Workspace[]
+
+  @@map("organization")
+}
+
+/// Org membership + org-scoped role (Story 6.10) — the org-tier sibling of
+/// `WorkspaceMembership`. Org membership GATES workspace access (a workspace is
+/// reachable only by a member of its org; the gate + the asymmetric upward
+/// auto-join land in 6.10.4) and an org owner/admin sits ABOVE the 6.4 workspace
+/// `MemberRole`. Many-to-many User↔Organization (one account, many orgs). Both
+/// FKs Cascade — deleting the user or the org removes the row (a membership is
+/// meaningless without both), mirroring `WorkspaceMembership`. The
+/// `(organizationId, userId)` uniqueness prevents double-adds.
+model OrganizationMembership {
+  id             String           @id @default(cuid())
+  organizationId String
+  userId         String
+  role           OrganizationRole @default(member)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("organization_membership")
+}
+
 /// Tenant boundary. Every workspace-scoped row (projects, work items, …)
 /// FKs against Workspace.id with onDelete: Cascade. The slug column is a
 /// URL-safe handle; it's unique globally (not per-user) so workspace URLs
 /// are sharable. subtaskPrMergeMode is consumed by Story 1.4 + Epic 4 —
-/// see Story 1.4 § Merge modes.
+/// see Story 1.4 § Merge modes. `organizationId` (Story 6.10) nests the
+/// workspace under its parent `Organization` — non-nullable after the backfill
+/// (every existing workspace got its own default org); Cascade so deleting an
+/// org takes its workspaces with it (the whole tenant goes).
 model Workspace {
   id                 String             @id @default(cuid())
+  organizationId     String
   name               String
   slug               String             @unique
   subtaskPrMergeMode SubtaskPrMergeMode @default(manual)
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
+  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   memberships              WorkspaceMembership[]
   projects                 Project[]
   workItems                WorkItem[]
@@ -234,6 +302,7 @@ model Workspace {
   // Dashboards (Story 6.3) — workspace-scoped widget grids. Cascade.
   dashboards               Dashboard[]
 
+  @@index([organizationId])
   @@map("workspace")
 }
 
@@ -447,6 +516,25 @@ model ProjectKeyAlias {
   @@unique([workspaceId, identifier])
   @@index([projectId])
   @@map("project_key_alias")
+}
+
+/// The org-scoped role a user holds in an `Organization` (Story 6.10), DISTINCT
+/// from the workspace/project `MemberRole` (6.4) and sitting ABOVE it:
+///   - `owner`  — the org founder; administers every workspace under the org,
+///                org settings + membership, and (later) billing.
+///   - `admin`  — administers every workspace under the org + org settings/
+///                membership; mirrors Atlassian org-admin / Linear Owner.
+///   - `member` — org-tier presence only; no cross-workspace admin — falls back
+///                to its per-workspace `MemberRole` for in-workspace actions.
+/// The role-precedence composition + the access gate that reads this land in
+/// 6.10.4. Closed + stable set → a Postgres enum, the same shape as
+/// `MemberRole`.
+enum OrganizationRole {
+  owner
+  admin
+  member
+
+  @@map("organization_role")
 }
 
 /// The role a user holds in a workspace or project (Story 6.4). Formalizes
