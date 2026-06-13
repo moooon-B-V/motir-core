@@ -1,0 +1,2054 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Triage inbox + submission surfaces (Story 6.11 · 6.11.1, gating 6.11.6 + 6.11.7)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the TRIAGE INBOX surface (Story 6.11) — the
+      incoming-work front door. No design/triage/ asset existed; the 6.11.1
+      design gate produces this. It is the layout source of truth for the two UI
+      code subtasks that carry 6.11.1 in dependsOn:
+        - 6.11.6 — the admin triage inbox (queue + detail + actions).
+        - 6.11.7 — the submission surfaces (in-app widget + public portal form).
+
+      Built FROM the real design system: the token block below is copied 1:1
+      from app/globals.css (Tier-0 --color-* + the shape tokens + Tier-3 --el-*),
+      and the markup mirrors the SHIPPED primitives — Card, Button (primary /
+      ghost / danger-tinted), Pill (neutral count + the tint tones), the
+      IssueTypeIcon kind hue (lucide bug / square-check-big in --el-type-*), the
+      initial-letter Avatar, Combobox (the canonical-item + parent pickers),
+      Popover (the promote / snooze menus), FormField + Input + Textarea +
+      Segmented (the submission forms), EmptyState, and Toast. Every surface is a
+      NEW ARRANGEMENT of these primitives — no new vocabulary.
+
+      The locked model (Yue, 2026-06-12): a submission IS a work_item in a
+      `triage` state, EXCLUDED from every normal read; the inbox is the one read
+      that returns only triage items. Mirrors Linear Triage's queue + detail +
+      action set (Accept / Promote / Decline / Mark duplicate-Merge / Snooze).
+
+      Covers (multi-panel — review EACH, mistake #31):
+        (1)  the admin triage inbox — paginated queue (left) + detail pane
+             (right) + the action bar; one queue row external, one snoozed.
+        (1b) the Promote picker (OPEN) — Backlog / Sprint / Epic / Story targets
+             + the position/rank chooser.
+        (1c) the Mark-duplicate / Merge picker (OPEN) — the canonical-item
+             Combobox.
+        (1d) the Snooze picker (OPEN) — the time options.
+        (2)  the empty queue state — the EmptyState primitive ("No items to triage").
+        (3)  the in-app "report a bug / request a feature" widget (modal).
+        (4)  the public portal form — unauthenticated, branded, single column.
+        (4b) the public form CONFIRMATION ("Thanks — we got it").
+        (4c) the public form RATE-LIMIT / error state.
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        /* Tier 0 — colour (light defaults) */
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Tier 0 — shape (default display style) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 14px;
+        --spacing-btn-y: 8px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 8px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #242424;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-destructive: #f06565;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1140px;
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1140px;
+      }
+      .panel {
+        max-width: 1140px;
+        margin: 0 auto;
+      }
+      .panel.narrow {
+        max-width: 760px;
+      }
+
+      /* ── Shared primitives ───────────────────────────────────────────────── */
+      .ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .surface-card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+      }
+
+      /* Buttons (mirror components/ui/Button.tsx variants) */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        border: 1px solid transparent;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn .ic {
+        width: 15px;
+        height: 15px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .btn-ghost:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .btn-outline {
+        background: var(--el-page-bg);
+        border-color: var(--el-border);
+        color: var(--el-text);
+      }
+      /* danger-tinted destructive action (finding #35: hue in the tint bg + strong text) */
+      .btn-danger {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .btn-danger .ic {
+        color: var(--el-danger);
+      }
+      .btn-block {
+        width: 100%;
+      }
+      .btn-lg {
+        height: var(--height-btn-md);
+        font-size: 14px;
+      }
+
+      /* Pills (mirror components/ui/Pill.tsx) */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.4;
+        white-space: nowrap;
+      }
+      .pill-neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+      }
+      /* the external-submitter chip — hue in the peach tint bg, strong text (AA ~10:1) */
+      .pill-external {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+      }
+      .pill-snoozed {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+      }
+
+      /* initial-letter avatar (mirror issueCellPrimitives Avatar) */
+      .avatar {
+        width: 22px;
+        height: 22px;
+        border-radius: 9999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+        flex: none;
+      }
+      .avatar.lg {
+        width: 30px;
+        height: 30px;
+        font-size: 13px;
+      }
+      .av-mint {
+        background: var(--el-tint-mint);
+      }
+      .av-sky {
+        background: var(--el-tint-sky);
+      }
+      .av-lav {
+        background: var(--el-tint-lavender);
+      }
+
+      .type-icon .ic {
+        width: 17px;
+        height: 17px;
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+
+      /* ── Panel 1 — the triage inbox (queue + detail) ─────────────────────── */
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+      .page-head .titles {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .page-head .title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin: 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .head-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .inbox {
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        min-height: 540px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .queue {
+        border-right: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        display: flex;
+        flex-direction: column;
+      }
+      .queue-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .queue-head .lbl {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .queue-search {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 10px 12px 6px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        color: var(--el-text-muted);
+        font-size: 13px;
+      }
+      .queue-search .ic {
+        color: var(--el-text-faint);
+      }
+      .queue-list {
+        flex: 1;
+        overflow: auto;
+      }
+      .q-row {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 10px;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--el-border-soft);
+        cursor: pointer;
+      }
+      .q-row:hover {
+        background: var(--el-surface);
+      }
+      .q-row.active {
+        background: var(--el-page-bg);
+        box-shadow: inset 3px 0 0 var(--el-accent);
+      }
+      .q-row .glyph {
+        padding-top: 1px;
+      }
+      .q-main {
+        min-width: 0;
+      }
+      .q-title {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0 0 3px;
+        line-height: 1.35;
+      }
+      .q-snippet {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        margin: 0 0 7px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+      }
+      .q-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .q-meta .who {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .q-age {
+        font-size: 12px;
+        color: var(--el-text-faint);
+      }
+      .q-dot {
+        color: var(--el-text-faint);
+      }
+
+      .queue-foot {
+        border-top: 1px solid var(--el-border);
+        padding: 10px 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        background: var(--el-page-bg);
+      }
+      .pager {
+        display: inline-flex;
+        gap: 6px;
+      }
+      .pager button {
+        font: inherit;
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        border-radius: var(--radius-control);
+        padding: 3px 9px;
+        cursor: pointer;
+      }
+      .pager button[disabled] {
+        color: var(--el-text-faint);
+        cursor: default;
+      }
+
+      /* detail pane */
+      .detail {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        position: relative;
+      }
+      .detail-body {
+        padding: 22px 24px 16px;
+        overflow: auto;
+        flex: 1;
+      }
+      .detail-kind {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .detail-kind .k {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .detail h3 {
+        font-family: var(--font-serif);
+        font-size: 21px;
+        font-weight: 600;
+        margin: 0 0 14px;
+        color: var(--el-text);
+        line-height: 1.3;
+      }
+      .attrib {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        margin-bottom: 18px;
+      }
+      .attrib .who {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .attrib .meta {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 1px;
+      }
+      .prose p {
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        margin: 0 0 12px;
+      }
+      .section-label {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        margin: 20px 0 10px;
+      }
+      .attach {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .attach .ic {
+        color: var(--el-text-faint);
+      }
+      .comment {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .comment .body p {
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        margin: 2px 0 0;
+      }
+      .comment .who {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .comment .ts {
+        font-size: 12px;
+        color: var(--el-text-faint);
+        margin-left: 6px;
+        font-weight: 400;
+      }
+
+      /* action bar (sticky footer of the detail pane) */
+      .action-bar {
+        border-top: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .action-bar .spacer {
+        flex: 1;
+      }
+
+      /* popover menus (Promote / Snooze) */
+      .popover {
+        width: 280px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 6px;
+      }
+      .popover .pop-label {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        padding: 8px 10px 4px;
+      }
+      .pop-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .pop-item:hover {
+        background: var(--el-surface);
+      }
+      .pop-item .ic {
+        color: var(--el-text-muted);
+      }
+      .pop-item .sub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .pop-item .chev {
+        margin-left: auto;
+        color: var(--el-text-faint);
+      }
+      .pop-divider {
+        height: 1px;
+        background: var(--el-border-soft);
+        margin: 6px 4px;
+      }
+      .pop-field {
+        padding: 4px 10px 10px;
+      }
+      .pop-field .fl {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin: 6px 0 5px;
+      }
+      .mini-input {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .mini-input .ic {
+        color: var(--el-text-faint);
+      }
+
+      /* combobox (canonical-item picker) */
+      .combo {
+        width: 340px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        overflow: hidden;
+      }
+      .combo-search {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 var(--spacing-control-x);
+        height: var(--height-control);
+        border-bottom: 1px solid var(--el-border-soft);
+        color: var(--el-text);
+        font-size: 13px;
+      }
+      .combo-search .ic {
+        color: var(--el-text-faint);
+      }
+      .combo-list {
+        padding: 6px;
+        max-height: 240px;
+        overflow: auto;
+      }
+      .combo-opt {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        cursor: pointer;
+      }
+      .combo-opt:hover,
+      .combo-opt.sel {
+        background: var(--el-surface);
+      }
+      .combo-opt .key {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-faint);
+      }
+      .combo-opt .lbl {
+        font-size: 13.5px;
+        color: var(--el-text);
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* ── Panel 2 — empty state (EmptyState primitive) ────────────────────── */
+      .empty {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        background: var(--el-page-bg);
+        padding: 72px 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .empty .ic-wrap {
+        width: 52px;
+        height: 52px;
+        border-radius: 9999px;
+        background: var(--el-surface);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 16px;
+      }
+      .empty .ic-wrap .ic {
+        width: 24px;
+        height: 24px;
+        color: var(--el-text-faint);
+      }
+      .empty h3 {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .empty p {
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+        margin: 0;
+        max-width: 360px;
+        line-height: 1.55;
+      }
+
+      /* ── Panels 3–4 — submission surfaces ────────────────────────────────── */
+      .surfaces {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        align-items: start;
+      }
+      @media (max-width: 880px) {
+        .surfaces {
+          grid-template-columns: 1fr;
+        }
+        .inbox {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* modal widget (mirror components/ui/Modal.tsx) */
+      .modal-stage {
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 36px;
+        display: flex;
+        justify-content: center;
+      }
+      .modal {
+        width: 420px;
+        max-width: 100%;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        overflow: hidden;
+      }
+      .modal-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 20px 0;
+      }
+      .modal-head h3 {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        border: none;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .icon-btn:hover {
+        background: var(--el-surface);
+      }
+      .modal-body {
+        padding: 14px 20px 4px;
+      }
+      .modal-foot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 16px 20px 20px;
+      }
+
+      /* Segmented (type toggle) — mirror components/ui/Segmented.tsx */
+      .segmented {
+        display: inline-flex;
+        padding: 3px;
+        gap: 3px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+      }
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 14px;
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .seg.on {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        box-shadow: var(--shadow-subtle);
+      }
+      .seg .ic {
+        width: 15px;
+        height: 15px;
+      }
+
+      /* FormField + Input + Textarea */
+      .field {
+        margin-bottom: 16px;
+      }
+      .field > label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin-bottom: 6px;
+      }
+      .field .opt {
+        font-weight: 400;
+        color: var(--el-text-faint);
+      }
+      .input {
+        width: 100%;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: inherit;
+        font-size: 14px;
+      }
+      .input::placeholder {
+        color: var(--el-text-faint);
+      }
+      textarea.input {
+        height: auto;
+        min-height: 96px;
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        resize: vertical;
+        line-height: 1.55;
+      }
+      .dropzone {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 12px 14px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-surface-soft);
+        color: var(--el-text-muted);
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .dropzone .ic {
+        color: var(--el-text-faint);
+      }
+      .hint {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin: 6px 0 0;
+        line-height: 1.5;
+      }
+
+      /* public portal page */
+      .portal {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .portal-top {
+        height: 6px;
+        background: var(--el-accent);
+      }
+      .portal-inner {
+        padding: 30px 30px 34px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 4px;
+      }
+      .brand .logo {
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-family: var(--font-serif);
+        font-size: 16px;
+      }
+      .brand .name {
+        font-weight: 700;
+        font-size: 15px;
+        color: var(--el-text);
+      }
+      .portal h2 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        margin: 16px 0 6px;
+        color: var(--el-text);
+      }
+      .portal .lede {
+        font-size: 14px;
+        color: var(--el-text-muted);
+        margin: 0 0 22px;
+        line-height: 1.55;
+      }
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .portal-foot {
+        margin-top: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .privacy {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        color: var(--el-text-faint);
+      }
+
+      /* confirmation + error states */
+      .state-card {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        background: var(--el-page-bg);
+        padding: 44px 30px;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .state-card .badge {
+        width: 48px;
+        height: 48px;
+        border-radius: 9999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 14px;
+      }
+      .badge-success {
+        background: var(--el-tint-mint);
+      }
+      .badge-success .ic {
+        color: var(--el-success);
+        width: 24px;
+        height: 24px;
+      }
+      .badge-warning {
+        background: var(--el-tint-peach);
+      }
+      .badge-warning .ic {
+        color: var(--el-warning);
+        width: 24px;
+        height: 24px;
+      }
+      .state-card h3 {
+        font-family: var(--font-serif);
+        font-size: 19px;
+        font-weight: 600;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .state-card p {
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+        margin: 0;
+        max-width: 380px;
+        line-height: 1.55;
+      }
+      /* inline validation/rate-limit banner (Toast-ish) */
+      .banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-peach);
+        margin-bottom: 18px;
+      }
+      .banner .ic {
+        color: var(--el-warning);
+        margin-top: 1px;
+      }
+      .banner .bt {
+        font-size: 13px;
+        color: var(--el-text-strong);
+        line-height: 1.5;
+      }
+      .banner .bt b {
+        font-weight: 700;
+      }
+
+      /* Toast (per-action confirmation, mirror components/ui/Toast.tsx) */
+      .toast {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        box-shadow: var(--shadow-elevated);
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .toast .ic {
+        color: var(--el-success);
+        width: 17px;
+        height: 17px;
+      }
+      .toast .undo {
+        margin-left: 4px;
+        color: var(--el-tint-sky);
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: underline;
+      }
+
+      .float-wrap {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .cap {
+        font-size: 12px;
+        color: var(--el-text-faint);
+        margin: 0 0 8px;
+        font-style: italic;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Triage inbox — bug / feature intake → promote</h1>
+        <p>
+          Story 6.11 · design subtask 6.11.1 (gates 6.11.6 inbox UI + 6.11.7 submission UIs). Mirror
+          of Linear Triage. Toggle dark mode to verify token parity.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle light / dark
+      </button>
+    </div>
+
+    <!-- ════════════════ PANEL 1 — the admin triage inbox ════════════════ -->
+    <div class="panel-label">
+      (1) Admin triage inbox — paginated queue · detail pane · action bar
+    </div>
+    <div class="panel">
+      <div class="page-head">
+        <div class="titles">
+          <div class="title-row">
+            <h2>Triage</h2>
+            <span class="pill pill-neutral">63 to triage</span>
+          </div>
+          <p class="sub">
+            Motir · PROD — incoming bug reports &amp; feature requests, excluded from the tree until
+            you act
+          </p>
+        </div>
+        <div class="head-actions">
+          <button class="btn btn-outline">
+            <svg class="ic"><use href="#i-external-link" /></svg>
+            Public form link
+          </button>
+          <button class="btn btn-primary">
+            <svg class="ic"><use href="#i-bug" /></svg>
+            Report
+          </button>
+        </div>
+      </div>
+
+      <div class="inbox">
+        <!-- ── left: the queue ── -->
+        <div class="queue">
+          <div class="queue-head">
+            <span class="lbl">Queue · newest first</span>
+            <span class="q-age">63</span>
+          </div>
+          <div class="queue-search">
+            <svg class="ic"><use href="#i-search" /></svg>
+            Search submissions
+          </div>
+          <div class="queue-list">
+            <!-- active row -->
+            <div class="q-row active">
+              <div class="glyph type-icon">
+                <svg class="ic t-bug"><use href="#i-bug" /></svg>
+              </div>
+              <div class="q-main">
+                <p class="q-title">
+                  Board drag drops the card on the wrong column near the viewport edge
+                </p>
+                <p class="q-snippet">
+                  When I drag a card to the rightmost column it snaps back to…
+                </p>
+                <div class="q-meta">
+                  <span class="who"><span class="avatar av-mint">B</span> Bo Philips</span>
+                  <span class="q-dot">·</span>
+                  <span class="q-age">2h ago</span>
+                </div>
+              </div>
+            </div>
+            <!-- external row -->
+            <div class="q-row">
+              <div class="glyph type-icon">
+                <svg class="ic t-task"><use href="#i-task" /></svg>
+              </div>
+              <div class="q-main">
+                <p class="q-title">
+                  Please add a Slack notification when an issue is assigned to me
+                </p>
+                <p class="q-snippet">
+                  Would love a heads-up in Slack so I don't have to keep the tab…
+                </p>
+                <div class="q-meta">
+                  <span class="pill pill-external">
+                    <svg class="ic" style="width: 12px; height: 12px"><use href="#i-mail" /></svg>
+                    External · dana@acme.io
+                  </span>
+                  <span class="q-age">5h ago</span>
+                </div>
+              </div>
+            </div>
+            <!-- normal rows -->
+            <div class="q-row">
+              <div class="glyph type-icon">
+                <svg class="ic t-bug"><use href="#i-bug" /></svg>
+              </div>
+              <div class="q-main">
+                <p class="q-title">Sprint burndown chart is blank on the first load of the day</p>
+                <p class="q-snippet">Refreshing fixes it, but the very first open shows nothing…</p>
+                <div class="q-meta">
+                  <span class="who"><span class="avatar av-sky">O</span> Odie</span>
+                  <span class="q-dot">·</span>
+                  <span class="q-age">1d ago</span>
+                </div>
+              </div>
+            </div>
+            <div class="q-row">
+              <div class="glyph type-icon">
+                <svg class="ic t-task"><use href="#i-task" /></svg>
+              </div>
+              <div class="q-main">
+                <p class="q-title">Bulk-edit labels from the backlog selection</p>
+                <p class="q-snippet">Selecting 20 items and relabelling one at a time is slow…</p>
+                <div class="q-meta">
+                  <span class="who"><span class="avatar av-lav">J</span> Julian</span>
+                  <span class="q-dot">·</span>
+                  <span class="q-age">1d ago</span>
+                </div>
+              </div>
+            </div>
+            <!-- snoozed row -->
+            <div class="q-row">
+              <div class="glyph type-icon">
+                <svg class="ic t-task"><use href="#i-task" /></svg>
+              </div>
+              <div class="q-main">
+                <p class="q-title">Dark-mode contrast on the priority chips</p>
+                <p class="q-snippet">The lowest-priority chip is hard to read in dark mode…</p>
+                <div class="q-meta">
+                  <span class="pill pill-snoozed">
+                    <svg class="ic" style="width: 12px; height: 12px"><use href="#i-alarm" /></svg>
+                    Snoozed · Mon
+                  </span>
+                  <span class="q-age">2d ago</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="queue-foot">
+            <span>Showing 1–25 of 63</span>
+            <span class="pager">
+              <button disabled>Newer</button>
+              <button>Older</button>
+            </span>
+          </div>
+        </div>
+
+        <!-- ── right: the detail pane ── -->
+        <div class="detail">
+          <div class="detail-body">
+            <div class="detail-kind">
+              <span class="type-icon"
+                ><svg class="ic t-bug"><use href="#i-bug" /></svg
+              ></span>
+              <span class="k">Bug report</span>
+              <span class="q-dot">·</span>
+              <span class="q-age">submitted 2h ago</span>
+            </div>
+            <h3>Board drag drops the card on the wrong column near the viewport edge</h3>
+
+            <div class="attrib">
+              <span class="avatar lg av-mint">B</span>
+              <div>
+                <div class="who">Bo Philips</div>
+                <div class="meta">Team member · reported from the in-app widget</div>
+              </div>
+            </div>
+
+            <div class="prose">
+              <p>
+                When I drag a card toward the rightmost column on a wide board, the drop indicator
+                lands one column to the left of where my cursor is. Releasing puts the card in the
+                wrong column and I have to drag it again.
+              </p>
+              <p>Happens consistently on the Sprint 14 board, both Chrome and Safari.</p>
+            </div>
+
+            <div class="section-label">Attachment</div>
+            <div class="attach">
+              <svg class="ic"><use href="#i-paperclip" /></svg>
+              board-drag-misdrop.png
+            </div>
+
+            <div class="section-label">Comments</div>
+            <div class="comment">
+              <span class="avatar av-lav">M</span>
+              <div class="body">
+                <span class="who">Mo</span><span class="ts">1h ago</span>
+                <p>
+                  I can repro at &gt; 1440px width. Looks like the auto-scroll offset isn't
+                  subtracted from the pointer position.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- the action bar -->
+          <div class="action-bar">
+            <button class="btn btn-primary">
+              <svg class="ic"><use href="#i-check-check" /></svg>
+              Accept
+            </button>
+            <button class="btn btn-outline">
+              <svg class="ic"><use href="#i-promote" /></svg>
+              Promote
+              <svg class="ic" style="width: 13px; height: 13px"><use href="#i-chevron-down" /></svg>
+            </button>
+            <button class="btn btn-outline">
+              <svg class="ic"><use href="#i-merge" /></svg>
+              Mark duplicate
+            </button>
+            <button class="btn btn-ghost">
+              <svg class="ic"><use href="#i-alarm" /></svg>
+              Snooze
+            </button>
+            <span class="spacer"></span>
+            <button class="btn btn-danger">
+              <svg class="ic"><use href="#i-decline" /></svg>
+              Decline
+            </button>
+          </div>
+        </div>
+      </div>
+      <p class="cap" style="margin-top: 10px">
+        The queue is paginated / cursor'd (finding #57) — never a load-all list. Submitter shows a
+        member avatar OR the peach "External" chip. A snoozed item is dimmed out of the active queue
+        until its time or new activity.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 1b/1c/1d — the action pickers (open) ════════════════ -->
+    <div class="panel-label">
+      (1b–1d) Action pickers — Promote · Mark duplicate / Merge · Snooze
+    </div>
+    <div class="panel">
+      <div class="float-wrap">
+        <!-- Promote picker -->
+        <div class="stack">
+          <p class="cap">Promote → choose a target + rank</p>
+          <div class="popover">
+            <div class="pop-label">Promote into</div>
+            <div class="pop-item">
+              <svg class="ic"><use href="#i-inbox" /></svg>
+              <div>
+                Backlog
+                <div class="sub">Unparented, default status</div>
+              </div>
+            </div>
+            <div class="pop-item">
+              <svg class="ic"><use href="#i-calendar" /></svg>
+              <div>
+                Active sprint
+                <div class="sub">Sprint 14</div>
+              </div>
+              <svg class="ic chev" style="width: 15px"><use href="#i-chevron-right" /></svg>
+            </div>
+            <div class="pop-item">
+              <span class="type-icon"
+                ><svg class="ic t-epic"><use href="#i-epic" /></svg
+              ></span>
+              <div>
+                Under an epic
+                <div class="sub">Pick parent epic</div>
+              </div>
+              <svg class="ic chev" style="width: 15px"><use href="#i-chevron-right" /></svg>
+            </div>
+            <div class="pop-item">
+              <span class="type-icon"
+                ><svg class="ic t-story"><use href="#i-book" /></svg
+              ></span>
+              <div>
+                Under a story
+                <div class="sub">Pick parent story</div>
+              </div>
+              <svg class="ic chev" style="width: 15px"><use href="#i-chevron-right" /></svg>
+            </div>
+            <div class="pop-divider"></div>
+            <div class="pop-field">
+              <div class="fl">Position in backlog</div>
+              <div class="mini-input">
+                Top of backlog
+                <svg class="ic" style="width: 15px"><use href="#i-chevron-down" /></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Merge / canonical-item combobox -->
+        <div class="stack">
+          <p class="cap">Mark duplicate / Merge → pick the canonical item</p>
+          <div class="combo">
+            <div class="combo-search">
+              <svg class="ic"><use href="#i-search" /></svg>
+              drag
+            </div>
+            <div class="combo-list">
+              <div class="combo-opt sel">
+                <span class="type-icon"
+                  ><svg class="ic t-bug"><use href="#i-bug" /></svg
+                ></span>
+                <span class="key">PROD-318</span>
+                <span class="lbl">Card drag misdrops near board edge</span>
+              </div>
+              <div class="combo-opt">
+                <span class="type-icon"
+                  ><svg class="ic t-bug"><use href="#i-bug" /></svg
+                ></span>
+                <span class="key">PROD-291</span>
+                <span class="lbl">Drag auto-scroll jumps on tall boards</span>
+              </div>
+              <div class="combo-opt">
+                <span class="type-icon"
+                  ><svg class="ic t-task"><use href="#i-task" /></svg
+                ></span>
+                <span class="key">PROD-205</span>
+                <span class="lbl">Improve drag-and-drop precision</span>
+              </div>
+            </div>
+          </div>
+          <p class="cap" style="font-style: normal; max-width: 340px">
+            On merge, this submission is canceled and its comments + attachments fold into the
+            chosen item (mirrors Linear).
+          </p>
+        </div>
+
+        <!-- Snooze picker -->
+        <div class="stack">
+          <p class="cap">Snooze → until a time or new activity</p>
+          <div class="popover" style="width: 230px">
+            <div class="pop-label">Snooze until</div>
+            <div class="pop-item">
+              <svg class="ic"><use href="#i-clock" /></svg> Tomorrow
+              <span class="sub" style="margin-left: auto">Fri 9am</span>
+            </div>
+            <div class="pop-item">
+              <svg class="ic"><use href="#i-clock" /></svg> Next week
+              <span class="sub" style="margin-left: auto">Mon 9am</span>
+            </div>
+            <div class="pop-item">
+              <svg class="ic"><use href="#i-calendar" /></svg> Pick a date…
+            </div>
+            <div class="pop-divider"></div>
+            <div class="pop-item" style="color: var(--el-text-muted)">
+              <svg class="ic"><use href="#i-alarm" /></svg>
+              Returns early on new activity
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 2 — empty state + an action toast ════════════════ -->
+    <div class="panel-label">(2) Empty queue state · per-action confirmation toast</div>
+    <div class="panel">
+      <div class="float-wrap">
+        <div class="empty" style="flex: 1; min-width: 420px">
+          <div class="ic-wrap">
+            <svg class="ic"><use href="#i-inbox" /></svg>
+          </div>
+          <h3>No items to triage</h3>
+          <p>
+            New bug reports and feature requests land here. Share the public form or use the in-app
+            “Report” button to collect them.
+          </p>
+        </div>
+        <div class="stack" style="padding-top: 40px">
+          <div class="toast">
+            <svg class="ic"><use href="#i-check-check" /></svg>
+            Promoted to the backlog
+            <span class="undo">Undo</span>
+          </div>
+          <div class="toast">
+            <svg class="ic"><use href="#i-check-check" /></svg>
+            Merged into PROD-318
+          </div>
+          <div class="toast">
+            <svg class="ic" style="color: var(--el-tint-lavender)"><use href="#i-alarm" /></svg>
+            Snoozed until Monday
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANELS 3 + 4 — the submission surfaces ════════════════ -->
+    <div class="panel-label">(3 + 4) Submission surfaces — in-app widget · public portal form</div>
+    <div class="panel">
+      <div class="surfaces">
+        <!-- (3) in-app widget -->
+        <div>
+          <p class="cap">(3) In-app widget — reachable from the app shell (authenticated member)</p>
+          <div class="modal-stage">
+            <div class="modal">
+              <div class="modal-head">
+                <h3>Report something</h3>
+                <button class="icon-btn">
+                  <svg class="ic"><use href="#i-x" /></svg>
+                </button>
+              </div>
+              <div class="modal-body">
+                <div class="field">
+                  <div class="segmented" role="tablist">
+                    <span class="seg on"
+                      ><svg class="ic t-bug"><use href="#i-bug" /></svg> Bug</span
+                    >
+                    <span class="seg"
+                      ><svg class="ic t-task"><use href="#i-task" /></svg> Feature</span
+                    >
+                  </div>
+                </div>
+                <div class="field">
+                  <label>Title</label>
+                  <input class="input" value="Board drag drops on the wrong column" />
+                </div>
+                <div class="field">
+                  <label
+                    >What happened? <span class="opt">— steps, expected vs. actual</span></label
+                  >
+                  <textarea class="input">
+When I drag a card to the rightmost column it snaps back to the one on its left.</textarea
+                  >
+                </div>
+                <div class="field">
+                  <label>Attachment <span class="opt">— optional</span></label>
+                  <div class="dropzone">
+                    <svg class="ic"><use href="#i-paperclip" /></svg>
+                    Add a screenshot or file
+                  </div>
+                </div>
+              </div>
+              <div class="modal-foot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-primary">
+                  <svg class="ic"><use href="#i-send" /></svg>
+                  Submit
+                </button>
+              </div>
+            </div>
+          </div>
+          <p class="hint">
+            Goes straight to the project's triage queue (never the tree). Attributed to the
+            signed-in member.
+          </p>
+        </div>
+
+        <!-- (4) public portal form -->
+        <div>
+          <p class="cap">(4) Public portal form — unauthenticated, branded, shareable URL</p>
+          <div class="portal">
+            <div class="portal-top"></div>
+            <div class="portal-inner">
+              <div class="brand">
+                <span class="logo">M</span>
+                <span class="name">Motir</span>
+              </div>
+              <h2>Report a bug or request a feature</h2>
+              <p class="lede">
+                Tell us what's broken or what you'd like to see. We read every submission.
+              </p>
+
+              <div class="field">
+                <div class="segmented" role="tablist">
+                  <span class="seg on"
+                    ><svg class="ic t-task"><use href="#i-task" /></svg> Feature request</span
+                  >
+                  <span class="seg"
+                    ><svg class="ic t-bug"><use href="#i-bug" /></svg> Bug</span
+                  >
+                </div>
+              </div>
+              <div class="two-col">
+                <div class="field">
+                  <label>Your name</label>
+                  <input class="input" placeholder="Jane Doe" />
+                </div>
+                <div class="field">
+                  <label>Email</label>
+                  <input class="input" placeholder="jane@company.com" />
+                </div>
+              </div>
+              <div class="field">
+                <label>Summary</label>
+                <input class="input" placeholder="A short title" />
+              </div>
+              <div class="field">
+                <label>Details</label>
+                <textarea class="input" placeholder="What would you like, and why?"></textarea>
+              </div>
+              <!-- honeypot field is visually hidden in the real form; noted here -->
+              <div class="portal-foot">
+                <span class="privacy">
+                  <svg class="ic" style="width: 14px; height: 14px"><use href="#i-shield" /></svg>
+                  We never share your email
+                </span>
+                <button class="btn btn-primary btn-lg">
+                  <svg class="ic"><use href="#i-send" /></svg>
+                  Send it
+                </button>
+              </div>
+            </div>
+          </div>
+          <p class="hint">
+            Exposes no tree or project internals — only accepts a submission. Rate-limited +
+            honeypot guarded (panel 4c).
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANELS 4b + 4c — public form result states ════════════════ -->
+    <div class="panel-label">
+      (4b + 4c) Public form result states — confirmation · rate-limit / error
+    </div>
+    <div class="panel">
+      <div class="surfaces">
+        <!-- (4b) confirmation -->
+        <div>
+          <p class="cap">(4b) Confirmation — after a successful submit</p>
+          <div class="state-card">
+            <span class="badge badge-success"
+              ><svg class="ic"><use href="#i-check-check" /></svg
+            ></span>
+            <h3>Thanks — we got it</h3>
+            <p>
+              Your feature request is with the Motir team. We'll take it from here — no account
+              needed.
+            </p>
+          </div>
+        </div>
+
+        <!-- (4c) rate-limit / error -->
+        <div>
+          <p class="cap">(4c) Rate-limit / error — graceful, never a raw 500</p>
+          <div class="portal">
+            <div class="portal-top"></div>
+            <div class="portal-inner">
+              <div class="brand"><span class="logo">M</span><span class="name">Motir</span></div>
+              <h2 style="font-size: 20px">Report a bug or request a feature</h2>
+              <div class="banner" style="margin-top: 18px">
+                <svg class="ic"><use href="#i-alarm" /></svg>
+                <span class="bt">
+                  <b>You're sending these a little fast.</b> Please wait a moment and try again —
+                  this keeps the form free of spam.
+                </span>
+              </div>
+              <div class="field">
+                <label>Summary</label>
+                <input class="input" value="Add Slack notifications" />
+              </div>
+              <div class="portal-foot">
+                <span class="privacy">
+                  <svg class="ic" style="width: 14px; height: 14px"><use href="#i-shield" /></svg>
+                  We never share your email
+                </span>
+                <button class="btn btn-primary btn-lg" style="opacity: 0.55">
+                  <svg class="ic"><use href="#i-clock" /></svg>
+                  Try again in 30s
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────── lucide symbol sprite (paths copied 1:1 from lucide) ──────────────────── -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <!-- bug -->
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <!-- task = square-check-big -->
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <!-- epic = zap -->
+        <g
+          id="i-epic"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <!-- story = book-open -->
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <!-- inbox -->
+        <g
+          id="i-inbox"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+          <path
+            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+          />
+        </g>
+        <!-- check-check (accept / success) -->
+        <g
+          id="i-check-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 7 17l-5-5" />
+          <path d="m22 10-7.5 7.5L13 16" />
+        </g>
+        <!-- promote = arrow-up-right -->
+        <g
+          id="i-promote"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M7 7h10v10" />
+          <path d="M7 17 17 7" />
+        </g>
+        <!-- merge = git-merge -->
+        <g
+          id="i-merge"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="18" cy="18" r="3" />
+          <circle cx="6" cy="6" r="3" />
+          <path d="M6 21V9a9 9 0 0 0 9 9" />
+        </g>
+        <!-- decline = circle-x -->
+        <g
+          id="i-decline"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="m15 9-6 6" />
+          <path d="m9 9 6 6" />
+        </g>
+        <!-- alarm-clock (snooze) -->
+        <g
+          id="i-alarm"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="13" r="8" />
+          <path d="M12 9v4l2 2" />
+          <path d="M5 3 2 6" />
+          <path d="m22 6-3-3" />
+          <path d="M6.38 18.7 4 21" />
+          <path d="M17.64 18.67 20 21" />
+        </g>
+        <!-- clock -->
+        <g
+          id="i-clock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </g>
+        <!-- calendar -->
+        <g
+          id="i-calendar"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M8 2v4" />
+          <path d="M16 2v4" />
+          <rect width="18" height="18" x="3" y="4" rx="2" />
+          <path d="M3 10h18" />
+        </g>
+        <!-- paperclip -->
+        <g
+          id="i-paperclip"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M13.234 20.252 21 12.3" />
+          <path
+            d="m16 6-8.414 8.586a2 2 0 0 0 0 2.828 2 2 0 0 0 2.828 0l8.414-8.586a4 4 0 0 0 0-5.656 4 4 0 0 0-5.656 0l-8.415 8.585a6 6 0 1 0 8.486 8.486"
+          />
+        </g>
+        <!-- search -->
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <!-- chevron-down -->
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <!-- chevron-right -->
+        <g
+          id="i-chevron-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </g>
+        <!-- mail -->
+        <g
+          id="i-mail"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="16" x="2" y="4" rx="2" />
+          <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+        </g>
+        <!-- external-link -->
+        <g
+          id="i-external-link"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </g>
+        <!-- send -->
+        <g
+          id="i-send"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+          />
+          <path d="m21.854 2.147-10.94 10.939" />
+        </g>
+        <!-- shield -->
+        <g
+          id="i-shield"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+        </g>
+        <!-- x -->
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+      </defs>
+    </svg>
+  </body>
+</html>
