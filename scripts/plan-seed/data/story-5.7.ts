@@ -285,7 +285,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.2',
       title:
         'Schema — `Notification` model + repository + migration (cursor-paginated reads + an efficient unread-count aggregate; FKs as Prisma relations)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
