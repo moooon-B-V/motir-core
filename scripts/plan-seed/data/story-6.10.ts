@@ -210,7 +210,7 @@ export const story_6_10: PlanStory = {
       id: '6.10.1',
       title:
         'Design — org admin surfaces: org switcher, org settings, cross-workspace member management',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 45,
