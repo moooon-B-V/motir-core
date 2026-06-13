@@ -35,12 +35,12 @@
       "review": "评审",
       "decision": "决策",
       "deploy": "部署",
-      "manual": "手动",
+      "manual": "人工",
       "chore": "杂务"
     },
     "executor": {
       "coding_agent": "编码代理",
-      "human": "人工"
+      "human": "人类"
     },
     "priority": {
       "highest": "最高",
@@ -611,6 +611,7 @@
     "advancedBacklog": "待办事项",
     "advancedValueCount": "{count, plural, other {#个值}}",
     "advancedFieldPriority": "优先级",
+    "advancedFieldType": "工作类型",
     "advancedFieldReporter": "创建人",
     "advancedFieldSprint": "Sprint",
     "advancedFieldText": "文本",
@@ -1632,7 +1633,6 @@
     "boardTypeLabel": "看板类型",
     "boardTypeKanban": "看板",
     "boardTypeScrum": "Scrum",
-    "epic4Badge": "篇章4",
     "newBoardSeedHint": "新看板会按项目工作流生成默认列，创建后即可使用。",
     "createBoard": "创建看板",
     "deleteBoardTitle": "删除“{name}”？",

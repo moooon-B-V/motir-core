@@ -163,7 +163,8 @@ export const story_6_10: PlanStory = {
     'gating (6.10.4); the org admin UI — settings + cross-workspace members + ' +
     'the shell org switcher (6.10.5); the seed loader modelling the `moooon` ' +
     'org (6.10.6); vitest (6.10.7); e2e (6.10.8); copy-on-create config clone ' +
-    'for new workspaces (6.10.9).\n\n' +
+    'for new workspaces (6.10.9); the create-workspace flow design — the ' +
+    'dialog + copy-source picker + the tier-2 first-reveal (6.10.10).\n\n' +
     '**Out of scope (named so they land in their owning story, not here):** ' +
     'the customer org usage/credit DISPLAY (**7.12.5** — a forward story; ' +
     'wiring it here would be a forward dep, forbidden); the Motir-internal ' +
@@ -705,8 +706,10 @@ export const story_6_10: PlanStory = {
         'the patterns the org switcher / org settings sit alongside / above.\n' +
         '- `motir-core/CLAUDE.md` § 4-layer + § colour/shape tokens + the ' +
         'inline-edit no-whole-tree-refresh rule.\n' +
-        '- `motir-core/app/globals.css` — the `--el-*` + shape tokens.',
-      dependsOn: ['6.10.1', '6.10.4'],
+        '- `motir-core/app/globals.css` — the `--el-*` + shape tokens.\n' +
+        '- 6.10.10 — the create-workspace flow design this org menu’s "New ' +
+        'workspace" entry launches (the dialog + the tier-2 first-reveal).',
+      dependsOn: ['6.10.1', '6.10.4', '6.10.10'],
     },
     {
       id: '6.10.6',
@@ -927,6 +930,9 @@ export const story_6_10: PlanStory = {
         'stays `Workspace`-scoped — the copy is a one-time snapshot).\n\n' +
         '## Context refs\n\n' +
         '- 6.10.2 §6e — the copy-on-create decision (no data inheritance).\n' +
+        '- 6.10.10 — the create-workspace flow DESIGN this implements (the ' +
+        'dialog, the copy-source picker, the states); build to it, do not ' +
+        'improvise the surface.\n' +
         '- 6.10.4 — the org-aware create-workspace flow this extends + the ' +
         'signup auto-provision (the first workspace) it mirrors.\n' +
         '- `motir-core/prisma/schema.prisma` — the `workspaceId`-scoped config ' +
@@ -936,7 +942,149 @@ export const story_6_10: PlanStory = {
         'to remap.\n' +
         '- `motir-core/CLAUDE.md` § 4-layer (service owns the tx; repos ' +
         'single-op, required `tx` on writes).',
-      dependsOn: ['6.10.4'],
+      dependsOn: ['6.10.4', '6.10.10'],
+    },
+    {
+      id: '6.10.10',
+      title:
+        'Design — the create-workspace flow: the dialog + copy-on-create source picker + the tier-2 first-reveal + states',
+      status: 'planned',
+      type: 'design',
+      executor: 'coding_agent',
+      estimateMinutes: 45,
+      descriptionMd:
+        '**Type:** design (the planning-time design gate, Principle #13 + the ' +
+        'design-reference rule). The org-admin design (6.10.1) draws **"New ' +
+        'workspace" only as a ROW in the always-present org menu** ("Adds the ' +
+        'workspace switcher") — it does NOT draw the surface that row OPENS. ' +
+        'Story 1.2 never drew it either (1.2.1’s switcher mockup ends at the ' +
+        'membership list + "Invite teammates"). So the create-workspace flow ' +
+        'is currently UNDESIGNED, and the implementation cards that build it ' +
+        '(6.10.5 wires the org-menu entry; 6.10.9 builds the create+clone) ' +
+        'would have to improvise it — forbidden (notes.html #31; design gate ' +
+        '"unspecified == no design"). This card draws it.\n\n' +
+        '**Why a NEW card, not a 6.10.1 reopen.** 6.10.1 is shipped/done; the ' +
+        'create-workspace flow is a distinct, multi-state surface (a launched ' +
+        'dialog + a source picker + a header/settings TRANSITION) that earns ' +
+        'its own asset. It lives in the SAME design area: extend ' +
+        '`motir-core/design/org-admin/` with a same-basename trio ' +
+        '`create-workspace.{mock.html,design-notes.md,png}` (the design-asset ' +
+        'is THREE files — notes + `.mock.html` source + a `.png` export; the ' +
+        'PNG is the board-visible face and is REQUIRED — MOTIR.md § design ' +
+        'DoD). Build it from the SHIPPED design system (the `components/ui/*` ' +
+        'primitives + the `--el-*` colour tokens + the `[data-display-style]` ' +
+        'shape tokens) — no `.pen`, no Tier-0 `--color-*`, no hand-rolled ' +
+        'spacing.\n\n' +
+        '**Mirror (cited — the create-with-config-copy shape).** Jira’s ' +
+        '"create project" lets you **share/copy settings from an existing ' +
+        'project** (the scheme-copy dialog) so the new project opens already ' +
+        'configured; Linear’s create-team flow names the team and starts it ' +
+        'from the workspace’s defaults. Draw THAT shape — a name-it dialog ' +
+        'whose new workspace is **seeded by copying a source workspace’s ' +
+        'config** (6.10.2 §6e / 6.10.9), distinct from a blank create.\n\n' +
+        '**Surfaces to draw** (multi-panel board, EVERY panel — the ' +
+        'multi-panel rule, mistake #31):\n\n' +
+        '- **Panel 1 — the entry point in context.** Re-show the always-' +
+        'present org menu (from 6.10.1) with **"New workspace"** highlighted as ' +
+        'the launch point, so the dialog’s origin is unambiguous. Note that at ' +
+        'ONE workspace this is the ONLY path to tier 2 (the workspace switcher ' +
+        'is still hidden).\n' +
+        '- **Panel 2 — the create dialog, ONE existing workspace (the first ' +
+        'split).** A `Dialog` composing `FormField` + `Input` for the ' +
+        'workspace **name** (+ the auto-derived **slug/identifier**, shown ' +
+        'editable or as a passive preview — DECIDE and draw, mirroring how ' +
+        '1.2/project-create handle the slug) + the create/cancel `Button`s. ' +
+        'Because exactly one workspace exists, the copy source is IMPLICIT — ' +
+        'draw a **passive "Starts with a copy of {Workspace}’s setup ' +
+        '(workflows, fields, labels, boards…)" affordance**, NOT an active ' +
+        'picker. NAME the exact copy-scope copy string so the user knows what ' +
+        'is and isn’t copied (config yes; work items / content no — 6.10.9).\n' +
+        '- **Panel 3 — the create dialog, ≥2 existing workspaces (the source ' +
+        'picker).** The same dialog, now with an **explicit "Copy settings ' +
+        'from" picker** (a `Select`/`Combobox` of the org’s workspaces, ' +
+        'DEFAULTING to the active workspace) — this is the 6.10.9 ' +
+        '"source workspace" choice made visible. Draw the chosen-source row + ' +
+        'the "what gets copied" explanation. (Optionally a "Start blank" ' +
+        'option — DECIDE in the notes whether blank-create is offered at all, ' +
+        'given copy-on-create is the product’s "looks-inherited" behaviour.)\n' +
+        '- **Panel 4 — the tier-2 FIRST-REVEAL transition.** The before→after ' +
+        'of completing the create that takes the org from 1→2 workspaces: the ' +
+        'header goes from `Acme` to **`Acme › {New Workspace}`** (the workspace ' +
+        'switcher renders for the FIRST time), and the single folded Settings ' +
+        'home SPLITS into a per-workspace Settings area (6.10.2 §6d). Draw both ' +
+        'states and NAME, in the notes, **where the user lands after create** ' +
+        '(the new workspace active, on its project list / a "create your first ' +
+        'project" empty state — DECIDE) and where focus goes.\n' +
+        '- **Panel 5 — states + permission gating.** The **submitting/creating** ' +
+        'state (the clone is one all-or-nothing tx — 6.10.9 — so the dialog ' +
+        'shows a pending state and stays open until it resolves), the **error** ' +
+        'state (name/slug collision; copy/clone failure rolls the whole tx ' +
+        'back — show a single in-dialog error, not a half-created workspace), ' +
+        'and the **permission** treatment: WHO may create a workspace ' +
+        '(org owner/admin per the 6.10.5 gate) — a member without the right ' +
+        'sees NO "New workspace" entry (or a disabled+explained one — DECIDE ' +
+        'and draw, consistent with how 6.10.1 gated the not-an-org-admin ' +
+        'state).\n\n' +
+        'Also write **`design/org-admin/create-workspace.design-notes.md`** ' +
+        'naming the exact primitives per surface (`Dialog`, `FormField`, ' +
+        '`Input`, `Select`/`Combobox`, `Button`, the switcher pattern), the ' +
+        'exact copy strings (in/for the `orgAdmin` i18n namespace 6.10.5 adds), ' +
+        'the per-`--el-*` colour role per element (use the palette, not ' +
+        'grey-only — finding #54), and the DECISIONS this card is pinning so ' +
+        'they are fixed at design time, NOT improvised in code: (a) slug ' +
+        'editable vs auto/preview; (b) whether a "Start blank" option exists ' +
+        'alongside copy-on-create; (c) the post-create landing + focus; (d) the ' +
+        'who-can-create gate’s visual treatment. It MUST cross-reference 6.10.9 ' +
+        '(the copy-on-create scope it visualises) and state that no ' +
+        'billing/credit surface appears here (7.12.5 / Epic 8). Include the ' +
+        '"primitives composed (no hand-rolling)" checklist.\n\n' +
+        '**Branch.** `design/PROD-6.10.10-create-workspace-flow`. The ' +
+        '`design/*` prefix gate skips CI E2E + the Vercel preview deploy ' +
+        '(MOTIR.md § Plan-seed Workflow) — this PR only edits ' +
+        '`design/org-admin/create-workspace.**`, no app code.\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- `motir-core/design/org-admin/create-workspace.mock.html` exists and ' +
+        'renders the five panels above, referencing ONLY `--el-*` tokens + ' +
+        '`[data-display-style]` shape tokens (no Tier-0 `--color-*`, no ' +
+        'hand-rolled spacing); a same-basename `.png` export is committed (the ' +
+        'board-visible face).\n' +
+        '- BOTH copy-source cases are drawn: the implicit single-workspace ' +
+        '"starts with a copy of {Workspace}" affordance AND the ≥2-workspace ' +
+        '"Copy settings from" picker (defaulting to the active workspace) — the ' +
+        '6.10.9 source choice made visible.\n' +
+        '- The tier-2 FIRST-REVEAL is drawn: header `Acme` → `Acme › {ws}` ' +
+        '(switcher appears) and the Settings home split, with the post-create ' +
+        'landing + focus named in the notes.\n' +
+        '- The submitting / error (tx-rollback) / permission-gated states are ' +
+        'drawn; the create is shown as one all-or-nothing op (no half-created ' +
+        'workspace on failure).\n' +
+        '- `design/org-admin/create-workspace.design-notes.md` exists, names ' +
+        'every primitive + every copy string + the per-element `--el-*` role, ' +
+        'and PINS the four decisions (slug edit; blank-vs-copy; post-create ' +
+        'landing; who-can-create treatment); it cross-refs 6.10.9 and states ' +
+        'billing is 7.12.5 / Epic 8 (absent here).\n' +
+        '- The mockup composes ONLY shipped primitives — if a genuinely new ' +
+        'primitive is needed, that is a NEW `design/` subtask, not a code ' +
+        'workaround.\n\n' +
+        '## Context refs\n\n' +
+        '- 6.10.1 — the shipped org-admin design + `design-notes.md` (the org ' +
+        'menu this dialog launches from; mirror its layout + notes shape).\n' +
+        '- 6.10.2 §6d/§6e — the progressive-disclosure first-reveal + the ' +
+        'copy-on-create (no-inheritance) decision this visualises.\n' +
+        '- 6.10.9 — the create+clone backend this is the UI for (the exact ' +
+        'config surface copied; the one-tx all-or-nothing semantics).\n' +
+        '- 6.10.5 — the org-admin UI that wires the "New workspace" entry + ' +
+        'renders this dialog (consumes this design).\n' +
+        '- Story 1.2 (1.2.1) — the workspace switcher / settings / ' +
+        'delete-confirmation dialog patterns to compose atop.\n' +
+        '- `motir-core/components/ui/Dialog.tsx`, `Input.tsx`, `Button.tsx`, ' +
+        'the `Select`/`Combobox` + `FormField` primitives — the composable ' +
+        'surface.\n' +
+        '- `motir-core/app/globals.css` — the `--el-*` colour + ' +
+        '`[data-display-style]` shape tokens.\n' +
+        '- Jira create-project "share settings" + Linear create-team — the ' +
+        'cited create-with-config-copy mirror.',
+      dependsOn: ['6.10.1', '6.10.2'],
     },
   ],
 };

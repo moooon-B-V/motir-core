@@ -393,7 +393,7 @@ export const story_2_7: PlanStory = {
     {
       id: '2.7.4',
       title: 'The type/executor picker UI (create modal + detail rail) + per-type hue tokens',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 65,
@@ -464,7 +464,7 @@ export const story_2_7: PlanStory = {
       id: '2.7.5',
       title:
         'Seed loader — map PlanItem.type/executor to the structured fields (stop emitting prose)',
-      status: 'planned',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 40,
@@ -522,7 +522,7 @@ export const story_2_7: PlanStory = {
     {
       id: '2.7.6',
       title: 'Epic-6 filter integration — `type` becomes a filterable field in the 6.1.1 FilterAST',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 45,
@@ -575,7 +575,7 @@ export const story_2_7: PlanStory = {
       id: '2.7.7',
       title:
         'Vitest — schema + default map + picker default-seeding + loader mapping + filter facet',
-      status: 'planned',
+      status: 'blocked',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 50,
@@ -623,7 +623,7 @@ export const story_2_7: PlanStory = {
         '- `motir-core/CLAUDE.md` § tests-use-real-Postgres + § coverage gate.\n' +
         '- `motir-core/lib/services/workItemsService.ts` + the FilterAST ' +
         'translator — the units asserted against.',
-      dependsOn: ['2.7.3'],
+      dependsOn: ['2.7.3', '2.7.4', '2.7.5', '2.7.6'],
     },
     {
       id: '2.7.8',

@@ -21,6 +21,7 @@ export type BuiltInFilterFieldId =
   | 'kind'
   | 'status'
   | 'priority'
+  | 'type'
   | 'assignee'
   | 'reporter'
   | 'sprint'

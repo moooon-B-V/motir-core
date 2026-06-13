@@ -1799,6 +1799,7 @@ const FILTER_FIELD_COLUMN_SQL: Record<Exclude<BuiltInFilterFieldId, 'text'>, Pri
   kind: Prisma.sql`w."kind"::text`,
   status: Prisma.sql`w."status"`,
   priority: Prisma.sql`w."priority"::text`,
+  type: Prisma.sql`w."type"::text`,
   assignee: Prisma.sql`w."assigneeId"`,
   reporter: Prisma.sql`w."reporterId"`,
   sprint: Prisma.sql`w."sprintId"`,
