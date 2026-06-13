@@ -17,8 +17,10 @@
 //
 // @smoke — exercises the UI↔service seams the unit/component tests can't: the
 // modal fetch flows → customFieldsService, the rail's
-// setCustomFieldValueAction → customFieldValuesService → revision write →
-// router.refresh re-render.
+// setCustomFieldValueAction → customFieldValuesService → revision write. The
+// rail keeps the picked value OPTIMISTICALLY on success (no router.refresh —
+// the inline-edit rule), so this spec waits on the action's authoritative
+// network signal, never an optimistic on-screen value, before reading the DB.
 //
 // Personas are seeded server-side (the project-access grammar: usersService +
 // workspacesService + projectsService + a direct projectMembership write —
@@ -265,10 +267,21 @@ test('the PM defines the five field types, sets each on an issue inline, and the
   await page.getByRole('button', { name: 'Show more fields (1)' }).click();
 
   // user — the searchable member Combobox, driven by keyboard; the option
-  // name carries the email secondary, so match by substring.
+  // name carries the email secondary, so match by substring. The set is
+  // OPTIMISTIC — the card shows "Petra PM" from the local override the instant
+  // it's picked, BEFORE the Server Action commits — so the on-screen text is
+  // NOT a commit signal. Wait for the action's POST to land (200) before
+  // reading the revision trail straight from the DB below, or the stakeholder
+  // write races the read and its diff is missing (the inline-edit
+  // authoritative-signal rule; the other four are covered by the reload above).
   await editToggle(page, 'Stakeholder').click();
   await page.getByPlaceholder('Search members…').fill('Petra');
+  const stakeholderWrite = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' && r.url().includes(issue.identifier) && r.status() === 200,
+  );
   await page.getByRole('option', { name: /Petra PM/ }).click();
+  await stakeholderWrite;
   await expect(fieldCard(page, 'Stakeholder')).toContainText('Petra PM');
 
   // Every field now holds a value → the disclosure is gone entirely.
@@ -326,7 +339,17 @@ test('the PM defines the five field types, sets each on an issue inline, and the
   const confirm = page.getByRole('dialog');
   await expect(confirm.getByRole('heading', { name: 'Delete Severity?' })).toBeVisible();
   await expect(confirm.getByText(/values on/)).toContainText('1 issue');
+  // The admin list drops the row OPTIMISTICALLY (before the DELETE resolves),
+  // so the row-count → 4 is NOT a commit signal. Wait for the DELETE /api/fields
+  // response to land before navigating to the issue, or the rail re-renders the
+  // not-yet-deleted field (the optimistic-delete-vs-read race, finding #81 /
+  // the authoritative-signal rule).
+  const fieldDeleted = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'DELETE' && r.url().includes('/api/fields/') && r.status() === 200,
+  );
   await confirm.getByRole('button', { name: 'Delete field' }).click();
+  await fieldDeleted;
   await expect(page.locator('[data-testid^="field-row-"]')).toHaveCount(4);
 
   await page.goto(`/issues/${issue.identifier}`);
