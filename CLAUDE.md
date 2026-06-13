@@ -506,6 +506,38 @@ swap can redefine the full shape language, not just colour.
 
 ---
 
+## ⚠️ Design assets — THREE files per surface (notes + source + `.png`)
+
+**EXTREMELY IMPORTANT: a design surface under `design/<area>/` is only complete
+when ALL THREE files exist together — none is optional.** When you produce or
+update a design asset (a `type: design` subtask, or any change to a mock), you
+MUST land all three, with a shared basename:
+
+1. **`design-notes.md`** — the spec: every primitive used, the exact copy, and
+   the `--el-*` colour + `[data-display-style]` shape-token role for every
+   element. (One per area; it indexes that area's surfaces.)
+2. **The asset SOURCE** — a self-contained **`<surface>.mock.html`** built from
+   the real design system (the `components/ui/*` primitives' markup + the
+   `globals.css` `--el-*` / shape tokens — NEVER Tier-0 `--color-*` or raw
+   `rounded-*`/`p-*`/`h-*`; the colour + shape token rules above apply to mocks
+   exactly as to components). The HTML is the source of truth. (A legacy Pencil
+   `.pen` source is also accepted, but new assets should be HTML mocks — no
+   Pencil→code gap.)
+3. **A `.png` EXPORT** — `<surface>.png`, beside the source (e.g.
+   `triage.mock.html` → `triage.png`; a multi-panel mock exports ONE full-page
+   PNG). **This is REQUIRED, not "if useful":** it is the board/tenant-visible
+   face of the asset and what a reviewer skims on the PR without opening the
+   HTML. Render it with Playwright chromium — full-page, light theme,
+   `deviceScaleFactor: 2`, viewport width ~1200 — matching the existing
+   `design/ready/ready.png` / `design/reports/charts.png` convention.
+
+A design surface shipped with only notes + HTML (no `.png`), or HTML + PNG (no
+notes), is **incomplete** — do not open the design PR / mark the subtask done
+until all three are committed. (The `motir-meta` `MOTIR.md` design-reference rule
+carries the same definition-of-done for the planner side.)
+
+---
+
 ## Project conventions (non-architecture)
 
 - **Manual merge mode.** Subtask PRs open as drafts targeting `main`; the
