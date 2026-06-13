@@ -19,30 +19,51 @@ import type { PlanStory } from '../types';
  *
  * **The verified mirror — org→workspace hierarchy with org-level billing (rung
  * 1, cited not asserted).**
- *   - **Atlassian / Jira Cloud.** The **Organization** is the topmost
- *     structure; it "provides a layer that controls licensing, **billing** and
- *     security" across every site/product. The **org admin** is the highest
- *     level of admin and "also see[s] the billing details" — site admins below
- *     do not. All org administration (users, billing, multiple sites) is
- *     handled at admin.atlassian.com. Motir's `Organization` = Atlassian's org
- *     (the billing/identity root); Motir's `Workspace` ≈ Atlassian's site (the
- *     product container under it). (Atlassian Community "Jira's Structure —
- *     Orgs, Sites, Spaces" + "What is different between org admin, site admin
- *     and product admin" + Atlassian Support "types of admin roles".)
- *   - **Linear.** A workspace is "the home for all issues and interactions in
- *     an organization"; the workspace **Owner** role is the one carrying "the
- *     most sensitive settings like **billing**, security, and audit logs", and
- *     members belong to one-or-many teams under it. Linear keeps billing at the
- *     org/workspace ROOT (separate workspaces have "separate billing plans"),
- *     which is exactly Motir's "credits/usage roll up to the org" decision.
- *     (Linear Docs — Workspaces, Members and roles.)
- *   So the durable shape both rung-1 mirrors share: a single root tenant that
- *   OWNS billing + cross-product/cross-workspace membership, with workspaces
- *   (Atlassian "sites" / Linear "teams-in-a-workspace") nested under it. Motir
- *   adopts that: `Organization` is the billing/identity root, `Workspace` the
- *   product container, the 6.4 `MemberRole` stays the WORKSPACE-scoped role and
- *   a NEW org-scoped owner/admin role sits above it (mirroring Atlassian's
- *   org-admin-above-site-admin split / Linear's Owner-above-Admin split).
+ *   - **Atlassian / Jira Cloud — the mirror for BOTH the two-level NESTING and
+ *     org-level billing (verified June 2026, checked not asserted).** The
+ *     **Organization** is the topmost structure; it "provides a layer that
+ *     controls licensing, **billing** and security" across every site/product.
+ *     The **org admin** is the highest level of admin and "also see[s] the
+ *     billing details" — site admins below do not. **An Atlassian org may have
+ *     ONE OR MULTIPLE sites under it** (a site holds the app instances; each
+ *     site runs one instance of each app), and **a single account exists at the
+ *     org level and can hold access to many sites within the org** — this is the
+ *     exact shape of Motir's `Organization` → N `Workspace`. So Motir's
+ *     `Organization` = Atlassian's org (the billing/identity root) and Motir's
+ *     `Workspace` ≈ Atlassian's **site** (the container under the org). All org
+ *     administration (users, billing, multiple sites) is handled at
+ *     admin.atlassian.com; a person who is org admin of more than one org picks
+ *     an org from a switcher there. (Atlassian Community "Jira's Structure —
+ *     Orgs, Sites, Spaces" + "Bring multiple cloud sites under one
+ *     Organisation"; Atlassian Support "Navigate Atlassian Administration" +
+ *     "Switch between multiple Atlassian accounts" + "types of admin roles";
+ *     resolution.de "Organizations and Sites".)
+ *   - **Linear — the mirror for org-level BILLING ONLY, NOT for the nesting (a
+ *     Linear workspace ≈ a Motir ORGANIZATION, not a Motir workspace).** A
+ *     Linear **workspace** is "the home for all issues and interactions in an
+ *     organization" — i.e. the workspace IS Linear's org-root; the workspace
+ *     **Owner** role carries "the most sensitive settings like **billing**,
+ *     security, and audit logs", and separate workspaces have "separate billing
+ *     plans". That backs Motir's "credits/usage roll up to the root tenant"
+ *     decision. **But Linear has NO sub-workspace tier:** its **teams** live
+ *     inside a single workspace and are NOT workspaces (a Linear team is closer
+ *     to a Motir project/group than to a Motir workspace), so Linear does NOT
+ *     demonstrate the org→workspace nesting — only the billing-at-root point.
+ *     One Linear account can belong to many workspaces and switch between them,
+ *     but each such workspace is an independent root, which is "one account in
+ *     many ORGANIZATIONS" in Motir's terms, not one org owning many workspaces.
+ *     (Linear Docs — Workspaces; Concepts; Members and roles.)
+ *   So the durable shape: a single root tenant that OWNS billing + cross-
+ *   workspace membership, with workspaces nested under it. **The NESTING is
+ *   mirrored by Atlassian (org → multiple sites); Linear backs only the
+ *   billing-at-root half** (its workspace maps to Motir's org). Motir adopts the
+ *   Atlassian shape: `Organization` is the billing/identity root, `Workspace`
+ *   the container under it (the Atlassian "site"), the 6.4 `MemberRole` stays
+ *   the WORKSPACE-scoped role, and a NEW org-scoped owner/admin role sits above
+ *   it (mirroring Atlassian's org-admin-above-site-admin split). A single
+ *   account may belong to MULTIPLE organizations (verified above) — so
+ *   `OrganizationMembership` is a many-to-many User↔Organization join and the
+ *   shell carries an org switcher for the multi-org case.
  *
  * **The billing-entity decision (Yue, locked).** Credits + usage roll up to the
  * `Organization`. 7.12 currently keys its `CreditLedger` to the workspace/
@@ -104,9 +125,13 @@ export const story_6_10: PlanStory = {
     '`WorkspaceMembership`.\n' +
     '- **`Organization` → N `Workspace` → Project.** Today `Workspace` is the ' +
     'top tier with no parent; 6.10 adds `Workspace.organizationId` so every ' +
-    'workspace belongs to exactly one org. The mirror (Atlassian org→site, ' +
-    'Linear workspace-root→teams) puts billing + cross-workspace membership at ' +
-    'this root.\n' +
+    'workspace belongs to exactly one org. **This two-level nesting mirrors ' +
+    'Atlassian (one org → ONE OR MULTIPLE sites; Motir `Workspace` ≈ Atlassian ' +
+    'site) — verified June 2026.** Linear does NOT have this nesting (a Linear ' +
+    'workspace IS its org-root and maps to a Motir *organization*, not a ' +
+    'workspace; Linear teams live inside one workspace and are not workspaces), ' +
+    'so Linear backs only the billing-at-root half. A single account may belong ' +
+    'to multiple orgs, so membership is a many-to-many join.\n' +
     '- **Org membership gates workspace access; an org owner/admin role sits ' +
     'ABOVE the 6.4 workspace `MemberRole`.** The 6.4 role stays the ' +
     'workspace-scoped role; a NEW org-scoped owner/admin extends it (mirroring ' +
@@ -115,13 +140,30 @@ export const story_6_10: PlanStory = {
     '- **The org is the BILLING ENTITY.** Credits + usage roll up to the org ' +
     '(the orchestrator re-keys 7.12’s ledger to the org separately — 6.10 ' +
     'records the decision, ships no credit view, and does NOT depend on ' +
-    '7.12).\n\n' +
+    '7.12).\n' +
+    '- **PROGRESSIVE DISCLOSURE (the scale principle, Yue 2026-06-13).** ONE ' +
+    'model + ONE set of surfaces serves all three scales (individual / small ' +
+    'org / enterprise); the UI reveals a tier only when its count ≥ 2, so there ' +
+    'is NO detected "individual" mode and NEVER a migration. The `Organization` ' +
+    'is auto-created at signup + renameable and is ALWAYS the header anchor (a ' +
+    'one-person company is just an org of one — OPC); the WORKSPACE switcher is ' +
+    'HIDDEN until the org has a 2nd workspace; the PROJECT stays in the sidebar. ' +
+    'Only two count-driven reveals exist: the workspace switcher at ws #2 and ' +
+    'the org menu’s switch-org section at org #2. At one workspace the ' +
+    'workspace-settings SURFACE is hidden but the workspace tier still does the ' +
+    'work underneath: the single Settings home (entered as the org’s settings) ' +
+    'FOLDS IN the workspace-config sections (workflows/fields/labels/components/' +
+    'automation/dashboards — all `workspaceId`-scoped) and routes each edit to ' +
+    'its own tier (org→`Organization`, config→the single `Workspace`); at ws #2 ' +
+    'those sections split into a per-workspace Settings area, with no data move. ' +
+    'Full spec in `design/org-admin/design-notes.md` (6.10.1).\n\n' +
     '**Scope:** the org-admin design (6.10.1); the `Organization`-model + ' +
     'billing-entity + role decision (6.10.2); the schema + migration + backfill ' +
     'every-workspace→a-default-org (6.10.3); the org-scoped services + access ' +
     'gating (6.10.4); the org admin UI — settings + cross-workspace members + ' +
     'the shell org switcher (6.10.5); the seed loader modelling the `moooon` ' +
-    'org (6.10.6); vitest (6.10.7); e2e (6.10.8).\n\n' +
+    'org (6.10.6); vitest (6.10.7); e2e (6.10.8); copy-on-create config clone ' +
+    'for new workspaces (6.10.9).\n\n' +
     '**Out of scope (named so they land in their owning story, not here):** ' +
     'the customer org usage/credit DISPLAY (**7.12.5** — a forward story; ' +
     'wiring it here would be a forward dep, forbidden); the Motir-internal ' +
@@ -299,12 +341,19 @@ export const story_6_10: PlanStory = {
         '2. **The hierarchy.** `Organization` → N `Workspace` → Project. ' +
         '`Workspace` today has no parent; the decision adds ' +
         '`Workspace.organizationId` (every workspace belongs to exactly one ' +
-        'org). Cite the mirror: Atlassian org→site→space (org controls ' +
-        'licensing/billing/security across sites), Linear ' +
-        'workspace-root→teams (the workspace Owner holds billing). Motir’s ' +
-        '`Organization` = the Atlassian org / Linear workspace-root (the ' +
-        'billing+identity root); Motir’s `Workspace` ≈ Atlassian site / a ' +
-        'Linear team-container.\n' +
+        'org). **Cite the NESTING mirror precisely — it is Atlassian, NOT ' +
+        'Linear:** an Atlassian org has ONE OR MULTIPLE sites under it and a ' +
+        'single account can hold access to many sites within the org, so ' +
+        'Motir’s `Organization` = the Atlassian org and Motir’s `Workspace` ≈ ' +
+        'an Atlassian **site** (verified June 2026). **Linear does NOT have ' +
+        'this nesting:** a Linear workspace IS its org-root (it maps to a Motir ' +
+        '*organization*, not a workspace) and Linear teams are intra-workspace ' +
+        'groups, not workspaces — so cite Linear ONLY for billing-at-the-root ' +
+        '(the workspace Owner holds billing; separate workspaces bill ' +
+        'separately), never for the org→workspace nesting. Record that a single ' +
+        'account may belong to multiple orgs (Atlassian org switcher; Linear ' +
+        'multi-workspace), so `OrganizationMembership` is a many-to-many ' +
+        'User↔Organization join, not 1:1.\n' +
         '3. **The org is THE BILLING ENTITY (Yue, locked).** Credits + usage ' +
         'roll up to the `Organization`. Record that the ORCHESTRATOR re-keys ' +
         '7.12’s `CreditLedger` to the org and that metering rows ' +
@@ -322,18 +371,59 @@ export const story_6_10: PlanStory = {
         'precedence rule (how an org role composes with a workspace role at an ' +
         'access check) — mirror Atlassian org-admin-above-site-admin / Linear ' +
         'Owner-above-Admin.\n' +
-        '5. **Access gating + the backfill semantics.** Fix that org ' +
-        'membership GATES workspace access (a workspace is reachable only by a ' +
-        'member of its org), the 404-not-403 cross-tenant posture is ' +
-        'preserved, and the migration BACKFILL rule: each existing workspace ' +
-        'gets its OWN default org (1:1, named from the workspace) and the ' +
+        '5. **Access gating + membership DIRECTION + the backfill semantics.** ' +
+        'Fix that org membership GATES workspace access (a workspace is ' +
+        'reachable only by a member of its org) and the 404-not-403 cross-tenant ' +
+        'posture is preserved. **Membership direction is ASYMMETRIC (Yue):** ' +
+        '(i) adding a user to a WORKSPACE auto-creates their ' +
+        '`OrganizationMembership` (role `member`) if absent — you cannot be in a ' +
+        'workspace without being in its org (UPWARD auto-join, an enforced ' +
+        'invariant); (ii) adding a user to the ORG creates NO workspace ' +
+        'membership — a plain org member reaches only the workspaces they are ' +
+        'EXPLICITLY added to (an org owner/admin still spans all workspaces by ' +
+        'role, per §4), so "org-only" members in ZERO workspaces are a valid ' +
+        'state (e.g. a billing admin). (iii) Removing from the org cascades ' +
+        'loss of all its workspace access (the gate); removing from a workspace ' +
+        'does NOT remove the org membership. The migration BACKFILL rule: each ' +
+        'existing workspace gets its OWN default org (1:1, named from the ' +
+        'workspace), every existing workspace member also becomes an org member ' +
+        '(the upward invariant applied to legacy rows), and the ' +
         'seeding/owning user becomes that org’s owner — so no existing data is ' +
-        'orphaned and the gate holds for legacy rows.\n\n' +
+        'orphaned and the gate holds for legacy rows.\n' +
+        '6. **Progressive disclosure + auto-provisioning (the scale principle, ' +
+        'Yue 2026-06-13).** Fix that ONE model + ONE set of surfaces serves all ' +
+        'three scales (individual / small org / enterprise) and the UI reveals a ' +
+        'tier only when its count ≥ 2 — so there is NO detected "individual" ' +
+        'mode and NEVER a migration. Record: (a) **signup AUTO-CREATES an ' +
+        'org + a default workspace** for every new account (a one-person company ' +
+        'is an org of one — OPC), and the org is RENAMEABLE; (b) the ORG is ' +
+        'always the header anchor, the WORKSPACE switcher is hidden until ws #2, ' +
+        'the PROJECT stays in the sidebar; (c) the only two count-driven reveals ' +
+        'are the workspace switcher at ws #2 and the org menu’s switch-org ' +
+        'section at org #2; (d) at one workspace the workspace-settings SURFACE ' +
+        'is hidden but the workspace tier still operates underneath — the single ' +
+        'Settings home FOLDS IN the workspace-config sections (all ' +
+        '`workspaceId`-scoped) and routes each edit to its own tier ' +
+        '(org→`Organization`, config→the single `Workspace`); at ws #2 they ' +
+        'split into a per-workspace Settings area with no data move. (e) **There ' +
+        'is NO org→workspace config INHERITANCE in the data model** — no ' +
+        'org-level config defaults, no override rows, no runtime resolution; ' +
+        'config is purely `Workspace`-scoped. The "inherit" UX is a ' +
+        'COPY-ON-CREATE: a new workspace is **seeded by copying the source ' +
+        'workspace’s config** at creation so it opens already configured (looks ' +
+        'inherited), after which the workspaces are independent and either can ' +
+        'overwrite. (Real live inheritance, if ever needed for enterprise, is an ' +
+        'additive future change, not a migration.) ' +
+        'The visual spec is `design/org-admin/design-notes.md` (6.10.1); this ' +
+        'ADR fixes the model/auto-provisioning side that the schema (6.10.3), ' +
+        'seed (6.10.6) and UI (6.10.5) build to.\n\n' +
         '## Acceptance criteria\n\n' +
         '- `motir-core/docs/decisions/organization-tier.md` exists and fixes ' +
-        'all five sections, naming `Organization` (NOT `Account`) and citing ' +
-        'the Atlassian + Linear org→workspace + org-billing mirror (cited, ' +
-        'not asserted).\n' +
+        'all SIX sections, naming `Organization` (NOT `Account`) and citing ' +
+        'the mirror PRECISELY: **Atlassian (org → one-or-multiple sites) for ' +
+        'the org→workspace NESTING; Linear (workspace-root billing) for the ' +
+        'billing-at-root half only — a Linear workspace maps to a Motir org, ' +
+        'NOT a Motir workspace** (cited, not asserted).\n' +
         '- It states plainly that the org is the billing entity AND that 6.10 ' +
         'ships no credit/usage view + takes no dep on 7.12 (the re-keying is ' +
         'the orchestrator’s; the view is 7.12.5).\n' +
@@ -341,7 +431,14 @@ export const story_6_10: PlanStory = {
         'access-gating rule (org membership gates workspace access; ' +
         '404-not-403 preserved).\n' +
         '- It fixes the backfill rule (one default org per existing ' +
-        'workspace; the owner becomes org owner; no orphan workspace).\n\n' +
+        'workspace; the owner becomes org owner; no orphan workspace).\n' +
+        '- It fixes the progressive-disclosure + auto-provisioning principle: ' +
+        'signup auto-creates an org + default workspace (OPC = org of one; org ' +
+        'renameable), the UI reveals a tier only at count ≥ 2 (no "individual" ' +
+        'mode; org always shown, workspace hidden until ws #2), and at one ' +
+        'workspace the Settings home folds in the workspace-config sections and ' +
+        'routes each edit to its tier (the workspace settings still operate ' +
+        'underneath; they split into a per-workspace area at ws #2).\n\n' +
         '## Context refs\n\n' +
         '- `motir-core/prisma/schema.prisma` — the existing `Account` ' +
         '(Better-Auth, do NOT reuse), `Workspace`, `WorkspaceMembership`, and ' +
@@ -454,8 +551,32 @@ export const story_6_10: PlanStory = {
         'rule). Each write-flow is ONE `prisma.$transaction`; returns DTOs via ' +
         '`lib/mappers/*` (never raw Prisma); throws typed errors from ' +
         '`lib/organizations/errors.ts` the route maps to HTTP.\n' +
+        '- **Membership DIRECTION (6.10.2 §5, asymmetric — enforce in the ' +
+        'service, NOT scattered):** adding a user to the ORG creates ONLY an ' +
+        '`OrganizationMembership` — NO workspace membership (org-only members in ' +
+        'zero workspaces are valid; a plain org member reaches only workspaces ' +
+        'they’re explicitly added to). Conversely the **add-to-WORKSPACE** flow ' +
+        '(extending the existing `WorkspaceMembership` create) MUST auto-create ' +
+        'the user’s `OrganizationMembership` (role `member`) in that workspace’s ' +
+        'org if absent — the UPWARD invariant (you cannot be in a workspace ' +
+        'without being in its org), in the SAME transaction. Removing from the ' +
+        'org cascades loss of workspace access (gate); removing from a workspace ' +
+        'leaves the org membership intact.\n' +
         '- Resolving the ACTIVE org for a session (for the switcher) + listing ' +
-        'the orgs a user belongs to.\n\n' +
+        'the orgs a user belongs to.\n' +
+        '- **Auto-provision on signup (the progressive-disclosure principle, ' +
+        '6.10.2 §6).** A `provisionForNewUser`-style flow that creates an org + ' +
+        'a default workspace + the owner memberships for a brand-new account, in ' +
+        'ONE transaction, wired into the existing signup/onboarding path — so ' +
+        'every account is an org of one (OPC) from day one and there is never a ' +
+        'tier-less user. Mirror the shape of the 6.10.3 backfill (which does the ' +
+        'same for pre-existing workspaces); the org name defaults from the ' +
+        'user/company and is renameable.\n' +
+        '- **(Make the create-workspace path org-aware** so a new workspace is ' +
+        'created under the active org with the creator as a member. The ' +
+        '**copy-on-create deep-copy** of the source workspace’s config — the ' +
+        '"looks-inherited" behaviour, 6.10.2 §6e — is its OWN subtask **6.10.9**, ' +
+        'which extends this flow; do not inline it here.)\n\n' +
         '**The access gate (the load-bearing change).** Extend the existing ' +
         'workspace access check so that reaching a workspace requires the ' +
         'session user to be a member of the workspace’s ORG (org membership ' +
@@ -518,11 +639,22 @@ export const story_6_10: PlanStory = {
         'session-gated (401 without a session) + org-gated (404-not-403 for a ' +
         'non-org-member, via the 6.10.4 gate). No `db.*` / `$transaction` / ' +
         'business logic in routes.\n\n' +
-        '**The surfaces (render the 6.10.1 design verbatim):**\n\n' +
-        '- **The org switcher in the shell** — shows the active org and lets a ' +
-        'multi-org user switch; nests above the existing workspace switcher ' +
-        '(switching org re-scopes the workspace switcher). Single-org users ' +
-        'see the quiet-label variant (no dropdown), per the design.\n' +
+        '**The surfaces (render the 6.10.1 design verbatim — incl. its ' +
+        'PROGRESSIVE-DISCLOSURE rules):**\n\n' +
+        '- **The org control in the shell + progressive disclosure (6.10.2 §6; ' +
+        'design-notes "Progressive disclosure").** The ORG is ALWAYS the ' +
+        'top-left anchor — a menu button (Settings / Members / Billing-soon / ' +
+        'New workspace), with a **"Switch organization" section shown ONLY when ' +
+        'the account is in ≥2 orgs**. The **WORKSPACE switcher renders ONLY when ' +
+        'the active org has ≥2 workspaces** (to the right of the org, ' +
+        '`Acme › Engineering`); at one workspace it is NOT rendered at all (no ' +
+        '"individual" mode — an OPC is just an org of one). The PROJECT switcher ' +
+        'stays in the sidebar; switching the workspace re-scopes it. At one ' +
+        'workspace the workspace-settings SURFACE is hidden but its config still ' +
+        'operates underneath: the single Settings home folds in the ' +
+        'workspace-config sections (`settings/workspace/*`) and saves them to the ' +
+        'single `Workspace` row; they split into a per-workspace Settings area ' +
+        'only at ws #2 (no data move).\n' +
         '- **Org settings** — org name / slug / org-level metadata, editable ' +
         'by an org owner/admin (the gate enforces the role). The passive ' +
         '"billing later" placeholder per the design — NO active billing ' +
@@ -541,11 +673,18 @@ export const story_6_10: PlanStory = {
         'region for the loading→loaded transition; i18n via a new ' +
         '`orgAdmin` namespace (the app’s locale set).\n\n' +
         '## Acceptance criteria\n\n' +
-        '- The org switcher renders in the shell (multi-org dropdown + ' +
-        'single-org quiet label), switches the active org, and re-scopes the ' +
-        'workspace switcher; org settings renders + saves (org-owner/admin ' +
-        'gated); cross-workspace member management lists + adds + removes + ' +
-        'role-changes members — all rendering the 6.10.1 design.\n' +
+        '- The org is ALWAYS the header anchor with its menu; org settings ' +
+        'renders + saves (org-owner/admin gated); cross-workspace member ' +
+        'management lists + adds + removes + role-changes members — all ' +
+        'rendering the 6.10.1 design.\n' +
+        '- **Progressive disclosure holds (6.10.2 §6 / design-notes):** with ONE ' +
+        'workspace the workspace switcher is NOT rendered; creating a 2nd ' +
+        'workspace makes it appear and switching it re-scopes the sidebar ' +
+        'project switcher; the org menu’s "Switch organization" section is ' +
+        'present only when the account is in ≥2 orgs; with one workspace there ' +
+        'is no separate workspace-settings surface — its config sections fold ' +
+        'into the Settings home and still save to the `Workspace` row (and split ' +
+        'out into a per-workspace area at ws #2).\n' +
         '- The member roster is paginated/lazy (at-scale, NOT load-all); ' +
         'inline edits use the success-response-is-confirmation pattern (no ' +
         'whole-tree refresh).\n' +
@@ -643,6 +782,12 @@ export const story_6_10: PlanStory = {
         'workspace under the org (the role composes above the 6.4 ' +
         '`MemberRole`); an org MEMBER falls back to their per-workspace ' +
         'role.\n' +
+        '- **Membership direction (6.10.2 §5):** adding a user to a WORKSPACE ' +
+        'auto-creates their org membership (assert the `OrganizationMembership` ' +
+        'row appears); adding a user to the ORG creates NO workspace membership ' +
+        '(assert an org-only member reaches zero workspaces until explicitly ' +
+        'added); removing from the org revokes all workspace access while ' +
+        'removing from a workspace leaves the org membership intact.\n' +
         '- The cross-workspace member listing returns members across the ' +
         'org’s workspaces and PAGINATES (assert a page boundary, not a ' +
         'full-table load — the at-scale rule).\n' +
@@ -725,6 +870,73 @@ export const story_6_10: PlanStory = {
         'run-harness + selector conventions to mirror.\n' +
         '- 6.10.6 — the seeded `moooon` org + members the flow runs against.',
       dependsOn: ['6.10.5'],
+    },
+    {
+      id: '6.10.9',
+      title:
+        'Copy-on-create — seed a new workspace’s config from the source workspace (the "looks-inherited" behaviour)',
+      status: 'blocked',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 75,
+      descriptionMd:
+        'Make a newly-created workspace open **already configured like the ' +
+        'workspace it was created from**, so multi-workspace *looks* inherited — ' +
+        'WITHOUT any data-inheritance layer (6.10.2 §6e). When a user creates a ' +
+        '2nd+ workspace under an org, **deep-copy the source workspace’s config** ' +
+        'into the new workspace in the SAME transaction as the workspace ' +
+        'creation; thereafter the workspaces are fully independent and either ' +
+        'can overwrite. There are NO org-level config defaults, NO override ' +
+        'rows, and NO runtime resolution — config stays purely ' +
+        '`Workspace`-scoped; this is a one-time snapshot at creation.\n\n' +
+        '**Why its own subtask.** The copy spans MANY `workspaceId`-scoped ' +
+        'config tables, each with intra-workspace references that must be ' +
+        'remapped to the new workspace’s rows (e.g. a board column points at a ' +
+        'workflow status; an automation rule references a field/label) — a ' +
+        'naive row-copy that keeps old ids would cross-link the two workspaces. ' +
+        'So it needs a dedicated, carefully-ordered clone with an old→new id ' +
+        'map, not a one-liner folded into 6.10.4.\n\n' +
+        '**What to copy (the workspace-config surface):** workflow statuses + ' +
+        'transitions, custom field definitions, labels, components, board(s) + ' +
+        'board columns + column→status mappings, automation rules, dashboards, ' +
+        'and saved filters — i.e. the `workspaceId`-scoped config models, NOT ' +
+        'the work items / sprints / comments (content, never copied). The source ' +
+        'workspace = the org’s existing workspace the user is creating from (for ' +
+        'the first split, the sole existing workspace); document the selection.\n\n' +
+        '**4-layer (motir-core/CLAUDE.md).** A `workspacesService` flow ' +
+        '(extending the existing create-workspace path that 6.10.4 made ' +
+        'org-aware) wraps the create + the clone in ONE `prisma.$transaction`; ' +
+        'each table’s rows are copied via its repository (writes require `tx`); ' +
+        'the old→new id map is built in the service. Returns the new workspace ' +
+        'DTO. Idempotency is not required (each create is a fresh workspace), but ' +
+        'the clone must be ALL-or-nothing (one tx).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- Creating a workspace under an org with an existing workspace produces ' +
+        'a new workspace whose workflow statuses/transitions, custom fields, ' +
+        'labels, components, board(s)+columns+column→status mappings, automation ' +
+        'rules, dashboards and saved filters MATCH the source at creation time.\n' +
+        '- **No cross-linking:** every copied row references the NEW workspace’s ' +
+        'rows (the id map is applied) — e.g. a copied board column points at the ' +
+        'copied status, never the source workspace’s; editing one workspace’s ' +
+        'config does not affect the other.\n' +
+        '- Work items, sprints, comments and other CONTENT are NOT copied (only ' +
+        'config).\n' +
+        '- The whole create+clone is ONE transaction (all-or-nothing); the ' +
+        'service owns it, repositories are single-op with required `tx`.\n' +
+        '- No org-level config / override / resolution is introduced (config ' +
+        'stays `Workspace`-scoped — the copy is a one-time snapshot).\n\n' +
+        '## Context refs\n\n' +
+        '- 6.10.2 §6e — the copy-on-create decision (no data inheritance).\n' +
+        '- 6.10.4 — the org-aware create-workspace flow this extends + the ' +
+        'signup auto-provision (the first workspace) it mirrors.\n' +
+        '- `motir-core/prisma/schema.prisma` — the `workspaceId`-scoped config ' +
+        'models to clone (workflowStatuses/transitions, customFieldDefinitions, ' +
+        'labels, components, boards/boardColumns/boardColumnStatuses, ' +
+        'automationRules, dashboards, savedFilters) + their intra-workspace FKs ' +
+        'to remap.\n' +
+        '- `motir-core/CLAUDE.md` § 4-layer (service owns the tx; repos ' +
+        'single-op, required `tx` on writes).',
+      dependsOn: ['6.10.4'],
     },
   ],
 };
