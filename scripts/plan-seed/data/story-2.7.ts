@@ -522,7 +522,7 @@ export const story_2_7: PlanStory = {
     {
       id: '2.7.6',
       title: 'Epic-6 filter integration — `type` becomes a filterable field in the 6.1.1 FilterAST',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 45,
