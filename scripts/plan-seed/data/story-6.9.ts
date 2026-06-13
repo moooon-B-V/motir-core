@@ -153,7 +153,7 @@ export const story_6_9: PlanStory = {
       id: '6.9.2',
       title:
         'Link/blocker picker retrofit — candidate read becomes query-driven server-side (closes finding #98); both link surfaces',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 24,
@@ -197,7 +197,7 @@ export const story_6_9: PlanStory = {
       id: '6.9.3',
       title:
         'Story tests — quick-search correctness + permission/exclusion + the #98 large-seed regression E2E + a11y sweep',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 26,
