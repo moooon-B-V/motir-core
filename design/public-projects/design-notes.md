@@ -122,7 +122,7 @@ Upvotes / Planned / Shipped) above a hairline.
 ### The body + sidebar (`.ov-grid`, 1fr + 312px)
 
 Motir is framed as **three layers, end to end** (NOT "AI project management"):
-**(1)** an AI planner, **(2)** an AI-native, MCP-native project tracker
+**(1)** an AI planner, **(2)** an AI-native project manager (MCP-native)
 (`motir-core`), **(3)** a hosted AI coding agent — the unique end-to-end pipeline.
 The README carries that in two beats:
 
@@ -133,7 +133,7 @@ The README carries that in two beats:
   - **Part 2 — "Vibe project"** (the headline idea, by analogy to _vibe coding_):
     you bring the idea, Motir's **three layers** carry it intent→shipped, drawn as
     a `ul.layers` list with per-layer palette-hued icons — AI planner
-    (`--el-type-story` route), AI-native MCP tracker (`--el-type-task` columns),
+    (`--el-type-story` route), AI-native project manager (`--el-type-task` columns),
     hosted coding agent (`--el-accent` github) — closing on "no other tool runs
     the whole loop end to end — that's a vibe project."
   - a **product-screenshot** placeholder (browser-chrome frame + tinted panes) and
@@ -359,7 +359,7 @@ swap layer must reach every element).
   the headline idea, by analogy to vibe coding):** _"You've heard of vibe coding —
   describe what you want, and the AI writes the code. Motir does that for an
   entire project…"_ + the three layers (**An AI planner** → chat to a structured
-  plan; **An AI-native tracker** → boards/sprints/system of record, **MCP-native**
+  plan; **An AI-native project manager** → boards/sprints/system of record, **MCP-native**
   so your agents read/write Motir directly; **A hosted coding agent** → picks up
   work items and ships the code) + _"No other tool runs the whole loop end to
   end — that's a vibe project."_ Then **"Contribute"**. NOT framed as "AI project
