@@ -130,7 +130,7 @@ test('@smoke the type+parent picker filters candidates inline (2.3.4)', async ({
 
   // Type = Sub-task → parent candidates are Story/Task/Bug, never the Epic.
   // (the type's display label is "Sub-task", hyphenated — ISSUE_TYPE_META.)
-  await page.getByRole('combobox', { name: 'Type' }).click();
+  await page.getByRole('combobox', { name: 'Type', exact: true }).click();
   await page.getByRole('option', { name: 'Sub-task' }).click();
   await page.getByRole('combobox', { name: 'Parent' }).click();
   await expect(page.getByRole('option', { name: /The Story/ })).toBeVisible();
@@ -141,7 +141,7 @@ test('@smoke the type+parent picker filters candidates inline (2.3.4)', async ({
   await page.getByRole('option', { name: 'No parent' }).click();
 
   // Type = Epic → no parent candidates (epics are top-level): only "No parent".
-  await page.getByRole('combobox', { name: 'Type' }).click();
+  await page.getByRole('combobox', { name: 'Type', exact: true }).click();
   await page.getByRole('option', { name: 'Epic' }).click();
   await page.getByRole('combobox', { name: 'Parent' }).click();
   await expect(page.getByRole('option', { name: 'No parent' })).toBeVisible();

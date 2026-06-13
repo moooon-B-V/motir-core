@@ -38,6 +38,10 @@
       "manual": "Manual",
       "chore": "Chore"
     },
+    "executor": {
+      "coding_agent": "Coding agent",
+      "human": "Human"
+    },
     "priority": {
       "highest": "Highest",
       "high": "High",
@@ -400,6 +404,8 @@
       "titleTooLong": "Title must be {max} characters or fewer.",
       "created": "{identifier} created",
       "type": "Type",
+      "workItemType": "Work type",
+      "executor": "Executor",
       "parent": "Parent",
       "titleLabel": "Title",
       "titlePlaceholder": "Summarize the work in a line",
@@ -527,6 +533,9 @@
     "removeLink": "Remove link",
     "status": "Status",
     "type": "Type",
+    "workItemType": "Work type",
+    "executor": "Executor",
+    "setType": "Set a type",
     "priority": "Priority",
     "assignee": "Assignee",
     "reporter": "Reporter",
@@ -785,6 +794,13 @@
   "ui": {
     "typePicker": {
       "label": "Type"
+    },
+    "workItemTypePicker": {
+      "label": "Work type",
+      "placeholder": "Set a type"
+    },
+    "executorPicker": {
+      "label": "Executor"
     },
     "priorityPicker": {
       "label": "Priority"

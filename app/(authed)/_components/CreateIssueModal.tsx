@@ -15,9 +15,17 @@ import { cn } from '@/lib/utils/cn';
 import { TypePicker } from '@/components/issues/TypePicker';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { PriorityPicker } from '@/components/issues/PriorityPicker';
+import { WorkItemTypePicker } from '@/components/issues/WorkItemTypePicker';
+import { ExecutorPicker } from '@/components/issues/ExecutorPicker';
+import { defaultExecutorForType, isTypeableKind } from '@/lib/issues/executorDefaults';
 import { CreateIssueLinksField, type PendingLink } from './CreateIssueLinksField';
 import { createIssueAction } from '../issues/actions';
-import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
+import type {
+  ExecutorDto,
+  WorkItemKindDto,
+  WorkItemPriorityDto,
+  WorkItemTypeDto,
+} from '@/lib/dto/workItems';
 
 // The create-issue modal (Subtask 2.3.3, pickers wired in 2.3.4). Collects the
 // field set and dispatches the `createIssueAction` Server Action; the service
@@ -53,6 +61,13 @@ export function CreateIssueModal({ open, onOpenChange, onCreated }: CreateIssueM
   const [isPending, startTransition] = useTransition();
 
   const [kind, setKind] = useState<WorkItemKindDto>('task');
+  // The work-item TYPE (the NATURE of the work) + EXECUTOR (Story 2.7 · 2.7.4),
+  // leaf-only: rendered + sent only when `kind` is a leaf (task/subtask/bug).
+  // `type` may be left unset (null); choosing a type SEEDS `executor` from the
+  // 2.7.3 default map (the single source — the UI never re-states it), still
+  // overridable. `executor` is null until a type is chosen (it follows the type).
+  const [type, setType] = useState<WorkItemTypeDto | null>(null);
+  const [executor, setExecutor] = useState<ExecutorDto | null>(null);
   const [parentId, setParentId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -82,6 +97,8 @@ export function CreateIssueModal({ open, onOpenChange, onCreated }: CreateIssueM
 
   function reset() {
     setKind('task');
+    setType(null);
+    setExecutor(null);
     setParentId(null);
     setTitle('');
     setDescription('');
@@ -120,6 +137,11 @@ export function CreateIssueModal({ open, onOpenChange, onCreated }: CreateIssueM
         explanationMd: explanation.trim() ? explanation : null,
         priority,
         parentId,
+        // Type + executor (Story 2.7), leaf-only: sent only when a type was
+        // chosen on a leaf kind. `executor` rides along (seeded from the type
+        // default, possibly overridden). Omitted entirely otherwise, so a plain
+        // create's payload (and its exact-match test) stays unchanged.
+        ...(type ? { type, ...(executor ? { executor } : {}) } : {}),
         // Only send dueDate when set (UTC-safe full ISO, like the edit form), so
         // a plain create's payload (and its exact-match test) stays unchanged.
         ...(dueDate ? { dueDate: new Date(`${dueDate}T00:00:00.000Z`).toISOString() } : {}),
@@ -172,7 +194,13 @@ export function CreateIssueModal({ open, onOpenChange, onCreated }: CreateIssueM
               value={kind}
               onChange={(v) => {
                 setKind(v);
-                setParentError(null); // a type change re-scopes the parent picker
+                setParentError(null); // a kind change re-scopes the parent picker
+                // type/executor are leaf-only — drop them when switching to a
+                // container kind (epic/story) so a stale type can't be submitted.
+                if (!isTypeableKind(v)) {
+                  setType(null);
+                  setExecutor(null);
+                }
               }}
               disabled={isPending}
             />
@@ -206,6 +234,38 @@ export function CreateIssueModal({ open, onOpenChange, onCreated }: CreateIssueM
             autoFocus
             required
           />
+
+          {/* Work type + Executor (Story 2.7 · 2.7.4) — a sibling of the kind
+              control, per design/work-items/type-executor-picker.mock.html
+              panels 1–2. LEAF-ONLY: rendered only when the chosen kind is a
+              leaf (task/subtask/bug), absent for epic/story. Choosing a type
+              seeds the executor from the 2.7.3 default map (single source); the
+              executor control appears only once a type is set (it follows the
+              type). Both may be left unset. */}
+          {isTypeableKind(kind) ? (
+            <>
+              <div className="flex flex-col gap-1 font-sans text-sm">
+                <span className="text-(--el-text) font-medium">
+                  {t('createIssue.workItemType')}
+                </span>
+                <WorkItemTypePicker
+                  value={type}
+                  onChange={(tp) => {
+                    setType(tp);
+                    setExecutor(defaultExecutorForType(tp));
+                  }}
+                  disabled={isPending}
+                />
+              </div>
+
+              {type && executor ? (
+                <div className="flex flex-col gap-1 font-sans text-sm">
+                  <span className="text-(--el-text) font-medium">{t('createIssue.executor')}</span>
+                  <ExecutorPicker value={executor} onChange={setExecutor} disabled={isPending} />
+                </div>
+              ) : null}
+            </>
+          ) : null}
 
           {/* The MarkdownEditor (min, with file upload) renders its own label
             (also its aria-label) — no external span, else it shows twice. */}

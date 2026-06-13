@@ -361,6 +361,27 @@
   --el-type-bug: var(--color-destructive);
   --el-type-subtask: var(--color-accent-teal);
 
+  /* ── Work-item TYPE hues (the work-NATURE palette, Story 2.7 · 2.7.4) ────
+     Parallel to the per-KIND hues above: the ten fixed `WorkItemType` members
+     each render their icon/chip in their own hue (matches
+     lib/issues/workItemTypeMeta.ts). NO new Tier-0 colour needed — the seven
+     "produces an artifact" types take the seven saturated hues; the three
+     "meta / admin" types (decision, manual, chore) take the three greys
+     (desaturation is semantically apt). Each maps to a Tier-0 var, so the
+     [data-theme="dark"] block re-skins them automatically. The chip puts the
+     hue in a color-mix tint BACKGROUND with --el-text-strong text (AA,
+     finding #35); never a page-level tint. */
+  --el-type-code: var(--color-info); /* blue   — implementation */
+  --el-type-design: var(--color-accent); /* pink   — UI/UX design */
+  --el-type-test: var(--color-success); /* green  — automated tests */
+  --el-type-content: var(--color-accent-teal); /* teal   — copy / docs / translate */
+  --el-type-research: var(--color-primary); /* purple — spike / investigation */
+  --el-type-review: var(--color-accent-orange); /* orange — QA / review */
+  --el-type-deploy: var(--color-destructive); /* red    — infra / ops / release */
+  --el-type-decision: var(--color-charcoal); /* ink    — decision record */
+  --el-type-manual: var(--color-stone); /* stone  — human provisioning */
+  --el-type-chore: var(--color-slate); /* slate  — housekeeping */
+
   /* ── Chart series (Story 4.6 · the reusable viz Story 6.3 reuses) ──
      Every chart colour routes through one of these, NEVER a raw --color-*
      in chart code (the per-component growth pattern). They map to Tier-0

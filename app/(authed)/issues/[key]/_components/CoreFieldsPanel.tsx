@@ -4,8 +4,13 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { Calendar, Clock } from 'lucide-react';
-import type { WorkItemDto, WorkItemKindDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
+import { Bot, Calendar, Clock, Plus, User } from 'lucide-react';
+import type {
+  ExecutorDto,
+  WorkItemDto,
+  WorkItemKindDto,
+  WorkItemSummaryDto,
+} from '@/lib/dto/workItems';
 import type { WorkflowDto, StatusCategoryDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
@@ -24,7 +29,11 @@ import { useProjectAccess } from '../../../_components/ProjectAccessProvider';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { TypePicker } from '@/components/issues/TypePicker';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { WorkItemTypePicker } from '@/components/issues/WorkItemTypePicker';
+import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
+import { ExecutorPicker } from '@/components/issues/ExecutorPicker';
 import { EstimateBadge } from '@/components/issues/EstimateBadge';
+import { defaultExecutorForType, isTypeableKind } from '@/lib/issues/executorDefaults';
 import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
 import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import { formatDateTime, formatDate } from '@/lib/utils/datetime';
@@ -76,7 +85,31 @@ export interface CoreFieldsPanelProps {
   };
 }
 
-type EditableKey = 'status' | 'type' | 'priority' | 'assignee' | 'parent' | 'dueDate' | 'estimate';
+type EditableKey =
+  | 'status'
+  | 'type'
+  | 'workItemType'
+  | 'executor'
+  | 'priority'
+  | 'assignee'
+  | 'parent'
+  | 'dueDate'
+  | 'estimate';
+
+// The read-mode executor indicator (Story 2.7 · 2.7.4) — a compact bot/person
+// glyph + label, per design panel 3. Decorative glyph; the label carries the name.
+const EXECUTOR_GLYPH: Record<ExecutorDto, typeof Bot> = { coding_agent: Bot, human: User };
+
+function ExecutorIndicator({ executor }: { executor: ExecutorDto }) {
+  const tl = useTranslations('labels');
+  const Glyph = EXECUTOR_GLYPH[executor];
+  return (
+    <span className="flex items-center gap-1.5">
+      <Glyph className="h-4 w-4 text-(--el-text-secondary)" aria-hidden />
+      {tl(`executor.${executor}`)}
+    </span>
+  );
+}
 
 const STATUS_TONE: Record<StatusCategoryDto, NonNullable<PillProps['status']>> = {
   todo: 'planned',
@@ -243,6 +276,68 @@ export function CoreFieldsPanel({
           </span>
         )}
       </FieldCard>
+
+      {/* Work type + Executor (Story 2.7 · 2.7.4) — the NATURE of the work +
+          WHO does it, per design/work-items/type-executor-picker.mock.html
+          panel 3. LEAF-ONLY: shown only for a leaf kind (task/subtask/bug),
+          absent for epic/story (panel 2d). Inline-edit reuses the SAME picker
+          (the 2.5.5 pattern); choosing a type seeds the executor when none is
+          set (matching the service seed-if-absent), preserving an override. The
+          Executor row appears only once a type is set (it follows the type). */}
+      {isTypeableKind(eff.kind as WorkItemKindDto) ? (
+        <>
+          <FieldCard
+            label={t('workItemType')}
+            editing={editing === 'workItemType'}
+            onToggle={() => toggle('workItemType')}
+          >
+            {editing === 'workItemType' ? (
+              <WorkItemTypePicker
+                value={eff.type}
+                onChange={(tp) =>
+                  patch({
+                    type: tp,
+                    ...(eff.executor == null ? { executor: defaultExecutorForType(tp) } : {}),
+                  })
+                }
+                onClose={() => setEditing(null)}
+                autoOpen
+                disabled={isPending || readOnly}
+              />
+            ) : eff.type ? (
+              <WorkItemTypeChip type={eff.type} />
+            ) : (
+              <button
+                type="button"
+                onClick={() => toggle('workItemType')}
+                disabled={isPending || readOnly}
+                className="inline-flex items-center gap-1.5 rounded-(--radius-badge) border border-dashed border-(--el-border-strong) px-(--spacing-chip-x) py-(--spacing-chip-y) text-(--el-text-muted) hover:text-(--el-text) disabled:opacity-50"
+              >
+                <Plus className="h-3.5 w-3.5 text-(--el-text-faint)" aria-hidden />
+                {t('setType')}
+              </button>
+            )}
+          </FieldCard>
+
+          {eff.type ? (
+            <FieldCard
+              label={t('executor')}
+              editing={editing === 'executor'}
+              onToggle={() => toggle('executor')}
+            >
+              {editing === 'executor' ? (
+                <ExecutorPicker
+                  value={eff.executor ?? defaultExecutorForType(eff.type)}
+                  onChange={(ex) => patch({ executor: ex })}
+                  disabled={isPending || readOnly}
+                />
+              ) : (
+                <ExecutorIndicator executor={eff.executor ?? defaultExecutorForType(eff.type)} />
+              )}
+            </FieldCard>
+          ) : null}
+        </>
+      ) : null}
 
       <FieldCard
         label={t('priority')}
