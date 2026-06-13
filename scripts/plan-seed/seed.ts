@@ -18,6 +18,17 @@
  * demo tenant stays browsable by every workspace member (flip to `private` here to
  * showcase gating instead). Before 6.4 access was workspace-level only.
  *
+ * Org tier (Story 6.10): the `moooon` workspace nests under a `moooon`
+ * **Organization** — the root tenancy tier ABOVE Workspace. The seed models a
+ * SINGLE org over the single workspace (the simplest shape that still exercises
+ * the org switcher's active org); `workspacesService.createWorkspace` mints it
+ * with **zhuyue@motir.co as org OWNER** and attaches the workspace, then the rest
+ * of the team is enrolled as org members at **varied org-roles** (a couple of
+ * `admin`s, the rest `member`s) so 6.10.5's cross-workspace member UI + 6.10.8's
+ * e2e have a realistic owner/admin/member roster. The clear pass deletes the org
+ * too — it does NOT cascade up from the workspace delete — so reseeds stay
+ * idempotent and never collide on the globally-unique `moooon` org slug.
+ *
  * Re-running is IDEMPOTENT — it clears ONLY the `moooon` workspace(s) owned by a
  * seed user (old or new) and reseeds; it never touches any other workspace's
  * data. The legacy single-owner account `info@moooon.net` is removed. Everything
@@ -34,13 +45,15 @@
  */
 /* eslint-disable no-console -- a CLI script: console IS its output surface */
 import '../_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads (helper is in scripts/, one level up)
-import type { Prisma, SprintState, WorkItemPriority } from '@prisma/client';
+import type { OrganizationRole, Prisma, SprintState, WorkItemPriority } from '@prisma/client';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
+import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
+import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
@@ -205,9 +218,18 @@ async function main() {
       where: { userId: { in: knownUsers.map((u) => u.id) } },
       include: { workspace: true },
     });
-    const workspaceIds = new Set(
-      memberships.filter((m) => m.workspace.name === SEED_WORKSPACE_NAME).map((m) => m.workspaceId),
-    );
+    const seededWorkspaces = memberships
+      .filter((m) => m.workspace.name === SEED_WORKSPACE_NAME)
+      .map((m) => m.workspace);
+    const workspaceIds = new Set(seededWorkspaces.map((w) => w.id));
+    // Story 6.10: each workspace's parent Organization (the tenant ROOT above
+    // Workspace). Cascade only flows org→workspace, so deleting a workspace does
+    // NOT delete its org — an undeleted org would orphan and collide on the
+    // globally-unique `moooon` org slug the next reseed mints, breaking
+    // idempotency. Capture the org ids now; drop them AFTER their workspaces.
+    // (The new-tenant-root truncate rule: a tier above an existing root must be
+    // cleared explicitly — Cascade never reaches up.)
+    const organizationIds = new Set(seededWorkspaces.map((w) => w.organizationId));
     for (const workspaceId of workspaceIds) {
       // work_item.parent is onDelete:NoAction, so clear the set in one statement
       // first; the workspace then cascades project + memberships. Clearing the
@@ -215,6 +237,16 @@ async function main() {
       await db.workItem.deleteMany({ where: { workspaceId } });
       await db.workspace.delete({ where: { id: workspaceId } });
     }
+    // The orgs are now childless — drop them (cascades their OrganizationMembership
+    // rows). This is slug-agnostic, so it also cleans an org whose slug a past
+    // collision suffixed. Belt-and-suspenders: also remove any org still carrying
+    // the seed slug that a PRE-6.10.6 reseed left orphaned (its workspace delete
+    // never reached up to it), so the createWorkspace below mints slug `moooon`,
+    // not a suffixed retry. `slug` is @unique, so this drops at most one row.
+    for (const organizationId of organizationIds) {
+      await db.organization.delete({ where: { id: organizationId } });
+    }
+    await db.organization.deleteMany({ where: { slug: SEED_WORKSPACE_NAME } });
     const legacy = knownUsers.find((u) => u.email === LEGACY_EMAIL);
     if (legacy) await db.user.delete({ where: { id: legacy.id } });
   }
@@ -245,6 +277,32 @@ async function main() {
       role: 'member',
     });
   }
+
+  // ── Org roster: model the `moooon` org over its workspace (Story 6.10.6) ───
+  // `createWorkspace` above already minted the `moooon` Organization (the root
+  // tenancy tier) with zhuyue@motir.co as its org OWNER and the workspace
+  // attached via `organizationId`. Enrol the rest of the team as org members at
+  // VARIED org-roles so the owner/admin/member spread is realistic for 6.10.5's
+  // cross-workspace member UI + 6.10.8's e2e. The 6.10.4 "adding a user to a
+  // workspace auto-creates their org membership" upward auto-join is not wired
+  // yet, so the seed enrols them explicitly here (6.10.9 reconciles this path
+  // once 6.10.4 lands). Idempotent across reseeds — the clear pass deletes the
+  // org first, cascading its memberships.
+  const organizationId = workspace.organizationId;
+  await db.$transaction(async (tx: Prisma.TransactionClient) => {
+    for (let i = 0; i < SEED_USERS.length; i++) {
+      const email = SEED_USERS[i]!.email;
+      if (email === OWNER_EMAIL) continue; // already the org owner via createWorkspace
+      // Deterministic spread: the first two non-owner members are org `admin`s,
+      // the rest are `member`s — so owner + admin + member are all represented.
+      const role: OrganizationRole = i <= 2 ? ORGANIZATION_ROLE.admin : ORGANIZATION_ROLE.member;
+      await organizationMembershipRepository.create(
+        { organizationId, userId: userIdByEmail.get(email)!, role },
+        tx,
+      );
+    }
+  });
+
   const project = await projectsService.createProject({
     name: SEED_PROJECT_NAME,
     identifier: SEED_PROJECT_IDENTIFIER,
