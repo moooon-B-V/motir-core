@@ -98,6 +98,40 @@ describe('workItemsService.quickSearch — correctness', () => {
     expect(results.map((r) => r.title)).toEqual(['Authentication Flow']);
   });
 
+  it('matches a mid-word substring of a single token', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'PROD' });
+    await seedItem({ ...projectOf(fx), reporterId: fx.ownerId, title: 'Refactor the search box' });
+
+    // "earch" appears mid-word inside "search".
+    const results = await workItemsService.quickSearch('earch', fx.ctx);
+    expect(results.map((r) => r.title)).toEqual(['Refactor the search box']);
+  });
+
+  it('matches multiple tokens that are NOT adjacent and out of order (Jira summary tokenisation)', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'PROD' });
+    await seedItem({ ...projectOf(fx), reporterId: fx.ownerId, title: 'Refactor the search box' });
+
+    // Every token must appear SOMEWHERE in the title — order-independent, and
+    // the words need not be adjacent. (Before this, only a contiguous
+    // "search box" substring matched; "refactor box" / "box search" returned
+    // nothing.)
+    for (const q of ['refactor box', 'box search', 'search box', 'the refactor']) {
+      const results = await workItemsService.quickSearch(q, fx.ctx);
+      expect(
+        results.map((r) => r.title),
+        `query=${q}`,
+      ).toEqual(['Refactor the search box']);
+    }
+  });
+
+  it('requires EVERY token to be present (a token with no match drops the row)', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'PROD' });
+    await seedItem({ ...projectOf(fx), reporterId: fx.ownerId, title: 'Refactor the search box' });
+
+    const results = await workItemsService.quickSearch('search missing', fx.ctx);
+    expect(results).toEqual([]);
+  });
+
   it('ranks an exact identifier above a same-prefix identifier above a title-only match', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'PROD' });
     // PROD-1 (exact) … then enough items so PROD-10/PROD-11 exist (prefix of
@@ -278,6 +312,19 @@ describe('workItemsService.quickSearch — permission scope (Story 6.4)', () => 
 describe('workItemRepository.quickSearch — direct', () => {
   it('short-circuits to [] when the browsable project set is empty', async () => {
     const rows = await workItemRepository.quickSearch('any-workspace', [], 'anything', 20);
+    expect(rows).toEqual([]);
+  });
+
+  it('matches nothing when the query has no usable tokens (whitespace)', async () => {
+    // The service guards this, but the repo must stay safe if called directly:
+    // a whitespace-only query yields zero tokens → the title arm is FALSE and
+    // the (space-prefixed) identifier arm matches nothing.
+    const rows = await workItemRepository.quickSearch(
+      'any-workspace',
+      ['bogus-project'],
+      '   ',
+      20,
+    );
     expect(rows).toEqual([]);
   });
 });

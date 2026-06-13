@@ -445,9 +445,21 @@ export const workItemRepository = {
   ): Promise<WorkItem[]> {
     if (projectIds.length === 0) return [];
     const exact = query.toLowerCase();
-    const escaped = escapeLikePattern(query);
-    const prefixPattern = `${escaped}%`;
-    const containsPattern = `%${escaped}%`;
+    const idPrefixPattern = `${escapeLikePattern(query)}%`;
+    // Title match is Jira-style summary tokenisation: split the query on
+    // whitespace and require the title to contain EVERY token (order-
+    // independent), each a case-insensitive substring — so "board drag" finds
+    // "Drag-and-drop on the board" even though the words aren't adjacent. A
+    // single-token query collapses to one contains-match. Each token's ILIKE
+    // rides the 6.1.1 `pg_trgm` GIN index. The identifier (key) match keeps the
+    // WHOLE query (keys don't tokenise — "PROD-12" is one token).
+    const tokens = query.split(/\s+/).filter((t) => t.length > 0);
+    const titleMatch = tokens.length
+      ? Prisma.join(
+          tokens.map((t) => Prisma.sql`w."title" ILIKE ${`%${escapeLikePattern(t)}%`}`),
+          ' AND ',
+        )
+      : Prisma.sql`FALSE`;
     // Empty array params break `ANY`/`ALL` type inference; projectIds is
     // guaranteed non-empty above, and the exclusion is omitted entirely when
     // there's nothing to exclude.
@@ -462,13 +474,13 @@ export const workItemRepository = {
           AND w."archivedAt" IS NULL
           ${excludeSql}
           AND (
-            w."identifier" ILIKE ${prefixPattern}
-            OR w."title" ILIKE ${containsPattern}
+            w."identifier" ILIKE ${idPrefixPattern}
+            OR (${titleMatch})
           )
         ORDER BY
           CASE
             WHEN LOWER(w."identifier") = ${exact} THEN 0
-            WHEN w."identifier" ILIKE ${prefixPattern} THEN 1
+            WHEN w."identifier" ILIKE ${idPrefixPattern} THEN 1
             ELSE 2
           END ASC,
           w."key" ASC,
