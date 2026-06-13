@@ -1459,6 +1459,156 @@ export const EPICS: EpicMeta[] = [
           'the 4-layer Route → Service → Repository → Prisma contract for any backend ' +
           'change the fix may need.',
       },
+      {
+        id: 'bug-builtin-filter-names-not-localized',
+        kind: 'bug',
+        title:
+          'Built-in saved-filter names render in English even when the UI locale is `zh` — the SavedFilterDropdown (and every other consumer) ships the English literal from the registry',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** every UI that lists built-in saved filters — confirmed in the ' +
+          'issues-list `SavedFilterDropdown` (`/issues`), referenced by the reports ' +
+          '`ReportScopeCombobox` and the dashboard `DataSourceField` saved-filter picker · ' +
+          '**Status:** open · **Reported by:** Yue.\n\n' +
+          'When the UI locale is `zh`, the dropdown chrome around saved filters IS ' +
+          'translated correctly (`默认 / 我的筛选器 / 项目筛选器 / 查找筛选器…`), but the ' +
+          'actual filter ROW names remain English (`My open issues / Reported by me / All ' +
+          'issues / Open issues / Done issues / Created recently / Updated recently / ' +
+          'Resolved recently`). The screenshot Yue attached shows the issues-list dropdown ' +
+          'with a `查找筛选器…` placeholder + `默认` group header + English row names — ' +
+          'evidence that the i18n thread reaches the chrome but stops at the rows. The ' +
+          '"Built-in" / `内置` tag on the right column is localised, so the chrome / row ' +
+          'split is visually jarring.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, set the UI language to ' +
+          'Chinese (or any non-English locale; `messages/zh.json` is the shipped second ' +
+          'locale). Open the `moooon` / `motir` project → `/issues`, click the saved-filter ' +
+          'dropdown trigger (the "Saved" / `已保存` button). Observe: the `默认` group ' +
+          'header is in Chinese, the search placeholder is `查找筛选器…`, but every row ' +
+          'in the group is in English. Same shape in the Distribution / Created-vs-' +
+          'Resolved report-landing scope picker when a saved filter is chosen, and in the ' +
+          "dashboard Add-widget modal's Data source picker (Saved filter mode).\n\n" +
+          '**Root cause (HIGH confidence — the source comment names it).** ' +
+          '`lib/savedFilters/builtins.ts:33` documents the design intent ' +
+          '**verbatim**:\n\n' +
+          '> `/** English display name (the 6.2.3 UI threads i18n over the slug). */`\n\n' +
+          'The registry then hard-codes the `name` field as the English literal for each ' +
+          'of the eight built-ins. The intended pattern was: server ships the slug ' +
+          '(stable, locale-independent), and every UI consumer threads `t(...)` over the ' +
+          'slug. **That thread was never wired.** Instead, the mapper at ' +
+          '`lib/mappers/savedFilterMappers.ts:39` reads:\n\n' +
+          '> `return { id: builtinFilterId(def.slug), name: def.name, builtin: true };`\n\n' +
+          '…copying the English `def.name` straight onto the DTO `name` field. The UI ' +
+          'then renders `builtin.name` directly — see ' +
+          '`app/(authed)/issues/_components/SavedFilterDropdown.tsx:480` ' +
+          '(`label={builtin.name}`). The slug never reaches the client; the DTO carries ' +
+          "the English text. So `t('savedFilters.builtinNames.<slug>')` is what the " +
+          'comment expected, but no such key exists in `messages/{en,zh}.json` and no ' +
+          'consumer calls it.\n\n' +
+          '**Impact.** Eight strings (the built-in names) leak English into every ' +
+          'non-English locale, across at least three surfaces (issues-list dropdown, ' +
+          'report scope, dashboard data source). It is the most visible i18n hole because ' +
+          "the dropdown's chrome is fully localised — the row names stand out as the only " +
+          'untranslated text.\n\n' +
+          '**Fix shapes (decide at fix time — option 1 is the durable shape the comment ' +
+          'asked for):**\n\n' +
+          '1. **Client-side i18n via the slug (recommended; matches the design ' +
+          'comment).** Add `slug` to `BuiltinFilterSummaryDto` (alongside `name`, or in ' +
+          'place of it). Add a `savedFilters.builtinNames` block to `messages/en.json` and ' +
+          '`messages/zh.json` keyed by slug ' +
+          '(`my-open-issues / reported-by-me / all-issues / open-issues / done-issues / ' +
+          'created-recently / updated-recently / resolved-recently`). Every UI consumer ' +
+          'replaces `builtin.name` with ' +
+          "`t(`savedFilters.builtinNames.${builtin.slug}`)`. The registry's English `name` " +
+          'becomes the canonical FALLBACK (used only by tools / tests that have no `t` in ' +
+          'scope), not the user-facing string. This is exactly what the ' +
+          '`builtins.ts:33` comment described.\n' +
+          '2. **Server-side localisation in the mapper.** Pass the request locale to ' +
+          '`toBuiltinFilterSummaryDto`; resolve the localized name via a server-side ' +
+          'message table; ship the localized string in `name`. Works, but it (a) bakes ' +
+          'locale into the DTO (a row read returns a different shape per locale), (b) ' +
+          'still leaves the registry as the English fallback for tools, and (c) is the ' +
+          'opposite shape from the existing client-side i18n (everything else in the app ' +
+          'uses `next-intl` on the client). Reject in favour of option 1.\n' +
+          '3. **Inline `t` in each consumer over the slug.** Like option 1 but without ' +
+          'adding a `savedFilters.builtinNames` namespace — each consumer has its own ' +
+          'mapping table. Reject: violates DRY and the three consumers will drift.\n\n' +
+          '**Recommended:** option 1. Single message namespace, slug-keyed, one DTO ' +
+          'change, one `t(...)` call shape repeated across consumers. The registry stays ' +
+          'as the source of slugs + the English fallback.\n\n' +
+          '**Test gap that let it ship.** Existing tests likely verify the dropdown ' +
+          'opens / lists the built-ins / applies a chosen filter — but assert against the ' +
+          'English `name` directly, so the assertion would pass against any locale. The ' +
+          'fix MUST add a test that:\n\n' +
+          '- Renders `SavedFilterDropdown` (or any of the three consumers) under a `zh` ' +
+          'next-intl `NextIntlClientProvider` wrapper.\n' +
+          '- Asserts the rendered row labels are the **Chinese** strings, not the ' +
+          'English ones.\n' +
+          '- Asserts ALL eight built-ins translate (no half-translated regression).\n' +
+          '- Re-renders under `en` and asserts the labels match the registry `name` ' +
+          'literals (the en path stays green).\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- In the `zh` locale, every built-in filter row in `SavedFilterDropdown` ' +
+          'renders its Chinese label (8 strings: 我的待办 / 我报告的 / 全部事项 / 待办 / ' +
+          '已完成 / 最近创建 / 最近更新 / 最近已解决 — exact wording to be confirmed at ' +
+          'fix time against the existing translation style in `messages/zh.json`; the ' +
+          'Chinese above is illustrative).\n' +
+          '- Same in every other consumer that lists built-in saved filters — the report ' +
+          'scope picker (`ReportScopeCombobox`) and the dashboard data-source picker ' +
+          '(`DataSourceField`). Audit the call sites; each one must thread `t(...)` over ' +
+          'the slug, not over `builtin.name`.\n' +
+          '- The `en` locale renders the SAME English strings it does today (no ' +
+          'regression of the green path).\n' +
+          '- The `BuiltinFilterSummaryDto` carries `slug` (the locale-independent ' +
+          'identifier). The `name` field MAY remain as the canonical English fallback for ' +
+          'callers without a `t` in scope (tools, CLI, server-side logs), or MAY be ' +
+          'dropped entirely if no such caller exists — decide at fix time.\n' +
+          '- A render test asserts the Chinese labels under `zh` and the English labels ' +
+          'under `en`, for all eight built-ins, in at least one consumer surface ' +
+          '(`SavedFilterDropdown` recommended; the others share the same DTO + ' +
+          "`t(...)` shape so one consumer's coverage is enough).\n" +
+          '- The `lib/savedFilters/builtins.ts:33` comment is UPDATED to reflect the ' +
+          'now-wired pattern ("English fallback; the UI threads ' +
+          "`t('savedFilters.builtinNames.<slug>')` for the localised label\") so the " +
+          'next reader of the registry sees the contract honoured rather than the ' +
+          'broken promise.\n' +
+          '- AA contrast preserved; no service / DTO transport change beyond adding ' +
+          '`slug` to `BuiltinFilterSummaryDto`; no route change.\n\n' +
+          '## Context refs\n\n' +
+          '- `lib/savedFilters/builtins.ts:29-112` — the `BUILTIN_FILTERS` registry; the ' +
+          'comment at line 33 documents the design intent (and names the gap). The eight ' +
+          'slugs are the i18n keys.\n' +
+          '- `lib/mappers/savedFilterMappers.ts:39` — `toBuiltinFilterSummaryDto`; where ' +
+          '`def.name` leaks into the DTO unmediated.\n' +
+          '- `lib/dto/savedFilters.ts` — `BuiltinFilterSummaryDto` definition; `slug` ' +
+          'addition lands here.\n' +
+          '- `app/(authed)/issues/_components/SavedFilterDropdown.tsx:480` — the issues-' +
+          'list dropdown that renders `label={builtin.name}` directly (the most visible ' +
+          'consumer; the screenshot surface).\n' +
+          '- `app/(authed)/reports/_components/ReportScopeCombobox.tsx:54` — ' +
+          '`label: f.name` for the report scope picker; second consumer.\n' +
+          '- `app/(authed)/dashboard/_components/DataSourceField.tsx` — the dashboard ' +
+          'data-source picker; third consumer (Saved filter mode).\n' +
+          '- `messages/en.json:1893-...` + `messages/zh.json:1985-...` — the `savedFilters` ' +
+          'i18n block; the `savedFilters.builtinNames.<slug>` keys land here.\n' +
+          '- `bug-backlog-zh-sprint-translated-as-chongci` (sibling i18n bug) — the ' +
+          'sprint/冲刺 mistranslation precedent; same shape as this one (i18n string ' +
+          'mistakenly literal-shipped through to a `zh` surface).\n' +
+          '- `motir-core/CLAUDE.md` — i18n strings live in `messages/{en,zh}.json`; ' +
+          'service mappers carry locale-independent shapes (the DTO contract).\n\n' +
+          '**Refactor signal (rule of three watch).** This is the SECOND i18n leak we ' +
+          'have logged where a server-side English literal ships untranslated to a ' +
+          '`zh`-localised UI surface — first was ' +
+          '`bug-backlog-zh-sprint-translated-as-chongci` (the sprint label, fixed in ' +
+          'PR #502), now this one (the eight built-in filter names). Both share the same ' +
+          'underlying defect: a server-shipped human-readable string that should have ' +
+          'been a locale-independent KEY (slug / id) for the client to thread `t(...)` ' +
+          'over. If a third surface ships this way (e.g. workflow status labels, ' +
+          'priority labels, or kind labels), the fix is no longer "thread `t(...)` per ' +
+          'consumer" — it is a lint rule (or a typed `LocalizedString` DTO field) that ' +
+          'forbids server-shipped user-facing English from crossing the boundary.',
+      },
     ],
   },
   {
