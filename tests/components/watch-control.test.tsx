@@ -216,7 +216,7 @@ describe('WatchControl — the watchers popover (panel 5)', () => {
     stubWatchersList(page({ canManage: true }));
     addWatcherSpy.mockResolvedValue({
       ok: false,
-      error: 'Julian can’t view this issue, so they can’t watch it.',
+      error: 'Julian can’t view this work item, so they can’t watch it.',
     });
     renderControl();
     await openPopover();
@@ -225,7 +225,9 @@ describe('WatchControl — the watchers popover (panel 5)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Julian' }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain('Julian can’t view this issue, so they can’t watch it.');
+    expect(alert.textContent).toContain(
+      'Julian can’t view this work item, so they can’t watch it.',
+    );
   });
 
   it('admins remove a watcher from the per-row ×', async () => {
