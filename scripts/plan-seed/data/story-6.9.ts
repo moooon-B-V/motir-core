@@ -54,7 +54,7 @@ import type { PlanStory } from '../types';
 export const story_6_9: PlanStory = {
   id: '6.9',
   title: 'Quick issue search (server-side issue-picker search)',
-  status: 'planned',
+  status: 'in_progress',
   descriptionMd:
     'The reusable **server-side issue quick-search** the pickers need — and the "Search Story" ' +
     'that Stories 1.5 / 2.4.9 / 2.5 defer to in prose but that was never planned (surfaced as ' +
@@ -197,7 +197,7 @@ export const story_6_9: PlanStory = {
       id: '6.9.3',
       title:
         'Story tests — quick-search correctness + permission/exclusion + the #98 large-seed regression E2E + a11y sweep',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 26,
