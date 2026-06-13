@@ -676,6 +676,97 @@ export const EPICS: EpicMeta[] = [
           'rather than open-coding `min-w-max` per row. Not yet — fix this one in place, but ' +
           'note the pattern for the next time.',
       },
+      {
+        id: 'bug-board-create-scrum-type-disabled',
+        kind: 'bug',
+        title:
+          'Cannot create a Scrum board — the create-board dialog’s Scrum type option is permanently disabled (stale "Epic 4" seam left over after Story 4.5 shipped)',
+        status: 'planned',
+        type: 'bug',
+        executor: 'coding_agent',
+        estimateMinutes: 25,
+        dependsOn: ['3.7.4', '4.5'],
+        descriptionMd:
+          '**Type:** bug (stale seam) · **Parent:** Epic 3 (Boards) · **Surfaces:** the ' +
+          'create-board dialog on `/boards` (`BoardSwitcher.tsx` → `BoardFormModal`, Subtask ' +
+          '**3.7.4**) · **Unblocked by:** Story **4.5** (Scrum board) + Subtask **3.7.3** ' +
+          '(`boardsService.createBoard`) · **Status:** open · **Reported by:** Yue.\n\n' +
+          'You cannot create a **Scrum** board through the UI. On `/boards`, the board switcher’s ' +
+          '**New board** dialog draws a Kanban / Scrum type picker, but the **Scrum** tile is ' +
+          'rendered permanently disabled — greyed (`opacity-60`, `aria-disabled`) with an ' +
+          '**"Epic 4"** badge — and the only selectable type is Kanban. So every board a user ' +
+          'creates is a Kanban board; there is no way to create a Scrum board from the product.\n\n' +
+          '**Why it’s now a bug (not a deliberate seam).** When the create dialog shipped (3.7.4) ' +
+          'the Scrum *board view* did not exist yet, so the Scrum tile was intentionally stubbed ' +
+          'with the "Epic 4" badge as a forward-looking placeholder. That prerequisite has since ' +
+          'landed: **Story 4.5 (Scrum board, sprint-scoped view) is `done`**, the backend ' +
+          '`boardsService.createBoard(projectId, { type: scrum })` shipped in **3.7.3** (and is ' +
+          'already exercised in production by 4.4’s sprint-start, which provisions a `type == ' +
+          "scrum` board via that exact call), and the DTO/enum (`BoardTypeDto = 'kanban' | " +
+          "'scrum'`) + the `POST /api/boards` route already validate and accept `scrum`. The " +
+          'whole stack supports a user-created Scrum board EXCEPT the one disabled tile — the seam ' +
+          'was never re-opened when 4.5 merged, so the UI silently caps board creation at Kanban.\n\n' +
+          '**Root cause.** In `app/(authed)/boards/_components/BoardSwitcher.tsx`, `BoardFormModal` ' +
+          'hardcodes the type and never lets it change:\n' +
+          "- `const [type] = useState<BoardType>('kanban');` — state with **no setter**, so the " +
+          'submitted type is always `kanban`.\n' +
+          '- The Kanban tile is a static `role="radio" aria-checked` element; the **Scrum tile** ' +
+          '(`data-testid="board-type-scrum"`) is a static `aria-disabled` / `aria-checked={false}` ' +
+          "element with `opacity-60` and a `<Pill>{t('epic4Badge')}</Pill>` — neither tile is " +
+          'actually a clickable control. There is no `onClick` / `onKeyDown` toggling `type` on ' +
+          'either tile.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open the `moooon` / `motir` ' +
+          'project → `/boards`. Open the board switcher → **New board**. Observe the type picker: ' +
+          'the **Scrum** tile is greyed with an "Epic 4" badge and cannot be selected; only Kanban ' +
+          'is available. Create the board → it is a Kanban board. There is no path to a Scrum ' +
+          'board.\n\n' +
+          '**Fix.** Re-open the seam now that 4.5 has shipped: make the type picker a real ' +
+          'two-option radio group.\n' +
+          "- Give `BoardFormModal` a working `const [type, setType] = useState<BoardType>('kanban')` " +
+          '(Kanban stays the default).\n' +
+          '- Make BOTH tiles selectable controls (button / `role="radio"` with `onClick` + arrow-key ' +
+          'roving focus per the radiogroup a11y pattern), toggling `aria-checked` and the ' +
+          'selected-state styling (`border-(--el-accent)` / `bg-(--el-muted)` like the current ' +
+          'Kanban tile). Remove the `aria-disabled` / `opacity-60` and the `epic4Badge` Pill from ' +
+          'the Scrum tile.\n' +
+          '- Submit carries the chosen `type` to the existing `createBoard(name, type)` → ' +
+          '`POST /api/boards { name, type }` path (already accepts `scrum`; no service/route/schema ' +
+          'change). Newly-created Scrum boards already render correctly — a `scrum` board with no ' +
+          'active sprint shows the 4.5 "No active sprint" empty state, and gains the sprint header ' +
+          'once a sprint is started.\n' +
+          '- Drop the now-unused `epic4Badge` i18n key from `messages/*.json` (and update the ' +
+          '`newBoardSeedHint` copy if the type-picker hint changes). Keep the colour/shape token ' +
+          'rules (`--el-*` + element-shape tokens) for any restyled tile.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- The New-board dialog’s Scrum tile is **enabled and selectable**; choosing it and ' +
+          'submitting creates a `type == scrum` board (verified server-side), which then appears ' +
+          'in the switcher and renders the 4.5 Scrum surface (sprint header / "No active sprint" ' +
+          'empty state).\n' +
+          '- Kanban remains the default selection; the picker is a proper radio group ' +
+          '(arrow-key navigable, single selection, `aria-checked` tracks the choice) with no ' +
+          '`aria-disabled` tile and no "Epic 4" badge.\n' +
+          '- A component test for `BoardFormModal` asserts the Scrum tile is selectable and that ' +
+          "submitting after selecting Scrum calls `onSubmit(name, 'scrum')` (today it always " +
+          'submits `kanban`); an E2E (`board-multi.spec.ts` or sibling) creates a Scrum board ' +
+          'end-to-end and asserts it renders the Scrum board view.\n' +
+          '- No dead `epic4Badge` reference remains; `pnpm test:coverage` keeps any changed ' +
+          'component file at/above the gate.\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/boards/_components/BoardSwitcher.tsx` — `BoardFormModal` (the ' +
+          "`useState<BoardType>('kanban')` with no setter, the static Kanban/Scrum tiles, the " +
+          '`epic4Badge` Pill) + `createBoard()` which already POSTs `{ name, type }`\n' +
+          '- `lib/services/boardsService.ts` `createBoard` + `lib/dto/boards.ts` `BoardTypeDto` + ' +
+          '`app/api/boards/route.ts` (`InvalidBoardTypeError`) — the backend that already accepts ' +
+          '`scrum`; `lib/services/sprintsService.ts` start flow — the existing in-product caller ' +
+          'that provisions a `scrum` board via `createBoard`\n' +
+          '- Story **4.5** (`story-4.5.ts`, `done`) — the Scrum board view that makes a ' +
+          'user-created scrum board fully functional; Subtask **3.7.4** — the create dialog that ' +
+          'owns the seam\n' +
+          '- `messages/en.json` `epic4Badge` / `boardTypeScrum` / `newBoardSeedHint` — the copy to ' +
+          'clean up\n' +
+          '- `motir-core/CLAUDE.md` — colour via `--el-*`, shape via element-shape tokens (applies ' +
+          'to the restyled Scrum tile); the radiogroup a11y pattern for the two-option picker',
+      },
     ],
   },
   {
