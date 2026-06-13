@@ -166,7 +166,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.1',
       title: 'Design — the triage inbox + the submission surfaces (widget + portal form)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 55,
