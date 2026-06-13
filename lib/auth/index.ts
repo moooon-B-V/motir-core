@@ -247,9 +247,14 @@ export const auth = betterAuth({
       create: {
         after: async (user) => {
           try {
-            await workspacesService.createWorkspace({
-              name: `${user.name}'s Workspace`,
-              ownerUserId: user.id,
+            // Story 6.10.4 — auto-provision the new account's tenancy: an
+            // organization (an org of one / OPC) + a default workspace + the
+            // owner memberships for both, atomically. provisionForNewUser is the
+            // named entry for this (it delegates to createWorkspace's
+            // mint-own-org branch).
+            await workspacesService.provisionForNewUser({
+              userId: user.id,
+              userName: user.name,
             });
           } catch (err) {
             // Post-commit best-effort: do not rethrow (the user row is
