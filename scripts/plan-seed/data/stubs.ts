@@ -8,6 +8,15 @@ import type { PlanStory } from '../types';
  * from the epic-*.html cards.
  */
 export const STUB_STORIES: PlanStory[] = [
+  // ── Epic 2: Issue tracking core ──────────────────────────────────────────
+  // Epic 2 was fully expanded + done; RE-OPENED 2026-06-12 with one new story:
+  // 2.7 (Work-item type + executor) — data/story-2.7.ts. Adds the structural
+  // `work_item.type` (code/design/test/…) + `executor` fields the AI layer
+  // generates (7.3) and routes prompts by (7.6); today they're only prose in
+  // the description. A Principle-#11 justified deviation from Jira (whose only
+  // type axis is `kind`). Placed in Epic 2 (core attribute) so every AI
+  // consumer is a clean backward dep.
+
   // ── Epic 3: Boards ─────────────────────────────────────────────────────────
   // Epic 3 is fully expanded — every story is a data/story-3.*.ts module
   // (3.1, 3.2, 3.3, 3.5, 3.6, 3.7, 3.8), assembled in index.ts; no Epic-3 stubs
@@ -62,24 +71,13 @@ export const STUB_STORIES: PlanStory[] = [
   // collaboration journey (the seams between stories) + the collaboration-
   // heavy loaded-issue fixture and its bounded-read/bounded-DOM at-scale
   // specs + the full-page strict a11y sweep. Epic 5 is now fully expanded
-  // except the 5.7 stub below.
-  {
-    id: '5.7',
-    title: 'In-app notifications (bell + unread feed)',
-    status: 'planned',
-    descriptionMd:
-      'The in-app half of the notification surface (5.1.6 ships the email half): a bell in the ' +
-      'shell header with an unread count, a notification feed (mentions first; watcher / ' +
-      'assignment / transition events as Stories 5.4 + 6.6 land), mark-read / mark-all-read, ' +
-      'deep links into issues, and per-user notification preferences (email vs in-app — the ' +
-      'Jira personal-notification-settings shape). Consumes the SAME channel-agnostic job ' +
-      'events 5.1.6 / 5.4 emit (`work-item/comment.created`, `work-item/mentioned`, …) — a ' +
-      'notification persistence model fed by a job, never a second emit path. Added during the ' +
-      '5.1 expansion: Jira notifies mentions in-app as well as by email, and no story owned ' +
-      'that surface (the no-V1-tier rule: an unowned capability is a planning bug, not a scope ' +
-      'cut).',
-    items: [],
-  },
+  // 5.7 (In-app notifications — bell + unread feed) is fully expanded —
+  // data/story-5.7.ts. Added 2026-06-12. The IN-APP channel: a Notification
+  // model fed by a SECOND consumer of 5.1.6's shipped channel-agnostic events
+  // (no new emit path), the shell-header bell + drawer, mark-read/mark-all,
+  // and a per-user × event-type × channel (email|in_app) preference matrix
+  // both the in-app consumer and the done 5.1.6 email job honor. Epic 5 is now
+  // fully expanded.
 
   // ── Epic 6: Search, reporting & admin ─────────────────────────────────────
   // 6.4 (Roles & permissions) shipped early — data/story-6.4.ts, done.
@@ -151,124 +149,45 @@ export const STUB_STORIES: PlanStory[] = [
   // backend (6.8.1/6.8.2) is independent. This is the capability the 8.7
   // rebrand cutover consumes — PROD-vs-NIF becomes a reversible setting.
 
+  // 6.10 (Organization root-account tier + org admin) — data/story-6.10.ts.
+  // Added 2026-06-12. `Organization` (≠ Better-Auth `Account`) above Workspace,
+  // the BILLING ENTITY credits/usage roll up to; org membership + admin.
+  // 6.11 (Triage inbox — bug/feature intake → promote) — data/story-6.11.ts.
+  // Added 2026-06-12. A work_item in a `triage` state EXCLUDED from every
+  // normal tree/board/list read; intake (in-app + portal) → promote to
+  // backlog/sprint/epic/story (the Linear Triage mirror).
+
+  // 6.12 (Public projects — "open project management") — data/story-6.12.ts.
+  // Added 2026-06-12. A 4th `ProjectAccessLevel` = `public`: any signed-in
+  // Motir account reads the project cross-org, read-only; the only write is
+  // submit-to-triage (6.11) + upvote + comment + dedupe (the Canny shape) +
+  // a public roadmap. Extends 6.4's access model.
+  // 6.13 (Project square — system-level public project directory) —
+  // data/story-6.13.ts. Added 2026-06-12. The cross-org discovery gallery of
+  // ALL public projects (cards + search + category/tag filters + trending/
+  // popular/recent rank tabs, paginated), each linking to its 6.12 public
+  // view. Mirror: GitHub/GitLab Explore.
+
   // ── Epic 7: AI Planning Layer ─────────────────────────────────────────────
-  {
-    id: '7.1',
-    title: 'Core ↔ AI API contract (motir-core ↔ motir-ai)',
-    status: 'planned',
-    descriptionMd:
-      'The documented HTTP boundary the open core calls into. All later stories ride this ' +
-      'contract. Designed so a future native AI-coding executor plugs in behind the same dispatch ' +
-      'shape.',
-    items: [],
-  },
-  {
-    id: '7.2',
-    title: 'Chat front door + stack/opinion discovery',
-    status: 'planned',
-    descriptionMd:
-      'Streaming chat UI + the planner\'s "do you care?" pass (stack, deploy, design language) so ' +
-      "it never assumes a default that doesn't fit. Drafts discovery context; read-react-revise " +
-      'loop. (Former Epic 2.)',
-    items: [],
-  },
-  {
-    id: '7.3',
-    title: 'Issue-tree generation (chat → real issues in the PM core)',
-    status: 'planned',
-    descriptionMd:
-      'First plan pass: generate a comet-shaped epic/story/task tree as actual issues (Epic 2 ' +
-      'model), not a parallel artifact. The differentiator that makes Motir AI-native. (Former ' +
-      'Epic 3 §3.1.) Contract recorded by 7.9.9 (`motir plan`): generation must be invokable ' +
-      'HEADLESSLY — an async server-side job + MCP tool surface (the 7.9 MCP-first rule), not ' +
-      'only via the 7.2 web chat — and must accept an OPTIONAL code-context bundle (the ' +
-      "CLI-gathered snapshot of the user's checkout, 7.9.9) alongside the chat-derived " +
-      'discovery context.',
-    items: [],
-  },
-  {
-    id: '7.4',
-    title: 'Augmentation, expansion & completion-aware re-planning',
-    status: 'planned',
-    descriptionMd:
-      'Augment an existing backlog from a prompt; on-demand + auto-suggested expansion of stubs; ' +
-      're-plan that respects completed work as immutable. (Former Epic 3 §3.2-3.5.) Contract ' +
-      'recorded by 7.9.8 (`motir auto --include-planning`): the expansion of a stub epic/story ' +
-      'must be triggerable as an ASYNC server-side job (queue + status, returns immediately) and ' +
-      'surfaced as an MCP tool (`expand_item`-style, per the 7.9 MCP-first rule) so the CLI loop ' +
-      'can fire it and keep dispatching without waiting; 7.9.8 carries a story-level dep here — ' +
-      'retarget it to the concrete subtask when this story expands. `motir plan` (7.9.9) drives ' +
-      'augmentation ("plan <description>" on an existing backlog) and explicit expansion ' +
-      '("plan <KEY>") through the SAME async-job + MCP-tool surface, optionally carrying the ' +
-      '7.9.9 code-context bundle.',
-    items: [],
-  },
-  {
-    id: '7.5',
-    title: 'Shared-context retrieval + ready-set engine + tool surface',
-    status: 'planned',
-    descriptionMd:
-      'The prompt-quality moat: inject referenced files into prompts; the ready-set query over the ' +
-      'dependency DAG that powers "what\'s next"; the narrow single-artifact planner tools (no ' +
-      'batching). (Former Epic 4 §4.0-4.0.7.) Locked contract (finding #42): the unit of dispatch ' +
-      'is the ready leaf work item of ANY kind — a bug with no children dispatches directly; ' +
-      'decomposition is never forced. "Ready" = all is_blocked_by links done; parent/child edges ' +
-      'are rollup, not blocking.\n\n' +
-      '**Front-half shipped ahead in Story 7.0** (the ready-set page + endpoints — `GET ' +
-      '/api/ready` and `POST /api/ready/next` + the `/ready` sidebar surface — pulled forward ' +
-      "as the AI dispatch contract for BYOK `motir run`). 7.5's remaining scope: " +
-      '**shared-context retrieval** (the file-content injection into dispatch payloads — the ' +
-      'prompt-quality moat itself) + **the broader planner tool surface** beyond `ready` (the ' +
-      'narrow single-artifact tools an AI planner calls). The split is justified inline in ' +
-      'story-7.0.ts; see also notes.html #32 (epic-ordering-follows-deps) — 7.0 has no ' +
-      'forward-pointing deps, so the early ship is a clean deviation, not a planning bug.\n\n' +
-      '**Code-access decision (recorded 2026-06-10, for `motir plan` / planning context):** the ' +
-      "planner reads the user's CODE through TWO retrieval sources, both landing in this " +
-      "story's retrieval layer — (a) **the 7.7 GitHub App read path** (server-side: an App " +
-      'installation with per-repo selection + contents:read — the verified standard shape for ' +
-      'hosted AI dev tools that read your repo from their cloud, e.g. the CodeRabbit-style ' +
-      'GitHub App installation; serves web-chat planning 7.2/7.3 and dispatch-' +
-      'prompt injection), and (b) **the CLI-pushed code-context bundle** (7.9.9 — the CLI runs ' +
-      'where the code LIVES, so it gathers context locally with explicit user consent; covers ' +
-      'pre-GitHub / non-GitHub projects and needs no server-side credential). Either source ' +
-      'crossing the 7.1 core↔AI boundary is REQUEST-SCOPED: motir-ai consumes the context ' +
-      "per job and never persists the user's code.",
-    items: [],
-  },
-  {
-    id: '7.6',
-    title: 'Prompt generation + external-agent dispatch',
-    status: 'planned',
-    descriptionMd:
-      'Per-issue prompt generation by type (coding/copy/design/…) and the dispatch surface: the ' +
-      'user runs the prompt in their own agent. THE seam the future native AI-coding layer ' +
-      "extends. (Former Epic 4 §4.1, §4.2.) Contract recorded by 7.9 (Motir CLI): the prompt's " +
-      'GIT WORKFLOW block is a DISPATCH-TIME template parameter — TWO variants (per-item PR ' +
-      'for `next` and `batch` (7.9.10 reuses it unchanged) / session-branch <name> for `auto`; ' +
-      'an auto-merge-to-main variant was ' +
-      'REJECTED as dangerous, main only moves through a human-merged PR), selected by the ' +
-      'dispatch request; also a structured `targetRepo` field AND the inherited ' +
-      '`sessionBranch` (7.8.11 — when an item is ready via an integrated-awaiting-review ' +
-      'dep, the GIT WORKFLOW must instruct building on that recorded branch) on the ' +
-      "dispatch payload (7.7's repo entity upgrades targetRepo later).",
-    items: [],
-  },
-  {
-    id: '7.7',
-    title: 'GitHub integration + status sync + review loop',
-    status: 'planned',
-    descriptionMd:
-      'GitHub OAuth, repo/branch/PR model, webhooks → issue status sync, Story-level verification ' +
-      '+ Subtask CI feedback loop. (Former Epic 4 §4.3-4.6.) Shape decision (recorded ' +
-      '2026-06-10): the integration ships as a **GitHub App installation** — per-repo selection, ' +
-      'contents:read + metadata for the code-read path, write scopes only where the status-sync/' +
-      'review loop needs them — the verified standard for hosted AI dev tools that read your ' +
-      'repo from their cloud (CodeRabbit-style, per its GitHub-integration docs; ' +
-      'OAuth identifies the USER, the App installation grants the REPO access — two separate ' +
-      "grants). This App read path is ALSO the server-side code-access source for 7.5's " +
-      'planning/dispatch context retrieval (see the 7.5 code-access decision).',
-    items: [],
-  },
+  // 7.1 (Core ↔ AI API contract + motir-ai persistence foundation) is fully
+  // expanded — data/story-7.1.ts. Added 2026-06-11 (the Epic-7 architecture
+  // discussion with Yue). It fixes the locked boundary every 7.x story rides:
+  // one-directional WRITES (AI proposes a tree-delta, motir-core persists via
+  // workItemsService — write authority stays in core); a tool-use SESSION not
+  // a one-shot call (motir-ai HOSTS the planning agent, emits read requests,
+  // graph-traversal-not-RAG — the Rovo mirror); an ASYNC job model serving
+  // BOTH the 7.2 chat and the headless MCP/CLI planners; and motir-ai as a
+  // STATEFUL service with its OWN DB (headless ≠ stateless) — direction docs
+  // (7.2), planning-mistakes (7.10), code graph (7.5/7.7) live there.
+  // 7.2 (Chat front door + discovery + direction docs) — data/story-7.2.ts.
+  // 7.3 (Issue-tree generation: chat → real issues) — data/story-7.3.ts.
+  // 7.4 (Augmentation, expansion & completion-aware re-planning) — data/story-7.4.ts.
+  // 7.5 (Shared-context retrieval: plan-tree graph + code graph) — data/story-7.5.ts.
+  // 7.6 (Prompt generation + external-agent dispatch) — data/story-7.6.ts.
+  // 7.7 (GitHub integration + status sync + review loop + code-graph feed) — data/story-7.7.ts.
+  // 7.10 (Planning-mistakes store + learning loop) — data/story-7.10.ts.
+  // All seven expanded 2026-06-11 (the Epic-7 full expansion). Epic 7 now has
+  // NO stubs — every story (7.0–7.10) is a data/story-*.ts module.
   // 7.8 (Motir MCP server — agent tool surface over the PM core) is fully
   // expanded — data/story-7.8.ts. Added 2026-06-10 (the orphaned-deferral fix:
   // MCP existed only as notes.html/findings future-state prose with no owning
@@ -286,6 +205,53 @@ export const STUB_STORIES: PlanStory[] = [
   // one PAT auth path), consuming 7.6's server-side prompt generation;
   // packages/cli workspace package, binary `motir`; npm publish is Epic-8
   // work (name securing gates it — no forward dep).
+  // 7.11 (Cadence — auto-planning trigger + AI sprint planning + AI project
+  // settings) — data/story-7.11.ts. Added 2026-06-12. Auto-expand when the
+  // ready set drains (rides the 1.6 cron); AI packs ready items into SHORT
+  // 2–3 day sprints (coding-agent cadence) via Epic-4 services; settings are
+  // Project columns surfaced in an AI-settings panel.
+  // 7.12 (Planning metering + token accounting + credit ledger) —
+  // data/story-7.12.ts. Added 2026-06-12. Per-model token metering + an
+  // internal credit unit (tokens × per-model rate × margin) in motir-ai's DB;
+  // out-of-credits refuses planning. Pricing/checkout UI defers to Epic 8; the
+  // ledger/tier/rate DATA lands now.
+  // 7.13 (Contextual planning from each work item) — data/story-7.13.ts. Added
+  // 2026-06-12. A planning chat embedded in the issue detail, scoped to the
+  // item but able to touch it / siblings / parent — confirmation ALWAYS
+  // required before any tree write. Reuses the 7.4 jobs + 7.2 chat.
+  // (Also 2026-06-12: 7.3.8 added an opt-in explanation-generation toggle.)
+
+  // 7.14 (Coding convention + code-health audit) — data/story-7.14.ts. Added
+  // 2026-06-12. motir-ai's 4th store: a per-project coding convention (proposed
+  // from existing code + clean-code rules → standard on user approval) + a
+  // code-issues audit report; the standard convention injects into 7.6 prompt
+  // generation (the productized CLAUDE.md). Audit half is migrate-only.
+  // 7.15 (Start-fresh onboarding flow) — data/story-7.15.ts. Added 2026-06-12.
+  // The guided wizard for a NEW project: discovery (7.2) → convention from
+  // stack (7.14) → generate (7.3) → review/approve → dispatch setup.
+  // 7.16 (Migrate-existing-codebase onboarding flow) — data/story-7.16.ts.
+  // Added 2026-06-12. The guided wizard for an EXISTING repo: connect (7.7) →
+  // index (7.5) → AUDIT + convention approve (7.14, a hard gate) → discovery
+  // (7.2) → code-aware generate (7.3+7.5.6) → review/approve.
+
+  // 7.17 (Issue importer — Jira/Linear/GitHub/CSV → work items) — data/story-7.17.ts.
+  // 7.18 (WF3: BYOK + codebase + import) — data/story-7.18.ts.
+  // 9.3 (Hosted execution layer — repo provisioning + scaffold + starter library +
+  //   GitHub handoff) — data/story-9.3.ts.
+  // 9.4 (WF4: hosted + fresh) / 9.5 (WF5: hosted + codebase) / 9.6 (WF6: hosted +
+  //   codebase + import) — data/story-9.4.ts / 9.5.ts / 9.6.ts. Added 2026-06-12:
+  //   the 6-workflow matrix (3 planning states × BYOK[Epic 7] / hosted[Epic 9]).
+  //   7.17 + 9.3 are the two new capability clusters; the WF stories are thin
+  //   orchestration + a manual-test each. Defaults: scaffold-then-build, curated
+  //   promote-to-starter, Motir-owned repo with transfer-on-request.
+
+  // 7.19 (Design system selection — palette/typography/shape → project design
+  //   tokens, recorded in motir-ai) — data/story-7.19.ts. Added 2026-06-12. The
+  //   PRE-PLANNING step for all 6 workflows: the user picks palette + shape
+  //   (from getdesign.md) + typography (curated) → the project's `--el-*` +
+  //   `[data-display-style]` tokens, confirmed on a /tokens-style page. The 5th
+  //   motir-ai store (the designer's contract, sibling to 7.14's coding
+  //   convention); injected into ALL later design-subtask planning.
 
   // ── Epic 8: Launch readiness ──────────────────────────────────────────────
   {

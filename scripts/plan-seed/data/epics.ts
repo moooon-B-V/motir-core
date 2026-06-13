@@ -108,14 +108,22 @@ export const EPICS: EpicMeta[] = [
   {
     id: '2',
     title: 'Issue tracking core',
-    status: 'done',
+    status: 'in_progress',
     descriptionMd:
       'The irreducible Jira core — the first epic of the PM substrate that makes Motir a usable ' +
       "standalone product. Built directly on Story 1.4's `work_item` model: issue types " +
       '(epic / story / task / bug), the issue detail view, create / edit, customizable per-project ' +
       'status **workflows**, assignees, and the issue list. After this epic a team can track real ' +
       'work by hand, with zero AI involved. The AI Planning Layer (Epic 7) later *generates* these ' +
-      'same issues — but the manual path is the foundation and must stand on its own.',
+      'same issues — but the manual path is the foundation and must stand on its own.\n\n' +
+      '**Re-opened 2026-06-12 — Story 2.7 (work-item type + executor).** The 2026-06-12 Epic-7 ' +
+      'augmentation surfaced a gap in this core model: a work item carries `kind` ' +
+      '(epic/story/task/bug/subtask) but no executor-routing **type** (code/design/test/…) — the ' +
+      "plan's own `type`/`executor` are only PROSE in the description today. Story 2.7 adds them as " +
+      'real fields (a Principle-#11 justified deviation from Jira, whose only type axis is `kind`), ' +
+      'so the AI layer can generate typed leaves (7.3) and route prompts by type (7.6), and a human ' +
+      'can filter by type (Epic 6). It lands in Epic 2 — not Epic 7 — because it is a core ' +
+      'work-item attribute, which keeps every AI consumer a clean backward dep.',
     items: [
       {
         id: 'bug-finding-47',
@@ -887,7 +895,7 @@ export const EPICS: EpicMeta[] = [
   {
     id: '5',
     title: 'Collaboration & fields',
-    status: 'planned',
+    status: 'in_progress',
     descriptionMd:
       'The layer that turns an issue from a record into a team workspace: **comments**, ' +
       '**@mentions**, **attachments**, **custom fields**, labels / components, assignees / ' +
@@ -968,7 +976,7 @@ export const EPICS: EpicMeta[] = [
   {
     id: '6',
     title: 'Search, reporting & admin',
-    status: 'planned',
+    status: 'in_progress',
     descriptionMd:
       'The tools that make the PM core enterprise-usable and complete the standalone Jira ' +
       'alternative: **search & filtering**, **dashboards & reports**, **roles & permissions**, ' +
@@ -1456,7 +1464,7 @@ export const EPICS: EpicMeta[] = [
   {
     id: '7',
     title: 'AI Planning Layer',
-    status: 'planned',
+    status: 'in_progress',
     descriptionMd:
       'The headline differentiator — a feature layered on the now-complete PM core (Epics 1-6). A ' +
       'chat front door drafts discovery context, generates and augments the issue tree in the PM ' +
@@ -1472,17 +1480,106 @@ export const EPICS: EpicMeta[] = [
       'independently useful before any AI planning ships, so we pull it in front of the ' +
       'remaining Epic-6 stubs rather than waiting. Full justification + the front-half/back-' +
       'half split with stub 7.5 lives in story-7.0.ts. (notes.html #32 — the cross-epic dep ' +
-      'audit passes; this is a deliberate deviation, not the mistake the rule guards against.)',
+      'audit passes; this is a deliberate deviation, not the mistake the rule guards against.)\n\n' +
+      '**Locked AI architecture (the Epic-7 planning discussion with Yue, 2026-06-11; full ' +
+      'rationale in story-7.1.ts; each story carries its slice):**\n\n' +
+      '1. **One-directional writes.** motir-core is the system of record; the AI NEVER writes the ' +
+      'tree. motir-core calls motir-ai to GENERATE → motir-ai returns a tree-DELTA → motir-core ' +
+      'persists via the shipped `workItemsService`. Generate→human-approve→persist (Principle #3).\n' +
+      '2. **A tool-use SESSION, not a one-shot call.** Planning context is non-local, so motir-ai ' +
+      'HOSTS the planning agent and reads on demand; the whole tree is reachable every job, ' +
+      "transmitted never. Context scales by the operation's blast radius (push bounded ops; " +
+      'skeleton + retrieve for unbounded augment).\n' +
+      '3. **Graph-traversal, not RAG.** Two explicit relational graphs walked over MCP, no vector ' +
+      'store — the **plan tree** (motir-core: rollup + is_blocked_by + comments) and the **code ' +
+      'graph** (motir-ai: `codegraph` embedded, GitHub-read-fed, webhook-refreshed). The verified ' +
+      'Atlassian-Rovo mirror (Teamwork Graph; notes.html #33 — checked, not asserted).\n' +
+      '4. **Async job model** serving BOTH the 7.2 chat and the headless MCP/CLI planners (7.9) — ' +
+      'two co-equal front doors over one 7.1 boundary.\n' +
+      '5. **motir-ai is STATEFUL** (headless ≠ stateless): its own DB holds the three context ' +
+      'stores with no home in an open PM tool — direction docs (7.2), planning-mistakes (7.10), ' +
+      'code graph (7.5/7.7). This is `motir-meta` productized, and it SHARPENS the open-core line ' +
+      '(motir-core stays a complete, exportable Jira clone with zero AI tables).\n\n' +
+      '**Two project kinds:** start-fresh (shipped first) and existing-project migration. ' +
+      '**Story 7.10** (planning-mistakes store + learning loop) was added in the same pass — the ' +
+      'orphaned-deferral fix for the third motir-ai store.\n\n' +
+      '**Augmentation 2026-06-12 — Stories 7.11–7.13** (six user-flagged feature gaps): ' +
+      '**7.11** cadence — an auto-planning trigger (expand when the ready set drains) + AI sprint ' +
+      'planning into SHORT 2–3 day sprints (coding-agent cadence, not human 1–2 week) + the AI ' +
+      'project-settings surface; **7.12** planning metering + token accounting + an internal ' +
+      'CREDIT ledger (credits normalize per-model token cost × margin; pricing/checkout UI defers ' +
+      'to Epic 8, the data lands now); **7.13** contextual planning from every work item (chat on ' +
+      'any issue to expand/modify it, its siblings, or its parent — confirmation ALWAYS required ' +
+      'before any tree write). The same pass added **Story 2.7** (work-item type + executor) in ' +
+      'Epic 2 and an explanation-generation toggle (7.3.8). Every new dep points backward — the ' +
+      'ordering audit stays clean.',
   },
   {
     id: '8',
     title: 'Launch readiness',
-    status: 'planned',
+    status: 'in_progress',
     descriptionMd:
       'Everything between "feature complete" and "live, paid users." Stripe billing, marketing ' +
       'site + the Motir brand mark, go-to-market strategy, the one-time Prodect → Motir rebrand ' +
       'cutover, ToS + privacy policy, transactional email, basic analytics, production deploy, ' +
       'domain + SSL, onboarding, and day-1 admin tools. Most of this is human subtasks ' +
       "running through Motir's own queue. (Formerly Epic 5.)",
+  },
+  {
+    id: '9',
+    title: 'Native AI coding (hosted agent execution)',
+    status: 'planned',
+    descriptionMd:
+      'The **third layer of the pipeline made native** — Motir runs the coding agent in a ' +
+      "HOSTED cloud sandbox on the user's behalf. Until now Motir shipped only the **external-" +
+      'agent (BYOK)** form of AI coding (7.6 generates a prompt, the user runs it in their own ' +
+      'agent — locally, optionally in the 7.9.7 sandbox container). This epic adds the hosted ' +
+      'runtime the vision reserved as "a **designed-for extension that augments — not replaces — ' +
+      'the external-agent path**" (MOTIR.md § What Motir is) — previously noted as a decided ' +
+      'follow-up BEYOND the eight planned epics, now planned (2026-06-12, Yue: "plan one step ' +
+      'further — host the container as the coding agent").\n\n' +
+      '**The hosted run mirrors the verified cloud-agent lifecycle** (Devin / Google Jules / ' +
+      'OpenAI Codex cloud / GitHub Copilot coding agent): a dispatched ticket → provision a ' +
+      'container-per-run sandbox → the agent autonomously edits + tests → opens a PR → human ' +
+      'review. Billing is **usage-based**, reusing the Epic-7 credit system: hosted CODING runs ' +
+      'spend tokens and debit the SAME 7.12 credit ledger as planning (one balance covers both).\n\n' +
+      '**Builds entirely on Epic 7 — backward deps only:** the 7.9.7 multi-agent sandbox image ' +
+      '(the hosted image extends it), 7.6 dispatch (a hosted run is a dispatch-target variant), ' +
+      'and 7.12 metering + credits (the token-usage report records an `AgentRun` and debits the ' +
+      'ledger). **Story 9.0** is the LLM metering gateway (fork of one-api) every hosted run ' +
+      'meters through; **Story 9.1** is the hosted-execution foundation — the hosted container + ' +
+      'run-scoped auth (the user is logged in INSIDE the run) + gateway-metered token usage; ' +
+      '**Story 9.2** adds the runtime DESIGN-APPROVAL gate — distinct from MOTIR.md’s ' +
+      'planning-time design gate: when the hosted agent PRODUCES a design in `motir auto`, a ' +
+      'deployed preview (iframe) + a revise-chat hold the dependent subtasks on the user’s ' +
+      'manual approval (per-project, default ON; the preview is undeployed on approval to cap ' +
+      'cost). Future 9.x stories (deferred not forgotten): the PR review/iteration loop, ' +
+      'multi-agent / parallel hosted runs, agent-selection policy, hosted-run pricing in the ' +
+      'Epic-8 billing surface, and security hardening.',
+  },
+  {
+    id: '10',
+    title: 'Platform administration & operations',
+    status: 'planned',
+    descriptionMd:
+      'The **Motir-internal operator console** — everything a SaaS platform team needs to run the ' +
+      'system across ALL tenants, plus the home for the cross-tenant governance the customer-facing ' +
+      'epics deliberately keep out. Added 2026-06-12 (Yue: "the admin board of the whole system"). ' +
+      'Distinct from the per-tenant admin already in Epic 6 (roles 6.4, project/workspace settings): ' +
+      'this is **platform staff**, gated by a superadmin role SEPARATE from tenant `MemberRole`, ' +
+      'reading ACROSS tenants (audited).\n\n' +
+      '**Stories:** **10.1** the superadmin console — an all-tenant overview (orgs/workspaces/' +
+      'projects/users) + **token/credit usage rollups** (project→workspace→org→platform, per-model, ' +
+      'top consumers); **10.2** system monitoring — INTEGRATED read-only from **Vercel** (deploys / ' +
+      'function errors / traffic) + **Inngest** (job runs / failures / throughput / backlog) + the ' +
+      '9.0 gateway + DB health, link-out not rebuild; **10.3** the governance toolkit — credit ' +
+      'grants/adjustments, plan/tier management, org suspend/reactivate, time-boxed audited ' +
+      'support impersonation, per-org feature flags / kill-switches, and a tamper-evident ' +
+      '(hash-chained) admin audit log.\n\n' +
+      '**Builds backward on:** the Epic-6 **Organization** tier (6.10 — the billing entity usage ' +
+      'rolls up to), 7.12 metering + credit ledger, and 9.0 gateway spend. The **Triage inbox** ' +
+      '(bug/feature intake → promote) is a customer-facing PM feature and lives in Epic 6 (6.11), ' +
+      'not here. Future 10.x (named in the story headers, deferred not forgotten): abuse / content ' +
+      'moderation, DSAR / compliance export-delete, status & maintenance banners, email-delivery ops.',
   },
 ];
