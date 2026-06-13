@@ -574,7 +574,12 @@
 
       /* ── Segmented executor control (components/ui/Segmented.tsx) ────────── */
       .seg {
+        /* The shipped Segmented is content-width (inline-flex). In a flex-column
+           field the parent's align-items:stretch would blow it full-width, so
+           pin it to its content like the real component. */
         display: inline-flex;
+        align-self: flex-start;
+        width: fit-content;
         align-items: center;
         gap: 2px;
         border-radius: var(--radius-btn);
