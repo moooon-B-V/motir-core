@@ -138,7 +138,7 @@ The README carries that in two beats:
     AI-native project manager (`--el-type-task` columns; MCP-native), hosted coding
     agent (`--el-accent` github; ships the engineering work items) — closing on
     "Motir plans, tracks, and ships the whole thing — code and everything around
-    it. No other tool runs the whole loop end to end — that's a vibe project."
+    it. That's a vibe project."
   - a **product-screenshot** placeholder (browser-chrome frame + tinted panes) and
     a **"Contribute"** section linking to submit. (Motir's own project seeds this
     exact copy as `publicOverviewMd`; see the Copy index.)
@@ -368,8 +368,7 @@ swap layer must reach every element).
   boards/sprints/system of record, **MCP-native** so your agents read/write Motir
   directly; **A hosted coding agent** → picks up the engineering work items and
   ships the code) + _"Motir plans, tracks, and ships the whole thing — code and
-  everything around it. No other tool runs the whole loop end to
-  end — that's a vibe project."_ Then **"Contribute"**. NOT framed as "AI project
+  everything around it. That's a vibe project."_ Then **"Contribute"**. NOT framed as "AI project
   management" — it's the three-layer, end-to-end pipeline. This canonical copy is
   seeded onto the `motir` project's `publicOverviewMd` (see story-6.12.ts § 6.12.4
   - the seed loader), so the live tenant renders it. Settings editor:
