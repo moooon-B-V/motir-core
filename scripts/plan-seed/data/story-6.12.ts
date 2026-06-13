@@ -580,8 +580,7 @@ export const story_6_12: PlanStory = {
         'read+write Motir directly), **a hosted coding agent** (picks up the ' +
         'engineering work items and ships the code, no setup); closing *"you ' +
         'stay at the level of intent; Motir plans, tracks, and ships the whole ' +
-        'thing — code and everything around it. No other tool runs the whole ' +
-        'loop end to end — that’s a vibe project."*; then **## ' +
+        'thing — code and everything around it. That’s a vibe project."*; then **## ' +
         'Contribute** (Submit a request — feeds the loop; the PM core is GPL-3.0 ' +
         'on GitHub). This copy is the design’s `design/public-projects/` Panel 1 ' +
         'text 1:1.\n' +
