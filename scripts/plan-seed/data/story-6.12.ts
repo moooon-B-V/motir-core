@@ -569,14 +569,19 @@ export const story_6_12: PlanStory = {
         'here, and are picked up by Motir to build the next Motir) + the 4-step ' +
         'loop *submit → triage → planned as a work item → the coding agent opens ' +
         'a PR → ships as Done*; **PART 2 — *## Vibe project***: *you’ve heard of ' +
-        'vibe coding (describe what you want, the AI writes the code) — Motir ' +
-        'does that for an entire project; you bring the idea, the three layers ' +
-        'carry it intent→shipped:* **an AI planner** (chat → a structured plan: ' +
-        'epics, stories, work items, dependencies), **an AI-native project manager** ' +
-        '(boards / sprints / system of record, **MCP-native** so your own agents ' +
-        'and tools read+write Motir directly), **a hosted coding agent** (picks ' +
-        'up work items and ships the code, no setup); closing *"no other tool ' +
-        'runs the whole loop end to end — that’s a vibe project."*; then **## ' +
+        'vibe coding (describe what you want, the AI writes the code) — a vibe ' +
+        'project takes that to the WHOLE project: not just the code, but the ' +
+        'design, marketing, legal, research — everything it takes to ship. You ' +
+        'bring the intent, the three layers carry it idea→shipped:* **an AI ' +
+        'planner** (chat → a structured plan: epics, stories, and work items of ' +
+        'every kind — design / marketing / legal / engineering — with ' +
+        'dependencies), **an AI-native project manager** (boards / sprints / ' +
+        'system of record, **MCP-native** so your own agents and tools ' +
+        'read+write Motir directly), **a hosted coding agent** (picks up the ' +
+        'engineering work items and ships the code, no setup); closing *"you ' +
+        'stay at the level of intent; Motir plans, tracks, and ships the whole ' +
+        'thing — code and everything around it. No other tool runs the whole ' +
+        'loop end to end — that’s a vibe project."*; then **## ' +
         'Contribute** (Submit a request — feeds the loop; the PM core is GPL-3.0 ' +
         'on GitHub). This copy is the design’s `design/public-projects/` Panel 1 ' +
         'text 1:1.\n' +
