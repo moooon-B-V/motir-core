@@ -715,7 +715,7 @@ export const story_6_10: PlanStory = {
       id: '6.10.6',
       title:
         'Seed loader — model the `moooon` org over its workspace(s); backfill in `pnpm db:seed`',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 40,
