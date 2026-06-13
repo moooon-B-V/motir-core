@@ -1,0 +1,1491 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Notification drawer / feed — Story 5.7 · 5.7.1 → 5.7.5</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the NOTIFICATION DRAWER / FEED — Subtask
+      5.7.1, the design that blocks code Subtask 5.7.5 (the bell + drawer). The
+      header-anchored popover that opens from the bell (bell.mock.html). No
+      design specifies it (design/shell/desktop.pen draws no notification
+      surface at all), so the planning-time design gate requires this asset
+      first — the same shape comments.mock.html (5.1.3) used for the Activity
+      thread.
+
+      MIRROR (decision-ladder rung 1, verified at plan time in the 5.7 story
+      module):
+        • Jira Cloud header drawer — splits DIRECT (mentioned / assigned /
+          reporter — the actions involving you) from WATCHING (items you
+          watch); each row has an unread blue-dot; clicking deep-links to the
+          issue AND marks it read; "Mark all as read" lives in the drawer
+          OVERFLOW (three-dots) menu. Read rows persist (greyed), not purged.
+          "Mark all" is ONE server op over the unread set, NOT a client loop
+          over rendered rows (Jira's own mark-all ships the JRACLOUD-85017 bug
+          from doing exactly that).
+        • Linear Inbox — the feed model cross-check: per-row read state, a
+          per-row toggle (the "U" control), keyboard-navigable, deep-link on
+          open. Motir mirrors the MODEL at Jira's drawer ALTITUDE (a header
+          bell + popover, not a separate Inbox route).
+
+      WATCHING is drawn DISABLED — the documented Story 5.4 seam (the
+      work-item/transitioned fan-in lands there with no 5.7 change), exactly
+      the way 2.5.3 drew the disabled view-switcher and comments.mock.html drew
+      the disabled History filter.
+
+      SCALE (finding #57): the feed is CURSOR-paginated — newest 20 + a "Show
+      more" affordance at the older edge; never a load-all. The badge count is
+      a cheap indexed unread aggregate (bell.mock.html), not a COUNT(*).
+
+      It composes ONLY shipped primitives: the Popover container
+      (rounded-(--radius-card) + shadow-(--shadow-elevated) + border), the
+      Segmented control (Direct/Watching), the overflow-menu vocabulary
+      (IssueViewSwitcher), the initial-letter Avatar, a small event-type glyph
+      taking the issue-type / event hue (--el-type-* + --el-accent — finding
+      #54, palette not grey), the BacklogSkeleton pulse, the inbox empty state,
+      ErrorState + retry, a ghost "Show more" at the older edge. So 5.7.5
+      invents NO new visual primitive. Tokens copied 1:1 from app/globals.css;
+      colour via Tier-3 --el-*; shape via element-semantic radius / spacing /
+      shadow tokens.
+
+      ⚠️ No nested interactive elements inside a row (the portal-popover /
+      nested-button lessons). The row's clickable deep-link target and the
+      per-row "mark read" toggle are SIBLINGS (the toggle is overlaid, not a
+      child of the link) — see panel 1 + design-notes.
+
+      Panels:
+        0 · Drawer anatomy — header (title · overflow) + Direct/Watching tabs
+            + a feed of unread & read rows + the "Show more" older edge.
+        1 · Row anatomy — avatar + event-type glyph · summary · excerpt ·
+            time · the unread accent dot; unread vs read; the hover
+            mark-read toggle (a sibling control, not nested).
+        2 · Direct vs Watching — Direct (default, populated) vs Watching
+            (drawn disabled — the 5.4 seam).
+        3 · Overflow menu open — "Mark all as read" (one server op) +
+            "Notification settings" deep-link.
+        4 · Feed states — loading skeleton · empty ("all caught up") · error
+            + retry.
+        5 · At-scale — a long feed + "Show more (N older)" (finding #57).
+
+      Toggle dark for token parity. See design-notes.md § Notification drawer.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 32px;
+        --focus-ring-color: var(--color-primary);
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-sidebar-item-bg-hover: #eeede9;
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #3bb3ae;
+        --color-accent-green: #2fc94f;
+        --color-info: #4aa3ff;
+        --color-destructive: #f0656c;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.05);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 12px 40px rgba(15, 15, 15, 0.15);
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design) ─────────────────────────────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 120px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 880px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .stack {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 44px;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding-left: 2px;
+      }
+      .panel-note {
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 940px;
+        padding-left: 2px;
+      }
+      .panel-note code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+      .mini-label {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin-bottom: 10px;
+      }
+      .row-of {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 32px;
+        align-items: flex-start;
+      }
+
+      /* ── THE DRAWER — Popover container ───────────────────────────────────── */
+      .drawer {
+        width: 384px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .drawer-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 10px 12px 16px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .drawer-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .drawer-head-right {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        background: transparent;
+        color: var(--el-text-muted);
+        border-radius: var(--radius-control);
+        padding: var(--spacing-icon-btn);
+        cursor: pointer;
+        transition:
+          color 0.15s,
+          background-color 0.15s;
+      }
+      .icon-btn:hover {
+        color: var(--el-text);
+        background: var(--el-surface);
+      }
+      .icon-btn svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      /* tab row — the Segmented control grammar */
+      .tabrow {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        padding: 2px;
+      }
+      .seg-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 var(--spacing-control-x);
+        border: 0;
+        background: transparent;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        line-height: 1;
+      }
+      .seg-btn.is-active {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .seg-btn.is-disabled {
+        color: var(--el-text-faint);
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+      .seg-count {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-faint);
+      }
+      .seg-btn.is-active .seg-count {
+        color: var(--el-accent);
+      }
+
+      /* ── THE FEED ─────────────────────────────────────────────────────────── */
+      .feed {
+        display: flex;
+        flex-direction: column;
+        max-height: 432px;
+        overflow-y: auto;
+      }
+      .n-rowwrap {
+        position: relative;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .n-row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px 40px 12px 12px;
+        cursor: pointer;
+        text-decoration: none;
+        color: inherit;
+      }
+      .n-rowwrap:hover .n-row {
+        background: var(--el-surface);
+      }
+      .n-row.is-unread {
+        background: var(--el-surface-soft);
+      }
+      .n-rowwrap:hover .n-row.is-unread {
+        background: var(--el-surface);
+      }
+      .n-dot {
+        width: 8px;
+        height: 8px;
+        margin-top: 13px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        flex: none;
+      }
+      .n-row.is-read .n-dot {
+        background: transparent;
+      }
+      .n-ava-wrap {
+        position: relative;
+        flex: none;
+      }
+      .n-avatar {
+        width: 30px;
+        height: 30px;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 12px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .n-typebadge {
+        position: absolute;
+        right: -3px;
+        bottom: -3px;
+        width: 16px;
+        height: 16px;
+        border-radius: 9999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-accent-text);
+        box-shadow: 0 0 0 2px var(--el-page-bg);
+      }
+      .n-rowwrap:hover .n-typebadge {
+        box-shadow: 0 0 0 2px var(--el-surface);
+      }
+      .n-typebadge svg {
+        width: 10px;
+        height: 10px;
+      }
+      .tb-mention {
+        background: var(--el-accent);
+      }
+      .tb-comment {
+        background: var(--el-type-task);
+      }
+      .tb-assigned {
+        background: var(--el-type-story);
+      }
+      .tb-transition {
+        background: var(--el-type-subtask);
+      }
+      .n-body {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .n-line1 {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .n-summary {
+        font-size: 13px;
+        line-height: 1.4;
+        color: var(--el-text);
+        min-width: 0;
+        flex: 1;
+      }
+      .n-summary strong {
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .n-time {
+        font-size: 11px;
+        color: var(--el-text-faint);
+        flex: none;
+        white-space: nowrap;
+      }
+      .n-excerpt {
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--el-text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 280px;
+      }
+      /* read treatment — greyed, no dot, persists in the feed */
+      .n-row.is-read .n-summary {
+        color: var(--el-text-muted);
+      }
+      .n-row.is-read .n-summary strong {
+        color: var(--el-text-secondary);
+      }
+      .n-row.is-read .n-excerpt {
+        color: var(--el-text-faint);
+      }
+      /* per-row mark-read toggle — a SIBLING control overlaid on the row
+         (NOT nested inside the clickable link) */
+      .n-toggle {
+        position: absolute;
+        top: 10px;
+        right: 8px;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border: 0;
+        background: transparent;
+        color: var(--el-text-muted);
+        border-radius: var(--radius-control);
+        cursor: pointer;
+      }
+      .n-toggle:hover {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      .n-rowwrap:hover .n-toggle {
+        display: inline-flex;
+      }
+      .n-toggle svg {
+        width: 15px;
+        height: 15px;
+      }
+
+      /* "Show more" — ghost button at the older edge */
+      .show-more {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        width: 100%;
+        padding: 10px;
+        border: 0;
+        border-top: 1px solid var(--el-border-soft);
+        background: transparent;
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .show-more:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+
+      /* overflow menu — IssueViewSwitcher vocabulary */
+      .menu {
+        width: 212px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 0;
+        background: transparent;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+        text-align: left;
+      }
+      .menu-item:hover {
+        background: var(--el-surface);
+      }
+      .menu-item svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .menu-sep {
+        height: 1px;
+        background: var(--el-border-soft);
+        margin: 4px 6px;
+      }
+
+      /* feed states */
+      .feed-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 6px;
+        padding: 44px 28px;
+      }
+      .feed-state .ic {
+        width: 40px;
+        height: 40px;
+        margin-bottom: 6px;
+      }
+      .feed-state.empty .ic {
+        color: var(--el-text-faint);
+      }
+      .feed-state.error .ic {
+        color: var(--el-danger);
+      }
+      .feed-state h3 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .feed-state p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-muted);
+        max-width: 240px;
+      }
+      .btn-secondary {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x);
+        margin-top: 10px;
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-btn);
+        background: transparent;
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .btn-secondary svg {
+        width: 14px;
+        height: 14px;
+      }
+      /* skeleton */
+      .sk-row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .sk-ava {
+        width: 30px;
+        height: 30px;
+        border-radius: 9999px;
+        background: var(--el-muted);
+        flex: none;
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      .sk-lines {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        padding-top: 3px;
+      }
+      .sk-line {
+        height: 9px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.45;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-at"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="4" />
+          <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+        </g>
+        <g
+          id="i-msg"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"
+          />
+        </g>
+        <g
+          id="i-user-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m16 11 2 2 4-4" />
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+        </g>
+        <g
+          id="i-pr"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="5" cy="6" r="3" />
+          <path d="M5 9v12" />
+          <circle cx="19" cy="18" r="3" />
+          <path d="m15 9-3-3 3-3" />
+          <path d="M12 6h5a2 2 0 0 1 2 2v7" />
+        </g>
+        <g id="i-ellipsis" fill="currentColor" stroke="none">
+          <circle cx="12" cy="12" r="1.6" />
+          <circle cx="19" cy="12" r="1.6" />
+          <circle cx="5" cy="12" r="1.6" />
+        </g>
+        <g
+          id="i-check-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 7 17l-5-5" />
+          <path d="m22 10-7.5 7.5L13 16" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-settings"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-inbox"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+          <path
+            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+          />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-refresh"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+          <path d="M8 16H3v5" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+      </defs>
+    </svg>
+
+    <div class="review-head">
+      <div>
+        <h1>Notification drawer / feed</h1>
+        <p>
+          Story 5.7 · Subtask 5.7.1 (design) → gates 5.7.5. The header-anchored popover the bell
+          opens. Direct / Watching split (Watching = the disabled 5.4 seam), per-row accent unread
+          dot, click deep-links + marks read, "Mark all as read" in the overflow, cursor-paged "Show
+          more" (finding #57). Composes the
+          <code>Popover</code> + <code>Segmented</code> + overflow-menu +
+          <code>Avatar</code> primitives. Toggle dark for parity.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <div class="stack">
+      <!-- PANEL 0 — Full drawer anatomy -->
+      <section class="panel">
+        <div class="panel-label">
+          0 · Drawer anatomy — header · Direct/Watching tabs · feed (unread + read) · Show more
+        </div>
+        <div class="drawer">
+          <div class="drawer-head">
+            <span class="drawer-title">Notifications</span>
+            <div class="drawer-head-right">
+              <button class="icon-btn" aria-label="Notification options">
+                <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+              </button>
+            </div>
+          </div>
+          <div class="tabrow">
+            <div class="seg" role="group" aria-label="Filter notifications">
+              <button class="seg-btn is-active" aria-pressed="true">
+                Direct <span class="seg-count">3</span>
+              </button>
+              <button
+                class="seg-btn is-disabled"
+                aria-pressed="false"
+                disabled
+                title="Watching — available once issue-watching ships (Story 5.4)"
+              >
+                Watching
+              </button>
+            </div>
+          </div>
+          <div class="feed">
+            <!-- unread · mention -->
+            <div class="n-rowwrap">
+              <a class="n-row is-unread" href="#">
+                <span class="n-dot" aria-hidden="true"></span>
+                <span class="n-ava-wrap">
+                  <span class="n-avatar" aria-hidden="true">Z</span>
+                  <span class="n-typebadge tb-mention" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-at" /></svg
+                  ></span>
+                </span>
+                <span class="n-body">
+                  <span class="n-line1">
+                    <span class="n-summary"
+                      ><strong>Zhu Yue</strong> mentioned you on <strong>PROD-42</strong></span
+                    >
+                    <span class="n-time">2m</span>
+                  </span>
+                  <span class="n-excerpt"
+                    >"@Bo can you repro the swimlane collapse reset on board switch?"</span
+                  >
+                </span>
+              </a>
+              <button class="n-toggle" aria-label="Mark as read">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </button>
+            </div>
+            <!-- unread · comment -->
+            <div class="n-rowwrap">
+              <a class="n-row is-unread" href="#">
+                <span class="n-dot" aria-hidden="true"></span>
+                <span class="n-ava-wrap">
+                  <span class="n-avatar" aria-hidden="true">B</span>
+                  <span class="n-typebadge tb-comment" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-msg" /></svg
+                  ></span>
+                </span>
+                <span class="n-body">
+                  <span class="n-line1">
+                    <span class="n-summary"
+                      ><strong>Bo Philips</strong> commented on <strong>PROD-18</strong></span
+                    >
+                    <span class="n-time">18m</span>
+                  </span>
+                  <span class="n-excerpt"
+                    >Burndown still shows the carried-over points twice after a sprint
+                    rollover.</span
+                  >
+                </span>
+              </a>
+              <button class="n-toggle" aria-label="Mark as read">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </button>
+            </div>
+            <!-- unread · assigned -->
+            <div class="n-rowwrap">
+              <a class="n-row is-unread" href="#">
+                <span class="n-dot" aria-hidden="true"></span>
+                <span class="n-ava-wrap">
+                  <span class="n-avatar" aria-hidden="true">O</span>
+                  <span class="n-typebadge tb-assigned" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user-check" /></svg
+                  ></span>
+                </span>
+                <span class="n-body">
+                  <span class="n-line1">
+                    <span class="n-summary"
+                      ><strong>Odie</strong> assigned you <strong>PROD-7</strong></span
+                    >
+                    <span class="n-time">1h</span>
+                  </span>
+                  <span class="n-excerpt">Export issues to CSV from the list view</span>
+                </span>
+              </a>
+              <button class="n-toggle" aria-label="Mark as read">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </button>
+            </div>
+            <!-- read · mention -->
+            <div class="n-rowwrap">
+              <a class="n-row is-read" href="#">
+                <span class="n-dot" aria-hidden="true"></span>
+                <span class="n-ava-wrap">
+                  <span class="n-avatar" aria-hidden="true" style="background: var(--el-text-faint)"
+                    >M</span
+                  >
+                  <span class="n-typebadge tb-mention" aria-hidden="true" style="opacity: 0.6"
+                    ><svg viewBox="0 0 24 24"><use href="#i-at" /></svg
+                  ></span>
+                </span>
+                <span class="n-body">
+                  <span class="n-line1">
+                    <span class="n-summary"
+                      ><strong>Mo</strong> mentioned you on <strong>PROD-31</strong></span
+                    >
+                    <span class="n-time">yesterday</span>
+                  </span>
+                  <span class="n-excerpt"
+                    >Renamed the board filter chip per the design — looks good now.</span
+                  >
+                </span>
+              </a>
+              <button class="n-toggle" aria-label="Mark as unread">
+                <svg viewBox="0 0 24 24"><use href="#i-check-check" /></svg>
+              </button>
+            </div>
+            <!-- read · comment -->
+            <div class="n-rowwrap">
+              <a class="n-row is-read" href="#">
+                <span class="n-dot" aria-hidden="true"></span>
+                <span class="n-ava-wrap">
+                  <span class="n-avatar" aria-hidden="true" style="background: var(--el-text-faint)"
+                    >J</span
+                  >
+                  <span class="n-typebadge tb-comment" aria-hidden="true" style="opacity: 0.6"
+                    ><svg viewBox="0 0 24 24"><use href="#i-msg" /></svg
+                  ></span>
+                </span>
+                <span class="n-body">
+                  <span class="n-line1">
+                    <span class="n-summary"
+                      ><strong>Julian</strong> commented on <strong>PROD-12</strong></span
+                    >
+                    <span class="n-time">2d</span>
+                  </span>
+                  <span class="n-excerpt"
+                    >The name-hash avatar tint is much easier to scan now.</span
+                  >
+                </span>
+              </a>
+              <button class="n-toggle" aria-label="Mark as unread">
+                <svg viewBox="0 0 24 24"><use href="#i-check-check" /></svg>
+              </button>
+            </div>
+          </div>
+          <button class="show-more">
+            Show more
+            <svg viewBox="0 0 24 24" style="width: 13px; height: 13px">
+              <use href="#i-chevron-down" />
+            </svg>
+          </button>
+        </div>
+        <p class="panel-note">
+          The popover (<code>--radius-card</code> + <code>--shadow-elevated</code> + hairline
+          border) anchors under the bell, <code>align="end"</code>. Header = the "Notifications"
+          title + the overflow (three-dots). The <code>Direct</code> / <code>Watching</code>
+          <code>Segmented</code> sits below; <code>Direct</code> is the default ("mentions first")
+          and carries the unread count, <code>Watching</code> is <strong>disabled</strong> until
+          Story 5.4's <code>work-item/transitioned</code> fan-in lands. Unread rows take a faint
+          <code>--el-surface-soft</code> wash + the accent dot; read rows persist (greyed, no dot).
+          The feed is cursor-paged — newest first + "Show more" at the older edge (finding #57),
+          never load-all.
+        </p>
+      </section>
+
+      <!-- PANEL 1 — Row anatomy -->
+      <section class="panel">
+        <div class="panel-label">
+          1 · Row anatomy — avatar + event glyph · summary · excerpt · time · accent dot · hover
+          toggle
+        </div>
+        <div class="row-of">
+          <div style="width: 384px">
+            <div class="mini-label">Unread (hover — mark-read toggle showing)</div>
+            <div
+              style="
+                border: 1px solid var(--el-border);
+                border-radius: var(--radius-card);
+                overflow: hidden;
+                background: var(--el-page-bg);
+              "
+            >
+              <div class="n-rowwrap" style="background: var(--el-surface)">
+                <a class="n-row is-unread" href="#" style="background: var(--el-surface)">
+                  <span class="n-dot" aria-hidden="true"></span>
+                  <span class="n-ava-wrap">
+                    <span class="n-avatar" aria-hidden="true">Z</span>
+                    <span
+                      class="n-typebadge tb-mention"
+                      aria-hidden="true"
+                      style="box-shadow: 0 0 0 2px var(--el-surface)"
+                      ><svg viewBox="0 0 24 24"><use href="#i-at" /></svg
+                    ></span>
+                  </span>
+                  <span class="n-body">
+                    <span class="n-line1">
+                      <span class="n-summary"
+                        ><strong>Zhu Yue</strong> mentioned you on <strong>PROD-42</strong></span
+                      >
+                      <span class="n-time">2m</span>
+                    </span>
+                    <span class="n-excerpt"
+                      >"@Bo can you repro the swimlane collapse reset on board switch?"</span
+                    >
+                  </span>
+                </a>
+                <button
+                  class="n-toggle"
+                  style="display: inline-flex; background: var(--el-muted); color: var(--el-text)"
+                  aria-label="Mark as read"
+                >
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div style="width: 384px">
+            <div class="mini-label">Read (greyed · persists · no dot)</div>
+            <div
+              style="
+                border: 1px solid var(--el-border);
+                border-radius: var(--radius-card);
+                overflow: hidden;
+                background: var(--el-page-bg);
+              "
+            >
+              <div class="n-rowwrap">
+                <a class="n-row is-read" href="#">
+                  <span class="n-dot" aria-hidden="true"></span>
+                  <span class="n-ava-wrap">
+                    <span
+                      class="n-avatar"
+                      aria-hidden="true"
+                      style="background: var(--el-text-faint)"
+                      >M</span
+                    >
+                    <span class="n-typebadge tb-mention" aria-hidden="true" style="opacity: 0.6"
+                      ><svg viewBox="0 0 24 24"><use href="#i-at" /></svg
+                    ></span>
+                  </span>
+                  <span class="n-body">
+                    <span class="n-line1">
+                      <span class="n-summary"
+                        ><strong>Mo</strong> mentioned you on <strong>PROD-31</strong></span
+                      >
+                      <span class="n-time">yesterday</span>
+                    </span>
+                    <span class="n-excerpt"
+                      >Renamed the board filter chip per the design — looks good now.</span
+                    >
+                  </span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The avatar carries a small <strong>event-type glyph</strong> taking the event's hue —
+          mention <code>--el-accent</code>, comment <code>--el-type-task</code>, assigned
+          <code>--el-type-story</code>, transitioned <code>--el-type-subtask</code> (finding #54:
+          the palette, not grey). Line 1 = the actor + action + issue key (actor &amp; key in
+          <code>--el-text-strong</code>) with the relative time pushed right (absolute on
+          hover/<code>title</code>); line 2 = the denormalized excerpt, single-line truncated. The
+          unread dot is the accent (Jira calls it the "blue-dot"; Motir uses one accent unread
+          signal shared with the badge). The whole row is ONE clickable deep-link to
+          <code>/issues/[key]</code>; the hover <strong>mark-read toggle</strong> is a
+          <strong>sibling</strong> control overlaid top-right — NOT nested inside the link (the
+          nested-interactive / portal-popover lessons). Clicking the row also marks it read.
+        </p>
+      </section>
+
+      <!-- PANEL 2 — Direct vs Watching -->
+      <section class="panel">
+        <div class="panel-label">2 · Direct (default) vs Watching (the disabled 5.4 seam)</div>
+        <div class="row-of">
+          <div>
+            <div class="mini-label">Direct — populated (default)</div>
+            <div
+              class="seg"
+              role="group"
+              aria-label="Filter notifications"
+              style="background: var(--el-surface); border: 1px solid var(--el-border)"
+            >
+              <button class="seg-btn is-active" aria-pressed="true">
+                Direct <span class="seg-count">3</span>
+              </button>
+              <button
+                class="seg-btn is-disabled"
+                disabled
+                title="Watching — available once issue-watching ships (Story 5.4)"
+              >
+                Watching
+              </button>
+            </div>
+          </div>
+          <div style="max-width: 520px">
+            <div class="mini-label">Why Watching is disabled</div>
+            <p class="panel-note" style="margin: 0">
+              <code>Direct</code> = the actions involving you (mentioned · assigned · reporter —
+              "mentions first"), shipped in 5.7. <code>Watching</code> is drawn
+              <strong>disabled</strong> (the exact grammar 2.5.3 used for the view-switcher seam)
+              because issue-watching's <code>work-item/transitioned</code> event is Story 5.4's; the
+              5.7.3 fan-in consumer is built to populate it with NO 5.7 change. A
+              <code>title</code> tooltip explains the wait.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- PANEL 3 — Overflow menu open -->
+      <section class="panel">
+        <div class="panel-label">
+          3 · Overflow menu — "Mark all as read" (one server op) + Notification settings
+        </div>
+        <div class="row-of">
+          <div class="drawer" style="height: max-content">
+            <div class="drawer-head">
+              <span class="drawer-title">Notifications</span>
+              <div class="drawer-head-right">
+                <button
+                  class="icon-btn is-active"
+                  style="background: var(--el-surface); color: var(--el-text)"
+                  aria-label="Notification options"
+                  aria-expanded="true"
+                >
+                  <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+                </button>
+              </div>
+            </div>
+            <div style="position: relative; padding: 8px 10px 16px">
+              <div class="menu" style="position: absolute; right: 10px; top: 0; z-index: 2">
+                <button class="menu-item">
+                  <svg viewBox="0 0 24 24"><use href="#i-check-check" /></svg> Mark all as read
+                </button>
+                <div class="menu-sep" aria-hidden="true"></div>
+                <button class="menu-item">
+                  <svg viewBox="0 0 24 24"><use href="#i-settings" /></svg> Notification settings
+                </button>
+              </div>
+            </div>
+          </div>
+          <div style="max-width: 480px">
+            <p class="panel-note" style="margin: 0">
+              "Mark all as read" is a <strong>single server operation</strong> over the caller's
+              whole unread set (a bulk <code>updateMany</code>), NOT a client loop over the rendered
+              rows — that loop is the JRACLOUD-85017 bug where reload re-shows the dots. After it
+              runs, every dot clears and the count returns 0 from the mutation response (no
+              whole-tree refresh — the inline-edit memory). "Notification settings" deep-links to
+              <code>/settings/account</code> → Notifications (<code>preferences.mock.html</code>).
+              The menu reuses the <code>IssueViewSwitcher</code> overflow vocabulary (<code
+                >--radius-card</code
+              >
+              + <code>--shadow-elevated</code>, <code>--radius-control</code> rows).
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- PANEL 4 — Feed states -->
+      <section class="panel">
+        <div class="panel-label">4 · Feed states — loading skeleton · empty · error + retry</div>
+        <div class="row-of">
+          <div class="drawer" style="height: max-content">
+            <div class="drawer-head">
+              <span class="drawer-title">Notifications</span>
+              <div class="drawer-head-right">
+                <button class="icon-btn" aria-label="Notification options">
+                  <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+                </button>
+              </div>
+            </div>
+            <div class="tabrow">
+              <div class="seg">
+                <button class="seg-btn is-active">Direct</button
+                ><button class="seg-btn is-disabled" disabled>Watching</button>
+              </div>
+            </div>
+            <div>
+              <div class="sk-row">
+                <span class="sk-ava"></span
+                ><span class="sk-lines"
+                  ><span class="sk-line" style="width: 78%"></span
+                  ><span class="sk-line" style="width: 54%"></span
+                ></span>
+              </div>
+              <div class="sk-row">
+                <span class="sk-ava"></span
+                ><span class="sk-lines"
+                  ><span class="sk-line" style="width: 64%"></span
+                  ><span class="sk-line" style="width: 44%"></span
+                ></span>
+              </div>
+              <div class="sk-row">
+                <span class="sk-ava"></span
+                ><span class="sk-lines"
+                  ><span class="sk-line" style="width: 70%"></span
+                  ><span class="sk-line" style="width: 50%"></span
+                ></span>
+              </div>
+            </div>
+          </div>
+          <div class="drawer" style="height: max-content">
+            <div class="drawer-head">
+              <span class="drawer-title">Notifications</span>
+              <div class="drawer-head-right">
+                <button class="icon-btn" aria-label="Notification options">
+                  <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+                </button>
+              </div>
+            </div>
+            <div class="tabrow">
+              <div class="seg">
+                <button class="seg-btn is-active">Direct</button
+                ><button class="seg-btn is-disabled" disabled>Watching</button>
+              </div>
+            </div>
+            <div class="feed-state empty">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-inbox" /></svg>
+              <h3>You're all caught up</h3>
+              <p>No notifications yet. Mentions, comments, and assignments will land here.</p>
+            </div>
+          </div>
+          <div class="drawer" style="height: max-content">
+            <div class="drawer-head">
+              <span class="drawer-title">Notifications</span>
+              <div class="drawer-head-right">
+                <button class="icon-btn" aria-label="Notification options">
+                  <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+                </button>
+              </div>
+            </div>
+            <div class="tabrow">
+              <div class="seg">
+                <button class="seg-btn is-active">Direct</button
+                ><button class="seg-btn is-disabled" disabled>Watching</button>
+              </div>
+            </div>
+            <div class="feed-state error" role="alert">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+              <h3>Couldn't load notifications</h3>
+              <p>Something went wrong fetching your feed.</p>
+              <button class="btn-secondary">
+                <svg viewBox="0 0 24 24"><use href="#i-refresh" /></svg> Try again
+              </button>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          <strong>Loading</strong> = the <code>BacklogSkeleton</code> pulse grammar (avatar circle +
+          two <code>--el-muted</code> lines per row). <strong>Empty</strong> = the inbox glyph +
+          "You're all caught up" — an inviting state, never blank. <strong>Error</strong> = the
+          <code>ErrorState</code> alert glyph + "Try again" (<code>Button variant="secondary"</code
+          >), <code>role="alert"</code>.
+        </p>
+      </section>
+
+      <!-- PANEL 5 — At scale -->
+      <section class="panel">
+        <div class="panel-label">
+          5 · At scale — a long feed + "Show more (N older)" (finding #57)
+        </div>
+        <div class="drawer" style="max-width: 384px">
+          <div class="drawer-head">
+            <span class="drawer-title">Notifications</span>
+            <div class="drawer-head-right">
+              <button class="icon-btn" aria-label="Notification options">
+                <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+              </button>
+            </div>
+          </div>
+          <div class="tabrow">
+            <div class="seg">
+              <button class="seg-btn is-active">Direct <span class="seg-count">12</span></button
+              ><button class="seg-btn is-disabled" disabled>Watching</button>
+            </div>
+          </div>
+          <div class="feed" style="max-height: 300px">
+            <div class="n-rowwrap">
+              <a class="n-row is-unread" href="#"
+                ><span class="n-dot"></span
+                ><span class="n-ava-wrap"
+                  ><span class="n-avatar">B</span
+                  ><span class="n-typebadge tb-comment"
+                    ><svg viewBox="0 0 24 24"><use href="#i-msg" /></svg></span></span
+                ><span class="n-body"
+                  ><span class="n-line1"
+                    ><span class="n-summary"
+                      ><strong>Bo Philips</strong> commented on <strong>PROD-91</strong></span
+                    ><span class="n-time">3m</span></span
+                  ><span class="n-excerpt">Can we cap the export at 10k rows for now?</span></span
+                ></a
+              >
+            </div>
+            <div class="n-rowwrap">
+              <a class="n-row is-unread" href="#"
+                ><span class="n-dot"></span
+                ><span class="n-ava-wrap"
+                  ><span class="n-avatar">O</span
+                  ><span class="n-typebadge tb-mention"
+                    ><svg viewBox="0 0 24 24"><use href="#i-at" /></svg></span></span
+                ><span class="n-body"
+                  ><span class="n-line1"
+                    ><span class="n-summary"
+                      ><strong>Odie</strong> mentioned you on <strong>PROD-88</strong></span
+                    ><span class="n-time">22m</span></span
+                  ><span class="n-excerpt"
+                    >@Zhu the chart axis labels overlap below 480px.</span
+                  ></span
+                ></a
+              >
+            </div>
+            <div class="n-rowwrap">
+              <a class="n-row is-unread" href="#"
+                ><span class="n-dot"></span
+                ><span class="n-ava-wrap"
+                  ><span class="n-avatar">J</span
+                  ><span class="n-typebadge tb-assigned"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user-check" /></svg></span></span
+                ><span class="n-body"
+                  ><span class="n-line1"
+                    ><span class="n-summary"
+                      ><strong>Julian</strong> assigned you <strong>PROD-84</strong></span
+                    ><span class="n-time">1h</span></span
+                  ><span class="n-excerpt">Add keyboard nav to the notification feed</span></span
+                ></a
+              >
+            </div>
+            <div class="n-rowwrap">
+              <a class="n-row is-read" href="#"
+                ><span class="n-dot"></span
+                ><span class="n-ava-wrap"
+                  ><span class="n-avatar" style="background: var(--el-text-faint)">M</span
+                  ><span class="n-typebadge tb-comment" style="opacity: 0.6"
+                    ><svg viewBox="0 0 24 24"><use href="#i-msg" /></svg></span></span
+                ><span class="n-body"
+                  ><span class="n-line1"
+                    ><span class="n-summary"
+                      ><strong>Mo</strong> commented on <strong>PROD-80</strong></span
+                    ><span class="n-time">4h</span></span
+                  ><span class="n-excerpt">Pushed the fix, ready for another look.</span></span
+                ></a
+              >
+            </div>
+            <div class="n-rowwrap">
+              <a class="n-row is-read" href="#"
+                ><span class="n-dot"></span
+                ><span class="n-ava-wrap"
+                  ><span class="n-avatar" style="background: var(--el-text-faint)">B</span
+                  ><span class="n-typebadge tb-mention" style="opacity: 0.6"
+                    ><svg viewBox="0 0 24 24"><use href="#i-at" /></svg></span></span
+                ><span class="n-body"
+                  ><span class="n-line1"
+                    ><span class="n-summary"
+                      ><strong>Bo Philips</strong> mentioned you on <strong>PROD-77</strong></span
+                    ><span class="n-time">yesterday</span></span
+                  ><span class="n-excerpt">Thanks @Zhu — merged.</span></span
+                ></a
+              >
+            </div>
+          </div>
+          <button class="show-more">
+            Show more (7 older)
+            <svg viewBox="0 0 24 24" style="width: 13px; height: 13px">
+              <use href="#i-chevron-down" />
+            </svg>
+          </button>
+        </div>
+        <p class="panel-note">
+          A years-active user accrues thousands of rows. The feed loads only the newest page (20)
+          and the body scrolls within a bounded height; "Show more (N older)" pages the next cursor
+          window (finding #57) — the read never loads the whole table, and the badge count is the
+          cheap indexed unread aggregate.
+        </p>
+      </section>
+    </div>
+  </body>
+</html>
