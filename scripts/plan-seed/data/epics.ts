@@ -1831,7 +1831,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'E2E suite has flaky specs that intermittently red CI on unrelated PRs (drag-reorder reload, at-scale cursor paging, inline-edit reload, watch-popover hydration)',
-        status: 'planned',
+        status: 'in_progress',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 8 (cross-cutting test-suite stability — a green, ' +
