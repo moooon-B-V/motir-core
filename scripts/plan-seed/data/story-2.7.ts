@@ -393,7 +393,7 @@ export const story_2_7: PlanStory = {
     {
       id: '2.7.4',
       title: 'The type/executor picker UI (create modal + detail rail) + per-type hue tokens',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 65,
