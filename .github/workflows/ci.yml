@@ -259,12 +259,6 @@ jobs:
       EMAIL_OUTBOX_PATH: /tmp/motir-test-emails.jsonl
       E2E_TEST_OAUTH: '1'
       E2E_TEST_OAUTH_USER_PATH: /tmp/motir-test-oauth-user.json
-      # Pin the Inngest dev-server CLI version (playwright.config.ts reads this;
-      # it defaults to 'latest' for local runs). Pinning is what makes the npx
-      # download cacheable across legs/runs — `@latest` re-resolves every time —
-      # and removes the cold-download flake where the 120s webServer wait times
-      # out mid-download. Bump in lockstep with the `inngest` SDK when needed.
-      INNGEST_CLI_VERSION: 1.27.0
       # Skip the husky install postinstall — CI has no .git/hooks to wire.
       HUSKY: '0'
     steps:
@@ -300,27 +294,12 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: pnpm exec playwright install-deps chromium
-      # Cache the npx-fetched inngest-cli (the dev-server binary spawned by
-      # playwright.config.ts's second webServer). Pinned via INNGEST_CLI_VERSION
-      # above, so the cache key is stable; restoring it skips the cold download
-      # that otherwise runs on every leg and is the documented 120s-timeout
-      # flake. npx stores fetched bins under ~/.npm/_npx.
-      - name: Cache inngest-cli (npx)
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm/_npx
-          key: ${{ runner.os }}-npx-inngest-cli-${{ env.INNGEST_CLI_VERSION }}
-      # Pre-warm the inngest-cli download OUTSIDE Playwright's 120s webServer
-      # window. The second webServer spawns `npx inngest-cli@<v> dev`; on a cold
-      # npx cache that download (~96 MB binary) runs INSIDE the 120s wait and, with
-      # all matrix legs cold-downloading in parallel on the first run, regularly
-      # blows past it (the timeout that failed bulk-2). `dev --help` fetches the
-      # exact same `inngest-cli@<v>` binary into ~/.npm/_npx and exits 0 without
-      # starting a server — so the real `dev` call hits a warm npx cache and boots
-      # instantly. On later runs the cache step above restores it and this is a
-      # no-op. This step has no tight timeout, so a slow CDN can't fail the lane.
-      - name: Pre-warm inngest-cli
-        run: npx --yes inngest-cli@"$INNGEST_CLI_VERSION" dev --help >/dev/null
+      # NOTE: the Inngest dev-server binary (E2E's second webServer) is now a
+      # pinned `inngest-cli` devDependency — `pnpm install` above runs its
+      # postinstall (allowlisted in pnpm-workspace.yaml `allowBuilds`) to fetch
+      # the binary, so it's present before any spec runs. This replaced the old
+      # npx-cache + pre-warm steps, which existed only to keep the 95MB cold
+      # download out of Playwright's 120s webServer window (the timeout flake).
       # ONE run step per matrix leg. `matrix.args` selects the slice (a
       # --grep-invert+--shard bulk slice, or a --grep at-scale lane); the
       # override env is per-leg and empty ('') on bulk legs — playwright.config

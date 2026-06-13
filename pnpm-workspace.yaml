@@ -19,3 +19,12 @@ allowBuilds:
   protobufjs: false
   sharp: true
   unrs-resolver: true
+  # inngest-cli's postinstall downloads the Inngest dev-server Go binary. The
+  # E2E suite spawns it as its second webServer (the executor that runs the
+  # email.send job), so the binary MUST be present after `pnpm install` — set
+  # true. This replaces the old `npx --yes inngest-cli@<v>` approach (which
+  # re-resolved @latest every run, couldn't be cached, and cold-downloaded the
+  # 95MB binary INSIDE Playwright's 120s webServer window → the documented
+  # timeout flake). As a pinned devDependency the binary is fetched once at
+  # install time (outside any timeout) and cached via the pnpm store.
+  inngest-cli: true
