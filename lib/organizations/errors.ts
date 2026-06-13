@@ -56,6 +56,22 @@ export class OrgForbiddenError extends Error {
 }
 
 /**
+ * Thrown by the org-admin "invite to organization" flow (6.10.5) when the email
+ * entered has no Motir account yet. Org membership is the root tenancy tier, so
+ * an org member must be an existing user; brand-new people join Motir by
+ * accepting a WORKSPACE invite (which auto-enrols them in that workspace's org
+ * via the upward invariant — 6.10.2 §5i). The UI surfaces this as "no Motir
+ * account with that email — invite them to a workspace first."
+ */
+export class OrgInviteeNotFoundError extends Error {
+  readonly code = 'ORG_INVITEE_NOT_FOUND' as const;
+  constructor(email: string) {
+    super(`No Motir account exists for ${email}.`);
+    this.name = 'OrgInviteeNotFoundError';
+  }
+}
+
+/**
  * Thrown when removing/demoting the membership would leave the organization
  * with zero owners. An org with no owner is unadministrable, so the last owner
  * must transfer ownership (promote another member to owner) before leaving or

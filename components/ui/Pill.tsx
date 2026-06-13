@@ -11,6 +11,9 @@ import { cn } from '@/lib/utils/cn';
  *  - `memberRole`: admin | member | viewer — a project membership role
  *    (Story 6.4), one hued tint per role. (Named `memberRole`, not `role`, so
  *    it can't collide with the DOM `role` ARIA attribute on the span.)
+ *  - `orgRole`: owner | admin | member — an ORGANIZATION role (Story 6.10),
+ *    sitting above the workspace `memberRole`. owner → lavender (the highest,
+ *    brand-purple tier), admin → sky, member → mint — per the org-admin design.
  *  - `tone`: neutral — a non-semantic chip (counts, metadata). Dark text on a
  *    neutral surface.
  *
@@ -59,6 +62,14 @@ const pillVariants = cva(
         member: 'bg-(--el-tint-sky) text-(--el-text-strong) border-transparent',
         viewer: 'bg-(--el-tint-mint) text-(--el-text-strong) border-transparent',
       },
+      // Organization roles (Story 6.10 · design/org-admin): owner → lavender
+      // (the highest, brand-purple tier), admin → sky, member → mint — the hue
+      // in the tint, charcoal text (AA-safe, finding #35), same recipe as above.
+      orgRole: {
+        owner: 'bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent',
+        admin: 'bg-(--el-tint-sky) text-(--el-text-strong) border-transparent',
+        member: 'bg-(--el-tint-mint) text-(--el-text-strong) border-transparent',
+      },
       tone: {
         neutral: 'bg-(--el-surface) text-(--el-text-secondary) border-(--el-border)',
       },
@@ -71,13 +82,13 @@ export interface PillProps
   extends HTMLAttributes<HTMLSpanElement>, VariantProps<typeof pillVariants> {}
 
 export const Pill = forwardRef<HTMLSpanElement, PillProps>(function Pill(
-  { status, severity, memberRole, tone, className, children, ...rest },
+  { status, severity, memberRole, orgRole, tone, className, children, ...rest },
   ref,
 ) {
   return (
     <span
       ref={ref}
-      className={cn(pillVariants({ status, severity, memberRole, tone }), className)}
+      className={cn(pillVariants({ status, severity, memberRole, orgRole, tone }), className)}
       {...rest}
     >
       {children}
