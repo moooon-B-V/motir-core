@@ -327,7 +327,7 @@ export const story_6_14: PlanStory = {
       id: '6.14.2',
       title:
         'Decision — the epic-privacy model: the epic-kind flag, server-side-everywhere enforcement, members-bypass, public-project scope, the aggregate-tell strip',
-      status: 'planned',
+      status: 'in_progress',
       type: 'decision',
       executor: 'coding_agent',
       estimateMinutes: 45,
