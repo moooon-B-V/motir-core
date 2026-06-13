@@ -2073,7 +2073,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Custom-fields E2E spec flakes on the Fields-admin empty state — finding-#89 hydration churn recurs on a surface bug-e2e-suite-flaky-specs did not cover',
-        status: 'planned',
+        status: 'in_progress',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 8 (cross-cutting test-suite stability — a green CI is ' +
