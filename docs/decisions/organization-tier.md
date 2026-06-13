@@ -327,8 +327,8 @@ The inherited _feel_ at ws #2 is a **copy-on-create**: a new workspace is **seed
 deep-copying the source workspace's config** at creation (so it opens already
 configured), after which the workspaces are fully independent and either can overwrite.
 (Real live inheritance, if ever needed for enterprise, is an **additive future change,
-not a migration**. The deep copy spans many config tables and may be split into its own
-subtask at expansion.)
+not a migration**. The deep copy spans many config tables — with intra-workspace FKs to
+remap so the two workspaces don't cross-link — so it is its own subtask, **6.10.9**.)
 
 ---
 
@@ -342,10 +342,11 @@ OrganizationRole` (`owner | admin | member`), and `Workspace.organizationId` —
 - **6.10.4 (services + gate)** implements §4's precedence + §5's gating in the **one**
   extended permission helper, returning DTOs / throwing typed errors mapped to HTTP
   (404-not-403 for cross-tenant). It owns the **asymmetric membership direction** (§5 —
-  workspace-add auto-joins the org; org-add joins no workspace; removal cascade), the
-  **signup auto-provisioning** (§6), and the **copy-on-create** of a new workspace's
-  config (§6). The cross-workspace member listing is **paginated** (the at-scale rule —
-  never load-all).
+  workspace-add auto-joins the org; org-add joins no workspace; removal cascade) and the
+  **signup auto-provisioning** (§6). The cross-workspace member listing is **paginated**
+  (the at-scale rule — never load-all). The **copy-on-create** deep-clone of a new
+  workspace's config (§6) is its own subtask, **6.10.9**, extending 6.10.4's org-aware
+  create-workspace path.
 - **6.10.5 (UI)** renders the org switcher / org settings / cross-workspace member
   management from the 6.10.1 design, **with the §6 progressive-disclosure rules** (org
   always shown; workspace switcher only at ≥ 2 ws; org switch-list only at ≥ 2 orgs;
