@@ -547,7 +547,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.6',
       title:
         'Per-user notification preferences — `NotificationPreference` model + the settings page (Jira shape); the channel gate BOTH the 5.7.3 in-app job AND the DONE 5.1.6 email job honour',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 38,
