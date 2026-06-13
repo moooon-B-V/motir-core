@@ -113,20 +113,32 @@ A bordered `Card` with a **soft corner-wash** (two radial `--el-hero-wash-*`
 tints over `--el-page-bg` — decorative only; all text sits on `--el-page-bg`, AA-
 safe, NOT a page-level tint — finding #35). Holds: a 52px logo tile
 (`--el-accent`), the project name in the serif display face, **meta `Pill`s**
-("Open source" mint / "GPL-3.0" / "Project management" neutral), the **tagline**,
-a **CTA row** (`View the roadmap` primary · `Submit a request` outline · `GitHub`
-ghost), and an **at-a-glance stat strip** (Public requests / Upvotes / Planned /
-Shipped) above a hairline.
+("Vibe project" lavender / "Open source" mint / "GPL-3.0" / "MCP-native" neutral),
+the **tagline** (the "vibe your whole project" framing — NOT "AI project
+management"), a **CTA row** (`View the roadmap` primary · `Submit a request`
+outline · `GitHub` ghost), and an **at-a-glance stat strip** (Public requests /
+Upvotes / Planned / Shipped) above a hairline.
 
 ### The body + sidebar (`.ov-grid`, 1fr + 312px)
 
-- **Main** — the authored README (`.md`, the `MarkdownView` render): `h3`
-  sections + paragraphs carrying the **self-improving twist** ("You're looking at
-  Motir, inside Motir" + "A self-improving loop — and you're in it"), a **numbered
-  loop** (`ol.loop`, accent number badges: submit → triage → plan → agent PR →
-  ships as Done), a **product-screenshot** placeholder (browser-chrome frame +
-  tinted panes), and a **"Contribute"** section linking to submit. (Motir's own
-  project seeds this exact copy as `publicOverviewMd`; see the Copy index.)
+Motir is framed as **three layers, end to end** (NOT "AI project management"):
+**(1)** an AI planner, **(2)** an AI-native, MCP-native project tracker
+(`motir-core`), **(3)** a hosted AI coding agent — the unique end-to-end pipeline.
+The README carries that in two beats:
+
+- **Main** — the authored README (`.md`, the `MarkdownView` render):
+  - **Part 1 — the self-improving loop** ("You're looking at Motir, inside Motir"
+    - "A self-improving loop — and you're in it"), a **numbered loop** (`ol.loop`,
+      accent number badges: submit → triage → plan → agent PR → ships as Done).
+  - **Part 2 — "Vibe project"** (the headline idea, by analogy to _vibe coding_):
+    you bring the idea, Motir's **three layers** carry it intent→shipped, drawn as
+    a `ul.layers` list with per-layer palette-hued icons — AI planner
+    (`--el-type-story` route), AI-native MCP tracker (`--el-type-task` columns),
+    hosted coding agent (`--el-accent` github) — closing on "no other tool runs
+    the whole loop end to end — that's a vibe project."
+  - a **product-screenshot** placeholder (browser-chrome frame + tinted panes) and
+    a **"Contribute"** section linking to submit. (Motir's own project seeds this
+    exact copy as `publicOverviewMd`; see the Copy index.)
 - **Sidebar** (`.ov-side`) — a **Links** `side-card` (Website / Docs / Source /
   Changelog, each an external-link row), an **At a glance** stat grid, and a
   **CTA card** ("Have an idea? → Submit a request") with the same accent wash.
@@ -331,26 +343,33 @@ swap layer must reach every element).
   signed in to Motir can view it and submit, upvote, or comment on requests."** ·
   **"View-only — you can't edit work items"**.
 - Nav: **"Overview" / "Board" / "Work items" / "Roadmap"** · **"Submit a request"**.
-- Overview: meta pills **"Open source" / "GPL-3.0" / "Project management"** ·
-  CTAs **"View the roadmap" / "Submit a request" / "GitHub"** · stat labels
-  **"Public requests" / "Upvotes" / "Planned" / "Shipped"** · sidebar
+- Overview: meta pills **"Vibe project" / "Open source" / "GPL-3.0" /
+  "MCP-native"** · CTAs **"View the roadmap" / "Submit a request" / "GitHub"** ·
+  stat labels **"Public requests" / "Upvotes" / "Planned" / "Shipped"** · sidebar
   **"Links"** (**"Website" / "Documentation" / "Source (GPL-3.0)" / "Changelog"**)
   · **"At a glance"** · CTA card **"Have an idea?"** / **"Tell us what to build
   next. It takes a minute and goes straight to the team."** The body is the
   admin-authored `publicOverviewMd` (not fixed product copy) — but **Motir's OWN
-  project seeds a canonical README** with the self-improving twist (tagline _"The
-  AI-native project manager — planned, tracked, and shipped inside itself. You're
-  looking at Motir, in Motir: every bug and idea here is picked up by Motir to
-  build the next version of Motir."_; sections _"You're looking at Motir, inside
-  Motir"_, _"A self-improving loop — and you're in it"_ + the 4-step loop
-  [submit → triage → plan → agent PR → ships as Done], _"Contribute"_). This
-  canonical copy is seeded onto the `motir` project's `publicOverviewMd` (see
-  story-6.12.ts § 6.12.4 + the seed loader), so the live tenant renders it.
-  Settings editor:
-  **"Project overview (public landing)"** · **"A README-style intro shown on the
-  project's public Overview tab. Markdown — headings, lists, links, and images."**
-  · **"This shows on the public Overview tab — the first thing a visitor sees.
-  It's hidden while the project isn't public."**
+  project seeds a canonical README** with two beats. **Tagline:** _"Vibe your
+  whole project. Bring an idea — Motir's three AI layers plan it, track it, and
+  ship it, end to end. You're looking at Motir, built in Motir."_ **Part 1 (the
+  self-improving loop):** _"You're looking at Motir, inside Motir"_ + _"A
+  self-improving loop — and you're in it"_ + the 4-step loop
+  [submit → triage → plan → agent PR → ships as Done]. **Part 2 ("Vibe project" —
+  the headline idea, by analogy to vibe coding):** _"You've heard of vibe coding —
+  describe what you want, and the AI writes the code. Motir does that for an
+  entire project…"_ + the three layers (**An AI planner** → chat to a structured
+  plan; **An AI-native tracker** → boards/sprints/system of record, **MCP-native**
+  so your agents read/write Motir directly; **A hosted coding agent** → picks up
+  work items and ships the code) + _"No other tool runs the whole loop end to
+  end — that's a vibe project."_ Then **"Contribute"**. NOT framed as "AI project
+  management" — it's the three-layer, end-to-end pipeline. This canonical copy is
+  seeded onto the `motir` project's `publicOverviewMd` (see story-6.12.ts § 6.12.4
+  - the seed loader), so the live tenant renders it. Settings editor:
+    **"Project overview (public landing)"** · **"A README-style intro shown on the
+    project's public Overview tab. Markdown — headings, lists, links, and images."**
+    · **"This shows on the public Overview tab — the first thing a visitor sees.
+    It's hidden while the project isn't public."**
 - Roadmap buckets: **"Submitted" / "Planned" / "In progress" / "Done"** ·
   **"Load N more →"**.
 - Submit: **"Submit a request"** · **"Tell the Motir team about a bug or a feature
