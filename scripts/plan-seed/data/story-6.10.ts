@@ -392,7 +392,15 @@ export const story_6_10: PlanStory = {
         'Settings home FOLDS IN the workspace-config sections (all ' +
         '`workspaceId`-scoped) and routes each edit to its own tier ' +
         '(org→`Organization`, config→the single `Workspace`); at ws #2 they ' +
-        'split into a per-workspace Settings area with no data move. ' +
+        'split into a per-workspace Settings area with no data move. (e) **There ' +
+        'is NO org→workspace config INHERITANCE in the data model** — no ' +
+        'org-level config defaults, no override rows, no runtime resolution; ' +
+        'config is purely `Workspace`-scoped. The "inherit" UX is a ' +
+        'COPY-ON-CREATE: a new workspace is **seeded by copying the source ' +
+        'workspace’s config** at creation so it opens already configured (looks ' +
+        'inherited), after which the workspaces are independent and either can ' +
+        'overwrite. (Real live inheritance, if ever needed for enterprise, is an ' +
+        'additive future change, not a migration.) ' +
         'The visual spec is `design/org-admin/design-notes.md` (6.10.1); this ' +
         'ADR fixes the model/auto-provisioning side that the schema (6.10.3), ' +
         'seed (6.10.6) and UI (6.10.5) build to.\n\n' +
@@ -539,7 +547,17 @@ export const story_6_10: PlanStory = {
         'every account is an org of one (OPC) from day one and there is never a ' +
         'tier-less user. Mirror the shape of the 6.10.3 backfill (which does the ' +
         'same for pre-existing workspaces); the org name defaults from the ' +
-        'user/company and is renameable.\n\n' +
+        'user/company and is renameable.\n' +
+        '- **Copy-on-create when adding a workspace (the "looks-inherited" ' +
+        'behaviour, 6.10.2 §6e).** Extend the existing create-workspace flow so a ' +
+        'NEW workspace is **seeded by copying the source workspace’s config** ' +
+        '(workflows/statuses, custom fields, labels, components, automation, ' +
+        'dashboards) in the same transaction — so it opens already configured ' +
+        'like the first workspace, then diverges freely. **NOT a data-inheritance ' +
+        'layer** (no org-level config, no override rows, no runtime resolution) — ' +
+        'a one-time deep copy at creation. NOTE: this deep copy spans many ' +
+        'config tables and may be split into its own subtask when 6.10 is ' +
+        'expanded for execution.\n\n' +
         '**The access gate (the load-bearing change).** Extend the existing ' +
         'workspace access check so that reaching a workspace requires the ' +
         'session user to be a member of the workspace’s ORG (org membership ' +
