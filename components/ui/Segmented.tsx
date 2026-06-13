@@ -21,6 +21,11 @@ export interface SegmentedOption<T extends string> {
   label: string;
   /** Optional leading glyph (decorative — the label carries the accessible name). */
   icon?: ReactNode;
+  /** Optional trailing content after the label (e.g. the notification drawer's
+   * unread count on the Direct tab, Subtask 5.7.5). Decorative — faint when the
+   * option is inactive, the `--el-accent` hue when active (mirrors the leading
+   * glyph's active treatment). */
+  trailing?: ReactNode;
   /** Disable just this option — a forward-compatible seam (e.g. the Activity
    * card's History filter, Story 5.5's slot) drawn present-but-inert. */
   disabled?: boolean;
@@ -70,8 +75,8 @@ export function Segmented<T extends string>({
               'focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
               'disabled:cursor-not-allowed disabled:opacity-50',
               active
-                ? 'bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle) [&_.seg-ic]:text-(--el-accent)'
-                : 'text-(--el-text-secondary) hover:text-(--el-text) [&_.seg-ic]:text-(--el-text-faint)',
+                ? 'bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle) [&_.seg-ic]:text-(--el-accent) [&_.seg-trail]:text-(--el-accent)'
+                : 'text-(--el-text-secondary) hover:text-(--el-text) [&_.seg-ic]:text-(--el-text-faint) [&_.seg-trail]:text-(--el-text-faint)',
             )}
           >
             {opt.icon ? (
@@ -80,6 +85,11 @@ export function Segmented<T extends string>({
               </span>
             ) : null}
             {opt.label}
+            {opt.trailing != null ? (
+              <span className="seg-trail text-[11px] font-semibold tabular-nums">
+                {opt.trailing}
+              </span>
+            ) : null}
           </button>
         );
       })}
