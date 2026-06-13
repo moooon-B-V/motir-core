@@ -1917,6 +1917,892 @@ export const EPICS: EpicMeta[] = [
           'data-grid or a drawer panel with its own focus scope), unify behind a single ' +
           'overflow-escape primitive instead of a third branch.',
       },
+      {
+        id: 'bug-notification-pref-transitioned-still-disabled-after-5-4-shipped',
+        kind: 'bug',
+        title:
+          'Notification preferences: the "An item you\'re watching changes status" row is still drawn disabled with "Soon" + "Available once issue-watching ships (Story 5.4)" copy, but Story 5.4 (issue-watching) shipped — the row should be settable',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** account settings notification matrix ' +
+          '(`/settings/account` — Subtask 5.7.6, `NotificationPreferencesCard.tsx`) · ' +
+          '**Code surface owned by:** Story 5.7 (matrix UI · Subtask 5.7.6) + Story 5.4 ' +
+          '(the seam that should have been closed when 5.4 shipped — the seam owner) · ' +
+          '**Status:** open · **Reported by:** Yue.\n\n' +
+          'On `/settings/account` the notification-preferences matrix shows four event-type rows: ' +
+          "**Mentioned**, **Commented on an item you're involved in**, **Assigned to you**, and " +
+          "**An item you're watching changes status**. The fourth row renders **disabled** with a " +
+          'lavender **“Soon”** tag and the helper text **“Available once issue-watching ships ' +
+          '(Story 5.4).”** Both Email and In-app switches are greyed out and unclickable. The user ' +
+          'has no way to opt out of (or back into) the watcher-transition email + in-app fan-in.\n\n' +
+          '**But Story 5.4 (Labels, components, watchers) is `done`**. Watching is shipped end-to-' +
+          'end: the `WatchControl` (`Subtask 5.4.9`) is live on the issue detail rail; the watcher ' +
+          'CRUD routes ship (`PUT/DELETE /api/work-items/[id]/watch`); `workItemsService.updateStatus` ' +
+          '(`lib/services/workItemsService.ts:1178`) and `boardsService` ' +
+          '(`lib/services/boardsService.ts:529`) BOTH emit `work-item/transitioned` events on every ' +
+          'status change; the 5.7.3 in-app fan-in (`notificationFanInService.ts:141`) and the ' +
+          '5.1.6 email job already consume `transitioned` and deliver to watchers ' +
+          '(`watcherNotificationsService.ts`). The transitioned NOTIFICATIONS are live for every ' +
+          'watcher right now. **Only the preference-matrix guard never flipped from `settable: ' +
+          'false` to `settable: true` when 5.4 landed.** Class: "post-prerequisite-ships, forgotten ' +
+          'flip" — Story 5.4\'s definition-of-done didn\'t include "close the seams that named you ' +
+          'as the gate."\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open `/settings/account`, scroll ' +
+          'to the **Notifications** card. Observe the fourth row "An item you\'re watching ' +
+          'changes status" renders greyed with a "Soon" / 即将推出 chip; the Email and In-app ' +
+          '`Switch`es are `disabled`. The aria-label reads "Email for An item you\'re watching ' +
+          'changes status (coming soon)". Now, in another browser tab, watch any work item (issue ' +
+          'detail page → 👁 Watch), have a teammate transition that item to Done, and observe in ' +
+          '`/notifications` that the user RECEIVES the transitioned notification — the channel is ' +
+          'live, but the user cannot configure it.\n\n' +
+          '**User impact.** A watcher who does NOT want transition emails (e.g. they watch many ' +
+          'items for read-only triage) has NO control: the row is hard-disabled, and the service ' +
+          'rejects writes with `NotificationEventTypeNotSettableError` (`notificationPreferences' +
+          'Service.ts:70`). Their only escapes are unwatching every item or hiding by email-' +
+          'client filter — both worse than a preference toggle that already exists in design and ' +
+          'in service. This is missing a user CONTROL over real notifications the system is ' +
+          'actively sending — not cosmetic.\n\n' +
+          '**Root cause (high confidence — one-line seam in three files).**\n\n' +
+          '- `lib/notifications/preferences.ts:70-75` — the `NOTIFICATION_PREFERENCE_EVENT_TYPES` ' +
+          'row for `transitioned` is `{ settable: false, defaults: { email: true, in_app: true } }`. ' +
+          'The source comment at line 70 documents the intent: *"Story 5.4 seam — drawn disabled, ' +
+          'rejected on write, until issue-watching ships."* It must flip to `settable: true`. ' +
+          "Defaults are already correct (both channels ON, mirroring Jira's personal-notification-" +
+          'settings shape) so the resolver does the right thing the moment the flag flips.\n' +
+          '- `messages/en.json:1415-1418` (`settings.account.notifications.events.transitioned`) — ' +
+          '`label: "An item you\'re watching changes status"` (KEEP), `desc: "Available once ' +
+          'issue-watching ships (Story 5.4)."` — must be replaced with a real description matching ' +
+          'the shipped event semantics, e.g. **"Someone changes the status of an item you watch ' +
+          '(including transitions to done or back open)."** (mirror the design copy + the other ' +
+          "three rows' style — present-tense, user-impact-named).\n" +
+          '- `messages/zh.json:1415-1418` — the matching zh `desc: "在事项关注功能上线后可用（故事 ' +
+          '5.4）。"` must be replaced with a translated version of the new en copy. (Both locales ' +
+          'must flip together; the existing convention is the matrix rows are translated in ' +
+          "lockstep — search `transitioned` in both files and update each.) Verify the row's " +
+          'aria-label flips from `cellAriaSoon` to `cellAria` automatically once `settable` is ' +
+          '`true` — the existing `NotificationPreferencesCard.tsx:192-194` branches on ' +
+          '`row.settable`, so no UI change.\n\n' +
+          '**Service contract — verify before flipping.** ' +
+          '`notificationPreferencesService.set` (`lib/services/notificationPreferencesService.ts:70`) ' +
+          'rejects with `NotificationEventTypeNotSettableError` for non-settable types. Once ' +
+          '`transitioned` flips to `settable: true`, writes will go through and the existing ' +
+          'channel-gate resolver (consulted by both the 5.7.3 in-app fan-in AND the 5.1.6 email ' +
+          "job — per the `preferences.ts` header comment) will honor the user's pick. Confirm the " +
+          'fan-in actually consults the matrix for `transitioned` (not just `mentioned` / ' +
+          '`commented` / `assigned`) — the `notificationFanInService.ts:141` comment claims 5.4 ' +
+          'extends the resolver with `transitioned`, but the bug fix MUST verify with a test that ' +
+          "flipping the user's `transitioned · email` cell to `off` actually suppresses the " +
+          'watcher transition email (otherwise the toggle is just decorative — a worse defect than ' +
+          'the disabled-with-Soon state).\n\n' +
+          '**Fix shape (minimal, no follow-up).**\n\n' +
+          '1. `lib/notifications/preferences.ts` — flip `settable: false` → `settable: true` on the ' +
+          '`transitioned` row; rewrite the line-70 comment from "Story 5.4 seam — drawn disabled ' +
+          '… until issue-watching ships" to a one-line "Watcher transition events (Story 5.4 — ' +
+          "shipped); fanned in by 5.7.3 + 5.1.6, gated by the user's `transitioned · {channel}` " +
+          'cell."\n' +
+          '2. `messages/en.json` + `messages/zh.json` — replace the `transitioned.desc` strings ' +
+          'with real present-tense copy describing the live event (mirror the existing three ' +
+          "rows' style).\n" +
+          '3. Add a test that asserts: (a) ' +
+          '`notificationPreferencesService.set({ eventType: "transitioned", channel: "email", ' +
+          'enabled: false })` SUCCEEDS for a user (currently throws `NotificationEventType' +
+          'NotSettableError`); (b) once that cell is `off`, ' +
+          '`watcherNotificationsService` does NOT deliver the email for a `work-item/transitioned` ' +
+          'event the user would otherwise receive; (c) the matrix DTO returned by ' +
+          '`GET /api/notification-preferences` reports `settable: true` for the `transitioned` ' +
+          'row. The first two are integration-tier (real DB, mirror the existing fan-in tests); ' +
+          'the third is a one-line DTO assertion or component test.\n' +
+          '4. Audit the rest of the repo for similar stale "ships (Story X)" guards. The current ' +
+          'sweep (`grep "Available once" + "settable: false" + "until …ships"` across `app ' +
+          'components lib messages`) finds only this row — but the audit is itself the rule, not ' +
+          'this single hit.\n\n' +
+          'No DB migration; no schema change; no Modal/Card/Switch primitive change; no service-' +
+          'method signature change; no shape/colour token churn — purely a flag flip + copy + ' +
+          'test. Story 5.4 already paid for the runtime contract; the bug is one boolean + two ' +
+          'strings + one assertion.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- The `/settings/account` notification matrix `transitioned` row is **enabled**: both ' +
+          'Email and In-app `Switch`es are clickable; the lavender "Soon" / 即将推出 tag is ' +
+          'absent; the helper text reads the new real copy (en + zh both updated).\n' +
+          "- The row's aria-label is `cellAria` (not `cellAriaSoon`) — falls out of " +
+          '`NotificationPreferencesCard.tsx:192-194` once `row.settable` is `true`.\n' +
+          '- The user can toggle each cell; the response is honored and the cell trusts it ' +
+          '(no `router.refresh` regression — the existing inline-toggle contract holds).\n' +
+          '- `notificationPreferencesService.set` no longer throws ' +
+          '`NotificationEventTypeNotSettableError` for `eventType: "transitioned"`.\n' +
+          '- When the user sets `transitioned · email` to `off`, a subsequent ' +
+          '`work-item/transitioned` event the user would otherwise receive (because they watch ' +
+          'the item) does NOT deliver the email — verified by an integration test against the ' +
+          'real `watcherNotificationsService`. Same for `in_app` and the 5.7.3 fan-in.\n' +
+          '- Existing three rows (mentioned / commented / assigned) keep current behaviour ' +
+          '(defaults, toggle paths, AA contrast). No regression in the other surfaces ' +
+          'consuming `NOTIFICATION_PREFERENCE_EVENT_TYPES` (the resolver, the matrix DTO, the ' +
+          'fan-in).\n' +
+          '- A one-line note in `notes.html` (or `PRODECT_FINDINGS.md`) documents the ' +
+          '"post-prerequisite-ships, forgotten flip" anti-pattern + the audit grep that catches ' +
+          'it — so a future Story-X completion checklist includes "close the seams named after ' +
+          'you." (Planner-side meta, not a code change — out of scope here but logged as a ' +
+          'finding in the PR body.)\n\n' +
+          '## Context refs\n\n' +
+          '- `lib/notifications/preferences.ts:70-75` — the seam (the one-line flip)\n' +
+          '- `messages/en.json:1415-1418`, `messages/zh.json:1415-1418` — the matching i18n copy ' +
+          '(both locales)\n' +
+          '- `app/(authed)/settings/account/_components/NotificationPreferencesCard.tsx:139-175` ' +
+          '— the row renderer (no change; branches on `row.settable` already)\n' +
+          '- `lib/services/notificationPreferencesService.ts:70` — the ' +
+          '`NotificationEventTypeNotSettableError` throw that gates writes today\n' +
+          '- `lib/services/workItemsService.ts:1178`, `lib/services/boardsService.ts:529` — the ' +
+          '`work-item/transitioned` event emitters (proof that the runtime side shipped with 5.4)\n' +
+          '- `lib/services/notificationFanInService.ts:141` — the 5.7.3 fan-in side that consumes ' +
+          "`transitioned`; verify the channel-gate is consulted (or wire it if it isn't — part of " +
+          'the fix)\n' +
+          '- `lib/services/watcherNotificationsService.ts` — the email-side fan-out; verify the ' +
+          'gate is consulted\n' +
+          '- Story 5.4 (Labels, components, watchers) — `done`; Subtasks 5.4.4 (watcher CRUD), ' +
+          '5.4.5 (transitioned event), 5.4.9 (`WatchControl`) all shipped\n' +
+          '- Sibling family: `bug-automation-editor-status-id-not-key` (Epic 6 sibling — also a ' +
+          '"editor said one thing, runtime contract said another" cross-layer defect; this is ' +
+          'the time-shifted variant where the contract evolved and the editor seam was not flipped ' +
+          'with it)\n\n' +
+          '**Refactor signal.** This is the FIRST documented "post-prerequisite-ships, forgotten ' +
+          'seam-flip" bug. The seam was correctly placed and correctly named (the comment cited ' +
+          'Story 5.4 by id) — the failure was that landing 5.4 didn\'t include a "search for ' +
+          'seams that named me" pass. Cheap catch: an audit grep ' +
+          '(`grep -rn "ships (Story\\|Available once\\|until.*ships"`) added to the planner\'s ' +
+          'Story-completion `motir mark <id> done` checklist would prevent the next instance. Not ' +
+          'in scope for this bug; the rule of one fires at "log it as a recurring class" not "fix ' +
+          'the planner runbook." If a second occurrence surfaces in another epic, promote the ' +
+          'audit grep to a CI lint.',
+      },
+      {
+        id: 'bug-reports-hub-agile-cards-collapse-to-one-url',
+        kind: 'bug',
+        title:
+          'Reports hub: all three Agile cards (Burndown chart / Velocity chart / Sprint report) navigate to the SAME `/sprints/[id]/report` URL — collapses three distinct Jira reports onto one page',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** project Reports hub (`/reports`, Subtask 6.3.6 — ' +
+          '`app/(authed)/reports/page.tsx`) · **Code surface owned by:** Story 6.3 ' +
+          '(Subtask 6.3.6 — built the hub) + Story 4.6 (the chart primitives + reads the new ' +
+          'pages will compose: 4.6.2 chart primitives, 4.6.3 `getBurndownSeries`, 4.6.4 ' +
+          '`getVelocity`, 4.6.5 burndown mount, 4.6.6 velocity mount — all `done`) · ' +
+          '**Status:** open · **Reported by:** Yue.\n\n' +
+          'On `/reports` the **Agile** group renders three cards: **Burndown chart**, **Velocity ' +
+          'chart**, **Sprint report**. Three distinct names, three distinct icons (TrendingDown · ' +
+          'BarChart3 · ListTree), three distinct body copies — visually a 3-up of three distinct ' +
+          'reports. But **all three cards link to the exact same URL** (' +
+          '`app/(authed)/reports/page.tsx:54-58, 68-90` — a single `agileHref` computed once ' +
+          '(active sprint else most recently completed, else `/backlog`) and reused for every ' +
+          '`<HubCard href={agileHref}>`). Clicking any of the three lands on the same sprint ' +
+          'report page; the user has no way to deep-link directly into the Velocity chart (a ' +
+          'cross-sprint history view), and "Burndown chart" / "Velocity chart" are misleading as ' +
+          "card titles when they're actually sub-sections of the sprint report.\n\n" +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open the `moooon` / `motir` ' +
+          'project, click **Reports** in the sidebar. Hover/click each of the three Agile cards; ' +
+          'observe each navigates to `/sprints/<id>/report` (same id). Velocity in particular is ' +
+          'CROSS-SPRINT by definition (the 4.6.4 `getVelocity` read returns recent-sprints ' +
+          "committed-vs-completed), but the only way to see it is to open one specific sprint's " +
+          "report, which frames the velocity beside that sprint's burndown rather than as a " +
+          'project-level history.\n\n' +
+          "**Mirror product (decision-authority rung 1).** Jira's Reports menu lists Burndown " +
+          'chart, Velocity chart, and Sprint report as THREE separate pages: ' +
+          '`/projects/{key}/reports/burndown-chart` (per-sprint, with a sprint picker), ' +
+          '`/projects/{key}/reports/velocity-chart` (cross-sprint history, no per-sprint scope), ' +
+          '`/projects/{key}/reports/sprint-report` (per-sprint, with a sprint picker — the ' +
+          'completed/incomplete + carried view this codebase already ships at ' +
+          '`/sprints/[id]/report`). Each is a focused, bookmarkable report with its own controls. ' +
+          'Linear groups them similarly. Three-name three-card UI matches this — the same-URL ' +
+          'collapse is a hub-affordance defect against rung 1, not a design intent. The 6.3.3 ' +
+          'design says "the agile group … link cards into the SHIPPED surfaces" — that names ' +
+          'WHICH primitives the new pages compose (4.6.5 / 4.6.6 mounts), not "all three deep-' +
+          'link to the same URL." The shipped code collapsed three logical destinations onto one ' +
+          'href and the design did not call for that.\n\n' +
+          '**User impact.** (a) The Velocity-chart card is functionally dead — clicking it lands ' +
+          'on the sprint report, which shows velocity as a side-by-side widget but does not let ' +
+          'the user focus on it or jump between historical sprints to compare. (b) The Burndown-' +
+          'chart card is half-functional — it lands on the sprint report which DOES contain a ' +
+          'burndown section, but the user has no sprint picker (the burndown of any other sprint ' +
+          "requires navigating to that sprint's report). (c) The hub itself fails its own " +
+          '"grouped index" framing: an index where three entries point at the same destination is ' +
+          'a bookmarks pane, not an index. (d) URL-bar tabs collapse — a user opening "Velocity ' +
+          'chart" + "Sprint report" in two tabs gets two identical tabs.\n\n' +
+          '**Root cause (clear — one `agileHref` computed once, reused three times).** ' +
+          '`app/(authed)/reports/page.tsx:54-58` computes a single `agileHref` based on the ' +
+          'active sprint (else most recent complete, else `/backlog`), then lines 68-90 mount ' +
+          'three `<HubCard href={agileHref} …>` siblings. There is no branching, no per-card ' +
+          'href; the destination is identical by construction. The 6.3.6 acceptance criteria ' +
+          '("the hub matches the design (both groups; agile cards LINK, never redraw)") were ' +
+          'satisfied at the "link, don\'t redraw" level but missed that each card needs a ' +
+          'distinct link — the AC didn\'t say "three distinct URLs" and the implementer collapsed ' +
+          'them; the design + Jira mirror both wanted three.\n\n' +
+          '**Fix shape — three focused report pages, each composing the existing 4.6.x ' +
+          'primitives + reads.** All chart components, all service reads, all DTOs already exist ' +
+          '— this is composition, not new infrastructure.\n\n' +
+          '1. **`/reports/burndown` (new page).** A focused project-level burndown report: a ' +
+          "sprint picker (the project's sprints, default active else most-recent-complete) + the " +
+          '4.6.5 `ReportBurndownSection` / 4.6.2 `BurndownChart` (`variant="full"`) for the ' +
+          'picked sprint. Server Component, services-only per 4-layer; URL-driven sprint param ' +
+          '(`?sprint=<id>`, the shipped `?view`/`?sort` convention from 2.5) so the picked sprint ' +
+          'reloads/shares. Empty state when the project has no sprints (link to `/backlog`).\n' +
+          '2. **`/reports/velocity` (new page).** A project-level cross-sprint velocity report: ' +
+          'the 4.6.6 `VelocityChart` mounted at full page width with optional history-window + ' +
+          'project-vs-board scope controls (URL-driven). The 4.6.4 `getVelocity` read already ' +
+          'returns the cross-sprint series; the page just composes it standalone instead of as a ' +
+          'side-widget. Low-history state (0–1 completed sprints) per the existing 4.6.6 design.\n' +
+          '3. **Keep `/sprints/[id]/report` for the Sprint report card.** The third card stays ' +
+          'pointed at the existing standalone sprint-report page (already a full per-sprint ' +
+          'report with completed / incomplete / carried + the analytics row), but its href should ' +
+          'still resolve to the active-sprint id (same `agileHref` logic, just isolated to this ' +
+          'card).\n' +
+          '4. **`app/(authed)/reports/page.tsx` re-wire.** Drop the single shared `agileHref`; ' +
+          'compute three hrefs: `burndownHref = /reports/burndown` (with `?sprint=<active>` if ' +
+          'one exists), `velocityHref = /reports/velocity`, `sprintReportHref = current ? ' +
+          '/sprints/${current.id}/report : /backlog`. Pass each into its respective HubCard.\n' +
+          '5. **i18n.** Update the existing `hub.burndownBody` copy ("Lives in the sprint ' +
+          'report.") to match the new shape — e.g. "Points remaining across the active sprint, ' +
+          'with a sprint picker." (en + zh both updated). The OTHER two copies are already shape-' +
+          'correct.\n' +
+          '6. **Sidebar / nav.** Verify the sidebar Reports link still points at `/reports` (it ' +
+          'does — no change needed); the two new pages are reachable via the hub cards + direct ' +
+          'URL. No new sidebar entries required.\n\n' +
+          "**What's out of scope for this bug:** sprint picker UI primitive (use the existing " +
+          'Combobox + a list of `sprintsService.listByProject`); chart redesign (composes 4.6.2 ' +
+          'primitives as-is); a new design subtask (the new pages compose existing designed ' +
+          'primitives and follow the existing report-page pattern at `/reports/created-vs-' +
+          'resolved` and `/reports/distribution` — same chrome, same control vocabulary, just ' +
+          'mounting a different chart; per the design-gate, composing existing primitives in ' +
+          'their documented variants is NOT improvising a new surface). If a design tweak ' +
+          'surfaces during build (e.g. how the sprint picker sits in the page header), capture ' +
+          'as a finding and add a follow-up design subtask — do NOT block the fix on it.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- On `/reports`, the three Agile cards link to **three distinct URLs**: Burndown → ' +
+          '`/reports/burndown` (with `?sprint=<id>` defaulting to active else recent-complete), ' +
+          'Velocity → `/reports/velocity`, Sprint report → `/sprints/<active-id>/report` (else ' +
+          '`/backlog` when no sprints exist).\n' +
+          '- `/reports/burndown` renders a sprint picker + the full 4.6.5/4.6.2 burndown for the ' +
+          'picked sprint. URL `?sprint=` param round-trips (reload + share restores).\n' +
+          '- `/reports/velocity` renders the 4.6.6 velocity chart at full page width as a cross-' +
+          'sprint history; low-history state (≤1 completed sprint) per the existing 4.6.6 ' +
+          'design.\n' +
+          '- Both new pages compose existing services only (4-layer; no new DB / Prisma / route ' +
+          'changes; `reportsService.getBurndownSeries` + `.getVelocity` already exist).\n' +
+          "- Per-viewer project gating works (no-access state on a project the viewer can't " +
+          'see, mirroring the existing report pages).\n' +
+          '- i18n strings updated in both `messages/en.json` and `messages/zh.json` for any copy ' +
+          'that changes (the burndown card body line); existing strings preserved.\n' +
+          '- The Burndown / Velocity / Sprint-report card titles + icons + groups are unchanged ' +
+          '(this is a routing + new-page fix, not a hub redesign).\n' +
+          '- A11y: hub cards keep their focus-ring + role; new pages pass the strict sweep; ' +
+          'sprint picker keyboard-complete.\n' +
+          '- An E2E (`tests/e2e/reports.spec.ts` — already exists per 6.3.7) extends to assert ' +
+          'each of the three Agile cards lands on its expected URL and renders its expected ' +
+          'chart, and that the burndown sprint picker reloads correctly.\n' +
+          '- Shape + colour tokens unchanged (composes existing chart primitives via their ' +
+          'documented variants).\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/reports/page.tsx:54-58, 68-90` — the single-`agileHref`-three-cards ' +
+          'site (the fix site)\n' +
+          '- `app/(authed)/sprints/[id]/report/page.tsx` — the standalone sprint report (the ' +
+          "sprint-report card's destination; unchanged)\n" +
+          '- `app/(authed)/backlog/_components/BurndownChart.tsx` (4.6.2) + ' +
+          '`ReportBurndownSection.tsx` (4.6.5) — the chart + section primitives the new ' +
+          '`/reports/burndown` page composes\n' +
+          '- `app/(authed)/backlog/_components/VelocityChart.tsx` (4.6.6) — the chart the new ' +
+          '`/reports/velocity` page composes\n' +
+          '- `lib/services/reportsService.ts` — `getBurndownSeries`, `getVelocity` (already ' +
+          'shipped; the new pages call these directly Server-Component-side)\n' +
+          '- `lib/services/sprintsService.ts` — `listByProject` (already used by the hub for the ' +
+          'agileHref; reused for the sprint picker)\n' +
+          '- `design/reports/dashboard.mock.html` panel 6 + `design/reports/design-notes.md` ' +
+          'lines 290-291 — the design "agile group … link cards into the SHIPPED surfaces"; ' +
+          'naming WHICH primitives compose, not "one URL"\n' +
+          '- `app/(authed)/reports/created-vs-resolved/page.tsx`, ' +
+          '`app/(authed)/reports/distribution/page.tsx` — the existing report-page pattern the ' +
+          'two new pages mirror (header + URL-driven controls + chart + i18n)\n' +
+          '- Story 6.3 (Reports + dashboards) — `done`, but Subtask 6.3.6\'s AC missed "three ' +
+          'distinct URLs" → that\'s why the cards collapsed onto one href\n' +
+          '- Jira reports menu (mirror product, rung 1) — Burndown / Velocity / Sprint report as ' +
+          'three distinct pages with their own pickers and scope\n\n' +
+          "**Refactor signal — Subtask AC drift.** Subtask 6.3.6's acceptance criteria said " +
+          '"agile cards LINK, never redraw" but did NOT say "three distinct URLs." The implementer ' +
+          "satisfied the letter (link, don't redraw — true; all three are `<Link>`s, none " +
+          'redraws the chart) while violating the spirit (the cards are not an index if they all ' +
+          'point at the same place). This is the second documented "AC satisfied by letter, ' +
+          'violated by mirror-product intent" defect this cycle (sibling: ' +
+          '`bug-notification-pref-transitioned-still-disabled-after-5-4-shipped`, where the seam ' +
+          "comment named Story 5.4 by id and the 5.4 completion didn't flip it). Both are " +
+          'planner-side process gaps: an AC that says "match the design" implicitly inherits ' +
+          'mirror-product behaviour for everything the design under-specifies, and "match the ' +
+          "mirror product\" is the planner's rung-1 obligation — not the implementer's. The fix " +
+          'is to tighten ACs at PLAN time to name the rung-1 expectation explicitly when a card ' +
+          'maps to a mirror-product behaviour that is not visually obvious (here: "three URLs, ' +
+          'one per card, mirroring Jira\'s three reports"). Out of scope for this bug — captured ' +
+          'as the refactor signal for a future planner-runbook tightening.',
+      },
+      {
+        id: 'bug-sprint-report-charts-misaligned-burndown-missing-chart-sub',
+        kind: 'bug',
+        title:
+          'Sprint report side-by-side charts misalign vertically — Burndown section is missing its `chart-sub` meta line that the 4.6.1 design specifies, but Velocity has one (and is rendering correctly)',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** sprint report analytics row — the side-by-side charts ' +
+          '(`app/(authed)/backlog/_components/SprintReport.tsx:179-197`) rendering ' +
+          '`BurndownChart` (Subtask 4.6.5) + `VelocityChart` (Subtask 4.6.6) ' +
+          '· **Code surface owned by:** Story 4.4 (Subtask 4.4.6 — the seam) + Story 4.6 ' +
+          '(Subtasks 4.6.5 burndown / 4.6.6 velocity — the chart mounts) · **Status:** open · ' +
+          '**Reported by:** Yue.\n\n' +
+          'On the sprint report page (`/sprints/[id]/report`), the analytics row places the ' +
+          'Burndown chart and the Velocity chart **side by side** per `design/reports/' +
+          'charts.mock.html` panel 5 (the seam-placement panel — both charts dropped into the ' +
+          'sprint-report seam reserved by 4.4.6). The two charts are **NOT vertically aligned**: ' +
+          'the Velocity chart sits about a line lower than the Burndown chart, and consequently ' +
+          'both the top (Y-axis cap line + first gridline) and the bottom (X-axis label / "View ' +
+          'data table" affordance) drift out of horizontal alignment. The visual reads as ' +
+          '"someone forgot to lay these out as a pair," which is exactly the bug: they ARE laid ' +
+          'out as a pair (`flex` row, equal `basis-[300px]`, identical 600×300 SVG frames and ' +
+          'shared `DEFAULT_MARGIN` from `ChartFrame`), but one section has an extra row of chrome ' +
+          'above its chart that the other does not.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open the `moooon` / `motir` ' +
+          'project → `/backlog`, click into a sprint with at least 2 completed predecessors so ' +
+          'the velocity chart renders (not the low-history state), then open ' +
+          '`/sprints/<id>/report`. Compare the two section frames in the analytics row: the ' +
+          'Burndown header is one line ("📈 Burndown" + the chart legend underneath); the ' +
+          'Velocity header is TWO lines ("📊 Velocity" + a sub-line "Last 3 completed sprints · ' +
+          'avg completed 42.7" + the legend). The Velocity legend sits ~16-20px lower than the ' +
+          'Burndown legend; the SVG chart frames cascade by the same offset; the X-axis labels ' +
+          'and the "View data table" buttons at the bottom of each section misalign by the same ' +
+          'amount.\n\n' +
+          '**Root cause (high confidence — asymmetric pre-chart chrome).** The Burndown and ' +
+          'Velocity primitives both target a 600×300 SVG via the same `ChartFrame.DEFAULT_MARGIN` ' +
+          '(`{ top: 16, right: 16, bottom: 46, left: 44 }`) and the same `ChartLegend` rendered ' +
+          'above the SVG with `mb-3`. The SVGs themselves are size-parity. The asymmetry is in ' +
+          'the PRE-LEGEND chrome:\n\n' +
+          '- `VelocityChart.tsx:72-77` renders an EXTRA `<span>` above its `<BarChart>`: ' +
+          '*"{velocityWindow} · {velocityAverage}"* — the "last N completed sprints · avg ' +
+          'completed N" meta line per `design/reports/charts.mock.html:1244-1248` (the design\'s ' +
+          '`<div class="chart-head">` carries a `<h3 class="chart-title">Velocity</h3>` + a ' +
+          '`<span class="chart-sub">last 7 completed sprints · avg completed 26</span>`).\n' +
+          '- `BurndownChart.tsx:261-294` renders ONLY the chart — no `chart-sub` equivalent above ' +
+          'the `<LineChart>`, even though `design/reports/charts.mock.html:878-880` specifies ' +
+          'BOTH for burndown too: `<h3 class="chart-title">Sprint 6 · Burndown</h3>` + `<span ' +
+          'class="chart-sub">Jun 2 → Jun 14 · completed · 42 pts committed</span>`. Same chrome ' +
+          'pattern, present in the design, missing in the code.\n' +
+          '- `SprintReport.tsx:179-197` hosts both sections with `flex flex-wrap gap-4` + ' +
+          '`flex-1 basis-[300px]` per section. The section TITLES (the "📈 Burndown" and ' +
+          '"📊 Velocity" lines) are mounted at the SECTION level (host-owned), so they ARE ' +
+          'aligned. But the `chart-sub` meta sits INSIDE the velocity primitive ' +
+          '(`VelocityChart`-owned) and is MISSING from the burndown primitive — so when the host ' +
+          'lays the two sections side by side, one has a single header row above the chart and ' +
+          'the other has two rows.\n\n' +
+          'Net: the design specified two-line chart-heads on BOTH charts; the code implemented ' +
+          'two-line head only on Velocity. The misalignment is the visible consequence.\n\n' +
+          '**Class.** Design fidelity drift — a per-chart chrome detail the design drew on both ' +
+          'panels but only one panel implemented. Not a layout bug (the `flex` / `basis` / SVG ' +
+          'dimensions are correct), not a token bug (`--el-*` is correct), and not a margin bug ' +
+          '(`DEFAULT_MARGIN` is correct). One missing element on one side; everything else is ' +
+          'fine.\n\n' +
+          '**Fix shape (recommended).** Add the missing burndown `chart-sub` meta line so both ' +
+          'sections have the same two-row chrome above the SVG, per the design.\n\n' +
+          '1. **`BurndownChart.tsx` — add a `<span className="text-xs text-(--el-text-muted)">` ' +
+          "above the `<LineChart>`**, mirroring `VelocityChart.tsx:73-77`'s pattern. The copy " +
+          'comes from the design (line 880): `Sprint 6 · Burndown` + `Jun 2 → Jun 14 · completed ' +
+          '· 42 pts committed`. Drop the redundant "Sprint 6 · Burndown" prefix (the host section ' +
+          'already names "Burndown"), so the sub-line is the date window + state + committed ' +
+          'baseline: e.g. **`{start} → {end} · {state} · {committed} pts committed`** in the ' +
+          "full variant. (Compact variant should keep its existing minimal chrome — that's the " +
+          'scrum-header slot, panel 2.) The `BurndownSeriesDto` already carries `committed`, ' +
+          '`state`, and day dates — no service/DTO change.\n' +
+          '2. **i18n.** Add `sprintReport.burndownWindow` keys to `messages/en.json` and ' +
+          '`messages/zh.json` matching the existing `sprintReport.velocityWindow` / ' +
+          '`velocityAverage` pattern (window + state + committed-pts, ICU-formatted). Keep ' +
+          'parallel naming so the en/zh files stay scannable.\n' +
+          '3. **Wrap the `<div>` consistently** so both `BurndownChart` and `VelocityChart` ' +
+          'return a `<div className="flex flex-col gap-2">` (currently burndown uses `gap-1`, ' +
+          'velocity uses `gap-2`). Bring burndown to `gap-2` to match velocity — small ' +
+          'consistency fix, lands inside the same diff.\n' +
+          '4. **No `SprintReport.tsx` change.** The host section headers stay as-is (icon + ' +
+          "name); the chart-sub line lives inside the chart primitive (matching the design's " +
+          "`chart-head` block) so the primitive remains self-contained whether it's mounted in " +
+          'the sprint report, the standalone `/reports/burndown` page (the sibling bug ' +
+          '[[bug-reports-hub-agile-cards-collapse-to-one-url]] proposes), or anywhere else.\n\n' +
+          '**Alternative fix (rejected).** Lift the velocity meta line OUT of `VelocityChart` ' +
+          'and into the host section header (so both sections have one row of chrome and the ' +
+          'sub-line disappears entirely). REJECTED because the design explicitly draws both ' +
+          'charts with a `chart-sub` line (`charts.mock.html:878-880` for burndown and `:1244-' +
+          '1248` for velocity — the planner verified both). Dropping the sub-line on velocity ' +
+          'would mean dropping a documented design element to "fix" an alignment defect, when ' +
+          'the design already says the alignment fix is to ADD the missing sub-line on burndown. ' +
+          'Per the decision-authority ladder rung 1 (the mirror product / the design), the ' +
+          'design wins.\n\n' +
+          "**What's out of scope for this bug:** the compact-burndown variant (Story 4.5 scrum-" +
+          'header slot — different design, panel 2, intentionally minimal). The empty / ' +
+          'unestimated / low-history states (they already have their own micro-headers per ' +
+          'panels 4 + 5). The standalone `/sprints/[id]/report` page chrome above the analytics ' +
+          'row (the title + metaWindow + completedAt + goal line — unchanged).\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- On `/sprints/[id]/report` for a sprint with ≥2 completed predecessors (velocity ' +
+          'renders), the Burndown and Velocity sections are **vertically aligned**: both legends ' +
+          'sit on the same Y; both SVG-frame tops sit on the same Y; both X-axis labels and ' +
+          '"View data table" affordances sit on the same Y.\n' +
+          '- The Burndown chart renders the missing `chart-sub` line above its `<LineChart>`, ' +
+          "matching the velocity chart's posture and the design at `charts.mock.html:878-880`. " +
+          'Copy: window (start → end) · state · committed-pts, ICU-formatted, both locales.\n' +
+          "- The Velocity chart's existing `chart-sub` line is UNCHANGED (it was rendering the " +
+          'design correctly all along).\n' +
+          '- The compact-burndown variant in the scrum-header slot is UNCHANGED (panel 2 is ' +
+          'minimal by design).\n' +
+          '- Empty / unestimated / low-history states unchanged (their micro-headers per panels ' +
+          '4 + 5 remain).\n' +
+          '- Both chart primitives return `<div className="flex flex-col gap-2">` (the small ' +
+          'consistency fix — burndown was `gap-1`, velocity was `gap-2`).\n' +
+          '- Colour via `--el-*`, shape via element-semantic tokens; AA contrast holds; no new ' +
+          '`--color-*` / raw `rounded-*`.\n' +
+          '- A regression test: a Playwright (or RTL) assertion in `tests/e2e/sprint-report.spec.' +
+          "ts` (or a sibling) that the burndown section's `<svg>` and the velocity section's " +
+          '`<svg>` have equal `getBoundingClientRect().top` when both render on the standalone ' +
+          'report page. Geometry, not CSS — same posture as the sibling sprint-report-modal-' +
+          'clipped fix.\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/backlog/_components/SprintReport.tsx:179-197` — the analytics row ' +
+          'host (no change here)\n' +
+          '- `app/(authed)/backlog/_components/BurndownChart.tsx:261-294` — the fix site ' +
+          '(add the `chart-sub` `<span>` above the `<LineChart>`)\n' +
+          '- `app/(authed)/backlog/_components/VelocityChart.tsx:72-77` — the existing pattern to ' +
+          'mirror (already correct, no change)\n' +
+          '- `components/ui/charts/LineChart.tsx`, `BarChart.tsx`, `ChartFrame.tsx` — the shared ' +
+          'primitives (600×300, `DEFAULT_MARGIN = { top: 16, right: 16, bottom: 46, left: 44 }`, ' +
+          '`ChartLegend mb-3`) — same on both sides, NOT the source of the misalignment\n' +
+          '- `design/reports/charts.mock.html:878-880` (burndown chart-head, the missing piece) ' +
+          'and `:1244-1248` (velocity chart-head, the implemented piece) — the design source\n' +
+          '- `design/reports/design-notes.md:103-106` (the seam-placement note — both charts ' +
+          'drop into the 4.4.6 sprint-report seam, side by side, per panel 5)\n' +
+          '- `lib/dto/reports.ts` — `BurndownSeriesDto` (already carries `committed`, `state`, ' +
+          'and day dates the new sub-line needs; no DTO change)\n' +
+          '- `messages/en.json` `sprintReport.velocityWindow` / `velocityAverage` — the existing ' +
+          'i18n pattern the new `burndownWindow` mirrors\n' +
+          '- Sibling Epic-6 bugs in this PR: [[bug-sprint-report-modal-clipped-burndown]] ' +
+          '(same surface, different defect — the modal clips the body; this is the analytics-row ' +
+          'misalignment) and [[bug-reports-hub-agile-cards-collapse-to-one-url]] (also names the ' +
+          '4.6.x chart primitives that this bug touches)\n\n' +
+          '**Refactor signal — design-fidelity audit at chart-primitive level.** Both charts ' +
+          'reach for the same shared `LineChart` / `BarChart` primitives + the same shared ' +
+          '`ChartLegend` + the same shared `ChartFrame.DEFAULT_MARGIN`, but the per-chart ' +
+          '`chart-head` chrome (title + sub) is hand-rolled inside each chart binder ' +
+          '(`BurndownChart`, `VelocityChart`) — and the burndown binder forgot one element the ' +
+          'design specified. A `ChartHead` primitive that takes `title` + `sub` props and is ' +
+          'mounted by every chart binder would have prevented this entire shape of defect (the ' +
+          'binder author would need to actively SKIP the `sub` prop, instead of forgetting to ' +
+          'add it). Not in scope for this bug — captured as the refactor signal for a future ' +
+          '4.6.2 primitive-extraction pass if a second chart binder ships with the same ' +
+          'omission. The same shape generalises to legend / axis title / data-table affordance: ' +
+          'anything the design draws on every chart panel should be a primitive, not a per-' +
+          'binder copy.',
+      },
+      {
+        id: 'bug-sprint-report-incomplete-list-zero-after-carry-over',
+        kind: 'bug',
+        title:
+          'Sprint report on a COMPLETED sprint reads CURRENT membership for the "Issues not completed" list/count — so after carry-over moves the unfinished items out, the report shows 0 (Jira freezes the at-completion snapshot)',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** sprint report read — `sprintsService.getSprintReport` ' +
+          '(`lib/services/sprintsService.ts:518-580`), the standalone closed-sprint report page ' +
+          '(`app/(authed)/sprints/[id]/report/page.tsx`), and indirectly the Reports hub Agile ' +
+          'Sprint-report card (the standalone page is its destination) · **Code surface owned ' +
+          'by:** Story 4.4 (Subtask 4.4.4 `getSprintReport` + 4.4.3 `completeSprint` carry-over) ' +
+          '· **Status:** open · **Reported by:** Yue.\n\n' +
+          'Complete a sprint with unfinished items and choose to carry them over to the next ' +
+          'sprint (or the backlog). Then open `/sprints/<that-just-completed-sprint-id>/report` ' +
+          '— Jira\'s closed-sprint report equivalent. The **"Issues not completed in this ' +
+          'sprint"** section shows **0** with the empty-state copy ("Everything in scope was ' +
+          'completed" or similar), and the not-completed list is empty. But the user knows real ' +
+          "unfinished items existed at sprint completion (the complete-sprint dialog's carry-over " +
+          'chooser told them so, and the items now sit in the next sprint / backlog). The report ' +
+          "is silently lying about the sprint's outcome.\n\n" +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, in `/backlog` start a sprint ' +
+          'with 5 issues, mark 3 as done, click **Complete sprint** → carry the 2 unfinished to ' +
+          '"Backlog" → confirm. The success-state modal correctly shows "2 not completed" with ' +
+          'each row labelled "→ Backlog" (PRE-MOVE snapshot — see "Why the success modal looks ' +
+          'right" below). Now reload, click **Open full report** on the same modal (or navigate ' +
+          'directly to `/sprints/<id>/report`). The **standalone** report says **0 not ' +
+          'completed**, the list is empty, but the points block still shows `committed: 5pts · ' +
+          'completed: 3pts · notCompleted: 2pts` (because points use the immutable baseline + ' +
+          'live rollup difference — see "What the report gets right" below). Net: a real Jira ' +
+          'closed-sprint report would show the 2 unfinished items with "→ Backlog" labels; ' +
+          "Motir's shows nothing.\n\n" +
+          "**Mirror product (decision-authority rung 1).** Jira's **Sprint Report** for a " +
+          'closed sprint is documented to display:\n\n' +
+          '- **Completed Issues** — issues that were in the sprint at completion AND reached a ' +
+          'done status\n' +
+          '- **Issues Not Completed in this Sprint** — issues that were in the sprint at ' +
+          'completion BUT did NOT reach done; each row carries a destination tag showing where ' +
+          'it was moved (`→ Backlog` / `→ <Next Sprint>`)\n' +
+          '- **Issues Removed From Sprint** — items pulled out manually BEFORE completion ' +
+          '(distinct from carry-over)\n' +
+          '- **Added After Sprint Started** — the scope-change figure\n\n' +
+          'Crucially, Jira **freezes the at-completion membership snapshot** for the closed ' +
+          'sprint report. Subsequently moving the carried-over items in the destination sprint, ' +
+          "archiving them, or even deleting them does NOT change what the closed sprint's report " +
+          "says — the closed sprint's history is immutable. This is the same posture Motir's " +
+          'OWN code already takes for points (the immutable `committedPoints` baseline locked ' +
+          'by `startSprint` in 4.4.2 — explicitly named in `sprintsService.ts:499-503` as "the ' +
+          'IMMUTABLE `committed` baseline preserves the original scope") — but the LIST / COUNT ' +
+          'silently drift to live membership in the same read. The two halves of the same DTO ' +
+          'tell different stories.\n\n' +
+          '**Root cause (high confidence — current-membership reads where historical were needed).** ' +
+          '`sprintsService.getSprintReport` (`lib/services/sprintsService.ts:538-559`) builds the ' +
+          '`incomplete` count + page via:\n\n' +
+          '```ts\n' +
+          'workItemRepository.countSprintIssuesByDoneMembership(id, ctx.workspaceId, {\n' +
+          '  statusKeys: doneStatusKeys,\n' +
+          '  include: false, // not-done\n' +
+          '});\n' +
+          'workItemRepository.findSprintIssuesByDoneMembership(id, ctx.workspaceId, {\n' +
+          '  statusKeys: doneStatusKeys,\n' +
+          '  include: false,\n' +
+          '  take,\n' +
+          '  cursor: options.incompleteCursor,\n' +
+          '});\n' +
+          '```\n\n' +
+          'Both helpers read **current `work_item.sprintId` membership** from the `workItem` ' +
+          'table. After `completeSprint` (`sprintsService.ts:330-460`) routes the unfinished ' +
+          "issues out (4.4.3 sets each carried-over item's `sprintId` to the destination), " +
+          '`workItem.sprintId !== <closed-sprint-id>` for those items, so they no longer match ' +
+          'the membership filter → `incompleteCount = 0`, `incompleteRows = []`. The same code ' +
+          'path works correctly for an **ACTIVE** sprint (membership IS the live truth there) ' +
+          'and for an active-sprint LIVE PREVIEW from inside the complete-sprint modal (the ' +
+          'modal fetches the report BEFORE calling complete — `CompleteSprintDialog.tsx:87-105` ' +
+          '— so at fetch time membership still holds). The post-completion reload is when the ' +
+          'drift surfaces.\n\n' +
+          'The `sprintsService.ts:487-495` comment LITERALLY DOCUMENTS the bug as if it were the ' +
+          'design: *"On a COMPLETED sprint, 4.4.3 has already carried the unfinished issues OUT, ' +
+          'so the report shows what SHIPPED and stayed, while the IMMUTABLE `committed` baseline ' +
+          'preserves the original scope (committed − completed = how much went unfinished) and ' +
+          'the carry-over already routed those issues."* This is a planner-side judgment call ' +
+          'that diverges from rung 1 with no documented use case — the comment is the smoking ' +
+          'gun, not the defence. Per the decision-authority ladder, rung 1 (Jira) wins; the ' +
+          'comment\'s framing is exactly the "AC satisfied by letter, mirror-product intent ' +
+          'violated" anti-pattern this PR captured in [[bug-reports-hub-agile-cards-collapse-to' +
+          '-one-url]] and [[bug-notification-pref-transitioned-still-disabled-after-5-4-shipped]].\n\n' +
+          "**Why the success modal LOOKS right** (and isn't a contradicting data point). " +
+          '`CompleteSprintDialog.tsx:87-105` fetches the report **BEFORE** `completeSprint` ' +
+          'runs (`useEffect` runs on mount/open; `handleComplete` fires on submit, AFTER the ' +
+          'fetch has populated `report`). The success-state `<SprintReport report={report} ' +
+          'carryOverLabel={…}>` reuses that PRE-MOVE snapshot and re-renders the same row list ' +
+          'with a "→ {destination}" badge per row (see `SprintReport.tsx:295-336` — the ' +
+          '`carryOverLabel` prop branch). This is correct for the modal — and is exactly the ' +
+          'SHAPE the standalone page must reproduce — but it works by **timing accident**, not ' +
+          "by data design: if a parallel session's complete races the modal's fetch, the modal " +
+          'would lose its snapshot too. The standalone page has no such timing window, so it ' +
+          'NEVER sees the snapshot.\n\n' +
+          "**What the report gets right (don't regress).** Several pieces of the report " +
+          'already use historical / immutable data and must keep doing so:\n\n' +
+          '- **`points.committed`** = `sprint.committedPoints`, the immutable baseline locked at ' +
+          '`startSprint` (4.4.2). Unchanged.\n' +
+          '- **`points.completed` + `points.notCompleted`** = the live rollup difference ' +
+          '(`estimationService.rollupForSprint`). For an ACTIVE sprint this is the live truth; ' +
+          'for a COMPLETED sprint this currently rolls up the items STILL in the sprint (the ' +
+          'completed ones) — which gives the right `completed` figure but the wrong ' +
+          '`notCompleted` (it would compute `0 not-completed-still-in-sprint` and then derive ' +
+          '`notCompleted = committed - completed` for the missing-points number; verify which ' +
+          'branch the rollup actually uses, and align with the new historical-list contract).\n' +
+          '- **`addedAfterStart`** = `workItemRevisionRepository.countItemsAddedToSprintAfter` — ' +
+          'already revision-trail based (`sprintsService.ts:564-569`). Unchanged. This is the ' +
+          'proof that the infrastructure to read historical membership EXISTS in the codebase; ' +
+          'the fix extends it.\n\n' +
+          '**Fix shape — read at-completion membership for completed sprints, keep current ' +
+          "membership for active ones.** The split is `sprint.state`-driven: an active sprint's " +
+          '"incomplete" IS the live not-done items (their membership is current); a completed ' +
+          'sprint\'s "incomplete" is whatever was in the sprint at `sprint.completedAt`.\n\n' +
+          '1. **`workItemRepository`** — add two new helpers (or a `pointInTime?: Date` option ' +
+          'on the existing pair):\n' +
+          '   - `findSprintIssuesAtCompletion(sprintId, workspaceId, { atDate: sprint.completedAt, ' +
+          'statusKeys, include, take, cursor })` — reads the `work_item_revision` trail to ' +
+          "rebuild the membership SET at `atDate`, joins each item's status AT THAT TIME (so " +
+          '"done at completion" is the correct status snapshot, not today\'s), and returns the ' +
+          'page. Mirror the `countItemsAddedToSprintAfter` posture (`workItemRevisionRepository.ts:' +
+          '112-130`) — same `work_item_revision`-based read, different query shape.\n' +
+          '   - `countSprintIssuesAtCompletion(sprintId, workspaceId, { atDate, statusKeys, ' +
+          'include })` — the count variant.\n' +
+          '2. **`sprintsService.getSprintReport`** — branch on `sprint.state`:\n' +
+          '   ```ts\n' +
+          "   if (sprint.state === 'complete' && sprint.completedAt) {\n" +
+          '     // historical reads — at-completion snapshot\n' +
+          '     [completedCount, incompleteCount, completedRows, incompleteRows] = await ' +
+          'Promise.all([\n' +
+          '       countSprintIssuesAtCompletion(id, ws, { atDate: sprint.completedAt, statusKeys, ' +
+          'include: true }),\n' +
+          '       countSprintIssuesAtCompletion(id, ws, { atDate: sprint.completedAt, statusKeys, ' +
+          'include: false }),\n' +
+          '       findSprintIssuesAtCompletion(id, ws, { atDate: sprint.completedAt, statusKeys, ' +
+          'include: true, take, cursor: completedCursor }),\n' +
+          '       findSprintIssuesAtCompletion(id, ws, { atDate: sprint.completedAt, statusKeys, ' +
+          'include: false, take, cursor: incompleteCursor }),\n' +
+          '     ]);\n' +
+          '   } else {\n' +
+          '     // active sprint — current membership (existing path, unchanged)\n' +
+          '   }\n' +
+          '   ```\n' +
+          '3. **Carry-over destination per row** — each not-completed row needs a ' +
+          "`carryOverTo: { kind: 'backlog' } | { kind: 'sprint', name: string }` field on the " +
+          '`SprintReportPageRowDto` so the standalone page can render the "→ Backlog" / ' +
+          '"→ <Sprint name>" badge per Jira. Source: the revision trail entry that moved the ' +
+          'item out of this sprint (the `sprintId` change right after `sprint.completedAt`). ' +
+          "The DTO already accommodates a destination via the modal's `carryOverLabel` prop on " +
+          '`SprintReport` (line 91 of SprintReport.tsx) — extend the DTO so the destination is ' +
+          "PER ROW and authoritative (the modal's single-label-for-all was a shortcut because " +
+          'the modal knew the user just chose one destination — Jira allows different ' +
+          'destinations per row over time, e.g. some carried, some manually removed later).\n' +
+          "4. **`SprintReport.tsx` consumer** — pass each row's destination through " +
+          '`ReportIssueRow` (currently `carryOverLabel` is a single string for ALL rows; promote ' +
+          'to per-row from the DTO). The modal continues to pass its single label as a fallback ' +
+          "for the PRE-MOVE snapshot case where the DTO doesn't carry destinations yet.\n" +
+          '5. **`points.notCompleted` for completed sprints** — re-derive from the at-completion ' +
+          'snapshot too, so the points and the list AGREE. Currently for a completed sprint ' +
+          'with carry-over the live rollup says `completed = 3, remaining = 0` → ' +
+          '`notCompleted = 0`, contradicting the immutable `committed = 5`. Either compute ' +
+          '`notCompleted = committed - completed` (the rough-but-correct fallback the comment ' +
+          'already gestures at), OR — better — sum story points across the at-completion ' +
+          'incomplete set (matches the new list exactly).\n\n' +
+          "**What's out of scope for this bug:** rewriting the active-sprint path (it works), " +
+          'restructuring `completeSprint` (no carry-over logic change), changing the ' +
+          'work-item-revision schema (the trail already records sprint changes — verify before ' +
+          'building the historical reader). The modal-success-state PRE-MOVE snapshot path stays ' +
+          'as a sensible "we just made the move, here\'s what we just moved" UI affordance — but ' +
+          'after the fix, even a fresh fetch into the standalone page reproduces the same shape ' +
+          'via the new historical reader. If the revision trail does not record sprint-membership ' +
+          "changes today (verify in `workItemsService.update*`), that's an out-of-scope " +
+          "prerequisite — log a separate finding and gate this bug's fix on that landing.\n\n" +
+          '## Acceptance criteria\n\n' +
+          '- For a **COMPLETED** sprint where the user carried N unfinished items out, ' +
+          '`GET /api/sprints/<id>/report` returns `incomplete.totalCount = N`, ' +
+          '`incomplete.items.length = min(N, take)`, with each item being the same one that was ' +
+          'unfinished at `sprint.completedAt`.\n' +
+          '- Each not-completed row in the DTO carries a per-row carry-over destination ' +
+          '(`backlog` / `{ sprintId, name }`) derived from the revision trail. The standalone ' +
+          'page renders the "→ Backlog" / "→ <Sprint name>" badge per row (matching the ' +
+          "modal's `carryOverLabel` posture and Jira).\n" +
+          '- For an **ACTIVE** sprint the read path is **unchanged** (current membership; the ' +
+          'live preview the complete-sprint modal already consumes stays byte-identical).\n' +
+          '- `points.completed` and `points.notCompleted` on a completed sprint AGREE with the ' +
+          'incomplete-list count: `notCompleted == committed - completed` (or, equivalently, ' +
+          'equals the sum of story-points across the at-completion incomplete set). No more ' +
+          'self-contradicting DTO.\n' +
+          '- A regression test (integration, real Postgres): start sprint A with 5 issues, ' +
+          'complete 3, carry 2 to Sprint B, complete A. Assert `GET /api/sprints/<A>/report` ' +
+          'returns `incomplete.totalCount = 2`, the 2 items carry `carryOverTo = { kind: ' +
+          '"sprint", name: "B" }`, and that subsequently moving one of those items in Sprint B ' +
+          "(or to the backlog, or deleting it) does NOT change Sprint A's report (immutability " +
+          'guarantee).\n' +
+          "- The standalone page's i18n strings (`sprintReport.sectionNotCompleted`, the empty-" +
+          'state copy) are unchanged. The "Issues removed from sprint" Jira concept (items ' +
+          'pulled out BEFORE completion) is captured as a follow-up, not part of this fix — log ' +
+          "a finding if the revision trail doesn't already distinguish it.\n" +
+          '- 4-layer respected: new repository helpers (single Prisma `$queryRaw` calls per the ' +
+          'existing revision-trail pattern), service composes them in `getSprintReport`, no ' +
+          'changes in route layer.\n\n' +
+          '## Context refs\n\n' +
+          '- `lib/services/sprintsService.ts:487-580` — `getSprintReport` (the fix site) + the ' +
+          'docstring comment that names the current behaviour as if it were the design (the ' +
+          'smoking gun)\n' +
+          '- `lib/services/sprintsService.ts:330-460` — `completeSprint` carry-over (where the ' +
+          'membership move happens; informs the revision-trail query that rebuilds the snapshot)\n' +
+          '- `lib/repositories/workItemRepository.ts` — `countSprintIssuesByDoneMembership` + ' +
+          '`findSprintIssuesByDoneMembership` (the current-membership readers; the new ' +
+          '`*AtCompletion` variants live alongside)\n' +
+          '- `lib/repositories/workItemRevisionRepository.ts:112-130` ' +
+          '(`countItemsAddedToSprintAfter`) — the existing revision-trail-based reader; the ' +
+          'pattern to mirror for `findSprintIssuesAtCompletion` / `countSprintIssuesAtCompletion`\n' +
+          '- `app/(authed)/backlog/_components/CompleteSprintDialog.tsx:87-105, 130-180` — the ' +
+          "success modal's PRE-MOVE-snapshot fetch + single-label `carryOverLabel` (the shape " +
+          'the per-row destination DTO field generalises)\n' +
+          '- `app/(authed)/backlog/_components/SprintReport.tsx:295-336` — `ReportIssueRow` ' +
+          '(consumes `carryOverLabel`; promote to per-row from the DTO)\n' +
+          '- `app/(authed)/sprints/[id]/report/page.tsx` — the standalone report (the surface ' +
+          'that exhibits the bug)\n' +
+          '- `lib/dto/sprints.ts:81-150` — `SprintReportDto` (extend with per-row carry-over)\n' +
+          '- Jira docs: closed-sprint Sprint Report (the rung-1 reference for the at-completion ' +
+          'snapshot + the per-row destination tag)\n' +
+          '- Sibling Epic-6 bugs in this PR: ' +
+          '[[bug-sprint-report-modal-clipped-burndown]], ' +
+          '[[bug-sprint-report-charts-misaligned-burndown-missing-chart-sub]] (also touch the ' +
+          'sprint-report seam; the modal-clip bug is on the same modal whose PRE-MOVE snapshot ' +
+          'is doing the right thing today). ' +
+          '[[bug-reports-hub-agile-cards-collapse-to-one-url]] proposes a `/reports/burndown` + ' +
+          '`/reports/velocity` split; the Sprint-report card destination ' +
+          '(`/sprints/<id>/report`) is unchanged by this bug but its contents become CORRECT.\n\n' +
+          '**Refactor signal — DTO whose fields read from different time horizons.** This is the ' +
+          'second instance of "the same DTO has fields computed from different snapshots and ' +
+          'they tell contradictory stories" — first was Story 5.4 vs the notification matrix ' +
+          "guard (the runtime ships, the UI guard doesn't flip — different time horizons of " +
+          "the same feature). Here it's within ONE DTO: `committed` is at-start-snapshot, " +
+          '`notCompleted points` is live-rollup, `incomplete list/count` is live-membership. ' +
+          'Three different time horizons. The right structural fix is to make the read function ' +
+          "declare its `at: 'start' | 'completion' | 'now'` snapshot stance ONCE and apply " +
+          'it consistently to every field — the function signature itself enforces internal ' +
+          'consistency. Not in scope for this bug (the fix is to make the closed-sprint read ' +
+          "fully `at: 'completion'`); captured as the refactor signal for a future " +
+          '`reportsSnapshotAt(sprintId, when)` extraction across sprint and (eventually) board ' +
+          'reports.',
+      },
+      {
+        id: 'bug-sprint-report-modal-clipped-burndown',
+        kind: 'bug',
+        title:
+          'Complete-sprint success modal: SprintReport bypasses Modal.Body, so the burndown section is clipped off the bottom with no scroll affordance',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** complete-sprint flow success state ' +
+          '(`app/(authed)/backlog/_components/CompleteSprintDialog.tsx:183-213`, Subtask 4.4.1 ' +
+          'modal) rendering the shared `SprintReport` body ' +
+          '(`app/(authed)/backlog/_components/SprintReport.tsx`, Subtask 4.4.6) + the modal ' +
+          'primitive (`components/ui/Modal.tsx`, Subtask 1.0.5) · **Code surface owned by:** ' +
+          'Story 4.4 (Sprint completion + report) · **Status:** open · **Reported by:** Yue.\n\n' +
+          'On the **complete-sprint success modal** (the post-`POST /api/sprints/[id]/complete` ' +
+          'success state — the modal whose title is `{sprint.name} 报告` / `{sprint.name} report`), ' +
+          'the bottom of the report is **clipped off** with no scrollbar. The 3-up points rollup, ' +
+          'scope-change line, completed section, and the start of the not-completed list are ' +
+          'visible; the **燃尽图 (burndown) section** is rendered but cut off at the modal’s ' +
+          'bottom edge — the chart legend bar (`理想线 · 剩余 · 新增范围`) is partly visible, the ' +
+          'chart itself is not, and the velocity chart (`size="lg"` modal also renders the side-by-' +
+          'side analytics row, design panel 5) is unreachable. The modal panel sits at its ' +
+          '`max-h-[90vh]` cap; the user has no way to see the rest of the body short of opening ' +
+          'the standalone `/sprints/[id]/report` page via the “Open full report” footer link.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open the `moooon` / `motir` ' +
+          'project → `/backlog`, click **Complete sprint** on an active sprint (Sprint 4 in the ' +
+          'reported screenshot — “Sprint 4 · Sprints & backlog”). Pick any carry-over destination, ' +
+          'submit. The success-state modal opens with title `{sprint.name} 报告`. At typical ' +
+          'laptop heights (≤ ~900px) observe that the modal grows to `max-h-[90vh]`, the body ' +
+          'panel is cropped at that height, and the analytics row at the bottom of `SprintReport` ' +
+          '(the burndown + velocity charts) is partly or fully outside the modal viewport with NO ' +
+          'scroll affordance on the body. The modal’s body does not scroll; the page behind it ' +
+          'does not scroll; the content is just clipped.\n\n' +
+          '**Root cause (high confidence — single-line miss in the success-state render).** ' +
+          '`Modal` (`components/ui/Modal.tsx:34-47, 188-224`) caps the panel at ' +
+          '`flex max-h-[90vh] flex-col overflow-hidden` and delegates body scrolling to its ' +
+          '`Modal.Body` subcomponent (`flex min-h-0 flex-1 flex-col overflow-y-auto`). A consumer ' +
+          'that passes long content as a DIRECT child of `<Modal>` (without `Modal.Body`) inherits ' +
+          'the cap WITHOUT the scroll recipe — the inner column lays out at its natural height, ' +
+          'the panel’s `overflow-hidden` clips it, and nothing scrolls.\n\n' +
+          'The success state in `CompleteSprintDialog.tsx:185-213` is exactly this shape — ' +
+          '`<Modal …><SprintReport … /><Modal.Footer>…</Modal.Footer></Modal>`. `SprintReport` ' +
+          'returns a `<div className="flex flex-col gap-4">…</div>` with the meta line, points ' +
+          'rollup, scope-change row, two `ReportSection` lists, and the analytics row — easily ' +
+          'taller than 90vh once the not-completed list has any rows and the burndown’s chart ' +
+          'block is present. The form state of the SAME modal (the carry-over chooser, ' +
+          '`CompleteSprintDialog.tsx:217-364`) DOES wrap its body in `<Modal.Body>` and scrolls ' +
+          'correctly when fields stack — the success state is the asymmetric miss.\n\n' +
+          'The standalone `/sprints/[id]/report` page ' +
+          '(`app/(authed)/sprints/[id]/report/page.tsx`) does NOT have this bug because it is a ' +
+          'normal authed page route — the document scrolls — so the same `SprintReport` component ' +
+          'renders fully there. This is what makes the success-state modal the only affected ' +
+          'surface.\n\n' +
+          '**Class.** Third documented “long content in a `Modal` with `overflow-hidden` cap but ' +
+          'no `Modal.Body` scroll seam” shape — sibling family with ' +
+          '`bug-inline-edit-clipped-when-table-short` (table overflow, fixed via body-portal) and ' +
+          '`bug-combobox-menu-clipped-inside-modal` (Combobox listbox clipped by modal). Those two ' +
+          'are popover-in-clip-box defects; this one is body-in-clip-box (the simpler shape). The ' +
+          '`Modal.Body` recipe already exists for exactly this case; the success state simply ' +
+          'doesn’t reach for it.\n\n' +
+          '**Fix shapes (decide at fix time — listed by likely durability):**\n' +
+          '1. **Wrap `<SprintReport>` in `<Modal.Body>` in `CompleteSprintDialog`’s success ' +
+          'state** (minimal, contained). Replace ' +
+          '`<SprintReport report={report} sprint={completedSprint} statusByKey={statusByKey} ' +
+          'carryOverLabel={carryOverLabel} />` with ' +
+          '`<Modal.Body className="gap-4"><SprintReport … /></Modal.Body>` so the body fills the ' +
+          'remaining column height (panel cap minus title + footer) and scrolls internally; the ' +
+          '`Modal.Footer` stays pinned, and the analytics row is reachable. Mirrors the carry-over ' +
+          'form-state branch of the SAME component (`CompleteSprintDialog.tsx:231-340`) — same ' +
+          'modal, same recipe, just applied to the success branch too. (The `gap-4` className is ' +
+          'carried over from `SprintReport`’s outer `<div>`, which can then drop its own ' +
+          '`flex flex-col gap-4` wrapper if desired — or keep it; both work, the outer is a ' +
+          'no-op once the body is a flex column.)\n' +
+          '2. **Make `Modal` scroll its direct children by default** (broader; would also pre-empt ' +
+          'a future fourth occurrence). Change the panel from `overflow-hidden` to a layout where ' +
+          'the child column is itself scrollable, e.g. apply ' +
+          '`overflow-y-auto` to the panel and keep `overflow-hidden` only on the cross-axis, or ' +
+          'add a default `min-h-0 flex-1 overflow-y-auto` wrapper around `children` (excluding ' +
+          'the `Modal.Footer` slot, which must stay pinned). Higher-risk — would change layout ' +
+          'semantics for every existing Modal consumer (e.g. the create-issue modal’s expandable ' +
+          'Explanation already relies on the current cap shape) and the focus-ring inset recipe ' +
+          'lives on `Modal.Body`, not the panel. Probably not worth it for a one-call-site miss.\n' +
+          '3. **Lint/jsx-typecheck** that long-content modals use `Modal.Body`. Too narrow to be a ' +
+          'real rule (a short modal correctly omits `Modal.Body`); reserve for the rule-of-three ' +
+          'footer below.\n\n' +
+          '**Recommended:** fix 1. One-line change at the success-state site; no Modal API ' +
+          'change; the existing `Modal.Body` recipe is exactly the seam that was meant to be ' +
+          'used. Fix 2 is overreach for a single missed wrapper. Coverage gap that let it ship: ' +
+          'no Playwright assertion on the success-state modal’s body scrollability with a ' +
+          'long carry-over list — the carry-over form state was tested for scroll (mounted ' +
+          '`Modal.Body`), the success state was not.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- On a viewport whose height is ≤ ~900px (typical laptop), opening the complete-sprint ' +
+          'success modal with a sprint whose report body exceeds the modal’s `max-h-[90vh]` cap ' +
+          '(any sprint with a few not-completed issues + the burndown rendered) shows a scrollable ' +
+          'body: the burndown + velocity analytics row is reachable by scrolling inside the ' +
+          'modal, NOT clipped at the bottom edge.\n' +
+          '- The fix is at the `CompleteSprintDialog` success-state call site ' +
+          '(`<Modal.Body>` wrapping `<SprintReport>`) — not a workaround inside `SprintReport` and ' +
+          'not a change to the `Modal` primitive — so the `/sprints/[id]/report` standalone page ' +
+          'is unaffected (it remains a normal scrolling page).\n' +
+          '- The `Modal.Footer` (Open full report + Done) stays PINNED at the bottom of the ' +
+          'panel as the body scrolls.\n' +
+          '- The focus-ring inset recipe (`Modal.Body`’s `-m-1.5 p-1.5`) is preserved — any ' +
+          '`Input`/control inside the report keeps its 4px focus-ring overhang from being clipped.\n' +
+          '- The carry-over FORM state of the same modal is unchanged (it already uses ' +
+          '`Modal.Body`); no regression there.\n' +
+          '- A Playwright regression asserts the success-state modal’s body is scrollable when ' +
+          'the report content exceeds the panel height: measure ' +
+          '`bodyEl.scrollHeight > bodyEl.clientHeight`, scroll to the bottom, and assert the ' +
+          'burndown section is visible (`getBoundingClientRect().bottom <= dialogRect.bottom`). ' +
+          'Same geometry-not-CSS posture as the sibling overflow bugs ' +
+          '(`bug-issue-detail-eyebrow-overflows-viewport`, ' +
+          '`bug-combobox-menu-clipped-inside-modal`).\n' +
+          '- next-intl strings unchanged; no service / DTO / route / DB change; AA contrast ' +
+          'preserved; shape + colour tokens unchanged.\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/backlog/_components/CompleteSprintDialog.tsx:182-213` — the ' +
+          'success-state render (the fix site); compare with ' +
+          '`CompleteSprintDialog.tsx:231-340` (the form state already wraps in `Modal.Body`)\n' +
+          '- `app/(authed)/backlog/_components/SprintReport.tsx` (Subtask 4.4.6) — the shared ' +
+          'presentational body; rendered identically here and on the standalone page\n' +
+          '- `components/ui/Modal.tsx:34-47` (`contentVariants`, `flex max-h-[90vh] flex-col ' +
+          'overflow-hidden`) + `Modal.tsx:188-224` (`ModalBody` — the `flex-1 overflow-y-auto` ' +
+          'scroll recipe + the `-m-1.5 p-1.5` focus-ring inset) — the primitive whose seam this ' +
+          'fix reaches for\n' +
+          '- `app/(authed)/sprints/[id]/report/page.tsx` — the standalone closed-sprint report ' +
+          'page; reference case where document scroll already works (no fix needed)\n' +
+          '- `design/sprints/sprint-lifecycle.mock.html` panels 6–7 + ' +
+          '`design/reports/charts.mock.html` panel 5 — the design intent: the analytics row is ' +
+          'PART of the report body, not a hidden overflow\n' +
+          '- `bug-inline-edit-clipped-when-table-short`, ' +
+          '`bug-combobox-menu-clipped-inside-modal` (sibling family) — popover-shape clip-box ' +
+          'defects in the same overflow-hidden family; this is the body-shape sibling\n' +
+          '- `motir-core/CLAUDE.md` — the colour + shape token rules (a `Modal.Body` wrap ' +
+          'introduces no new tokens; this is purely a layout fix)\n\n' +
+          '**Refactor signal (rule of three).** This is now the **third** documented occurrence ' +
+          'of “Modal’s `overflow-hidden` panel clips content because the consumer didn’t reach ' +
+          'for the `Modal.Body` scroll seam.” The first two ' +
+          '(`bug-inline-edit-clipped-when-table-short`, `bug-combobox-menu-clipped-inside-modal`) ' +
+          'were popovers inside the cap; this one is the BODY itself. The `Modal.Body` opt-in ' +
+          'shape is documented but easy to skip — a long-body modal that ships without it is ' +
+          'this defect. Consider, in a follow-up Subtask: (a) a `<Modal scrollBody>` opt-out ' +
+          'inverse where the default IS `Modal.Body` and a consumer that wants raw children ' +
+          'opts out, OR (b) a Storybook/RTL render test that mounts every existing ' +
+          '`<Modal>` consumer with synthetic long content + asserts no clipping. Not in scope ' +
+          'for this bug; the rule of three is the trigger for the refactor pass.',
+      },
     ],
   },
   {
