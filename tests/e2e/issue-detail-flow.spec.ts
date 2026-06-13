@@ -177,6 +177,80 @@ test('@smoke tree navigation: breadcrumb walks up, child list walks down', async
   await expect(page.getByRole('heading', { name: 'The Subtask', level: 1 })).toBeVisible();
 });
 
+// Regression: `bug-issue-detail-eyebrow-overflows-viewport` (epics.ts, Epic 6).
+// An item with a LONG ancestor chain (the data shape Epic 6 introduced —
+// parenthetical-clause Story titles) used to push the whole detail page wider
+// than the viewport: the eyebrow breadcrumb sat as a bare flex child and
+// resolved to its min-content width (a flex item's default `min-width:auto`),
+// so its inner `truncate` never fired and the page gained horizontal scroll —
+// clipping the header right cluster (watch + Edit) and the core-fields rail.
+// A wide markdown child (long unbroken URL / code block) was a SECOND latent
+// source via the unbounded `1fr` grid track. We MEASURE rendered geometry in a
+// real browser (scrollWidth vs clientWidth + on-screen boxes) rather than
+// asserting CSS rules — same posture as the Epic-3 swimlane / tree-header bugs.
+test('@smoke long ancestor chain + wide content never overflow the viewport (bug-issue-detail-eyebrow-overflows-viewport)', async ({
+  page,
+}) => {
+  const email = 'e2e-detail-overflow@example.com';
+  await signUp(page, email);
+  const projectId = await seedActiveProject(email, 'OVF');
+
+  // Ancestor titles well past 80 chars (the threshold the original detail.png
+  // mockup — short "Epic: Foo" ancestors — never crossed).
+  const story = await mk(page, projectId, {
+    kind: 'story',
+    title:
+      'Edit project details and change the project key with old-key redirects across every saved filter and board',
+  });
+  const task = await mk(page, projectId, {
+    kind: 'task',
+    title:
+      'Audit-log UI — per-rule execution log with status, error detail, pagination, and retry affordances',
+    parentId: story.id,
+  });
+  // The leaf also carries a wide markdown child (a long unbroken URL + a long
+  // code line) to exercise the `<main>` `1fr` grid track guard.
+  const sub = await mk(page, projectId, {
+    kind: 'subtask',
+    title: 'A child whose eyebrow carries a long ancestor chain',
+    parentId: task.id,
+    descriptionMd:
+      'A long unbroken URL https://example.com/' +
+      'verylongpathsegment'.repeat(20) +
+      '\n\n```\nconst x = "' +
+      'token '.repeat(60) +
+      '";\n```\n',
+  });
+
+  // The bug reproduces at typical laptop widths; pin 1280 per the AC.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/issues/${sub.identifier}`);
+
+  // The long ancestor chain is present (and so the bug's trigger is live)...
+  const breadcrumb = page.getByRole('navigation', { name: 'Parent work items' });
+  await expect(breadcrumb.getByRole('link', { name: /Edit project details/ })).toBeVisible();
+
+  // ...yet the page root does NOT overflow horizontally.
+  const root = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  expect(
+    root.scrollWidth,
+    `page root must not overflow (scrollWidth ${root.scrollWidth} ≤ clientWidth ${root.clientWidth} + 1)`,
+  ).toBeLessThanOrEqual(root.clientWidth + 1);
+
+  // The user-visible consequence was the right cluster + rail being clipped —
+  // assert both stay within the viewport's right edge.
+  const editBox = await page.getByRole('link', { name: 'Edit' }).first().boundingBox();
+  expect(editBox, 'Edit link rendered').not.toBeNull();
+  expect(editBox!.x + editBox!.width).toBeLessThanOrEqual(root.clientWidth + 1);
+
+  const railBox = await page.getByText('Reporter').first().boundingBox();
+  expect(railBox, 'core-fields rail rendered').not.toBeNull();
+  expect(railBox!.x + railBox!.width).toBeLessThanOrEqual(root.clientWidth + 1);
+});
+
 test('@smoke inline status: a legal transition persists; illegal targets are not offered', async ({
   page,
 }) => {
