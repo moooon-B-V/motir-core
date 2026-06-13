@@ -140,7 +140,18 @@ export const story_6_10: PlanStory = {
     '- **The org is the BILLING ENTITY.** Credits + usage roll up to the org ' +
     '(the orchestrator re-keys 7.12’s ledger to the org separately — 6.10 ' +
     'records the decision, ships no credit view, and does NOT depend on ' +
-    '7.12).\n\n' +
+    '7.12).\n' +
+    '- **PROGRESSIVE DISCLOSURE (the scale principle, Yue 2026-06-13).** ONE ' +
+    'model + ONE set of surfaces serves all three scales (individual / small ' +
+    'org / enterprise); the UI reveals a tier only when its count ≥ 2, so there ' +
+    'is NO detected "individual" mode and NEVER a migration. The `Organization` ' +
+    'is auto-created at signup + renameable and is ALWAYS the header anchor (a ' +
+    'one-person company is just an org of one — OPC); the WORKSPACE switcher is ' +
+    'HIDDEN until the org has a 2nd workspace; the PROJECT stays in the sidebar. ' +
+    'Only two count-driven reveals exist: the workspace switcher at ws #2 and ' +
+    'the org menu’s switch-org section at org #2. At one workspace, org settings ' +
+    'ARE the whole Settings home (the workspace-settings split appears only at ' +
+    'ws #2). Full spec in `design/org-admin/design-notes.md` (6.10.1).\n\n' +
     '**Scope:** the org-admin design (6.10.1); the `Organization`-model + ' +
     'billing-entity + role decision (6.10.2); the schema + migration + backfill ' +
     'every-workspace→a-default-org (6.10.3); the org-scoped services + access ' +
@@ -360,10 +371,25 @@ export const story_6_10: PlanStory = {
         'preserved, and the migration BACKFILL rule: each existing workspace ' +
         'gets its OWN default org (1:1, named from the workspace) and the ' +
         'seeding/owning user becomes that org’s owner — so no existing data is ' +
-        'orphaned and the gate holds for legacy rows.\n\n' +
+        'orphaned and the gate holds for legacy rows.\n' +
+        '6. **Progressive disclosure + auto-provisioning (the scale principle, ' +
+        'Yue 2026-06-13).** Fix that ONE model + ONE set of surfaces serves all ' +
+        'three scales (individual / small org / enterprise) and the UI reveals a ' +
+        'tier only when its count ≥ 2 — so there is NO detected "individual" ' +
+        'mode and NEVER a migration. Record: (a) **signup AUTO-CREATES an ' +
+        'org + a default workspace** for every new account (a one-person company ' +
+        'is an org of one — OPC), and the org is RENAMEABLE; (b) the ORG is ' +
+        'always the header anchor, the WORKSPACE switcher is hidden until ws #2, ' +
+        'the PROJECT stays in the sidebar; (c) the only two count-driven reveals ' +
+        'are the workspace switcher at ws #2 and the org menu’s switch-org ' +
+        'section at org #2; (d) at one workspace, org settings ARE the whole ' +
+        'Settings home — the workspace-settings split appears only at ws #2. ' +
+        'The visual spec is `design/org-admin/design-notes.md` (6.10.1); this ' +
+        'ADR fixes the model/auto-provisioning side that the schema (6.10.3), ' +
+        'seed (6.10.6) and UI (6.10.5) build to.\n\n' +
         '## Acceptance criteria\n\n' +
         '- `motir-core/docs/decisions/organization-tier.md` exists and fixes ' +
-        'all five sections, naming `Organization` (NOT `Account`) and citing ' +
+        'all SIX sections, naming `Organization` (NOT `Account`) and citing ' +
         'the mirror PRECISELY: **Atlassian (org → one-or-multiple sites) for ' +
         'the org→workspace NESTING; Linear (workspace-root billing) for the ' +
         'billing-at-root half only — a Linear workspace maps to a Motir org, ' +
@@ -375,7 +401,12 @@ export const story_6_10: PlanStory = {
         'access-gating rule (org membership gates workspace access; ' +
         '404-not-403 preserved).\n' +
         '- It fixes the backfill rule (one default org per existing ' +
-        'workspace; the owner becomes org owner; no orphan workspace).\n\n' +
+        'workspace; the owner becomes org owner; no orphan workspace).\n' +
+        '- It fixes the progressive-disclosure + auto-provisioning principle: ' +
+        'signup auto-creates an org + default workspace (OPC = org of one; org ' +
+        'renameable), the UI reveals a tier only at count ≥ 2 (no "individual" ' +
+        'mode; org always shown, workspace hidden until ws #2), and one-workspace ' +
+        'org settings ARE the whole Settings home.\n\n' +
         '## Context refs\n\n' +
         '- `motir-core/prisma/schema.prisma` — the existing `Account` ' +
         '(Better-Auth, do NOT reuse), `Workspace`, `WorkspaceMembership`, and ' +
@@ -489,7 +520,15 @@ export const story_6_10: PlanStory = {
         '`lib/mappers/*` (never raw Prisma); throws typed errors from ' +
         '`lib/organizations/errors.ts` the route maps to HTTP.\n' +
         '- Resolving the ACTIVE org for a session (for the switcher) + listing ' +
-        'the orgs a user belongs to.\n\n' +
+        'the orgs a user belongs to.\n' +
+        '- **Auto-provision on signup (the progressive-disclosure principle, ' +
+        '6.10.2 §6).** A `provisionForNewUser`-style flow that creates an org + ' +
+        'a default workspace + the owner memberships for a brand-new account, in ' +
+        'ONE transaction, wired into the existing signup/onboarding path — so ' +
+        'every account is an org of one (OPC) from day one and there is never a ' +
+        'tier-less user. Mirror the shape of the 6.10.3 backfill (which does the ' +
+        'same for pre-existing workspaces); the org name defaults from the ' +
+        'user/company and is renameable.\n\n' +
         '**The access gate (the load-bearing change).** Extend the existing ' +
         'workspace access check so that reaching a workspace requires the ' +
         'session user to be a member of the workspace’s ORG (org membership ' +
@@ -552,11 +591,19 @@ export const story_6_10: PlanStory = {
         'session-gated (401 without a session) + org-gated (404-not-403 for a ' +
         'non-org-member, via the 6.10.4 gate). No `db.*` / `$transaction` / ' +
         'business logic in routes.\n\n' +
-        '**The surfaces (render the 6.10.1 design verbatim):**\n\n' +
-        '- **The org switcher in the shell** — shows the active org and lets a ' +
-        'multi-org user switch; nests above the existing workspace switcher ' +
-        '(switching org re-scopes the workspace switcher). Single-org users ' +
-        'see the quiet-label variant (no dropdown), per the design.\n' +
+        '**The surfaces (render the 6.10.1 design verbatim — incl. its ' +
+        'PROGRESSIVE-DISCLOSURE rules):**\n\n' +
+        '- **The org control in the shell + progressive disclosure (6.10.2 §6; ' +
+        'design-notes "Progressive disclosure").** The ORG is ALWAYS the ' +
+        'top-left anchor — a menu button (Settings / Members / Billing-soon / ' +
+        'New workspace), with a **"Switch organization" section shown ONLY when ' +
+        'the account is in ≥2 orgs**. The **WORKSPACE switcher renders ONLY when ' +
+        'the active org has ≥2 workspaces** (to the right of the org, ' +
+        '`Acme › Engineering`); at one workspace it is NOT rendered at all (no ' +
+        '"individual" mode — an OPC is just an org of one). The PROJECT switcher ' +
+        'stays in the sidebar; switching the workspace re-scopes it. At one ' +
+        'workspace, org settings ARE the whole Settings home (the ' +
+        'workspace-settings split appears only at ws #2).\n' +
         '- **Org settings** — org name / slug / org-level metadata, editable ' +
         'by an org owner/admin (the gate enforces the role). The passive ' +
         '"billing later" placeholder per the design — NO active billing ' +
@@ -575,11 +622,16 @@ export const story_6_10: PlanStory = {
         'region for the loading→loaded transition; i18n via a new ' +
         '`orgAdmin` namespace (the app’s locale set).\n\n' +
         '## Acceptance criteria\n\n' +
-        '- The org switcher renders in the shell (multi-org dropdown + ' +
-        'single-org quiet label), switches the active org, and re-scopes the ' +
-        'workspace switcher; org settings renders + saves (org-owner/admin ' +
-        'gated); cross-workspace member management lists + adds + removes + ' +
-        'role-changes members — all rendering the 6.10.1 design.\n' +
+        '- The org is ALWAYS the header anchor with its menu; org settings ' +
+        'renders + saves (org-owner/admin gated); cross-workspace member ' +
+        'management lists + adds + removes + role-changes members — all ' +
+        'rendering the 6.10.1 design.\n' +
+        '- **Progressive disclosure holds (6.10.2 §6 / design-notes):** with ONE ' +
+        'workspace the workspace switcher is NOT rendered; creating a 2nd ' +
+        'workspace makes it appear and switching it re-scopes the sidebar ' +
+        'project switcher; the org menu’s "Switch organization" section is ' +
+        'present only when the account is in ≥2 orgs; with one workspace there ' +
+        'is no separate workspace-settings surface.\n' +
         '- The member roster is paginated/lazy (at-scale, NOT load-all); ' +
         'inline edits use the success-response-is-confirmation pattern (no ' +
         'whole-tree refresh).\n' +
