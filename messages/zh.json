@@ -26,6 +26,18 @@
       "bug": "缺陷",
       "subtask": "子任务"
     },
+    "workItemType": {
+      "code": "代码",
+      "design": "设计",
+      "test": "测试",
+      "content": "内容",
+      "research": "调研",
+      "review": "评审",
+      "decision": "决策",
+      "deploy": "部署",
+      "manual": "人工",
+      "chore": "杂务"
+    },
     "priority": {
       "highest": "最高",
       "high": "高",
@@ -590,6 +602,7 @@
     "advancedBacklog": "待办事项",
     "advancedValueCount": "{count, plural, other {#个值}}",
     "advancedFieldPriority": "优先级",
+    "advancedFieldType": "工作类型",
     "advancedFieldReporter": "创建人",
     "advancedFieldSprint": "Sprint",
     "advancedFieldText": "文本",

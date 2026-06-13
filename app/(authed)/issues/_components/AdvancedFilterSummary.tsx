@@ -58,6 +58,7 @@ export function AdvancedFilterSummary({
   const tType = useTranslations('labels.issueType');
   const tStatus = useTranslations('labels.defaultStatus');
   const tPriority = useTranslations('labels.priority');
+  const tWorkType = useTranslations('labels.workItemType');
   const format = useFormatter();
   const setOpen = useAdvancedFilterPopover()?.setOpen ?? (() => {});
 
@@ -102,6 +103,8 @@ export function AdvancedFilterSummary({
       }
       case 'priority':
         return tPriority(id);
+      case 'type':
+        return tWorkType(id);
       case 'assignee':
       case 'reporter': {
         if (id === 'unassigned') return t('unassigned');

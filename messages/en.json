@@ -26,6 +26,18 @@
       "bug": "Bug",
       "subtask": "Sub-task"
     },
+    "workItemType": {
+      "code": "Code",
+      "design": "Design",
+      "test": "Test",
+      "content": "Content",
+      "research": "Research",
+      "review": "Review",
+      "decision": "Decision",
+      "deploy": "Deploy",
+      "manual": "Manual",
+      "chore": "Chore"
+    },
     "priority": {
       "highest": "Highest",
       "high": "High",
@@ -590,6 +602,7 @@
     "advancedBacklog": "Backlog",
     "advancedValueCount": "{count, plural, one {# value} other {# values}}",
     "advancedFieldPriority": "Priority",
+    "advancedFieldType": "Type",
     "advancedFieldReporter": "Reporter",
     "advancedFieldSprint": "Sprint",
     "advancedFieldText": "Text",

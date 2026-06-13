@@ -22,6 +22,7 @@ export function sampleValue(
     case 'is_none_of':
       if (field === 'kind') return ['bug', 'task'];
       if (field === 'priority') return ['high', 'highest'];
+      if (field === 'type') return ['code', 'design'];
       if (field === 'assignee') return ['user-1', FILTER_UNASSIGNED_TOKEN];
       if (field === 'sprint') return ['sprint-1', 'backlog'];
       return ['todo', 'in_progress'];

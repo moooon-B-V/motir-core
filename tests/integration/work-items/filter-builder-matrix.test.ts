@@ -116,6 +116,7 @@ async function seedMatrix(): Promise<Seeded> {
       storyPoints: 5,
       estimateMinutes: 60,
       descriptionMd: 'Stack trace points at the token refresh path.',
+      type: 'code',
     },
   });
   await db.workItem.update({
@@ -129,6 +130,7 @@ async function seedMatrix(): Promise<Seeded> {
       dueDate: dueDate(-5),
       storyPoints: 2,
       estimateMinutes: null,
+      type: 'manual',
     },
   });
   await db.workItem.update({
@@ -336,6 +338,13 @@ const CASES: MatrixCase[] = [
   // priority (enum, not nullable)
   builtin('priority', 'is_any_of', ['high'], ['d']),
   builtin('priority', 'is_none_of', ['high'], ['a', 'b', 'c']),
+  // type (enum, nullable — leaf-only: a=code, b=manual, c/d untyped → the
+  // empty pair is the "untyped" bucket; is_none_of includes the NULLs per the
+  // Jira rule, mirroring the assignee/sprint nullable-enum cases below)
+  builtin('type', 'is_any_of', ['code'], ['a']),
+  builtin('type', 'is_none_of', ['code'], ['b', 'c', 'd']),
+  builtin('type', 'is_empty', null, ['c', 'd']),
+  builtin('type', 'is_not_empty', null, ['a', 'b']),
   // assignee (enum, nullable — empty pair + the unassigned sentinel rules)
   builtin('assignee', 'is_any_of', [], ['a'], (s) => [s.memberId]),
   builtin('assignee', 'is_none_of', [], ['b', 'c', 'd'], (s) => [s.memberId]),
