@@ -421,6 +421,63 @@ export const EPICS: EpicMeta[] = [
           'Regression tests cover same-cell (reassign → unassign) and cross-cell (status → ' +
           'assignee) follow-ups against the real service.',
       },
+      {
+        id: 'bug-inline-edit-detail-rail-refresh-on-success',
+        kind: 'bug',
+        title:
+          'Issue detail rail: inline field edits still router.refresh() on success — the same revert race + a whole-route repaint',
+        status: 'done',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 2 · **Surface:** the issue detail RAIL — ' +
+          '`CoreFieldsPanel` (status / type / priority / assignee / due date / estimate / ' +
+          'parent, Story 2.4) and `CustomFieldsSection` (text / number / date / select / user ' +
+          'custom-field values, Story 5.3.7) · **Reported by:** finding #79 (Yue, 2026-06-10) · ' +
+          '**Status:** done.\n\n' +
+          'The detail-rail follow-up to [[bug-inline-status-revert-on-second-edit]]. That bug ' +
+          "fixed the `/issues` LIST inline editors (PR #640) and set Yue's contract — **a " +
+          'successful action response IS the confirmation: confirm the optimistic value ' +
+          'locally, NO `router.refresh()` on success** (the refresh fan-out is what raced ' +
+          'stale whole-page snapshots and reverted unrelated cells). The detail rail was ' +
+          'explicitly OUT of scope there (finding #79) because `CoreFieldsPanel` was owned by ' +
+          'open PR #633, and touching it in parallel would collide (the 7.0.2/7.0.3 lesson, ' +
+          'finding #63).\n\n' +
+          '**The defect (finding #79).** The rail editors call the edit Server Actions ' +
+          '(`updateIssueAction` / `changeStatusAction` / `setCustomFieldValueAction`), then ' +
+          '`router.refresh()` on success — the exact mechanic #640 removed from the list — and ' +
+          'render every field from `item.*` / server props with no optimistic display state. ' +
+          'Consequences: (a) two quick edits on the SAME detail page race two refresh payloads ' +
+          'just like the list bug, and with no override to mask it the first field shows its ' +
+          'OLD value; (b) every single-field edit repaints the WHOLE detail route (comments, ' +
+          'activity, attachments) for one cell.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- The rail editors keep the picked value optimistically on the action’s success ' +
+          'response — no `router.refresh()` on success.\n' +
+          '- `router.refresh()` survives ONLY on the optimistic-concurrency STALE (409) ' +
+          'conflict, where a re-read is the point.\n' +
+          '- Covers both rail editors that shared the mechanic: `CoreFieldsPanel` (all built-in ' +
+          'fields, incl. the relational parent) and `CustomFieldsSection` (all five custom ' +
+          'field types).\n' +
+          '- Component tests assert the optimistic value is kept and no refresh fires on ' +
+          'success; the custom-fields E2E waits on the action’s authoritative network signal ' +
+          '(the optimistic on-screen value is no longer a commit signal).\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/issues/[key]/_components/CoreFieldsPanel.tsx`, ' +
+          '`CustomFieldsSection.tsx` — the rail editors\n' +
+          '- `components/issues/ParentPicker.tsx` — now hands the picked parent ' +
+          '`{identifier, title}` up so the rail shows it without a re-read\n' +
+          '- [[bug-inline-status-revert-on-second-edit]] (PR #640) — the list fix + the ' +
+          'no-refresh contract this extends · finding #79\n\n' +
+          '**Closed (2026-06-12): PR #879 merged.** `CoreFieldsPanel` and `CustomFieldsSection` ' +
+          'now hold per-field optimistic overrides and KEEP the value on the action’s success ' +
+          'response, with `router.refresh()` retained only on a stale conflict. ' +
+          '`CustomFieldsSection` dropped `useRouter` entirely (its action has no stale path). ' +
+          'Component tests assert the kept value + no-refresh; the custom-fields E2E was ' +
+          'switched to wait on the Server Action POST / `DELETE /api/fields` responses rather ' +
+          'than an optimistic on-screen value (the diffKeys + finding-#81 delete races the ' +
+          'optimistic display exposed). `EstimateBadge`’s identical fix shipped in PR #873. ' +
+          'Full CI green.',
+      },
     ],
   },
   {
