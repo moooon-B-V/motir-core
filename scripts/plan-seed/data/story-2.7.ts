@@ -77,7 +77,7 @@ import type { PlanStory } from '../types';
 export const story_2_7: PlanStory = {
   id: '2.7',
   title: 'Work-item type + executor',
-  status: 'planned',
+  status: 'done',
   gitBranch: 'feat/PROD-2.7-work-item-type-executor',
   descriptionMd:
     'Promote two pieces of planning metadata from PROSE to STRUCTURE: a ' +
@@ -629,7 +629,7 @@ export const story_2_7: PlanStory = {
       id: '2.7.8',
       title:
         'Playwright E2E — create a typed work item (pick type + executor), filter the list by type',
-      status: 'in_progress',
+      status: 'done',
       type: 'e2e',
       executor: 'coding_agent',
       estimateMinutes: 40,
