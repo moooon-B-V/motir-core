@@ -17,6 +17,7 @@ vi.mock('@/lib/auth', async (importOriginal) => {
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { organizationsService } from '@/lib/services/organizationsService';
 import {
   INVITE_IDENTIFIER_PREFIX,
   workspaceInvitesService,
@@ -263,6 +264,39 @@ describe('POST /api/invites/[token]/accept', () => {
       where: { identifier: { startsWith: INVITE_IDENTIFIER_PREFIX } },
     });
     expect(remaining).toBe(0);
+  });
+
+  it('upward-auto-joins the invitee into the workspace’s ORG so the access gate grants access (Story 6.10.4)', async () => {
+    // Regression: the org access gate (6.10.4) DENIES a workspace member who is
+    // not an org member, so accepting a cross-org invite MUST also enrol the
+    // invitee in the workspace's org — otherwise the post-accept active-workspace
+    // resolution can't reach the joined workspace (the workspace-flows e2e timed
+    // out on exactly this).
+    const { user: inviter, workspace } = await makeInviter('inviter2@example.com', 'Inviter Two');
+    const invitee = await usersService.createUser({
+      email: 'crossorg@example.com',
+      password: 'hunter2hunter2',
+      name: 'Cross Org',
+    });
+    const token = await createInvite({
+      workspaceId: workspace.id,
+      email: invitee.email,
+      inviterUserId: inviter.id,
+    });
+
+    mockSession.current = {
+      user: { id: invitee.id, email: invitee.email, name: invitee.name },
+    };
+    const res = await postAccept(token);
+    expect(res.status).toBe(200);
+
+    // The invitee is now an ORG member (role member) of the workspace's org...
+    const access = await organizationsService.resolveWorkspaceAccess(invitee.id, workspace.id);
+    expect(access).not.toBeNull();
+    expect(access!.orgRole).toBe('member');
+    // ...and the active-workspace resolver can land them on the joined workspace.
+    const resolved = await workspacesService.resolveActiveWorkspace(invitee.id, workspace.id);
+    expect(resolved).toBe(workspace.id);
   });
 
   it('returns 403 INVITE_EMAIL_MISMATCH and preserves the token when email differs', async () => {

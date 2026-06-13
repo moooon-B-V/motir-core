@@ -15,6 +15,7 @@ import { userRepository } from '@/lib/repositories/userRepository';
 import { verificationRepository } from '@/lib/repositories/verificationRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { organizationsService } from '@/lib/services/organizationsService';
 import {
   AlreadyMemberError,
   InvalidEmailError,
@@ -320,6 +321,23 @@ export const workspaceInvitesService = {
           'code' in err &&
           (err as { code?: string }).code === 'P2002';
         if (!isUnique) throw err;
+      }
+      // Story 6.10.4 — the UPWARD membership invariant (6.10.2 §5i): you cannot
+      // be in a workspace without being in its org, and the org access gate
+      // (organizationsService.resolveWorkspaceAccess) DENIES a workspace member
+      // who isn't an org member. Accepting a cross-org invite must therefore
+      // also enrol the invitee in the workspace's org, in the SAME transaction —
+      // otherwise the post-accept active-workspace resolution can't reach the
+      // joined workspace. (Mirrors workspacesService.addMember's auto-join; the
+      // invite-accept path creates the membership directly, so it carries the
+      // same invariant.) Idempotent on an already-member.
+      const workspace = await workspaceRepository.findByIdInTx(payload.workspaceId, tx);
+      if (workspace) {
+        await organizationsService.ensureOrgMembership(
+          sessionUser.id,
+          workspace.organizationId,
+          tx,
+        );
       }
       await verificationRepository.deleteByIdentifier(INVITE_IDENTIFIER_PREFIX + token, tx);
     });
