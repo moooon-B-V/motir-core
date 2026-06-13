@@ -1,0 +1,1790 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Create-workspace flow — dialog, copy-on-create source picker, tier-2
+      first-reveal (Story 6.10 · 6.10.10)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the CREATE-WORKSPACE FLOW — Story 6.10, subtask 6.10.10.
+
+      The org-admin design (6.10.1) draws "New workspace" only as a ROW in the
+      always-present org menu ("Adds the workspace switcher") — it does NOT draw
+      the surface that row OPENS. Story 1.2 never drew it either (1.2.1's switcher
+      mockup ends at the membership list + "Invite teammates"). So the
+      create-workspace flow was UNDESIGNED, and the implementation cards that
+      build it (6.10.5 wires the org-menu entry; 6.10.9 builds the create+clone)
+      would have to improvise it — forbidden (notes.html #31; design gate
+      "unspecified == no design"). This card draws it.
+
+      Built FROM the real design system: the token block below is copied 1:1 from
+      app/globals.css (Tier-0 --color-* + Tier-3 --el-* + the [data-display-style]
+      shape tokens), and the markup composes ONLY shipped primitives —
+        • Modal (components/ui/Modal.tsx — the shipped dialog primitive, built on
+          Radix Dialog; there is NO Dialog.tsx. The shipped CreateWorkspaceModal
+          in WorkspaceSwitcher.tsx already composes Modal + Input), Input +
+          FormField (name + slug-preview), Combobox (the "Copy settings from"
+          source picker + the per-role select reused from 6.10.1), Segmented
+          (components/ui/Segmented.tsx — the copy-vs-blank choice), Button
+          (primary / ghost / secondary), Pill (the "what gets copied" scope chips
+          + role chips — hue in the tint BACKGROUND with --el-text-strong text,
+          AA-safe per finding #35), Spinner (the submitting state), the note /
+          ErrorState grammar (the tx-rollback in-dialog error), Tooltip (the
+          disabled-explainer). The org menu + TopNav chrome is reused verbatim
+          from 6.10.1 so the dialog's ORIGIN is unambiguous.
+
+      MIRROR (rung 1 — cited, not asserted): create-with-config-copy.
+        • Jira "create project" lets you SHARE / COPY settings from an existing
+          project (the scheme-copy dialog) so the new project opens already
+          configured. (Atlassian Support — "Create a project"; "Manage how
+          projects share schemes".)
+        • Linear "create team" names the team and starts it from the workspace's
+          defaults. (Linear Docs — Teams.)
+      Motir draws THAT shape: a name-it dialog whose new workspace is SEEDED BY
+      COPYING a source workspace's config (6.10.2 §6e / 6.10.9), distinct from a
+      blank create.
+
+      DECISIONS this card PINS at design time (so 6.10.5 / 6.10.9 do NOT improvise
+      them — see design-notes.md "Decisions pinned"):
+        (a) SLUG is AUTO-DERIVED from the name and shown as a PASSIVE
+            "motir.co/{slug}" preview — NOT an editable field in the create
+            dialog. Faithful to the shipped CreateWorkspaceModal (name-only; the
+            service slugify()s + random-suffixes on collision) and renameable
+            later in workspace settings (mirrors the project ChangeKeyModal).
+        (b) COPY-ON-CREATE is the DEFAULT ("looks-inherited"); a "Start blank"
+            opt-out IS offered (a Segmented), because a genuinely different team
+            setup is a legitimate use and the blank path already exists — low
+            cost. Default = Copy.
+        (c) POST-CREATE LANDING: the user lands in the NEW (now active) workspace
+            on its "Create your first project" empty state (config is copied;
+            CONTENT — projects / work items — is NOT, per 6.10.9), focus on the
+            primary "New project" CTA. The workspace switcher now renders and the
+            new workspace is selected.
+        (d) WHO-CAN-CREATE: org owner/admin only (the 6.10.5 gate). A plain org
+            member sees NO "New workspace" row at all (the controls are not
+            rendered — consistent with 6.10.1's not-an-org-admin forbidden
+            posture), shown alongside the disabled+explained variant that was
+            considered and rejected.
+
+      OUT OF SCOPE (named, NOT drawn): billing / credit / usage — that is 7.12.5
+      (org usage view) + Epic 8 (checkout). No billing surface appears in this
+      flow. The cross-org platform-staff console is Epic 10.
+
+      Covers (multi-panel — review EACH, mistake #31):
+        (1) ENTRY POINT in context — the org menu (from 6.10.1) with "New
+            workspace" highlighted as the launch point; at ONE workspace this is
+            the ONLY path to tier 2 (the workspace switcher is still hidden).
+        (2) CREATE DIALOG, ONE existing workspace — name + passive slug preview +
+            the IMPLICIT copy-source affordance ("Starts with a copy of {ws}'s
+            setup") + the copy-scope chips.
+        (3) CREATE DIALOG, ≥2 existing workspaces — the explicit "Copy settings
+            from" Combobox (default = active workspace) + the Copy / Start-blank
+            Segmented + the "what gets copied" explanation.
+        (4) TIER-2 FIRST-REVEAL transition — before (Acme) → after (Acme › Mobile
+            App): the workspace switcher renders for the first time and the folded
+            Settings home SPLITS into a per-workspace area; the new workspace is
+            active on its first-project empty state.
+        (5) STATES + permission — submitting (one all-or-nothing tx, dialog stays
+            open), error (name/slug collision OR clone failure rolls the whole tx
+            back → one in-dialog error, no half-created workspace), and the
+            who-can-create permission treatment.
+      Toggle dark mode to confirm token parity. See design-notes.md for the
+      per-surface primitive + copy + --el-* role spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-pressed: #4534b3;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --color-link-pressed: #005bab;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-accent: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1100px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 820px;
+        line-height: 1.5;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1100px;
+      }
+      .stage {
+        position: relative;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 28px;
+      }
+      @media (max-width: 760px) {
+        .grid-2 {
+          grid-template-columns: 1fr;
+        }
+      }
+      .cap {
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        margin: 0 0 14px;
+      }
+      .cap strong {
+        color: var(--el-text-secondary);
+      }
+
+      /* ── TopNav stub — hosts the org switcher (mirrors TopNav.tsx) ────────── */
+      .topnav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        height: 56px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .topnav .left,
+      .topnav .right {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .ctx-sep {
+        color: var(--el-text-faint);
+        font-size: 15px;
+        margin: 0 2px;
+      }
+      .trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        background: transparent;
+        border: 1px solid transparent;
+        color: var(--el-text);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        max-width: 220px;
+      }
+      .trigger:hover {
+        background: var(--el-surface);
+      }
+      .trigger.on {
+        background: var(--el-surface);
+      }
+      .trigger .org-ava,
+      .trigger .ws-ava {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .trigger .ws-ava {
+        background: var(--el-tint-peach);
+      }
+      .trigger .tlabel {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .trigger svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .mini-search {
+        height: var(--height-btn-md);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        color: var(--el-text-muted);
+        font-size: 12px;
+      }
+      .mini-search svg {
+        width: 14px;
+        height: 14px;
+      }
+      .avatar {
+        flex: none;
+        width: 32px;
+        height: 32px;
+        border-radius: 9999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 600;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+      }
+
+      /* ── Popover menu (components/ui/Popover) — reused from 6.10.1 ────────── */
+      .menu {
+        width: 320px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .menu-head {
+        padding: 8px 10px 4px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-muted);
+      }
+      .menu-sep {
+        height: 1px;
+        background: var(--el-border);
+        margin: 4px 2px;
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .opt.active {
+        background: var(--el-surface);
+      }
+      /* the launch row — the focus of this flow */
+      .opt.launch {
+        background: var(--el-tint-lavender);
+        outline: 2px solid var(--el-accent);
+        outline-offset: -2px;
+      }
+      .opt.is-disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .opt .ck {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-accent);
+        visibility: hidden;
+      }
+      .opt.sel .ck {
+        visibility: visible;
+      }
+      .opt .org-ava,
+      .opt .ws-ava {
+        flex: none;
+        width: 24px;
+        height: 24px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .opt .ws-ava {
+        background: var(--el-tint-peach);
+      }
+      .opt .ot {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.25;
+        min-width: 0;
+        flex: 1;
+      }
+      .opt .ot .nm {
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .opt .ot .od {
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .opt svg.li {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .opt .meta {
+        margin-left: auto;
+        color: var(--el-text-muted);
+        font-size: 11px;
+      }
+
+      /* ── Modal / Dialog (components/ui/Modal — Radix Dialog) ──────────────── */
+      .scene {
+        position: relative;
+        min-height: 460px;
+        background: var(--el-surface);
+        overflow: hidden;
+      }
+      /* a blurred app backdrop so the dialog reads as launched-over-the-app */
+      .backdrop {
+        position: absolute;
+        inset: 0;
+        padding: 0;
+      }
+      .backdrop .topnav {
+        opacity: 0.55;
+      }
+      .backdrop .bd-body {
+        opacity: 0.4;
+        padding: 28px;
+      }
+      .overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 56px 16px;
+      }
+      .modal {
+        width: 100%;
+        max-width: 480px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        overflow: hidden;
+      }
+      .modal-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 18px var(--spacing-card-padding) 6px;
+      }
+      .modal-head h3 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .modal-head .msub {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        margin-top: 3px;
+        line-height: 1.45;
+      }
+      .x {
+        flex: none;
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .x:hover {
+        background: var(--el-surface);
+      }
+      .x svg {
+        width: 16px;
+        height: 16px;
+      }
+      .modal-body {
+        padding: 12px var(--spacing-card-padding) 8px;
+      }
+      .modal-foot {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 14px var(--spacing-card-padding) 18px;
+      }
+      .modal-foot.split {
+        justify-content: space-between;
+      }
+
+      /* ── Form fields (components/ui/Input + FormField) ───────────────────── */
+      .field {
+        display: block;
+        margin-bottom: 16px;
+      }
+      .field:last-child {
+        margin-bottom: 0;
+      }
+      .flabel {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        margin-bottom: 6px;
+      }
+      .input {
+        display: flex;
+        align-items: center;
+        height: var(--height-input);
+        width: 100%;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        padding: 0 var(--spacing-input-x);
+        font-size: 14px;
+        color: var(--el-text);
+        background: var(--el-page-bg);
+      }
+      .input.focus {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring-color) 22%, transparent);
+      }
+      .input .caret {
+        width: 1px;
+        height: 18px;
+        background: var(--el-accent);
+        margin-left: 1px;
+        animation: none;
+      }
+      .input .pfx {
+        color: var(--el-text-faint);
+        margin-right: 1px;
+      }
+      .slug-preview {
+        display: flex;
+        align-items: center;
+        height: var(--height-input);
+        width: 100%;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-input);
+        padding: 0 var(--spacing-input-x);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft);
+      }
+      .slug-preview .pfx {
+        color: var(--el-text-faint);
+      }
+      .slug-preview .slug {
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .fhint {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        margin-top: 6px;
+      }
+
+      /* ── Combobox trigger (components/ui/Combobox) — source picker ─────────── */
+      .cbx {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        width: 100%;
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        border-radius: var(--radius-input);
+        padding: 0 var(--spacing-input-x);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .cbx .ws-ava {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .cbx .chev {
+        margin-left: auto;
+        color: var(--el-text-muted);
+      }
+      .cbx svg {
+        width: 16px;
+        height: 16px;
+      }
+      .cbx-menu {
+        margin-top: 4px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+
+      /* ── Segmented (components/ui/Segmented) — copy vs blank ──────────────── */
+      .seg {
+        display: inline-flex;
+        padding: 3px;
+        gap: 2px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        width: 100%;
+      }
+      .seg button {
+        flex: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: var(--height-control);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        font-weight: 500;
+        font-family: inherit;
+        cursor: pointer;
+      }
+      .seg button svg {
+        width: 14px;
+        height: 14px;
+      }
+      .seg button.on {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        box-shadow: var(--shadow-subtle);
+      }
+
+      /* ── Copy-scope card (what gets copied) ───────────────────────────────── */
+      .copybox {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 12px 14px;
+        margin-top: 4px;
+      }
+      .copybox .ch {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .copybox .ch svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-accent);
+      }
+      .scope-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 9px;
+      }
+      .copybox .excl {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        margin-top: 10px;
+        line-height: 1.45;
+      }
+      .copybox .excl strong {
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Pills (components/ui/Pill — hue in tint bg, --el-text-strong text) ── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        line-height: 1.1;
+        white-space: nowrap;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill-neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill-owner {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pill-member {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-cfg {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+        font-size: 11.5px;
+        padding: 2px 9px;
+      }
+      .pill-content {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+        font-size: 11.5px;
+        padding: 2px 9px;
+        text-decoration: line-through;
+        text-decoration-color: var(--el-text-faint);
+      }
+
+      /* ── Buttons (components/ui/Button) ──────────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid transparent;
+        font-family: inherit;
+      }
+      .btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        font-size: 12px;
+        padding: 0 var(--spacing-btn-x-sm);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn[disabled],
+      .btn.is-disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      /* ── Spinner (components/ui/Spinner) — submitting state ───────────────── */
+      .spin {
+        width: 15px;
+        height: 15px;
+        border: 2px solid color-mix(in srgb, var(--el-accent-text) 45%, transparent);
+        border-top-color: var(--el-accent-text);
+        border-radius: 9999px;
+      }
+      .spin.ink {
+        border-color: var(--el-border-strong);
+        border-top-color: var(--el-text-muted);
+      }
+
+      /* ── In-dialog error (the tx-rollback message) ───────────────────────── */
+      .err-note {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 10px 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+        font-size: 12.5px;
+        line-height: 1.45;
+        margin-bottom: 14px;
+      }
+      .err-note svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-danger-text);
+      }
+      .note {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 10px 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        border: 1px dashed var(--el-border-strong);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .note svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+      }
+
+      /* ── Tooltip (components/ui/Tooltip — ink bg, inverted text) ──────────── */
+      .ttp {
+        position: relative;
+        display: inline-flex;
+      }
+      .ttp .bubble {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 50%;
+        transform: translateX(-50%);
+        width: 224px;
+        white-space: normal;
+        text-align: center;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        border-radius: var(--radius-control);
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        font-size: 11.5px;
+        line-height: 1.4;
+        box-shadow: var(--shadow-elevated);
+        z-index: 3;
+      }
+      .ttp .bubble::after {
+        content: '';
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 5px solid transparent;
+        border-bottom-color: var(--el-text);
+      }
+
+      /* ── Empty state (first-project landing) + arrow transition ──────────── */
+      .state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 30px 28px;
+      }
+      .state .ico {
+        width: 44px;
+        height: 44px;
+        margin-bottom: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .state .ico svg {
+        width: 22px;
+        height: 22px;
+      }
+      .state h4 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 17px;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .state p {
+        margin-top: 8px;
+        max-width: 40ch;
+        font-size: 13px;
+        color: var(--el-text-muted);
+        line-height: 1.5;
+      }
+      .state .actions {
+        margin-top: 16px;
+      }
+      .ring {
+        outline: 2px solid var(--el-accent);
+        outline-offset: 2px;
+      }
+
+      .ba {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: 18px;
+      }
+      @media (max-width: 760px) {
+        .ba {
+          grid-template-columns: 1fr;
+        }
+        .ba .arrow {
+          transform: rotate(90deg);
+        }
+      }
+      .mini {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .mini .topnav {
+        height: 48px;
+        padding: 0 14px;
+      }
+      .mini .trigger {
+        height: var(--height-btn-sm);
+        font-size: 12px;
+      }
+      .mini-foot {
+        padding: 9px 14px;
+        font-size: 11px;
+        color: var(--el-text-faint);
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .arrow {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 9999px;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .arrow svg {
+        width: 18px;
+        height: 18px;
+      }
+      .blbl {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        padding: 9px 14px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Create-workspace flow</h1>
+        <p>
+          Story 6.10 · Subtask 6.10.10 design asset — built from app/globals.css tokens. Draws the
+          surface the org menu's <strong>New&nbsp;workspace</strong> row opens (6.10.1 drew the row,
+          not the dialog). A name-it <strong>Modal</strong> whose new workspace is
+          <strong>seeded by copying a source workspace's config</strong> (6.10.2 §6e / 6.10.9) — the
+          "looks-inherited" behaviour — plus the tier-2 first-reveal it triggers. Mirror = Jira
+          create-project "share settings" / Linear create-team (rung 1). Billing is 7.12.5 / Epic 8
+          and ABSENT here. Source of truth = this HTML; see design-notes.md. Consumed by 6.10.5,
+          visualises 6.10.9.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- ════════════════ PANEL 1 — the entry point in context ════════════════ -->
+    <div class="panel-label">
+      1 · Entry point — the always-present org menu (6.10.1) with “New workspace” as the launch
+      point, so the dialog’s origin is unambiguous. At ONE workspace this is the ONLY path to tier 2
+      (the workspace switcher is still hidden).
+    </div>
+    <div class="panel">
+      <div class="stage" style="padding: 22px">
+        <div class="grid-2" style="gap: 32px; align-items: start">
+          <div>
+            <p class="cap">
+              <strong>The header at one workspace.</strong> Only the org (<em>Acme&nbsp;▾</em>)
+              shows as the top-left anchor; the workspace is implicit and not shown. Clicking the
+              org opens its menu →
+            </p>
+            <div class="mini">
+              <div class="topnav">
+                <div class="left">
+                  <button class="trigger on" aria-label="Organization menu">
+                    <span class="org-ava">A</span>
+                    <span class="tlabel">Acme</span>
+                    <svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+                  </button>
+                </div>
+                <div class="right">
+                  <span class="mini-search"
+                    ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search</span
+                  >
+                  <span class="avatar" style="width: 28px; height: 28px; font-size: 11px">Z</span>
+                </div>
+              </div>
+              <div class="mini-foot">
+                The same header serves an OPC and a 10-person org — no “individual” mode.
+              </div>
+            </div>
+          </div>
+          <div>
+            <p class="cap">
+              <strong>The org menu open.</strong> “New workspace” is the discoverable path to reveal
+              tier 2 (“Adds the workspace switcher”). Only an org owner/admin sees this row (panel
+              5).
+            </p>
+            <div class="menu" style="margin: 0">
+              <div class="menu-head">Acme</div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-settings" /></svg>
+                <span class="ot"><span class="nm">Settings</span></span>
+              </div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-users" /></svg>
+                <span class="ot"><span class="nm">Members</span></span>
+              </div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-sparkle" /></svg>
+                <span class="ot"
+                  ><span class="nm">Billing &amp; usage</span
+                  ><span class="od">Coming soon</span></span
+                >
+              </div>
+              <div class="opt launch">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-plus" /></svg>
+                <span class="ot"
+                  ><span class="nm">New workspace</span
+                  ><span class="od">Adds the workspace switcher</span></span
+                >
+              </div>
+              <div class="menu-sep"></div>
+              <div class="menu-head">Switch organization · shown only at 2+ orgs</div>
+              <div class="opt sel active">
+                <svg viewBox="0 0 24 24" class="ck"><use href="#i-check" /></svg>
+                <span class="org-ava">A</span>
+                <span class="ot"
+                  ><span class="nm">Acme</span><span class="od">1 workspace</span></span
+                >
+                <span class="pill pill-owner"
+                  ><svg viewBox="0 0 24 24"><use href="#i-crown" /></svg>Owner</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 2 — create dialog, ONE existing workspace ════════════════ -->
+    <div class="panel-label">
+      2 · Create dialog — ONE existing workspace (the first split). Name + a PASSIVE slug preview
+      (decision a: auto-derived, not editable here). The copy source is IMPLICIT (only one workspace
+      exists) — a passive “Starts with a copy of {ws}’s setup” affordance, not a picker. The
+      copy-scope is named so the user knows config is copied, content is not.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="scene">
+          <div class="backdrop">
+            <div class="topnav">
+              <div class="left">
+                <button class="trigger">
+                  <span class="org-ava">A</span><span class="tlabel">Acme</span
+                  ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+                </button>
+              </div>
+              <div class="right">
+                <span class="avatar" style="width: 28px; height: 28px; font-size: 11px">Z</span>
+              </div>
+            </div>
+            <div class="bd-body">&nbsp;</div>
+          </div>
+          <div class="overlay">
+            <div class="modal" role="dialog" aria-modal="true" aria-labelledby="t2">
+              <div class="modal-head">
+                <div>
+                  <h3 id="t2">New workspace</h3>
+                  <div class="msub">
+                    A workspace groups related projects under the Acme organization.
+                  </div>
+                </div>
+                <span class="x" aria-label="Close"
+                  ><svg viewBox="0 0 24 24"><use href="#i-x" /></svg
+                ></span>
+              </div>
+              <div class="modal-body">
+                <div class="field">
+                  <span class="flabel">Workspace name</span>
+                  <div class="input focus">Mobile App<span class="caret"></span></div>
+                </div>
+                <div class="field">
+                  <span class="flabel">Workspace URL</span>
+                  <div class="slug-preview">
+                    <span class="pfx">motir.co/</span><span class="slug">mobile-app</span>
+                  </div>
+                  <div class="fhint">
+                    Generated from the name. You can change it later in workspace settings.
+                  </div>
+                </div>
+                <div class="copybox">
+                  <div class="ch">
+                    <svg viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+                    Starts with a copy of <span style="color: var(--el-text)">Engineering</span>’s
+                    setup
+                  </div>
+                  <div class="scope-chips">
+                    <span class="pill pill-cfg">Workflows &amp; statuses</span>
+                    <span class="pill pill-cfg">Custom fields</span>
+                    <span class="pill pill-cfg">Labels</span>
+                    <span class="pill pill-cfg">Components</span>
+                    <span class="pill pill-cfg">Boards &amp; columns</span>
+                    <span class="pill pill-cfg">Automation</span>
+                    <span class="pill pill-cfg">Dashboards</span>
+                    <span class="pill pill-cfg">Saved filters</span>
+                  </div>
+                  <div class="excl">
+                    <strong>Not copied:</strong> work items, sprints, comments and other content —
+                    only configuration. After this, the two workspaces are independent.
+                  </div>
+                </div>
+              </div>
+              <div class="modal-foot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-primary">Create workspace</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 3 — create dialog, ≥2 existing workspaces ════════════════ -->
+    <div class="panel-label">
+      3 · Create dialog — ≥2 existing workspaces (the source picker). The copy source becomes an
+      EXPLICIT “Copy settings from” Combobox, defaulting to the active workspace (the 6.10.9 source
+      choice made visible). A Copy / Start-blank Segmented (decision b: copy is default; blank is
+      offered).
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="scene">
+          <div class="backdrop">
+            <div class="topnav">
+              <div class="left">
+                <button class="trigger">
+                  <span class="org-ava">A</span><span class="tlabel">Acme</span
+                  ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+                </button>
+                <span class="ctx-sep">›</span>
+                <button class="trigger">
+                  <span class="ws-ava">E</span><span class="tlabel">Engineering</span
+                  ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+                </button>
+              </div>
+              <div class="right">
+                <span class="avatar" style="width: 28px; height: 28px; font-size: 11px">Z</span>
+              </div>
+            </div>
+            <div class="bd-body">&nbsp;</div>
+          </div>
+          <div class="overlay">
+            <div class="modal" role="dialog" aria-modal="true" aria-labelledby="t3">
+              <div class="modal-head">
+                <div>
+                  <h3 id="t3">New workspace</h3>
+                  <div class="msub">
+                    A workspace groups related projects under the Acme organization.
+                  </div>
+                </div>
+                <span class="x" aria-label="Close"
+                  ><svg viewBox="0 0 24 24"><use href="#i-x" /></svg
+                ></span>
+              </div>
+              <div class="modal-body">
+                <div class="field">
+                  <span class="flabel">Workspace name</span>
+                  <div class="input">Marketing</div>
+                </div>
+                <div class="field">
+                  <span class="flabel">Starting setup</span>
+                  <div class="seg">
+                    <button class="on">
+                      <svg viewBox="0 0 24 24"><use href="#i-copy" /></svg>Copy from a workspace
+                    </button>
+                    <button>
+                      <svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>Start blank
+                    </button>
+                  </div>
+                  <div class="fhint">
+                    Copy reuses another workspace’s configuration so the new one opens ready to use.
+                  </div>
+                </div>
+                <div class="field">
+                  <span class="flabel">Copy settings from</span>
+                  <div class="cbx">
+                    <span class="ws-ava">E</span>
+                    <span>Engineering</span>
+                    <span class="pill pill-neutral" style="margin-left: 6px">Active</span>
+                    <svg viewBox="0 0 24 24" class="chev"><use href="#i-chevdown" /></svg>
+                  </div>
+                  <!-- the open picker -->
+                  <div class="cbx-menu">
+                    <div class="opt sel active">
+                      <svg viewBox="0 0 24 24" class="ck"><use href="#i-check" /></svg>
+                      <span class="ws-ava">E</span>
+                      <span class="ot"
+                        ><span class="nm">Engineering</span
+                        ><span class="od">Active workspace · 18 members</span></span
+                      >
+                    </div>
+                    <div class="opt">
+                      <svg viewBox="0 0 24 24" class="ck"><use href="#i-check" /></svg>
+                      <span class="ws-ava" style="background: var(--el-tint-sky)">D</span>
+                      <span class="ot"
+                        ><span class="nm">Design</span><span class="od">6 members</span></span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <div class="copybox">
+                  <div class="ch">
+                    <svg viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+                    What gets copied from <span style="color: var(--el-text)">Engineering</span>
+                  </div>
+                  <div class="scope-chips">
+                    <span class="pill pill-cfg">Workflows &amp; statuses</span>
+                    <span class="pill pill-cfg">Custom fields</span>
+                    <span class="pill pill-cfg">Labels</span>
+                    <span class="pill pill-cfg">Components</span>
+                    <span class="pill pill-cfg">Boards &amp; columns</span>
+                    <span class="pill pill-cfg">Automation</span>
+                    <span class="pill pill-content">Work items</span>
+                    <span class="pill pill-content">Sprints</span>
+                    <span class="pill pill-content">Comments</span>
+                  </div>
+                  <div class="excl">
+                    Configuration only — content (struck through) stays in Engineering. The
+                    workspaces are independent after creation; either can change its own setup.
+                  </div>
+                </div>
+              </div>
+              <div class="modal-foot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-primary">Create workspace</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 4 — the tier-2 FIRST-REVEAL transition ════════════════ -->
+    <div class="panel-label">
+      4 · Tier-2 first-reveal — completing the create takes the org from 1→2 workspaces: the header
+      goes <em>Acme</em> → <em>Acme › Mobile&nbsp;App</em> (the workspace switcher renders for the
+      FIRST time) and the folded Settings home SPLITS into a per-workspace area. The user lands in
+      the NEW workspace (decision c).
+    </div>
+    <div class="panel">
+      <div class="stage" style="padding: 24px">
+        <div class="ba">
+          <!-- BEFORE -->
+          <div class="mini">
+            <div class="blbl">Before · 1 workspace</div>
+            <div class="topnav">
+              <div class="left">
+                <button class="trigger">
+                  <span class="org-ava">A</span><span class="tlabel">Acme</span
+                  ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+                </button>
+              </div>
+            </div>
+            <div class="mini-foot">
+              Workspace switcher hidden · one Settings home (org + workspace config folded
+              together).
+            </div>
+          </div>
+          <!-- arrow -->
+          <div class="arrow">
+            <svg viewBox="0 0 24 24"><use href="#i-arrowright" /></svg>
+          </div>
+          <!-- AFTER -->
+          <div class="mini">
+            <div class="blbl">After · 2 workspaces — workspace switcher appears</div>
+            <div class="topnav">
+              <div class="left">
+                <button class="trigger">
+                  <span class="org-ava">A</span><span class="tlabel">Acme</span
+                  ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+                </button>
+                <span class="ctx-sep">›</span>
+                <button class="trigger ring">
+                  <span class="ws-ava">M</span><span class="tlabel">Mobile App</span
+                  ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+                </button>
+              </div>
+            </div>
+            <!-- landing: the new workspace active, on its first-project empty state -->
+            <div class="state">
+              <span class="ico"
+                ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg
+              ></span>
+              <h4>Create your first project</h4>
+              <p>
+                Mobile App is set up and ready — workflows, fields and boards were copied from
+                Engineering. Add a project to start tracking work.
+              </p>
+              <div class="actions">
+                <button class="btn btn-primary ring">
+                  <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>New project
+                </button>
+              </div>
+            </div>
+            <div class="mini-foot">
+              Settings has split: a per-workspace Settings area now exists alongside the org
+              settings (no data moved).
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 5 — states + permission ════════════════ -->
+    <div class="panel-label">
+      5 · States + permission — submitting (one all-or-nothing tx, dialog stays open), error
+      (name/slug collision OR clone failure rolls the whole tx back → one in-dialog message, no
+      half-created workspace), and who-can-create (decision d: org owner/admin only).
+    </div>
+    <div class="panel">
+      <div class="stage" style="padding: 22px">
+        <div class="grid-2" style="gap: 22px; align-items: start">
+          <!-- 5a submitting -->
+          <div>
+            <p class="cap">
+              <strong>a · Submitting.</strong> The clone is one transaction (6.10.9), so the dialog
+              stays open and shows a pending state until it resolves — no premature navigation.
+            </p>
+            <div class="modal" style="box-shadow: var(--shadow-card)">
+              <div class="modal-head">
+                <div>
+                  <h3>New workspace</h3>
+                  <div class="msub">Copying configuration from Engineering…</div>
+                </div>
+              </div>
+              <div class="modal-body">
+                <div class="field">
+                  <span class="flabel">Workspace name</span>
+                  <div class="input" style="color: var(--el-text-muted)">Marketing</div>
+                </div>
+                <div class="note">
+                  <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                  Setting up workflows, fields, labels and boards. This usually takes a moment.
+                </div>
+              </div>
+              <div class="modal-foot">
+                <button class="btn btn-ghost is-disabled" disabled>Cancel</button>
+                <button class="btn btn-primary is-disabled" disabled>
+                  <span class="spin"></span>Creating…
+                </button>
+              </div>
+            </div>
+          </div>
+          <!-- 5b error -->
+          <div>
+            <p class="cap">
+              <strong>b · Error (tx rollback).</strong> A name/slug collision or a clone failure
+              rolls back the WHOLE transaction. One in-dialog error; the form keeps its values;
+              nothing was half-created.
+            </p>
+            <div class="modal" style="box-shadow: var(--shadow-card)">
+              <div class="modal-head">
+                <div>
+                  <h3>New workspace</h3>
+                  <div class="msub">
+                    A workspace groups related projects under the Acme organization.
+                  </div>
+                </div>
+                <span class="x" aria-label="Close"
+                  ><svg viewBox="0 0 24 24"><use href="#i-x" /></svg
+                ></span>
+              </div>
+              <div class="modal-body">
+                <div class="err-note">
+                  <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+                  <span
+                    >A workspace named “Engineering” already exists in this organization. Pick a
+                    different name — nothing was created.</span
+                  >
+                </div>
+                <div class="field">
+                  <span class="flabel">Workspace name</span>
+                  <div
+                    class="input"
+                    style="
+                      border-color: var(--el-danger);
+                      box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-danger) 18%, transparent);
+                    "
+                  >
+                    Engineering
+                  </div>
+                </div>
+              </div>
+              <div class="modal-foot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-primary">Create workspace</button>
+              </div>
+            </div>
+          </div>
+          <!-- 5c permission: org member -->
+          <div>
+            <p class="cap">
+              <strong>c · Permission — an org member.</strong> Only org owners/admins may create a
+              workspace. A plain member’s org menu has NO “New workspace” row (the control is not
+              rendered — like 6.10.1’s forbidden posture).
+            </p>
+            <div class="menu" style="width: 300px; margin: 0">
+              <div class="menu-head">Acme</div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-settings" /></svg>
+                <span class="ot"><span class="nm">Settings</span></span>
+              </div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-users" /></svg>
+                <span class="ot"><span class="nm">Members</span></span>
+              </div>
+              <div class="menu-sep"></div>
+              <div class="menu-head">Switch organization · shown only at 2+ orgs</div>
+              <div class="opt sel active">
+                <svg viewBox="0 0 24 24" class="ck"><use href="#i-check" /></svg>
+                <span class="org-ava" style="background: var(--el-tint-mint)">A</span>
+                <span class="ot"
+                  ><span class="nm">Acme</span><span class="od">2 workspaces</span></span
+                >
+                <span class="pill pill-member">Member</span>
+              </div>
+            </div>
+          </div>
+          <!-- 5d the considered-and-rejected disabled variant -->
+          <div>
+            <p class="cap">
+              <strong>d · Considered &amp; rejected.</strong> A disabled+explained row was weighed,
+              but advertising a control a member can never use adds noise; decision = not rendered
+              (c). Shown here only to document the choice.
+            </p>
+            <div class="menu" style="width: 300px; margin: 0">
+              <div class="menu-head">Acme</div>
+              <div class="ttp" style="display: block">
+                <div class="opt is-disabled">
+                  <svg viewBox="0 0 24 24" class="li"><use href="#i-plus" /></svg>
+                  <span class="ot"
+                    ><span class="nm">New workspace</span
+                    ><span class="od">Owners &amp; admins only</span></span
+                  >
+                  <svg viewBox="0 0 24 24" class="li" style="margin-left: auto">
+                    <use href="#i-lock" />
+                  </svg>
+                </div>
+                <div
+                  class="bubble"
+                  style="
+                    position: static;
+                    transform: none;
+                    width: auto;
+                    margin: 6px 4px 0;
+                    display: inline-block;
+                  "
+                >
+                  Only Acme owners and admins can create workspaces.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── lucide symbol sprite (viewBox 0 0 24 24; stroke currentColor) ─────── -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-chevdown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g
+          id="i-users"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </g>
+        <g
+          id="i-crown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"
+          />
+          <path d="M5 21h14" />
+        </g>
+        <g
+          id="i-settings"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+        <g
+          id="i-sparkle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+          />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-copy"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+        </g>
+        <g
+          id="i-arrowright"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </g>
+        <g
+          id="i-folder"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+          />
+        </g>
+      </defs>
+    </svg>
+  </body>
+</html>
