@@ -147,6 +147,35 @@ export type ReadyCandidateRow = WorkItem & {
 };
 
 /**
+ * One row of the triage QUEUE read (Subtask 6.11.3) — the FULL `work_item` row
+ * (so the mapper consumes its `triagedAt` / `snoozedUntil` / `externalSubmitter*`
+ * columns directly) PLUS the bits the SAME single read resolves so the service
+ * doesn't re-query: the status `category` (joined from `workflow_status` — the
+ * row's `status` is only the key) and the REPORTER's display name / email /
+ * avatar (left-joined from `user`). For an in-app member submission the reporter
+ * IS the submitter; for an external portal submission the reporter is the
+ * per-project intake user and the real submitter is in `externalSubmitter{Name,
+ * Email}` (ADR §3) — the mapper derives which from `externalSubmitterEmail`.
+ */
+export type TriageQueueRow = WorkItem & {
+  statusCategory: string;
+  reporterName: string | null;
+  reporterEmail: string | null;
+  reporterImage: string | null;
+};
+
+/**
+ * The seek-after position the triage-queue cursor decodes to — the last item of
+ * the previous page under the queue's `(triagedAt DESC, id ASC)` total order.
+ * `triagedAt` is the marker timestamp (always non-null for a queue row); `id`
+ * breaks the (rare) same-instant tie so paging never skips/repeats a row.
+ */
+export interface TriageQueueCursor {
+  triagedAt: Date;
+  id: string;
+}
+
+/**
  * The whitelisted ORDER-BY expression per sort column (Subtask 2.5.8). The
  * key is a validated `IssueSortColumn` (parsed/clamped in `issueListView`), so
  * the SQL fragment is never derived from raw user input. `assignee`/`reporter`
@@ -385,6 +414,7 @@ export const workItemRepository = {
         WHERE w."projectId" = ${projectId}
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
+          AND ${notInTriageSql('w')}
           AND ws."category" = 'todo'
           AND NOT EXISTS (
             SELECT 1 FROM "work_item" c
@@ -394,6 +424,73 @@ export const workItemRepository = {
           AND (${where})
         ORDER BY ${kindRankSql} ASC, w."priority" DESC, w."key" ASC
         LIMIT ${filter.limit}`;
+  },
+
+  /**
+   * The triage QUEUE read (Subtask 6.11.3, per docs/decisions/triage-model.md
+   * §2) — the ONE read that INVERTS the `notInTriageSql` exclusion: it returns
+   * ONLY triage-marked items for a project, never the planned tree. The ACTIVE
+   * queue an admin works through:
+   *
+   *   • `triagedAt IS NOT NULL`        — only triage items
+   *   • `ws."category" <> 'done'`      — hides DECLINED / MERGED items (decline
+   *                                      and merge cancel the item to a terminal
+   *                                      `category = 'done'` status while KEEPING
+   *                                      the triage marker, ADR §5; they leave the
+   *                                      active queue but never re-enter the tree)
+   *   • snooze window                  — hides currently-snoozed items
+   *                                      (`snoozedUntil > now()`); a NULL or past
+   *                                      `snoozedUntil` is active
+   *
+   * Ordered newest-first (`triagedAt DESC`) with an `id ASC` tiebreak so the
+   * `(triagedAt, id)` seek-after cursor is a total order (no skip/repeat across
+   * pages). Cursor-paginated — `take + 1` lets the service derive the next
+   * cursor without a COUNT (finding #57 — the public form can flood the inbox;
+   * NEVER load-all). Resolves the status `category` (so the service needn't
+   * re-query) + the REPORTER display fields for attribution in the SAME read.
+   * Read-only path → `db` singleton (optional `tx`). The explicit
+   * `workspaceId` + `projectId` gate is the app-layer tenancy check (finding #26).
+   */
+  async findTriageQueue(
+    projectId: string,
+    workspaceId: string,
+    options: { limit: number; cursor?: TriageQueueCursor },
+    tx?: Prisma.TransactionClient,
+  ): Promise<TriageQueueRow[]> {
+    const client = tx ?? db;
+    // The snooze cutoff is a BOUND `Date` param, not SQL `NOW()`: Prisma stores
+    // `DateTime` as a naive-UTC `timestamp` (no tz), so a `timestamp <= now()
+    // [timestamptz]` comparison reinterprets the column through the session
+    // timezone and skews by the offset. Binding a `Date` compares like-for-like
+    // (the same pattern `aggregateCreatedByBucket` uses for its window bounds).
+    const now = new Date();
+    // Seek-after under `(triagedAt DESC, id ASC)`: strictly after the previous
+    // page's last item. Bound params, never interpolated.
+    const cursorPred = options.cursor
+      ? Prisma.sql`AND (
+            w."triagedAt" < ${options.cursor.triagedAt}
+            OR (w."triagedAt" = ${options.cursor.triagedAt} AND w."id" > ${options.cursor.id})
+          )`
+      : Prisma.empty;
+    return client.$queryRaw<TriageQueueRow[]>`
+      SELECT w.*,
+             ws."category"::text AS "statusCategory",
+             ru."name"           AS "reporterName",
+             ru."email"          AS "reporterEmail",
+             ru."image"          AS "reporterImage"
+        FROM "work_item" w
+        JOIN "workflow_status" ws
+              ON ws."project_id" = w."projectId" AND ws."key" = w."status"
+        LEFT JOIN "user" ru ON ru."id" = w."reporterId"
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND w."triagedAt" IS NOT NULL
+          AND ws."category" <> 'done'
+          AND (w."snoozedUntil" IS NULL OR w."snoozedUntil" <= ${now})
+          ${cursorPred}
+        ORDER BY w."triagedAt" DESC, w."id" ASC
+        LIMIT ${options.limit}`;
   },
 
   /**
@@ -451,6 +548,7 @@ export const workItemRepository = {
         WHERE w."workspaceId" = ${workspaceId}
           AND w."projectId" = ANY(${projectIds})
           AND w."archivedAt" IS NULL
+          AND ${notInTriageSql('w')}
           ${excludeSql}
           AND (
             w."identifier" ILIKE ${idPrefixPattern}
@@ -505,6 +603,7 @@ export const workItemRepository = {
       where: {
         projectId,
         archivedAt: null,
+        triagedAt: null, // read-exclusion (Subtask 6.11.3)
         ...(filter.kind ? { kind: filter.kind } : {}),
         ...(filter.status ? { status: filter.status } : {}),
         ...(filter.assigneeId !== undefined ? { assigneeId: filter.assigneeId } : {}),
@@ -531,7 +630,14 @@ export const workItemRepository = {
     if (kinds.length === 0) return [];
     const client = tx ?? db;
     return client.workItem.findMany({
-      where: { projectId, workspaceId, kind: { in: [...kinds] }, archivedAt: null },
+      // triagedAt: null — a triage item is never a candidate parent (read-exclusion, 6.11.3).
+      where: {
+        projectId,
+        workspaceId,
+        kind: { in: [...kinds] },
+        archivedAt: null,
+        triagedAt: null,
+      },
       orderBy: { key: 'asc' },
     });
   },
@@ -550,7 +656,7 @@ export const workItemRepository = {
     const client = tx ?? db;
     const { take = 50, cursor } = options;
     return client.workItem.findMany({
-      where: { projectId, archivedAt: null },
+      where: { projectId, archivedAt: null, triagedAt: null }, // read-exclusion (6.11.3)
       orderBy: { key: 'asc' },
       take,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -596,7 +702,10 @@ export const workItemRepository = {
   async findChildren(parentId: string, tx?: Prisma.TransactionClient): Promise<WorkItem[]> {
     const client = tx ?? db;
     return client.workItem.findMany({
-      where: { parentId, archivedAt: null },
+      // triagedAt: null is a no-op in practice (a triage item is always
+      // parentless, so never a child) but documents + enforces the read-exclusion
+      // invariant uniformly so no future child read can leak triage (6.11.3).
+      where: { parentId, archivedAt: null, triagedAt: null },
       orderBy: { position: 'asc' },
     });
   },
@@ -730,6 +839,7 @@ export const workItemRepository = {
             AND w."workspaceId" = ${workspaceId}
             AND w."parentId" IS NULL
             AND w."archivedAt" IS NULL
+            AND ${notInTriageSql('w')}
         UNION ALL
         SELECT c."id", c."parentId", c."kind", c."key", c."identifier",
                c."title", c."status", c."priority", c."assigneeId", c."reporterId",
@@ -739,6 +849,7 @@ export const workItemRepository = {
           WHERE c."projectId" = ${projectId}
             AND c."workspaceId" = ${workspaceId}
             AND c."archivedAt" IS NULL
+            AND ${notInTriageSql('c')}
       )
       SELECT f."id",
              f."parentId",
@@ -817,6 +928,7 @@ export const workItemRepository = {
         WHERE w."projectId" = ${projectId}
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
+          AND ${notInTriageSql('w')}
           AND (${matched})
         ORDER BY ${orderCol} ${dir} NULLS LAST, w."key" ASC
         ${limitSql}`;
@@ -845,6 +957,7 @@ export const workItemRepository = {
         WHERE w."projectId" = ${projectId}
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
+          AND ${notInTriageSql('w')}
           AND (${matched})`;
     return rows[0]?.count ?? 0;
   },
@@ -889,6 +1002,9 @@ export const workItemRepository = {
         projectId,
         workspaceId,
         archivedAt: null,
+        // Read-exclusion (Subtask 6.11.3): a triage item never appears as a
+        // board card — same predicate as the swimlane lane aggregates below.
+        triagedAt: null,
         status: { in: statusKeys },
         ...(opts.updatedSince ? { updatedAt: { gte: opts.updatedSince } } : {}),
         // Sprint scope (Story 4.5.2) — a SCRUM board's projection passes the
@@ -949,6 +1065,7 @@ export const workItemRepository = {
              EXISTS (
                SELECT 1 FROM "work_item" ch
                 WHERE ch."parentId" = w."id" AND ch."archivedAt" IS NULL
+                  AND ${notInTriageSql('ch')}
              )                    AS "hasChildren"
         FROM "work_item" w
         LEFT JOIN "user" au ON au."id" = w."assigneeId"
@@ -958,6 +1075,7 @@ export const workItemRepository = {
         WHERE w."projectId" = ${projectId}
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
+          AND ${notInTriageSql('w')}
           AND ${parentPred}
         ORDER BY ${orderCol} ${dir} NULLS LAST, w."key" ASC
         LIMIT ${page.take + 1} OFFSET ${page.offset}`;
@@ -986,6 +1104,7 @@ export const workItemRepository = {
         WHERE w."projectId" = ${projectId}
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
+          AND ${notInTriageSql('w')}
           AND ${parentPred}`;
     return Number(rows[0]?.count ?? 0);
   },
@@ -1035,6 +1154,9 @@ export const workItemRepository = {
         projectId,
         workspaceId,
         archivedAt: null,
+        // Read-exclusion (Subtask 6.11.3): a triage item never counts toward a
+        // swimlane lane — keeps the lane counts consistent with `findColumnCards`.
+        triagedAt: null,
         status: { in: statusKeys },
         ...(sprintId ? { sprintId } : {}),
       },
@@ -1061,6 +1183,9 @@ export const workItemRepository = {
         projectId,
         workspaceId,
         archivedAt: null,
+        // Read-exclusion (Subtask 6.11.3): a triage item never counts toward a
+        // swimlane lane — keeps the lane counts consistent with `findColumnCards`.
+        triagedAt: null,
         status: { in: statusKeys },
         ...(sprintId ? { sprintId } : {}),
       },
@@ -1099,6 +1224,7 @@ export const workItemRepository = {
           WHERE w."projectId" = ${projectId}
             AND w."workspaceId" = ${workspaceId}
             AND w."archivedAt" IS NULL
+            AND ${notInTriageSql('w')}
             AND w."status" = ANY(${statusKeys})
             ${sprintScope}
         UNION ALL
@@ -1167,6 +1293,7 @@ export const workItemRepository = {
       WHERE w."projectId" = ${projectId}
         AND w."workspaceId" = ${workspaceId}
         AND w."archivedAt" IS NULL
+        AND ${notInTriageSql('w')}
         AND w."createdAt" >= ${window.start}
         AND w."createdAt" <= ${window.end}
         AND (${astSql})
@@ -1212,6 +1339,7 @@ export const workItemRepository = {
       WHERE w."projectId" = ${projectId}
         AND w."workspaceId" = ${workspaceId}
         AND w."archivedAt" IS NULL
+        AND ${notInTriageSql('w')}
         AND (${astSql})
       GROUP BY 1, 2
       ORDER BY 3 DESC, 2 ASC NULLS LAST, 1 ASC NULLS LAST`;
@@ -1471,6 +1599,10 @@ export const workItemRepository = {
         workspaceId,
         sprintId: null,
         archivedAt: null,
+        // Read-exclusion (Subtask 6.11.3): a triage item is created parentless +
+        // unsprinted, so without this it would surface in the backlog (a core
+        // planning surface). The marker keeps it out until accept/promote.
+        triagedAt: null,
         // The backlog is the to-be-planned pile, so issues in a `done`-category
         // status are excluded (mirror rung 1: Jira hides the Done column from the
         // backlog; in-progress unsprinted issues stay). The service passes the
@@ -1502,6 +1634,7 @@ export const workItemRepository = {
         workspaceId,
         sprintId: null,
         archivedAt: null,
+        triagedAt: null, // read-exclusion (6.11.3) — matches findBacklogPage
         ...(excludeStatusKeys.length > 0 ? { status: { notIn: excludeStatusKeys } } : {}),
       },
     });
@@ -2161,6 +2294,28 @@ function distributionGroupBySql(groupBy: DistributionGroupBy): {
             joinSql: Prisma.sql`LEFT JOIN "custom_field_value" v ON v."work_item_id" = w."id" AND v."field_id" = ${groupBy.fieldId} LEFT JOIN "user" vu ON vu."id" = v."value_user_id"`,
           };
   }
+}
+
+/**
+ * The single, total "not in triage" exclusion (Subtask 6.11.3, per
+ * docs/decisions/triage-model.md §2). A submission is born a `work_item`
+ * carrying a `triagedAt` marker that hides it from EVERY normal read until it
+ * graduates (accept/promote clear the marker); decline/merge KEEP the marker so
+ * a parentless cancelled submission can never resurface as a tree root (ADR §5).
+ * So "is this item part of the planned workspace?" reduces to this one
+ * predicate — `triagedAt IS NULL` — with no status/`cancelled` special-casing.
+ *
+ * Defined ONCE here and ANDed into every normal read OUTSIDE any user-supplied
+ * FilterAST (so no filter can opt back in to triage items): the tree forest +
+ * lazy tree level (+ their counts), the flat List (+ count), each board column
+ * + every swimlane lane aggregate, the ready set, quick search, and the report
+ * aggregates. The triage-queue read (`findTriageQueue`) is the ONLY read that
+ * inverts it. The `alias` is a fixed internal literal (never user input), as in
+ * `buildIssueFilterSql`. The Prisma-builder reads (`findColumnCards`, the lane
+ * `groupBy`s) express the same predicate as `{ triagedAt: null }`.
+ */
+function notInTriageSql(alias: string): Prisma.Sql {
+  return Prisma.sql`${Prisma.raw(alias)}."triagedAt" IS NULL`;
 }
 
 /**
