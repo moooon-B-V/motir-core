@@ -25,7 +25,10 @@ export interface ParentPickerProps {
   childType: IssueType;
   /** Selected parent work-item id, or null for "No parent". */
   value: string | null;
-  onChange: (parentId: string | null) => void;
+  onChange: (
+    parentId: string | null,
+    parent?: { identifier: string; title: string } | null,
+  ) => void;
   /** Inline error from the server (defense-in-depth path), rendered below. */
   error?: string | null;
   id?: string;
@@ -107,12 +110,17 @@ export function ParentPicker({
   function handleChange(v: string) {
     setNotice(null);
     if (v === NONE) {
-      onChange(null);
+      onChange(null, null);
       selectedLabelRef.current = null;
       return;
     }
-    onChange(v);
     const picked = options.find((o) => o.value === v);
+    // Hand the chosen parent's label up too (secondary = identifier, label =
+    // title), so an inline editor can show it optimistically without a re-read.
+    onChange(
+      v,
+      picked ? { identifier: picked.secondary ?? '', title: String(picked.label) } : null,
+    );
     selectedLabelRef.current = picked ? `${picked.secondary ?? ''} ${picked.label}`.trim() : null;
   }
 

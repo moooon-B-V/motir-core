@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
@@ -181,6 +181,22 @@ describe('CoreFieldsPanel (inline rail)', () => {
     fireEvent.click(screen.getByRole('option', { name: 'Task' }));
 
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ id: 'wi_1', kind: 'task' }));
+  });
+
+  it('KEEPS the optimistic value on success without a whole-tree refresh', async () => {
+    updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-03T10:00:00.000Z' });
+    renderPanel();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Priority' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Priority' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Low' }));
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalled());
+    // The picked value stays on the rail — the 200 IS the confirmation, so the
+    // success path must NOT router.refresh() (the inline-edit revert bug).
+    await waitFor(() => expect(screen.getByText('Low')).toBeTruthy());
+    expect(screen.queryByText('High')).toBeNull();
+    expect(refreshSpy).not.toHaveBeenCalled();
   });
 
   it('commits an estimate edit on blur (and not on every keystroke)', () => {
