@@ -429,7 +429,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.4',
       title:
         '`notificationsService` + routes — cursor-paged feed, unread count, mark-read, mark-all-read (4-layer, per-user scoped)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
