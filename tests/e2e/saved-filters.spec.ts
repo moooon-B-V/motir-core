@@ -294,11 +294,11 @@ test.describe('saved filters', () => {
     // ── The directory mirrors the visibility gate. ────────────────────────────
     await otherPage.goto('/filters');
     await expect(
-      otherPage.getByRole('button', { name: 'Apply Team triage on Issues' }),
+      otherPage.getByRole('button', { name: 'Apply Team triage on Work Items' }),
     ).toBeVisible();
-    await expect(otherPage.getByRole('button', { name: 'Apply My secret on Issues' })).toHaveCount(
-      0,
-    );
+    await expect(
+      otherPage.getByRole('button', { name: 'Apply My secret on Work Items' }),
+    ).toHaveCount(0);
 
     await otherPage.context().close();
   });
@@ -364,7 +364,7 @@ test.describe('saved filters', () => {
     await delDialog.getByRole('button', { name: 'Delete filter' }).click();
     await expect(adminPage.getByText('Filter deleted').first()).toBeVisible();
     await expect(
-      adminPage.getByRole('button', { name: 'Apply Release gate on Issues' }),
+      adminPage.getByRole('button', { name: 'Apply Release gate on Work Items' }),
     ).toHaveCount(0);
 
     await adminPage.context().close();

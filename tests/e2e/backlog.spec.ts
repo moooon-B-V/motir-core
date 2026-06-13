@@ -25,7 +25,7 @@ import { seedGroomingBacklog, seedScaleBacklog, type BacklogSeed } from './_help
 // transaction) plus repeated real sign-ins need more than the 30s default.
 test.describe.configure({ timeout: 120_000 });
 
-const BACKLOG_LIST = 'Backlog issues'; // backlogListLabel — the bottom region's <ul>
+const BACKLOG_LIST = 'Backlog work items'; // backlogListLabel — the bottom region's <ul>
 
 // ── shared helpers ──────────────────────────────────────────────────────────
 
@@ -54,7 +54,7 @@ const row = (page: Page, identifier: string): Locator =>
 
 const backlogList = (page: Page): Locator => page.getByRole('list', { name: BACKLOG_LIST });
 const sprintList = (page: Page, sprintName: string): Locator =>
-  page.getByRole('list', { name: `${sprintName} issues` });
+  page.getByRole('list', { name: `${sprintName} work items` });
 
 // Region-scoped row locators. dnd-kit's DragOverlay renders a CLONE of the
 // lifted row carrying the SAME `backlog-row-<id>` testid, and it lingers for the

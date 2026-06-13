@@ -32,7 +32,7 @@ import { seedSprintLifecycle, type LifecycleSeed } from './_helpers/sprint-lifec
 // the 30s default.
 test.describe.configure({ timeout: 120_000 });
 
-const BACKLOG_LIST = 'Backlog issues';
+const BACKLOG_LIST = 'Backlog work items';
 
 // A sprint container is a <section aria-label="{name}, {state}, {count} issues">
 // → an implicit `region`. Scope per-sprint controls to it; the dialogs portal to
