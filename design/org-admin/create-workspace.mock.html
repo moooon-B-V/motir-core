@@ -46,6 +46,18 @@
       COPYING a source workspace's config (6.10.2 §6e / 6.10.9), distinct from a
       blank create.
 
+      EXAMPLE FRAMING (Yue, 2026-06-13): the canonical "multiple workspaces under
+      one org" case is a PORTFOLIO COMPANY's PRODUCTS, not one product's
+      departments. The example here is the real moooon B.V. setup — the
+      organization is the company `moooon`, and each WORKSPACE is a PRODUCT: the
+      existing `Motir` (this PM tool) and a new `Taq` (moooon's task-management
+      app, taq.today / the `doooo` codebase) being set up as a second workspace.
+      So "set up a second workspace for Taq" is the headline scenario (panel 2).
+      This is the org=billing-entity / workspace=product mapping, distinct from
+      Linear's intra-workspace TEAMS (a Motir workspace is a whole product, not a
+      team). (6.10.1's asset used a generic `Acme` org; this asset uses the real
+      moooon/Motir/Taq portfolio — a candidate follow-up is to align 6.10.1 too.)
+
       DECISIONS this card PINS at design time (so 6.10.5 / 6.10.9 do NOT improvise
       them — see design-notes.md "Decisions pinned"):
         (a) SLUG is AUTO-DERIVED from the name and shown as a PASSIVE
@@ -82,8 +94,8 @@
         (3) CREATE DIALOG, ≥2 existing workspaces — the explicit "Copy settings
             from" Combobox (default = active workspace) + the Copy / Start-blank
             Segmented + the "what gets copied" explanation.
-        (4) TIER-2 FIRST-REVEAL transition — before (Acme) → after (Acme › Mobile
-            App): the workspace switcher renders for the first time and the folded
+        (4) TIER-2 FIRST-REVEAL transition — before (moooon) → after (moooon › Taq):
+            the workspace switcher renders for the first time and the folded
             Settings home SPLITS into a per-workspace area; the new workspace is
             active on its first-project empty state.
         (5) STATES + permission — submitting (one all-or-nothing tx, dialog stays
@@ -1079,10 +1091,13 @@
           surface the org menu's <strong>New&nbsp;workspace</strong> row opens (6.10.1 drew the row,
           not the dialog). A name-it <strong>Modal</strong> whose new workspace is
           <strong>seeded by copying a source workspace's config</strong> (6.10.2 §6e / 6.10.9) — the
-          "looks-inherited" behaviour — plus the tier-2 first-reveal it triggers. Mirror = Jira
-          create-project "share settings" / Linear create-team (rung 1). Billing is 7.12.5 / Epic 8
-          and ABSENT here. Source of truth = this HTML; see design-notes.md. Consumed by 6.10.5,
-          visualises 6.10.9.
+          "looks-inherited" behaviour — plus the tier-2 first-reveal it triggers. The example is the
+          real <strong>moooon&nbsp;B.V.</strong> portfolio: the organization is the company, and
+          each <em>workspace is a product</em> — here the existing <strong>Motir</strong> workspace
+          and a new <strong>Taq</strong> workspace being set up (a second moooon product), NOT
+          departments of one product. Mirror = Jira create-project "share settings" / Linear
+          create-team (rung 1). Billing is 7.12.5 / Epic 8 and ABSENT here. Source of truth = this
+          HTML; see design-notes.md. Consumed by 6.10.5, visualises 6.10.9.
         </p>
       </div>
       <button
@@ -1107,7 +1122,7 @@
         <div class="grid-2" style="gap: 32px; align-items: start">
           <div>
             <p class="cap">
-              <strong>The header at one workspace.</strong> Only the org (<em>Acme&nbsp;▾</em>)
+              <strong>The header at one workspace.</strong> Only the org (<em>moooon&nbsp;▾</em>)
               shows as the top-left anchor; the workspace is implicit and not shown. Clicking the
               org opens its menu →
             </p>
@@ -1115,8 +1130,8 @@
               <div class="topnav">
                 <div class="left">
                   <button class="trigger on" aria-label="Organization menu">
-                    <span class="org-ava">A</span>
-                    <span class="tlabel">Acme</span>
+                    <span class="org-ava">m</span>
+                    <span class="tlabel">moooon</span>
                     <svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
                   </button>
                 </div>
@@ -1139,7 +1154,7 @@
               5).
             </p>
             <div class="menu" style="margin: 0">
-              <div class="menu-head">Acme</div>
+              <div class="menu-head">moooon</div>
               <div class="opt">
                 <svg viewBox="0 0 24 24" class="li"><use href="#i-settings" /></svg>
                 <span class="ot"><span class="nm">Settings</span></span>
@@ -1166,9 +1181,9 @@
               <div class="menu-head">Switch organization · shown only at 2+ orgs</div>
               <div class="opt sel active">
                 <svg viewBox="0 0 24 24" class="ck"><use href="#i-check" /></svg>
-                <span class="org-ava">A</span>
+                <span class="org-ava">m</span>
                 <span class="ot"
-                  ><span class="nm">Acme</span><span class="od">1 workspace</span></span
+                  ><span class="nm">moooon</span><span class="od">1 workspace</span></span
                 >
                 <span class="pill pill-owner"
                   ><svg viewBox="0 0 24 24"><use href="#i-crown" /></svg>Owner</span
@@ -1194,7 +1209,7 @@
             <div class="topnav">
               <div class="left">
                 <button class="trigger">
-                  <span class="org-ava">A</span><span class="tlabel">Acme</span
+                  <span class="org-ava">m</span><span class="tlabel">moooon</span
                   ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
                 </button>
               </div>
@@ -1210,7 +1225,7 @@
                 <div>
                   <h3 id="t2">New workspace</h3>
                   <div class="msub">
-                    A workspace groups related projects under the Acme organization.
+                    A workspace groups related projects under the moooon organization.
                   </div>
                 </div>
                 <span class="x" aria-label="Close"
@@ -1220,12 +1235,12 @@
               <div class="modal-body">
                 <div class="field">
                   <span class="flabel">Workspace name</span>
-                  <div class="input focus">Mobile App<span class="caret"></span></div>
+                  <div class="input focus">Taq<span class="caret"></span></div>
                 </div>
                 <div class="field">
                   <span class="flabel">Workspace URL</span>
                   <div class="slug-preview">
-                    <span class="pfx">motir.co/</span><span class="slug">mobile-app</span>
+                    <span class="pfx">motir.co/</span><span class="slug">taq</span>
                   </div>
                   <div class="fhint">
                     Generated from the name. You can change it later in workspace settings.
@@ -1234,8 +1249,7 @@
                 <div class="copybox">
                   <div class="ch">
                     <svg viewBox="0 0 24 24"><use href="#i-copy" /></svg>
-                    Starts with a copy of <span style="color: var(--el-text)">Engineering</span>’s
-                    setup
+                    Starts with a copy of <span style="color: var(--el-text)">Motir</span>’s setup
                   </div>
                   <div class="scope-chips">
                     <span class="pill pill-cfg">Workflows &amp; statuses</span>
@@ -1277,12 +1291,12 @@
             <div class="topnav">
               <div class="left">
                 <button class="trigger">
-                  <span class="org-ava">A</span><span class="tlabel">Acme</span
+                  <span class="org-ava">m</span><span class="tlabel">moooon</span
                   ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
                 </button>
                 <span class="ctx-sep">›</span>
                 <button class="trigger">
-                  <span class="ws-ava">E</span><span class="tlabel">Engineering</span
+                  <span class="ws-ava">M</span><span class="tlabel">Motir</span
                   ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
                 </button>
               </div>
@@ -1298,7 +1312,7 @@
                 <div>
                   <h3 id="t3">New workspace</h3>
                   <div class="msub">
-                    A workspace groups related projects under the Acme organization.
+                    A workspace groups related projects under the moooon organization.
                   </div>
                 </div>
                 <span class="x" aria-label="Close"
@@ -1308,7 +1322,7 @@
               <div class="modal-body">
                 <div class="field">
                   <span class="flabel">Workspace name</span>
-                  <div class="input">Marketing</div>
+                  <div class="input">Taq</div>
                 </div>
                 <div class="field">
                   <span class="flabel">Starting setup</span>
@@ -1327,8 +1341,8 @@
                 <div class="field">
                   <span class="flabel">Copy settings from</span>
                   <div class="cbx">
-                    <span class="ws-ava">E</span>
-                    <span>Engineering</span>
+                    <span class="ws-ava">M</span>
+                    <span>Motir</span>
                     <span class="pill pill-neutral" style="margin-left: 6px">Active</span>
                     <svg viewBox="0 0 24 24" class="chev"><use href="#i-chevdown" /></svg>
                   </div>
@@ -1336,17 +1350,17 @@
                   <div class="cbx-menu">
                     <div class="opt sel active">
                       <svg viewBox="0 0 24 24" class="ck"><use href="#i-check" /></svg>
-                      <span class="ws-ava">E</span>
+                      <span class="ws-ava">M</span>
                       <span class="ot"
-                        ><span class="nm">Engineering</span
-                        ><span class="od">Active workspace · 18 members</span></span
+                        ><span class="nm">Motir</span
+                        ><span class="od">Active workspace · 9 members</span></span
                       >
                     </div>
                     <div class="opt">
                       <svg viewBox="0 0 24 24" class="ck"><use href="#i-check" /></svg>
-                      <span class="ws-ava" style="background: var(--el-tint-sky)">D</span>
+                      <span class="ws-ava" style="background: var(--el-tint-mint)">S</span>
                       <span class="ot"
-                        ><span class="nm">Design</span><span class="od">6 members</span></span
+                        ><span class="nm">moooon Site</span><span class="od">4 members</span></span
                       >
                     </div>
                   </div>
@@ -1354,7 +1368,7 @@
                 <div class="copybox">
                   <div class="ch">
                     <svg viewBox="0 0 24 24"><use href="#i-copy" /></svg>
-                    What gets copied from <span style="color: var(--el-text)">Engineering</span>
+                    What gets copied from <span style="color: var(--el-text)">Motir</span>
                   </div>
                   <div class="scope-chips">
                     <span class="pill pill-cfg">Workflows &amp; statuses</span>
@@ -1368,8 +1382,8 @@
                     <span class="pill pill-content">Comments</span>
                   </div>
                   <div class="excl">
-                    Configuration only — content (struck through) stays in Engineering. The
-                    workspaces are independent after creation; either can change its own setup.
+                    Configuration only — content (struck through) stays in Motir. The workspaces are
+                    independent after creation; either can change its own setup.
                   </div>
                 </div>
               </div>
@@ -1386,9 +1400,9 @@
     <!-- ════════════════ PANEL 4 — the tier-2 FIRST-REVEAL transition ════════════════ -->
     <div class="panel-label">
       4 · Tier-2 first-reveal — completing the create takes the org from 1→2 workspaces: the header
-      goes <em>Acme</em> → <em>Acme › Mobile&nbsp;App</em> (the workspace switcher renders for the
-      FIRST time) and the folded Settings home SPLITS into a per-workspace area. The user lands in
-      the NEW workspace (decision c).
+      goes <em>moooon</em> → <em>moooon › Taq</em> (the workspace switcher renders for the FIRST
+      time) and the folded Settings home SPLITS into a per-workspace area. The user lands in the NEW
+      workspace (decision c).
     </div>
     <div class="panel">
       <div class="stage" style="padding: 24px">
@@ -1399,7 +1413,7 @@
             <div class="topnav">
               <div class="left">
                 <button class="trigger">
-                  <span class="org-ava">A</span><span class="tlabel">Acme</span
+                  <span class="org-ava">m</span><span class="tlabel">moooon</span
                   ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
                 </button>
               </div>
@@ -1419,12 +1433,12 @@
             <div class="topnav">
               <div class="left">
                 <button class="trigger">
-                  <span class="org-ava">A</span><span class="tlabel">Acme</span
+                  <span class="org-ava">m</span><span class="tlabel">moooon</span
                   ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
                 </button>
                 <span class="ctx-sep">›</span>
                 <button class="trigger ring">
-                  <span class="ws-ava">M</span><span class="tlabel">Mobile App</span
+                  <span class="ws-ava">T</span><span class="tlabel">Taq</span
                   ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
                 </button>
               </div>
@@ -1436,8 +1450,8 @@
               ></span>
               <h4>Create your first project</h4>
               <p>
-                Mobile App is set up and ready — workflows, fields and boards were copied from
-                Engineering. Add a project to start tracking work.
+                Taq is set up and ready — workflows, fields and boards were copied from Motir. Add a
+                project to start tracking work.
               </p>
               <div class="actions">
                 <button class="btn btn-primary ring">
@@ -1473,13 +1487,13 @@
               <div class="modal-head">
                 <div>
                   <h3>New workspace</h3>
-                  <div class="msub">Copying configuration from Engineering…</div>
+                  <div class="msub">Copying configuration from Motir…</div>
                 </div>
               </div>
               <div class="modal-body">
                 <div class="field">
                   <span class="flabel">Workspace name</span>
-                  <div class="input" style="color: var(--el-text-muted)">Marketing</div>
+                  <div class="input" style="color: var(--el-text-muted)">Taq</div>
                 </div>
                 <div class="note">
                   <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
@@ -1506,7 +1520,7 @@
                 <div>
                   <h3>New workspace</h3>
                   <div class="msub">
-                    A workspace groups related projects under the Acme organization.
+                    A workspace groups related projects under the moooon organization.
                   </div>
                 </div>
                 <span class="x" aria-label="Close"
@@ -1517,8 +1531,8 @@
                 <div class="err-note">
                   <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>
                   <span
-                    >A workspace named “Engineering” already exists in this organization. Pick a
-                    different name — nothing was created.</span
+                    >A workspace named “Motir” already exists in this organization. Pick a different
+                    name — nothing was created.</span
                   >
                 </div>
                 <div class="field">
@@ -1530,7 +1544,7 @@
                       box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-danger) 18%, transparent);
                     "
                   >
-                    Engineering
+                    Motir
                   </div>
                 </div>
               </div>
@@ -1548,7 +1562,7 @@
               rendered — like 6.10.1’s forbidden posture).
             </p>
             <div class="menu" style="width: 300px; margin: 0">
-              <div class="menu-head">Acme</div>
+              <div class="menu-head">moooon</div>
               <div class="opt">
                 <svg viewBox="0 0 24 24" class="li"><use href="#i-settings" /></svg>
                 <span class="ot"><span class="nm">Settings</span></span>
@@ -1561,9 +1575,9 @@
               <div class="menu-head">Switch organization · shown only at 2+ orgs</div>
               <div class="opt sel active">
                 <svg viewBox="0 0 24 24" class="ck"><use href="#i-check" /></svg>
-                <span class="org-ava" style="background: var(--el-tint-mint)">A</span>
+                <span class="org-ava" style="background: var(--el-tint-mint)">m</span>
                 <span class="ot"
-                  ><span class="nm">Acme</span><span class="od">2 workspaces</span></span
+                  ><span class="nm">moooon</span><span class="od">2 workspaces</span></span
                 >
                 <span class="pill pill-member">Member</span>
               </div>
@@ -1577,7 +1591,7 @@
               (c). Shown here only to document the choice.
             </p>
             <div class="menu" style="width: 300px; margin: 0">
-              <div class="menu-head">Acme</div>
+              <div class="menu-head">moooon</div>
               <div class="ttp" style="display: block">
                 <div class="opt is-disabled">
                   <svg viewBox="0 0 24 24" class="li"><use href="#i-plus" /></svg>
@@ -1599,7 +1613,7 @@
                     display: inline-block;
                   "
                 >
-                  Only Acme owners and admins can create workspaces.
+                  Only moooon owners and admins can create workspaces.
                 </div>
               </div>
             </div>

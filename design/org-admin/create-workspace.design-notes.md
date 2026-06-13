@@ -32,6 +32,21 @@ source workspace's configuration** (the "looks-inherited" behaviour — 6.10.2 �
 **tier-2 first-reveal**: it takes the org from 1→2 workspaces, which is the only
 event that surfaces the workspace switcher (progressive disclosure, 6.10.1).
 
+### Example framing — workspaces are PRODUCTS of a portfolio company (Yue)
+
+The canonical "multiple workspaces under one org" case is a **portfolio
+company's products**, NOT one product's departments/teams. The example
+throughout this asset is the real **moooon B.V.** setup: the **organization** is
+the company `moooon`, and **each workspace is a product** — the existing
+**Motir** (this PM tool) and a new **Taq** (moooon's task-management app,
+taq.today, the `doooo` codebase) being set up as a **second workspace** ("set up
+a second workspace for Taq" is the headline scenario, panel 2). This is the
+`org = billing entity` / `workspace = product` mapping (6.10.2), and it is the
+sense in which Motir's workspaces differ from **Linear's intra-workspace teams**
+— a Motir workspace is a whole product, not a sub-team. (The shared 6.10.1 asset
+used a generic `Acme` org; a candidate follow-up is to re-cast it to the same
+moooon/Motir/Taq portfolio so the area reads consistently.)
+
 ### Mirror product (rung 1 — cited, not asserted)
 
 - **Atlassian / Jira Cloud** — "create project" lets you **share / copy settings
@@ -100,7 +115,7 @@ the primary "New project" CTA**. **Why:** the clone copies **configuration**, no
 **content** (6.10.9 copies workflows/fields/labels/boards/etc.; it does NOT copy
 projects, work items, sprints or comments) — so the new workspace is _configured_
 but _empty of work_, and the next natural action is creating a project. The
-workspace switcher now renders (`Acme › Mobile App`) with the new workspace
+workspace switcher now renders (`moooon › Taq`) with the new workspace
 selected, and the sidebar project switcher re-scopes to it.
 
 ### (d) Who-can-create — org owner/admin only; the row is NOT rendered for others
@@ -138,7 +153,7 @@ A `Modal` composing:
   workspace settings." (decision a).
 - **The implicit copy affordance** — because exactly one workspace exists, the
   source is **not** a picker but a passive **copy-scope box**: "Starts with a copy
-  of **Engineering**'s setup" + the **config chips** (Workflows & statuses, Custom
+  of **Motir**'s setup" + the **config chips** (Workflows & statuses, Custom
   fields, Labels, Components, Boards & columns, Automation, Dashboards, Saved
   filters) + the **"Not copied: work items, sprints, comments … only
   configuration"** exclusion line. This names the exact 6.10.9 copy scope so the
@@ -163,9 +178,9 @@ The same `Modal`, now with the source made explicit:
 
 A **before → after** pair (with an arrow between):
 
-- **Before · 1 workspace** — header shows only `Acme`; caption notes the
+- **Before · 1 workspace** — header shows only `moooon`; caption notes the
   workspace switcher is hidden and Settings is one folded home.
-- **After · 2 workspaces** — the header now reads `Acme › Mobile App` with the
+- **After · 2 workspaces** — the header now reads `moooon › Taq` with the
   **workspace switcher rendered for the first time** (ringed to show it's new and
   the new workspace is active). Below it, the **landing**: the new workspace's
   **"Create your first project"** empty state with the ringed **New project** CTA
