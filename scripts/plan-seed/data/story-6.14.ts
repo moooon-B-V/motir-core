@@ -222,7 +222,7 @@ export const story_6_14: PlanStory = {
       id: '6.14.1',
       title:
         'Design — the "this epic is not public" placeholder (tree-expand + detail child-panel) + the private-epic public row + the project-admin set-private control',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 50,
