@@ -114,6 +114,13 @@ async function blockersOf(page: Page, id: string): Promise<{ id: string }[]> {
   return (await res.json()) as { id: string }[];
 }
 
+// The link picker is query-driven (Subtask 6.9.2 — closes finding #98): open the
+// issue-search Combobox and TYPE before a candidate loads (it no longer prefetches
+// a newest-50 window). The trigger must already be expanded by the caller.
+async function searchLinkPicker(page: Page, query: string): Promise<void> {
+  await page.getByRole('combobox', { name: /Search by identifier or title/ }).fill(query);
+}
+
 test('@smoke renders the canonical detail page (header · rendered Markdown · core fields · Edit)', async ({
   page,
 }) => {
@@ -348,8 +355,9 @@ test('@smoke link management — add a blocked-by link via the panel; persists +
   // "Ready to start" before any dependency exists (bug-ready-banner-no-deps).
   await expect(page.getByText('Ready to start')).toBeVisible();
   await page.getByRole('button', { name: 'Link work item' }).click();
-  // Default relationship is "Blocked by" — just pick the target + Add.
+  // Default relationship is "Blocked by" — search the target, pick it + Add.
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
+  await searchLinkPicker(page, 'blocker');
   await page.getByRole('option', { name: /The blocker issue/ }).click();
   await page.getByRole('button', { name: 'Add', exact: true }).click();
 
@@ -405,6 +413,7 @@ test('@smoke link management — removing a relates_to link drops both reciproca
   await page.getByRole('combobox', { name: 'Relationship' }).click();
   await page.getByRole('option', { name: 'Relates to' }).click();
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
+  await searchLinkPicker(page, 'Delta');
   await page.getByRole('option', { name: /Issue Delta/ }).click();
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(page.getByRole('link', { name: /Issue Delta/ })).toBeVisible();
@@ -437,6 +446,7 @@ test('@smoke link management — a cycle attempt surfaces an inline error and pe
   await page.goto(`/issues/${b.identifier}`);
   await page.getByRole('button', { name: 'Link work item' }).click();
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
+  await searchLinkPicker(page, 'Alpha cyc');
   await page.getByRole('option', { name: /Alpha cyc/ }).click();
   await page.getByRole('button', { name: 'Add', exact: true }).click();
 
@@ -457,8 +467,9 @@ test('@smoke create with a link (2.4.10): the link is written atomically with th
   await page.getByRole('button', { name: 'Create work item' }).click();
   await page.getByLabel('Title').fill('Created with a link');
 
-  // The Linked-issues section: pick the target (default "Blocked by") + Add.
+  // The Linked-issues section: search the target (default "Blocked by") + Add.
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
+  await searchLinkPicker(page, 'Pre-existing');
   await page.getByRole('option', { name: /Pre-existing target/ }).click();
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   // The pending row renders before submit.
@@ -490,6 +501,7 @@ test('@smoke create with a link (2.4.10): removing the pending row before create
   await page.getByRole('button', { name: 'Create work item' }).click();
   await page.getByLabel('Title').fill('No links after all');
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
+  await searchLinkPicker(page, 'Not actually');
   await page.getByRole('option', { name: /Not actually linked/ }).click();
   await page.getByRole('button', { name: 'Add', exact: true }).click();
 
@@ -533,6 +545,9 @@ test('@smoke cross-workspace isolation: a foreign identifier 404s; the link pick
   await page.goto(`/issues/${bItem.identifier}`);
   await page.getByRole('button', { name: 'Link work item' }).click();
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
+  // "issue" matches every title across BOTH workspaces — only the workspace scope
+  // keeps A's item out of B's server search (6.9.2).
+  await searchLinkPicker(page, 'issue');
   await expect(page.getByRole('option', { name: /B candidate issue/ })).toBeVisible();
   await expect(page.getByRole('option', { name: /A-only issue/ })).toHaveCount(0);
 });

@@ -33,6 +33,11 @@ import { extractReferencedBlobUrlsFromBodies } from '@/lib/blob/referencedUrls';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { automationFieldsFromDiffKeys } from '@/lib/automation/fields';
 import { keyForAppend, keyBetween } from '@/lib/workItems/positioning';
+import {
+  QUICK_SEARCH_DEFAULT_LIMIT,
+  QUICK_SEARCH_MAX_LIMIT,
+  QUICK_SEARCH_MIN_QUERY_LENGTH,
+} from '@/lib/workItems/quickSearch';
 import { relationshipToLink } from '@/lib/workItems/linkRelationships';
 import {
   AssigneeNotInWorkspaceError,
@@ -1995,37 +2000,40 @@ export const workItemsService = {
   },
 
   /**
-   * Candidate targets for the link picker (Subtask 2.4.9): non-archived items in
-   * the caller's WORKSPACE (cross-project — the link model allows it), excluding
-   * the current item itself AND any already linked to it by the chosen
-   * relationship (direction-aware, so the picker won't offer a duplicate; the
-   * trigger still backstops a forged one). Tenant-gated on the current item
-   * (cross-workspace / missing → 404). Bounded to LINK_CANDIDATE_LIMIT; the
-   * picker's Combobox filters by identifier/title client-side (full server
-   * search is Epic 6).
+   * Candidate target issues for the CREATE-modal link picker (Subtask 2.4.10,
+   * server-search since 6.9.2). Like {@link listLinkCandidates} but there is no
+   * current item yet (the issue isn't created), so nothing is excluded
+   * server-side beyond tenancy + permission — the modal drops already-pending
+   * targets client-side (direction-aware, per chosen relationship). Delegates to
+   * the 6.9.1 {@link quickSearch}: a `query`-driven, key + title, workspace +
+   * 6.4-permission-scoped, bounded read over the `pg_trgm` index — NOT the old
+   * newest-50 window (finding #98). An empty / short query returns `[]` (the
+   * picker prompts "type to search"); the Combobox fetches per keystroke.
    */
-  /**
-   * Candidate target issues for the CREATE-modal link picker (Subtask 2.4.10).
-   * Like {@link listLinkCandidates} but there is no current item yet (the issue
-   * isn't created), so there's nothing to exclude server-side beyond tenancy:
-   * every non-archived item in the caller's WORKSPACE (cross-project — the link
-   * model allows it). The modal excludes already-pending targets client-side
-   * (direction-aware, per chosen relationship) and the Combobox filters by
-   * identifier/title. Bounded to LINK_CANDIDATE_LIMIT; explicit `workspaceId`
-   * gate (finding #26 — the primary tenant filter, RLS is defense-in-depth).
-   */
-  async listCreateLinkCandidates(ctx: ServiceContext): Promise<WorkItemSummaryDto[]> {
-    const rows = await workItemRepository.findLinkCandidates(
-      ctx.workspaceId,
-      [],
-      LINK_CANDIDATE_LIMIT,
-    );
-    return rows.map(toWorkItemSummaryDto);
+  async listCreateLinkCandidates(
+    query: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemSummaryDto[]> {
+    return this.quickSearch(query, ctx);
   },
 
+  /**
+   * Candidate targets for the link picker (Subtask 2.4.9; server-search since
+   * 6.9.2 — closes finding #98). Tenant-gates the current item (cross-workspace /
+   * missing → 404), computes the direction-aware exclusion set (the item itself +
+   * any already linked to it by the chosen relationship, so the picker won't
+   * offer a duplicate; the trigger still backstops a forged one), then delegates
+   * to the 6.9.1 {@link quickSearch} with that exclusion set. The result is a
+   * `query`-driven, key + title, workspace + 6.4-permission-scoped, bounded read
+   * over the `pg_trgm` index — NOT a newest-50 window filtered client-side (which
+   * left ~88% of a real tenant unreachable by search). An empty / short query
+   * returns `[]`; the picker's Combobox fetches per keystroke and re-fetches when
+   * the relationship changes (the exclusion set is direction-aware).
+   */
   async listLinkCandidates(
     currentItemId: string,
     relationship: RelationshipKind,
+    query: string,
     ctx: ServiceContext,
   ): Promise<WorkItemSummaryDto[]> {
     const item = await workItemRepository.findById(currentItemId);
@@ -2045,12 +2053,7 @@ export const workItemsService = {
             )
           ).map((l) => l.toId);
 
-    const rows = await workItemRepository.findLinkCandidates(
-      ctx.workspaceId,
-      [currentItemId, ...linkedIds],
-      LINK_CANDIDATE_LIMIT,
-    );
-    return rows.map(toWorkItemSummaryDto);
+    return this.quickSearch(query, ctx, { excludeIds: [currentItemId, ...linkedIds] });
   },
 
   /**
@@ -2207,24 +2210,11 @@ export const workItemsService = {
   },
 };
 
-/** Upper bound on the link-picker candidate list (the Combobox filters it). */
-const LINK_CANDIDATE_LIMIT = 50;
-
-/**
- * Quick-search bounds (Subtask 6.9.1) — bounded reads, never load-all (finding
- * #57). The default window serves the cmd-K palette; a caller (6.9.2's link
- * picker) may ask for more, but never beyond the ceiling. Exported so 6.9.2 +
- * the future palette share the one source of truth.
- */
-export const QUICK_SEARCH_DEFAULT_LIMIT = 20;
-export const QUICK_SEARCH_MAX_LIMIT = 50;
-/**
- * Shortest query the quick-search runs — below this it returns `[]` with no DB
- * round-trip. A 1-char title `ILIKE '%x%'` can't use the `pg_trgm` GIN index
- * (a trigram needs ≥3 chars), so a sub-2-char search would only ever be a noisy
- * seq-scan; the guard keeps the read index-friendly and cheap.
- */
-export const QUICK_SEARCH_MIN_QUERY_LENGTH = 2;
+// Quick-search bounds (Subtask 6.9.1) live in the pure `lib/workItems/quickSearch`
+// module so the client link pickers (6.9.2) can import them too; re-exported here
+// (the bindings are imported at the top) for existing importers + tests that
+// source them from the service.
+export { QUICK_SEARCH_DEFAULT_LIMIT, QUICK_SEARCH_MAX_LIMIT, QUICK_SEARCH_MIN_QUERY_LENGTH };
 
 /**
  * Fetch ONE cursor-paginated window of READY candidate rows (Subtask 7.0.2) —

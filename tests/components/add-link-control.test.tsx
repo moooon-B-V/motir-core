@@ -45,15 +45,30 @@ function open() {
   fireEvent.click(screen.getByRole('button', { name: /Link work item/ }));
 }
 
-describe('AddLinkControl (2.4.9)', () => {
-  it('expands the form, fetches candidates for the default relationship, and Add starts disabled', async () => {
+// Open the issue-search Combobox and type a query — the candidate read is
+// query-driven since 6.9.2 (debounced server fetch per keystroke), so nothing
+// loads until the user types ≥ the search minimum.
+async function typeSearch(query: string) {
+  fireEvent.click(await screen.findByRole('combobox', { name: 'Work item to link' }));
+  fireEvent.change(await screen.findByRole('combobox', { name: /Search by identifier or title/ }), {
+    target: { value: query },
+  });
+}
+
+describe('AddLinkControl (2.4.9; server-search since 6.9.2)', () => {
+  it('expands the form, does NOT fetch until typed, then searches the typed query', async () => {
     open();
     // The kind + issue comboboxes render; Add is disabled until a target is picked.
     expect(screen.getByRole('combobox', { name: 'Relationship' })).toBeTruthy();
     expect(screen.getByRole('combobox', { name: 'Work item to link' })).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Add' }) as HTMLButtonElement).disabled).toBe(true);
+    // No fetch on open — the picker is query-driven (closes finding #98's
+    // newest-50 prefetch).
+    expect(listLinkCandidatesAction).not.toHaveBeenCalled();
+
+    await typeSearch('Callback');
     await waitFor(() =>
-      expect(listLinkCandidatesAction).toHaveBeenCalledWith('wi-1', 'blocked_by'),
+      expect(listLinkCandidatesAction).toHaveBeenCalledWith('wi-1', 'blocked_by', 'Callback'),
     );
   });
 
@@ -64,12 +79,12 @@ describe('AddLinkControl (2.4.9)', () => {
     expect(screen.queryByRole('button', { name: 'Add' })).toBeNull();
   });
 
-  it('selecting a target enables Add; a rejected create surfaces the inline error (no refresh)', async () => {
+  it('selecting a searched target enables Add; a rejected create surfaces the inline error (no refresh)', async () => {
     createLinkAction.mockResolvedValue({ ok: false, error: 'That link already exists.' });
     open();
 
-    // Open the issue combobox + pick the fetched candidate.
-    fireEvent.click(await screen.findByRole('combobox', { name: 'Work item to link' }));
+    // Type to search, then pick the fetched candidate.
+    await typeSearch('Callback');
     fireEvent.click(await screen.findByRole('option', { name: /Callback bug/ }));
 
     const add = screen.getByRole('button', { name: 'Add' }) as HTMLButtonElement;

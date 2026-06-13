@@ -245,14 +245,16 @@ describe('workItemsService.getIssueDetail (2.4.1)', () => {
   });
 });
 
-describe('workItemsService.listLinkCandidates (2.4.9)', () => {
+describe('workItemsService.listLinkCandidates (2.4.9; server-search since 6.9.2)', () => {
   it('excludes self + already-linked-by-relationship, and is direction-aware per kind', async () => {
     const fx = await makeWorkItemFixture();
+    // Shared "node" token so one query surfaces all three — the candidate read is
+    // query-driven since 6.9.2 (no query ⇒ empty result).
     const make = (title: string) =>
       workItemsService.createWorkItem({ projectId: fx.projectId, kind: 'task', title }, fx.ctx);
-    const subject = await make('Subject');
-    const a = await make('Alpha');
-    const b = await make('Beta');
+    const subject = await make('Subject node');
+    const a = await make('Alpha node');
+    const b = await make('Beta node');
 
     // subject is_blocked_by A.
     await workItemsService.linkWorkItems(
@@ -261,7 +263,7 @@ describe('workItemsService.listLinkCandidates (2.4.9)', () => {
     );
 
     const ids = async (rel: 'blocked_by' | 'blocks' | 'relates_to') =>
-      (await workItemsService.listLinkCandidates(subject.id, rel, fx.ctx)).map((c) => c.id);
+      (await workItemsService.listLinkCandidates(subject.id, rel, 'node', fx.ctx)).map((c) => c.id);
 
     // Self is always excluded.
     expect(await ids('blocked_by')).not.toContain(subject.id);
@@ -281,22 +283,29 @@ describe('workItemsService.listLinkCandidates (2.4.9)', () => {
   it('is workspace-scoped — a foreign item is never a candidate, and a foreign current item 404s', async () => {
     const fx = await makeWorkItemFixture();
     const subject = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'Subject' },
+      { projectId: fx.projectId, kind: 'task', title: 'Subject node' },
       fx.ctx,
     );
 
     const other = await makeWorkItemFixture();
     const foreign = await workItemsService.createWorkItem(
-      { projectId: other.projectId, kind: 'task', title: 'Foreign' },
+      { projectId: other.projectId, kind: 'task', title: 'Foreign node' },
       other.ctx,
     );
 
-    const candidates = await workItemsService.listLinkCandidates(subject.id, 'relates_to', fx.ctx);
+    // Both titles share the "node" token, so only the workspace scope keeps the
+    // foreign item out of the result.
+    const candidates = await workItemsService.listLinkCandidates(
+      subject.id,
+      'relates_to',
+      'node',
+      fx.ctx,
+    );
     expect(candidates.map((c) => c.id)).not.toContain(foreign.id);
 
     // A cross-workspace current item → 404 (no leak).
     await expect(
-      workItemsService.listLinkCandidates(foreign.id, 'relates_to', fx.ctx),
+      workItemsService.listLinkCandidates(foreign.id, 'relates_to', 'node', fx.ctx),
     ).rejects.toThrow(WorkItemNotFoundError);
   });
 });

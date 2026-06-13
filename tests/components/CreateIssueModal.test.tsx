@@ -292,9 +292,14 @@ describe('CreateIssueModal — linked issues (2.4.10)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create work item' }));
   }
 
-  // Pick the fetched candidate in the Linked-issues search combobox and click Add.
+  // Type a query (the candidate read is query-driven since 6.9.2 — debounced
+  // server fetch per keystroke), pick the fetched candidate, and click Add.
   async function addPendingLink() {
     fireEvent.click(await screen.findByRole('combobox', { name: 'Work item to link' }));
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /Search by identifier or title/ }),
+      { target: { value: 'Callback' } },
+    );
     fireEvent.click(await screen.findByRole('option', { name: /Callback bug/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
   }

@@ -801,6 +801,7 @@
       "searchPlaceholder": "搜索工作项…",
       "searchByIdentifierOrTitle": "按标识或标题搜索…",
       "noMatchingIssues": "没有匹配的工作项。",
+      "typeToSearch": "输入以搜索工作项…",
       "add": "添加"
     },
     "readiness": {
