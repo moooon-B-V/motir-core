@@ -15,11 +15,22 @@
       No design/public-projects/ asset existed; the 6.12.1 design gate produces
       this FIRST. It is the layout source of truth for every UI code subtask in
       Story 6.12 that carries 6.12.1 in dependsOn (all `blocked` until it lands):
-        - 6.12.4 — the public read-only project view (board / issues), internal
-                   fields hidden, no edit affordances.
+        - 6.12.4 — the public read-only project view (board / issues) + the
+                   public OVERVIEW/README landing, internal fields hidden, no
+                   edit affordances.
         - 6.12.6 — upvote + comments on public requests.
         - 6.12.7 — the public roadmap (status-grouped, vote-counted).
-        - 6.12.8 — project settings: the make-public toggle + the share link.
+        - 6.12.8 — project settings: the make-public toggle + the share link +
+                   the Overview/README authoring editor.
+
+      OVERVIEW/README (added per Yue, design iteration): the public landing leads
+      with a modern, GitHub-README-style project intro — a hero (logo + name +
+      tagline + at-a-glance stats + CTAs) + an authored Markdown body + a links /
+      at-a-glance sidebar. It is the DEFAULT public tab (GitHub puts the README on
+      the repo home). Authored by the project admin in settings (a MarkdownEditor),
+      stored as a new project field `publicOverviewMd`, rendered read-only via
+      MarkdownView on the public Overview tab. Planning delta lands in the seed:
+      the field in 6.12.3, the render in 6.12.4, the editor in 6.12.8.
 
       Built FROM the real design system: the token block below is copied 1:1 from
       app/globals.css (Tier-0 --color-* + the shape tokens + Tier-3 --el-*), and
@@ -199,6 +210,10 @@
         --el-roadmap-planned: var(--color-tint-lavender);
         --el-roadmap-progress: var(--color-tint-sky);
         --el-roadmap-done: var(--color-tint-mint);
+        /* the Overview hero's soft corner washes (decorative tints; text on them
+           stays AA via --el-text on --el-page-bg, not on the wash) */
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
       }
       [data-theme='dark'] {
         color-scheme: dark;
@@ -1412,6 +1427,314 @@
         height: 16px;
         margin-top: 1px;
       }
+
+      /* ── Overview / README (the public landing) ──────────────────────────── */
+      /* the modern hero — a bordered card with a soft accent-tint wash (AA text
+         on the tint, NOT a page-level tint — finding #35) */
+      .hero {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        background:
+          radial-gradient(120% 140% at 0% 0%, var(--el-hero-wash-a) 0%, transparent 55%),
+          radial-gradient(120% 140% at 100% 0%, var(--el-hero-wash-b) 0%, transparent 50%),
+          var(--el-page-bg);
+        padding: 30px 32px;
+      }
+      .hero-top {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 16px;
+      }
+      .hero-logo {
+        width: 52px;
+        height: 52px;
+        border-radius: var(--radius-card);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 26px;
+        flex: none;
+        box-shadow: var(--shadow-subtle);
+      }
+      .hero h2 {
+        font-family: var(--font-serif);
+        font-size: 30px;
+        font-weight: 600;
+        line-height: 1.15;
+        margin: 0;
+        color: var(--el-text);
+        letter-spacing: -0.01em;
+      }
+      .hero .tagline {
+        margin: 14px 0 0;
+        font-size: 16px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 640px;
+      }
+      .hero-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 6px;
+      }
+      .hero-actions {
+        display: flex;
+        gap: 9px;
+        flex-wrap: wrap;
+        margin-top: 20px;
+      }
+      .hero-stats {
+        display: flex;
+        gap: 26px;
+        flex-wrap: wrap;
+        margin-top: 24px;
+        padding-top: 20px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .hstat .n {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--el-text);
+        font-family: var(--font-serif);
+      }
+      .hstat .l {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+
+      .ov-grid {
+        display: grid;
+        grid-template-columns: 1fr 312px;
+        gap: 20px;
+        margin-top: 18px;
+        align-items: start;
+      }
+
+      /* the authored README body — rendered via MarkdownView */
+      .md {
+        color: var(--el-text-secondary);
+      }
+      .md h3 {
+        font-family: var(--font-serif);
+        font-size: 19px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 26px 0 10px;
+      }
+      .md h3:first-child {
+        margin-top: 0;
+      }
+      .md p {
+        font-size: 14.5px;
+        line-height: 1.68;
+        margin: 0 0 14px;
+      }
+      .md ul {
+        margin: 0 0 14px;
+        padding-left: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .md li {
+        display: flex;
+        gap: 10px;
+        font-size: 14.5px;
+        line-height: 1.5;
+      }
+      .md li .ic {
+        width: 17px;
+        height: 17px;
+        margin-top: 1px;
+        color: var(--el-success);
+        flex: none;
+      }
+      .md li b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .md a {
+        color: var(--el-link);
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .md .shot {
+        margin: 4px 0 18px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-surface-soft);
+      }
+      .md .shot .bar {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .md .shot .bar i {
+        width: 9px;
+        height: 9px;
+        border-radius: 9999px;
+        background: var(--el-border-strong);
+        display: inline-block;
+      }
+      .md .shot .pane {
+        height: 168px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        padding: 12px;
+      }
+      .md .shot .pane span {
+        border-radius: var(--radius-control);
+        background: linear-gradient(160deg, var(--el-tint-lavender), var(--el-tint-sky));
+        opacity: 0.7;
+      }
+      .md .shot .pane span:nth-child(2) {
+        background: linear-gradient(160deg, var(--el-tint-mint), var(--el-tint-sky));
+      }
+      .md .shot .pane span:nth-child(3) {
+        background: linear-gradient(160deg, var(--el-tint-peach), var(--el-tint-rose));
+      }
+
+      /* the sidebar — Links / At a glance / CTA cards */
+      .ov-side {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .side-card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: 16px;
+      }
+      .side-card .lbl {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        margin: 0 0 12px;
+      }
+      .linkrow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 0;
+        font-size: 13.5px;
+        color: var(--el-text);
+        text-decoration: none;
+      }
+      .linkrow + .linkrow {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .linkrow .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-secondary);
+        flex: none;
+      }
+      .linkrow .ext {
+        margin-left: auto;
+        width: 13px;
+        height: 13px;
+        color: var(--el-text-faint);
+      }
+      .linkrow:hover {
+        color: var(--el-link);
+      }
+      .glance {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px 10px;
+      }
+      .glance .n {
+        font-size: 19px;
+        font-weight: 700;
+        color: var(--el-text);
+        font-family: var(--font-serif);
+      }
+      .glance .l {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        margin-top: 1px;
+      }
+      .cta-card {
+        background:
+          radial-gradient(140% 120% at 100% 0%, var(--el-hero-wash-a) 0%, transparent 60%),
+          var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 18px;
+      }
+      .cta-card h4 {
+        margin: 0 0 5px;
+        font-size: 15px;
+        font-family: var(--font-serif);
+        color: var(--el-text);
+      }
+      .cta-card p {
+        margin: 0 0 13px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+
+      /* the make-it (authoring) editor in settings */
+      .ov-editor {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .ov-editor .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 7px 9px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+      }
+      .ov-editor .toolbar .tb {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .ov-editor .toolbar .tb .ic {
+        width: 15px;
+        height: 15px;
+      }
+      .ov-editor .body {
+        padding: 13px var(--spacing-input-x);
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        min-height: 96px;
+      }
+      .ov-editor .body b {
+        color: var(--el-text);
+      }
     </style>
   </head>
   <body>
@@ -1436,8 +1759,230 @@
 
     <!-- ════════════════ PANEL 1 — public read-only project view (board) ════════════════ -->
     <div class="panel-label">
-      (1) Public read-only project view — no edit affordances · internal fields (assignee / estimate
-      / internal comments) ABSENT · the public banner + cross-org viewer identity
+      (1) Public landing — the project OVERVIEW / README — a modern intro (hero + authored rich body
+      + links / at-a-glance sidebar). The DEFAULT public tab (GitHub puts the README on the repo
+      home)
+    </div>
+    <div class="panel">
+      <div class="pub-shell">
+        <div class="pub-topbar">
+          <div class="pub-brand">
+            <span class="pub-logo">M</span>
+            <div>
+              <div class="pub-proj">
+                Motir
+                <span class="pill pill-public" style="margin-left: 6px"
+                  ><svg class="ic"><use href="#i-globe" /></svg> Public</span
+                >
+              </div>
+              <span class="pub-key">PROD · moooon</span>
+            </div>
+          </div>
+          <div class="viewer">
+            <div class="who">
+              <span class="nm">Priya Nair</span>
+              <span class="org">signed in · Acme org</span>
+            </div>
+            <span class="avatar av-sky">PN</span>
+          </div>
+        </div>
+
+        <div class="pub-banner">
+          <svg class="ic"><use href="#i-globe" /></svg>
+          <span
+            ><b>You're viewing a public project.</b> Anyone signed in to Motir can view it and
+            submit, upvote, or comment on requests.</span
+          >
+          <span class="dot">·</span>
+          <span class="readonly-note"
+            ><svg class="ic"><use href="#i-lock" /></svg> View-only — you can't edit issues</span
+          >
+        </div>
+
+        <div class="pub-subbar">
+          <div class="seg" role="tablist" aria-label="Public views">
+            <button class="on">
+              <svg class="ic"><use href="#i-book" /></svg> Overview
+            </button>
+            <button>
+              <svg class="ic"><use href="#i-columns" /></svg> Board
+            </button>
+            <button>
+              <svg class="ic"><use href="#i-list" /></svg> Issues
+            </button>
+            <button>
+              <svg class="ic"><use href="#i-route" /></svg> Roadmap
+            </button>
+          </div>
+          <button class="btn btn-primary">
+            <svg class="ic"><use href="#i-plus" /></svg> Submit a request
+          </button>
+        </div>
+
+        <div class="overview" style="padding: 20px">
+          <!-- the modern hero -->
+          <div class="hero">
+            <div class="hero-top">
+              <span class="hero-logo">M</span>
+              <div>
+                <h2>Motir</h2>
+                <div class="hero-meta">
+                  <span class="pill pill-mint">Open source</span>
+                  <span class="pill pill-neutral">GPL-3.0</span>
+                  <span class="pill pill-neutral">Project management</span>
+                </div>
+              </div>
+            </div>
+            <p class="tagline">
+              The AI-native project manager — plan work in chat, track it on real boards and
+              sprints, and ship it with coding agents. We build Motir in the open: this is our live
+              backlog, roadmap, and request portal.
+            </p>
+            <div class="hero-actions">
+              <button class="btn btn-primary btn-lg">
+                <svg class="ic"><use href="#i-route" /></svg> View the roadmap
+              </button>
+              <button class="btn btn-outline btn-lg">
+                <svg class="ic"><use href="#i-plus" /></svg> Submit a request
+              </button>
+              <button class="btn btn-ghost btn-lg">
+                <svg class="ic"><use href="#i-github" /></svg> GitHub
+              </button>
+            </div>
+            <div class="hero-stats">
+              <div class="hstat">
+                <div class="n">240</div>
+                <div class="l">Public requests</div>
+              </div>
+              <div class="hstat">
+                <div class="n">1.2k</div>
+                <div class="l">Upvotes</div>
+              </div>
+              <div class="hstat">
+                <div class="n">17</div>
+                <div class="l">Planned</div>
+              </div>
+              <div class="hstat">
+                <div class="n">203</div>
+                <div class="l">Shipped</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ov-grid">
+            <!-- the authored README body (MarkdownView) -->
+            <div class="ov-main">
+              <div class="md">
+                <h3>About this project</h3>
+                <p>
+                  Motir is a complete project-management tool — a Jira / Linear alternative for
+                  small teams — with two AI layers bolted on: planning (describe what you want in
+                  chat → a structured issue tree) and coding (issues become agent-ready work). The
+                  PM core stands alone and is fully open source.
+                </p>
+                <p>What you can do from this public project:</p>
+                <ul>
+                  <li>
+                    <svg class="ic"><use href="#i-check-check" /></svg>
+                    <span><b>Browse</b> the live board, backlog, and public roadmap.</span>
+                  </li>
+                  <li>
+                    <svg class="ic"><use href="#i-check-check" /></svg>
+                    <span
+                      ><b>Submit</b> a bug or feature request — it goes straight to our
+                      triage.</span
+                    >
+                  </li>
+                  <li>
+                    <svg class="ic"><use href="#i-check-check" /></svg>
+                    <span
+                      ><b>Upvote &amp; comment</b> on requests to tell us what matters most.</span
+                    >
+                  </li>
+                </ul>
+
+                <div class="shot" aria-label="Product screenshot">
+                  <div class="bar"><i></i><i></i><i></i></div>
+                  <div class="pane"><span></span><span></span><span></span><span></span></div>
+                </div>
+
+                <h3>Why we build in the open</h3>
+                <p>
+                  Our roadmap is public because the people who use Motir should shape it. Every
+                  request here is read by the team, and the highest-voted ideas move up the queue.
+                  Follow along, or jump in.
+                </p>
+
+                <h3>How to contribute</h3>
+                <p>
+                  Found a bug or have an idea?
+                  <a href="#">Submit a request</a> — no setup, just your Motir account. Prefer code?
+                  The PM core is GPL-3.0 on <a href="#">GitHub</a>.
+                </p>
+              </div>
+            </div>
+
+            <!-- the sidebar: Links / At a glance / CTA -->
+            <div class="ov-side">
+              <div class="side-card">
+                <div class="lbl">Links</div>
+                <a class="linkrow" href="#"
+                  ><svg class="ic"><use href="#i-globe" /></svg> Website
+                  <svg class="ic ext"><use href="#i-external-link" /></svg
+                ></a>
+                <a class="linkrow" href="#"
+                  ><svg class="ic"><use href="#i-book" /></svg> Documentation
+                  <svg class="ic ext"><use href="#i-external-link" /></svg
+                ></a>
+                <a class="linkrow" href="#"
+                  ><svg class="ic"><use href="#i-github" /></svg> Source (GPL-3.0)
+                  <svg class="ic ext"><use href="#i-external-link" /></svg
+                ></a>
+                <a class="linkrow" href="#"
+                  ><svg class="ic"><use href="#i-route" /></svg> Changelog
+                  <svg class="ic ext"><use href="#i-external-link" /></svg
+                ></a>
+              </div>
+
+              <div class="side-card">
+                <div class="lbl">At a glance</div>
+                <div class="glance">
+                  <div>
+                    <div class="n">240</div>
+                    <div class="l">Requests</div>
+                  </div>
+                  <div>
+                    <div class="n">6</div>
+                    <div class="l">In progress</div>
+                  </div>
+                  <div>
+                    <div class="n">17</div>
+                    <div class="l">Planned</div>
+                  </div>
+                  <div>
+                    <div class="n">203</div>
+                    <div class="l">Shipped</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cta-card">
+                <h4>Have an idea?</h4>
+                <p>Tell us what to build next. It takes a minute and goes straight to the team.</p>
+                <button class="btn btn-primary btn-block">
+                  <svg class="ic"><use href="#i-plus" /></svg> Submit a request
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      (2) Public read-only project view (Board tab) — no edit affordances · internal fields
+      (assignee / estimate / internal comments) ABSENT · the public banner + cross-org viewer
+      identity
     </div>
     <div class="panel">
       <div class="pub-shell">
@@ -1480,6 +2025,9 @@
         <!-- read-only view nav -->
         <div class="pub-subbar">
           <div class="seg" role="tablist" aria-label="Public views">
+            <button>
+              <svg class="ic"><use href="#i-book" /></svg> Overview
+            </button>
             <button class="on">
               <svg class="ic"><use href="#i-columns" /></svg> Board
             </button>
@@ -1607,7 +2155,7 @@
 
     <!-- ════════════════ PANEL 2 — the public roadmap ════════════════ -->
     <div class="panel-label">
-      (2) Public roadmap — status-grouped (submitted → planned → in progress → done) · vote counts ·
+      (3) Public roadmap — status-grouped (submitted → planned → in progress → done) · vote counts ·
       paginated / lazy per column (NOT load-all)
     </div>
     <div class="panel">
@@ -1726,7 +2274,7 @@
 
     <!-- ════════════════ PANEL 3 — submit a request + duplicate detection ════════════════ -->
     <div class="panel-label">
-      (3) Submit a request + DUPLICATE DETECTION — as the title is typed, matching existing requests
+      (4) Submit a request + DUPLICATE DETECTION — as the title is typed, matching existing requests
       surface with "Upvote this instead" (Canny) · submit-as-new · the confirmation
     </div>
     <div class="panel cols2 uneven">
@@ -1842,7 +2390,7 @@
 
     <!-- ════════════════ PANEL 4 — public request detail (upvote + comments) ════════════════ -->
     <div class="panel-label">
-      (4) Public request detail — the request body · the UPVOTE control + count (already-voted
+      (5) Public request detail — the request body · the UPVOTE control + count (already-voted
       state) · the public comment thread + composer (the only interactive elements besides submit)
     </div>
     <div class="panel narrow">
@@ -1916,7 +2464,7 @@
 
     <!-- ════════════════ PANEL 5 — project settings: make-public + share link ════════════════ -->
     <div class="panel-label">
-      (5) Project settings — the four-level Access control (public > open > limited > private) + the
+      (6) Project settings — the four-level Access control (public > open > limited > private) + the
       shareable public link (copy / disable / rotate) + the account-required note
     </div>
     <div class="panel narrow">
@@ -1992,12 +2540,49 @@
             >
           </div>
         </div>
+
+        <!-- the README/Overview authoring affordance (renders on the public landing) -->
+        <div class="sharelink">
+          <div class="section-label">Project overview (public landing)</div>
+          <p class="csub" style="margin: -2px 0 12px">
+            A README-style intro shown on the project's public Overview tab. Markdown — headings,
+            lists, links, and images.
+          </p>
+          <div class="ov-editor">
+            <div class="toolbar">
+              <span class="tb" title="Heading">H</span>
+              <span class="tb" title="Bold"><b>B</b></span>
+              <span class="tb" title="Italic" style="font-style: italic">I</span>
+              <span class="tb" title="Link"
+                ><svg class="ic"><use href="#i-link" /></svg
+              ></span>
+              <span class="tb" title="List"
+                ><svg class="ic"><use href="#i-list" /></svg
+              ></span>
+              <span class="tb" title="Image"
+                ><svg class="ic"><use href="#i-book" /></svg
+              ></span>
+            </div>
+            <div class="body">
+              <b>## About this project</b><br />
+              Motir is a complete project-management tool — a Jira / Linear alternative for small
+              teams — with two AI layers bolted on…
+            </div>
+          </div>
+          <div class="acct-note">
+            <svg class="ic"><use href="#i-globe" /></svg>
+            <span
+              >This shows on the public <b>Overview</b> tab — the first thing a visitor sees. It's
+              hidden while the project isn't public.</span
+            >
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- ════════════════ PANEL 6 — empty / loading / error / rate-limit states ════════════════ -->
     <div class="panel-label">
-      (6) States — empty roadmap · empty request list · the paginated loading skeleton · the
+      (7) States — empty roadmap · empty request list · the paginated loading skeleton · the
       fetch-error (ErrorState) · the rate-limited submit (graceful, never a raw 500)
     </div>
     <div class="panel">
@@ -2440,6 +3025,33 @@
         >
           <path d="M18 6 6 18" />
           <path d="m6 6 12 12" />
+        </g>
+        <!-- external-link -->
+        <g
+          id="i-external-link"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </g>
+        <!-- github -->
+        <g
+          id="i-github"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C4 2 3 2 3 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 2 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"
+          />
+          <path d="M9 18c-4.51 2-5-2-7-2" />
         </g>
       </defs>
     </svg>

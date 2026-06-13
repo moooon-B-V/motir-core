@@ -8,13 +8,14 @@ Built FROM the real design system (`app/globals.css` `--el-*` colour tokens +
 `[data-display-style]` shape tokens + the shipped `components/ui/*` primitives),
 so the code subtasks compose the same primitives — no Pencil→code gap.
 
-| Surface                       | Asset                       | Gates                                                  |
-| ----------------------------- | --------------------------- | ------------------------------------------------------ |
-| **Public read-only view**     | `public-projects.mock.html` | **6.12.4** (board / issues, internal fields hidden)    |
-| **Public roadmap**            | `public-projects.mock.html` | **6.12.7** (status-grouped, vote-counted, paginated)   |
-| **Submit + duplicate detect** | `public-projects.mock.html` | **6.12.5** (the form) + **6.12.6** (the upvote target) |
-| **Request detail**            | `public-projects.mock.html` | **6.12.6** (upvote + comments on public requests)      |
-| **Make-public + share link**  | `public-projects.mock.html` | **6.12.8** (the four-level Access control + the link)  |
+| Surface                       | Asset                       | Gates                                                   |
+| ----------------------------- | --------------------------- | ------------------------------------------------------- |
+| **Public Overview / README**  | `public-projects.mock.html` | **6.12.4** (render) + **6.12.8** (the authoring editor) |
+| **Public read-only view**     | `public-projects.mock.html` | **6.12.4** (board / issues, internal fields hidden)     |
+| **Public roadmap**            | `public-projects.mock.html` | **6.12.7** (status-grouped, vote-counted, paginated)    |
+| **Submit + duplicate detect** | `public-projects.mock.html` | **6.12.5** (the form) + **6.12.6** (the upvote target)  |
+| **Request detail**            | `public-projects.mock.html` | **6.12.6** (upvote + comments on public requests)       |
+| **Make-public + share link**  | `public-projects.mock.html` | **6.12.8** (the four-level Access control + the link)   |
 
 Every UI code subtask in Story 6.12 (6.12.4 / 6.12.6 / 6.12.7 / 6.12.8) carries
 `6.12.1` in `dependsOn` and is `blocked` until this asset lands.
@@ -55,20 +56,26 @@ duplicate-detection portal set.
 
 ## The asset is multi-panel (review EACH — mistake #31)
 
-1. **(1)** the public read-only project view — the read-only **board** (To Do /
-   In Progress / In Review / Done) as a NON-member cross-org viewer sees it: NO
-   edit affordances, INTERNAL fields absent, the public-project BANNER + the
-   signed-in cross-org viewer identity, a read-only Board / Issues / Roadmap nav.
-2. **(2)** the public **roadmap** — status-grouped columns (submitted → planned →
+1. **(1)** the public **Overview / README** landing — a modern, GitHub-README-
+   style project intro: a hero (logo + name + tagline + meta pills + at-a-glance
+   stats + CTAs) + an authored Markdown body + a links / at-a-glance sidebar. The
+   **default** public tab.
+2. **(2)** the public read-only project view (**Board** tab) — the read-only
+   **board** (To Do / In Progress / In Review / Done) as a NON-member cross-org
+   viewer sees it: NO edit affordances, INTERNAL fields absent, the public-project
+   BANNER + the signed-in cross-org viewer identity, a read-only Overview / Board
+   / Issues / Roadmap nav.
+3. **(3)** the public **roadmap** — status-grouped columns (submitted → planned →
    in progress → done) with vote counts + per-column pagination.
-3. **(3)** **submit a request + DUPLICATE DETECTION** — the form (type toggle,
+4. **(4)** **submit a request + DUPLICATE DETECTION** — the form (type toggle,
    title, description), the dedupe "upvote this instead" state, submit-as-new,
    the confirmation.
-4. **(4)** a public **request detail** — the body, the upvote control + count
+5. **(5)** a public **request detail** — the body, the upvote control + count
    (voted state), the public comment thread + composer.
-5. **(5)** project **settings** — the four-level Access control + the shareable
-   public link (copy / disable / rotate) + the account-required note.
-6. **(6)** **states** — empty roadmap, empty request list, the paginated loading
+6. **(6)** project **settings** — the four-level Access control + the shareable
+   public link (copy / disable / rotate) + the account-required note + **the
+   Overview/README authoring editor**.
+7. **(7)** **states** — empty roadmap, empty request list, the paginated loading
    skeleton, the fetch-error, the rate-limited submit.
 
 ## Where it lives
@@ -76,13 +83,57 @@ duplicate-detection portal set.
 ```
 design/public-projects/
   design-notes.md            ← this spec
-  public-projects.mock.html  ← the asset SOURCE (6 panels, one self-contained file)
+  public-projects.mock.html  ← the asset SOURCE (7 panels, one self-contained file)
   public-projects.png        ← the full-page PNG export (board-visible face)
 ```
 
 ---
 
-## Panel 1 — the public read-only view (the 6.12.4 surface)
+## Panel 1 — the Overview / README landing (the 6.12.4 render + 6.12.8 authoring)
+
+The public landing leads with a **modern, GitHub-README-style** project intro —
+"introduce the project, like a GitHub README but more modern" (Yue). It is the
+**default** public tab (GitHub puts the README on the repo home; Canny /
+Productboard portals and Plane / OpenProject public projects all open on an
+about/overview, not the raw board). Mirror, modernised: a hero band + an authored
+rich body + a links/stats sidebar, all in the design system.
+
+### The data — a new project field
+
+The README content is a new nullable project field **`publicOverviewMd`**
+(Markdown). Authored by the project admin (Panel 6 editor), rendered read-only on
+this tab via the shipped **`MarkdownView`**. It is part of the **public
+projection** (6.12.4) — a public-safe field, served only when the project is
+public. When empty, the tab falls back to a slim auto-intro (name + tagline +
+stats + CTAs, no body) — never a blank page.
+
+### The hero (`.hero`)
+
+A bordered `Card` with a **soft corner-wash** (two radial `--el-hero-wash-*`
+tints over `--el-page-bg` — decorative only; all text sits on `--el-page-bg`, AA-
+safe, NOT a page-level tint — finding #35). Holds: a 52px logo tile
+(`--el-accent`), the project name in the serif display face, **meta `Pill`s**
+("Open source" mint / "GPL-3.0" / "Project management" neutral), the **tagline**,
+a **CTA row** (`View the roadmap` primary · `Submit a request` outline · `GitHub`
+ghost), and an **at-a-glance stat strip** (Public requests / Upvotes / Planned /
+Shipped) above a hairline.
+
+### The body + sidebar (`.ov-grid`, 1fr + 312px)
+
+- **Main** — the authored README (`.md`, the `MarkdownView` render): `h3`
+  sections, paragraphs, a **check-marked feature list** (`--el-success` ticks), a
+  **product-screenshot** placeholder (a browser-chrome frame + tinted panes), and
+  a "How to contribute" section linking to submit.
+- **Sidebar** (`.ov-side`) — a **Links** `side-card` (Website / Docs / Source /
+  Changelog, each an external-link row), an **At a glance** stat grid, and a
+  **CTA card** ("Have an idea? → Submit a request") with the same accent wash.
+
+No edit affordances on the public render; the only actions are the CTAs (submit /
+roadmap / external links). The authoring editor lives in Panel 6 (settings).
+
+---
+
+## Panel 2 — the public read-only view (the 6.12.4 surface)
 
 ### The public chrome
 
@@ -112,7 +163,7 @@ projection paginated / lazy (the at-scale rule).
 
 ---
 
-## Panel 2 — the public roadmap (the 6.12.7 surface)
+## Panel 3 — the public roadmap (the 6.12.7 surface)
 
 Four `.rm-col` columns, each a status bucket with a tinted header
 (`.rm-head` + `.ct` count) and a `.rm-body`:
@@ -142,7 +193,7 @@ button.
 
 ---
 
-## Panel 3 — submit a request + duplicate detection (the 6.12.5 surface)
+## Panel 4 — submit a request + duplicate detection (the 6.12.5 surface)
 
 - **Type toggle** (`.type-toggle`, a 2-option `Segmented`/radiogroup):
   **Feature** (`square-check-big`, `--el-type-task`) | **Bug** (`bug`,
@@ -166,7 +217,7 @@ disabled resting state).
 
 ---
 
-## Panel 4 — the public request detail (the 6.12.6 surface)
+## Panel 5 — the public request detail (the 6.12.6 surface)
 
 - **`.req-head`**: the large upvote control (`.vote.lg`, voted state) + the
   status `Pill` + the title + a meta row (kind `IssueTypeIcon`, "opened by
@@ -181,7 +232,7 @@ disabled resting state).
 
 ---
 
-## Panel 5 — make-public toggle + share link (the 6.12.8 surface)
+## Panel 6 — make-public toggle + share link (the 6.12.8 surface)
 
 - **Access control** (`.access-opt` radio cards) extends 6.4's three-level
   control to **four**, in openness order **public > open > limited > private**,
@@ -194,10 +245,16 @@ disabled resting state).
   **Disable** (`btn-danger`, rose tint). The `.acct-note` states the link is a
   pointer that still requires sign-in, anonymous access is unsupported, and
   rotating issues a new link without changing the project key.
+- **Project overview editor** (`.ov-editor`): the **`MarkdownEditor`** authoring
+  the `publicOverviewMd` field that renders on the Panel-1 Overview tab — a
+  toolbar (heading / bold / italic / link / list / image) over a Markdown body.
+  A note states it shows on the public **Overview** tab (the first thing a
+  visitor sees) and is hidden while the project isn't public. Project-admin-gated;
+  inline-save (success-response-is-confirmation).
 
 ---
 
-## Panel 6 — states
+## Panel 7 — states
 
 - **Empty roadmap** / **empty request list** — the `EmptyState` primitive (glyph
   tile + heading + copy; the list adds a "Submit a request" CTA).
@@ -229,17 +286,23 @@ disabled resting state).
 | Rate-limit banner               | `--el-tint-yellow` + `--el-text-strong`, `--el-warning` glyph                      |
 | Success confirmation badge      | `--el-tint-mint` + `--el-success`                                                  |
 | Error glyph                     | `--el-tint-rose` + `--el-danger`                                                   |
+| Overview hero corner washes     | `--el-hero-wash-a` (→ lavender) + `--el-hero-wash-b` (→ sky), over `--el-page-bg`  |
+| Hero logo / CTA card accent     | `--el-accent` + `--el-accent-text`; stats text `--el-text` (serif)                 |
+| README feature-list ticks       | `--el-success`; links `--el-link`                                                  |
 
 **Palette, not grey-only (finding #54):** the roadmap uses four distinct status
-tints, the upvote uses the accent, kinds use their type hues, priority/status use
-`Pill` tones — the screen is not collapsed to grey + primary.
+tints, the upvote uses the accent, kinds use their type hues, the Overview hero +
+CTA cards use the accent washes + mint/neutral meta pills — the screen is not
+collapsed to grey + primary. The hero washes are **decorative**: all text sits on
+`--el-page-bg`, never on the wash, so AA holds (finding #35 — no page-tint text).
 
 **New `--el-*` tokens 6.12.4 / 6.12.6 / 6.12.7 must ADD to `globals.css` Tier 3**
 (each mapped to an existing Tier-0 value, per the per-component token-growth
 pattern, mistake #20): `--el-public-banner-bg`, `--el-public-banner-text`,
 `--el-vote-bg`, `--el-vote-active-bg`, `--el-vote-active-text`,
 `--el-roadmap-submitted`, `--el-roadmap-planned`, `--el-roadmap-progress`,
-`--el-roadmap-done`. Consume the `--el-*` token, never the Tier-0 value directly.
+`--el-roadmap-done`, **`--el-hero-wash-a`, `--el-hero-wash-b`**. Consume the
+`--el-*` token, never the Tier-0 value directly.
 
 ## Shape roles (every shaped surface via the `[data-display-style]` tokens)
 
@@ -250,7 +313,10 @@ pattern, mistake #20): `--el-public-banner-bg`, `--el-public-banner-text`,
 - **Pills / chips**: `--radius-badge`, `--spacing-chip-x/y`.
 - **Inputs / textarea / link field**: `--radius-input`, `--height-input`,
   `--spacing-input-x/y`.
-- **Upvote control, segmented options, status header**: `--radius-control`.
+- **Upvote control, segmented options, status header, editor toolbar buttons**:
+  `--radius-control`.
+- **Hero / overview sidebar cards / CTA card / editor**: `--radius-card` (editor
+  `--radius-input`) + `--shadow-card`/`-subtle`.
 - **Avatars / radio / status dots**: `rounded-full` (genuinely circular — allowed).
 
 No raw `rounded-*` / `p-*` / `h-*` / `shadow-md` on any shaped surface (the shape
@@ -261,7 +327,18 @@ swap layer must reach every element).
 - Public chip: **"Public"** · banner: **"You're viewing a public project. Anyone
   signed in to Motir can view it and submit, upvote, or comment on requests."** ·
   **"View-only — you can't edit issues"**.
-- Nav: **"Board" / "Issues" / "Roadmap"** · **"Submit a request"**.
+- Nav: **"Overview" / "Board" / "Issues" / "Roadmap"** · **"Submit a request"**.
+- Overview: meta pills **"Open source" / "GPL-3.0" / "Project management"** ·
+  CTAs **"View the roadmap" / "Submit a request" / "GitHub"** · stat labels
+  **"Public requests" / "Upvotes" / "Planned" / "Shipped"** · sidebar
+  **"Links"** (**"Website" / "Documentation" / "Source (GPL-3.0)" / "Changelog"**)
+  · **"At a glance"** · CTA card **"Have an idea?"** / **"Tell us what to build
+  next. It takes a minute and goes straight to the team."** (the body itself is
+  the admin-authored `publicOverviewMd`, not fixed copy). Settings editor:
+  **"Project overview (public landing)"** · **"A README-style intro shown on the
+  project's public Overview tab. Markdown — headings, lists, links, and images."**
+  · **"This shows on the public Overview tab — the first thing a visitor sees.
+  It's hidden while the project isn't public."**
 - Roadmap buckets: **"Submitted" / "Planned" / "In progress" / "Done"** ·
   **"Load N more →"**.
 - Submit: **"Submit a request"** · **"Tell the Motir team about a bug or a feature
@@ -298,11 +375,30 @@ swap layer must reach every element).
 tint tones + the public chip) · `IssueTypeIcon` (kind hue via `--el-type-*`) ·
 `Avatar` (initial-letter) · `Segmented` (the view nav + the type toggle) ·
 `FormField` + `Input` + `Textarea` (the submit form + comment composer) ·
-`EmptyState` / `ErrorState` (the state panels) · the loading `Spinner`/skeleton ·
-the board `.col`/`.bcard` grammar from `design/boards`. The upvote control is the
-one NEW composite (a bordered `--radius-control` chevron+count) — it is not a new
-primitive vocabulary, just an arrangement of an icon + a number + the tokens; it
-maps to a small `components/ui` control 6.12.6 adds.
+`MarkdownView` (the Overview README render) · `MarkdownEditor` (the settings
+authoring editor) · `EmptyState` / `ErrorState` (the state panels) · the loading
+`Spinner`/skeleton · the board `.col`/`.bcard` grammar from `design/boards`. The
+upvote control is the one NEW composite (a bordered `--radius-control`
+chevron+count) — it is not a new primitive vocabulary, just an arrangement of an
+icon + a number + the tokens; it maps to a small `components/ui` control 6.12.6
+adds. The Overview hero is likewise a NEW arrangement (logo + serif heading +
+pills + CTA row + stat strip), not a new primitive.
+
+## Planning delta (this design iteration adds scope — reflected in the seed)
+
+The Overview/README is new product scope, so the plan seed (Story 6.12) is updated
+alongside this asset so the design is not orphaned:
+
+- **`publicOverviewMd` — a new nullable `project` Markdown field.** Lands in
+  **6.12.3** (the schema + access card) so the migration is coherent; it is a
+  public-safe field in the public projection.
+- **Render** the Overview tab as the default public landing — **6.12.4** (uses
+  `MarkdownView`; empty → the auto-intro fallback).
+- **Author** it in project settings via `MarkdownEditor` — **6.12.8** (alongside
+  the make-public toggle + share link; project-admin-gated, inline-save).
+- No new subtask is required — the three existing UI/schema cards absorb it; the
+  story's scope line + model gain the Overview. (Mirror rung 1: GitHub repo README
+  on the repo home; Canny / Productboard / Plane / OpenProject public overviews.)
 
 ## Context refs
 
