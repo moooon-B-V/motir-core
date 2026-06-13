@@ -229,7 +229,7 @@ export const story_6_11: PlanStory = {
       id: '6.11.2',
       title:
         'Decision — the triage model: work_item + `triage` state, read-exclusion, promote/decline/merge semantics',
-      status: 'planned',
+      status: 'in_progress',
       type: 'decision',
       executor: 'coding_agent',
       estimateMinutes: 45,
