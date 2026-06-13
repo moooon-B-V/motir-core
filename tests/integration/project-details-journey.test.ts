@@ -169,12 +169,20 @@ describe('Story 6.8 — concurrent renames serialise on the project-row lock', (
     const rejected = results.filter((r) => r.status === 'rejected');
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
-    // The loser's error is one of the typed key-conflict errors (not a raw DB error).
+    // The loser's error is a TYPED domain error, never a raw DB error. Which one
+    // depends on the interleaving (all are correct, non-corrupting outcomes):
+    //   • re-reads the now-NIF key under the lock → IdentifierUnchangedError;
+    //   • slips past the pre-checks on a stale snapshot and trips the unique
+    //     constraint → translated to IdentifierTakenError (the changeKey P2002
+    //     backstop) — never a raw P2002;
+    //   • resolves AFTER the winner commits, when PROD is already an alias →
+    //     ProjectNotFoundError (the resolve path is deliberately not alias-aware).
     const reason = (rejected[0] as PromiseRejectedResult).reason;
     expect(
       reason instanceof IdentifierUnchangedError ||
         reason instanceof IdentifierTakenError ||
-        reason instanceof IdentifierReservedError,
+        reason instanceof IdentifierReservedError ||
+        reason instanceof ProjectNotFoundError,
     ).toBe(true);
 
     // The end state is single-valued: NIF is live, exactly ONE PROD alias exists,

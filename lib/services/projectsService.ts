@@ -693,15 +693,34 @@ export const projectsService = {
       }
 
       // The bulk rewrite (one statement) + reserve the old key + set the new key.
-      await workItemRepository.rewriteIdentifiersForProject(resolved.id, requested, tx);
-      await projectKeyAliasRepository.create(
-        { workspaceId, projectId: resolved.id, identifier: current },
-        tx,
-      );
-      const updated = await projectRepository.updateIdentifier(resolved.id, requested, tx);
+      //
+      // Concurrency backstop (the rename∥rename race). The FOR-UPDATE lock above
+      // serializes two concurrent renames, and the loser SHOULD re-read the
+      // now-committed key under the lock and bail at a pre-check (steps 3–4). But
+      // under load the loser can still act on a stale snapshot — slipping past the
+      // guards and reaching these writes, where the duplicate old-key alias create
+      // trips the DB unique constraint and a raw P2002 surfaces. A raw DB error
+      // must NEVER escape this service, so translate it to the typed conflict
+      // callers handle — the requested key is no longer freely assignable by this
+      // losing attempt. The throw rolls this attempt back; the winner's
+      // single-valued end state stands. (The OTHER race-loss outcome — the loser
+      // resolving AFTER the winner commits, when the old key is already an alias —
+      // is a plain ProjectNotFoundError from the deliberately-not-alias-aware
+      // resolve; both are legitimate, non-corrupting outcomes.)
+      try {
+        await workItemRepository.rewriteIdentifiersForProject(resolved.id, requested, tx);
+        await projectKeyAliasRepository.create(
+          { workspaceId, projectId: resolved.id, identifier: current },
+          tx,
+        );
+        const updated = await projectRepository.updateIdentifier(resolved.id, requested, tx);
 
-      const aliases = await projectKeyAliasRepository.findManyByProject(resolved.id, tx);
-      return toProjectDTO(updated, aliases);
+        const aliases = await projectKeyAliasRepository.findManyByProject(resolved.id, tx);
+        return toProjectDTO(updated, aliases);
+      } catch (err) {
+        if (isUniqueViolation(err)) throw new IdentifierTakenError(requested);
+        throw err;
+      }
     });
   },
 
