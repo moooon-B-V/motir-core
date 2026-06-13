@@ -285,7 +285,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.2',
       title:
         'Schema — `Notification` model + repository + migration (cursor-paginated reads + an efficient unread-count aggregate; FKs as Prisma relations)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
@@ -357,7 +357,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.3',
       title:
         'In-app notification fan-in job — a 1.6-pipeline consumer of the SHIPPED 5.1.6 events writing `Notification` rows (actor-excluded, mention-deduped, EXTENSIBLE for 5.4/6.6)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
@@ -429,7 +429,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.4',
       title:
         '`notificationsService` + routes — cursor-paged feed, unread count, mark-read, mark-all-read (4-layer, per-user scoped)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -547,7 +547,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.6',
       title:
         'Per-user notification preferences — `NotificationPreference` model + the settings page (Jira shape); the channel gate BOTH the 5.7.3 in-app job AND the DONE 5.1.6 email job honour',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 38,
