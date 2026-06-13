@@ -135,6 +135,28 @@ export const workspaceMembershipRepository = {
     return tx.workspaceMembership.count({ where: { workspaceId } });
   },
 
+  /**
+   * Memberships for a set of users across a set of workspaces, inside the
+   * caller's transaction. Used by the Story 6.10 cross-workspace member roster
+   * to answer "which of the org's workspaces does each member belong to?" in a
+   * single round-trip (the service passes the org's workspace ids + the current
+   * roster page's user ids). Returns the lean (userId, workspaceId) pairs the
+   * roster needs — the workspace names are joined in the service from
+   * workspaceRepository.listByOrganization. An empty id list short-circuits to
+   * [] (the no-members / no-workspaces page makes the empty match explicit).
+   */
+  async findByWorkspaceIdsAndUserIds(
+    workspaceIds: string[],
+    userIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Pick<WorkspaceMembership, 'userId' | 'workspaceId'>[]> {
+    if (workspaceIds.length === 0 || userIds.length === 0) return [];
+    return tx.workspaceMembership.findMany({
+      where: { workspaceId: { in: workspaceIds }, userId: { in: userIds } },
+      select: { userId: true, workspaceId: true },
+    });
+  },
+
   async create(
     data: { userId: string; workspaceId: string; role: MemberRole },
     tx: Prisma.TransactionClient,

@@ -93,6 +93,45 @@ export const organizationMembershipRepository = {
     return tx.organizationMembership.count({ where: { organizationId } });
   },
 
+  /**
+   * Count of OWNER memberships in an organization. Takes `tx` so the
+   * last-owner guard in organizationsService (remove / demote) reads the count
+   * and mutates in the SAME transaction — an org with zero owners is
+   * unadministrable, so removing or demoting the last owner must be blocked
+   * without a TOCTOU window.
+   */
+  async countOwnersByOrg(organizationId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.organizationMembership.count({
+      where: { organizationId, role: 'owner' },
+    });
+  },
+
+  /**
+   * One keyset-paginated PAGE of an org's members joined with the user fields
+   * the roster renders, ordered by (createdAt asc, id asc) so the owner (first
+   * membership) leads and the order is stable across pages. Returns up to
+   * `limit + 1` rows so the service can detect "is there a next page?" and
+   * compute the next cursor without a second count. `cursorId` is the last
+   * membership id of the previous page (Prisma `cursor` + `skip: 1`); omit it
+   * for the first page. This is the at-scale read (finding #57) — a large org's
+   * roster is NEVER loaded whole. Takes `tx` so the RLS policy's per-transaction
+   * GUCs admit the rows.
+   */
+  async findMembersByOrgPage(
+    organizationId: string,
+    limit: number,
+    cursorId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<OrgMembershipWithUser[]> {
+    return tx.organizationMembership.findMany({
+      where: { organizationId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: limit + 1,
+      ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
+  },
+
   async create(
     data: { organizationId: string; userId: string; role: OrganizationRole },
     tx: Prisma.TransactionClient,

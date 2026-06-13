@@ -8,6 +8,7 @@ import { userRepository } from '@/lib/repositories/userRepository';
 import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { WORKSPACE_ROLE } from '@/lib/workspaces/roles';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
+import { organizationsService } from '@/lib/services/organizationsService';
 import {
   AlreadyMemberError,
   LastMemberError,
@@ -79,31 +80,46 @@ function isUniqueViolation(err: unknown): err is Prisma.PrismaClientKnownRequest
 // (each retry needs a FRESH transaction — a P2002 poisons the current one,
 // so we can't just catch-and-continue inside a single `tx`).
 async function insertWorkspaceWithOwner(
-  input: { name: string; slug: string; ownerUserId: string },
+  input: { name: string; slug: string; ownerUserId: string; organizationId?: string },
   tx: Prisma.TransactionClient,
 ): Promise<{ workspace: Workspace; membership: WorkspaceMembership }> {
   // Story 6.10: every workspace lives under an Organization (the root tenancy
-  // tier — Workspace.organizationId is non-nullable). Until 6.10.4 wires the
-  // org-context + the "create 2nd+ workspaces under the ACTIVE org" routing, a
-  // brand-new workspace mints its OWN default org with the creator as org owner
-  // — the same one-org-per-workspace shape the 6.10.3 migration backfill gives
-  // every pre-existing workspace (an org of one / OPC). The org reuses the
-  // workspace's name + globally-unique slug; the slug-retry loop in the callers
-  // covers an org.slug collision exactly as it covers a workspace.slug one.
-  const organization = await organizationRepository.create(
-    { name: input.name, slug: input.slug },
-    tx,
-  );
-  await organizationMembershipRepository.create(
-    {
-      organizationId: organization.id,
-      userId: input.ownerUserId,
-      role: ORGANIZATION_ROLE.owner,
-    },
-    tx,
-  );
+  // tier — Workspace.organizationId is non-nullable). Two creation shapes:
+  //
+  //   * 2nd+ workspace under an ACTIVE org (organizationId provided, 6.10.4) —
+  //     the workspace nests under the existing org and the creator gets an
+  //     org membership via the UPWARD invariant (you cannot be in a workspace
+  //     without being in its org — 6.10.2 §5i) if they aren't one already.
+  //   * a brand-new account / first workspace (no organizationId) — mints its
+  //     OWN default org with the creator as org owner (an org of one / OPC),
+  //     the same one-org-per-workspace shape the 6.10.3 migration backfill gives
+  //     every pre-existing workspace. The org reuses the workspace's name +
+  //     globally-unique slug; the caller's slug-retry loop covers an org.slug
+  //     collision exactly as it covers a workspace.slug one.
+  //
+  // (The copy-on-create config CLONE — making a 2nd workspace open already
+  // configured like the source — is its own subtask, 6.10.9, layered on top of
+  // this org-aware path; not done here.)
+  let organizationId = input.organizationId;
+  if (organizationId) {
+    await organizationsService.ensureOrgMembership(input.ownerUserId, organizationId, tx);
+  } else {
+    const organization = await organizationRepository.create(
+      { name: input.name, slug: input.slug },
+      tx,
+    );
+    await organizationMembershipRepository.create(
+      {
+        organizationId: organization.id,
+        userId: input.ownerUserId,
+        role: ORGANIZATION_ROLE.owner,
+      },
+      tx,
+    );
+    organizationId = organization.id;
+  }
   const workspace = await workspaceRepository.create(
-    { name: input.name, slug: input.slug, organizationId: organization.id },
+    { name: input.name, slug: input.slug, organizationId },
     tx,
   );
   // The workspace creator is its OWNER — the privileged tier the 1.6.5 operator
@@ -121,6 +137,14 @@ async function insertWorkspaceWithOwner(
 export interface CreateWorkspaceInput {
   name: string;
   ownerUserId: string;
+  /**
+   * Story 6.10: when set, the workspace nests under this EXISTING organization
+   * (the "create a 2nd+ workspace under the active org" path) and the creator
+   * gets an org membership via the upward invariant. When omitted, a fresh
+   * default org is minted with the creator as org owner (the signup / first-
+   * workspace OPC path).
+   */
+  organizationId?: string;
 }
 
 export interface CreateWorkspaceResult {
@@ -152,7 +176,12 @@ export const workspacesService = {
       try {
         return await db.$transaction(async (tx) => {
           return insertWorkspaceWithOwner(
-            { name: input.name, slug, ownerUserId: input.ownerUserId },
+            {
+              name: input.name,
+              slug,
+              ownerUserId: input.ownerUserId,
+              organizationId: input.organizationId,
+            },
             tx,
           );
         });
@@ -168,6 +197,24 @@ export const workspacesService = {
       }
     }
     throw new SlugCollisionError(lastAttempt);
+  },
+
+  /**
+   * Provision a brand-new account's tenancy (Story 6.10.4, the
+   * progressive-disclosure / auto-provision principle): an organization (an org
+   * of one — OPC) + a default workspace + the owner memberships for both, all in
+   * ONE transaction. This is the named entry the signup/onboarding hook calls so
+   * every account is an org of one from day one and there is never a tier-less
+   * user; it delegates to `createWorkspace` (no `organizationId` → the
+   * mint-own-org branch), which already does the atomic org+workspace+memberships
+   * insert with the slug-collision retry. The org name defaults from the user and
+   * is renameable later (organizationsService.renameOrganization).
+   */
+  async provisionForNewUser(input: EnsureDefaultWorkspaceInput): Promise<CreateWorkspaceResult> {
+    return workspacesService.createWorkspace({
+      name: `${input.userName}'s Workspace`,
+      ownerUserId: input.userId,
+    });
   },
 
   /**
@@ -264,11 +311,20 @@ export const workspacesService = {
    * session + cookie and delegates here.
    *
    * Resolution order:
-   *   1. cookie-pinned workspace, IF the user has a membership in it;
+   *   1. cookie-pinned workspace, IF the user has a membership in it AND it
+   *      passes the org access gate;
    *   2. otherwise the user's first membership (createdAt asc — the
-   *      auto-created default from Subtask 1.2.4 lands first);
-   *   3. zero memberships → self-heal via ensureDefaultWorkspace and
+   *      auto-created default from Subtask 1.2.4 lands first) that passes the
+   *      org access gate;
+   *   3. zero ACCESSIBLE memberships → self-heal via ensureDefaultWorkspace and
    *      return the workspace it guarantees.
+   *
+   * Story 6.10.4: a candidate must clear the ORG gate
+   * (organizationsService.resolveWorkspaceAccess) — org membership gates
+   * workspace access, so a stale workspace membership whose org membership was
+   * revoked no longer resolves as the active workspace. The gate is passed the
+   * withUserContext `tx`; the candidate is always a workspace the user is a
+   * member of, so its rows are RLS-visible under the bound user GUC.
    *
    * The membership reads run inside withUserContext so the `app.user_id`
    * GUC is bound first and the RLS membership policies bite even on a
@@ -293,10 +349,21 @@ export const workspacesService = {
           cookieWorkspaceId,
           tx,
         );
-        if (pinned) return pinned.workspaceId;
+        if (
+          pinned &&
+          (await organizationsService.resolveWorkspaceAccess(userId, pinned.workspaceId, tx))
+        ) {
+          return pinned.workspaceId;
+        }
       }
       const first = await workspaceMembershipRepository.findFirstByUserWithWorkspace(userId, tx);
-      return first?.workspaceId ?? null;
+      if (
+        first &&
+        (await organizationsService.resolveWorkspaceAccess(userId, first.workspaceId, tx))
+      ) {
+        return first.workspaceId;
+      }
+      return null;
     });
 
     if (existing) return existing;
@@ -316,9 +383,16 @@ export const workspacesService = {
 
   /**
    * Add a member to a workspace. Throws AlreadyMemberError when the
-   * unique (userId, workspaceId) constraint fires. Wraps the single
-   * write in a transaction so the error-translation point stays
-   * consistent with the rest of the service surface.
+   * unique (userId, workspaceId) constraint fires. Wraps the writes in one
+   * transaction so the error-translation point stays consistent and the
+   * upward auto-join is atomic with the workspace-membership insert.
+   *
+   * Story 6.10.4 — the UPWARD membership invariant (6.10.2 §5i): you cannot be
+   * in a workspace without being in its org, so adding a user to a workspace
+   * also ensures their OrganizationMembership (role `member`) in that
+   * workspace's org, in the SAME transaction. This is what keeps the org access
+   * gate satisfied for every workspace member (an invite-accept that adds a
+   * cross-org user to a workspace auto-enrols them in the org).
    */
   async addMember(input: {
     userId: string;
@@ -327,7 +401,7 @@ export const workspacesService = {
   }): Promise<WorkspaceMembership> {
     try {
       return await db.$transaction(async (tx) => {
-        return workspaceMembershipRepository.create(
+        const membership = await workspaceMembershipRepository.create(
           {
             userId: input.userId,
             workspaceId: input.workspaceId,
@@ -335,6 +409,17 @@ export const workspacesService = {
           },
           tx,
         );
+        // Upward auto-join: the create succeeded, so the workspace exists; bring
+        // the user into its org if they aren't a member already.
+        const workspace = await workspaceRepository.findByIdInTx(input.workspaceId, tx);
+        if (workspace) {
+          await organizationsService.ensureOrgMembership(
+            input.userId,
+            workspace.organizationId,
+            tx,
+          );
+        }
+        return membership;
       });
     } catch (err) {
       if (isUniqueViolation(err)) {
@@ -462,29 +547,35 @@ export const workspacesService = {
   },
 
   /**
-   * Asserts the user is a member of the workspace, throwing
-   * NotAMemberError otherwise. Convenience for route handlers that
-   * want to gate on membership without writing a null-check by hand.
+   * Asserts the user can ACCESS the workspace, throwing NotAMemberError
+   * otherwise. Convenience for route handlers that want to gate without writing
+   * a null-check by hand.
+   *
+   * Story 6.10.4: this now goes through the ORG access gate
+   * (organizationsService.resolveWorkspaceAccess), so "access" means org
+   * membership gates workspace access AND an org owner/admin reaches every
+   * workspace under the org (composed above the 6.4 workspace role). A user with
+   * a stale workspace membership but no org membership is DENIED. The gate
+   * self-binds withWorkspaceContext so the rows are RLS-visible.
    */
   async assertMembership(userId: string, workspaceId: string): Promise<void> {
-    const m = await workspaceMembershipRepository.findByUserAndWorkspace(userId, workspaceId);
-    if (!m) throw new NotAMemberError(userId, workspaceId);
+    const access = await organizationsService.resolveWorkspaceAccess(userId, workspaceId);
+    if (!access) throw new NotAMemberError(userId, workspaceId);
   },
 
   /**
-   * The user's role in the workspace (`owner` | `member`), or null if they
-   * aren't a member. Read-only — used by surfaces that gate an action on the
+   * The user's EFFECTIVE workspace role (`owner` | `member`), or null if they
+   * have no access. Read-only — used by surfaces that gate an action on the
    * privileged tier (e.g. the 1.6.5 dashboard's owner-only Replay button).
-   * Returns the raw stored string so callers compare via lib/workspaces/roles.
+   *
+   * Story 6.10.4: the role composes the org tier above the 6.4 workspace role —
+   * an org owner/admin reports `owner` on every workspace under the org even
+   * with no workspace membership; a plain org member reports their stored
+   * workspace role; a non-org-member (no access) reports null. Callers compare
+   * via lib/workspaces/roles.
    */
   async getMemberRole(userId: string, workspaceId: string): Promise<string | null> {
-    // Read inside withWorkspaceContext so the membership_visible RLS policy
-    // admits the row under the non-bypass prodect_app role (a db-singleton read
-    // with no GUC bound returns NULL → would mis-gate every owner as a member
-    // in production). Mirrors listMembers.
-    const m = await withWorkspaceContext({ userId, workspaceId }, (tx) =>
-      workspaceMembershipRepository.findByUserAndWorkspaceInTx(userId, workspaceId, tx),
-    );
-    return m?.role ?? null;
+    const access = await organizationsService.resolveWorkspaceAccess(userId, workspaceId);
+    return access?.effectiveRole ?? null;
   },
 };
