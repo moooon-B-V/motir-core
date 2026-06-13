@@ -131,7 +131,7 @@ describe('WidgetConfigModal — registry-driven editor kinds + the data-source X
 describe('Widget state views', () => {
   it('renders the empty / no-access / stale bodies as TEXT (finding #35)', () => {
     renderWithIntl(<WidgetEmpty />);
-    expect(screen.getByText('No matching issues')).toBeTruthy();
+    expect(screen.getByText('No matching work items')).toBeTruthy();
     cleanup();
     renderWithIntl(<WidgetNoAccess />);
     expect(screen.getByText('No access')).toBeTruthy();
@@ -187,7 +187,7 @@ describe('DistributionBody (donut renderer)', () => {
     renderWithIntl(
       <DistributionBody source={PROJECT_SOURCE} config={{ statisticType: 'status' }} />,
     );
-    await waitFor(() => expect(screen.getByText('No matching issues')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('No matching work items')).toBeTruthy());
   });
 
   it('short-circuits a stale source to the filter-missing card (no fetch)', () => {

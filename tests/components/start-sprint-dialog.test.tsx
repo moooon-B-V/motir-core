@@ -105,7 +105,7 @@ describe('StartSprintDialog (4.4.5)', () => {
     expect(screen.getByText(/ends in 13 days/)).toBeTruthy();
     // Committed baseline preview reads the issue count AND the live points
     // roll-up (Subtask 4.4.9 — finding #69), fetched from /api/sprints/[id]/points.
-    expect(await screen.findByText(/8 issues · 21 points committed at start/)).toBeTruthy();
+    expect(await screen.findByText(/8 work items · 21 points committed at start/)).toBeTruthy();
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/sp7/points'))).toBe(true);
   });
 
@@ -114,7 +114,7 @@ describe('StartSprintDialog (4.4.5)', () => {
       String(url).endsWith('/points') ? pointsJson(0) : okJson(),
     );
     renderDialog();
-    expect(await screen.findByText(/8 issues · — committed at start/)).toBeTruthy();
+    expect(await screen.findByText(/8 work items · — committed at start/)).toBeTruthy();
   });
 
   it('derives the window from the chosen duration', () => {

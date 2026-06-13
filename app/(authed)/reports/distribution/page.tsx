@@ -123,7 +123,7 @@ export default async function DistributionPage({
   const subLine = [
     ctx.project.name,
     t('distribution.byStatistic', { statistic: statisticLabel }),
-    ...(total === null ? [] : [t('distribution.issuesCount', { count: total })]),
+    ...(total === null ? [] : [t('distribution.itemsCount', { count: total })]),
   ].join(' · ');
 
   return (

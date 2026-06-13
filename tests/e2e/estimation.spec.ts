@@ -29,7 +29,7 @@ import {
 // sign-ins need more than the 30s default — same budget backlog.spec.ts uses.
 test.describe.configure({ timeout: 120_000 });
 
-const BACKLOG_LIST = 'Backlog issues'; // the bottom region's <ul> aria-label
+const BACKLOG_LIST = 'Backlog work items'; // the bottom region's <ul> aria-label
 
 // ── shared locators / helpers ────────────────────────────────────────────────
 

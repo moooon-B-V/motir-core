@@ -230,7 +230,7 @@ describe('ActivitySection (5.5.4)', () => {
     expect(within(feed).getByText('Description')).toBeTruthy();
     // sprint — names resolved; the backlog form
     expect(within(feed).getAllByText('Sprint 4').length).toBeGreaterThan(0);
-    expect(within(feed).getAllByText(/moved this issue to/).length).toBe(2);
+    expect(within(feed).getAllByText(/moved this work item to/).length).toBe(2);
     expect(within(feed).getAllByText('Backlog').length).toBeGreaterThan(0);
   });
 
@@ -315,8 +315,8 @@ describe('ActivitySection (5.5.4)', () => {
     // deleted referent — the Former member form
     expect(within(feed).getByText('Former member')).toBeTruthy();
     // anchors
-    expect(within(feed).getByText(/created the issue/)).toBeTruthy();
-    expect(within(feed).getByText(/archived the issue/)).toBeTruthy();
+    expect(within(feed).getByText(/created the work item/)).toBeTruthy();
+    expect(within(feed).getByText(/archived the work item/)).toBeTruthy();
   });
 
   it('history is read-only: no row carries any action affordance', () => {
@@ -348,7 +348,7 @@ describe('ActivitySection (5.5.4)', () => {
 
     renderSection({ initialHistory: historyPage([]) });
     expect(
-      screen.getByText('No history yet — changes to this issue will show up here'),
+      screen.getByText('No history yet — changes to this work item will show up here'),
     ).toBeTruthy();
   });
 
@@ -378,7 +378,7 @@ describe('ActivitySection (5.5.4)', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Show more changes (1 older)' }));
-    await waitFor(() => expect(screen.getByText(/created the issue/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/created the work item/)).toBeTruthy());
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
       '/api/work-items/wi-1/activity/history?order=desc&cursor=rev-1',
     );
@@ -428,7 +428,7 @@ describe('ActivitySection (5.5.4)', () => {
 
     // Default oldest-first: the created anchor renders first.
     let items = within(screen.getByRole('list', { name: 'History' })).getAllByRole('listitem');
-    expect(items[0]?.textContent).toContain('created the issue');
+    expect(items[0]?.textContent).toContain('created the work item');
 
     fireEvent.click(screen.getByRole('button', { name: 'Sort activity, oldest first' }));
     items = within(screen.getByRole('list', { name: 'History' })).getAllByRole('listitem');
@@ -511,7 +511,7 @@ describe('ActivitySection (5.5.4)', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Show more activity (2 older)' }));
-    await waitFor(() => expect(screen.getByText(/created the issue/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/created the work item/)).toBeTruthy());
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
       '/api/work-items/wi-1/activity/all?order=desc&cursor=composite-1',
     );
@@ -530,7 +530,7 @@ describe('ActivitySection (5.5.4)', () => {
     expect(screen.getByText("Couldn't load history")).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    await waitFor(() => expect(screen.getByText(/created the issue/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/created the work item/)).toBeTruthy());
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
       '/api/work-items/wi-1/activity/history?order=desc',
     );

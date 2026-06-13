@@ -185,14 +185,14 @@ describe('CompleteSprintDialog (4.4.6)', () => {
     expect(await screen.findByText('29 of 42 points')).toBeTruthy();
     expect(screen.getByText('13 points carry over')).toBeTruthy();
     // The carry-over chooser (Backlog default + A future sprint).
-    expect(screen.getByText('Move the 6 incomplete issues to')).toBeTruthy();
+    expect(screen.getByText('Move the 6 incomplete work items to')).toBeTruthy();
     expect(screen.getByRole('radio', { name: /Backlog/ })).toBeTruthy();
     expect(screen.getByRole('radio', { name: /A future sprint/ })).toBeTruthy();
     // The report preview fetch happened.
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/sp6/report'))).toBe(true);
   });
 
-  it('collapses the chooser to "all complete" when there are no incomplete issues', async () => {
+  it('collapses the chooser to "all complete" when there are no incomplete work items', async () => {
     install(
       report({
         incomplete: pageOf([], 0),
@@ -200,8 +200,8 @@ describe('CompleteSprintDialog (4.4.6)', () => {
       }),
     );
     renderDialog();
-    expect(await screen.findByText(/All issues are complete/)).toBeTruthy();
-    expect(screen.queryByText(/Move the .* incomplete issues to/)).toBeNull();
+    expect(await screen.findByText(/All work items are complete/)).toBeTruthy();
+    expect(screen.queryByText(/Move the .* incomplete work items to/)).toBeNull();
   });
 
   it('completes carrying over to the backlog by default', async () => {
@@ -240,7 +240,7 @@ describe('CompleteSprintDialog (4.4.6)', () => {
     fireEvent.click(completeButton());
     // The success state shows the report (the pre-move snapshot).
     expect(await screen.findByRole('heading', { name: 'Sprint 6 report' })).toBeTruthy();
-    expect(screen.getByText(/2 issues added after the sprint started/)).toBeTruthy();
+    expect(screen.getByText(/2 work items added after the sprint started/)).toBeTruthy();
     expect(screen.getByTestId('report-row-PROD-241')).toBeTruthy();
     // The carried-over incomplete row shows its "→ Backlog" destination.
     expect(screen.getByTestId('report-row-PROD-244')).toBeTruthy();

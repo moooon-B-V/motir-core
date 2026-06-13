@@ -387,7 +387,7 @@ test('@smoke the combined collaboration journey: build-up across every Epic-5 fe
   await switchTab(page, 'History');
   const historyAfter = page.getByRole('list', { name: 'History' });
   await expect(historyAfter).toBeVisible();
-  await expect(historyAfter.getByText(/created the issue/)).toBeVisible();
+  await expect(historyAfter.getByText(/created the work item/)).toBeVisible();
   await expect(historyAfter.getByText(/deleted a comment/)).toBeVisible();
 
   // ── Unwind 4: a transition mails BOTH watchers; the actor (PM) is excluded ─

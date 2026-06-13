@@ -102,7 +102,7 @@ async function createBacklogIssue(
   return { id: dto.id, identifier: dto.identifier, title };
 }
 
-/** The small grooming fixture: one planned sprint (1 issue) + 5 backlog issues. */
+/** The small grooming fixture: one planned sprint (1 work item) + 5 backlog issues. */
 export async function seedGroomingBacklog(email: string): Promise<BacklogSeed> {
   const { ctx, projectId, projectIdentifier } = await makeTenant(
     email,

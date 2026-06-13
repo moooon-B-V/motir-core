@@ -127,7 +127,7 @@ async function createChild(
   return { id: dto.id, identifier: dto.identifier, title };
 }
 
-/** The small functional fixture: a planned sprint (1 issue) + a backlog story +
+/** The small functional fixture: a planned sprint (1 work item) + a backlog story +
  *  an epic with one estimable child. Nothing is estimated up front — the spec
  *  estimates through the UI and watches the roll-ups react. */
 export async function seedEstimationFixture(email: string): Promise<EstimationSeed> {

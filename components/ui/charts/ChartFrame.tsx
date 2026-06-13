@@ -21,7 +21,19 @@ export interface ChartFrameScales {
 }
 
 export interface ChartFrameProps {
-  /** viewBox width / height (the SVG scales responsively to its container). */
+  /**
+   * viewBox width / height — these set the chart's intrinsic ASPECT RATIO, not
+   * its rendered pixels. The SVG is `block w-full h-auto`, so it fills its
+   * container's width and the height follows from this ratio.
+   *
+   * **Bounded-container contract (the bug-reports-chart-sizing fix).** Because
+   * the SVG scales to its container, the CONSUMER owns the rendered size by
+   * bounding the width: a dashboard-widget tile bounds it to the ~400 px tile;
+   * a full-page report landing MUST wrap it in a max-width block (the report
+   * pages use the `mx-auto max-w-[48rem]` card in ReportPageChrome) — otherwise the
+   * chart paints the full page width and, at this ratio, runs below the fold.
+   * An UNBOUNDED full-page mount is the bug, not a valid use.
+   */
   width: number;
   height: number;
   margin?: Partial<ChartMargin>;

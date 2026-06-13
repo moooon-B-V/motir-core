@@ -702,7 +702,7 @@ test.describe('@a11y shell accessibility', () => {
     await expect(page.getByRole('heading', { name: 'Audited task', level: 1 })).toBeVisible();
     const history = page.getByRole('list', { name: 'History' });
     await expect(history).toBeVisible();
-    await expect(history.getByText(/created the issue/)).toBeVisible();
+    await expect(history.getByText(/created the work item/)).toBeVisible();
     await expect(history.getByText(/deleted a comment/)).toBeVisible();
 
     const historyResults = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
@@ -719,7 +719,7 @@ test.describe('@a11y shell accessibility', () => {
     const all = page.getByRole('list', { name: 'All activity' });
     await expect(all).toBeVisible();
     await expect(all.getByText('a live comment among the history rows')).toBeVisible();
-    await expect(all.getByText(/created the issue/)).toBeVisible();
+    await expect(all.getByText(/created the work item/)).toBeVisible();
 
     const allResults = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     expect(

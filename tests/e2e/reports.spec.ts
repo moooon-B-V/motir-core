@@ -206,7 +206,61 @@ test.describe('reports @smoke', () => {
     await sweep(page, '/reports/created-vs-resolved', 'Created vs Resolved');
     await sweep(page, '/reports/distribution', 'Status distribution');
   });
+
+  // The bug-reports-chart-sizing regression. Both report charts used to render
+  // at dashboard-widget-tile proportions on the full page: the donut hard-pixel
+  // ~170 px wide (lost in whitespace), the line chart `w-full` of the unbounded
+  // page → ~1280 × ~600 px (X axis below the fold). Assert the RENDERED geometry
+  // (getBoundingClientRect via boundingBox), not CSS rules — measured at a
+  // typical laptop viewport. Caps come from the bug's acceptance criteria.
+  //
+  // ALSO assert the report card itself is page-width (≥ 640 px). The chart caps
+  // alone are NOT enough: the donut is a fixed `size`, and a COLLAPSED card
+  // (e.g. the `max-w-3xl`→40px Tailwind-theme trap) leaves the donut at 360 px
+  // and shrinks the line chart UNDER the caps — both passing while the page is
+  // visibly broken. The card-width floor is what catches a layout collapse.
+  test('E — chart geometry: page-level sizing, not widget-tile (regression)', async ({ page }) => {
+    const t = await seedTenant();
+    await signIn(page, t.ownerEmail, TEST_PASSWORD);
+    await page.setViewportSize({ width: 1280, height: 900 });
+
+    // Distribution donut: a page-level ring (280–420 px), not the ~170 px tile.
+    await page.goto('/reports/distribution');
+    await expect(page.getByRole('heading', { name: 'Status distribution' })).toBeVisible();
+    const donut = page.getByRole('img', { name: 'Status distribution' });
+    await expect(donut).toBeVisible({ timeout: 15_000 });
+    const donutBox = await donut.boundingBox();
+    expect(donutBox).not.toBeNull();
+    expect(donutBox!.width).toBeGreaterThanOrEqual(280);
+    expect(donutBox!.width).toBeLessThanOrEqual(420);
+    // The report card did not collapse — it spans a page-level width.
+    expect(await reportCardWidth(page)).toBeGreaterThanOrEqual(640);
+
+    // Created-vs-Resolved line chart: bounded by the report card, so it fits one
+    // fold (height ≤ 480) and does NOT span the full 1280 px page width — but is
+    // not collapsed either (a real page chart, ≥ 600 px wide).
+    await page.goto('/reports/created-vs-resolved');
+    await expect(page.getByRole('heading', { name: 'Created vs Resolved' })).toBeVisible();
+    const line = page.getByRole('img', { name: 'Created vs Resolved' });
+    await expect(line).toBeVisible({ timeout: 15_000 });
+    const lineBox = await line.boundingBox();
+    expect(lineBox).not.toBeNull();
+    expect(lineBox!.height).toBeLessThanOrEqual(480);
+    expect(lineBox!.width).toBeGreaterThanOrEqual(600);
+    expect(lineBox!.width).toBeLessThanOrEqual(820);
+    expect(await reportCardWidth(page)).toBeGreaterThanOrEqual(640);
+  });
 });
+
+/** Rendered width of the bounded report Card (the `--radius-card` container that
+ * wraps the report body). Guards against a layout collapse the chart-size caps
+ * miss — see test E. */
+async function reportCardWidth(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const card = document.querySelector('main [class*="radius-card"]');
+    return card ? Math.round(card.getBoundingClientRect().width) : 0;
+  });
+}
 
 async function sweep(page: Page, path: string, heading: string): Promise<void> {
   await page.goto(path);

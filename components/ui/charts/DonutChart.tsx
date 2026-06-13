@@ -13,17 +13,29 @@ export interface DonutChartProps {
   description: string;
   /** Optional short `aria-label`; the `<desc>` carries the detail. */
   ariaLabel?: string;
-  /** Noun for the centre-hole total, e.g. "issues" → "80 issues". */
+  /** Noun for the centre-hole total, e.g. "work items" → "80 work items". */
   totalNoun?: string;
   /** Column header for the data-table group column (e.g. "Status"). */
   statisticLabel?: string;
-  /** Square SVG viewBox size (default 220 — the 6.3.3 widget proportion). */
+  /**
+   * Square SVG viewBox size. Default 220 — the 6.3.3 dashboard-widget tile
+   * proportion. A full-page report landing (`legendLayout="below"`) passes a
+   * larger value (the distribution report uses 360) so the ring reads as a
+   * primary page visualization, not a tile thumbnail.
+   */
   size?: number;
   /** Inner-hole radius as a fraction of the outer radius (default 0.587 — the mock). */
   innerRatio?: number;
   /** How many distinct ramp hues before the overflow rollup (default 7). */
   rampLength?: number;
-  /** `side` = compact widget legend (default); `below` = the report-page layout. */
+  /**
+   * The legend placement — which doubles as the SURFACE-SIZING contract (the
+   * bug-reports-chart-sizing fix): `side` (default) is the compact dashboard
+   * widget tile (donut beside the legend at 0.71× the viewBox); `below` is the
+   * full-page report landing (donut above the legend, rendered at the FULL
+   * `size`). Pick the layout that matches the host surface so the ring is never
+   * tile-sized on a page or page-sized in a tile.
+   */
   legendLayout?: 'side' | 'below';
   /** Override the derived a11y data table. */
   dataTable?: Omit<ChartDataTableProps, 'className'>;
@@ -105,7 +117,14 @@ export function DonutChart({
           aria-label={ariaLabel ?? description}
           aria-describedby={descId}
           className="block h-auto shrink-0"
-          style={{ width: size * 0.71 }}
+          // `legendLayout` doubles as the SURFACE signal (the bug-reports-chart-
+          // sizing fix): `side` is the compact dashboard-widget tile — the donut
+          // shares its row with the legend, so render at 0.71× the viewBox;
+          // `below` is the full-page report landing — the donut owns the column,
+          // so render at the FULL `size` for page-level presence. Without this,
+          // the report page inherited the tile's 0.71× shrink and the ring sat
+          // ~170 px adrift on a 1400 px page (the "lost in whitespace" symptom).
+          style={{ width: legendLayout === 'below' ? size : size * 0.71 }}
         >
           <desc id={descId}>{description}</desc>
           {segments.map((seg, i) => (

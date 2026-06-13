@@ -93,8 +93,8 @@ describe('the populated admin list', () => {
     expect(screen.getByText('Custom fields')).toBeTruthy();
     expect(screen.getByText('3 / 50')).toBeTruthy();
     expect(screen.getByText('Severity')).toBeTruthy();
-    expect(screen.getByText('Select · 4 options · used on 12 issues')).toBeTruthy();
-    expect(screen.getByText('Text · used on 7 issues')).toBeTruthy();
+    expect(screen.getByText('Select · 4 options · used on 12 work items')).toBeTruthy();
+    expect(screen.getByText('Text · used on 7 work items')).toBeTruthy();
     expect(screen.getByText('User · not used yet')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Add field' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Reorder Severity' })).toBeTruthy();
@@ -248,7 +248,7 @@ describe('edit field', () => {
     const dialog = screen.getByRole('dialog');
 
     // Per-option usage gloss + the guarded delete (disabled, tooltip-wrapped).
-    expect(within(dialog).getByText('used on 2 issues')).toBeTruthy();
+    expect(within(dialog).getByText('used on 2 work items')).toBeTruthy();
     const lowRow = within(dialog).getByTestId('option-row-used');
     const lowDelete = within(lowRow).getByRole('button', {
       name: 'Delete Low',
@@ -342,7 +342,7 @@ describe('delete field', () => {
 
     // The consequence statement uses the FRESH count from the confirm-open GET.
     expect(await screen.findByText('Delete Severity?')).toBeTruthy();
-    await waitFor(() => expect(screen.getByText('12 issues')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('12 work items')).toBeTruthy());
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete field' }));
     await waitFor(() => {
@@ -362,7 +362,7 @@ describe('delete field', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete Customer' }));
     expect(
-      await screen.findByText('Deletes the field. No issues hold a value for it.'),
+      await screen.findByText('Deletes the field. No work items hold a value for it.'),
     ).toBeTruthy();
   });
 });

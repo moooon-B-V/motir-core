@@ -207,7 +207,7 @@ describe('BoardColumn — WIP chip (3.3.6)', () => {
     expect(chip.textContent).toContain('6/5');
     expect(chip.getAttribute('data-over')).toBe('true');
     expect(chip.getAttribute('role')).toBe('status');
-    expect(chip.getAttribute('aria-label')).toBe('6 of 5 issues — over the WIP limit');
+    expect(chip.getAttribute('aria-label')).toBe('6 of 5 work items — over the WIP limit');
     expect(chip.querySelector('svg')).toBeTruthy();
   });
 });

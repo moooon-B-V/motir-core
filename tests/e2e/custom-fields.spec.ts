@@ -338,7 +338,7 @@ test('the PM defines the five field types, sets each on an issue inline, and the
   await freshened;
   const confirm = page.getByRole('dialog');
   await expect(confirm.getByRole('heading', { name: 'Delete Severity?' })).toBeVisible();
-  await expect(confirm.getByText(/values on/)).toContainText('1 issue');
+  await expect(confirm.getByText(/values on/)).toContainText('1 work item');
   // The admin list drops the row OPTIMISTICALLY (before the DELETE resolves),
   // so the row-count → 4 is NOT a commit signal. Wait for the DELETE /api/fields
   // response to land before navigating to the issue, or the rail re-renders the

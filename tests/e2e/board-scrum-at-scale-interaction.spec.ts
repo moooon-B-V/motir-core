@@ -633,7 +633,7 @@ test.describe('board-scrum-at-scale — interaction + complete (4.7.3)', () => {
     const dialog = page.getByRole('dialog', { name: 'Complete sprint' });
     await expect(dialog).toBeVisible();
     // The chooser names the FULL aggregate incomplete count.
-    await expect(dialog).toContainText(`${unfinished.length} incomplete issues`);
+    await expect(dialog).toContainText(`${unfinished.length} incomplete work items`);
 
     await dialog.getByRole('radio', { name: /A future sprint/ }).click();
     await dialog.getByRole('combobox', { name: 'Target sprint' }).click();
@@ -648,8 +648,8 @@ test.describe('board-scrum-at-scale — interaction + complete (4.7.3)', () => {
     await expect(report).toContainText('Not completed');
     // The scope-change line and the bounded-list affordance (the "view all"
     // deep-link on both non-empty sections) — the report never dumps the set.
-    await expect(report).toContainText('2 issues added after the sprint started');
-    await expect(report.getByRole('link', { name: 'View all in Issues' })).toHaveCount(2);
+    await expect(report).toContainText('2 work items added after the sprint started');
+    await expect(report.getByRole('link', { name: 'View all in Work Items' })).toHaveCount(2);
     // The pre-move snapshot marks where the carried issues went.
     await expect(report.getByText(targetSprintName).first()).toBeVisible();
     await report.getByRole('button', { name: 'Done' }).click();
@@ -710,7 +710,7 @@ test.describe('board-scrum-at-scale — interaction + complete (4.7.3)', () => {
     await page.getByTestId('scrum-complete-sprint').click();
     const dialog = page.getByRole('dialog', { name: 'Complete sprint' });
     await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText(`${unfinished.length} incomplete issues`);
+    await expect(dialog).toContainText(`${unfinished.length} incomplete work items`);
     await dialog.getByRole('button', { name: 'Complete sprint' }).click();
     const report = page.getByRole('dialog', { name: /report/ });
     await expect(report).toBeVisible({ timeout: 30_000 });

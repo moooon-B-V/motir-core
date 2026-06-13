@@ -95,8 +95,8 @@ describe('the populated admin list', () => {
     expect(screen.getByText('Bo')).toBeTruthy();
     expect(screen.getAllByText('Default assignee').length).toBe(3);
     expect(screen.getAllByText('None').length).toBe(2); // Web + Billing unset
-    expect(screen.getByText('12 issues')).toBeTruthy();
-    expect(screen.getByText('7 issues')).toBeTruthy();
+    expect(screen.getByText('12 work items')).toBeTruthy();
+    expect(screen.getByText('7 work items')).toBeTruthy();
     expect(screen.getByText('not used yet')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Add component' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Edit API' })).toBeTruthy();
@@ -255,7 +255,7 @@ describe('edit', () => {
     // The row reflects the response: renamed, assignee cleared, count kept.
     await waitFor(() => expect(screen.getByText('Public API')).toBeTruthy());
     expect(screen.getByText('None')).toBeTruthy();
-    expect(screen.getByText('3 issues')).toBeTruthy();
+    expect(screen.getByText('3 work items')).toBeTruthy();
   });
 });
 

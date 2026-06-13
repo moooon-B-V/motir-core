@@ -100,7 +100,7 @@ export async function POST(req: Request): Promise<Response> {
   const b = (body ?? {}) as Record<string, unknown>;
   if (!isIssueType(b.kind)) {
     return NextResponse.json(
-      { code: 'BAD_REQUEST', error: '`kind` must be a valid issue type.' },
+      { code: 'BAD_REQUEST', error: '`kind` must be a valid work item type.' },
       { status: 400 },
     );
   }

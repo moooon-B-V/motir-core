@@ -32,7 +32,7 @@ import { seedSprintLifecycle, type LifecycleSeed } from './_helpers/sprint-lifec
 // the 30s default.
 test.describe.configure({ timeout: 120_000 });
 
-const BACKLOG_LIST = 'Backlog issues';
+const BACKLOG_LIST = 'Backlog work items';
 
 // A sprint container is a <section aria-label="{name}, {state}, {count} issues">
 // → an implicit `region`. Scope per-sprint controls to it; the dialogs portal to
@@ -98,7 +98,7 @@ test.describe('sprint lifecycle (4.4.7)', () => {
     await page.waitForURL('**/boards', { timeout: 30_000 });
 
     // The sprint is active in the DB (real round-trip), with its scope-lock
-    // baseline stamped (3 issues · 10 points: 3 + 2 + 5).
+    // baseline stamped (3 work items · 10 points: 3 + 2 + 5).
     await expect
       .poll(async () => (await db.sprint.findUnique({ where: { id: seed.mainSprintId } }))?.state)
       .toBe('active');
@@ -132,7 +132,7 @@ test.describe('sprint lifecycle (4.4.7)', () => {
     const completeDialog = page.getByRole('dialog', { name: 'Complete sprint' });
     await expect(completeDialog).toBeVisible();
     // 1 done · 2 incomplete — the chooser offers where the 2 unfinished go.
-    await expect(completeDialog).toContainText('2 incomplete issues');
+    await expect(completeDialog).toContainText('2 incomplete work items');
     // Backlog is the default carry-over destination; confirm.
     await completeDialog.getByRole('button', { name: 'Complete sprint' }).click();
 

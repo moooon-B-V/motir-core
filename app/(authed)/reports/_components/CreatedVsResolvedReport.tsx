@@ -203,7 +203,7 @@ function CreatedVsResolvedBody({
   const y: ChartAxis = {
     domain: [0, series.yMax],
     ticks: series.yTicks.map((v) => ({ value: v, label: String(v) })),
-    title: t('cvr.yIssues'),
+    title: t('cvr.yItems'),
   };
 
   const createdLabel = t('cvr.created');
