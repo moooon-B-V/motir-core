@@ -2077,6 +2077,173 @@ export const EPICS: EpicMeta[] = [
           'audit grep to a CI lint.',
       },
       {
+        id: 'bug-reports-hub-agile-cards-collapse-to-one-url',
+        kind: 'bug',
+        title:
+          'Reports hub: all three Agile cards (Burndown chart / Velocity chart / Sprint report) navigate to the SAME `/sprints/[id]/report` URL — collapses three distinct Jira reports onto one page',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** project Reports hub (`/reports`, Subtask 6.3.6 — ' +
+          '`app/(authed)/reports/page.tsx`) · **Code surface owned by:** Story 6.3 ' +
+          '(Subtask 6.3.6 — built the hub) + Story 4.6 (the chart primitives + reads the new ' +
+          'pages will compose: 4.6.2 chart primitives, 4.6.3 `getBurndownSeries`, 4.6.4 ' +
+          '`getVelocity`, 4.6.5 burndown mount, 4.6.6 velocity mount — all `done`) · ' +
+          '**Status:** open · **Reported by:** Yue.\n\n' +
+          'On `/reports` the **Agile** group renders three cards: **Burndown chart**, **Velocity ' +
+          'chart**, **Sprint report**. Three distinct names, three distinct icons (TrendingDown · ' +
+          'BarChart3 · ListTree), three distinct body copies — visually a 3-up of three distinct ' +
+          'reports. But **all three cards link to the exact same URL** (' +
+          '`app/(authed)/reports/page.tsx:54-58, 68-90` — a single `agileHref` computed once ' +
+          '(active sprint else most recently completed, else `/backlog`) and reused for every ' +
+          '`<HubCard href={agileHref}>`). Clicking any of the three lands on the same sprint ' +
+          'report page; the user has no way to deep-link directly into the Velocity chart (a ' +
+          'cross-sprint history view), and "Burndown chart" / "Velocity chart" are misleading as ' +
+          "card titles when they're actually sub-sections of the sprint report.\n\n" +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open the `moooon` / `motir` ' +
+          'project, click **Reports** in the sidebar. Hover/click each of the three Agile cards; ' +
+          'observe each navigates to `/sprints/<id>/report` (same id). Velocity in particular is ' +
+          'CROSS-SPRINT by definition (the 4.6.4 `getVelocity` read returns recent-sprints ' +
+          "committed-vs-completed), but the only way to see it is to open one specific sprint's " +
+          "report, which frames the velocity beside that sprint's burndown rather than as a " +
+          'project-level history.\n\n' +
+          "**Mirror product (decision-authority rung 1).** Jira's Reports menu lists Burndown " +
+          'chart, Velocity chart, and Sprint report as THREE separate pages: ' +
+          '`/projects/{key}/reports/burndown-chart` (per-sprint, with a sprint picker), ' +
+          '`/projects/{key}/reports/velocity-chart` (cross-sprint history, no per-sprint scope), ' +
+          '`/projects/{key}/reports/sprint-report` (per-sprint, with a sprint picker — the ' +
+          'completed/incomplete + carried view this codebase already ships at ' +
+          '`/sprints/[id]/report`). Each is a focused, bookmarkable report with its own controls. ' +
+          'Linear groups them similarly. Three-name three-card UI matches this — the same-URL ' +
+          'collapse is a hub-affordance defect against rung 1, not a design intent. The 6.3.3 ' +
+          'design says "the agile group … link cards into the SHIPPED surfaces" — that names ' +
+          'WHICH primitives the new pages compose (4.6.5 / 4.6.6 mounts), not "all three deep-' +
+          'link to the same URL." The shipped code collapsed three logical destinations onto one ' +
+          'href and the design did not call for that.\n\n' +
+          '**User impact.** (a) The Velocity-chart card is functionally dead — clicking it lands ' +
+          'on the sprint report, which shows velocity as a side-by-side widget but does not let ' +
+          'the user focus on it or jump between historical sprints to compare. (b) The Burndown-' +
+          'chart card is half-functional — it lands on the sprint report which DOES contain a ' +
+          'burndown section, but the user has no sprint picker (the burndown of any other sprint ' +
+          "requires navigating to that sprint's report). (c) The hub itself fails its own " +
+          '"grouped index" framing: an index where three entries point at the same destination is ' +
+          'a bookmarks pane, not an index. (d) URL-bar tabs collapse — a user opening "Velocity ' +
+          'chart" + "Sprint report" in two tabs gets two identical tabs.\n\n' +
+          '**Root cause (clear — one `agileHref` computed once, reused three times).** ' +
+          '`app/(authed)/reports/page.tsx:54-58` computes a single `agileHref` based on the ' +
+          'active sprint (else most recent complete, else `/backlog`), then lines 68-90 mount ' +
+          'three `<HubCard href={agileHref} …>` siblings. There is no branching, no per-card ' +
+          'href; the destination is identical by construction. The 6.3.6 acceptance criteria ' +
+          '("the hub matches the design (both groups; agile cards LINK, never redraw)") were ' +
+          'satisfied at the "link, don\'t redraw" level but missed that each card needs a ' +
+          'distinct link — the AC didn\'t say "three distinct URLs" and the implementer collapsed ' +
+          'them; the design + Jira mirror both wanted three.\n\n' +
+          '**Fix shape — three focused report pages, each composing the existing 4.6.x ' +
+          'primitives + reads.** All chart components, all service reads, all DTOs already exist ' +
+          '— this is composition, not new infrastructure.\n\n' +
+          '1. **`/reports/burndown` (new page).** A focused project-level burndown report: a ' +
+          "sprint picker (the project's sprints, default active else most-recent-complete) + the " +
+          '4.6.5 `ReportBurndownSection` / 4.6.2 `BurndownChart` (`variant="full"`) for the ' +
+          'picked sprint. Server Component, services-only per 4-layer; URL-driven sprint param ' +
+          '(`?sprint=<id>`, the shipped `?view`/`?sort` convention from 2.5) so the picked sprint ' +
+          'reloads/shares. Empty state when the project has no sprints (link to `/backlog`).\n' +
+          '2. **`/reports/velocity` (new page).** A project-level cross-sprint velocity report: ' +
+          'the 4.6.6 `VelocityChart` mounted at full page width with optional history-window + ' +
+          'project-vs-board scope controls (URL-driven). The 4.6.4 `getVelocity` read already ' +
+          'returns the cross-sprint series; the page just composes it standalone instead of as a ' +
+          'side-widget. Low-history state (0–1 completed sprints) per the existing 4.6.6 design.\n' +
+          '3. **Keep `/sprints/[id]/report` for the Sprint report card.** The third card stays ' +
+          'pointed at the existing standalone sprint-report page (already a full per-sprint ' +
+          'report with completed / incomplete / carried + the analytics row), but its href should ' +
+          'still resolve to the active-sprint id (same `agileHref` logic, just isolated to this ' +
+          'card).\n' +
+          '4. **`app/(authed)/reports/page.tsx` re-wire.** Drop the single shared `agileHref`; ' +
+          'compute three hrefs: `burndownHref = /reports/burndown` (with `?sprint=<active>` if ' +
+          'one exists), `velocityHref = /reports/velocity`, `sprintReportHref = current ? ' +
+          '/sprints/${current.id}/report : /backlog`. Pass each into its respective HubCard.\n' +
+          '5. **i18n.** Update the existing `hub.burndownBody` copy ("Lives in the sprint ' +
+          'report.") to match the new shape — e.g. "Points remaining across the active sprint, ' +
+          'with a sprint picker." (en + zh both updated). The OTHER two copies are already shape-' +
+          'correct.\n' +
+          '6. **Sidebar / nav.** Verify the sidebar Reports link still points at `/reports` (it ' +
+          'does — no change needed); the two new pages are reachable via the hub cards + direct ' +
+          'URL. No new sidebar entries required.\n\n' +
+          "**What's out of scope for this bug:** sprint picker UI primitive (use the existing " +
+          'Combobox + a list of `sprintsService.listByProject`); chart redesign (composes 4.6.2 ' +
+          'primitives as-is); a new design subtask (the new pages compose existing designed ' +
+          'primitives and follow the existing report-page pattern at `/reports/created-vs-' +
+          'resolved` and `/reports/distribution` — same chrome, same control vocabulary, just ' +
+          'mounting a different chart; per the design-gate, composing existing primitives in ' +
+          'their documented variants is NOT improvising a new surface). If a design tweak ' +
+          'surfaces during build (e.g. how the sprint picker sits in the page header), capture ' +
+          'as a finding and add a follow-up design subtask — do NOT block the fix on it.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- On `/reports`, the three Agile cards link to **three distinct URLs**: Burndown → ' +
+          '`/reports/burndown` (with `?sprint=<id>` defaulting to active else recent-complete), ' +
+          'Velocity → `/reports/velocity`, Sprint report → `/sprints/<active-id>/report` (else ' +
+          '`/backlog` when no sprints exist).\n' +
+          '- `/reports/burndown` renders a sprint picker + the full 4.6.5/4.6.2 burndown for the ' +
+          'picked sprint. URL `?sprint=` param round-trips (reload + share restores).\n' +
+          '- `/reports/velocity` renders the 4.6.6 velocity chart at full page width as a cross-' +
+          'sprint history; low-history state (≤1 completed sprint) per the existing 4.6.6 ' +
+          'design.\n' +
+          '- Both new pages compose existing services only (4-layer; no new DB / Prisma / route ' +
+          'changes; `reportsService.getBurndownSeries` + `.getVelocity` already exist).\n' +
+          "- Per-viewer project gating works (no-access state on a project the viewer can't " +
+          'see, mirroring the existing report pages).\n' +
+          '- i18n strings updated in both `messages/en.json` and `messages/zh.json` for any copy ' +
+          'that changes (the burndown card body line); existing strings preserved.\n' +
+          '- The Burndown / Velocity / Sprint-report card titles + icons + groups are unchanged ' +
+          '(this is a routing + new-page fix, not a hub redesign).\n' +
+          '- A11y: hub cards keep their focus-ring + role; new pages pass the strict sweep; ' +
+          'sprint picker keyboard-complete.\n' +
+          '- An E2E (`tests/e2e/reports.spec.ts` — already exists per 6.3.7) extends to assert ' +
+          'each of the three Agile cards lands on its expected URL and renders its expected ' +
+          'chart, and that the burndown sprint picker reloads correctly.\n' +
+          '- Shape + colour tokens unchanged (composes existing chart primitives via their ' +
+          'documented variants).\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/reports/page.tsx:54-58, 68-90` — the single-`agileHref`-three-cards ' +
+          'site (the fix site)\n' +
+          '- `app/(authed)/sprints/[id]/report/page.tsx` — the standalone sprint report (the ' +
+          "sprint-report card's destination; unchanged)\n" +
+          '- `app/(authed)/backlog/_components/BurndownChart.tsx` (4.6.2) + ' +
+          '`ReportBurndownSection.tsx` (4.6.5) — the chart + section primitives the new ' +
+          '`/reports/burndown` page composes\n' +
+          '- `app/(authed)/backlog/_components/VelocityChart.tsx` (4.6.6) — the chart the new ' +
+          '`/reports/velocity` page composes\n' +
+          '- `lib/services/reportsService.ts` — `getBurndownSeries`, `getVelocity` (already ' +
+          'shipped; the new pages call these directly Server-Component-side)\n' +
+          '- `lib/services/sprintsService.ts` — `listByProject` (already used by the hub for the ' +
+          'agileHref; reused for the sprint picker)\n' +
+          '- `design/reports/dashboard.mock.html` panel 6 + `design/reports/design-notes.md` ' +
+          'lines 290-291 — the design "agile group … link cards into the SHIPPED surfaces"; ' +
+          'naming WHICH primitives compose, not "one URL"\n' +
+          '- `app/(authed)/reports/created-vs-resolved/page.tsx`, ' +
+          '`app/(authed)/reports/distribution/page.tsx` — the existing report-page pattern the ' +
+          'two new pages mirror (header + URL-driven controls + chart + i18n)\n' +
+          '- Story 6.3 (Reports + dashboards) — `done`, but Subtask 6.3.6\'s AC missed "three ' +
+          'distinct URLs" → that\'s why the cards collapsed onto one href\n' +
+          '- Jira reports menu (mirror product, rung 1) — Burndown / Velocity / Sprint report as ' +
+          'three distinct pages with their own pickers and scope\n\n' +
+          "**Refactor signal — Subtask AC drift.** Subtask 6.3.6's acceptance criteria said " +
+          '"agile cards LINK, never redraw" but did NOT say "three distinct URLs." The implementer ' +
+          "satisfied the letter (link, don't redraw — true; all three are `<Link>`s, none " +
+          'redraws the chart) while violating the spirit (the cards are not an index if they all ' +
+          'point at the same place). This is the second documented "AC satisfied by letter, ' +
+          'violated by mirror-product intent" defect this cycle (sibling: ' +
+          '`bug-notification-pref-transitioned-still-disabled-after-5-4-shipped`, where the seam ' +
+          "comment named Story 5.4 by id and the 5.4 completion didn't flip it). Both are " +
+          'planner-side process gaps: an AC that says "match the design" implicitly inherits ' +
+          'mirror-product behaviour for everything the design under-specifies, and "match the ' +
+          "mirror product\" is the planner's rung-1 obligation — not the implementer's. The fix " +
+          'is to tighten ACs at PLAN time to name the rung-1 expectation explicitly when a card ' +
+          'maps to a mirror-product behaviour that is not visually obvious (here: "three URLs, ' +
+          'one per card, mirroring Jira\'s three reports"). Out of scope for this bug — captured ' +
+          'as the refactor signal for a future planner-runbook tightening.',
+      },
+      {
         id: 'bug-sprint-report-modal-clipped-burndown',
         kind: 'bug',
         title:
