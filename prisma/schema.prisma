@@ -140,6 +140,11 @@ model User {
   // unattributed, never blocks a delete — the assignee semantics).
   notifications             Notification[]            @relation("NotificationRecipient")
   actedNotifications        Notification[]            @relation("NotificationActor")
+  // Per-user notification preferences (Story 5.7 · Subtask 5.7.6) — the
+  // per-user × event-type × channel toggle matrix that gates BOTH the in-app
+  // fan-in (5.7.3) and the DONE email job (5.1.6). Cascade: preferences are
+  // personal substrate, they die with the user (the notifications pattern).
+  notificationPreferences   NotificationPreference[]  @relation("UserNotificationPreferences")
 
   @@map("user")
 }
@@ -1759,6 +1764,53 @@ enum NotificationCategory {
   watching
 
   @@map("notification_category")
+}
+
+/// Per-user notification PREFERENCES (Story 5.7 · Subtask 5.7.6) — the Jira
+/// *Personal settings → Notification settings* shape, generalized to a
+/// per-user × EVENT-TYPE × CHANNEL toggle matrix. One row = "user U wants (or
+/// not) channel C for event-type E". The resolved value is the single CHANNEL
+/// GATE consulted by BOTH the 5.7.3 in-app fan-in job (the `in_app` channel)
+/// AND the DONE 5.1.6 email job (the `email` channel) — toggling a channel off
+/// suppresses that channel without touching either emit site (the event still
+/// fires once; only the SEND decision asks the resolver).
+///
+/// ABSENCE = the documented DEFAULT (the resolver supplies it — an unset row is
+/// NOT "off"; direct/mention events default ON for both channels). So an
+/// untouched user has ZERO rows and still gets the default behaviour; a row
+/// exists only once the user has explicitly toggled that (event, channel) cell.
+///
+/// `eventType` is a String (NOT an enum) to match `Notification.type` — the
+/// SAME open event-type axis, so Story 5.4 (`transitioned`) and Story 6.6
+/// (`created` / `field.changed`) extend it with no migration. `channel` is a
+/// CLOSED two-value set, so an enum (the `NotificationCategory` precedent).
+model NotificationPreference {
+  id        String              @id @default(cuid())
+  userId    String              @map("user_id")
+  eventType String              @map("event_type")
+  channel   NotificationChannel
+  enabled   Boolean
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt @map("updated_at")
+
+  user User @relation("UserNotificationPreferences", fields: [userId], references: [id], onDelete: Cascade)
+
+  // One row per (user × event-type × channel): the upsert target the settings
+  // toggle and the resolver both key on.
+  @@unique([userId, eventType, channel])
+  // The resolver's per-user read (the settings-page matrix + the gate lookups).
+  @@index([userId])
+  @@map("notification_preference")
+}
+
+/// The notification delivery channels (Story 5.7 · Subtask 5.7.6). A CLOSED set
+/// — `email` (the DONE 5.1.6 job) and `in_app` (the 5.7.3 bell feed) — so an
+/// enum. Mobile/native push is explicitly out of scope (a non-Motir surface).
+enum NotificationChannel {
+  email
+  in_app
+
+  @@map("notification_channel")
 }
 
 /// The five per-project custom-field types (Story 5.3). Each maps 1:1 to a

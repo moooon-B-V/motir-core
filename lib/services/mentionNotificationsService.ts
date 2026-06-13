@@ -6,6 +6,8 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { mentionExcerpt } from '@/lib/mentions/excerpt';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { sendEvent } from '@/lib/jobs/sendEvent';
+import { notificationPreferencesService } from '@/lib/services/notificationPreferencesService';
+import { NOTIFICATION_EVENT_TYPE } from '@/lib/notifications/preferences';
 
 // Mention → email fan-out (Story 5.1 · Subtask 5.1.6). The business logic
 // behind the mentionNotify job (lib/jobs/definitions/mentionNotify.ts): given
@@ -111,8 +113,21 @@ export const mentionNotificationsService = {
     }
     if (viewableIds.length === 0) return { notifiedUserIds: [] };
 
+    // Per-user CHANNEL GATE (Story 5.7 · Subtask 5.7.6). The mention email is
+    // the `email` channel of the `mentioned` event type; a recipient who turned
+    // email off for mentions is dropped HERE — at the SEND decision, not at any
+    // emit site (the event still fired once; the one-emit-path invariant holds).
+    // An unset preference resolves to the documented default (mentions ON), so
+    // this is behaviour-preserving for every user who hasn't opted out.
+    const emailEnabledIds = await notificationPreferencesService.filterChannelEnabled(
+      viewableIds,
+      NOTIFICATION_EVENT_TYPE.mentioned,
+      'email',
+    );
+    if (emailEnabledIds.length === 0) return { notifiedUserIds: [] };
+
     const [author] = await userRepository.findByIds([input.authorId]);
-    const recipients = await userRepository.findByIds(viewableIds);
+    const recipients = await userRepository.findByIds(emailEnabledIds);
     const excerpt = mentionExcerpt(bodyMd);
     const issueUrl = `${resolveBaseUrlTrimmed()}/issues/${encodeURIComponent(item.identifier)}`;
 

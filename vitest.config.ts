@@ -74,6 +74,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: [
+        // Story 5.7 (in-app notifications) · Subtask 5.7.6 — the per-user
+        // notification-preference layer (the channel gate) lands gated.
+        'lib/services/notificationPreferencesService.ts',
+        'lib/repositories/notificationPreferenceRepository.ts',
+        'lib/mappers/notificationPreferenceMappers.ts',
+        'lib/notifications/preferences.ts',
         'lib/services/workItemsService.ts',
         'lib/services/backlogService.ts',
         'lib/repositories/workItemRepository.ts',
@@ -167,6 +173,19 @@ export default defineConfig({
       // independently, so a regression in any one fails the run (rather than a
       // blended average hiding a weak module).
       thresholds: {
+        // Story 5.7 · Subtask 5.7.6 — notification-preference channel gate.
+        'lib/services/notificationPreferencesService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/repositories/notificationPreferenceRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/mappers/notificationPreferenceMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/notifications/preferences.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/workItemsService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/backlogService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workItemRepository.ts': { branches: 90, functions: 90, lines: 90 },

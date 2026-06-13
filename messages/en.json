@@ -1374,6 +1374,43 @@
         "heading": "Language",
         "helper": "Choose the language for the Motir interface.",
         "label": "Language"
+      },
+      "notifications": {
+        "heading": "Notifications",
+        "helper": "Choose how you're notified for each kind of update. These apply to you across every workspace.",
+        "columns": {
+          "event": "Event",
+          "email": "Email",
+          "inApp": "In-app"
+        },
+        "events": {
+          "mentioned": {
+            "label": "Mentioned",
+            "desc": "Someone @-mentions you in a comment or description."
+          },
+          "commented": {
+            "label": "Commented on an item you're involved in",
+            "desc": "A new comment on an item you reported, are assigned, or commented on."
+          },
+          "assigned": {
+            "label": "Assigned to you",
+            "desc": "An item is assigned to you."
+          },
+          "transitioned": {
+            "label": "An item you're watching changes status",
+            "desc": "Available once issue-watching ships (Story 5.4)."
+          }
+        },
+        "soon": "Soon",
+        "cellAria": "{channel} for {event}",
+        "cellAriaSoon": "{channel} for {event} (coming soon)",
+        "defaultsNote": "Direct events — mentions, comments on your items, and assignments — default on for both channels. An untouched row uses that default (it is not off until you turn it off).",
+        "status": {
+          "saving": "Saving…",
+          "saved": "Saved",
+          "error": "Couldn't save",
+          "retry": "Retry"
+        }
       }
     },
     "automation": {

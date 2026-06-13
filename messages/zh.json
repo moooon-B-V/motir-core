@@ -1374,6 +1374,43 @@
         "heading": "语言",
         "helper": "选择Motir界面使用的语言。",
         "label": "语言"
+      },
+      "notifications": {
+        "heading": "通知",
+        "helper": "选择你希望以何种方式接收每类更新的通知。这些设置对你在所有工作区均生效。",
+        "columns": {
+          "event": "事件",
+          "email": "邮件",
+          "inApp": "应用内"
+        },
+        "events": {
+          "mentioned": {
+            "label": "被提及",
+            "desc": "有人在评论或描述中@提及你。"
+          },
+          "commented": {
+            "label": "你参与的事项有新评论",
+            "desc": "你报告、被指派或评论过的事项有了新评论。"
+          },
+          "assigned": {
+            "label": "指派给你",
+            "desc": "有事项被指派给你。"
+          },
+          "transitioned": {
+            "label": "你关注的事项状态变更",
+            "desc": "在事项关注功能上线后可用（故事 5.4）。"
+          }
+        },
+        "soon": "即将推出",
+        "cellAria": "{event}的{channel}通知",
+        "cellAriaSoon": "{event}的{channel}通知（即将推出）",
+        "defaultsNote": "直接相关的事件——提及、你的事项的评论以及指派——默认在两个渠道均开启。未改动的行使用该默认值（在你关闭之前不会关闭）。",
+        "status": {
+          "saving": "保存中…",
+          "saved": "已保存",
+          "error": "保存失败",
+          "retry": "重试"
+        }
       }
     },
     "automation": {
