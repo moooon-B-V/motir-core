@@ -155,7 +155,7 @@ export const story_2_7: PlanStory = {
     {
       id: '2.7.1',
       title: 'Design — the type + executor picker on the create modal + the detail rail',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 40,
