@@ -1319,7 +1319,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Reports landing pages render their charts at widget-tile proportions — Distribution donut is too small (lost in whitespace); Created-vs-Resolved line chart is too big (fills viewport width, runs off the bottom)',
-        status: 'in_progress',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 · **Surfaces:** reports landing pages ' +
@@ -1456,7 +1456,16 @@ export const EPICS: EpicMeta[] = [
           '- 6.3.3 widget tile + 6.5.2 / 6.5.3 report-landing — the two consumer ' +
           'surfaces whose differing requirements the chart API has to encode\n' +
           '- `motir-core/CLAUDE.md` — colour via `--el-*`, shape via element-shape tokens ' +
-          '(applies to whatever wrapper / prop the fix introduces)',
+          '(applies to whatever wrapper / prop the fix introduces)\n\n' +
+          '**Closed (2026-06-13): PR #836 merged.** The report-landing charts now size for ' +
+          'the page, not the widget tile: the Distribution donut renders at a page-level ' +
+          'diameter and the Created-vs-Resolved line/area chart is bounded so it fits within ' +
+          'one fold, while the 6.3.3 dashboard-widget tiles keep their existing tile size. ' +
+          'The bounded report card uses `max-w-[48rem]` — the named `max-w-3xl` resolves to ' +
+          '~40px under motir-core’s `@theme` (which clears the container scale) and collapsed ' +
+          'the layout. Full CI green (sharded Playwright E2E + Vitest). The PR also carried, ' +
+          'at Yue’s request, the “issue” → “work item” terminology sweep across the app copy ' +
+          'and the E2E selectors that key on the renamed aria-labels.',
       },
       {
         id: 'bug-board-cannot-drag-from-in-review-to-done',
