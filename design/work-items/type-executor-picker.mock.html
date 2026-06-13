@@ -1,0 +1,1709 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Work-item type + executor picker (Story 2.7 · 2.7.1 → 2.7.4)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the work-item TYPE + EXECUTOR picker — the
+      planning-time design gate for Story 2.7 (2.7.1; the picker code is 2.7.4,
+      blocked on this). Two NEW structural fields promoted from prose to UI:
+        • type     — a FIXED ten-member WorkItemType enum, LEAF-ONLY (task /
+                     subtask / bug; null on epic/story + legacy rows)
+        • executor — coding_agent | human, SEEDED from a type→executor default
+                     map when a type is first chosen, OVERRIDABLE
+
+      The picker is a NEW element on TWO existing surfaces — the issue CREATE
+      MODAL and the issue DETAIL RAIL. Per the mirror check (Atlassian, verified
+      in 2.7.2): Jira's "issue type" IS the kind hierarchy and routing-who is the
+      ASSIGNEE field — so this control reads as a SIBLING of the kind/assignee
+      affordances, never a replacement for kind.
+
+      Built FROM the shipped design system — every element composes a shipped
+      primitive, nothing hand-rolled:
+        • type picker        → Combobox (components/ui/Combobox.tsx), in-dialog
+                               inline menu (role=dialog → inline, not portaled)
+        • executor control   → Segmented (components/ui/Segmented.tsx)
+        • type chip          → the Pill recipe (hue in the TINT background +
+                               --el-text-strong text, finding #35) + the
+                               IssueTypeIcon saturated glyph
+        • executor indicator → a bot / user glyph + label
+
+      Colour ONLY via Tier-3 --el-* (tokens copied 1:1 from app/globals.css);
+      the ten per-type hues are PROPOSED here as --el-type-{code…chore} and are
+      added to globals.css Tier 3 by 2.7.4 (the per-component token-growth
+      pattern). Shape ONLY via element-semantic shape tokens. See design-notes.md
+      for the primitive map, copy strings, the full hue table, and a11y.
+
+      Panels: (1) create-modal type picker OPEN (the ten members) · (2) executor
+      default-seeding + override + unset + leaf-only-absent · (3) detail-rail
+      type chip + executor indicator (typed · null · inline-edit open) · (4) the
+      ten-type legend + hue + executor-default map. Toggle dark for token parity.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --height-btn-md: 40px;
+        --focus-ring-color: var(--color-primary);
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-warning: var(--color-warning);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-sidebar-item-bg-hover: #eeede9;
+
+        /* Existing issue-type hues (work-item KIND identity — finding #54) */
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        /* ── PROPOSED by THIS design (2.7.4 adds these to globals.css Tier 3) ──
+           The ten per-TYPE hues — the work-NATURE palette, parallel to the
+           per-KIND hues above. Mapped to existing Tier-0 values (NO new Tier-0
+           colour needed): the seven "produces an artifact" types take the seven
+           saturated hues; the three "meta / admin" types (decision, manual,
+           chore) take the three greys — desaturation is semantically apt. The
+           dark block re-skins them automatically (each is a --color-* ref). */
+        --el-type-code: var(--color-info); /* blue   — implementation */
+        --el-type-design: var(--color-accent); /* pink   — UI/UX design */
+        --el-type-test: var(--color-success); /* green  — automated tests */
+        --el-type-content: var(--color-accent-teal); /* teal   — copy / docs / translate */
+        --el-type-research: var(--color-primary); /* purple — spike / investigation */
+        --el-type-review: var(--color-accent-orange); /* orange — QA / review */
+        --el-type-deploy: var(--color-destructive); /* red    — infra / ops / release */
+        --el-type-decision: var(--color-charcoal); /* ink    — decision record */
+        --el-type-manual: var(--color-stone); /* stone  — human provisioning */
+        --el-type-chore: var(--color-slate); /* slate  — housekeeping */
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #f0742a;
+        --color-accent-teal: #3bb6b1;
+        --color-accent-green: #2bc24a;
+        --color-success: #2bc24a;
+        --color-warning: #f0742a;
+        --color-destructive: #f0564a;
+        --color-info: #4d9fff;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 12px 40px rgba(15, 15, 15, 0.15);
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 120px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 28px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 760px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .board {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 40px;
+      }
+      .panel-band {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .band-title {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .band-title b {
+        color: var(--el-text-secondary);
+      }
+      .panel-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 28px;
+        align-items: flex-start;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--el-text-secondary);
+        padding-left: 2px;
+      }
+      .panel-note {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+        max-width: 320px;
+        padding-left: 2px;
+      }
+      .panel-note code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+
+      /* ── Modal (components/ui/Modal.tsx) chrome ─────────────────────────── */
+      .modal {
+        position: relative;
+        width: 448px; /* max-w-[28rem] (size="md") */
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .modal.compact {
+        width: 360px;
+      }
+      .modal-title {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0 0 var(--spacing-md);
+      }
+      .modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: transparent;
+        color: var(--el-text-muted);
+        border-radius: var(--radius-control);
+        cursor: pointer;
+      }
+      .modal-body {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-md);
+      }
+      .modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: var(--spacing-md);
+        padding-top: var(--spacing-md);
+        border-top: 1px solid var(--el-border);
+      }
+
+      /* ── Field row grammar ──────────────────────────────────────────────── */
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field > label {
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .field.is-new > label::after {
+        content: 'NEW · 2.7';
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--el-accent);
+      }
+      /* Representative (already-shipped) control — shown for context only */
+      .control {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .control .chev {
+        margin-left: auto;
+        color: var(--el-text-muted);
+        display: inline-flex;
+      }
+
+      /* ── Combobox (components/ui/Combobox.tsx) ──────────────────────────── */
+      .cbx {
+        position: relative;
+      }
+      .cbx-trigger {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .cbx-trigger.is-open {
+        border-color: var(--el-accent);
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: var(--focus-ring-offset);
+      }
+      .cbx-trigger .val {
+        color: var(--el-text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cbx-trigger .placeholder {
+        color: var(--el-text-muted);
+      }
+      .cbx-trigger .updown {
+        margin-left: auto;
+        color: var(--el-text-muted);
+        display: inline-flex;
+        flex: none;
+      }
+      /* The in-dialog inline menu (role=dialog → inline, not portaled) */
+      .cbx-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        z-index: 20;
+        width: max-content;
+        min-width: 100%;
+        max-width: 18rem;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+        max-height: 320px;
+        overflow-y: auto;
+      }
+      .cbx-opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .cbx-opt.is-active {
+        background: var(--el-surface);
+      }
+      .cbx-opt .opt-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cbx-opt .opt-gloss {
+        margin-left: auto;
+        color: var(--el-text-muted);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .cbx-opt .opt-check {
+        margin-left: 4px;
+        color: var(--el-text);
+        flex: none;
+        display: inline-flex;
+      }
+      .cbx-opt.is-active .opt-gloss {
+        margin-left: auto;
+      }
+
+      /* ── Type glyph — the IssueTypeIcon-adjacent saturated stroke ───────── */
+      .tglyph {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+      }
+      .t-code {
+        color: var(--el-type-code);
+      }
+      .t-design {
+        color: var(--el-type-design);
+      }
+      .t-test {
+        color: var(--el-type-test);
+      }
+      .t-content {
+        color: var(--el-type-content);
+      }
+      .t-research {
+        color: var(--el-type-research);
+      }
+      .t-review {
+        color: var(--el-type-review);
+      }
+      .t-deploy {
+        color: var(--el-type-deploy);
+      }
+      .t-decision {
+        color: var(--el-type-decision);
+      }
+      .t-manual {
+        color: var(--el-type-manual);
+      }
+      .t-chore {
+        color: var(--el-type-chore);
+      }
+
+      /* ── Type CHIP — Pill recipe: hue in the TINT background (a color-mix of
+           the type hue) + --el-text-strong label (AA, finding #35) + the
+           saturated glyph. One saturated --el-type-* token yields its own tint,
+           so no 10 separate tint pairs are needed. ─────────────────────────── */
+      .tchip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .tchip .tglyph {
+        width: 13px;
+        height: 13px;
+      }
+      .tchip.code {
+        background: color-mix(in srgb, var(--el-type-code) 14%, var(--el-page-bg));
+      }
+      .tchip.design {
+        background: color-mix(in srgb, var(--el-type-design) 14%, var(--el-page-bg));
+      }
+      .tchip.test {
+        background: color-mix(in srgb, var(--el-type-test) 14%, var(--el-page-bg));
+      }
+      .tchip.content {
+        background: color-mix(in srgb, var(--el-type-content) 14%, var(--el-page-bg));
+      }
+      .tchip.research {
+        background: color-mix(in srgb, var(--el-type-research) 14%, var(--el-page-bg));
+      }
+      .tchip.review {
+        background: color-mix(in srgb, var(--el-type-review) 14%, var(--el-page-bg));
+      }
+      .tchip.deploy {
+        background: color-mix(in srgb, var(--el-type-deploy) 14%, var(--el-page-bg));
+      }
+      .tchip.decision {
+        background: color-mix(in srgb, var(--el-type-decision) 14%, var(--el-page-bg));
+      }
+      .tchip.manual {
+        background: color-mix(in srgb, var(--el-type-manual) 18%, var(--el-page-bg));
+      }
+      .tchip.chore {
+        background: color-mix(in srgb, var(--el-type-chore) 18%, var(--el-page-bg));
+      }
+
+      /* ── Segmented executor control (components/ui/Segmented.tsx) ────────── */
+      .seg {
+        /* The shipped Segmented is content-width (inline-flex). In a flex-column
+           field the parent's align-items:stretch would blow it full-width, so
+           pin it to its content like the real component. */
+        display: inline-flex;
+        align-self: flex-start;
+        width: fit-content;
+        align-items: center;
+        gap: 2px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        padding: 2px;
+      }
+      .seg button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: none;
+        background: transparent;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .seg button .seg-ic {
+        display: inline-flex;
+        color: var(--el-text-faint);
+      }
+      .seg button[aria-pressed='true'] {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .seg button[aria-pressed='true'] .seg-ic {
+        color: var(--el-accent);
+      }
+
+      /* ── Executor indicator (read mode — detail rail) ───────────────────── */
+      .exec-ind {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .exec-ind .seg-ic {
+        display: inline-flex;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Buttons (components/ui/Button.tsx) ─────────────────────────────── */
+      .btn {
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+
+      /* ── A standalone field cluster card (panel 2) ──────────────────────── */
+      .cluster {
+        width: 320px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-md);
+      }
+
+      /* ── Detail rail (panel 3) — issue detail right-rail metadata column ─── */
+      .rail {
+        width: 300px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 6px 4px;
+      }
+      .rail-row {
+        position: relative;
+        display: grid;
+        grid-template-columns: 92px 1fr;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 14px;
+        border-radius: var(--radius-control);
+        min-height: 40px;
+      }
+      .rail-row + .rail-row {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .rail-row > .rk {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-muted);
+      }
+      .rail-row.is-new > .rk::after {
+        content: ' ·';
+        color: var(--el-accent);
+      }
+      .rail-val {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      /* the editable affordance — a quiet hover target, like the shipped inline
+         pickers (2.5.5): the static chip/indicator IS the click target */
+      .editable {
+        cursor: pointer;
+        border-radius: var(--radius-badge);
+      }
+      .set-affordance {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--el-text-muted);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-badge);
+        padding: 3px 12px;
+        cursor: pointer;
+      }
+      .set-affordance .plus {
+        display: inline-flex;
+        color: var(--el-text-faint);
+      }
+      .rail-editing {
+        position: absolute;
+        top: calc(100% - 4px);
+        left: 14px;
+        z-index: 20;
+      }
+
+      /* ── Legend (panel 4) ───────────────────────────────────────────────── */
+      .legend {
+        width: 100%;
+        max-width: 1120px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 6px 8px;
+      }
+      .legend-row {
+        display: grid;
+        grid-template-columns: 150px 1fr 200px 250px;
+        align-items: center;
+        gap: 16px;
+        padding: 9px 14px;
+        font-size: 13px;
+      }
+      .legend-row + .legend-row {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .legend-row.head {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+      }
+      .legend-row .gloss {
+        color: var(--el-text-secondary);
+      }
+      .legend-row .tok {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .legend-row .tok b {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .legend-row .exec {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--el-text);
+      }
+      .legend-row .exec .seg-ic {
+        color: var(--el-text-secondary);
+        display: inline-flex;
+      }
+      .legend-row .exec .either {
+        color: var(--el-text-muted);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Work-item type + executor picker</h1>
+        <p>
+          Story 2.7 · design for 2.7.4 (the planning-time design gate). A NEW <code>type</code> (ten
+          fixed members, leaf-only) + <code>executor</code> (coding&nbsp;agent | human, seeded from
+          a default map) on the create modal and the detail rail. Built from the shipped Combobox /
+          Segmented / Pill primitives + the <code>--el-*</code> tokens. Reads as a sibling of the
+          kind / assignee affordances (verified Jira mirror, 2.7.2) — never a replacement for kind.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-updown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m7 15 5 5 5-5M7 9l5-5 5 5" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18M6 6l12 12" />
+        </g>
+        <g
+          id="i-chevD"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14M12 5v14" />
+        </g>
+        <!-- kind glyphs (representative) -->
+        <g
+          id="k-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+        <g
+          id="k-story"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+        </g>
+        <!-- the ten TYPE glyphs -->
+        <g
+          id="t-code"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m16 18 6-6-6-6M8 6l-6 6 6 6" />
+        </g>
+        <g
+          id="t-design"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          />
+          <path d="m15 5 4 4" />
+        </g>
+        <g
+          id="t-test"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"
+          />
+          <path d="M6.453 15h11.094M8.5 2h7" />
+        </g>
+        <g
+          id="t-content"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" />
+          <path d="M14 2v4a2 2 0 0 0 2 2h4M16 13H8M16 17H8M10 9H8" />
+        </g>
+        <g
+          id="t-research"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
+          />
+          <path d="M9 18h6M10 22h4" />
+        </g>
+        <g
+          id="t-review"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="8" y="2" width="8" height="4" rx="1" />
+          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+          <path d="m9 14 2 2 4-4" />
+        </g>
+        <g
+          id="t-deploy"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"
+          />
+          <path
+            d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"
+          />
+          <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+        </g>
+        <g
+          id="t-decision"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1zM2 16l3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"
+          />
+          <path d="M7 21h10M12 3v18M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" />
+        </g>
+        <g
+          id="t-manual"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2" />
+          <path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2" />
+          <path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8" />
+          <path
+            d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+          />
+        </g>
+        <g
+          id="t-chore"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
+          />
+        </g>
+        <!-- executor glyphs -->
+        <g
+          id="e-agent"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 8V4H8" />
+          <rect x="4" y="8" width="16" height="12" rx="2" />
+          <path d="M2 14h2M20 14h2M15 13v2M9 13v2" />
+        </g>
+        <g
+          id="e-human"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </g>
+      </defs>
+    </svg>
+
+    <div class="board">
+      <!-- ═══════════════ PANEL 1 — type picker OPEN on the create modal ═══════════════ -->
+      <div class="panel-band">
+        <div class="band-title">
+          Panel 1 · <b>Create modal — the type picker open</b> · the ten members, leaf-only
+        </div>
+        <div class="panel-row">
+          <div class="panel">
+            <div class="panel-label">1 · kind = Task (a leaf) · Type combobox open</div>
+            <div class="modal" role="dialog" aria-label="Create issue">
+              <button class="modal-close" aria-label="Close">
+                <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+              </button>
+              <h2 class="modal-title">Create issue</h2>
+              <div class="modal-body">
+                <div class="field">
+                  <label>Kind</label>
+                  <div class="control">
+                    <span class="tglyph t-task" style="color: var(--el-type-task)">
+                      <svg width="16" height="16" viewBox="0 0 24 24"><use href="#k-task" /></svg>
+                    </span>
+                    <span>Task</span>
+                    <span class="chev">
+                      <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-chevD" /></svg>
+                    </span>
+                  </div>
+                </div>
+                <div class="field">
+                  <label>Title</label>
+                  <div class="control">
+                    <span>Migrate the seed loader to structured fields</span>
+                  </div>
+                </div>
+                <!-- THE NEW FIELD — Type, combobox OPEN -->
+                <div class="field is-new">
+                  <label>Type</label>
+                  <div class="cbx">
+                    <div class="cbx-trigger is-open" role="combobox" aria-expanded="true">
+                      <span class="tglyph t-code">
+                        <svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-code" /></svg>
+                      </span>
+                      <span class="val">Code</span>
+                      <span class="updown">
+                        <svg width="16" height="16" viewBox="0 0 24 24">
+                          <use href="#i-updown" />
+                        </svg>
+                      </span>
+                    </div>
+                    <div class="cbx-menu" role="listbox" aria-label="Type">
+                      <div class="cbx-opt is-active" role="option" aria-selected="true">
+                        <span class="tglyph t-code"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-code" /></svg
+                        ></span>
+                        <span class="opt-label">Code</span>
+                        <span class="opt-check"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#i-check" /></svg
+                        ></span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-design"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-design" /></svg
+                        ></span>
+                        <span class="opt-label">Design</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-test"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-test" /></svg
+                        ></span>
+                        <span class="opt-label">Test</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-content"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-content" /></svg
+                        ></span>
+                        <span class="opt-label">Content</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-research"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-research" /></svg
+                        ></span>
+                        <span class="opt-label">Research</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-review"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-review" /></svg
+                        ></span>
+                        <span class="opt-label">Review</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-decision"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-decision" /></svg
+                        ></span>
+                        <span class="opt-label">Decision</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-deploy"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-deploy" /></svg
+                        ></span>
+                        <span class="opt-label">Deploy</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-manual"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-manual" /></svg
+                        ></span>
+                        <span class="opt-label">Manual</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-chore"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-chore" /></svg
+                        ></span>
+                        <span class="opt-label">Chore</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <!-- the executor control sits right under Type; seeded from the picked type -->
+                <div class="field is-new" style="margin-top: 296px">
+                  <label>Executor</label>
+                  <div class="seg" role="group" aria-label="Executor">
+                    <button type="button" aria-pressed="true">
+                      <span class="seg-ic"
+                        ><svg width="15" height="15" viewBox="0 0 24 24">
+                          <use href="#e-agent" /></svg
+                      ></span>
+                      Coding agent
+                    </button>
+                    <button type="button" aria-pressed="false">
+                      <span class="seg-ic"
+                        ><svg width="15" height="15" viewBox="0 0 24 24">
+                          <use href="#e-human" /></svg
+                      ></span>
+                      Human
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-primary">Create issue</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-label">Notes</div>
+            <p class="panel-note">
+              The <b>Type</b> picker is the shipped <code>Combobox</code> (not searchable — a fixed,
+              closed set of ten). Because the create modal is a <code>role="dialog"</code>, the menu
+              renders <b>inline</b> (the Combobox in-dialog branch), not portaled.
+            </p>
+            <p class="panel-note">
+              Each row = the type's saturated <code>--el-type-*</code> glyph (mirroring
+              <code>IssueTypeIcon</code>) + its label; the selected row carries the trailing
+              <code>Check</code>. The trigger shows the chosen type's glyph + label + the
+              <code>ChevronsUpDown</code> affordance.
+            </p>
+            <p class="panel-note">
+              <b>Leaf-only:</b> Type + Executor render <b>only</b> when the chosen kind is a leaf
+              (<code>task</code> / <code>subtask</code> / <code>bug</code>) — absent for
+              <code>epic</code> / <code>story</code> (panel 2d). <code>type</code> may be left
+              <b>unset</b> (null, panel 2c).
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════ PANEL 2 — executor default-seeding + override + unset + absent ═══════════════ -->
+      <div class="panel-band">
+        <div class="band-title">
+          Panel 2 · <b>Executor — default-seeding, override, unset, leaf-only-absent</b>
+        </div>
+        <div class="panel-row">
+          <!-- 2a — code → coding_agent (default) -->
+          <div class="panel">
+            <div class="panel-label">2a · Type = Code → executor seeded coding_agent</div>
+            <div class="cluster">
+              <div class="field is-new">
+                <label>Type</label>
+                <div class="cbx-trigger">
+                  <span class="tglyph t-code"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-code" /></svg
+                  ></span>
+                  <span class="val">Code</span>
+                  <span class="updown"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-updown" /></svg
+                  ></span>
+                </div>
+              </div>
+              <div class="field is-new">
+                <label>Executor</label>
+                <div class="seg" role="group" aria-label="Executor">
+                  <button type="button" aria-pressed="true">
+                    <span class="seg-ic"
+                      ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-agent" /></svg
+                    ></span>
+                    Coding agent
+                  </button>
+                  <button type="button" aria-pressed="false">
+                    <span class="seg-ic"
+                      ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-human" /></svg
+                    ></span>
+                    Human
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p class="panel-note">
+              Choosing a type <b>seeds</b> the executor from the default map via the single-source
+              <code>defaultExecutorForType</code> helper (2.7.3) — the UI never re-states the map.
+            </p>
+          </div>
+
+          <!-- 2b — manual → human (default), then overridden -->
+          <div class="panel">
+            <div class="panel-label">2b · Type = Manual → seeded human, then overridden</div>
+            <div class="cluster">
+              <div class="field is-new">
+                <label>Type</label>
+                <div class="cbx-trigger">
+                  <span class="tglyph t-manual"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-manual" /></svg
+                  ></span>
+                  <span class="val">Manual</span>
+                  <span class="updown"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-updown" /></svg
+                  ></span>
+                </div>
+              </div>
+              <div class="field is-new">
+                <label
+                  >Executor
+                  <span style="color: var(--el-text-faint); font-weight: 400">· seeded</span></label
+                >
+                <div class="seg" role="group" aria-label="Executor (default)">
+                  <button type="button" aria-pressed="false">
+                    <span class="seg-ic"
+                      ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-agent" /></svg
+                    ></span>
+                    Coding agent
+                  </button>
+                  <button type="button" aria-pressed="true">
+                    <span class="seg-ic"
+                      ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-human" /></svg
+                    ></span>
+                    Human
+                  </button>
+                </div>
+              </div>
+              <div class="field is-new">
+                <label
+                  >Executor
+                  <span style="color: var(--el-accent); font-weight: 400"
+                    >· overridden →</span
+                  ></label
+                >
+                <div class="seg" role="group" aria-label="Executor (overridden)">
+                  <button type="button" aria-pressed="true">
+                    <span class="seg-ic"
+                      ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-agent" /></svg
+                    ></span>
+                    Coding agent
+                  </button>
+                  <button type="button" aria-pressed="false">
+                    <span class="seg-ic"
+                      ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-human" /></svg
+                    ></span>
+                    Human
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p class="panel-note">
+              The default is a <b>seed, not a lock</b> — <code>manual</code> seeds
+              <code>human</code>, but the user can flip it to <code>coding_agent</code> and the
+              override sticks.
+            </p>
+          </div>
+
+          <!-- 2c — unset -->
+          <div class="panel">
+            <div class="panel-label">2c · Type unset (null)</div>
+            <div class="cluster">
+              <div class="field is-new">
+                <label>Type</label>
+                <div class="cbx-trigger">
+                  <span class="val placeholder">Set a type</span>
+                  <span class="updown"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-updown" /></svg
+                  ></span>
+                </div>
+              </div>
+              <div class="field is-new">
+                <label style="color: var(--el-text-muted)">Executor</label>
+                <p style="margin: 0; font-size: 13px; color: var(--el-text-muted)">
+                  — follows the type; no executor until a type is chosen
+                </p>
+              </div>
+            </div>
+            <p class="panel-note">
+              A leaf may carry <b>no type</b> (the column is nullable). The trigger shows the
+              <code>Set a type</code> placeholder; the executor control is dormant until a type
+              seeds it.
+            </p>
+          </div>
+
+          <!-- 2d — leaf-only-absent (kind = Story) -->
+          <div class="panel">
+            <div class="panel-label">2d · kind = Story → no type control</div>
+            <div class="cluster">
+              <div class="field">
+                <label>Kind</label>
+                <div class="control">
+                  <span class="tglyph" style="color: var(--el-type-story)">
+                    <svg width="16" height="16" viewBox="0 0 24 24"><use href="#k-story" /></svg>
+                  </span>
+                  <span>Story</span>
+                  <span class="chev"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-chevD" /></svg
+                  ></span>
+                </div>
+              </div>
+              <div class="field">
+                <label>Title</label>
+                <div class="control"><span>Work-item type + executor</span></div>
+              </div>
+              <p
+                style="margin: 0; font-size: 12px; color: var(--el-text-faint); font-style: italic"
+              >
+                (no Type / Executor row — type is leaf-only)
+              </p>
+            </div>
+            <p class="panel-note">
+              <code>type</code> is <b>distinct from kind</b> and carried only on executable leaves.
+              Epics and stories show <b>no</b> type control at all — they are always
+              <code>type = null</code>.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════ PANEL 3 — detail rail: chip + indicator (typed · null · inline-edit) ═══════════════ -->
+      <div class="panel-band">
+        <div class="band-title">
+          Panel 3 · <b>Detail rail — the type chip + executor indicator</b> · read &amp; inline-edit
+        </div>
+        <div class="panel-row">
+          <!-- 3a typed leaf -->
+          <div class="panel">
+            <div class="panel-label">3a · a typed leaf (read mode)</div>
+            <div class="rail">
+              <div class="rail-row">
+                <span class="rk">Status</span>
+                <span class="rail-val"
+                  ><span class="tchip" style="background: var(--el-tint-sky)"
+                    >In progress</span
+                  ></span
+                >
+              </div>
+              <div class="rail-row">
+                <span class="rk">Assignee</span>
+                <span class="rail-val" style="color: var(--el-text)">Odie N.</span>
+              </div>
+              <div class="rail-row is-new">
+                <span class="rk">Type</span>
+                <span class="rail-val">
+                  <span class="tchip code editable" title="Edit type">
+                    <span class="tglyph t-code"
+                      ><svg viewBox="0 0 24 24"><use href="#t-code" /></svg
+                    ></span>
+                    Code
+                  </span>
+                </span>
+              </div>
+              <div class="rail-row is-new">
+                <span class="rk">Executor</span>
+                <span class="rail-val">
+                  <span class="exec-ind editable" title="Edit executor">
+                    <span class="seg-ic"
+                      ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-agent" /></svg
+                    ></span>
+                    Coding agent
+                  </span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3b inline-edit open -->
+          <div class="panel">
+            <div class="panel-label">3b · click the chip → the same picker, inline</div>
+            <div class="rail">
+              <div class="rail-row">
+                <span class="rk">Assignee</span>
+                <span class="rail-val" style="color: var(--el-text)">Odie N.</span>
+              </div>
+              <div class="rail-row is-new">
+                <span class="rk">Type</span>
+                <span class="rail-val">
+                  <span class="tchip code editable">
+                    <span class="tglyph t-code"
+                      ><svg viewBox="0 0 24 24"><use href="#t-code" /></svg
+                    ></span>
+                    Code
+                  </span>
+                </span>
+                <div class="rail-editing">
+                  <div
+                    class="cbx-menu"
+                    role="listbox"
+                    aria-label="Type"
+                    style="position: static; box-shadow: var(--shadow-elevated)"
+                  >
+                    <div class="cbx-opt is-active" role="option" aria-selected="true">
+                      <span class="tglyph t-code"
+                        ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-code" /></svg
+                      ></span>
+                      <span class="opt-label">Code</span>
+                      <span class="opt-check"
+                        ><svg width="16" height="16" viewBox="0 0 24 24">
+                          <use href="#i-check" /></svg
+                      ></span>
+                    </div>
+                    <div class="cbx-opt" role="option">
+                      <span class="tglyph t-design"
+                        ><svg width="16" height="16" viewBox="0 0 24 24">
+                          <use href="#t-design" /></svg
+                      ></span>
+                      <span class="opt-label">Design</span>
+                    </div>
+                    <div class="cbx-opt" role="option">
+                      <span class="tglyph t-test"
+                        ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-test" /></svg
+                      ></span>
+                      <span class="opt-label">Test</span>
+                    </div>
+                    <div class="cbx-opt" role="option">
+                      <span class="tglyph t-review"
+                        ><svg width="16" height="16" viewBox="0 0 24 24">
+                          <use href="#t-review" /></svg
+                      ></span>
+                      <span class="opt-label">Review</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="rail-row is-new" style="margin-top: 168px">
+                <span class="rk">Executor</span>
+                <span class="rail-val">
+                  <span class="exec-ind editable">
+                    <span class="seg-ic"
+                      ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-agent" /></svg
+                    ></span>
+                    Coding agent
+                  </span>
+                </span>
+              </div>
+            </div>
+            <p class="panel-note">
+              Inline edit reuses the <b>same</b> Combobox / Segmented (the 2.5.5 pattern — the
+              static chip IS the click target, opening the picker in place). No second editing
+              surface.
+            </p>
+          </div>
+
+          <!-- 3c null leaf -->
+          <div class="panel">
+            <div class="panel-label">3c · a leaf with type = null</div>
+            <div class="rail">
+              <div class="rail-row">
+                <span class="rk">Assignee</span>
+                <span class="rail-val" style="color: var(--el-text)">Mo K.</span>
+              </div>
+              <div class="rail-row is-new">
+                <span class="rk">Type</span>
+                <span class="rail-val">
+                  <span class="set-affordance" title="Set a type">
+                    <span class="plus"
+                      ><svg width="13" height="13" viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                    ></span>
+                    Set a type
+                  </span>
+                </span>
+              </div>
+            </div>
+            <p class="panel-note">
+              An untyped leaf shows a quiet dashed <code>Set a type</code> affordance; there is no
+              executor row until a type is set.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════ PANEL 4 — the ten-type legend + hue + executor-default map ═══════════════ -->
+      <div class="panel-band">
+        <div class="band-title">
+          Panel 4 · <b>The ten-type legend</b> · chip hue + gloss + token + executor default
+        </div>
+        <div class="legend">
+          <div class="legend-row head">
+            <span>Type chip</span><span>What it is</span><span>--el-type-* → Tier-0</span
+            ><span>Executor default</span>
+          </div>
+          <div class="legend-row">
+            <span class="tchip code"
+              ><span class="tglyph t-code"
+                ><svg viewBox="0 0 24 24"><use href="#t-code" /></svg></span
+              >Code</span
+            >
+            <span class="gloss">Implementation / code changes</span>
+            <span class="tok"><b>code</b> → --color-info</span>
+            <span class="exec"
+              ><span class="seg-ic"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-agent" /></svg></span
+              >Coding agent</span
+            >
+          </div>
+          <div class="legend-row">
+            <span class="tchip design"
+              ><span class="tglyph t-design"
+                ><svg viewBox="0 0 24 24"><use href="#t-design" /></svg></span
+              >Design</span
+            >
+            <span class="gloss">UI / UX design assets</span>
+            <span class="tok"><b>design</b> → --color-accent</span>
+            <span class="exec"
+              ><span class="seg-ic"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-agent" /></svg></span
+              >Coding agent <span class="either">· either</span></span
+            >
+          </div>
+          <div class="legend-row">
+            <span class="tchip test"
+              ><span class="tglyph t-test"
+                ><svg viewBox="0 0 24 24"><use href="#t-test" /></svg></span
+              >Test</span
+            >
+            <span class="gloss">Automated tests (unit / integration / E2E)</span>
+            <span class="tok"><b>test</b> → --color-success</span>
+            <span class="exec"
+              ><span class="seg-ic"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-agent" /></svg></span
+              >Coding agent</span
+            >
+          </div>
+          <div class="legend-row">
+            <span class="tchip content"
+              ><span class="tglyph t-content"
+                ><svg viewBox="0 0 24 24"><use href="#t-content" /></svg></span
+              >Content</span
+            >
+            <span class="gloss">Copy, docs, translation</span>
+            <span class="tok"><b>content</b> → --color-accent-teal</span>
+            <span class="exec"
+              ><span class="seg-ic"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-agent" /></svg></span
+              >Coding agent <span class="either">· either</span></span
+            >
+          </div>
+          <div class="legend-row">
+            <span class="tchip research"
+              ><span class="tglyph t-research"
+                ><svg viewBox="0 0 24 24"><use href="#t-research" /></svg></span
+              >Research</span
+            >
+            <span class="gloss">Spike / investigation</span>
+            <span class="tok"><b>research</b> → --color-primary</span>
+            <span class="exec"
+              ><span class="seg-ic"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-agent" /></svg></span
+              >Coding agent <span class="either">· either</span></span
+            >
+          </div>
+          <div class="legend-row">
+            <span class="tchip review"
+              ><span class="tglyph t-review"
+                ><svg viewBox="0 0 24 24"><use href="#t-review" /></svg></span
+              >Review</span
+            >
+            <span class="gloss">QA / review</span>
+            <span class="tok"><b>review</b> → --color-accent-orange</span>
+            <span class="exec"
+              ><span class="seg-ic"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-human" /></svg></span
+              >Human</span
+            >
+          </div>
+          <div class="legend-row">
+            <span class="tchip deploy"
+              ><span class="tglyph t-deploy"
+                ><svg viewBox="0 0 24 24"><use href="#t-deploy" /></svg></span
+              >Deploy</span
+            >
+            <span class="gloss">Infra / ops / release</span>
+            <span class="tok"><b>deploy</b> → --color-destructive</span>
+            <span class="exec"
+              ><span class="seg-ic"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-agent" /></svg></span
+              >Coding agent</span
+            >
+          </div>
+          <div class="legend-row">
+            <span class="tchip decision"
+              ><span class="tglyph t-decision"
+                ><svg viewBox="0 0 24 24"><use href="#t-decision" /></svg></span
+              >Decision</span
+            >
+            <span class="gloss">Decision record (ADR)</span>
+            <span class="tok"><b>decision</b> → --color-charcoal</span>
+            <span class="exec"
+              ><span class="seg-ic"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-human" /></svg></span
+              >Human</span
+            >
+          </div>
+          <div class="legend-row">
+            <span class="tchip manual"
+              ><span class="tglyph t-manual"
+                ><svg viewBox="0 0 24 24"><use href="#t-manual" /></svg></span
+              >Manual</span
+            >
+            <span class="gloss">Human SaaS / dashboard / provisioning</span>
+            <span class="tok"><b>manual</b> → --color-stone</span>
+            <span class="exec"
+              ><span class="seg-ic"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-human" /></svg></span
+              >Human</span
+            >
+          </div>
+          <div class="legend-row">
+            <span class="tchip chore"
+              ><span class="tglyph t-chore"
+                ><svg viewBox="0 0 24 24"><use href="#t-chore" /></svg></span
+              >Chore</span
+            >
+            <span class="gloss">Housekeeping / config / deps</span>
+            <span class="tok"><b>chore</b> → --color-slate</span>
+            <span class="exec"
+              ><span class="seg-ic"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-agent" /></svg></span
+              >Coding agent <span class="either">· either</span></span
+            >
+          </div>
+        </div>
+        <p class="panel-note" style="max-width: 1120px">
+          The seven "produces an artifact" types take the seven saturated hues; the three "meta /
+          admin" types (<code>decision</code>, <code>manual</code>, <code>chore</code>) take the
+          three greys — desaturation is semantically apt and needs <b>no new Tier-0 colour</b>. The
+          chip puts the hue in a <code>color-mix</code> tint <b>background</b> with
+          <code>--el-text-strong</code> text (AA, finding #35) — so one saturated
+          <code>--el-type-*</code> token yields both the glyph hue and the chip tint. "Either" types
+          default to <code>coding_agent</code> but flip freely.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
