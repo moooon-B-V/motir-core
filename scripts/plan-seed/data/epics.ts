@@ -1609,6 +1609,157 @@ export const EPICS: EpicMeta[] = [
           'consumer" — it is a lint rule (or a typed `LocalizedString` DTO field) that ' +
           'forbids server-shipped user-facing English from crossing the boundary.',
       },
+      {
+        id: 'bug-combobox-menu-clipped-inside-modal',
+        kind: 'bug',
+        title:
+          'Combobox listbox is clipped by the Modal when opened inside a dialog (Add-widget config modal — Statistic type picker shows only the first 1–2 options)',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** any `Combobox` opened inside a `Modal`; the concrete repro is the ' +
+          'dashboard **Add widget → Distribution → Statistic type** picker ' +
+          '(`app/(authed)/dashboard/_components/WidgetConfigModal.tsx`, Subtask 6.3.5; ' +
+          'shared component `components/ui/Combobox.tsx`, `components/ui/Modal.tsx`) · ' +
+          '**Status:** open · **Reported by:** Yue.\n\n' +
+          'When a `Combobox` listbox opens inside a `Modal`, the open menu is **clipped by ' +
+          "the modal's `overflow-hidden` boundary** instead of extending below the modal or " +
+          'inside a scroll region. In the reported repro (Add Distribution widget, dark ' +
+          'theme), the **Statistic type** picker shows only the first two options ' +
+          '(`Status`, partial `Assignee`) and the rest (`Priority`, `Issue type`, `Reporter`, ' +
+          'custom fields, etc.) are visually cut off at the bottom edge of the modal — the ' +
+          'list is unreachable without keyboard arrowing blindly past the visible items. The ' +
+          'modal itself shows no scroll affordance because the listbox is `position: absolute` ' +
+          'relative to the trigger and lives OUTSIDE the modal-body scroll flow.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open the `moooon` / ' +
+          '`motir` project → dashboard, click **Add widget**, pick the **Distribution** ' +
+          'type. In the modal, leave Data source = `Project` and the project = `motir` ' +
+          '(the defaults), then click the **Statistic type** combobox. Observe: the ' +
+          'options panel opens below the trigger but the lower half of the option list is ' +
+          'clipped at the bottom of the modal. The full list has at least 5–7 options ' +
+          '(Status, Assignee, Priority, Issue type, Reporter, plus any custom fields) — ' +
+          'only the first 1–2 are visible.\n\n' +
+          '**Root cause (high confidence — the source comments document it).** ' +
+          '`components/ui/Combobox.tsx` deliberately branches its menu rendering by parent ' +
+          'context (lines ~125-134, ~294-298, ~386-413):\n\n' +
+          '- **Outside a dialog** → the menu is **portaled to `document.body`** with ' +
+          '`position: fixed` viewport-anchored positioning, so it escapes every overflow ' +
+          "ancestor (this is the `bug-inline-edit-clipped-when-table-short` fix's posture).\n" +
+          '- **Inside a Radix Dialog** (`triggerRef.current?.closest("[role=\\"dialog\\"]")`) ' +
+          '→ the menu is rendered **INLINE** as ' +
+          '`absolute left-0 top-full ... w-max min-w-full max-w-[18rem]` inside the ' +
+          "trigger's `relative` container, because a portal would land outside the dialog's " +
+          'focus scope (focus-trap war, source comment line 128) AND a portaled menu would ' +
+          "be mis-positioned by the dialog's centering `translate`.\n\n" +
+          "The inline menu sits inside the modal's `flex max-h-[90vh] flex-col " +
+          'overflow-hidden` content panel (`components/ui/Modal.tsx:39`). `overflow-hidden` ' +
+          'on the modal panel **clips the absolutely-positioned menu** the moment its ' +
+          "bottom edge crosses the modal's bottom edge. The `menuInner` listbox carries " +
+          '`max-h-64` (`16rem`) as a fallback cap, but that 16rem is **still taller than ' +
+          'the remaining vertical space inside the modal** when the trigger sits in the ' +
+          'lower half of a sm-width modal (Widget config modal is `size="sm"` = ' +
+          '`max-w-[24rem]`, with several stacked fields above the Statistic-type trigger ' +
+          '— Data source toggle, Project picker, the trigger itself).\n\n' +
+          '**Net:** the inline branch sacrifices reachability for the focus-trap and ' +
+          'positioning correctness it gains. The source comment claims **"A dialog scrolls ' +
+          'rather than short-clips, so inline is both safe and the original, proven ' +
+          "behaviour\"** — that's only true if the menu participates in the dialog's body " +
+          "scroll flow, but an `absolute` child does NOT contribute to the body's scroll " +
+          'height. The body has nowhere to scroll TO; the menu just renders past the ' +
+          'overflow-hidden boundary and gets clipped.\n\n' +
+          "**Sibling case to verify the fix doesn't regress** (the comment names " +
+          'it): **`bug-inline-edit-clipped-when-table-short`** — the original case the ' +
+          'body-portal branch was added for (a `Combobox` opened inline-edit in a TABLE ' +
+          'cell, the table was short, `overflow:hidden` clipped the menu). That is the ' +
+          'TABLE shape; this bug is the MODAL shape. Same underlying defect ' +
+          '("popover clipped by an ancestor\'s overflow") in a different parent. The ' +
+          'fix must work for BOTH shapes without re-breaking either.\n\n' +
+          '**Fix shapes (decide at fix time — listed by likely durability):**\n' +
+          "1. **Clamp the inline menu's height to the modal's available space** " +
+          '(durable). When `inDialog` is true, compute `listMaxHeight` from the ' +
+          "containing dialog's bottom edge minus the trigger's bottom edge (with a small " +
+          "gap), and set the listbox's `maxHeight` to that — same shape as the portaled " +
+          'branch already does against the viewport (`Combobox.tsx:166-189`), just ' +
+          'measured against `triggerRef.current.closest("[role=\\"dialog\\"]").getBoundingClientRect()` ' +
+          "instead of `window.innerHeight`. The menu then SCROLLS INTERNALLY (it's a " +
+          '`max-h` listbox with `overflow-y-auto` — confirm in `menuInner`), the modal ' +
+          "doesn't, and clipping is gone. This honours the inline-rendering invariant the " +
+          'comment defends.\n' +
+          '2. **Flip the menu above the trigger when the space below is shorter** ' +
+          '(complement of fix 1). The portaled branch already does this; mirror it for ' +
+          'inline. Combine with fix 1 so the menu picks the taller side AND clamps to it.\n' +
+          "3. **Use Radix Dialog's `forceMount` + a contained portal target** (the " +
+          'durable architectural fix; bigger change). Pass an `aside` portal target to ' +
+          "the menu that's INSIDE the dialog's focus scope (e.g. mount a portal target as " +
+          'a sibling of the modal body but outside `overflow-hidden`). This solves both ' +
+          'this bug and any future "menu inside dialog" case in one place. Higher-touch — ' +
+          "evaluate against the existing Combobox's contract before reaching for it.\n\n" +
+          '**Recommended:** fix 1 + fix 2 together — minimal-touch, contained to the ' +
+          'inline branch of `Combobox.tsx`, no Modal API change. The portaled branch is ' +
+          'untouched (table-short bug stays fixed). Reserve fix 3 if a third occurrence ' +
+          'surfaces (rule of three; see refactor signal below).\n\n' +
+          '**Test gap that let it ship.** Existing tests for `Combobox` likely cover the ' +
+          "portaled (outside-dialog) branch and the inline branch's **opens/closes/" +
+          'keyboard-nav** semantics, but not its **rendered geometry inside a constrained ' +
+          'parent**. The fix MUST add either a render-test or Playwright assertion: open ' +
+          "the menu inside a modal whose remaining space is < the menu's natural height, " +
+          "measure the listbox's `getBoundingClientRect()`, and assert it FITS inside the " +
+          "modal's rect (`menuBottom <= dialogBottom - gap`). Same measurement posture as " +
+          'the Epic-3 swimlane / Epic-6 detail-overflow bugs — geometry, not CSS.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- In the dashboard Add-widget config modal (`size="sm"`), the Statistic-type ' +
+          'combobox menu is **fully reachable**: either the menu fits inside the modal ' +
+          '(clamped + internally scrollable), or it flips above the trigger if that side ' +
+          "has more room. No options are clipped by the modal's overflow-hidden boundary.\n" +
+          '- The fix is in `components/ui/Combobox.tsx` (the inline branch) — not a ' +
+          'workaround on the consumer side (`WidgetConfigModal.tsx`), so every other ' +
+          '`Combobox`-in-`Modal` site benefits automatically (e.g. issue create / edit ' +
+          'modals, sprint dialogs, project settings dialogs). Audit the existing call sites ' +
+          'and confirm each renders correctly after the fix.\n' +
+          '- The portaled (outside-dialog) branch is UNCHANGED in behaviour — inline-edit ' +
+          'cells inside a short table still render the menu via the body portal ' +
+          '(`bug-inline-edit-clipped-when-table-short` stays fixed). Verify with the ' +
+          'existing inline-edit test fixtures.\n' +
+          '- The menu still respects the focus-trap (Tab cycles inside the dialog; Escape ' +
+          'closes the menu, not the dialog — the `data-inner-dismiss` mechanism stays ' +
+          'intact). a11y axe sweep on the Add-widget modal stays clean.\n' +
+          "- A Playwright (or RTL render) regression asserts the listbox's rendered " +
+          "bottom-edge fits inside the dialog's rendered bottom-edge when a tall option " +
+          'list opens near the bottom of a short modal — measured via ' +
+          '`getBoundingClientRect`, not CSS rules.\n' +
+          '- AA contrast preserved; next-intl strings unchanged; no service / DTO / route ' +
+          'change.\n\n' +
+          '## Context refs\n\n' +
+          '- `components/ui/Combobox.tsx:125-134, 294-298, 386-413` — the inline-vs-portal ' +
+          "branch + the inline branch's `absolute left-0 top-full` rendering (the fix site)\n" +
+          '- `components/ui/Combobox.tsx:166-189` (`updatePosition`) — the portaled ' +
+          "branch's viewport-clamping logic to mirror against the dialog rect for the " +
+          'inline branch\n' +
+          '- `components/ui/Modal.tsx:28-67` — the modal `contentVariants`; ' +
+          '`flex max-h-[90vh] flex-col overflow-hidden` is the clipping boundary, by ' +
+          "design (the modal MUST stay capped — the fix can't drop `overflow-hidden`)\n" +
+          '- `app/(authed)/dashboard/_components/WidgetConfigModal.tsx:201-292` — the ' +
+          'concrete repro surface (Subtask 6.3.5)\n' +
+          '- `bug-inline-edit-clipped-when-table-short` (sibling) — the original ' +
+          'table-overflow case that justified the portaled branch; the contract this fix ' +
+          'must NOT regress\n' +
+          '- `bug-board-cannot-drag-from-in-review-to-done`, ' +
+          '`bug-reports-landing-charts-sized-for-widget-tile-not-page`, ' +
+          '`bug-issue-detail-eyebrow-overflows-viewport` (sibling Epic 6 bugs) — the ' +
+          'cluster of Epic 6 surfaces hitting layout / overflow defects this PR-cycle\n' +
+          '- `motir-core/CLAUDE.md` — colour via `--el-*`, shape via element-shape tokens ' +
+          '(applies to whatever wrapper the fix introduces)\n\n' +
+          '**Refactor signal (rule of two → three).** This is the SECOND documented ' +
+          'occurrence of "menu/popover clipped by an ancestor\'s overflow" — first was ' +
+          '`bug-inline-edit-clipped-when-table-short` (table, fixed by adding the body-' +
+          'portal branch), now this one (modal, the inline branch fails the same way ' +
+          'in reverse). The Combobox already encodes both branches inside one component ' +
+          'with a `closest("[role=\\"dialog\\"]")` switch — the per-context-branch shape ' +
+          'is workable for two. If a third occurrence surfaces (e.g. a sticky-header ' +
+          'data-grid or a drawer panel with its own focus scope), unify behind a single ' +
+          'overflow-escape primitive instead of a third branch.',
+      },
     ],
   },
   {
