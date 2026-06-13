@@ -327,7 +327,7 @@ export const story_2_7: PlanStory = {
       id: '2.7.3',
       title:
         'Schema — WorkItemType enum + nullable work_item.type + executor field + migration + default helper',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
