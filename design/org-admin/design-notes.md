@@ -98,16 +98,32 @@ have more than one"; Linear's single-workspace view is equally clean.)
   RIGHT of the org with a `›` separator (`--el-text-faint`) **only when the
   active org has ≥2 workspaces**. Below that threshold it is not rendered at
   all. So the header reads `Acme` (1 ws) → `Acme › Engineering` (2+ ws).
-- **Org settings + members** — an **org-scoped settings area**. **At one
-  workspace this IS the whole Settings home** (no separate "workspace settings"
-  surface — that split appears only once a 2nd workspace exists, to avoid
-  confusing a small team with an org-vs-workspace settings distinction that is
-  1:1 for them). Suggested routes: `app/(authed)/settings/organization/page.tsx`
-  (general + billing placeholder + danger zone) and
-  `app/(authed)/settings/organization/members/page.tsx` (the paginated roster).
-  Reached from the org menu's Settings/Members items and **org-owner/admin
-  gated** (404-not-403 for a non-org member; a forbidden treatment for an org
-  member who lacks admin — panel 5d).
+- **Settings — collapsed at one workspace, but the workspace tier still does
+  the work underneath.** The data is ALWAYS 3 tiers, and **workspace-scoped
+  config keeps living on the `Workspace` row** (workflows, statuses, custom
+  fields, labels, components, automation, dashboards, saved filters, workspace
+  members — all `workspaceId`-scoped in the schema today). What collapses is
+  only the _surface_:
+  - **At ONE workspace:** a **single Settings area**, entered from the org menu,
+    that renders **both** the org-scoped sections (org name / slug / billing
+    placeholder / org members / danger zone) **and** the workspace-config
+    sections — and **each section persists to its own tier underneath** (org →
+    `Organization`, workspace-config → the single `Workspace`). The org settings
+    "pass through" to the workspace's settings; there is **no separate
+    `/settings/workspace` surface shown**, but the workspace settings are still
+    the underlying mechanism being written. This avoids showing a small team an
+    org-vs-workspace split that is 1:1 for them.
+  - **At ≥2 workspaces:** the workspace-config sections **split out** into a
+    per-workspace Settings surface (scoped by the active workspace), and the org
+    Settings page keeps only the org-scoped sections. Nothing in the data moves —
+    only which surface renders which sections.
+  - Suggested routes: `app/(authed)/settings/organization/page.tsx` (org-scoped:
+    general + billing placeholder + danger zone) and
+    `app/(authed)/settings/organization/members/page.tsx` (the paginated roster);
+    the existing `app/(authed)/settings/workspace/*` is the workspace-config
+    surface that is **folded into** the org Settings page at one workspace and
+    **re-surfaced standalone** at ws ≥ 2. All org-owner/admin gated (404-not-403
+    for a non-org member; the forbidden treatment of panel 5d for a non-admin).
 
 The page shells reuse the `/issues` + workspace-settings grammar: a serif `h2`
 title + a muted subtitle, then a `stack` of `Card`s.
@@ -157,6 +173,15 @@ A `stack` of three `Card`s on the org-scoped settings page:
   exists so the layout stays stable when billing lands; it is NOT a billing UI.
 - **Danger zone** — a destructive "Delete organization" `secondary`/`danger`
   button + the irreversibility copy (header in `--el-danger-text`).
+
+**At one workspace, this page also folds in the workspace-config sections**
+(workflows, statuses, custom fields, labels, components, automation, dashboards
+— the existing `settings/workspace/*` surfaces), rendered below the org-scoped
+cards as the same `stack` grammar. They are NOT redrawn in this org-admin asset
+(they're owned by their own design areas); the org settings page simply hosts
+them and writes them to the `Workspace` row underneath. At ws ≥ 2 these sections
+move to a per-workspace Settings surface and this page keeps only the org-scoped
+cards above. See "Settings — collapsed at one workspace" under _Where it lives_.
 
 ### Panel 3 — cross-workspace member management (PAGINATED)
 
