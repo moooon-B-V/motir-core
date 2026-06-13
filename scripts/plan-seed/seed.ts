@@ -192,23 +192,33 @@ async function main() {
   // ── Org roster: model the `moooon` org over its workspace (Story 6.10.6) ───
   // `createWorkspace` above already minted the `moooon` Organization (the root
   // tenancy tier) with zhuyue@motir.co as its org OWNER and the workspace
-  // attached via `organizationId`. Enrol the rest of the team as org members at
-  // VARIED org-roles so the owner/admin/member spread is realistic for 6.10.5's
-  // cross-workspace member UI + 6.10.8's e2e. The 6.10.4 "adding a user to a
-  // workspace auto-creates their org membership" upward auto-join is not wired
-  // yet, so the seed enrols them explicitly here (6.10.9 reconciles this path
-  // once 6.10.4 lands). Idempotent across reseeds — the clear pass deletes the
-  // org first, cascading its memberships.
+  // attached via `organizationId`. We want the rest of the team enrolled as org
+  // members at VARIED org-roles so the owner/admin/member spread is realistic for
+  // 6.10.5's cross-workspace member UI + 6.10.8's e2e.
+  //
+  // As of Story 6.10.4 the upward auto-join IS wired: `workspacesService.addMember`
+  // (the loop above) already created an org membership at the default `member`
+  // role for every non-owner. So we must NOT `create` the membership again here —
+  // that double-creates and trips the unique (organizationId, userId) constraint,
+  // aborting the seed AFTER the destructive clear but BEFORE the project/work-item
+  // pass (leaving the tenant with no project and no items). Instead, UPDATE the
+  // role for the members we want promoted to org `admin`; the rest keep the
+  // `member` role addMember already gave them. Idempotent across reseeds — the
+  // clear pass deletes the org first, cascading its memberships.
   const organizationId = workspace.organizationId;
   await db.$transaction(async (tx: Prisma.TransactionClient) => {
     for (let i = 0; i < SEED_USERS.length; i++) {
       const email = SEED_USERS[i]!.email;
       if (email === OWNER_EMAIL) continue; // already the org owner via createWorkspace
       // Deterministic spread: the first two non-owner members are org `admin`s,
-      // the rest are `member`s — so owner + admin + member are all represented.
+      // the rest stay `member` (addMember's auto-join default) — so owner + admin
+      // + member are all represented. Only the admins need a role update.
       const role: OrganizationRole = i <= 2 ? ORGANIZATION_ROLE.admin : ORGANIZATION_ROLE.member;
-      await organizationMembershipRepository.create(
-        { organizationId, userId: userIdByEmail.get(email)!, role },
+      if (role === ORGANIZATION_ROLE.member) continue; // auto-join already set this
+      await organizationMembershipRepository.updateRole(
+        organizationId,
+        userIdByEmail.get(email)!,
+        role,
         tx,
       );
     }
