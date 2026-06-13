@@ -310,6 +310,17 @@ jobs:
         with:
           path: ~/.npm/_npx
           key: ${{ runner.os }}-npx-inngest-cli-${{ env.INNGEST_CLI_VERSION }}
+      # Pre-warm the inngest-cli download OUTSIDE Playwright's 120s webServer
+      # window. The second webServer spawns `npx inngest-cli@<v> dev`; on a cold
+      # npx cache that download (~96 MB binary) runs INSIDE the 120s wait and, with
+      # all matrix legs cold-downloading in parallel on the first run, regularly
+      # blows past it (the timeout that failed bulk-2). `dev --help` fetches the
+      # exact same `inngest-cli@<v>` binary into ~/.npm/_npx and exits 0 without
+      # starting a server — so the real `dev` call hits a warm npx cache and boots
+      # instantly. On later runs the cache step above restores it and this is a
+      # no-op. This step has no tight timeout, so a slow CDN can't fail the lane.
+      - name: Pre-warm inngest-cli
+        run: npx --yes inngest-cli@"$INNGEST_CLI_VERSION" dev --help >/dev/null
       # ONE run step per matrix leg. `matrix.args` selects the slice (a
       # --grep-invert+--shard bulk slice, or a --grep at-scale lane); the
       # override env is per-leg and empty ('') on bulk legs — playwright.config
