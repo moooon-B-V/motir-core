@@ -2244,6 +2244,168 @@ export const EPICS: EpicMeta[] = [
           'as the refactor signal for a future planner-runbook tightening.',
       },
       {
+        id: 'bug-sprint-report-charts-misaligned-burndown-missing-chart-sub',
+        kind: 'bug',
+        title:
+          'Sprint report side-by-side charts misalign vertically — Burndown section is missing its `chart-sub` meta line that the 4.6.1 design specifies, but Velocity has one (and is rendering correctly)',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** sprint report analytics row — the side-by-side charts ' +
+          '(`app/(authed)/backlog/_components/SprintReport.tsx:179-197`) rendering ' +
+          '`BurndownChart` (Subtask 4.6.5) + `VelocityChart` (Subtask 4.6.6) ' +
+          '· **Code surface owned by:** Story 4.4 (Subtask 4.4.6 — the seam) + Story 4.6 ' +
+          '(Subtasks 4.6.5 burndown / 4.6.6 velocity — the chart mounts) · **Status:** open · ' +
+          '**Reported by:** Yue.\n\n' +
+          'On the sprint report page (`/sprints/[id]/report`), the analytics row places the ' +
+          'Burndown chart and the Velocity chart **side by side** per `design/reports/' +
+          'charts.mock.html` panel 5 (the seam-placement panel — both charts dropped into the ' +
+          'sprint-report seam reserved by 4.4.6). The two charts are **NOT vertically aligned**: ' +
+          'the Velocity chart sits about a line lower than the Burndown chart, and consequently ' +
+          'both the top (Y-axis cap line + first gridline) and the bottom (X-axis label / "View ' +
+          'data table" affordance) drift out of horizontal alignment. The visual reads as ' +
+          '"someone forgot to lay these out as a pair," which is exactly the bug: they ARE laid ' +
+          'out as a pair (`flex` row, equal `basis-[300px]`, identical 600×300 SVG frames and ' +
+          'shared `DEFAULT_MARGIN` from `ChartFrame`), but one section has an extra row of chrome ' +
+          'above its chart that the other does not.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open the `moooon` / `motir` ' +
+          'project → `/backlog`, click into a sprint with at least 2 completed predecessors so ' +
+          'the velocity chart renders (not the low-history state), then open ' +
+          '`/sprints/<id>/report`. Compare the two section frames in the analytics row: the ' +
+          'Burndown header is one line ("📈 Burndown" + the chart legend underneath); the ' +
+          'Velocity header is TWO lines ("📊 Velocity" + a sub-line "Last 3 completed sprints · ' +
+          'avg completed 42.7" + the legend). The Velocity legend sits ~16-20px lower than the ' +
+          'Burndown legend; the SVG chart frames cascade by the same offset; the X-axis labels ' +
+          'and the "View data table" buttons at the bottom of each section misalign by the same ' +
+          'amount.\n\n' +
+          '**Root cause (high confidence — asymmetric pre-chart chrome).** The Burndown and ' +
+          'Velocity primitives both target a 600×300 SVG via the same `ChartFrame.DEFAULT_MARGIN` ' +
+          '(`{ top: 16, right: 16, bottom: 46, left: 44 }`) and the same `ChartLegend` rendered ' +
+          'above the SVG with `mb-3`. The SVGs themselves are size-parity. The asymmetry is in ' +
+          'the PRE-LEGEND chrome:\n\n' +
+          '- `VelocityChart.tsx:72-77` renders an EXTRA `<span>` above its `<BarChart>`: ' +
+          '*"{velocityWindow} · {velocityAverage}"* — the "last N completed sprints · avg ' +
+          'completed N" meta line per `design/reports/charts.mock.html:1244-1248` (the design\'s ' +
+          '`<div class="chart-head">` carries a `<h3 class="chart-title">Velocity</h3>` + a ' +
+          '`<span class="chart-sub">last 7 completed sprints · avg completed 26</span>`).\n' +
+          '- `BurndownChart.tsx:261-294` renders ONLY the chart — no `chart-sub` equivalent above ' +
+          'the `<LineChart>`, even though `design/reports/charts.mock.html:878-880` specifies ' +
+          'BOTH for burndown too: `<h3 class="chart-title">Sprint 6 · Burndown</h3>` + `<span ' +
+          'class="chart-sub">Jun 2 → Jun 14 · completed · 42 pts committed</span>`. Same chrome ' +
+          'pattern, present in the design, missing in the code.\n' +
+          '- `SprintReport.tsx:179-197` hosts both sections with `flex flex-wrap gap-4` + ' +
+          '`flex-1 basis-[300px]` per section. The section TITLES (the "📈 Burndown" and ' +
+          '"📊 Velocity" lines) are mounted at the SECTION level (host-owned), so they ARE ' +
+          'aligned. But the `chart-sub` meta sits INSIDE the velocity primitive ' +
+          '(`VelocityChart`-owned) and is MISSING from the burndown primitive — so when the host ' +
+          'lays the two sections side by side, one has a single header row above the chart and ' +
+          'the other has two rows.\n\n' +
+          'Net: the design specified two-line chart-heads on BOTH charts; the code implemented ' +
+          'two-line head only on Velocity. The misalignment is the visible consequence.\n\n' +
+          '**Class.** Design fidelity drift — a per-chart chrome detail the design drew on both ' +
+          'panels but only one panel implemented. Not a layout bug (the `flex` / `basis` / SVG ' +
+          'dimensions are correct), not a token bug (`--el-*` is correct), and not a margin bug ' +
+          '(`DEFAULT_MARGIN` is correct). One missing element on one side; everything else is ' +
+          'fine.\n\n' +
+          '**Fix shape (recommended).** Add the missing burndown `chart-sub` meta line so both ' +
+          'sections have the same two-row chrome above the SVG, per the design.\n\n' +
+          '1. **`BurndownChart.tsx` — add a `<span className="text-xs text-(--el-text-muted)">` ' +
+          "above the `<LineChart>`**, mirroring `VelocityChart.tsx:73-77`'s pattern. The copy " +
+          'comes from the design (line 880): `Sprint 6 · Burndown` + `Jun 2 → Jun 14 · completed ' +
+          '· 42 pts committed`. Drop the redundant "Sprint 6 · Burndown" prefix (the host section ' +
+          'already names "Burndown"), so the sub-line is the date window + state + committed ' +
+          'baseline: e.g. **`{start} → {end} · {state} · {committed} pts committed`** in the ' +
+          "full variant. (Compact variant should keep its existing minimal chrome — that's the " +
+          'scrum-header slot, panel 2.) The `BurndownSeriesDto` already carries `committed`, ' +
+          '`state`, and day dates — no service/DTO change.\n' +
+          '2. **i18n.** Add `sprintReport.burndownWindow` keys to `messages/en.json` and ' +
+          '`messages/zh.json` matching the existing `sprintReport.velocityWindow` / ' +
+          '`velocityAverage` pattern (window + state + committed-pts, ICU-formatted). Keep ' +
+          'parallel naming so the en/zh files stay scannable.\n' +
+          '3. **Wrap the `<div>` consistently** so both `BurndownChart` and `VelocityChart` ' +
+          'return a `<div className="flex flex-col gap-2">` (currently burndown uses `gap-1`, ' +
+          'velocity uses `gap-2`). Bring burndown to `gap-2` to match velocity — small ' +
+          'consistency fix, lands inside the same diff.\n' +
+          '4. **No `SprintReport.tsx` change.** The host section headers stay as-is (icon + ' +
+          "name); the chart-sub line lives inside the chart primitive (matching the design's " +
+          "`chart-head` block) so the primitive remains self-contained whether it's mounted in " +
+          'the sprint report, the standalone `/reports/burndown` page (the sibling bug ' +
+          '[[bug-reports-hub-agile-cards-collapse-to-one-url]] proposes), or anywhere else.\n\n' +
+          '**Alternative fix (rejected).** Lift the velocity meta line OUT of `VelocityChart` ' +
+          'and into the host section header (so both sections have one row of chrome and the ' +
+          'sub-line disappears entirely). REJECTED because the design explicitly draws both ' +
+          'charts with a `chart-sub` line (`charts.mock.html:878-880` for burndown and `:1244-' +
+          '1248` for velocity — the planner verified both). Dropping the sub-line on velocity ' +
+          'would mean dropping a documented design element to "fix" an alignment defect, when ' +
+          'the design already says the alignment fix is to ADD the missing sub-line on burndown. ' +
+          'Per the decision-authority ladder rung 1 (the mirror product / the design), the ' +
+          'design wins.\n\n' +
+          "**What's out of scope for this bug:** the compact-burndown variant (Story 4.5 scrum-" +
+          'header slot — different design, panel 2, intentionally minimal). The empty / ' +
+          'unestimated / low-history states (they already have their own micro-headers per ' +
+          'panels 4 + 5). The standalone `/sprints/[id]/report` page chrome above the analytics ' +
+          'row (the title + metaWindow + completedAt + goal line — unchanged).\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- On `/sprints/[id]/report` for a sprint with ≥2 completed predecessors (velocity ' +
+          'renders), the Burndown and Velocity sections are **vertically aligned**: both legends ' +
+          'sit on the same Y; both SVG-frame tops sit on the same Y; both X-axis labels and ' +
+          '"View data table" affordances sit on the same Y.\n' +
+          '- The Burndown chart renders the missing `chart-sub` line above its `<LineChart>`, ' +
+          "matching the velocity chart's posture and the design at `charts.mock.html:878-880`. " +
+          'Copy: window (start → end) · state · committed-pts, ICU-formatted, both locales.\n' +
+          "- The Velocity chart's existing `chart-sub` line is UNCHANGED (it was rendering the " +
+          'design correctly all along).\n' +
+          '- The compact-burndown variant in the scrum-header slot is UNCHANGED (panel 2 is ' +
+          'minimal by design).\n' +
+          '- Empty / unestimated / low-history states unchanged (their micro-headers per panels ' +
+          '4 + 5 remain).\n' +
+          '- Both chart primitives return `<div className="flex flex-col gap-2">` (the small ' +
+          'consistency fix — burndown was `gap-1`, velocity was `gap-2`).\n' +
+          '- Colour via `--el-*`, shape via element-semantic tokens; AA contrast holds; no new ' +
+          '`--color-*` / raw `rounded-*`.\n' +
+          '- A regression test: a Playwright (or RTL) assertion in `tests/e2e/sprint-report.spec.' +
+          "ts` (or a sibling) that the burndown section's `<svg>` and the velocity section's " +
+          '`<svg>` have equal `getBoundingClientRect().top` when both render on the standalone ' +
+          'report page. Geometry, not CSS — same posture as the sibling sprint-report-modal-' +
+          'clipped fix.\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/backlog/_components/SprintReport.tsx:179-197` — the analytics row ' +
+          'host (no change here)\n' +
+          '- `app/(authed)/backlog/_components/BurndownChart.tsx:261-294` — the fix site ' +
+          '(add the `chart-sub` `<span>` above the `<LineChart>`)\n' +
+          '- `app/(authed)/backlog/_components/VelocityChart.tsx:72-77` — the existing pattern to ' +
+          'mirror (already correct, no change)\n' +
+          '- `components/ui/charts/LineChart.tsx`, `BarChart.tsx`, `ChartFrame.tsx` — the shared ' +
+          'primitives (600×300, `DEFAULT_MARGIN = { top: 16, right: 16, bottom: 46, left: 44 }`, ' +
+          '`ChartLegend mb-3`) — same on both sides, NOT the source of the misalignment\n' +
+          '- `design/reports/charts.mock.html:878-880` (burndown chart-head, the missing piece) ' +
+          'and `:1244-1248` (velocity chart-head, the implemented piece) — the design source\n' +
+          '- `design/reports/design-notes.md:103-106` (the seam-placement note — both charts ' +
+          'drop into the 4.4.6 sprint-report seam, side by side, per panel 5)\n' +
+          '- `lib/dto/reports.ts` — `BurndownSeriesDto` (already carries `committed`, `state`, ' +
+          'and day dates the new sub-line needs; no DTO change)\n' +
+          '- `messages/en.json` `sprintReport.velocityWindow` / `velocityAverage` — the existing ' +
+          'i18n pattern the new `burndownWindow` mirrors\n' +
+          '- Sibling Epic-6 bugs in this PR: [[bug-sprint-report-modal-clipped-burndown]] ' +
+          '(same surface, different defect — the modal clips the body; this is the analytics-row ' +
+          'misalignment) and [[bug-reports-hub-agile-cards-collapse-to-one-url]] (also names the ' +
+          '4.6.x chart primitives that this bug touches)\n\n' +
+          '**Refactor signal — design-fidelity audit at chart-primitive level.** Both charts ' +
+          'reach for the same shared `LineChart` / `BarChart` primitives + the same shared ' +
+          '`ChartLegend` + the same shared `ChartFrame.DEFAULT_MARGIN`, but the per-chart ' +
+          '`chart-head` chrome (title + sub) is hand-rolled inside each chart binder ' +
+          '(`BurndownChart`, `VelocityChart`) — and the burndown binder forgot one element the ' +
+          'design specified. A `ChartHead` primitive that takes `title` + `sub` props and is ' +
+          'mounted by every chart binder would have prevented this entire shape of defect (the ' +
+          'binder author would need to actively SKIP the `sub` prop, instead of forgetting to ' +
+          'add it). Not in scope for this bug — captured as the refactor signal for a future ' +
+          '4.6.2 primitive-extraction pass if a second chart binder ships with the same ' +
+          'omission. The same shape generalises to legend / axis title / data-table affordance: ' +
+          'anything the design draws on every chart panel should be a primitive, not a per-' +
+          'binder copy.',
+      },
+      {
         id: 'bug-sprint-report-modal-clipped-burndown',
         kind: 'bug',
         title:
