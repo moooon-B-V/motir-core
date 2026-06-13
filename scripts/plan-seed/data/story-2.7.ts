@@ -252,7 +252,7 @@ export const story_2_7: PlanStory = {
     {
       id: '2.7.2',
       title: 'Decision — the WorkItemType taxonomy + the type→executor default map',
-      status: 'planned',
+      status: 'in_progress',
       type: 'decision',
       executor: 'coding_agent',
       estimateMinutes: 35,
