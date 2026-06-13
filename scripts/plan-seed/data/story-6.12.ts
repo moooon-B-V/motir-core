@@ -238,7 +238,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.1',
       title:
         'Design — the public project view + public roadmap + submit/upvote/comment surfaces + the make-public toggle',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 55,
