@@ -534,7 +534,7 @@ export const story_6_10: PlanStory = {
       id: '6.10.4',
       title:
         'Org-scoped services + access gating — org membership gates workspace access; org owner/admin extends 6.4 roles',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 70,
