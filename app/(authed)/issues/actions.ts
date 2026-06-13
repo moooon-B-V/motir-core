@@ -22,6 +22,8 @@ import type {
   CreateWorkItemLinkInput,
   WorkItemKindDto,
   WorkItemPriorityDto,
+  WorkItemTypeDto,
+  ExecutorDto,
   WorkItemSummaryDto,
   TreeLevelDto,
 } from '@/lib/dto/workItems';
@@ -56,6 +58,14 @@ export interface CreateIssueInput {
   // land the modal omits them and an issue is created top-level + unassigned.
   parentId?: string | null;
   assigneeId?: string | null;
+  // Work-item type + executor (Story 2.7), leaf-only. The modal sends them only
+  // when a type was chosen on a leaf kind; the service enforces leaf-only and
+  // seeds the executor from the type→executor default when a type arrives
+  // without one (seed-if-absent). Whitelisted here so they actually reach the
+  // service — omitting them silently dropped the picker's choice on create
+  // (the patch/inline-edit path persisted type, but create did not).
+  type?: WorkItemTypeDto | null;
+  executor?: ExecutorDto | null;
   // Optional Due date (Subtask 2.3.12 — the modal's DatePicker field; finding
   // #56 "mirror Jira"). An ISO 8601 string the service stores on the work item;
   // omitted/null when no date is chosen (Due date is nullable).
@@ -101,6 +111,12 @@ export async function createIssueAction(input: CreateIssueInput): Promise<Create
         parentId: input.parentId ?? null,
         assigneeId: input.assigneeId ?? null,
         ...(input.priority ? { priority: input.priority } : {}),
+        // Type + executor (Story 2.7), leaf-only: forward only when a type was
+        // chosen, mirroring the modal's payload shape. `executor` rides along
+        // (the service seeds it from the type default if absent).
+        ...(input.type
+          ? { type: input.type, ...(input.executor ? { executor: input.executor } : {}) }
+          : {}),
         ...(input.dueDate ? { dueDate: input.dueDate } : {}),
         ...(links.length ? { links } : {}),
       },

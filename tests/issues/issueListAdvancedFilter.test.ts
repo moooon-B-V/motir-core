@@ -202,11 +202,15 @@ describe('upgradeFacetsIntoAst (the one-way lossless upgrade)', () => {
 });
 
 describe('advancedBuilderFields (the registry-driven field menu)', () => {
-  it('offers every registry field, in registry order, incl. the Epic-5 join fields (6.1.5)', () => {
+  it('offers every registry field, in registry order, incl. the Epic-5 join fields (6.1.5) + the 2.7.6 work-item type facet', () => {
     expect(advancedBuilderFields().map((f) => f.id)).toEqual([
       'kind',
       'status',
       'priority',
+      // Story 2.7 (2.7.6): the work-item `type` facet — registry-ordered right
+      // after `priority`. Its `type-select` editor is now in the builder's
+      // SUPPORTED_EDITOR_KINDS allowlist, so the field reaches the menu.
+      'type',
       'assignee',
       'reporter',
       'sprint',

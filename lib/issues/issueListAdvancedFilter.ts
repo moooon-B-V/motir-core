@@ -166,6 +166,12 @@ const SUPPORTED_EDITOR_KINDS: ReadonlySet<FilterValueEditorKind> = new Set([
   'kind-select',
   'status-select',
   'priority-select',
+  // Story 2.7 (2.7.6): the work-item `type` facet. Its value editor ships in
+  // AdvancedFilterValueEditor, but this allowlist (the builder's field-menu
+  // gate) was not updated, so `advancedBuilderFields` dropped the `type` field
+  // from the field picker — the predicate/AST worked (integration tests green)
+  // while the user could never ADD the condition. Surfaced by 2.7.8's E2E.
+  'type-select',
   'member-select',
   'sprint-select',
   'label-select',
