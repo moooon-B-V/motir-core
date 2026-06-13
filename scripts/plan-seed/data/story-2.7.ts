@@ -629,7 +629,7 @@ export const story_2_7: PlanStory = {
       id: '2.7.8',
       title:
         'Playwright E2E — create a typed work item (pick type + executor), filter the list by type',
-      status: 'planned',
+      status: 'in_progress',
       type: 'e2e',
       executor: 'coding_agent',
       estimateMinutes: 40,
