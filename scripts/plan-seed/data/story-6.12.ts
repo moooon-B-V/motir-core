@@ -169,13 +169,27 @@ export const story_6_12: PlanStory = {
     'pre-check) and 6.11.3’s queue (adding the vote-count sort); it adds no ' +
     'second submissions table and no second access policy.\n\n' +
     '**Scope:** the public-surface design (6.12.1); the `public`-access-level ' +
-    'semantics decision (6.12.2); the schema + access-check extension + ' +
-    'migration (6.12.3); the public read-only project view, internal fields ' +
-    'hidden (6.12.4); cross-account submit-to-triage + duplicate detection ' +
-    '(6.12.5); upvoting + comments on public requests (6.12.6); the public ' +
-    'roadmap view with status tracking (6.12.7); the "make public" toggle + ' +
-    'the shareable public link in project settings (6.12.8); the access + ' +
-    'dedupe + voting tests (6.12.9); the cross-org e2e (6.12.10).\n\n' +
+    'semantics decision (6.12.2); the schema + access-check extension + the ' +
+    '`publicOverviewMd` project field + migration (6.12.3); the public ' +
+    'read-only project view + the OVERVIEW/README landing (the default public ' +
+    'tab), internal fields hidden (6.12.4); cross-account submit-to-triage + ' +
+    'duplicate detection (6.12.5); upvoting + comments on public requests ' +
+    '(6.12.6); the public roadmap view with status tracking (6.12.7); the ' +
+    '"make public" toggle + the shareable public link + the Overview/README ' +
+    'authoring editor in project settings (6.12.8); the access + dedupe + ' +
+    'voting tests (6.12.9); the cross-org e2e (6.12.10).\n\n' +
+    '**The public OVERVIEW / README (Yue, design iteration 2026-06-13).** The ' +
+    'public landing leads with a modern, GitHub-README-style project intro — a ' +
+    'hero (logo + name + tagline + at-a-glance stats + CTAs) + an authored ' +
+    'Markdown body + a links/stats sidebar — and is the DEFAULT public tab ' +
+    '(rung 1: GitHub puts the README on the repo home; Canny / Productboard / ' +
+    'Plane / OpenProject public projects open on an about/overview, not the raw ' +
+    'board). The content is a new nullable `project.publicOverviewMd` Markdown ' +
+    'field (a public-safe field in the public projection), authored by the ' +
+    'project admin via the shipped `MarkdownEditor` in settings and rendered ' +
+    'read-only via `MarkdownView`; an empty field falls back to a slim ' +
+    'auto-intro (never a blank page). Design: `design/public-projects/` Panel ' +
+    '1 (6.12.1, the design gate — DONE).\n\n' +
     '**Out of scope (named so they land in their own story, not here):** ' +
     'ANONYMOUS / logged-out public access (a future story — needs ' +
     'anonymous-identity + heavier abuse controls); a fully custom-branded / ' +
@@ -457,6 +471,12 @@ export const story_6_12: PlanStory = {
         '(to `work_item` + `User`) per the CLAUDE.md FK-as-`@relation` rule — ' +
         'NO raw-SQL-only FK (6.12.6 uses it, but the model lands with the ' +
         'access foundation so the schema is coherent in one migration).\n' +
+        '- **`publicOverviewMd` (the public Overview/README field):** add a ' +
+        'nullable `String?` column `publicOverviewMd` to `project` (Markdown ' +
+        'authored by the admin in 6.12.8, rendered on the public Overview tab in ' +
+        '6.12.4). It lands in THIS migration so the schema is coherent in one ' +
+        'shot; it is a public-safe field included in the public projection ' +
+        '(6.12.4) only when the project is public.\n' +
         '- **Access-check extension (the single auditable branch):** extend ' +
         '`canBrowse` so that when a project is `public`, it returns true for ' +
         'ANY authenticated user — bypassing the 6.10 org/workspace membership ' +
@@ -473,8 +493,9 @@ export const story_6_12: PlanStory = {
         'repository, the access policy in the service layer (extend the ' +
         'existing `projectAccessService`), no raw Prisma in routes.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- The migration adds `public` to `ProjectAccessLevel` and the ' +
-        '`PublicRequestVote` join (every FK an `@relation` on both sides); ' +
+        '- The migration adds `public` to `ProjectAccessLevel`, the ' +
+        '`PublicRequestVote` join (every FK an `@relation` on both sides), and ' +
+        'the nullable `project.publicOverviewMd` Markdown column; ' +
         '`prisma migrate dev` reports no drift; no existing project’s level ' +
         'changes.\n' +
         '- `canBrowse` returns true for ANY authenticated user on a `public` ' +
@@ -503,7 +524,7 @@ export const story_6_12: PlanStory = {
     {
       id: '6.12.4',
       title:
-        'Public read-only project view (board / issues) — internal fields hidden, no edit affordances',
+        'Public read-only project view (overview/README landing + board / issues) — internal fields hidden, no edit affordances',
       status: 'blocked',
       type: 'code',
       executor: 'coding_agent',
@@ -520,6 +541,15 @@ export const story_6_12: PlanStory = {
         'fetched-then-hidden (so nothing internal crosses the wire). What IS ' +
         'returned: issue key / title / kind / status / description, board ' +
         'columns, ordering — the public-safe fields only.\n' +
+        '- **The OVERVIEW / README landing (the DEFAULT public tab, per the ' +
+        '6.12.1 Panel 1 design):** the read-only nav is ' +
+        'Overview / Board / Issues / Roadmap, and Overview is the landing. ' +
+        'Render the modern intro — a hero (logo + project name + tagline + ' +
+        'at-a-glance stats + CTAs) + the authored `publicOverviewMd` body via ' +
+        'the shipped `MarkdownView` + a links / at-a-glance sidebar. When ' +
+        '`publicOverviewMd` is empty, fall back to a slim auto-intro (name + ' +
+        'stats + CTAs, no body) — NEVER a blank page. `publicOverviewMd` is ' +
+        'served via the public projection (public-safe field).\n' +
         '- **The view UI:** render the read-only board + issue list with the ' +
         '"public project" framing (banner/chip) and the signed-in cross-org ' +
         'viewer’s identity; NO create / move / assign / status / drag ' +
@@ -534,9 +564,11 @@ export const story_6_12: PlanStory = {
         'the public projection; the projection lives in the service/repository ' +
         'read layer so no future read can leak internal fields.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- A cross-org authenticated viewer opens a public project and sees the ' +
-        'read-only board + issue list rendering the 6.12.1 design; a non-public ' +
-        'project stays 404 cross-org.\n' +
+        '- A cross-org authenticated viewer opens a public project and lands on ' +
+        'the OVERVIEW/README tab (hero + the `publicOverviewMd` `MarkdownView` ' +
+        'body + links/stats sidebar; empty → the slim auto-intro), and can ' +
+        'switch to the read-only board + issue list — all rendering the 6.12.1 ' +
+        'design; a non-public project stays 404 cross-org.\n' +
         '- The public projection strips assignees, estimates, and internal ' +
         'comments at the read layer (verified: the hidden fields are absent ' +
         'from the response payload, not merely hidden in the DOM).\n' +
@@ -738,11 +770,12 @@ export const story_6_12: PlanStory = {
     },
     {
       id: '6.12.8',
-      title: 'Project settings — the "make public" toggle + the shareable public link',
+      title:
+        'Project settings — the "make public" toggle + the shareable public link + the Overview/README editor',
       status: 'blocked',
       type: 'code',
       executor: 'coding_agent',
-      estimateMinutes: 45,
+      estimateMinutes: 55,
       descriptionMd:
         'Extend project settings with the FOUR-level Access control + the ' +
         'shareable public link, per the 6.12.1 design, over the 6.12.3 access ' +
@@ -761,6 +794,13 @@ export const story_6_12: PlanStory = {
         'it still requires sign-in (account-required, not an unauthenticated ' +
         'bypass); decide the slug model so a project can rotate/disable its ' +
         'public link without changing the project key.\n' +
+        '- **The Overview/README editor (per the 6.12.1 Panel 6 design):** a ' +
+        '`MarkdownEditor` authoring the `project.publicOverviewMd` field ' +
+        '(6.12.3) that renders on the public Overview tab (6.12.4). ' +
+        'Project-admin-gated; inline-save through a service method (the ' +
+        'success-response-is-confirmation rule — no whole-tree refresh). A note ' +
+        'states it shows on the public Overview tab and is hidden while the ' +
+        'project is not public.\n' +
         '- **Design-system compliance:** ONLY `--el-*` + `[data-display-' +
         'style]` tokens + shipped `components/ui/*`; the access-level copy + ' +
         'the account-required note per the 6.12.1 design; inline edits follow ' +
@@ -778,6 +818,10 @@ export const story_6_12: PlanStory = {
         'copy / disable / rotate; the link requires sign-in (account-required, ' +
         'no unauthenticated bypass); rotating/disabling does not change the ' +
         'project key.\n' +
+        '- The Overview/README `MarkdownEditor` persists `publicOverviewMd` via ' +
+        'a service method (success-response-is-confirmation, no whole-tree ' +
+        'refresh), project-admin-gated; its content renders on the public ' +
+        'Overview tab (6.12.4).\n' +
         '- Only `--el-*` + `[data-display-style]` tokens + shipped ' +
         'primitives; matches the 6.12.1 design; inline edits use the ' +
         'success-response-is-confirmation pattern.\n' +
