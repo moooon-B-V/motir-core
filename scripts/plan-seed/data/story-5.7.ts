@@ -429,7 +429,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.4',
       title:
         '`notificationsService` + routes — cursor-paged feed, unread count, mark-read, mark-all-read (4-layer, per-user scoped)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
@@ -486,7 +486,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.5',
       title:
         'The bell + unread badge + notification drawer in the shell header — live count, deep links, mark-read on open (no whole-tree refresh)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
