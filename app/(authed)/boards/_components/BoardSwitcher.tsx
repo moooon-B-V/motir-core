@@ -1,5 +1,6 @@
 'use client';
 
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -573,8 +574,10 @@ function ManageItem({
 }
 
 // The create / rename modal — an Input (name) + (create only) a Kanban/Scrum
-// type picker (Scrum disabled, Epic 4). Submitting hands the trimmed name (+
-// type) up; an empty name is blocked client-side (mirrors the service guard).
+// type picker. Both types are real, selectable options (the Scrum board view
+// landed in Story 4.5, so the old "Epic 4" disabled seam is gone); Kanban stays
+// the default. Submitting hands the trimmed name (+ chosen type) up; an empty
+// name is blocked client-side (mirrors the service guard).
 function BoardFormModal({
   mode,
   initialName = '',
@@ -588,9 +591,35 @@ function BoardFormModal({
 }) {
   const t = useTranslations('boards');
   const [name, setName] = useState(initialName);
-  const [type] = useState<BoardType>('kanban');
+  const [type, setType] = useState<BoardType>('kanban');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // The two board types as a single-selection radio group (Kanban default).
+  const typeOptions: { value: BoardType; icon: typeof Columns3; label: string }[] = [
+    { value: 'kanban', icon: Columns3, label: t('boardTypeKanban') },
+    { value: 'scrum', icon: Rows3, label: t('boardTypeScrum') },
+  ];
+  const tileRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  // Arrow-key roving focus across the radio group: move selection AND focus to
+  // the neighbour, wrapping at the ends (the WAI-ARIA radiogroup pattern).
+  function moveType(from: number, delta: number) {
+    const to = (from + delta + typeOptions.length) % typeOptions.length;
+    const option = typeOptions[to];
+    if (!option) return;
+    setType(option.value);
+    tileRefs.current[to]?.focus();
+  }
+  function onTileKeyDown(e: ReactKeyboardEvent<HTMLButtonElement>, index: number) {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      moveType(index, 1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      moveType(index, -1);
+    }
+  }
 
   async function submit() {
     const trimmed = name.trim();
@@ -640,29 +669,40 @@ function BoardFormModal({
             <legend className="mb-1 text-xs font-medium text-(--el-text-secondary)">
               {t('boardTypeLabel')}
             </legend>
-            <div className="grid grid-cols-2 gap-2">
-              <div
-                data-testid="board-type-kanban"
-                aria-checked
-                role="radio"
-                className="flex items-center gap-2 rounded-(--radius-input) border border-(--el-accent) bg-(--el-muted) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text)"
-              >
-                <Columns3 className="h-4 w-4 shrink-0 text-(--el-accent)" aria-hidden />
-                {t('boardTypeKanban')}
-              </div>
-              <div
-                data-testid="board-type-scrum"
-                aria-checked={false}
-                aria-disabled
-                role="radio"
-                className="flex items-center gap-2 rounded-(--radius-input) border border-(--el-border) px-(--spacing-control-x) py-(--spacing-control-y) text-sm text-(--el-text-muted) opacity-60"
-              >
-                <Rows3 className="h-4 w-4 shrink-0" aria-hidden />
-                {t('boardTypeScrum')}
-                <Pill tone="neutral" className="ml-auto">
-                  {t('epic4Badge')}
-                </Pill>
-              </div>
+            <div
+              role="radiogroup"
+              aria-label={t('boardTypeLabel')}
+              className="grid grid-cols-2 gap-2"
+            >
+              {typeOptions.map(({ value, icon: Icon, label }, index) => {
+                const selected = type === value;
+                return (
+                  <button
+                    key={value}
+                    ref={(el) => {
+                      tileRefs.current[index] = el;
+                    }}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    tabIndex={selected ? 0 : -1}
+                    data-testid={`board-type-${value}`}
+                    onClick={() => setType(value)}
+                    onKeyDown={(e) => onTileKeyDown(e, index)}
+                    className={`flex items-center gap-2 rounded-(--radius-input) border px-(--spacing-control-x) py-(--spacing-control-y) text-left text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none ${
+                      selected
+                        ? 'border-(--el-accent) bg-(--el-muted) font-medium text-(--el-text)'
+                        : 'border-(--el-border) text-(--el-text)'
+                    }`}
+                  >
+                    <Icon
+                      className={`h-4 w-4 shrink-0 ${selected ? 'text-(--el-accent)' : 'text-(--el-text-muted)'}`}
+                      aria-hidden
+                    />
+                    {label}
+                  </button>
+                );
+              })}
             </div>
             <p className="mt-0.5 text-[11.5px] leading-snug text-(--el-text-muted)">
               {t('newBoardSeedHint')}

@@ -113,10 +113,16 @@ async function boardById(page: Page, boardId: string): Promise<BoardProjectionDt
 // Create a board through the actual switcher UI ("New board" → name → submit) and
 // return the created board's DTO from the POST response. The switcher then
 // auto-switches to it (selectBoard pushes `?board=<id>`), so we wait for the URL.
-async function createBoardViaUI(page: Page, name: string): Promise<BoardSummaryDto> {
+async function createBoardViaUI(
+  page: Page,
+  name: string,
+  type: 'kanban' | 'scrum' = 'kanban',
+): Promise<BoardSummaryDto> {
   await page.getByTestId('board-switcher-trigger').click();
   await page.getByTestId('board-switcher-new').click();
   await page.getByTestId('board-new-name').fill(name);
+  // Kanban is preselected; pick the Scrum tile when a scrum board is requested.
+  if (type === 'scrum') await page.getByTestId('board-type-scrum').click();
   const post = page.waitForResponse(
     (r) => r.url().endsWith('/api/boards') && r.request().method() === 'POST',
   );
@@ -124,6 +130,7 @@ async function createBoardViaUI(page: Page, name: string): Promise<BoardSummaryD
   const res = await post;
   expect(res.status(), 'POST /api/boards (create) returns 201').toBe(201);
   const created = (await res.json()) as BoardSummaryDto;
+  expect(created.type, `created board is a ${type} board`).toBe(type);
   await page.waitForURL((url) => url.searchParams.get('board') === created.id, { timeout: 10_000 });
   return created;
 }
@@ -222,6 +229,33 @@ test.describe('board-crud @smoke', () => {
     await expect(page.getByTestId('board')).toBeVisible({ timeout: 15_000 });
     expect(new URL(page.url()).searchParams.get('board')).toBe(defaultBoard.id);
     await expect(page.getByTestId('board-switcher-trigger')).toContainText(defaultBoard.name);
+  });
+
+  test('the switcher creates a SCRUM board (type picker selectable) and it renders the Scrum surface — the "Epic 4" seam is gone', async ({
+    page,
+  }) => {
+    await signUp(page, OWNER_EMAIL);
+    await seedActiveProject(OWNER_EMAIL);
+    await openBoard(page);
+
+    // The New-board type picker offers Scrum as a real, enabled option (the old
+    // disabled "Epic 4" seam was re-opened once Story 4.5 shipped). Selecting it
+    // creates a server-side scrum board.
+    const sprintBoard = await createBoardViaUI(page, 'Sprint board', 'scrum');
+    expect(sprintBoard.type).toBe('scrum');
+
+    // It's persisted as scrum (read back through the request context)…
+    const boards = await listBoards(page);
+    expect(boards.find((b) => b.id === sprintBoard.id)?.type).toBe('scrum');
+
+    // …and renders the 4.5 Scrum surface: a freshly-created scrum board has no
+    // active sprint, so it shows the "No active sprint" empty state (with a
+    // Backlog CTA), NOT a bare Kanban grid.
+    await gotoBoard(page, sprintBoard.id);
+    await expect(page.getByText('No active sprint', { exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByRole('link', { name: 'Go to Backlog' })).toBeVisible();
   });
 
   test('each board carries its own config — a group-by on board B leaves the default board flat, and survives a round-trip switch', async ({
