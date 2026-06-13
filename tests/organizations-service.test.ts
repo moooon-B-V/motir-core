@@ -137,6 +137,33 @@ describe('resolveWorkspaceAccess (the org access gate)', () => {
     const access = await organizationsService.resolveWorkspaceAccess(user.id, 'nonexistent-id');
     expect(access).toBeNull();
   });
+
+  it('resolveActiveWorkspace honours a cookie pinned to a SECOND org-backed workspace (jobs-flow regression)', async () => {
+    // A user who owns two workspaces in two different orgs: the cookie-pinned
+    // one must win. Regression for the jobs-flow cross-workspace-isolation e2e —
+    // the gate now skips a workspace whose org the user isn't in, so a directly-
+    // created workspaceB without an org membership would fall back to A. Both
+    // here are org-backed, so the cookie selects which one resolves.
+    const owner = await createTestUser();
+    const { workspace: wsA } = await workspacesService.createWorkspace({
+      name: 'Alpha',
+      ownerUserId: owner.id,
+    });
+    const orgB = await organizationsService.createOrganization({
+      name: 'Beta Org',
+      actorUserId: owner.id,
+    });
+    const { workspace: wsB } = await workspacesService.createWorkspace({
+      name: 'Beta WS',
+      ownerUserId: owner.id,
+      organizationId: orgB.id,
+    });
+
+    // Cookie pinned to B → resolves to B (not the first-created A).
+    expect(await workspacesService.resolveActiveWorkspace(owner.id, wsB.id)).toBe(wsB.id);
+    // Cookie pinned to A → resolves to A.
+    expect(await workspacesService.resolveActiveWorkspace(owner.id, wsA.id)).toBe(wsA.id);
+  });
 });
 
 describe('membership direction (6.10.2 §5, asymmetric)', () => {

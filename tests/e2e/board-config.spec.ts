@@ -285,6 +285,16 @@ test.describe('board-config @smoke', () => {
     await db.workspaceMembership.create({
       data: { userId: member.id, workspaceId, role: 'member', activeProjectId: projectId },
     });
+    // Story 6.10.4: a workspace member must also be a member of the workspace's
+    // org (org membership gates workspace access). Enrol the member so the org
+    // gate — not the zero-membership self-heal fallback — resolves them onto the
+    // owner's workspace with their `member` role (the read-only board-config gate).
+    {
+      const ws = await db.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+      await db.organizationMembership.create({
+        data: { organizationId: ws.organizationId, userId: member.id, role: 'member' },
+      });
+    }
 
     // Sign in as the member (two-step credentials flow).
     await page.goto('/sign-in');

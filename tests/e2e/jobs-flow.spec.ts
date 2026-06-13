@@ -253,12 +253,19 @@ test('@smoke cross-workspace isolation: jobs from another workspace are not visi
   const workspaceB = await db.workspace.create({
     data: { name: 'Isolation B', slug: 'jf-iso-b', organizationId: orgB.id },
   });
+  const isoUserId = (await db.user.findFirstOrThrow()).id;
   await db.workspaceMembership.create({
     data: {
       workspaceId: workspaceB.id,
-      userId: (await db.user.findFirstOrThrow()).id,
+      userId: isoUserId,
       role: 'owner',
     },
+  });
+  // Story 6.10.4: org membership gates workspace access — a workspace member who
+  // isn't a member of its org is DENIED, so resolveActiveWorkspace would skip B
+  // and fall back to A. Enrol the user in orgB so activating B resolves to B.
+  await db.organizationMembership.create({
+    data: { organizationId: orgB.id, userId: isoUserId, role: 'owner' },
   });
 
   // Activate workspace B (the RLS + explicit workspace filter must hide A's runs).
