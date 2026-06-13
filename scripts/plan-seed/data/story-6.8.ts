@@ -80,7 +80,7 @@ import type { PlanStory } from '../types';
 export const story_6_8: PlanStory = {
   id: '6.8',
   title: 'Edit project details + change project key (with old-key redirects)',
-  status: 'planned',
+  status: 'done',
   descriptionMd:
     'Project-admin editing of project details — **name, avatar, key** — by growing the ' +
     '**6.5.3 Details landing** (the read-only identity page the 6.5 settings area lands on; ' +
@@ -394,7 +394,7 @@ export const story_6_8: PlanStory = {
       id: '6.8.5',
       title:
         'Story tests — rename-tx matrix (atomicity, collisions, races, reclaim/release) + redirect/serve matrix + the rename E2E journey + a11y sweep',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
