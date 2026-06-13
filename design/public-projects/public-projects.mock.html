@@ -15,11 +15,22 @@
       No design/public-projects/ asset existed; the 6.12.1 design gate produces
       this FIRST. It is the layout source of truth for every UI code subtask in
       Story 6.12 that carries 6.12.1 in dependsOn (all `blocked` until it lands):
-        - 6.12.4 — the public read-only project view (board / issues), internal
-                   fields hidden, no edit affordances.
+        - 6.12.4 — the public read-only project view (board / work items) + the
+                   public OVERVIEW/README landing, internal fields hidden, no
+                   edit affordances.
         - 6.12.6 — upvote + comments on public requests.
         - 6.12.7 — the public roadmap (status-grouped, vote-counted).
-        - 6.12.8 — project settings: the make-public toggle + the share link.
+        - 6.12.8 — project settings: the make-public toggle + the share link +
+                   the Overview/README authoring editor.
+
+      OVERVIEW/README (added per Yue, design iteration): the public landing leads
+      with a modern, GitHub-README-style project intro — a hero (logo + name +
+      tagline + at-a-glance stats + CTAs) + an authored Markdown body + a links /
+      at-a-glance sidebar. It is the DEFAULT public tab (GitHub puts the README on
+      the repo home). Authored by the project admin in settings (a MarkdownEditor),
+      stored as a new project field `publicOverviewMd`, rendered read-only via
+      MarkdownView on the public Overview tab. Planning delta lands in the seed:
+      the field in 6.12.3, the render in 6.12.4, the editor in 6.12.8.
 
       Built FROM the real design system: the token block below is copied 1:1 from
       app/globals.css (Tier-0 --color-* + the shape tokens + Tier-3 --el-*), and
@@ -199,6 +210,10 @@
         --el-roadmap-planned: var(--color-tint-lavender);
         --el-roadmap-progress: var(--color-tint-sky);
         --el-roadmap-done: var(--color-tint-mint);
+        /* the Overview hero's soft corner washes (decorative tints; text on them
+           stays AA via --el-text on --el-page-bg, not on the wash) */
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
       }
       [data-theme='dark'] {
         color-scheme: dark;
@@ -450,7 +465,7 @@
         background: var(--el-tint-peach);
       }
 
-      /* issue-type icon hue */
+      /* work-item-type icon hue */
       .type-icon {
         display: inline-flex;
       }
@@ -1412,6 +1427,542 @@
         height: 16px;
         margin-top: 1px;
       }
+
+      /* ── Overview / README (the public landing) ──────────────────────────── */
+      /* the modern hero — a bordered card with a soft accent-tint wash (AA text
+         on the tint, NOT a page-level tint — finding #35) */
+      .hero {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        background:
+          radial-gradient(120% 140% at 0% 0%, var(--el-hero-wash-a) 0%, transparent 55%),
+          radial-gradient(120% 140% at 100% 0%, var(--el-hero-wash-b) 0%, transparent 50%),
+          var(--el-page-bg);
+        padding: 30px 32px;
+      }
+      .hero-top {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 16px;
+      }
+      .hero-logo {
+        width: 52px;
+        height: 52px;
+        border-radius: var(--radius-card);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 26px;
+        flex: none;
+        box-shadow: var(--shadow-subtle);
+      }
+      .hero h2 {
+        font-family: var(--font-serif);
+        font-size: 30px;
+        font-weight: 600;
+        line-height: 1.15;
+        margin: 0;
+        color: var(--el-text);
+        letter-spacing: -0.01em;
+      }
+      .hero .tagline {
+        margin: 14px 0 0;
+        font-size: 16px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 640px;
+      }
+      .hero-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 6px;
+      }
+      .hero-actions {
+        display: flex;
+        gap: 9px;
+        flex-wrap: wrap;
+        margin-top: 20px;
+      }
+      .hero-stats {
+        display: flex;
+        gap: 26px;
+        flex-wrap: wrap;
+        margin-top: 24px;
+        padding-top: 20px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .hstat .n {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--el-text);
+        font-family: var(--font-serif);
+      }
+      .hstat .l {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+
+      .ov-grid {
+        display: grid;
+        grid-template-columns: 1fr 312px;
+        gap: 20px;
+        margin-top: 18px;
+        align-items: start;
+      }
+
+      /* the authored README body — rendered via MarkdownView */
+      .md {
+        color: var(--el-text-secondary);
+      }
+      .md h3 {
+        font-family: var(--font-serif);
+        font-size: 19px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 26px 0 10px;
+      }
+      .md h3:first-child {
+        margin-top: 0;
+      }
+      .md p {
+        font-size: 14.5px;
+        line-height: 1.68;
+        margin: 0 0 14px;
+      }
+      .md ul {
+        margin: 0 0 14px;
+        padding-left: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .md li {
+        display: flex;
+        gap: 10px;
+        font-size: 14.5px;
+        line-height: 1.5;
+      }
+      .md li .ic {
+        width: 17px;
+        height: 17px;
+        margin-top: 1px;
+        color: var(--el-success);
+        flex: none;
+      }
+      .md li b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      /* the self-improving loop — numbered accent badges */
+      .md ol.loop {
+        counter-reset: loop;
+        list-style: none;
+        margin: 2px 0 16px;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .md ol.loop li {
+        counter-increment: loop;
+        align-items: center;
+      }
+      .md ol.loop li::before {
+        content: counter(loop);
+        width: 22px;
+        height: 22px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 12px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .md a {
+        color: var(--el-link);
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .md .shot {
+        margin: 4px 0 18px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-surface-soft);
+      }
+      .md .shot .bar {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .md .shot .bar i {
+        width: 9px;
+        height: 9px;
+        border-radius: 9999px;
+        background: var(--el-border-strong);
+        display: inline-block;
+      }
+      .md .shot .pane {
+        height: 168px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        padding: 12px;
+      }
+      .md .shot .pane span {
+        border-radius: var(--radius-control);
+        background: linear-gradient(160deg, var(--el-tint-lavender), var(--el-tint-sky));
+        opacity: 0.7;
+      }
+      .md .shot .pane span:nth-child(2) {
+        background: linear-gradient(160deg, var(--el-tint-mint), var(--el-tint-sky));
+      }
+      .md .shot .pane span:nth-child(3) {
+        background: linear-gradient(160deg, var(--el-tint-peach), var(--el-tint-rose));
+      }
+
+      /* the sidebar — Links / At a glance / CTA cards */
+      .ov-side {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .side-card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: 16px;
+      }
+      .side-card .lbl {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        margin: 0 0 12px;
+      }
+      .linkrow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 0;
+        font-size: 13.5px;
+        color: var(--el-text);
+        text-decoration: none;
+      }
+      .linkrow + .linkrow {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .linkrow .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-secondary);
+        flex: none;
+      }
+      .linkrow .ext {
+        margin-left: auto;
+        width: 13px;
+        height: 13px;
+        color: var(--el-text-faint);
+      }
+      .linkrow:hover {
+        color: var(--el-link);
+      }
+      .glance {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px 10px;
+      }
+      .glance .n {
+        font-size: 19px;
+        font-weight: 700;
+        color: var(--el-text);
+        font-family: var(--font-serif);
+      }
+      .glance .l {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        margin-top: 1px;
+      }
+      .cta-card {
+        background:
+          radial-gradient(140% 120% at 100% 0%, var(--el-hero-wash-a) 0%, transparent 60%),
+          var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 18px;
+      }
+      .cta-card h4 {
+        margin: 0 0 5px;
+        font-size: 15px;
+        font-family: var(--font-serif);
+        color: var(--el-text);
+      }
+      .cta-card p {
+        margin: 0 0 13px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+
+      /* the make-it (authoring) editor in settings */
+      .ov-editor {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .ov-editor .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 7px 9px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+      }
+      .ov-editor .toolbar .tb {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .ov-editor .toolbar .tb .ic {
+        width: 15px;
+        height: 15px;
+      }
+      .ov-editor .body {
+        padding: 13px var(--spacing-input-x);
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        min-height: 96px;
+      }
+      .ov-editor .body b {
+        color: var(--el-text);
+      }
+
+      /* settings entry point → opens the dedicated Edit overview view */
+      .ov-entry {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 13px 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .ov-entry .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .ov-entry .ttl {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin-bottom: 3px;
+      }
+      .ov-entry .snip {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .ov-entry .snip b {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+
+      /* ── The dedicated "Edit overview" view (split editor + live preview) ── */
+      .editor-shell {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .editor-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .editor-head .titles {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .editor-head .title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .editor-head h2 {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .editor-head .sub {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .icon-btn {
+        width: var(--height-control);
+        height: var(--height-control);
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        flex: none;
+      }
+      .icon-btn:hover {
+        background: var(--el-surface);
+      }
+      .saved {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        color: var(--el-success);
+        margin-right: 4px;
+      }
+      .saved .ic {
+        width: 15px;
+        height: 15px;
+      }
+
+      .editor-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+      }
+      .editor-toolbar .tb {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .editor-toolbar .tb:hover {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      .editor-toolbar .tb .ic {
+        width: 15px;
+        height: 15px;
+      }
+      .editor-toolbar .tb.sep {
+        width: 1px;
+        height: 18px;
+        background: var(--el-border);
+        margin: 0 4px;
+        cursor: default;
+      }
+      .editor-toolbar .grow {
+        flex: 1;
+      }
+      .pane-tag {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+      }
+      .pane-tag.right {
+        width: 50%;
+        padding-left: 16px;
+      }
+
+      .editor-split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        min-height: 420px;
+      }
+      .editor-src {
+        border-right: 1px solid var(--el-border);
+        overflow: auto;
+        background: var(--el-page-bg);
+      }
+      .editor-src pre {
+        margin: 0;
+        padding: 16px 18px;
+      }
+      .editor-src code {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .editor-prev {
+        position: relative;
+        overflow: auto;
+        background: var(--el-surface-soft);
+        padding: 18px 20px;
+      }
+      .prev-badge {
+        position: absolute;
+        top: 12px;
+        right: 14px;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        padding: 2px 9px;
+      }
+      .md-prev {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 18px;
+      }
+      .md-prev h3:first-child {
+        margin-top: 0;
+      }
     </style>
   </head>
   <body>
@@ -1436,8 +1987,260 @@
 
     <!-- ════════════════ PANEL 1 — public read-only project view (board) ════════════════ -->
     <div class="panel-label">
-      (1) Public read-only project view — no edit affordances · internal fields (assignee / estimate
-      / internal comments) ABSENT · the public banner + cross-org viewer identity
+      (1) Public landing — the project OVERVIEW / README — a modern intro (hero + authored rich body
+      + links / at-a-glance sidebar). The DEFAULT public tab (GitHub puts the README on the repo
+      home)
+    </div>
+    <div class="panel">
+      <div class="pub-shell">
+        <div class="pub-topbar">
+          <div class="pub-brand">
+            <span class="pub-logo">M</span>
+            <div>
+              <div class="pub-proj">
+                Motir
+                <span class="pill pill-public" style="margin-left: 6px"
+                  ><svg class="ic"><use href="#i-globe" /></svg> Public</span
+                >
+              </div>
+              <span class="pub-key">PROD · moooon</span>
+            </div>
+          </div>
+          <div class="viewer">
+            <div class="who">
+              <span class="nm">Priya Nair</span>
+              <span class="org">signed in · Acme org</span>
+            </div>
+            <span class="avatar av-sky">PN</span>
+          </div>
+        </div>
+
+        <div class="pub-banner">
+          <svg class="ic"><use href="#i-globe" /></svg>
+          <span
+            ><b>You're viewing a public project.</b> Anyone signed in to Motir can view it and
+            submit, upvote, or comment on requests.</span
+          >
+          <span class="dot">·</span>
+          <span class="readonly-note"
+            ><svg class="ic"><use href="#i-lock" /></svg> View-only — you can't edit work
+            items</span
+          >
+        </div>
+
+        <div class="pub-subbar">
+          <div class="seg" role="tablist" aria-label="Public views">
+            <button class="on">
+              <svg class="ic"><use href="#i-book" /></svg> Overview
+            </button>
+            <button>
+              <svg class="ic"><use href="#i-columns" /></svg> Board
+            </button>
+            <button>
+              <svg class="ic"><use href="#i-list" /></svg> Work items
+            </button>
+            <button>
+              <svg class="ic"><use href="#i-route" /></svg> Roadmap
+            </button>
+          </div>
+          <button class="btn btn-primary">
+            <svg class="ic"><use href="#i-plus" /></svg> Submit a request
+          </button>
+        </div>
+
+        <div class="overview" style="padding: 20px">
+          <!-- the modern hero -->
+          <div class="hero">
+            <div class="hero-top">
+              <span class="hero-logo">M</span>
+              <div>
+                <h2>Motir</h2>
+                <div class="hero-meta">
+                  <span class="pill pill-lav">Vibe project</span>
+                  <span class="pill pill-mint">Open source</span>
+                  <span class="pill pill-neutral">GPL-3.0</span>
+                  <span class="pill pill-neutral">MCP-native</span>
+                </div>
+              </div>
+            </div>
+            <p class="tagline">
+              Vibe your whole project. Bring an idea — Motir's three AI layers plan it, track it,
+              and ship it, end to end. You're looking at Motir, built in Motir.
+            </p>
+            <div class="hero-actions">
+              <button class="btn btn-primary btn-lg">
+                <svg class="ic"><use href="#i-route" /></svg> View the roadmap
+              </button>
+              <button class="btn btn-outline btn-lg">
+                <svg class="ic"><use href="#i-plus" /></svg> Submit a request
+              </button>
+              <button class="btn btn-ghost btn-lg">
+                <svg class="ic"><use href="#i-github" /></svg> GitHub
+              </button>
+            </div>
+            <div class="hero-stats">
+              <div class="hstat">
+                <div class="n">240</div>
+                <div class="l">Public requests</div>
+              </div>
+              <div class="hstat">
+                <div class="n">1.2k</div>
+                <div class="l">Upvotes</div>
+              </div>
+              <div class="hstat">
+                <div class="n">17</div>
+                <div class="l">Planned</div>
+              </div>
+              <div class="hstat">
+                <div class="n">203</div>
+                <div class="l">Shipped</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ov-grid">
+            <!-- the authored README body (MarkdownView) -->
+            <div class="ov-main">
+              <div class="md">
+                <h3>You're looking at Motir, inside Motir</h3>
+                <p>
+                  This is Motir's own project — the live board, roadmap, and backlog we use to build
+                  Motir. We build Motir with Motir: every feature here started as a work item on
+                  this board, moved through these columns, and was shipped by the same agents that
+                  turn work items into code.
+                </p>
+
+                <h3>A self-improving loop — and you're in it</h3>
+                <p>
+                  This is also our public feedback portal, and it's not a suggestion box that goes
+                  nowhere. The bugs you report and the ideas you upvote land in Motir's triage, get
+                  planned as work items right here, and are picked up by Motir to build the next
+                  version of Motir. You're not just watching the roadmap — you're shaping it.
+                </p>
+                <ol class="loop">
+                  <li><span>You submit a bug or an idea — it enters our triage.</span></li>
+                  <li><span>We plan it as a work item on this board.</span></li>
+                  <li><span>Motir's coding agent turns it into a pull request.</span></li>
+                  <li><span>It ships — and lands as Done on this very roadmap.</span></li>
+                </ol>
+
+                <h3>Vibe project</h3>
+                <p>
+                  You've heard of vibe coding — describe what you want, and the AI writes the code.
+                  A vibe project takes that to the <i>whole</i> project: not just the code, but the
+                  design, the marketing, the legal, the research — everything it takes to ship. You
+                  bring the intent; Motir's three layers carry it from idea to shipped, end to end:
+                </p>
+                <ul class="layers">
+                  <li>
+                    <svg class="ic" style="color: var(--el-type-story)">
+                      <use href="#i-route" />
+                    </svg>
+                    <span
+                      ><b>An AI planner</b> turns a conversation into a structured plan — epics,
+                      stories, and work items of every kind (design, marketing, legal,
+                      engineering…), with dependencies.</span
+                    >
+                  </li>
+                  <li>
+                    <svg class="ic" style="color: var(--el-type-task)">
+                      <use href="#i-columns" />
+                    </svg>
+                    <span
+                      ><b>An AI-native project manager</b> holds the work — boards, sprints, the
+                      system of record. It's <b>MCP-native</b>, so your own agents and tools read
+                      and write Motir directly.</span
+                    >
+                  </li>
+                  <li>
+                    <svg class="ic" style="color: var(--el-accent)"><use href="#i-github" /></svg>
+                    <span
+                      ><b>A hosted coding agent</b> picks up the engineering work items and ships
+                      the code — Motir runs it for you, no setup.</span
+                    >
+                  </li>
+                </ul>
+                <p>
+                  You stay at the level of intent; Motir plans, tracks, and ships the whole thing —
+                  code and everything around it. That's a <b>vibe project</b>.
+                </p>
+
+                <div class="shot" aria-label="Product screenshot">
+                  <div class="bar"><i></i><i></i><i></i></div>
+                  <div class="pane"><span></span><span></span><span></span><span></span></div>
+                </div>
+
+                <h3>Contribute</h3>
+                <p>
+                  Found a bug or have an idea?
+                  <a href="#">Submit a request</a> — a minute of your time feeds straight into the
+                  loop. Want to go deeper? The PM core is open source (GPL-3.0) on
+                  <a href="#">GitHub</a>.
+                </p>
+              </div>
+            </div>
+
+            <!-- the sidebar: Links / At a glance / CTA -->
+            <div class="ov-side">
+              <div class="side-card">
+                <div class="lbl">Links</div>
+                <a class="linkrow" href="#"
+                  ><svg class="ic"><use href="#i-globe" /></svg> Website
+                  <svg class="ic ext"><use href="#i-external-link" /></svg
+                ></a>
+                <a class="linkrow" href="#"
+                  ><svg class="ic"><use href="#i-book" /></svg> Documentation
+                  <svg class="ic ext"><use href="#i-external-link" /></svg
+                ></a>
+                <a class="linkrow" href="#"
+                  ><svg class="ic"><use href="#i-github" /></svg> Source (GPL-3.0)
+                  <svg class="ic ext"><use href="#i-external-link" /></svg
+                ></a>
+                <a class="linkrow" href="#"
+                  ><svg class="ic"><use href="#i-route" /></svg> Changelog
+                  <svg class="ic ext"><use href="#i-external-link" /></svg
+                ></a>
+              </div>
+
+              <div class="side-card">
+                <div class="lbl">At a glance</div>
+                <div class="glance">
+                  <div>
+                    <div class="n">240</div>
+                    <div class="l">Requests</div>
+                  </div>
+                  <div>
+                    <div class="n">6</div>
+                    <div class="l">In progress</div>
+                  </div>
+                  <div>
+                    <div class="n">17</div>
+                    <div class="l">Planned</div>
+                  </div>
+                  <div>
+                    <div class="n">203</div>
+                    <div class="l">Shipped</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cta-card">
+                <h4>Have an idea?</h4>
+                <p>Tell us what to build next. It takes a minute and goes straight to the team.</p>
+                <button class="btn btn-primary btn-block">
+                  <svg class="ic"><use href="#i-plus" /></svg> Submit a request
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      (2) Public read-only project view (Board tab) — no edit affordances · internal fields
+      (assignee / estimate / internal comments) ABSENT · the public banner + cross-org viewer
+      identity
     </div>
     <div class="panel">
       <div class="pub-shell">
@@ -1473,18 +2276,22 @@
           >
           <span class="dot">·</span>
           <span class="readonly-note"
-            ><svg class="ic"><use href="#i-lock" /></svg> View-only — you can't edit issues</span
+            ><svg class="ic"><use href="#i-lock" /></svg> View-only — you can't edit work
+            items</span
           >
         </div>
 
         <!-- read-only view nav -->
         <div class="pub-subbar">
           <div class="seg" role="tablist" aria-label="Public views">
+            <button>
+              <svg class="ic"><use href="#i-book" /></svg> Overview
+            </button>
             <button class="on">
               <svg class="ic"><use href="#i-columns" /></svg> Board
             </button>
             <button>
-              <svg class="ic"><use href="#i-list" /></svg> Issues
+              <svg class="ic"><use href="#i-list" /></svg> Work items
             </button>
             <button>
               <svg class="ic"><use href="#i-route" /></svg> Roadmap
@@ -1497,7 +2304,7 @@
 
         <!-- the board: shipped board card MINUS assignee + estimate, NO drag handle -->
         <div class="board">
-          <section class="col" aria-label="To Do, 6 issues">
+          <section class="col" aria-label="To Do, 6 work items">
             <div class="col-head">
               <span class="nm">To Do</span><span class="col-count">6</span>
             </div>
@@ -1533,7 +2340,7 @@
             </div>
           </section>
 
-          <section class="col" aria-label="In Progress, 3 issues">
+          <section class="col" aria-label="In Progress, 3 work items">
             <div class="col-head">
               <span class="nm">In Progress</span><span class="col-count">3</span>
             </div>
@@ -1555,7 +2362,7 @@
             </div>
           </section>
 
-          <section class="col" aria-label="In Review, 2 issues">
+          <section class="col" aria-label="In Review, 2 work items">
             <div class="col-head">
               <span class="nm">In Review</span><span class="col-count">2</span>
             </div>
@@ -1575,7 +2382,7 @@
             </div>
           </section>
 
-          <section class="col" aria-label="Done, 41 issues">
+          <section class="col" aria-label="Done, 41 work items">
             <div class="col-head">
               <span class="nm">Done</span><span class="col-count">41</span>
             </div>
@@ -1601,13 +2408,13 @@
       <p class="readonly-note" style="margin: 12px 2px 0">
         <svg class="ic"><use href="#i-eye-off" /></svg> Note for 6.12.4 — the cards above carry NO
         assignee avatar and NO story-point estimate (stripped by the public projection at the read
-        layer, not hidden in the DOM); internal issue comments are not shown.
+        layer, not hidden in the DOM); internal work-item comments are not shown.
       </p>
     </div>
 
     <!-- ════════════════ PANEL 2 — the public roadmap ════════════════ -->
     <div class="panel-label">
-      (2) Public roadmap — status-grouped (submitted → planned → in progress → done) · vote counts ·
+      (3) Public roadmap — status-grouped (submitted → planned → in progress → done) · vote counts ·
       paginated / lazy per column (NOT load-all)
     </div>
     <div class="panel">
@@ -1726,7 +2533,7 @@
 
     <!-- ════════════════ PANEL 3 — submit a request + duplicate detection ════════════════ -->
     <div class="panel-label">
-      (3) Submit a request + DUPLICATE DETECTION — as the title is typed, matching existing requests
+      (4) Submit a request + DUPLICATE DETECTION — as the title is typed, matching existing requests
       surface with "Upvote this instead" (Canny) · submit-as-new · the confirmation
     </div>
     <div class="panel cols2 uneven">
@@ -1842,7 +2649,7 @@
 
     <!-- ════════════════ PANEL 4 — public request detail (upvote + comments) ════════════════ -->
     <div class="panel-label">
-      (4) Public request detail — the request body · the UPVOTE control + count (already-voted
+      (5) Public request detail — the request body · the UPVOTE control + count (already-voted
       state) · the public comment thread + composer (the only interactive elements besides submit)
     </div>
     <div class="panel narrow">
@@ -1870,8 +2677,8 @@
         </div>
 
         <p class="req-body">
-          A full dark theme that follows the OS preference, covering the board, the issue detail,
-          and the public roadmap. Right now the roadmap embed is bright white at night.
+          A full dark theme that follows the OS preference, covering the board, the work-item
+          detail, and the public roadmap. Right now the roadmap embed is bright white at night.
         </p>
 
         <div class="divider"></div>
@@ -1916,7 +2723,7 @@
 
     <!-- ════════════════ PANEL 5 — project settings: make-public + share link ════════════════ -->
     <div class="panel-label">
-      (5) Project settings — the four-level Access control (public > open > limited > private) + the
+      (6) Project settings — the four-level Access control (public > open > limited > private) + the
       shareable public link (copy / disable / rotate) + the account-required note
     </div>
     <div class="panel narrow">
@@ -1992,12 +2799,176 @@
             >
           </div>
         </div>
+
+        <!-- the README/Overview authoring entry point → opens the dedicated Edit overview view -->
+        <div class="sharelink">
+          <div class="section-label">Project overview (public landing)</div>
+          <div class="ov-entry">
+            <div class="body">
+              <div class="ttl">README-style intro for the public Overview tab</div>
+              <div class="snip">
+                <b>## You're looking at Motir, inside Motir</b> · We build Motir with Motir…
+              </div>
+            </div>
+            <button class="btn btn-outline">
+              <svg class="ic"><use href="#i-edit" /></svg> Edit overview
+            </button>
+          </div>
+          <div class="acct-note">
+            <svg class="ic"><use href="#i-globe" /></svg>
+            <span
+              >This shows on the public <b>Overview</b> tab — the first thing a visitor sees. It's
+              hidden while the project isn't public.</span
+            >
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- ════════════════ PANEL 6 — empty / loading / error / rate-limit states ════════════════ -->
+    <!-- ════════════════ PANEL 7 — the dedicated "Edit overview" view (split editor + live preview) ════════════════ -->
     <div class="panel-label">
-      (6) States — empty roadmap · empty request list · the paginated loading skeleton · the
+      (7) Edit overview — the dedicated authoring view: a split Markdown editor (left) + live
+      preview of the public landing (right). Edits the `publicOverviewMd` body only; hero name/stats
+      are auto, links come from existing project fields
+    </div>
+    <div class="panel">
+      <div class="editor-shell">
+        <div class="editor-head">
+          <div class="titles">
+            <div class="title-row">
+              <button class="icon-btn" aria-label="Back to settings">
+                <svg class="ic"><use href="#i-arrow-left" /></svg>
+              </button>
+              <h2>Edit overview</h2>
+            </div>
+            <p class="sub">
+              Markdown — shown on your public project's <b>Overview</b> tab. Changes save to the
+              live public page.
+            </p>
+          </div>
+          <div class="head-actions">
+            <span class="saved"
+              ><svg class="ic"><use href="#i-check-check" /></svg> Saved</span
+            >
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">
+              <svg class="ic"><use href="#i-check-check" /></svg> Save
+            </button>
+          </div>
+        </div>
+
+        <div class="editor-toolbar">
+          <span class="tb" title="Heading">H</span>
+          <span class="tb" title="Bold"><b>B</b></span>
+          <span class="tb" title="Italic" style="font-style: italic">I</span>
+          <span class="tb sep"></span>
+          <span class="tb" title="Link"
+            ><svg class="ic"><use href="#i-link" /></svg
+          ></span>
+          <span class="tb" title="List"
+            ><svg class="ic"><use href="#i-list" /></svg
+          ></span>
+          <span class="tb" title="Numbered list"
+            ><svg class="ic"><use href="#i-list" /></svg
+          ></span>
+          <span class="tb" title="Image"
+            ><svg class="ic"><use href="#i-image" /></svg
+          ></span>
+          <span class="grow"></span>
+          <span class="pane-tag">Markdown</span>
+          <span class="pane-tag right">Preview</span>
+        </div>
+
+        <div class="editor-split">
+          <!-- left: the Markdown source -->
+          <div class="editor-src">
+            <pre><code># Motir
+
+## You're looking at Motir, inside Motir
+
+This is Motir's own project — the live board, roadmap, and backlog we
+use to build Motir. We build Motir with Motir: every feature here
+started as a work item on this board, moved through these columns, and
+was shipped by the same agents that turn work items into code.
+
+## A self-improving loop — and you're in it
+
+The bugs you report and the ideas you upvote land in Motir's triage,
+get planned as work items right here, and are picked up by Motir to
+build the next version of Motir.
+
+1. You submit a bug or an idea — it enters our triage.
+2. We plan it as a work item on this board.
+3. Motir's coding agent turns it into a pull request.
+4. It ships — and lands as Done on this very roadmap.
+
+## Vibe project
+
+You've heard of vibe coding — describe what you want, and the AI writes
+the code. A vibe project takes that to the *whole* project: not just the
+code, but the design, the marketing, the legal, the research…
+
+- **An AI planner** turns a conversation into a structured plan.
+- **An AI-native project manager** holds the work — **MCP-native**.
+- **A hosted coding agent** ships the engineering work items.
+
+That's a vibe project.
+
+## Contribute
+
+Found a bug or have an idea? [Submit a request](#) — the PM core is
+open source (GPL-3.0) on [GitHub](#).
+</code></pre>
+          </div>
+
+          <!-- right: the live preview (rendered) -->
+          <div class="editor-prev">
+            <div class="prev-badge">Live preview</div>
+            <div class="md md-prev">
+              <h3>You're looking at Motir, inside Motir</h3>
+              <p>
+                This is Motir's own project — the live board, roadmap, and backlog we use to build
+                Motir. We build Motir with Motir: every feature here started as a work item on this
+                board…
+              </p>
+              <h3>A self-improving loop — and you're in it</h3>
+              <ol class="loop">
+                <li><span>You submit a bug or an idea — it enters our triage.</span></li>
+                <li><span>We plan it as a work item on this board.</span></li>
+                <li><span>Motir's coding agent turns it into a pull request.</span></li>
+                <li><span>It ships — and lands as Done on this very roadmap.</span></li>
+              </ol>
+              <h3>Vibe project</h3>
+              <p>
+                You've heard of vibe coding — describe what you want, and the AI writes the code. A
+                vibe project takes that to the <i>whole</i> project: not just the code, but the
+                design, the marketing, the legal, the research…
+              </p>
+              <ul class="layers">
+                <li>
+                  <svg class="ic" style="color: var(--el-type-story)"><use href="#i-route" /></svg>
+                  <span><b>An AI planner</b> turns a conversation into a structured plan.</span>
+                </li>
+                <li>
+                  <svg class="ic" style="color: var(--el-type-task)"><use href="#i-columns" /></svg>
+                  <span
+                    ><b>An AI-native project manager</b> holds the work — <b>MCP-native</b>.</span
+                  >
+                </li>
+                <li>
+                  <svg class="ic" style="color: var(--el-accent)"><use href="#i-github" /></svg>
+                  <span><b>A hosted coding agent</b> ships the engineering work items.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 8 — empty / loading / error / rate-limit states ════════════════ -->
+    <div class="panel-label">
+      (8) States — empty roadmap · empty request list · the paginated loading skeleton · the
       fetch-error (ErrorState) · the rate-limited submit (graceful, never a raw 500)
     </div>
     <div class="panel">
@@ -2282,7 +3253,7 @@
           <path d="M9 3v18" />
           <path d="M15 3v18" />
         </g>
-        <!-- list (issues) -->
+        <!-- list (work items) -->
         <g
           id="i-list"
           fill="none"
@@ -2440,6 +3411,72 @@
         >
           <path d="M18 6 6 18" />
           <path d="m6 6 12 12" />
+        </g>
+        <!-- external-link -->
+        <g
+          id="i-external-link"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </g>
+        <!-- github -->
+        <g
+          id="i-github"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C4 2 3 2 3 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 2 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"
+          />
+          <path d="M9 18c-4.51 2-5-2-7-2" />
+        </g>
+        <!-- edit = square-pen -->
+        <g
+          id="i-edit"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path
+            d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"
+          />
+        </g>
+        <!-- arrow-left -->
+        <g
+          id="i-arrow-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </g>
+        <!-- image -->
+        <g
+          id="i-image"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+          <circle cx="9" cy="9" r="2" />
+          <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
         </g>
       </defs>
     </svg>
