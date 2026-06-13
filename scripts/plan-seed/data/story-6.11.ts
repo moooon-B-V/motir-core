@@ -602,7 +602,7 @@ export const story_6_11: PlanStory = {
       title:
         'E2E (playwright) — submit a bug → lands in triage (not the tree) → admin promotes → appears in the tree',
       status: 'blocked',
-      type: 'subtask',
+      type: 'e2e',
       executor: 'coding_agent',
       estimateMinutes: 55,
       descriptionMd:

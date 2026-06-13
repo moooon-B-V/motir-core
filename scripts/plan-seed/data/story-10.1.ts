@@ -772,7 +772,7 @@ export const story_10_1: PlanStory = {
       title:
         'E2E — platform-staff sees overview + rollups + drills into an org; a normal user is denied',
       status: 'blocked',
-      type: 'subtask',
+      type: 'e2e',
       executor: 'coding_agent',
       estimateMinutes: 50,
       descriptionMd:
