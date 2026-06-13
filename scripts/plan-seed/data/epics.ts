@@ -2068,6 +2068,71 @@ export const EPICS: EpicMeta[] = [
           'EstimateBadge optimistic-keep fix that the estimation spec needed shipped in the ' +
           'same PR.',
       },
+      {
+        id: 'bug-e2e-custom-fields-empty-state-hydration-flake',
+        kind: 'bug',
+        title:
+          'Custom-fields E2E spec flakes on the Fields-admin empty state — finding-#89 hydration churn recurs on a surface bug-e2e-suite-flaky-specs did not cover',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 8 (cross-cutting test-suite stability — a green CI is ' +
+          'a launch gate) · **Surfaces:** the `Playwright E2E` job ' +
+          '(`tests/e2e/custom-fields.spec.ts`) · **Status:** open · **Reported by:** Yue.\n\n' +
+          'A NEW manifestation of the same finding-#89 hydration-churn class that ' +
+          '`bug-e2e-suite-flaky-specs` (DONE, PR #873) hardened — but on a spec that bug did NOT ' +
+          'cover, so it recurs. Observed reding the `Playwright E2E (bulk-2)` leg on **PR #891** — ' +
+          'a Vitest-ONLY change (per-worker test DB isolation) that touches no E2E code, so the ' +
+          'red is purely an inherited flake: the merge-with-`main` CI taxing an unrelated PR, ' +
+          'exactly the cost the parent bug + the CLAUDE.md “wait on the AUTHORITATIVE signal” rule ' +
+          'describe.\n\n' +
+          '**The failure (PR #891, run 27473371705 — `55 passed`, `1 failed`):** ' +
+          '`tests/e2e/custom-fields.spec.ts:195` › “the PM defines the five field types …”. ' +
+          '**Failed initial + retry #1.** The first assertion after `gotoFields()` on a ' +
+          'freshly-seeded tenant (line ~204): `await expect(page.getByText(' +
+          "'No custom fields yet')).toBeVisible()` timed out at 5000ms. The tenant is brand new " +
+          '(`seedTenant`), so the empty state is trivially correct — the TEST raced the render.\n\n' +
+          '**Root cause (the finding-#89 shape).** The WebServer log for the run is flooded with ' +
+          '`next-intl` `ENVIRONMENT_FALLBACK: the \`now\` parameter wasn’t provided to ' +
+          '\`relativeTime\`` warnings, then `Uncaught Error: Hydration failed because the server ' +
+          'rendered text didn’t match the client`. A relative-time value rendered without a stable ' +
+          '`now` mismatches between SSR and client → React regenerates the tree on hydration → the ' +
+          'Fields-admin empty-state paint is delayed past the 5s `toBeVisible` window. Same class ' +
+          'as finding #89 (relative-time SSR/client mismatch hydration-fails a page and swallows ' +
+          'early interactions); the parent bug fixed five OTHER specs, not this surface.\n\n' +
+          '**Preferred fix is PRODUCT-side, not per-spec (kills the whole class).** The recurring ' +
+          'tell is the `ENVIRONMENT_FALLBACK` for `relativeTime`: next-intl renders relative times ' +
+          'without a provided `now` (and/or `timeZone`), which is what causes the SSR/client ' +
+          'mismatch + hydration churn everywhere it appears. Provide a stable `now`/`timeZone` to ' +
+          'the next-intl provider (or pass `now` at each `format.relativeTime` call) so the warning ' +
+          '— and the hydration regeneration it triggers — stops across ALL pages, not just this ' +
+          'spec. That is more durable than re-timing one assertion. Only if the app proves correct ' +
+          'and it is purely a test race should the fallback be test-side (wait on a ' +
+          'hydration-settled / response signal, per the parent bug’s pattern). Per the decision ' +
+          'ladder, the `ENVIRONMENT_FALLBACK` is a real config gap, so removing it is the root ' +
+          'fix.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- `tests/e2e/custom-fields.spec.ts` passes **5 consecutive full CI E2E runs with zero ' +
+          'flakes** (re-run to prove it, per the parent bug’s bar).\n' +
+          '- The `next-intl` `ENVIRONMENT_FALLBACK` (`relativeTime`) warnings + the “Hydration ' +
+          'failed” errors are GONE from the E2E WebServer log on the affected pages — the root ' +
+          'cause removed, not just the one assertion re-timed. If a stable `now`/`timeZone` is ' +
+          'supplied to next-intl, confirm relative times still render correctly in the app.\n' +
+          '- Fix is product-side IF the `ENVIRONMENT_FALLBACK` is a real config gap (preferred); ' +
+          'otherwise test-side timing hardening, stated explicitly. No coverage weakened.\n' +
+          '- Sweep for the SAME `ENVIRONMENT_FALLBACK`/hydration tell on specs not in the parent ' +
+          'bug’s five (it is a class, not a one-off) and fold them in.\n\n' +
+          '## Context refs\n\n' +
+          "- `tests/e2e/custom-fields.spec.ts` (≈ line 204 — the `'No custom fields yet'` " +
+          'empty-state assertion that timed out).\n' +
+          '- `bug-e2e-suite-flaky-specs` (this Epic, DONE via PR #873) — the parent class + the ' +
+          'authoritative-signal discipline; this is the same shape on an uncovered surface.\n' +
+          '- `notes.html` mistake #37 + the CLAUDE.md “E2E tests wait on the AUTHORITATIVE signal” ' +
+          'rule; finding #89 (relative-time SSR/client mismatch hydration flake).\n' +
+          '- The `next-intl` provider wiring (`NextIntlClientProvider` / the request config that ' +
+          'sets `now` / `timeZone`) — where to supply a stable `now` so `relativeTime` stops ' +
+          'falling back.',
+      },
     ],
   },
   {
