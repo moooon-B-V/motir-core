@@ -131,11 +131,14 @@ The README carries that in two beats:
     - "A self-improving loop — and you're in it"), a **numbered loop** (`ol.loop`,
       accent number badges: submit → triage → plan → agent PR → ships as Done).
   - **Part 2 — "Vibe project"** (the headline idea, by analogy to _vibe coding_):
-    you bring the idea, Motir's **three layers** carry it intent→shipped, drawn as
-    a `ul.layers` list with per-layer palette-hued icons — AI planner
-    (`--el-type-story` route), AI-native project manager (`--el-type-task` columns),
-    hosted coding agent (`--el-accent` github) — closing on "no other tool runs
-    the whole loop end to end — that's a vibe project."
+    a vibe project is the WHOLE project, not just code — **design, marketing,
+    legal, research, engineering**; you bring the intent, Motir's **three layers**
+    carry it idea→shipped, drawn as a `ul.layers` list with per-layer palette-hued
+    icons — AI planner (`--el-type-story` route; plans work items of every kind),
+    AI-native project manager (`--el-type-task` columns; MCP-native), hosted coding
+    agent (`--el-accent` github; ships the engineering work items) — closing on
+    "Motir plans, tracks, and ships the whole thing — code and everything around
+    it. No other tool runs the whole loop end to end — that's a vibe project."
   - a **product-screenshot** placeholder (browser-chrome frame + tinted panes) and
     a **"Contribute"** section linking to submit. (Motir's own project seeds this
     exact copy as `publicOverviewMd`; see the Copy index.)
@@ -357,11 +360,15 @@ swap layer must reach every element).
   self-improving loop — and you're in it"_ + the 4-step loop
   [submit → triage → plan → agent PR → ships as Done]. **Part 2 ("Vibe project" —
   the headline idea, by analogy to vibe coding):** _"You've heard of vibe coding —
-  describe what you want, and the AI writes the code. Motir does that for an
-  entire project…"_ + the three layers (**An AI planner** → chat to a structured
-  plan; **An AI-native project manager** → boards/sprints/system of record, **MCP-native**
-  so your agents read/write Motir directly; **A hosted coding agent** → picks up
-  work items and ships the code) + _"No other tool runs the whole loop end to
+  describe what you want, and the AI writes the code. A vibe project takes that to
+  the whole project: not just the code, but the design, the marketing, the legal,
+  the research — everything it takes to ship…"_ + the three layers (**An AI
+  planner** → chat to a structured plan, work items of every kind (design /
+  marketing / legal / engineering); **An AI-native project manager** →
+  boards/sprints/system of record, **MCP-native** so your agents read/write Motir
+  directly; **A hosted coding agent** → picks up the engineering work items and
+  ships the code) + _"Motir plans, tracks, and ships the whole thing — code and
+  everything around it. No other tool runs the whole loop end to
   end — that's a vibe project."_ Then **"Contribute"**. NOT framed as "AI project
   management" — it's the three-layer, end-to-end pipeline. This canonical copy is
   seeded onto the `motir` project's `publicOverviewMd` (see story-6.12.ts § 6.12.4
