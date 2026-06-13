@@ -120,26 +120,51 @@ async function dragWidgetToColumn(
   page: Page,
   grip: Locator,
   column: Locator,
+  targetColumn: number,
 ): ReturnType<Page['waitForResponse']> {
-  await grip.scrollIntoViewIfNeeded();
-  await column.scrollIntoViewIfNeeded();
-  const f = (await grip.boundingBox())!;
-  const t = (await column.boundingBox())!;
-  const fx = f.x + f.width / 2;
-  const fy = f.y + f.height / 2;
-  const tx = t.x + t.width / 2;
-  const ty = t.y + t.height * 0.5;
-  await page.mouse.move(fx, fy);
-  await page.mouse.down();
-  await page.mouse.move(fx + 10, fy + 10, { steps: 5 }); // clear the 8px activation
-  await page.mouse.move(tx, ty, { steps: 18 });
-  await page.mouse.move(tx, ty, { steps: 4 }); // settle so the over-target sticks
-  const move = page.waitForResponse(
-    (r) => /\/widgets\/[^/]+\/move$/.test(r.url()) && r.request().method() === 'POST',
-    { timeout: 10_000 },
-  );
-  await page.mouse.up();
-  return move;
+  // A synthetic pointer drag into a (here empty) column is inherently flaky
+  // under dnd-kit's `closestCorners`: at the instant of release `over` can
+  // resolve to a stale widget in the SOURCE column rather than the target
+  // column, so the move POSTs the wrong column / neighbour ids that don't bound
+  // a real slot → 422 (the dashboards-drag flake). A rejected move changes
+  // nothing server-side, so retry the whole gesture until the move BOTH commits
+  // (200) AND targeted the intended column (the request body's `column`). We
+  // bias each attempt by releasing only once the column shows its `isOver`
+  // style, then verify the actual committed move rather than trusting the drop.
+  const isMove = (r: import('@playwright/test').Response) =>
+    /\/widgets\/[^/]+\/move$/.test(r.url()) && r.request().method() === 'POST';
+  let last: import('@playwright/test').Response | null = null;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    await grip.scrollIntoViewIfNeeded();
+    await column.scrollIntoViewIfNeeded();
+    const f = (await grip.boundingBox())!;
+    const t = (await column.boundingBox())!;
+    const fx = f.x + f.width / 2;
+    const fy = f.y + f.height / 2;
+    const tx = t.x + t.width / 2;
+    const ty = t.y + t.height * 0.5;
+    await page.mouse.move(fx, fy);
+    await page.mouse.down();
+    await page.mouse.move(fx + 10, fy + 10, { steps: 5 }); // clear the 8px activation
+    await page.mouse.move(tx, ty, { steps: 18 });
+    await page.mouse.move(tx, ty, { steps: 4 }); // settle so the over-target sticks
+    // Best-effort: prefer releasing while the column is the active droppable
+    // (the lavender isOver style). Don't fail the attempt if it doesn't show —
+    // the post-drop verification + retry is the real guarantee.
+    await expect(column)
+      .toHaveClass(/tint-lavender/, { timeout: 1_500 })
+      .catch(() => {});
+    const movePromise = page.waitForResponse(isMove, { timeout: 5_000 }).catch(() => null);
+    await page.mouse.up();
+    const res = await movePromise;
+    if (res && res.status() === 200 && res.request().postDataJSON()?.column === targetColumn) {
+      return res;
+    }
+    last = res ?? last;
+    await page.mouse.move(fx, fy, { steps: 3 }); // reset the pointer before retrying
+  }
+  if (last) return last; // exhausted — surface the last response so the caller's assert reports it
+  throw new Error('widget move never committed to the target column');
 }
 
 // Open the add-widget picker and pick a type, opening its config modal.
@@ -238,7 +263,12 @@ test.describe('dashboards @smoke', () => {
       'dashboard-widget-grip-',
       '',
     );
-    const moveResp = await dragWidgetToColumn(page, grip, page.getByTestId('dashboard-column-1'));
+    const moveResp = await dragWidgetToColumn(
+      page,
+      grip,
+      page.getByTestId('dashboard-column-1'),
+      1,
+    );
     expect((await moveResp).status()).toBe(200);
 
     // Reload — the move persists (assert through the authoritative read).

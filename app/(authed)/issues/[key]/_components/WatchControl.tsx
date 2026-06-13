@@ -106,6 +106,8 @@ export function WatchControl({
   const [addError, setAddError] = useState<string | null>(null);
   // Drops a stale list response that resolves after a newer one.
   const fetchSeq = useRef(0);
+  // Drops the reconcile of a superseded toggle (see `toggle` below).
+  const toggleSeq = useRef(0);
   // The popover state as a ref — the toggle's async success handler must see
   // the CURRENT open state, not the one its closure captured (the composite
   // click opens the popover in the same tick it fires the toggle).
@@ -144,10 +146,18 @@ export function WatchControl({
   // toast grammar (panel 6). Tabular-nums keep the cluster from shifting.
   const toggle = useCallback(() => {
     const next = !watching;
+    // Drop the reconcile of a SUPERSEDED toggle. Rapid toggles (the W shortcut
+    // pressed repeatedly, or the composite click firing while a W toggle is
+    // still in flight) overlap, and their action responses can resolve out of
+    // order — an older response's `setWatching(res.watching)` would otherwise
+    // clobber the newest optimistic state (the watch-spec flake). Only the
+    // latest toggle's reconcile applies — mirrors loadPage's `fetchSeq` guard.
+    const seq = ++toggleSeq.current;
     setWatching(next);
     setCount((c) => Math.max(0, c + (next ? 1 : -1)));
     startTransition(async () => {
       const res = await toggleWatchAction({ workItemId, watch: next });
+      if (seq !== toggleSeq.current) return;
       if (res.ok) {
         setWatching(res.watching);
         setCount(res.watcherCount);

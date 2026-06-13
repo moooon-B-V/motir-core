@@ -257,8 +257,16 @@ test('at scale the read stays cursor-paged: 50 + "Show more", view toggle withou
   await expect(list.getByText('file-71.txt')).toBeVisible();
   await expect(list.getByText('file-70.txt')).toHaveCount(0);
 
-  // Extend one cursor page.
+  // Extend one cursor page. Await the cursor-page FETCH (arm before the click)
+  // before asserting the new count — the at-scale render of +50 rows can take
+  // longer than the default expect timeout, so the bare toHaveCount(100) raced
+  // the in-flight read and saw the still-50 window.
+  const nextPage = page.waitForResponse(
+    (r) => /\/api\/work-items\/[^/]+\/attachments/.test(r.url()) && r.request().method() === 'GET',
+    { timeout: 10_000 },
+  );
   await page.getByRole('button', { name: 'Show more (70)' }).click();
+  await nextPage;
   await expect(list.getByRole('listitem')).toHaveCount(100);
   await expect(list.getByText('file-21.txt')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Show more (20)' })).toBeVisible();

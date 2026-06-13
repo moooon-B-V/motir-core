@@ -62,10 +62,18 @@ async function openPicker(page: Page, scope: Locator | Page): Promise<Locator> {
   return picker;
 }
 
-/** Estimate the badge in `scope` to a deck value, then wait for the picker to close. */
+/** Estimate the badge in `scope` to a deck value, then wait for the picker to
+ *  close AND the estimate to PERSIST. The picker is optimistic, so without
+ *  awaiting the PATCH /api/work-items/<id>/estimate 200 a subsequent reload can
+ *  race the in-flight write and read the pre-estimate value back (the flake). */
 async function estimateVia(page: Page, scope: Locator | Page, value: number): Promise<void> {
   const picker = await openPicker(page, scope);
+  const write = page.waitForResponse(
+    (r) => /\/api\/work-items\/[^/]+\/estimate$/.test(r.url()) && r.request().method() === 'PATCH',
+    { timeout: 10_000 },
+  );
   await picker.getByRole('button', { name: `${value} story points` }).click();
+  expect((await write).status()).toBe(200);
   await expect(picker).toBeHidden();
 }
 
