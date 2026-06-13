@@ -458,7 +458,7 @@ export const story_6_10: PlanStory = {
       id: '6.10.3',
       title:
         'Schema — `Organization` + `OrganizationMembership` + `Workspace.organizationId` + migration + backfill',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 65,
@@ -533,7 +533,7 @@ export const story_6_10: PlanStory = {
       id: '6.10.4',
       title:
         'Org-scoped services + access gating — org membership gates workspace access; org owner/admin extends 6.4 roles',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 70,
@@ -712,7 +712,7 @@ export const story_6_10: PlanStory = {
       id: '6.10.6',
       title:
         'Seed loader — model the `moooon` org over its workspace(s); backfill in `pnpm db:seed`',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 40,
