@@ -35,12 +35,12 @@
       "review": "评审",
       "decision": "决策",
       "deploy": "部署",
-      "manual": "人工",
+      "manual": "手动",
       "chore": "杂务"
     },
     "executor": {
       "coding_agent": "编码代理",
-      "human": "人类"
+      "human": "人工"
     },
     "priority": {
       "highest": "最高",
