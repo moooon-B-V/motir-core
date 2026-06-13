@@ -122,9 +122,11 @@ test.describe('project-details — the editable Details + change-key journey', (
     await nameInput.fill('Details E2E Renamed');
     await expect(saveButton).toBeEnabled();
     await saveButton.click();
-    // A successful save clears `dirty` → the Save button returns to disabled (the
-    // durable signal; the "Saved" status pill is transient — it self-clears).
-    await expect(saveButton).toBeDisabled();
+    // Wait for the "Saved" status — it appears only after the action RESOLVES ok
+    // (justSaved=true) and router.refresh() fires, so the write is committed before
+    // we navigate. (The button is also disabled DURING the in-flight transition, so
+    // toBeDisabled would race ahead of the commit — don't use it as the signal.)
+    await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 
     await page.goto('/issues');
     await expect(switcher(page)).toContainText('Details E2E Renamed');
@@ -139,7 +141,7 @@ test.describe('project-details — the editable Details + change-key journey', (
     await page.keyboard.press('Escape'); // close the popover; selection is staged
     await expect(saveButton).toBeEnabled();
     await saveButton.click();
-    await expect(saveButton).toBeDisabled();
+    await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 
     // Re-open the picker → the saved selection is reflected (round-tripped through
     // the server + router.refresh).
@@ -166,13 +168,20 @@ test.describe('project-details — the editable Details + change-key journey', (
     await expect(keyModal.getByRole('heading', { name: 'Change project key' })).toBeVisible();
     await keyModal.getByRole('textbox', { name: 'New key' }).fill('NIF');
     await expect(keyModal.getByText('Available', { exact: true })).toBeVisible();
-    await expect(keyModal.getByText(/Every issue identifier becomes NIF/)).toBeVisible();
+    // Noun-agnostic ("issue" vs "work item" — the catalog noun varies by runtime
+    // terminology): assert the stable parts of the consequence copy.
+    await expect(keyModal.getByText(/identifier becomes NIF/)).toBeVisible();
     await expect(keyModal.getByText(/Old PROD-? links keep working/)).toBeVisible();
     await keyModal.getByRole('button', { name: 'Change key', exact: true }).click();
 
-    // The Details page now shows NIF as the key and PROD as a previous key.
+    // The Details page now shows PROD as a previous (retired) key — scope to the
+    // Previous-keys row (a listitem carrying a Release control) so the assertion
+    // can't be satisfied by the live-key field instead.
     await expect(page.getByText('Previous keys')).toBeVisible();
-    await expect(page.getByText('PROD', { exact: true }).first()).toBeVisible();
+    const prodPrevRow = page
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('button', { name: 'Release' }) });
+    await expect(prodPrevRow).toContainText('PROD');
 
     // ── 4. An old issue link 308-redirects to its canonical NIF identifier ───
     await page.goto('/issues/PROD-1');
@@ -181,20 +190,23 @@ test.describe('project-details — the editable Details + change-key journey', (
     await expect(page.getByText('NIF-1', { exact: true })).toBeVisible();
 
     // ── 5. Reclaim the own previous key (revert): NIF → PROD ─────────────────
+    // PROD goes live again and NIF becomes the retired key. (The reverse old-link
+    // redirect — NIF-1 → PROD-1 — is proven deterministically by the integration
+    // journey test; it is NOT re-asserted through the browser here because NIF-1
+    // was already loaded as a LIVE page in step 4, so the dev route cache can
+    // serve that stale render and make a re-visit flaky.)
     await page.goto('/settings/project');
     await page.getByRole('button', { name: 'Change key', exact: false }).click();
     const revertModal = page.getByRole('dialog');
     await revertModal.getByRole('textbox', { name: 'New key' }).fill('PROD');
     await expect(revertModal.getByText('Available', { exact: true })).toBeVisible();
     await revertModal.getByRole('button', { name: 'Change key', exact: true }).click();
-    // Previous keys now lists NIF (PROD is live again).
-    await expect(page.getByText('Previous keys')).toBeVisible();
-    await expect(page.getByText('NIF', { exact: true }).first()).toBeVisible();
-
-    // Old NIF issue links now redirect to the reclaimed PROD canonical.
-    await page.goto('/issues/NIF-1');
-    await page.waitForURL('**/issues/PROD-1');
-    expect(new URL(page.url()).pathname).toBe('/issues/PROD-1');
+    // The Previous-keys row now lists NIF (and no longer PROD — it's live again).
+    const nifPrevRow = page
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('button', { name: 'Release' }) });
+    await expect(nifPrevRow).toContainText('NIF');
+    await expect(nifPrevRow).not.toContainText('PROD');
   });
 
   test('a non-admin member sees the Details values but NONE of the editing controls', async ({
