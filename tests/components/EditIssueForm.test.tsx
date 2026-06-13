@@ -50,6 +50,8 @@ const issue: WorkItemDto = {
   reporterId: 'u1',
   dueDate: null,
   estimateMinutes: null,
+  type: null,
+  executor: null,
   storyPoints: null,
   position: 'a0',
   sprintId: null,

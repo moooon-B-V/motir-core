@@ -109,6 +109,8 @@ function makeItem(overrides: Partial<WorkItemDto> = {}): WorkItemDto {
     reporterId: 'u_reporter',
     dueDate: '2026-06-10T00:00:00.000Z',
     estimateMinutes: 90,
+    type: null,
+    executor: null,
     storyPoints: null,
     position: 'a0',
     sprintId: null,

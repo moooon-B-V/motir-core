@@ -41,6 +41,10 @@ export function toWorkItemDto(row: WorkItem): WorkItemDto {
     reporterId: row.reporterId,
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
     estimateMinutes: row.estimateMinutes,
+    // Work-item type + executor (Story 2.7) — nullable enums; pass straight
+    // through (Prisma enums are plain string unions on the row).
+    type: row.type,
+    executor: row.executor,
     // The `Decimal(6, 2)` story-point estimate (Story 4.3) → a wire-safe number
     // (or null when unestimated); Decimals don't survive JSON otherwise.
     storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),

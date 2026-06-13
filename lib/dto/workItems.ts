@@ -18,6 +18,32 @@ import type { CustomFieldWithValueDto } from './customFieldValues';
 export type WorkItemKindDto = 'epic' | 'story' | 'task' | 'bug' | 'subtask';
 export type WorkItemPriorityDto = 'lowest' | 'low' | 'medium' | 'high' | 'highest';
 export type WorkItemExplanationSourceDto = 'user_authored' | 'ai_draft' | 'user_edited';
+/**
+ * The work-item TYPE — the NATURE of executable work (Story 2.7). A FIXED
+ * ten-member set, in the canonical order the 2.7.2 ADR
+ * (docs/decisions/work-item-type-taxonomy.md) froze, mirroring the
+ * `WorkItemType` Prisma enum 1:1. DISTINCT from `kind`; carried only on
+ * executable leaves (task / subtask / bug) — epics/stories + legacy rows are
+ * `null`. Fixed (not free text) so Story 7.6's per-type prompt generator is a
+ * TOTAL function over it and the 2.7.6 filter facet is a closed set.
+ */
+export type WorkItemTypeDto =
+  | 'code'
+  | 'design'
+  | 'test'
+  | 'content'
+  | 'research'
+  | 'review'
+  | 'decision'
+  | 'deploy'
+  | 'manual'
+  | 'chore';
+/**
+ * WHO executes a piece of work (Story 2.7) — mirrors the `Executor` Prisma
+ * enum. Seeded from the type→executor default map (`lib/issues/executorDefaults.ts`)
+ * when a type is first chosen, and overridable.
+ */
+export type ExecutorDto = 'coding_agent' | 'human';
 
 /**
  * The full work-item shape for the detail view. Carries both content axes
@@ -41,6 +67,18 @@ export interface WorkItemDto {
   reporterId: string;
   dueDate: string | null;
   estimateMinutes: number | null;
+  /**
+   * The NATURE of the work (Story 2.7) — one of the ten `WorkItemTypeDto`
+   * members, or `null` on a container kind (epic/story) or an untyped leaf.
+   * DISTINCT from `kind`.
+   */
+  type: WorkItemTypeDto | null;
+  /**
+   * WHO executes the work (Story 2.7) — `coding_agent` | `human`, seeded from
+   * the type→executor default when a type is chosen and overridable. `null`
+   * when no type is set.
+   */
+  executor: ExecutorDto | null;
   /**
    * The agile STORY-POINT estimate (Story 4.3 · Subtask 4.3.3) — a separate
    * numeric estimate from `estimateMinutes` (TIME). Null = unestimated. The
@@ -374,6 +412,20 @@ export interface CreateWorkItemInput {
   dueDate?: string | null; // ISO 8601
   estimateMinutes?: number | null;
   /**
+   * The work-item TYPE (Story 2.7) — leaf-only: supplying it on an epic/story
+   * kind is rejected with `TypeNotAllowedOnKindError` (422). When a `type` is
+   * supplied WITHOUT an explicit `executor`, the service seeds `executor` from
+   * the type→executor default map (`defaultExecutorForType`). Omitted → the
+   * column stays null (an untyped leaf), unchanged from pre-2.7.
+   */
+  type?: WorkItemTypeDto | null;
+  /**
+   * WHO executes the work (Story 2.7). Overrides the type→executor default
+   * when supplied alongside `type`. Setting it on an epic/story kind (or with
+   * no type) follows the same leaf-only rule as `type`.
+   */
+  executor?: ExecutorDto | null;
+  /**
    * Create the issue directly INTO a sprint (Subtask 4.2.2 — the backlog /
    * sprint-planning "+ Create issue" row that targets a sprint container). When
    * set, the new issue is born already assigned to this sprint, appended to the
@@ -459,6 +511,19 @@ export interface UpdateWorkItemInput {
   priority?: WorkItemPriorityDto;
   dueDate?: string | null; // ISO 8601
   estimateMinutes?: number | null;
+  /**
+   * Patch the work-item TYPE (Story 2.7). Leaf-only — set/changing it on an
+   * epic/story is rejected (`TypeNotAllowedOnKindError`, 422). An explicit
+   * `null` clears the type. SEED-IF-ABSENT semantics for the executor (the same
+   * rule create uses): when `type` is patched to a non-null value, `executor`
+   * is NOT supplied, AND the row currently has no executor, the service seeds
+   * `executor` from `defaultExecutorForType` — the "first chosen" case from the
+   * 2.7.2 ADR. If the row already HAS an executor (a prior override), a bare
+   * `type` change never clobbers it.
+   */
+  type?: WorkItemTypeDto | null;
+  /** Patch the executor (Story 2.7) — same leaf-only rule as `type`. */
+  executor?: ExecutorDto | null;
 }
 
 /**
