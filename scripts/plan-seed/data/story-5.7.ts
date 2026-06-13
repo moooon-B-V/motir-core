@@ -199,7 +199,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.1',
       title:
         'Design — bell + unread badge in the shell header + the notification drawer + the per-user notification-preferences settings page (`design/notifications/`)',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 45,
