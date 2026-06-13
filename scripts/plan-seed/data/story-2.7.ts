@@ -575,7 +575,7 @@ export const story_2_7: PlanStory = {
       id: '2.7.7',
       title:
         'Vitest — schema + default map + picker default-seeding + loader mapping + filter facet',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 50,
