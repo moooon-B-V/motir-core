@@ -131,6 +131,15 @@ model User {
   // Dashboards (Story 6.3) — owned grids ride the SavedFilter owner
   // semantics (Cascade; change-owner is the recorded extension).
   dashboards                Dashboard[]               @relation("DashboardOwner")
+  // In-app notifications (Story 5.7 · Subtask 5.7.2). Two distinct User↔
+  // Notification edges, so named relations. As the RECIPIENT a user owns many
+  // notifications (Cascade: a notification row is per-user notification
+  // substrate — it dies with the user, the watchers/commentMentions pattern).
+  // As the ACTOR (who caused it — rendered as the row avatar) a user appears
+  // on many (SetNull on the FK: a departed actor leaves the row intact and
+  // unattributed, never blocks a delete — the assignee semantics).
+  notifications             Notification[]            @relation("NotificationRecipient")
+  actedNotifications        Notification[]            @relation("NotificationActor")
 
   @@map("user")
 }
@@ -301,6 +310,10 @@ model Workspace {
   automationRules          AutomationRule[]
   // Dashboards (Story 6.3) — workspace-scoped widget grids. Cascade.
   dashboards               Dashboard[]
+  // In-app notifications (Story 5.7 · Subtask 5.7.2) — workspace-scoped per
+  // the finding-#26 tenancy gate (every notification read filters on it).
+  // Cascade with the workspace, the comments pattern.
+  notifications            Notification[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -733,6 +746,12 @@ model WorkItem {
   // (the rule's history is kept; the deleted item renders a tombstone), so the
   // FK nulls rather than deleting the execution row.
   automationExecutions AutomationRuleExecution[]
+  // In-app notifications that deep-link to this issue (Story 5.7 · Subtask
+  // 5.7.2). Cascade — a hard-deleted issue takes its notification rows with
+  // it (the deep-link target would 404 otherwise), the comments pattern. The
+  // FK is nullable on the notification side (non-item notifications stay
+  // modellable), so this back-relation lists only the rows that name the issue.
+  notifications        Notification[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -1646,6 +1665,100 @@ model Watcher {
   // The "issues I watch" read path (Story 5.7 / Epic 6).
   @@index([userId])
   @@map("watcher")
+}
+
+/// One in-app notification row (Story 5.7 · Subtask 5.7.2) — the persistence
+/// layer behind the header bell + unread feed. WRITTEN by the 5.7.3 fan-in job
+/// (a SECOND consumer of the SHIPPED channel-agnostic 5.1.6 events, beside the
+/// email job — never a second emit path) and READ by the 5.7.4
+/// `notificationsService`. A row is FOR exactly one recipient; every read is
+/// scoped to the session user.
+///
+/// The badge-vs-row split (the Jira/Linear-verified model, Story 5.7 desc): the
+/// bell badge is a SEEN-since-last-open count the drawer clears, while `readAt`
+/// is PER-ROW read state (the blue-dot / greyed driver) — distinct concepts, so
+/// the schema carries `readAt` and the badge is a cheap unread aggregate over
+/// the partial index below.
+///
+/// `type` is a STRING discriminator, NOT a Prisma enum — the deliberate
+/// justified deviation (the "no complexity for nothing" rule, inverted: the
+/// EXTENSIBILITY use case earns the looser shape). The 5.7.3 handler is
+/// registry-driven so Story 5.4 (`transitioned`) and Story 6.6 (`created` /
+/// `field.changed`) fan in by ADDING a registry entry + a 5.7.6 preference-
+/// matrix row, with NO migration and no 5.7 change. An enum would force a
+/// schema migration per new event type, defeating that seam. The 5.7.6
+/// preference matrix keys on this same string. `category` IS an enum: the
+/// Direct/Watching drawer split is Jira's closed two-tab set, not extensible.
+///
+/// `data` (Json) is the DENORMALIZED render payload captured at fan-in (issue
+/// key + title, actor name, comment excerpt, from→to status) so the feed read
+/// is a single-table scan — no join storm per row (finding #57).
+///
+/// Idempotency: `dedupeKey` carries the SOURCE identity (e.g. `comment:<id>` /
+/// `mentioned:<revisionId>`), scoped per recipient by `@@unique([dedupeKey,
+/// recipientUserId])`. This mirrors the SHIPPED 5.1.6 email idempotency
+/// (`mention:<sourceId>:<userId>`, keyed on the stable source id — NOT the
+/// per-delivery Inngest event id, which a comment-edit re-fire changes), the
+/// decision-ladder rung-2 precedent. A replayed/retried event `createMany`s
+/// with `skipDuplicates`, so the unique turns a double-write into a no-op.
+///
+/// Every FK is a two-sided Prisma `@relation` with explicit `onDelete` (the
+/// FK-as-@relation migration rule; the 2.3.7 attachment-FK drift lesson):
+/// recipient Cascade, actor SetNull, workItem Cascade, workspace Cascade.
+///
+/// RLS: pure workspace gate (NON-NULL `workspace_id`), the same single
+/// PERMISSIVE FOR ALL policy as `comment` — see the migration. The PER-USER
+/// scoping (a user reads only their OWN rows) is an APPLICATION concern the
+/// 5.7.4 service enforces (`recipientUserId = session user`); RLS is the
+/// tenant boundary, not the per-user boundary.
+model Notification {
+  id              String               @id @default(cuid())
+  workspaceId     String               @map("workspace_id")
+  recipientUserId String               @map("recipient_user_id")
+  type            String
+  category        NotificationCategory
+  workItemId      String?              @map("work_item_id")
+  actorId         String?              @map("actor_id")
+  data            Json
+  dedupeKey       String               @map("dedupe_key")
+  readAt          DateTime?            @map("read_at")
+  createdAt       DateTime             @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  recipient User      @relation("NotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  actor     User?     @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  workItem  WorkItem? @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  // Idempotency — one row per (source event × recipient); a replayed event's
+  // createMany(skipDuplicates) no-ops against this.
+  @@unique([dedupeKey, recipientUserId])
+  // The feed cursor walk: newest-first per recipient, optionally narrowed by
+  // category. `id` is the cursor tie-break (createdAt alone is not a total
+  // order — PRODECT_FINDINGS #38); it is the @id, so no extra index needed.
+  @@index([recipientUserId, createdAt])
+  // The RLS workspace gate.
+  @@index([workspaceId])
+  // NOTE: the cheap unread-count aggregate is backed by a PARTIAL index
+  //   CREATE INDEX notification_unread_idx ON notification(recipient_user_id)
+  //     WHERE read_at IS NULL
+  // created in raw migration SQL — Prisma's schema DSL cannot express a
+  // WHERE-filtered index (the workflow_status_one_initial_per_project /
+  // board_one_default_per_project precedent), so it lives in the migration and
+  // is intentionally absent here. migrate dev does not drift on it.
+  @@map("notification")
+}
+
+/// The two drawer tabs of Jira's notification surface (Story 5.7 · 5.7.2):
+/// `direct` = the actions involving YOU (mentioned / assigned / reporter —
+/// "mentions first", the default tab), `watching` = items you watch (the
+/// Story 5.4 `work-item/transitioned` fan-in slot, populated when 5.4 lands —
+/// no 5.7 change). A CLOSED set (Jira ships exactly these two), so an enum,
+/// unlike the open `type` string above.
+enum NotificationCategory {
+  direct
+  watching
+
+  @@map("notification_category")
 }
 
 /// The five per-project custom-field types (Story 5.3). Each maps 1:1 to a
