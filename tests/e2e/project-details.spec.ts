@@ -209,9 +209,10 @@ test.describe('project-details — the editable Details + change-key journey', (
     await page.goto('/settings/project');
     await expect(page.getByRole('heading', { name: 'Details', exact: true })).toBeVisible();
 
-    // The values are visible…
+    // The values are visible… (scope the name to the main pane — it also appears
+    // in the settings rail header, which would make a bare match ambiguous).
     await expect(page.getByText('Read-only', { exact: true })).toBeVisible();
-    await expect(page.getByText(PROJECT_NAME, { exact: true })).toBeVisible();
+    await expect(page.locator('#main').getByText(PROJECT_NAME, { exact: true })).toBeVisible();
     // …but every editing affordance is absent (the hide is presentation; the
     // PATCH/DELETE reject server-side too — proven at the service tier).
     await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
@@ -247,9 +248,10 @@ test.describe('project-details — the editable Details + change-key journey', (
     await sweep(page, 'change-key modal');
     await page.keyboard.press('Escape');
 
-    // The release-key confirm.
+    // The release-key confirm. The retired key is PROD (PROD→NIF made NIF live and
+    // PROD the alias), so the confirm reads "Release PROD?".
     await page.getByRole('button', { name: 'Release', exact: true }).click();
-    await expect(page.getByRole('heading', { name: /Release NIF/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Release PROD/ })).toBeVisible();
     await sweep(page, 'release-key confirm');
   });
 });
