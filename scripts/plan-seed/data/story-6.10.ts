@@ -149,9 +149,14 @@ export const story_6_10: PlanStory = {
     'one-person company is just an org of one — OPC); the WORKSPACE switcher is ' +
     'HIDDEN until the org has a 2nd workspace; the PROJECT stays in the sidebar. ' +
     'Only two count-driven reveals exist: the workspace switcher at ws #2 and ' +
-    'the org menu’s switch-org section at org #2. At one workspace, org settings ' +
-    'ARE the whole Settings home (the workspace-settings split appears only at ' +
-    'ws #2). Full spec in `design/org-admin/design-notes.md` (6.10.1).\n\n' +
+    'the org menu’s switch-org section at org #2. At one workspace the ' +
+    'workspace-settings SURFACE is hidden but the workspace tier still does the ' +
+    'work underneath: the single Settings home (entered as the org’s settings) ' +
+    'FOLDS IN the workspace-config sections (workflows/fields/labels/components/' +
+    'automation/dashboards — all `workspaceId`-scoped) and routes each edit to ' +
+    'its own tier (org→`Organization`, config→the single `Workspace`); at ws #2 ' +
+    'those sections split into a per-workspace Settings area, with no data move. ' +
+    'Full spec in `design/org-admin/design-notes.md` (6.10.1).\n\n' +
     '**Scope:** the org-admin design (6.10.1); the `Organization`-model + ' +
     'billing-entity + role decision (6.10.2); the schema + migration + backfill ' +
     'every-workspace→a-default-org (6.10.3); the org-scoped services + access ' +
@@ -382,8 +387,12 @@ export const story_6_10: PlanStory = {
         'always the header anchor, the WORKSPACE switcher is hidden until ws #2, ' +
         'the PROJECT stays in the sidebar; (c) the only two count-driven reveals ' +
         'are the workspace switcher at ws #2 and the org menu’s switch-org ' +
-        'section at org #2; (d) at one workspace, org settings ARE the whole ' +
-        'Settings home — the workspace-settings split appears only at ws #2. ' +
+        'section at org #2; (d) at one workspace the workspace-settings SURFACE ' +
+        'is hidden but the workspace tier still operates underneath — the single ' +
+        'Settings home FOLDS IN the workspace-config sections (all ' +
+        '`workspaceId`-scoped) and routes each edit to its own tier ' +
+        '(org→`Organization`, config→the single `Workspace`); at ws #2 they ' +
+        'split into a per-workspace Settings area with no data move. ' +
         'The visual spec is `design/org-admin/design-notes.md` (6.10.1); this ' +
         'ADR fixes the model/auto-provisioning side that the schema (6.10.3), ' +
         'seed (6.10.6) and UI (6.10.5) build to.\n\n' +
@@ -405,8 +414,10 @@ export const story_6_10: PlanStory = {
         '- It fixes the progressive-disclosure + auto-provisioning principle: ' +
         'signup auto-creates an org + default workspace (OPC = org of one; org ' +
         'renameable), the UI reveals a tier only at count ≥ 2 (no "individual" ' +
-        'mode; org always shown, workspace hidden until ws #2), and one-workspace ' +
-        'org settings ARE the whole Settings home.\n\n' +
+        'mode; org always shown, workspace hidden until ws #2), and at one ' +
+        'workspace the Settings home folds in the workspace-config sections and ' +
+        'routes each edit to its tier (the workspace settings still operate ' +
+        'underneath; they split into a per-workspace area at ws #2).\n\n' +
         '## Context refs\n\n' +
         '- `motir-core/prisma/schema.prisma` — the existing `Account` ' +
         '(Better-Auth, do NOT reuse), `Workspace`, `WorkspaceMembership`, and ' +
@@ -602,8 +613,11 @@ export const story_6_10: PlanStory = {
         '`Acme › Engineering`); at one workspace it is NOT rendered at all (no ' +
         '"individual" mode — an OPC is just an org of one). The PROJECT switcher ' +
         'stays in the sidebar; switching the workspace re-scopes it. At one ' +
-        'workspace, org settings ARE the whole Settings home (the ' +
-        'workspace-settings split appears only at ws #2).\n' +
+        'workspace the workspace-settings SURFACE is hidden but its config still ' +
+        'operates underneath: the single Settings home folds in the ' +
+        'workspace-config sections (`settings/workspace/*`) and saves them to the ' +
+        'single `Workspace` row; they split into a per-workspace Settings area ' +
+        'only at ws #2 (no data move).\n' +
         '- **Org settings** — org name / slug / org-level metadata, editable ' +
         'by an org owner/admin (the gate enforces the role). The passive ' +
         '"billing later" placeholder per the design — NO active billing ' +
@@ -631,7 +645,9 @@ export const story_6_10: PlanStory = {
         'workspace makes it appear and switching it re-scopes the sidebar ' +
         'project switcher; the org menu’s "Switch organization" section is ' +
         'present only when the account is in ≥2 orgs; with one workspace there ' +
-        'is no separate workspace-settings surface.\n' +
+        'is no separate workspace-settings surface — its config sections fold ' +
+        'into the Settings home and still save to the `Workspace` row (and split ' +
+        'out into a per-workspace area at ws #2).\n' +
         '- The member roster is paginated/lazy (at-scale, NOT load-all); ' +
         'inline edits use the success-response-is-confirmation pattern (no ' +
         'whole-tree refresh).\n' +
