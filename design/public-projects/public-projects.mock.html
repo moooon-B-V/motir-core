@@ -1,0 +1,2447 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Public projects — read-only view + roadmap + submit/upvote/comment + make-public
+      (Story 6.12 · 6.12.1)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the PUBLIC PROJECTS surface (Story 6.12) —
+      "open source project management": a project made PUBLIC for read-only VIEW
+      to ANY signed-in Motir account (across orgs/workspaces), where the only
+      writes are submit-a-request (into the 6.11 Triage), upvote, and comment.
+      No design/public-projects/ asset existed; the 6.12.1 design gate produces
+      this FIRST. It is the layout source of truth for every UI code subtask in
+      Story 6.12 that carries 6.12.1 in dependsOn (all `blocked` until it lands):
+        - 6.12.4 — the public read-only project view (board / issues), internal
+                   fields hidden, no edit affordances.
+        - 6.12.6 — upvote + comments on public requests.
+        - 6.12.7 — the public roadmap (status-grouped, vote-counted).
+        - 6.12.8 — project settings: the make-public toggle + the share link.
+
+      Built FROM the real design system: the token block below is copied 1:1 from
+      app/globals.css (Tier-0 --color-* + the shape tokens + Tier-3 --el-*), and
+      the markup mirrors the SHIPPED primitives — Card, Button (primary / ghost /
+      outline / danger-tinted), Pill (neutral + the tint tones), the IssueTypeIcon
+      kind hue (--el-type-*), the initial-letter Avatar, Combobox / Segmented (the
+      type toggle + access control), FormField + Input + Textarea (the submit
+      form), Popover (the share-link menu), EmptyState / ErrorState, Spinner, and
+      Toast. The PUBLIC board card is the SHIPPED board card (design/boards) with
+      the INTERNAL fields removed — same vocabulary, a public PROJECTION of it.
+      Every colour via --el-* (no Tier-0 --color-* in surface markup); every
+      shaped surface via the [data-display-style] shape tokens; AA-safe; read as
+      text, not colour alone (finding #35 / #54).
+
+      The locked model (Yue, 2026-06-12 — see story-6.12.ts header): `public` is a
+      4th ProjectAccessLevel extending 6.4 (ladder public > open > limited >
+      private); it is the ONLY level that crosses the org boundary for READ. A
+      public viewer is NOT a member, so 6.4 canEdit is false — the three permitted
+      writes (submit / upvote / comment) are NEW narrow grants. Internal fields
+      (assignees / estimates / internal comments) are stripped by a public
+      PROJECTION at the read layer. Account-required, NOT anonymous (a viewer must
+      be a signed-in Motir account; the share link still requires sign-in).
+      Mirror products (rung 1, verified): OpenProject / Plane / GitHub public
+      visibility + the Canny / Productboard / Featurebase feedback-portal set
+      (submit + upvote + comment + status roadmap + dedupe-before-create).
+
+      Covers (multi-panel — review EACH, mistake #31):
+        (1)  the public read-only project view — the read-only board (To Do / In
+             Progress / In Review / Done) as a NON-member cross-org viewer sees
+             it: NO edit affordances (no create / move / assign / status / drag),
+             INTERNAL fields absent (NO assignee, NO estimate), the public-project
+             BANNER + the signed-in cross-org viewer identity, a read-only
+             Board / List / Roadmap nav.
+        (2)  the public ROADMAP — status-grouped columns (submitted → planned → in
+             progress → done) of public-facing requests, each with its VOTE COUNT
+             + a link to the request; paginated / lazy (the at-scale rule).
+        (3)  SUBMIT a request + DUPLICATE DETECTION — the submit form (type toggle
+             bug | feature, title, description), the dedupe state ("Upvote this
+             instead" on a matching existing request) + the submit-as-new path +
+             the "thanks, we got it" confirmation.
+        (4)  a public REQUEST DETAIL — the request body, the UPVOTE control +
+             count (already-voted state), the public COMMENT thread + composer.
+        (5)  project SETTINGS — the four-level Access control
+             (public > open > limited > private) with per-level copy, the
+             shareable public link (copy / disable / rotate), the
+             account-required-not-anonymous note.
+        (6)  STATES — empty roadmap, empty request list, the paginated loading
+             skeleton, the fetch-error (ErrorState), the rate-limited submit
+             (graceful, never a raw 500).
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        /* Tier 0 — colour (light defaults) */
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Tier 0 — shape (default display style) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 14px;
+        --spacing-btn-y: 8px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 8px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+
+        /* Tier 3 growth — public-projects (6.12.1). NEW --el-* roles 6.12.4/6.12.6/6.12.7
+           add to globals.css Tier 3, each mapped to an existing Tier-0 value (per the
+           per-component token-growth pattern, mistake #20 / CLAUDE.md colour rule). */
+        --el-public-banner-bg: var(
+          --color-tint-sky
+        ); /* the "you are viewing a public project" framing */
+        --el-public-banner-text: var(--color-charcoal); /* AA ~10:1 on the sky tint */
+        --el-vote-bg: var(--color-tint-lavender); /* the upvote control resting fill */
+        --el-vote-active-bg: var(--color-primary); /* voted: accent fill */
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #242424;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-destructive: #f06565;
+        --el-sidebar-item-bg-hover: #222222;
+        --el-public-banner-text: var(--color-charcoal);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      .panel.narrow {
+        max-width: 820px;
+      }
+      .cols2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        align-items: start;
+      }
+      .cols2.uneven {
+        grid-template-columns: 1.05fr 0.95fr;
+      }
+
+      /* ── Shared primitives ───────────────────────────────────────────────── */
+      .ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .ic svg,
+      svg.ic {
+        width: 100%;
+        height: 100%;
+      }
+      .surface-card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+      }
+
+      /* Buttons (mirror components/ui/Button.tsx variants) */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        border: 1px solid transparent;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn .ic {
+        width: 15px;
+        height: 15px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .btn-ghost:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .btn-outline {
+        background: var(--el-page-bg);
+        border-color: var(--el-border);
+        color: var(--el-text);
+      }
+      /* danger-tinted destructive action (finding #35: hue in the tint bg + strong text) */
+      .btn-danger {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .btn-danger .ic {
+        color: var(--el-danger);
+      }
+      .btn-block {
+        width: 100%;
+      }
+      .btn-lg {
+        height: var(--height-btn-md);
+        font-size: 14px;
+      }
+      .btn[disabled] {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      /* Pills (mirror components/ui/Pill.tsx) */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.4;
+        white-space: nowrap;
+      }
+      .pill .ic {
+        width: 13px;
+        height: 13px;
+      }
+      .pill-neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+      }
+      .pill-public {
+        background: var(--el-public-banner-bg);
+        color: var(--el-public-banner-text);
+        border: 1px solid transparent;
+      }
+      .pill-public .ic {
+        color: var(--el-info);
+      }
+      .pill-mint {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+      }
+      .pill-peach {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+      }
+      .pill-lav {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+      }
+      .pill-sky {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+      }
+
+      /* initial-letter avatar (mirror issueCellPrimitives Avatar) */
+      .avatar {
+        width: 26px;
+        height: 26px;
+        border-radius: 9999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+        flex: none;
+      }
+      .av-mint {
+        background: var(--el-tint-mint);
+      }
+      .av-sky {
+        background: var(--el-tint-sky);
+      }
+      .av-lav {
+        background: var(--el-tint-lavender);
+      }
+      .av-peach {
+        background: var(--el-tint-peach);
+      }
+
+      /* issue-type icon hue */
+      .type-icon {
+        display: inline-flex;
+      }
+      .type-icon .ic {
+        width: 16px;
+        height: 16px;
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+
+      /* page header (mirror app/(authed)/.../page headers) */
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+      .page-head .titles {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .page-head .title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 23px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin: 0;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+      }
+      .head-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* ── The public top bar (the cross-org viewer's chrome) ──────────────── */
+      .pub-shell {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .pub-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .pub-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      .pub-logo {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 14px;
+        flex: none;
+      }
+      .pub-proj {
+        font-weight: 700;
+        font-size: 14.5px;
+        color: var(--el-text);
+      }
+      .pub-key {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-faint);
+      }
+      .viewer {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .viewer .who {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.25;
+        text-align: right;
+      }
+      .viewer .who .nm {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .viewer .who .org {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+      }
+
+      /* the explicit public banner (account-required note + view-only framing) */
+      .pub-banner {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 18px;
+        background: var(--el-public-banner-bg);
+        color: var(--el-public-banner-text);
+        font-size: 12.5px;
+      }
+      .pub-banner .ic {
+        color: var(--el-info);
+        width: 15px;
+        height: 15px;
+      }
+      .pub-banner b {
+        font-weight: 700;
+      }
+      .pub-banner .dot {
+        color: var(--el-text-faint);
+      }
+
+      /* read-only view nav (Board / List / Roadmap) — Segmented, no edit */
+      .pub-subbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 11px 18px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .seg {
+        display: inline-flex;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        padding: 2px;
+        gap: 2px;
+      }
+      .seg button {
+        font: inherit;
+        font-size: 12.5px;
+        font-weight: 600;
+        border: 0;
+        background: transparent;
+        color: var(--el-text-secondary);
+        padding: 5px 12px;
+        border-radius: var(--radius-control);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .seg button .ic {
+        width: 14px;
+        height: 14px;
+      }
+      .seg button.on {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        box-shadow: var(--shadow-subtle);
+      }
+      .readonly-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .readonly-note .ic {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-faint);
+      }
+
+      /* ── The board (mirror design/boards/board.mock.html — public PROJECTION) ── */
+      .board {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(232px, 1fr);
+        gap: 14px;
+        padding: 18px;
+        overflow-x: auto;
+      }
+      .col {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .col-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 2px 4px 10px;
+      }
+      .col-head .nm {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .col-count {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-faint);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        padding: 1px 8px;
+      }
+      .col-body {
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      /* the public board card — the shipped board card MINUS internal fields */
+      .bcard {
+        display: block;
+        text-decoration: none;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: 12px 13px;
+      }
+      .bcard:hover {
+        border-color: var(--el-border-strong);
+      }
+      .bc-top {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 7px;
+      }
+      .bc-id {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-faint);
+      }
+      .bc-title {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.38;
+      }
+      .bc-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 9px;
+      }
+      .pill--high {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .pill--high .ic {
+        color: var(--el-danger);
+      }
+      .pill--medium {
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+      }
+      .pill--medium .ic {
+        color: var(--el-warning);
+      }
+      .pill--low {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+      }
+      .col-empty {
+        font-size: 12.5px;
+        color: var(--el-text-faint);
+        padding: 14px 4px;
+        text-align: center;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+      }
+
+      /* ── The roadmap (Panel 2) ───────────────────────────────────────────── */
+      .roadmap {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+      }
+      .rm-col {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .rm-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: var(--radius-card) var(--radius-card) 0 0;
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+      }
+      .rm-head .ct {
+        margin-left: auto;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .rm-submitted {
+        background: var(--el-roadmap-submitted);
+      }
+      .rm-planned {
+        background: var(--el-roadmap-planned);
+      }
+      .rm-progress {
+        background: var(--el-roadmap-progress);
+      }
+      .rm-done {
+        background: var(--el-roadmap-done);
+      }
+      .rm-body {
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+        padding: 10px;
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-top: 0;
+        border-radius: 0 0 var(--radius-card) var(--radius-card);
+        flex: 1;
+        min-height: 220px;
+      }
+      .rm-card {
+        display: flex;
+        gap: 10px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: 10px 11px;
+      }
+      .rm-card:hover {
+        border-color: var(--el-border-strong);
+      }
+      .rm-card .body {
+        min-width: 0;
+        flex: 1;
+      }
+      .rm-card a.tt {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        text-decoration: none;
+        line-height: 1.35;
+        margin-bottom: 6px;
+      }
+      .rm-card a.tt:hover {
+        color: var(--el-link);
+      }
+      .rm-card .kind {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+      }
+      .rm-more {
+        margin-top: 2px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-link);
+        background: transparent;
+        border: 0;
+        cursor: pointer;
+        padding: 6px 4px;
+        text-align: left;
+      }
+
+      /* the upvote control (Canny-style up-chevron + count) */
+      .vote {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1px;
+        flex: none;
+        width: 42px;
+        padding: 6px 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .vote .ic {
+        width: 15px;
+        height: 15px;
+      }
+      .vote .n {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+      }
+      .vote:hover {
+        border-color: var(--el-accent);
+      }
+      .vote.voted {
+        background: var(--el-vote-active-bg);
+        border-color: var(--el-vote-active-bg);
+        color: var(--el-vote-active-text);
+      }
+      .vote.voted .n {
+        color: var(--el-vote-active-text);
+      }
+      .vote.lg {
+        width: 56px;
+        padding: 10px 0;
+      }
+      .vote.lg .ic {
+        width: 18px;
+        height: 18px;
+      }
+      .vote.lg .n {
+        font-size: 16px;
+      }
+
+      /* ── Forms (mirror FormField + Input + Textarea + Segmented) ─────────── */
+      .field {
+        margin-bottom: 14px;
+      }
+      .field > label {
+        display: block;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        margin-bottom: 6px;
+      }
+      .field .hint {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        margin-top: 5px;
+      }
+      .input,
+      .textarea {
+        width: 100%;
+        font: inherit;
+        font-size: 13.5px;
+        color: var(--el-text);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+      }
+      .input {
+        height: var(--height-input);
+      }
+      .textarea {
+        min-height: 92px;
+        resize: vertical;
+        line-height: 1.5;
+      }
+      .input.focus {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 22%, transparent);
+      }
+      .ph {
+        color: var(--el-text-faint);
+      }
+      .type-toggle {
+        display: inline-flex;
+        gap: 8px;
+      }
+      .type-toggle .opt {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        border-radius: var(--radius-btn);
+        padding: 7px 13px;
+        cursor: pointer;
+      }
+      .type-toggle .opt.on {
+        border-color: var(--el-accent);
+        background: color-mix(in srgb, var(--el-accent) 9%, var(--el-page-bg));
+        color: var(--el-text);
+      }
+      .type-toggle .opt .ic {
+        width: 15px;
+        height: 15px;
+      }
+
+      /* dedupe match block (the "upvote this instead" surface) */
+      .dedupe {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 12px;
+        margin-bottom: 14px;
+      }
+      .dedupe .lbl {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        margin-bottom: 10px;
+      }
+      .dedupe .lbl .ic {
+        color: var(--el-warning);
+        width: 15px;
+        height: 15px;
+      }
+      .match {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 9px 11px;
+      }
+      .match + .match {
+        margin-top: 8px;
+      }
+      .match .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .match .tt {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin-bottom: 3px;
+      }
+      .match .meta {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .dedupe .alt {
+        margin-top: 11px;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .linklike {
+        color: var(--el-link);
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      /* confirmation state */
+      .confirm {
+        text-align: center;
+        padding: 30px 22px;
+      }
+      .confirm .badge {
+        width: 52px;
+        height: 52px;
+        border-radius: 9999px;
+        background: var(--el-tint-mint);
+        color: var(--el-success);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 14px;
+      }
+      .confirm .badge .ic {
+        width: 26px;
+        height: 26px;
+      }
+      .confirm h4 {
+        margin: 0 0 6px;
+        font-size: 16px;
+        font-family: var(--font-serif);
+        color: var(--el-text);
+      }
+      .confirm p {
+        margin: 0 auto;
+        max-width: 320px;
+        font-size: 13px;
+        color: var(--el-text-muted);
+        line-height: 1.5;
+      }
+
+      /* card chrome */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: var(--spacing-card-padding);
+      }
+      .card h3 {
+        margin: 0 0 4px;
+        font-size: 16px;
+        font-family: var(--font-serif);
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .card .csub {
+        margin: 0 0 18px;
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .section-label {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        margin: 0 0 10px;
+      }
+
+      /* ── Request detail (Panel 4) ────────────────────────────────────────── */
+      .req-head {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+      }
+      .req-head .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .req-head h3 {
+        font-size: 19px;
+        line-height: 1.3;
+        margin: 2px 0 8px;
+      }
+      .req-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+      .req-body {
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        margin: 16px 0 22px;
+      }
+      .divider {
+        height: 1px;
+        background: var(--el-border);
+        margin: 18px 0;
+      }
+      .comment {
+        display: flex;
+        gap: 11px;
+        margin-bottom: 16px;
+      }
+      .comment .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .comment .crow {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 3px;
+      }
+      .comment .au {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .comment .org {
+        font-size: 11.5px;
+        color: var(--el-text-faint);
+      }
+      .comment .ago {
+        font-size: 11.5px;
+        color: var(--el-text-faint);
+        margin-left: auto;
+      }
+      .comment .ctext {
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .composer {
+        display: flex;
+        gap: 11px;
+        align-items: flex-start;
+        margin-top: 4px;
+      }
+      .composer .body {
+        flex: 1;
+      }
+      .composer-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 9px;
+      }
+
+      /* ── Access control (Panel 5) ────────────────────────────────────────── */
+      .access-opt {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        padding: 13px 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        cursor: pointer;
+      }
+      .access-opt + .access-opt {
+        margin-top: 10px;
+      }
+      .access-opt.on {
+        border-color: var(--el-accent);
+        background: color-mix(in srgb, var(--el-accent) 7%, var(--el-page-bg));
+      }
+      .radio {
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        border: 2px solid var(--el-border-strong);
+        flex: none;
+        margin-top: 1px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .access-opt.on .radio {
+        border-color: var(--el-accent);
+      }
+      .access-opt.on .radio::after {
+        content: '';
+        width: 9px;
+        height: 9px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+      }
+      .access-opt .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .access-opt .ttl {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13.5px;
+        font-weight: 700;
+        color: var(--el-text);
+        margin-bottom: 3px;
+      }
+      .access-opt .ttl .ic {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-secondary);
+      }
+      .access-opt.on .ttl .ic {
+        color: var(--el-accent);
+      }
+      .access-opt .dsc {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        line-height: 1.45;
+      }
+
+      .sharelink {
+        margin-top: 18px;
+        padding-top: 18px;
+        border-top: 1px solid var(--el-border);
+      }
+      .link-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .link-field {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-surface);
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        min-width: 0;
+      }
+      .link-field .ic {
+        color: var(--el-text-faint);
+        width: 15px;
+        height: 15px;
+      }
+      .link-field .url {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .acct-note {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        margin-top: 13px;
+        padding: 10px 12px;
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        line-height: 1.45;
+      }
+      .acct-note .ic {
+        color: var(--el-info);
+        width: 15px;
+        height: 15px;
+        margin-top: 1px;
+      }
+
+      /* ── States (Panel 6) ────────────────────────────────────────────────── */
+      .state-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 18px;
+      }
+      .state-box {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: 18px;
+        min-height: 188px;
+        display: flex;
+        flex-direction: column;
+      }
+      .state-cap {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        margin-bottom: 12px;
+      }
+      .empty {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        gap: 8px;
+      }
+      .empty .glyph {
+        width: 40px;
+        height: 40px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-faint);
+      }
+      .empty .glyph .ic {
+        width: 20px;
+        height: 20px;
+      }
+      .empty h5 {
+        margin: 0;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 0;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        max-width: 240px;
+      }
+      .error .glyph {
+        background: var(--el-tint-rose);
+        color: var(--el-danger);
+      }
+      /* loading skeleton */
+      .sk {
+        background: linear-gradient(
+          90deg,
+          var(--el-surface) 25%,
+          var(--el-muted) 37%,
+          var(--el-surface) 63%
+        );
+        border-radius: var(--radius-control);
+      }
+      .sk-card {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 11px;
+        margin-bottom: 9px;
+        display: flex;
+        gap: 10px;
+      }
+      .sk-line {
+        height: 10px;
+        margin-bottom: 7px;
+      }
+      /* rate-limit warning */
+      .ratelimit {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        justify-content: center;
+      }
+      .rl-banner {
+        display: flex;
+        gap: 9px;
+        align-items: flex-start;
+        padding: 11px 12px;
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+        border-radius: var(--radius-card);
+        font-size: 12.5px;
+        line-height: 1.45;
+      }
+      .rl-banner .ic {
+        color: var(--el-warning);
+        width: 16px;
+        height: 16px;
+        margin-top: 1px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Public projects — open project management</h1>
+        <p>
+          Story 6.12 · 6.12.1 — the design gate for 6.12.4 (public view) · 6.12.6 (upvote +
+          comments) · 6.12.7 (roadmap) · 6.12.8 (make-public toggle + share link)
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle theme
+      </button>
+    </div>
+
+    <!-- ════════════════ PANEL 1 — public read-only project view (board) ════════════════ -->
+    <div class="panel-label">
+      (1) Public read-only project view — no edit affordances · internal fields (assignee / estimate
+      / internal comments) ABSENT · the public banner + cross-org viewer identity
+    </div>
+    <div class="panel">
+      <div class="pub-shell">
+        <!-- top bar: the project + the signed-in cross-org viewer -->
+        <div class="pub-topbar">
+          <div class="pub-brand">
+            <span class="pub-logo">M</span>
+            <div>
+              <div class="pub-proj">
+                Motir
+                <span class="pill pill-public" style="margin-left: 6px"
+                  ><svg class="ic"><use href="#i-globe" /></svg> Public</span
+                >
+              </div>
+              <span class="pub-key">PROD · moooon</span>
+            </div>
+          </div>
+          <div class="viewer">
+            <div class="who">
+              <span class="nm">Priya Nair</span>
+              <span class="org">signed in · Acme org</span>
+            </div>
+            <span class="avatar av-sky">PN</span>
+          </div>
+        </div>
+
+        <!-- the explicit "you are viewing a public project" framing -->
+        <div class="pub-banner">
+          <svg class="ic"><use href="#i-globe" /></svg>
+          <span
+            ><b>You're viewing a public project.</b> Anyone signed in to Motir can view it and
+            submit, upvote, or comment on requests.</span
+          >
+          <span class="dot">·</span>
+          <span class="readonly-note"
+            ><svg class="ic"><use href="#i-lock" /></svg> View-only — you can't edit issues</span
+          >
+        </div>
+
+        <!-- read-only view nav -->
+        <div class="pub-subbar">
+          <div class="seg" role="tablist" aria-label="Public views">
+            <button class="on">
+              <svg class="ic"><use href="#i-columns" /></svg> Board
+            </button>
+            <button>
+              <svg class="ic"><use href="#i-list" /></svg> Issues
+            </button>
+            <button>
+              <svg class="ic"><use href="#i-route" /></svg> Roadmap
+            </button>
+          </div>
+          <button class="btn btn-primary">
+            <svg class="ic"><use href="#i-plus" /></svg> Submit a request
+          </button>
+        </div>
+
+        <!-- the board: shipped board card MINUS assignee + estimate, NO drag handle -->
+        <div class="board">
+          <section class="col" aria-label="To Do, 6 issues">
+            <div class="col-head">
+              <span class="nm">To Do</span><span class="col-count">6</span>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg class="ic"><use href="#i-task" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-204</span>
+                </div>
+                <div class="bc-title">Keyboard shortcut to jump between boards</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><svg class="ic"><use href="#i-minus" /></svg> Medium</span
+                  >
+                </div>
+              </a>
+              <a class="bcard" href="#">
+                <div class="bc-top">
+                  <span class="type-icon t-bug"
+                    ><svg class="ic"><use href="#i-bug" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-211</span>
+                </div>
+                <div class="bc-title">Roadmap column count is off by one on first load</div>
+                <div class="bc-meta">
+                  <span class="pill pill--high"
+                    ><svg class="ic"><use href="#i-arrow-up" /></svg> High</span
+                  >
+                </div>
+              </a>
+            </div>
+          </section>
+
+          <section class="col" aria-label="In Progress, 3 issues">
+            <div class="col-head">
+              <span class="nm">In Progress</span><span class="col-count">3</span>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg class="ic"><use href="#i-book" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-188</span>
+                </div>
+                <div class="bc-title">Public roadmap with status tracking</div>
+                <div class="bc-meta">
+                  <span class="pill pill--high"
+                    ><svg class="ic"><use href="#i-arrow-up" /></svg> High</span
+                  >
+                </div>
+              </a>
+            </div>
+          </section>
+
+          <section class="col" aria-label="In Review, 2 issues">
+            <div class="col-head">
+              <span class="nm">In Review</span><span class="col-count">2</span>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg class="ic"><use href="#i-task" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-176</span>
+                </div>
+                <div class="bc-title">Duplicate detection on public submit</div>
+                <div class="bc-meta">
+                  <span class="pill pill--low">Low</span>
+                </div>
+              </a>
+            </div>
+          </section>
+
+          <section class="col" aria-label="Done, 41 issues">
+            <div class="col-head">
+              <span class="nm">Done</span><span class="col-count">41</span>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg class="ic"><use href="#i-book" /></svg
+                  ></span>
+                  <span class="bc-id">PROD-92</span>
+                </div>
+                <div class="bc-title">Project access levels (open / limited / private)</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><svg class="ic"><use href="#i-minus" /></svg> Medium</span
+                  >
+                </div>
+              </a>
+            </div>
+          </section>
+        </div>
+      </div>
+      <p class="readonly-note" style="margin: 12px 2px 0">
+        <svg class="ic"><use href="#i-eye-off" /></svg> Note for 6.12.4 — the cards above carry NO
+        assignee avatar and NO story-point estimate (stripped by the public projection at the read
+        layer, not hidden in the DOM); internal issue comments are not shown.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 2 — the public roadmap ════════════════ -->
+    <div class="panel-label">
+      (2) Public roadmap — status-grouped (submitted → planned → in progress → done) · vote counts ·
+      paginated / lazy per column (NOT load-all)
+    </div>
+    <div class="panel">
+      <div class="roadmap">
+        <div class="rm-col">
+          <div class="rm-head rm-submitted">Submitted <span class="ct">128</span></div>
+          <div class="rm-body">
+            <div class="rm-card">
+              <button class="vote" aria-label="Upvote — 42 votes">
+                <svg class="ic"><use href="#i-chevron-up" /></svg><span class="n">42</span>
+              </button>
+              <div class="body">
+                <a class="tt" href="#">Slack notifications for mentions</a>
+                <span class="kind"
+                  ><svg class="ic t-task" style="width: 13px; height: 13px">
+                    <use href="#i-task" />
+                  </svg>
+                  Feature</span
+                >
+              </div>
+            </div>
+            <div class="rm-card">
+              <button class="vote" aria-label="Upvote — 9 votes">
+                <svg class="ic"><use href="#i-chevron-up" /></svg><span class="n">9</span>
+              </button>
+              <div class="body">
+                <a class="tt" href="#">CSV export of the backlog</a>
+                <span class="kind"
+                  ><svg class="ic t-task" style="width: 13px; height: 13px">
+                    <use href="#i-task" />
+                  </svg>
+                  Feature</span
+                >
+              </div>
+            </div>
+            <button class="rm-more">Load 24 more →</button>
+          </div>
+        </div>
+
+        <div class="rm-col">
+          <div class="rm-head rm-planned">Planned <span class="ct">17</span></div>
+          <div class="rm-body">
+            <div class="rm-card">
+              <button class="vote voted" aria-label="Upvoted — 88 votes">
+                <svg class="ic"><use href="#i-chevron-up" /></svg><span class="n">88</span>
+              </button>
+              <div class="body">
+                <a class="tt" href="#">Dark mode for the whole app</a>
+                <span class="kind"
+                  ><svg class="ic t-task" style="width: 13px; height: 13px">
+                    <use href="#i-task" />
+                  </svg>
+                  Feature</span
+                >
+              </div>
+            </div>
+            <div class="rm-card">
+              <button class="vote" aria-label="Upvote — 31 votes">
+                <svg class="ic"><use href="#i-chevron-up" /></svg><span class="n">31</span>
+              </button>
+              <div class="body">
+                <a class="tt" href="#">Saved filters on the public roadmap</a>
+                <span class="kind"
+                  ><svg class="ic t-task" style="width: 13px; height: 13px">
+                    <use href="#i-task" />
+                  </svg>
+                  Feature</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rm-col">
+          <div class="rm-head rm-progress">In progress <span class="ct">6</span></div>
+          <div class="rm-body">
+            <div class="rm-card">
+              <button class="vote" aria-label="Upvote — 64 votes">
+                <svg class="ic"><use href="#i-chevron-up" /></svg><span class="n">64</span>
+              </button>
+              <div class="body">
+                <a class="tt" href="#">Public roadmap with status tracking</a>
+                <span class="kind"
+                  ><svg class="ic t-story" style="width: 13px; height: 13px">
+                    <use href="#i-book" />
+                  </svg>
+                  Story</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rm-col">
+          <div class="rm-head rm-done">Done <span class="ct">203</span></div>
+          <div class="rm-body">
+            <div class="rm-card">
+              <button class="vote" aria-label="Upvote — 120 votes">
+                <svg class="ic"><use href="#i-chevron-up" /></svg><span class="n">120</span>
+              </button>
+              <div class="body">
+                <a class="tt" href="#">Project access levels</a>
+                <span class="kind"
+                  ><svg class="ic t-story" style="width: 13px; height: 13px">
+                    <use href="#i-book" />
+                  </svg>
+                  Story</span
+                >
+              </div>
+            </div>
+            <button class="rm-more">Load 40 more →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 3 — submit a request + duplicate detection ════════════════ -->
+    <div class="panel-label">
+      (3) Submit a request + DUPLICATE DETECTION — as the title is typed, matching existing requests
+      surface with "Upvote this instead" (Canny) · submit-as-new · the confirmation
+    </div>
+    <div class="panel cols2 uneven">
+      <!-- 3a/3b — the form WITH the dedupe match surfaced -->
+      <div class="card">
+        <h3>Submit a request</h3>
+        <p class="csub">Tell the Motir team about a bug or a feature you'd like.</p>
+
+        <div class="field">
+          <label>Type</label>
+          <div class="type-toggle" role="radiogroup" aria-label="Request type">
+            <span class="opt on" role="radio" aria-checked="true"
+              ><svg class="ic t-task"><use href="#i-task" /></svg> Feature</span
+            >
+            <span class="opt" role="radio" aria-checked="false"
+              ><svg class="ic t-bug"><use href="#i-bug" /></svg> Bug</span
+            >
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="t">Title</label>
+          <div class="input focus" id="t">
+            Dark mode<span
+              class="ph"
+              style="border-left: 1.5px solid var(--el-accent); margin-left: 1px"
+              >&nbsp;</span
+            >
+          </div>
+        </div>
+
+        <!-- the dedupe match block (fires BEFORE create) -->
+        <div class="dedupe">
+          <div class="lbl">
+            <svg class="ic"><use href="#i-copy-check" /></svg> 2 existing requests look similar —
+            upvote one instead of creating a duplicate?
+          </div>
+          <div class="match">
+            <span class="vote" role="img" aria-label="88 votes">
+              <svg class="ic"><use href="#i-chevron-up" /></svg><span class="n">88</span>
+            </span>
+            <div class="body">
+              <div class="tt">Dark mode for the whole app</div>
+              <span class="meta"
+                ><span class="pill pill-lav" style="padding: 1px 8px">Planned</span> · 88
+                upvotes</span
+              >
+            </div>
+            <button class="btn btn-outline">
+              <svg class="ic"><use href="#i-chevron-up" /></svg> Upvote this
+            </button>
+          </div>
+          <div class="match">
+            <span class="vote" role="img" aria-label="12 votes">
+              <svg class="ic"><use href="#i-chevron-up" /></svg><span class="n">12</span>
+            </span>
+            <div class="body">
+              <div class="tt">Dark theme for the public roadmap embed</div>
+              <span class="meta"
+                ><span class="pill pill-peach" style="padding: 1px 8px">Submitted</span> · 12
+                upvotes</span
+              >
+            </div>
+            <button class="btn btn-outline">
+              <svg class="ic"><use href="#i-chevron-up" /></svg> Upvote this
+            </button>
+          </div>
+          <div class="alt">
+            Not the same?
+            <span class="linklike">Continue and submit as new →</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="d">Description</label>
+          <div class="textarea" id="d">
+            <span class="ph">What should it do, and why does it matter to you?</span>
+          </div>
+          <div class="hint">
+            Submitted as <b>Priya Nair (Acme org)</b> — your account is attached for follow-up.
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px">
+          <button class="btn btn-ghost">Cancel</button>
+          <button class="btn btn-primary btn-lg" disabled>
+            <svg class="ic"><use href="#i-send" /></svg> Submit request
+          </button>
+        </div>
+      </div>
+
+      <!-- 3c — the confirmation -->
+      <div class="card" style="align-self: stretch">
+        <div class="section-label">After "submit as new"</div>
+        <div class="confirm">
+          <span class="badge"
+            ><svg class="ic"><use href="#i-check-check" /></svg
+          ></span>
+          <h4>Thanks — we got it</h4>
+          <p>
+            Your request landed in the team's triage queue. You'll see it on the public roadmap once
+            they review it. We'll attribute it to your account.
+          </p>
+          <div style="margin-top: 16px; display: flex; gap: 8px; justify-content: center">
+            <button class="btn btn-outline">
+              <svg class="ic"><use href="#i-route" /></svg> View roadmap
+            </button>
+            <button class="btn btn-ghost">Submit another</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 4 — public request detail (upvote + comments) ════════════════ -->
+    <div class="panel-label">
+      (4) Public request detail — the request body · the UPVOTE control + count (already-voted
+      state) · the public comment thread + composer (the only interactive elements besides submit)
+    </div>
+    <div class="panel narrow">
+      <div class="card">
+        <div class="req-head">
+          <button class="vote lg voted" aria-label="Upvoted — 89 votes">
+            <svg class="ic"><use href="#i-chevron-up" /></svg><span class="n">89</span>
+          </button>
+          <div class="body">
+            <span class="pill pill-lav"
+              ><svg class="ic"><use href="#i-route" /></svg> Planned</span
+            >
+            <h3>Dark mode for the whole app</h3>
+            <div class="req-meta">
+              <span class="type-icon t-task"
+                ><svg class="ic"><use href="#i-task" /></svg
+              ></span>
+              Feature
+              <span class="dot" style="color: var(--el-text-faint)">·</span>
+              opened by <b style="color: var(--el-text-secondary)">Dana Kim</b>
+              <span class="pill pill-peach" style="padding: 1px 8px">Acme org</span>
+              <span class="dot" style="color: var(--el-text-faint)">·</span> 3 weeks ago
+            </div>
+          </div>
+        </div>
+
+        <p class="req-body">
+          A full dark theme that follows the OS preference, covering the board, the issue detail,
+          and the public roadmap. Right now the roadmap embed is bright white at night.
+        </p>
+
+        <div class="divider"></div>
+        <div class="section-label">3 comments</div>
+
+        <div class="comment">
+          <span class="avatar av-mint">DK</span>
+          <div class="body">
+            <div class="crow">
+              <span class="au">Dana Kim</span><span class="org">Acme org</span
+              ><span class="ago">3w ago</span>
+            </div>
+            <div class="ctext">Would love this — happy to help test on Windows high-contrast.</div>
+          </div>
+        </div>
+        <div class="comment">
+          <span class="avatar av-lav">LM</span>
+          <div class="body">
+            <div class="crow">
+              <span class="au">Leo Marín</span><span class="org">Northwind org</span
+              ><span class="ago">2w ago</span>
+            </div>
+            <div class="ctext">
+              +1. The roadmap embed especially — it's blinding in our dashboard.
+            </div>
+          </div>
+        </div>
+
+        <div class="composer">
+          <span class="avatar av-sky">PN</span>
+          <div class="body">
+            <div class="textarea"><span class="ph">Add a comment…</span></div>
+            <div class="composer-actions">
+              <button class="btn btn-primary">
+                <svg class="ic"><use href="#i-send" /></svg> Comment
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 5 — project settings: make-public + share link ════════════════ -->
+    <div class="panel-label">
+      (5) Project settings — the four-level Access control (public > open > limited > private) + the
+      shareable public link (copy / disable / rotate) + the account-required note
+    </div>
+    <div class="panel narrow">
+      <div class="card">
+        <h3>Project access</h3>
+        <p class="csub">
+          Who can see and act on this project. Only project admins can change this.
+        </p>
+
+        <div class="access-opt on" role="radio" aria-checked="true">
+          <span class="radio"></span>
+          <div class="body">
+            <div class="ttl">
+              <svg class="ic"><use href="#i-globe" /></svg> Public
+            </div>
+            <div class="dsc">
+              Any signed-in Motir account — across orgs and workspaces — can view this project and
+              submit, upvote, and comment on requests. They can't edit anything else.
+            </div>
+          </div>
+        </div>
+        <div class="access-opt" role="radio" aria-checked="false">
+          <span class="radio"></span>
+          <div class="body">
+            <div class="ttl">
+              <svg class="ic"><use href="#i-users" /></svg> Open
+            </div>
+            <div class="dsc">Any member of this workspace can view and edit.</div>
+          </div>
+        </div>
+        <div class="access-opt" role="radio" aria-checked="false">
+          <span class="radio"></span>
+          <div class="body">
+            <div class="ttl">
+              <svg class="ic"><use href="#i-eye" /></svg> Limited
+            </div>
+            <div class="dsc">Any member of this workspace can view and comment, but not edit.</div>
+          </div>
+        </div>
+        <div class="access-opt" role="radio" aria-checked="false">
+          <span class="radio"></span>
+          <div class="body">
+            <div class="ttl">
+              <svg class="ic"><use href="#i-lock" /></svg> Private
+            </div>
+            <div class="dsc">Only people added to this project can see it.</div>
+          </div>
+        </div>
+
+        <div class="sharelink">
+          <div class="section-label">Public link</div>
+          <div class="link-row">
+            <div class="link-field">
+              <svg class="ic"><use href="#i-link" /></svg>
+              <span class="url">https://motir.co/p/moooon-motir</span>
+            </div>
+            <button class="btn btn-outline">
+              <svg class="ic"><use href="#i-copy" /></svg> Copy
+            </button>
+            <button class="btn btn-outline">
+              <svg class="ic"><use href="#i-rotate" /></svg> Rotate
+            </button>
+            <button class="btn btn-danger">
+              <svg class="ic"><use href="#i-x" /></svg> Disable
+            </button>
+          </div>
+          <div class="acct-note">
+            <svg class="ic"><use href="#i-shield" /></svg>
+            <span
+              >The link is a pointer to the public project — visitors still sign in to Motir to view
+              it. <b>Anonymous, logged-out access isn't supported.</b> Rotating issues a new link
+              and retires the old one; the project key (<code>PROD</code>) doesn't change.</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 6 — empty / loading / error / rate-limit states ════════════════ -->
+    <div class="panel-label">
+      (6) States — empty roadmap · empty request list · the paginated loading skeleton · the
+      fetch-error (ErrorState) · the rate-limited submit (graceful, never a raw 500)
+    </div>
+    <div class="panel">
+      <div class="state-grid">
+        <div class="state-box">
+          <div class="state-cap">Empty roadmap</div>
+          <div class="empty">
+            <span class="glyph"
+              ><svg class="ic"><use href="#i-route" /></svg
+            ></span>
+            <h5>Nothing on the roadmap yet</h5>
+            <p>When the team plans public requests, they'll show up here grouped by status.</p>
+          </div>
+        </div>
+
+        <div class="state-box">
+          <div class="state-cap">Empty request list</div>
+          <div class="empty">
+            <span class="glyph"
+              ><svg class="ic"><use href="#i-inbox" /></svg
+            ></span>
+            <h5>No requests yet</h5>
+            <p>Be the first — submit a bug or feature request for this project.</p>
+            <button class="btn btn-primary" style="margin-top: 4px">
+              <svg class="ic"><use href="#i-plus" /></svg> Submit a request
+            </button>
+          </div>
+        </div>
+
+        <div class="state-box">
+          <div class="state-cap">Loading skeleton (paginated fetch)</div>
+          <div style="flex: 1">
+            <div class="sk-card">
+              <div class="sk" style="width: 42px; height: 46px; flex: none"></div>
+              <div style="flex: 1">
+                <div class="sk sk-line" style="width: 70%"></div>
+                <div class="sk sk-line" style="width: 40%; margin-bottom: 0"></div>
+              </div>
+            </div>
+            <div class="sk-card">
+              <div class="sk" style="width: 42px; height: 46px; flex: none"></div>
+              <div style="flex: 1">
+                <div class="sk sk-line" style="width: 55%"></div>
+                <div class="sk sk-line" style="width: 32%; margin-bottom: 0"></div>
+              </div>
+            </div>
+            <div class="sk-card" style="margin-bottom: 0">
+              <div class="sk" style="width: 42px; height: 46px; flex: none"></div>
+              <div style="flex: 1">
+                <div class="sk sk-line" style="width: 62%"></div>
+                <div class="sk sk-line" style="width: 38%; margin-bottom: 0"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="state-box error">
+          <div class="state-cap">Fetch error (ErrorState)</div>
+          <div class="empty">
+            <span class="glyph"
+              ><svg class="ic"><use href="#i-alert" /></svg
+            ></span>
+            <h5>Couldn't load this project</h5>
+            <p>Something went wrong fetching the public view. Try again in a moment.</p>
+            <button class="btn btn-outline" style="margin-top: 4px">
+              <svg class="ic"><use href="#i-rotate" /></svg> Retry
+            </button>
+          </div>
+        </div>
+
+        <div class="state-box" style="grid-column: span 2">
+          <div class="state-cap">Rate-limited submit (typed error — never a raw 500)</div>
+          <div class="ratelimit">
+            <div class="rl-banner">
+              <svg class="ic"><use href="#i-alarm" /></svg>
+              <span
+                ><b>You're submitting a little too fast.</b> To keep the queue healthy, please wait
+                a minute before sending another request. Your draft is saved.</span
+              >
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px">
+              <button class="btn btn-ghost">Keep editing</button>
+              <button class="btn btn-primary" disabled>
+                <svg class="ic"><use href="#i-send" /></svg> Submit request
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────── lucide symbol sprite (paths copied 1:1 from lucide) ──────────────── -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <!-- bug -->
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <!-- task = square-check-big -->
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <!-- story = book-open -->
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <!-- globe -->
+        <g
+          id="i-globe"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+          <path d="M2 12h20" />
+        </g>
+        <!-- lock -->
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <!-- eye -->
+        <g
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <!-- eye-off -->
+        <g
+          id="i-eye-off"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"
+          />
+          <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" />
+          <path
+            d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"
+          />
+          <path d="m2 2 20 20" />
+        </g>
+        <!-- users -->
+        <g
+          id="i-users"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </g>
+        <!-- chevron-up (upvote) -->
+        <g
+          id="i-chevron-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m18 15-6-6-6 6" />
+        </g>
+        <!-- arrow-up (priority high) -->
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <!-- minus (priority medium) -->
+        <g
+          id="i-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+        </g>
+        <!-- plus -->
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <!-- route (roadmap) -->
+        <g
+          id="i-route"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="6" cy="19" r="3" />
+          <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
+          <circle cx="18" cy="5" r="3" />
+        </g>
+        <!-- columns (board) -->
+        <g
+          id="i-columns"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+        </g>
+        <!-- list (issues) -->
+        <g
+          id="i-list"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12h.01" />
+          <path d="M3 18h.01" />
+          <path d="M3 6h.01" />
+          <path d="M8 12h13" />
+          <path d="M8 18h13" />
+          <path d="M8 6h13" />
+        </g>
+        <!-- inbox -->
+        <g
+          id="i-inbox"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+          <path
+            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+          />
+        </g>
+        <!-- check-check -->
+        <g
+          id="i-check-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 7 17l-5-5" />
+          <path d="m22 10-7.5 7.5L13 16" />
+        </g>
+        <!-- copy-check (dedupe) -->
+        <g
+          id="i-copy-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 15 2 2 4-4" />
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+        </g>
+        <!-- copy -->
+        <g
+          id="i-copy"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+        </g>
+        <!-- link -->
+        <g
+          id="i-link"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </g>
+        <!-- rotate-cw -->
+        <g
+          id="i-rotate"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+        </g>
+        <!-- send -->
+        <g
+          id="i-send"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+          />
+          <path d="m21.854 2.147-10.94 10.939" />
+        </g>
+        <!-- shield -->
+        <g
+          id="i-shield"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+        </g>
+        <!-- alarm-clock (rate-limit) -->
+        <g
+          id="i-alarm"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="13" r="8" />
+          <path d="M12 9v4l2 2" />
+          <path d="M5 3 2 6" />
+          <path d="m22 6-3-3" />
+          <path d="M6.38 18.7 4 21" />
+          <path d="M17.64 18.67 20 21" />
+        </g>
+        <!-- triangle-alert (error) -->
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <!-- x -->
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+      </defs>
+    </svg>
+  </body>
+</html>
