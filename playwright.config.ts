@@ -39,14 +39,17 @@ const PORT = new URL(BASE_URL).port || '3000';
 const INNGEST_PORT = process.env['INNGEST_PORT'] ?? '8288';
 const INNGEST_BASE_URL = `http://localhost:${INNGEST_PORT}`;
 
-// The Inngest dev-server CLI is pulled via `npx` (it's a standalone binary, not
-// the `inngest` SDK dep). Default 'latest' keeps local `pnpm test:e2e`
-// unchanged, but CI pins INNGEST_CLI_VERSION to a fixed version: a pinned
-// `inngest-cli@<v>` is what lets the npx download be cached across runs/shards
-// (`@latest` re-resolves every time) — which also removes the cold-download CI
-// flake where the 120s webServer wait times out mid-download (Next "Ready" but
-// no :8288). See ci.yml's npx cache step.
-const INNGEST_CLI_VERSION = process.env['INNGEST_CLI_VERSION'] ?? 'latest';
+// The Inngest dev-server CLI is a pinned `inngest-cli` devDependency (its
+// postinstall downloads the standalone Go binary at install time — see
+// pnpm-workspace.yaml `allowBuilds`). We invoke the binary by its direct path:
+// pnpm's generated `.bin/inngest` shim wraps the target with `node`, but the
+// postinstall OVERWRITES bin/inngest with a raw ELF binary, so `pnpm exec
+// inngest` would try to parse ELF as JS. This replaced the old `npx --yes
+// inngest-cli@<v>` approach, which re-resolved @latest every run, couldn't be
+// cached, and cold-downloaded the 95MB binary INSIDE Playwright's 120s
+// webServer window (the documented timeout flake). The pinned dep is fetched
+// once at install (outside any timeout) and cached via the pnpm store.
+const INNGEST_CLI_BIN = 'node_modules/inngest-cli/bin/inngest';
 
 // Subtask 3.5.1 board load-model test seam: forward the cap / Done-age overrides
 // to the dev server ONLY when the run sets them, so a targeted
@@ -211,7 +214,7 @@ export default defineConfig({
       // INNGEST_PORT (default :8288 — the SDK dev-mode default); a sibling
       // worktree run sets its own INNGEST_PORT so concurrent E2E runs no
       // longer collide on the executor (Subtask 5.4.11).
-      command: `npx --yes inngest-cli@${INNGEST_CLI_VERSION} dev -u http://localhost:${PORT}/api/inngest --no-discovery -p ${INNGEST_PORT}`,
+      command: `${INNGEST_CLI_BIN} dev -u http://localhost:${PORT}/api/inngest --no-discovery -p ${INNGEST_PORT}`,
       url: INNGEST_BASE_URL,
       reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
       timeout: 120_000,
