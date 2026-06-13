@@ -11,6 +11,7 @@ so the code subtasks compose the same primitives — no Pencil→code gap.
 | Surface                       | Asset                       | Gates                                                   |
 | ----------------------------- | --------------------------- | ------------------------------------------------------- |
 | **Public Overview / README**  | `public-projects.mock.html` | **6.12.4** (render) + **6.12.8** (the authoring editor) |
+| **Edit overview** (admin)     | `public-projects.mock.html` | **6.12.8** (split Markdown editor + live preview)       |
 | **Public read-only view**     | `public-projects.mock.html` | **6.12.4** (board / work items, internal fields hidden) |
 | **Public roadmap**            | `public-projects.mock.html` | **6.12.7** (status-grouped, vote-counted, paginated)    |
 | **Submit + duplicate detect** | `public-projects.mock.html` | **6.12.5** (the form) + **6.12.6** (the upvote target)  |
@@ -74,8 +75,11 @@ duplicate-detection portal set.
    (voted state), the public comment thread + composer.
 6. **(6)** project **settings** — the four-level Access control + the shareable
    public link (copy / disable / rotate) + the account-required note + **the
-   Overview/README authoring editor**.
-7. **(7)** **states** — empty roadmap, empty request list, the paginated loading
+   Overview/README authoring entry point** (opens Panel 7).
+7. **(7)** **Edit overview** — the dedicated authoring view: a **split Markdown
+   editor (left) + live preview (right)** of the public landing; edits the
+   `publicOverviewMd` body only.
+8. **(8)** **states** — empty roadmap, empty request list, the paginated loading
    skeleton, the fetch-error, the rate-limited submit.
 
 ## Where it lives
@@ -83,7 +87,7 @@ duplicate-detection portal set.
 ```
 design/public-projects/
   design-notes.md            ← this spec
-  public-projects.mock.html  ← the asset SOURCE (7 panels, one self-contained file)
+  public-projects.mock.html  ← the asset SOURCE (8 panels, one self-contained file)
   public-projects.png        ← the full-page PNG export (board-visible face)
 ```
 
@@ -101,11 +105,14 @@ rich body + a links/stats sidebar, all in the design system.
 ### The data — a new project field
 
 The README content is a new nullable project field **`publicOverviewMd`**
-(Markdown). Authored by the project admin (Panel 6 editor), rendered read-only on
-this tab via the shipped **`MarkdownView`**. It is part of the **public
-projection** (6.12.4) — a public-safe field, served only when the project is
-public. When empty, the tab falls back to a slim auto-intro (name + tagline +
-stats + CTAs, no body) — never a blank page.
+(Markdown). Authored by the project admin in the dedicated **Edit overview** view
+(Panel 7, reached from settings), rendered read-only on this tab via the shipped
+**`MarkdownView`**. It is part of the **public projection** (6.12.4) — a
+public-safe field, served only when the project is public. When empty, the tab
+falls back to a slim auto-intro (name + tagline + stats + CTAs, no body) — never a
+blank page. **Only `publicOverviewMd` (the body) is editable** — the hero
+name/stats are auto, and the Links sidebar pulls from existing project fields
+(website / repo / docs); no new schema beyond `publicOverviewMd`.
 
 ### The hero (`.hero`)
 
@@ -263,16 +270,43 @@ disabled resting state).
   **Disable** (`btn-danger`, rose tint). The `.acct-note` states the link is a
   pointer that still requires sign-in, anonymous access is unsupported, and
   rotating issues a new link without changing the project key.
-- **Project overview editor** (`.ov-editor`): the **`MarkdownEditor`** authoring
-  the `publicOverviewMd` field that renders on the Panel-1 Overview tab — a
-  toolbar (heading / bold / italic / link / list / image) over a Markdown body.
-  A note states it shows on the public **Overview** tab (the first thing a
-  visitor sees) and is hidden while the project isn't public. Project-admin-gated;
-  inline-save (success-response-is-confirmation).
+- **Project overview entry point** (`.ov-entry`): a row showing a one-line snippet
+  of the current `publicOverviewMd` + an **"Edit overview"** button that opens the
+  dedicated editor (Panel 7). The `.acct-note` states it shows on the public
+  **Overview** tab (the first thing a visitor sees) and is hidden while the project
+  isn't public. Project-admin-gated.
 
 ---
 
-## Panel 7 — states
+## Panel 7 — Edit overview (the 6.12.8 authoring view)
+
+The dedicated authoring surface for `publicOverviewMd` — a \*\*split Markdown editor
+
+- live preview\*\*, mirroring GitHub README editing / Canny portal editing (the
+  chosen scope: full editor + preview, body-only). Not a cramped settings box.
+
+* **`.editor-shell`** — a `Card` with a header (`.editor-head`): a back
+  `.icon-btn` (← to settings), the serif **"Edit overview"** title + a subtitle
+  ("Markdown — shown on your public project's Overview tab. Changes save to the
+  live public page."), and the action cluster — a **"Saved"** status
+  (`--el-success` check), **Cancel** (ghost), **Save** (primary).
+* **`.editor-toolbar`** — the `MarkdownEditor` formatting row (heading / bold /
+  italic · separator · link / list / numbered / image) + the **"Markdown"** /
+  **"Preview"** pane tags.
+* **`.editor-split`** (1fr / 1fr) — **left** `.editor-src`: the raw Markdown source
+  in `--font-mono` (`<pre><code>`); **right** `.editor-prev`: the **live preview**
+  rendered with the SAME `.md` primitives as the public Overview (headings, the
+  `ol.loop`, the `ul.layers` with palette-hued icons), framed in an `--el-page-bg`
+  card with a floating **"Live preview"** badge — so the admin sees exactly what
+  ships.
+* **Save** persists `publicOverviewMd` via a service method (the
+  success-response-is-confirmation rule — no whole-tree refresh); project-admin-
+  gated; the public projection re-reads it. Built with `MarkdownEditor` +
+  `MarkdownView` — no new primitive.
+
+---
+
+## Panel 8 — states
 
 - **Empty roadmap** / **empty request list** — the `EmptyState` primitive (glyph
   tile + heading + copy; the list adds a "Submit a request" CTA).
@@ -371,11 +405,14 @@ swap layer must reach every element).
   everything around it. That's a vibe project."_ Then **"Contribute"**. NOT framed as "AI project
   management" — it's the three-layer, end-to-end pipeline. This canonical copy is
   seeded onto the `motir` project's `publicOverviewMd` (see story-6.12.ts § 6.12.4
-  - the seed loader), so the live tenant renders it. Settings editor:
-    **"Project overview (public landing)"** · **"A README-style intro shown on the
-    project's public Overview tab. Markdown — headings, lists, links, and images."**
-    · **"This shows on the public Overview tab — the first thing a visitor sees.
-    It's hidden while the project isn't public."**
+  - the seed loader), so the live tenant renders it. Settings entry point:
+    **"Project overview (public landing)"** · **"README-style intro for the public
+    Overview tab"** · **"Edit overview"** (button) · **"This shows on the public
+    Overview tab — the first thing a visitor sees. It's hidden while the project
+    isn't public."** Edit-overview view: **"Edit overview"** · **"Markdown — shown
+    on your public project's Overview tab. Changes save to the live public page."**
+    · **"Markdown" / "Preview" / "Live preview"** · **"Saved" / "Cancel" /
+    "Save"**.
 - Roadmap buckets: **"Submitted" / "Planned" / "In progress" / "Done"** ·
   **"Load N more →"**.
 - Submit: **"Submit a request"** · **"Tell the Motir team about a bug or a feature

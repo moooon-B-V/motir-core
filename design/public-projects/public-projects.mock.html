@@ -1763,6 +1763,206 @@
       .ov-editor .body b {
         color: var(--el-text);
       }
+
+      /* settings entry point → opens the dedicated Edit overview view */
+      .ov-entry {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 13px 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .ov-entry .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .ov-entry .ttl {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin-bottom: 3px;
+      }
+      .ov-entry .snip {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .ov-entry .snip b {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+
+      /* ── The dedicated "Edit overview" view (split editor + live preview) ── */
+      .editor-shell {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .editor-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .editor-head .titles {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .editor-head .title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .editor-head h2 {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .editor-head .sub {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .icon-btn {
+        width: var(--height-control);
+        height: var(--height-control);
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        flex: none;
+      }
+      .icon-btn:hover {
+        background: var(--el-surface);
+      }
+      .saved {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        color: var(--el-success);
+        margin-right: 4px;
+      }
+      .saved .ic {
+        width: 15px;
+        height: 15px;
+      }
+
+      .editor-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+      }
+      .editor-toolbar .tb {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .editor-toolbar .tb:hover {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      .editor-toolbar .tb .ic {
+        width: 15px;
+        height: 15px;
+      }
+      .editor-toolbar .tb.sep {
+        width: 1px;
+        height: 18px;
+        background: var(--el-border);
+        margin: 0 4px;
+        cursor: default;
+      }
+      .editor-toolbar .grow {
+        flex: 1;
+      }
+      .pane-tag {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+      }
+      .pane-tag.right {
+        width: 50%;
+        padding-left: 16px;
+      }
+
+      .editor-split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        min-height: 420px;
+      }
+      .editor-src {
+        border-right: 1px solid var(--el-border);
+        overflow: auto;
+        background: var(--el-page-bg);
+      }
+      .editor-src pre {
+        margin: 0;
+        padding: 16px 18px;
+      }
+      .editor-src code {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .editor-prev {
+        position: relative;
+        overflow: auto;
+        background: var(--el-surface-soft);
+        padding: 18px 20px;
+      }
+      .prev-badge {
+        position: absolute;
+        top: 12px;
+        right: 14px;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        padding: 2px 9px;
+      }
+      .md-prev {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 18px;
+      }
+      .md-prev h3:first-child {
+        margin-top: 0;
+      }
     </style>
   </head>
   <body>
@@ -2600,33 +2800,19 @@
           </div>
         </div>
 
-        <!-- the README/Overview authoring affordance (renders on the public landing) -->
+        <!-- the README/Overview authoring entry point → opens the dedicated Edit overview view -->
         <div class="sharelink">
           <div class="section-label">Project overview (public landing)</div>
-          <p class="csub" style="margin: -2px 0 12px">
-            A README-style intro shown on the project's public Overview tab. Markdown — headings,
-            lists, links, and images.
-          </p>
-          <div class="ov-editor">
-            <div class="toolbar">
-              <span class="tb" title="Heading">H</span>
-              <span class="tb" title="Bold"><b>B</b></span>
-              <span class="tb" title="Italic" style="font-style: italic">I</span>
-              <span class="tb" title="Link"
-                ><svg class="ic"><use href="#i-link" /></svg
-              ></span>
-              <span class="tb" title="List"
-                ><svg class="ic"><use href="#i-list" /></svg
-              ></span>
-              <span class="tb" title="Image"
-                ><svg class="ic"><use href="#i-book" /></svg
-              ></span>
-            </div>
+          <div class="ov-entry">
             <div class="body">
-              <b>## About this project</b><br />
-              Motir is a complete project-management tool — a Jira / Linear alternative for small
-              teams — with two AI layers bolted on…
+              <div class="ttl">README-style intro for the public Overview tab</div>
+              <div class="snip">
+                <b>## You're looking at Motir, inside Motir</b> · We build Motir with Motir…
+              </div>
             </div>
+            <button class="btn btn-outline">
+              <svg class="ic"><use href="#i-edit" /></svg> Edit overview
+            </button>
           </div>
           <div class="acct-note">
             <svg class="ic"><use href="#i-globe" /></svg>
@@ -2639,9 +2825,150 @@
       </div>
     </div>
 
-    <!-- ════════════════ PANEL 6 — empty / loading / error / rate-limit states ════════════════ -->
+    <!-- ════════════════ PANEL 7 — the dedicated "Edit overview" view (split editor + live preview) ════════════════ -->
     <div class="panel-label">
-      (7) States — empty roadmap · empty request list · the paginated loading skeleton · the
+      (7) Edit overview — the dedicated authoring view: a split Markdown editor (left) + live
+      preview of the public landing (right). Edits the `publicOverviewMd` body only; hero name/stats
+      are auto, links come from existing project fields
+    </div>
+    <div class="panel">
+      <div class="editor-shell">
+        <div class="editor-head">
+          <div class="titles">
+            <div class="title-row">
+              <button class="icon-btn" aria-label="Back to settings">
+                <svg class="ic"><use href="#i-arrow-left" /></svg>
+              </button>
+              <h2>Edit overview</h2>
+            </div>
+            <p class="sub">
+              Markdown — shown on your public project's <b>Overview</b> tab. Changes save to the
+              live public page.
+            </p>
+          </div>
+          <div class="head-actions">
+            <span class="saved"
+              ><svg class="ic"><use href="#i-check-check" /></svg> Saved</span
+            >
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">
+              <svg class="ic"><use href="#i-check-check" /></svg> Save
+            </button>
+          </div>
+        </div>
+
+        <div class="editor-toolbar">
+          <span class="tb" title="Heading">H</span>
+          <span class="tb" title="Bold"><b>B</b></span>
+          <span class="tb" title="Italic" style="font-style: italic">I</span>
+          <span class="tb sep"></span>
+          <span class="tb" title="Link"
+            ><svg class="ic"><use href="#i-link" /></svg
+          ></span>
+          <span class="tb" title="List"
+            ><svg class="ic"><use href="#i-list" /></svg
+          ></span>
+          <span class="tb" title="Numbered list"
+            ><svg class="ic"><use href="#i-list" /></svg
+          ></span>
+          <span class="tb" title="Image"
+            ><svg class="ic"><use href="#i-image" /></svg
+          ></span>
+          <span class="grow"></span>
+          <span class="pane-tag">Markdown</span>
+          <span class="pane-tag right">Preview</span>
+        </div>
+
+        <div class="editor-split">
+          <!-- left: the Markdown source -->
+          <div class="editor-src">
+            <pre><code># Motir
+
+## You're looking at Motir, inside Motir
+
+This is Motir's own project — the live board, roadmap, and backlog we
+use to build Motir. We build Motir with Motir: every feature here
+started as a work item on this board, moved through these columns, and
+was shipped by the same agents that turn work items into code.
+
+## A self-improving loop — and you're in it
+
+The bugs you report and the ideas you upvote land in Motir's triage,
+get planned as work items right here, and are picked up by Motir to
+build the next version of Motir.
+
+1. You submit a bug or an idea — it enters our triage.
+2. We plan it as a work item on this board.
+3. Motir's coding agent turns it into a pull request.
+4. It ships — and lands as Done on this very roadmap.
+
+## Vibe project
+
+You've heard of vibe coding — describe what you want, and the AI writes
+the code. A vibe project takes that to the *whole* project: not just the
+code, but the design, the marketing, the legal, the research…
+
+- **An AI planner** turns a conversation into a structured plan.
+- **An AI-native project manager** holds the work — **MCP-native**.
+- **A hosted coding agent** ships the engineering work items.
+
+That's a vibe project.
+
+## Contribute
+
+Found a bug or have an idea? [Submit a request](#) — the PM core is
+open source (GPL-3.0) on [GitHub](#).
+</code></pre>
+          </div>
+
+          <!-- right: the live preview (rendered) -->
+          <div class="editor-prev">
+            <div class="prev-badge">Live preview</div>
+            <div class="md md-prev">
+              <h3>You're looking at Motir, inside Motir</h3>
+              <p>
+                This is Motir's own project — the live board, roadmap, and backlog we use to build
+                Motir. We build Motir with Motir: every feature here started as a work item on this
+                board…
+              </p>
+              <h3>A self-improving loop — and you're in it</h3>
+              <ol class="loop">
+                <li><span>You submit a bug or an idea — it enters our triage.</span></li>
+                <li><span>We plan it as a work item on this board.</span></li>
+                <li><span>Motir's coding agent turns it into a pull request.</span></li>
+                <li><span>It ships — and lands as Done on this very roadmap.</span></li>
+              </ol>
+              <h3>Vibe project</h3>
+              <p>
+                You've heard of vibe coding — describe what you want, and the AI writes the code. A
+                vibe project takes that to the <i>whole</i> project: not just the code, but the
+                design, the marketing, the legal, the research…
+              </p>
+              <ul class="layers">
+                <li>
+                  <svg class="ic" style="color: var(--el-type-story)"><use href="#i-route" /></svg>
+                  <span><b>An AI planner</b> turns a conversation into a structured plan.</span>
+                </li>
+                <li>
+                  <svg class="ic" style="color: var(--el-type-task)"><use href="#i-columns" /></svg>
+                  <span
+                    ><b>An AI-native project manager</b> holds the work — <b>MCP-native</b>.</span
+                  >
+                </li>
+                <li>
+                  <svg class="ic" style="color: var(--el-accent)"><use href="#i-github" /></svg>
+                  <span><b>A hosted coding agent</b> ships the engineering work items.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 8 — empty / loading / error / rate-limit states ════════════════ -->
+    <div class="panel-label">
+      (8) States — empty roadmap · empty request list · the paginated loading skeleton · the
       fetch-error (ErrorState) · the rate-limited submit (graceful, never a raw 500)
     </div>
     <div class="panel">
@@ -3111,6 +3438,45 @@
             d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C4 2 3 2 3 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 2 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"
           />
           <path d="M9 18c-4.51 2-5-2-7-2" />
+        </g>
+        <!-- edit = square-pen -->
+        <g
+          id="i-edit"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path
+            d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"
+          />
+        </g>
+        <!-- arrow-left -->
+        <g
+          id="i-arrow-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </g>
+        <!-- image -->
+        <g
+          id="i-image"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+          <circle cx="9" cy="9" r="2" />
+          <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
         </g>
       </defs>
     </svg>
