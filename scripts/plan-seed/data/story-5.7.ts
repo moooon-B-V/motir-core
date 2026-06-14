@@ -843,7 +843,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.11',
       title:
         'Gate the watcher TRANSITION email by the `transitioned · email` preference — `watcherNotificationsService` never consults the resolver',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 22,
