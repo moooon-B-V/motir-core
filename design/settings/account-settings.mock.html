@@ -28,15 +28,16 @@
       registry mirroring `lib/settings/projectSettingsNav` (the same grouped-nav +
       "Soon" placeholder + totality-guard mechanism).
 
-      SHIPPED-vs-DESIGNED-AHEAD (see design-notes.md): theme pattern, display style,
-      language, and notifications EXIST today (`lib/theme/types.ts` ·
-      NotificationPreferencesCard); accent palette + font are DESIGNED AHEAD here so
-      the architecture holds them — each needs its own owning story (a planning
-      flag, not part of 7.8.3). API tokens (the Security pane) is 7.8.3.
+      DESIGNED HERE = only what we'll actually build now: the AREA shell + the real
+      panes (Language · Notifications · API tokens). APPEARANCE IS NOT DESIGNED — it
+      is only a reserved "Soon" nav slot. Mocking concrete appearance controls
+      (theme/accent/font/display-style) would be misleading: we are not going to
+      implement appearance like that, and it gets its own future story (Yue,
+      2026-06-14). Profile is likewise a "Soon" slot. API tokens is 7.8.3.
 
       Covers (multi-panel — review EACH, mistake #31):
-        (1)  Appearance pane — the area shell (account rail + grouped nav) + the
-             Appearance page (theme · accent · font · display style · language).
+        (1)  Language pane — the area shell (account rail + grouped nav) + the
+             shipped Language preference inside the area.
         (2)  Notifications pane — the shipped preference matrix inside the area.
         (3)  Security & access pane — the API tokens card + table inside the area.
         (4)  Create-token modal.
@@ -515,62 +516,6 @@
       .srow .sc {
         flex: none;
       }
-      .soon-tag {
-        margin-left: 8px;
-        font-size: 10px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: var(--el-text-strong);
-        background: var(--el-tint-yellow);
-        padding: 1px 7px;
-        border-radius: var(--radius-badge);
-        vertical-align: middle;
-      }
-
-      /* Segmented (components/ui/Segmented.tsx) */
-      .seg {
-        display: inline-flex;
-        align-items: center;
-        gap: 2px;
-        border-radius: var(--radius-btn);
-        border: 1px solid var(--el-border);
-        background: var(--el-surface);
-        padding: 2px;
-      }
-      .seg-opt {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        height: var(--height-control);
-        padding: 0 var(--spacing-control-x);
-        border-radius: var(--radius-control);
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--el-text-secondary);
-        border: 0;
-        background: transparent;
-        cursor: pointer;
-        white-space: nowrap;
-      }
-      .seg-opt .si {
-        width: 14px;
-        height: 14px;
-        color: var(--el-text-faint);
-      }
-      .seg-opt.on {
-        background: var(--el-page-bg);
-        color: var(--el-text-strong);
-        box-shadow: var(--shadow-subtle);
-      }
-      .seg-opt.on .si {
-        color: var(--el-accent);
-      }
-      .seg-opt.dis {
-        opacity: 0.5;
-        cursor: default;
-      }
-
       /* Combobox trigger (components/ui/Combobox.tsx) — input-shaped select */
       .select {
         display: inline-flex;
@@ -592,29 +537,6 @@
         width: 16px;
         height: 16px;
         color: var(--el-text-muted);
-      }
-
-      /* ColorSwatchPicker (components/ui/ColorSwatchPicker.tsx) */
-      .swatches {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-      }
-      .swatch {
-        width: 28px;
-        height: 28px;
-        border-radius: 9999px;
-        border: 1px solid var(--el-border);
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .swatch.sel {
-        box-shadow:
-          0 0 0 2px var(--el-page-bg),
-          0 0 0 4px var(--el-text);
       }
 
       /* Switch (components/ui/Switch.tsx) */
@@ -1380,13 +1302,13 @@
 
     <!-- shared rail markup is repeated per panel (a static mock has no router) -->
 
-    <!-- ════════════ PANEL 1 — Appearance pane (area shell + Appearance page) ════════════ -->
+    <!-- ════════════ PANEL 1 — Language pane (area shell + the shipped Language preference) ════════════ -->
     <div class="panel-label">
-      1 · Appearance pane — the account-settings AREA: the rail swaps to the grouped account nav
-      (user identity + General / Preferences / Security; Appearance active), and the content is the
-      Appearance page (theme · accent · font · display style · language). The Profile row is a
-      reserved "Soon" slot (the project-area placeholder pattern). Accent + Font are designed-ahead
-      (see notes).
+      1 · Language pane — the account-settings AREA: the rail swaps to the grouped account nav (user
+      identity + General / Preferences / Security; Language active), and the content is the shipped
+      Language preference. Profile AND Appearance are reserved "Soon" slots (the project-area
+      placeholder pattern) — Appearance is NOT designed here (we won't implement it as a mocked
+      control set; it gets its own future story).
     </div>
     <div class="panel">
       <div class="stage">
@@ -1420,15 +1342,22 @@
                 <div class="grp-label">Preferences</div>
                 <div class="nav-row active">
                   <span class="ni"
-                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg
+                    ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg
                   ></span>
-                  <span class="nl">Appearance</span>
+                  <span class="nl">Language</span>
                 </div>
                 <div class="nav-row">
                   <span class="ni"
                     ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg
                   ></span>
                   <span class="nl">Notifications</span>
+                </div>
+                <div class="nav-row soon">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg
+                  ></span>
+                  <span class="nl">Appearance</span>
+                  <span class="soon-chip">Soon</span>
                 </div>
               </div>
               <div class="grp">
@@ -1445,104 +1374,25 @@
 
           <div class="content">
             <div class="page-head">
-              <h2>Appearance</h2>
+              <h2>Language &amp; region</h2>
               <p class="sub">
-                How Motir looks for you — theme, accent, type and density. These are personal and
-                apply on every device you sign in on.
+                The language Motir's interface is shown in — menus, labels and dates. Personal to
+                you, applied on every device you sign in on.
               </p>
             </div>
             <div class="stack">
               <div class="card">
                 <div class="card-head">
                   <div>
-                    <h3>Theme &amp; display</h3>
-                    <p class="hsub">Light or dark, your accent colour, type and density.</p>
+                    <h3>Language</h3>
+                    <p class="hsub">Choose your interface language.</p>
                   </div>
                 </div>
                 <div class="card-body">
                   <div class="srow">
                     <div class="sl">
-                      <div class="name">Theme</div>
-                      <div class="desc">Follow your system, or pick light / dark.</div>
-                    </div>
-                    <div class="sc">
-                      <div class="seg" role="group" aria-label="Theme">
-                        <button class="seg-opt on">
-                          <svg class="si" viewBox="0 0 24 24"><use href="#i-monitor" /></svg>System
-                        </button>
-                        <button class="seg-opt">
-                          <svg class="si" viewBox="0 0 24 24"><use href="#i-sun" /></svg>Light
-                        </button>
-                        <button class="seg-opt">
-                          <svg class="si" viewBox="0 0 24 24"><use href="#i-moon" /></svg>Dark
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="srow">
-                    <div class="sl">
-                      <div class="name">Accent colour<span class="soon-tag">Soon</span></div>
-                      <div class="desc">The highlight used for buttons, links and selection.</div>
-                    </div>
-                    <div class="sc">
-                      <div class="swatches" role="radiogroup" aria-label="Accent colour">
-                        <span
-                          class="swatch sel"
-                          style="background: #5645d4"
-                          aria-label="Purple"
-                        ></span>
-                        <span class="swatch" style="background: #ff64c8" aria-label="Pink"></span>
-                        <span class="swatch" style="background: #2a9d99" aria-label="Teal"></span>
-                        <span class="swatch" style="background: #1aae39" aria-label="Green"></span>
-                        <span class="swatch" style="background: #0075de" aria-label="Blue"></span>
-                        <span class="swatch" style="background: #dd5b00" aria-label="Amber"></span>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="srow">
-                    <div class="sl">
-                      <div class="name">Font<span class="soon-tag">Soon</span></div>
-                      <div class="desc">The typeface used across the app.</div>
-                    </div>
-                    <div class="sc">
-                      <div class="seg" role="group" aria-label="Font">
-                        <button class="seg-opt on">
-                          <svg class="si" viewBox="0 0 24 24"><use href="#i-type" /></svg>System
-                        </button>
-                        <button class="seg-opt">Inter</button>
-                        <button class="seg-opt">Serif</button>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="srow">
-                    <div class="sl">
-                      <div class="name">Display style</div>
-                      <div class="desc">Density and corner softness. More styles arrive later.</div>
-                    </div>
-                    <div class="sc">
-                      <div class="seg" role="group" aria-label="Display style">
-                        <button class="seg-opt on">Default</button>
-                        <button class="seg-opt">Soft</button>
-                        <button class="seg-opt dis" title="Coming soon">Flat</button>
-                        <button class="seg-opt dis" title="Coming soon">Pill</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="card">
-                <div class="card-head">
-                  <div>
-                    <h3>Language &amp; region</h3>
-                    <p class="hsub">The language Motir's interface is shown in.</p>
-                  </div>
-                </div>
-                <div class="card-body">
-                  <div class="srow">
-                    <div class="sl">
-                      <div class="name">Language</div>
-                      <div class="desc">Applies to menus, labels and dates.</div>
+                      <div class="name">Display language</div>
+                      <div class="desc">Menus, labels and dates use this language.</div>
                     </div>
                     <div class="sc">
                       <div class="select">
@@ -1597,15 +1447,22 @@
                 <div class="grp-label">Preferences</div>
                 <div class="nav-row">
                   <span class="ni"
-                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg
+                    ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg
                   ></span>
-                  <span class="nl">Appearance</span>
+                  <span class="nl">Language</span>
                 </div>
                 <div class="nav-row active">
                   <span class="ni"
                     ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg
                   ></span>
                   <span class="nl">Notifications</span>
+                </div>
+                <div class="nav-row soon">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg
+                  ></span>
+                  <span class="nl">Appearance</span>
+                  <span class="soon-chip">Soon</span>
                 </div>
               </div>
               <div class="grp">
@@ -1732,15 +1589,22 @@
                 <div class="grp-label">Preferences</div>
                 <div class="nav-row">
                   <span class="ni"
-                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg
+                    ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg
                   ></span>
-                  <span class="nl">Appearance</span>
+                  <span class="nl">Language</span>
                 </div>
                 <div class="nav-row">
                   <span class="ni"
                     ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg
                   ></span>
                   <span class="nl">Notifications</span>
+                </div>
+                <div class="nav-row soon">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg
+                  ></span>
+                  <span class="nl">Appearance</span>
+                  <span class="soon-chip">Soon</span>
                 </div>
               </div>
               <div class="grp">

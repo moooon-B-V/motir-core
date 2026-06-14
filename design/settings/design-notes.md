@@ -1,124 +1,104 @@
 # Settings — design notes
 
-Design reference for the `settings` UI area. The headline surface here is the
+Design reference for the `settings` UI area. The headline surface is the
 **account settings AREA** — the per-user settings surface, redesigned (Story 7.8
 · 7.8.2) from a flat 2-card page into a grouped-nav **area** that scales as it
 grows. Built FROM the real design system (`app/globals.css` `--el-*` / shape
 tokens + the shipped `components/ui/*` primitives), so the code subtasks compose
 the same primitives — no Pencil→code gap.
 
-| Surface                   | Asset                                        | Notes                                                                                                                                                                                                                                                                                         |
-| ------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Account settings area** | **`account-settings.mock.html`** (HTML mock) | The whole account-settings area: the rail grouped nav + the Appearance / Notifications / Security (API tokens) panes + the API-token create / shown-once / revoke / empty / toast flows. Multi-panel. **Gates 7.8.3** (API tokens) and is the architecture for the future Appearance stories. |
+| Surface                   | Asset                                        | Notes                                                                                                                                                                                                                                |
+| ------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Account settings area** | **`account-settings.mock.html`** (HTML mock) | The account-settings area: the rail grouped nav + the **real** panes (Language · Notifications · Security/API tokens) + the API-token create / shown-once / revoke / empty / toast flows. Multi-panel. **Gates 7.8.3** (API tokens). |
 
 ## Why the whole area (the corner that was cut, then fixed)
 
 The first pass designed **only** the API-tokens card, bolted onto the existing
-flat account page (`LanguageCard` + `NotificationPreferencesCard` stacked in a
-`max-w-[42rem]` column). That was a corner cut: the account surface is about to
-hold **many** more personal settings — theme, **colour palette / accent**,
-**font**, **display style**, language — and a flat card stack does not scale to
-that. Designing one card in isolation would have locked in the wrong
-architecture. So 7.8.2 is the **whole account-settings redesign**, with API
-tokens as one section.
+flat account page. That was a corner cut: the account surface is about to hold
+more personal settings, and a flat card stack does not scale. So 7.8.2 designs
+the account-settings **area architecture** — but only the panes we will actually
+build now (see the scope guard below).
 
 ## Architecture — an "area" with a grouped rail nav (rung 2: the shipped pattern)
 
-The decision is settled by **already-shipped code**, not invented: Motir's
-**project settings** is an _area_ (Story 6.5) whose grouped nav swaps into the
-app rail (`SidebarNav` renders it from the `lib/settings/projectSettingsNav`
-registry when the route is inside the area), one page per sub-section, with a
-route↔registry **totality guard** and a "Soon" placeholder slot for designed-for
-pages. The account settings adopts the **same** pattern (Yue's call,
-2026-06-14):
+Settled by **already-shipped code**, not invented: Motir's **project settings**
+is an _area_ (Story 6.5) whose grouped nav swaps into the app rail (`SidebarNav`
+renders it from the `lib/settings/projectSettingsNav` registry when the route is
+inside the area), one page per sub-section, with a route↔registry **totality
+guard** and a "Soon" placeholder slot for designed-for pages. The account
+settings adopts the **same** pattern (Yue's call, 2026-06-14):
 
 - A new **`lib/settings/accountSettingsNav`** registry — the exact shape of
   `projectSettingsNav` (typed entries with `id` / `group` / `href` / `icon` /
   `labelKey` / `access` / `placeholder`), driving (1) the rail area nav, (2) the
   command-palette deep links, (3) the totality test pairing every
-  `settings/account/**/page.tsx` route 1:1 with a registry entry.
-- The rail's **header** (where project settings shows the back-link +
-  ProjectSwitcher) here shows **"← Back to Motir"** + the **user identity**
+  `settings/account/**/page.tsx` route 1:1 with a real (non-placeholder) entry.
+- The rail's **header** shows **"← Back to Motir"** + the **user identity**
   (initial `Avatar` + name + email) + the eyebrow **"Account settings"**.
 - **Groups** (rail order): **General · Preferences · Security**.
   - **General → Profile** — a reserved **"Soon"** placeholder (name / avatar /
-    password live here later), drawn as the disabled `Soon` row exactly like the
-    project area's Automation slot, so the area's shape is legible from day one.
-  - **Preferences → Appearance, Notifications** — both real pages.
+    password later), the disabled placeholder row, like the project area's
+    Automation slot.
+  - **Preferences → Language** (real), **Notifications** (real), **Appearance**
+    (reserved **"Soon"** — see the scope guard).
   - **Security → API tokens** — the 7.8.3 page.
-- Each sub-section is its own route under `app/(authed)/settings/account/…`
-  (Appearance / Notifications / API tokens). The existing flat account page
-  becomes the area's landing (Appearance) — the `LanguageCard` /
-  `NotificationPreferencesCard` move into their panes.
+- Each REAL sub-section is its own route under `app/(authed)/settings/account/…`
+  (Language / Notifications / API tokens). The existing flat account page's
+  `LanguageCard` / `NotificationPreferencesCard` move into their panes.
 
-### ⚠️ Planning implications (flagged, not silently absorbed)
+### ⚠️ Scope guard — Appearance is NOT designed here (Yue, 2026-06-14)
 
-This redesign is bigger than the original 7.8.3 ("API tokens settings UI") scope.
-Two items need OWNING subtasks/stories (the no-V1-tier / orphaned-deferral rule —
-don't fold them into 7.8.3):
+Appearance (theme / accent / font / display style) appears in the nav **only as a
+reserved "Soon" slot**. It is deliberately **not** mocked as a concrete control
+set: **"we are not going to implement it like this — it's misleading."** A design
+that draws specific theme/accent/font/display-style controls we won't actually
+build would mislead the implementer. Appearance gets its **own future story**
+that designs it properly when we decide how it works. The "Soon" row keeps the
+area's shape honest without over-committing. (Theme + display-style do exist today
+as the shell `ThemeToggle` / `THEME_STORAGE_KEYS`, but where/how they surface in
+settings is that future story's call, not this asset's.)
+
+So the **designed** surfaces here are exactly: the **area shell**, the **Language**
+pane, the **Notifications** pane, and the **Security/API tokens** pane + flows.
+
+### ⚠️ Planning flags (surfaced, not silently absorbed)
 
 1. **The account-settings AREA shell** — the `accountSettingsNav` registry, the
-   rail-swap wiring, the `settings/account` layout, the route split, the totality
-   test. A prerequisite for the API-tokens page living in the area. Should be its
-   own subtask under Story 7.8 (sibling of 7.8.3), with 7.8.3 `dependsOn` it; or
-   7.8.3 is re-scoped to "API tokens page **inside** the new account area" and a
-   new 7.8.x owns the shell. **Recommend: a new shell subtask + retarget 7.8.3's
-   dependsOn.**
-2. **Appearance: accent palette + font** — these controls are **designed-ahead**
-   here but DO NOT exist yet (`lib/theme/types.ts` ships only `pattern` +
-   `displayStyle`; `THEME_STORAGE_KEYS` has no accent/font). They are not part of
-   7.8 at all — they belong to a future **Appearance** story (personalization).
-   The mock marks them with a **"Soon"** tag so the area is honest about what's
-   live. Logged as a planning gap to seed a story for.
-
-## Shipped vs. designed-ahead (so 7.8.3 builds only what's real)
-
-| Control                        | State today                                                                 | In the mock                         |
-| ------------------------------ | --------------------------------------------------------------------------- | ----------------------------------- |
-| Theme (system / light / dark)  | **Shipped** — `theme-context` + `ThemeToggle`, `THEME_STORAGE_KEYS.pattern` | live Segmented                      |
-| Display style (default / soft) | **Shipped** — `THEME_STORAGE_KEYS.displayStyle` (flat / pill are future)    | live Segmented (flat/pill disabled) |
-| Language                       | **Shipped** — `setLocale` cookie (`LanguageCard`)                           | live Combobox                       |
-| Notifications matrix           | **Shipped** — `NotificationPreferencesCard` (5.7.6)                         | live Switch matrix                  |
-| **Accent colour**              | **Not built** — future Appearance story                                     | `Soon`-tagged swatches              |
-| **Font**                       | **Not built** — future Appearance story                                     | `Soon`-tagged Segmented             |
-| API tokens                     | substrate 7.8.1 (in progress); page is **7.8.3**                            | full table + flows                  |
+   rail-swap wiring, the `settings/account` layout, the route split (Language /
+   Notifications / API tokens pages), the totality test. It is a prerequisite
+   bigger than 7.8.3's original "API tokens settings UI" scope. **Recommend a new
+   shell subtask under Story 7.8, with 7.8.3 `dependsOn` it** (or re-scope 7.8.3
+   to "API tokens page _inside_ the new account area").
+2. **Appearance** — a future personalization **story** owns it (design + build).
+   Not part of 7.8; reserved as a "Soon" nav slot here.
 
 ---
 
-## Panel 1 — Appearance pane (the area shell + the Appearance page)
+## Panel 1 — Language pane (the area shell + the shipped Language preference)
 
 The area shell: the **rail** (`--el-sidebar-bg`, `border-(--el-sidebar-border)`)
-with the back-link + user identity + grouped nav (Appearance active = the
+with the back-link + user identity + grouped nav (Language active = the
 canvas-inset treatment: `bg-(--el-sidebar-item-bg-active)` +
-`border-(--el-sidebar-border)` + `shadow-(--shadow-subtle)` + accent icon), and
-the **content** with the serif `h2` page head + a `max-w-[680px]` card stack.
+`border-(--el-sidebar-border)` + `shadow-(--shadow-subtle)` + accent icon; the
+`languages` glyph), and the **content** with the serif `h2` page head + a
+`max-w-[680px]` card stack.
 
-The Appearance page uses a **settings-row grammar** inside `Card`s — a label +
+The Language page uses the **settings-row grammar** inside a `Card` — a label +
 description on the left, the control on the right, hairline-separated
-(`border-(--el-border-soft)`) — the pattern that scales as more rows land:
+(`border-(--el-border-soft)`) — the pattern that scales as region / timezone /
+date-format rows land later:
 
-- **Card "Theme & display"**:
-  - **Theme** — a `Segmented` (System / Light / Dark) with lucide `monitor` /
-    `sun` / `moon` leading glyphs (active glyph takes `--el-accent`).
-  - **Accent colour** (`Soon`) — a `ColorSwatchPicker` (radiogroup of
-    `rounded-full` swatches; selected = the double-ring `--el-text` halo). The
-    palette draws from the Tier-0 hues (primary / pink / teal / green / blue /
-    amber).
-  - **Font** (`Soon`) — a `Segmented` (System / Inter / Serif), `type` glyph.
-  - **Display style** — a `Segmented` (Default / Soft; Flat / Pill drawn
-    present-but-disabled with a "Coming soon" `title`, the Segmented `disabled`
-    option seam).
-- **Card "Language & region"**:
-  - **Language** — the shipped `Combobox` (input-shaped trigger, `chevron-down`).
+- **Card "Language"** → row **"Display language"** with the shipped `Combobox`
+  (input-shaped trigger + `chevron-down`), value "English". This is the existing
+  `LanguageCard` (`setLocale` cookie) moved into its pane.
 
 ## Panel 2 — Notifications pane
 
 The shipped **`NotificationPreferencesCard`** matrix inside the area — a
 `grid-cols-[1fr_5rem_5rem]` of event rows × **Email / In-app** columns of
-`Switch` toggles (`role="switch"`, accent track when on). Header row caption
+`Switch` toggles (`role="switch"`, accent track when on). Header caption
 (`--el-text-faint` uppercase) with a `--el-border` rule; rows hairline-separated.
-Each switch carries an `aria-label` ("{channel} for {event}"). No redesign of the
-matrix itself — it just moves into its pane.
+Each switch carries an `aria-label`. No redesign — it just moves into its pane.
 
 ## Panel 3 — Security & access pane (API tokens) — the 7.8.3 surface
 
@@ -129,14 +109,13 @@ expiring, revocable** — the Jira / GitHub API-token shape.
 **Mirror surface (rung 1, VERIFIED):** Atlassian API tokens (`id.atlassian.com`
 → Security → API tokens) — create with label + expiry, a list of label / created
 / expires / last-used, revoke per row, secret shown once. The `motir_pat_` prefix
+and the shown-once monospace copy field follow GitHub's PAT shape (a greppable
+prefix for secret scanners). Motir keeps its coloured personality (peach
+"expiring soon" chip, accent CTA) without inventing primitives.
 
-- shown-once monospace copy field follow GitHub's PAT shape (greppable prefix for
-  secret scanners). Motir keeps its coloured personality (peach "expiring soon"
-  chip, accent CTA) without inventing primitives.
-
-* **Card "Your tokens"** with a header slot: title + sub on the left, the
+- **Card "Your tokens"** with a header slot: title + sub on the left, the
   **"Create token"** primary `Button` (size `sm`, `plus` glyph) on the right.
-* **The table** — a borderless row list (org-members roster grammar). Columns:
+- **The table** — a borderless row list (org-members roster grammar). Columns:
   **Label · Token · Created · Expires · Last used · Actions** (last
   right-aligned). `thead` is the `--el-text-faint` uppercase caption with a
   `--el-border` rule; rows hairline-separated (`--el-border-soft`).
@@ -203,11 +182,11 @@ config now — it won't be shown again." Fired from the shown-once Copy handler.
 
 - **new `settings.account` namespace** — `eyebrow` ("Account settings"),
   `back` ("Back to Motir"), `nav.group.{general,preferences,security}`,
-  `nav.{profile,appearance,notifications,apiTokens}`.
-- **`settings.appearance`** — `heading`, `subtitle`, `theme.{label,desc,
-system,light,dark}`, `accent.{label,desc}`, `font.{label,desc,system,inter,
-serif}`, `display.{label,desc,default,soft,flat,pill}`, `language.{label,
-desc}`, `soon` ("Soon").
+  `nav.{profile,language,notifications,appearance,apiTokens}`, `nav.soon`
+  ("Soon").
+- **`settings.language`** — `heading` ("Language & region"), `subtitle`,
+  `card.title`, `card.subtitle`, `displayLanguage.{label,desc}`. (The Combobox
+  options reuse the existing locale labels.)
 - **`settings.apiTokens`** — `heading`, `subtitle`, `card.{title,subtitle}`,
   `create` ("Create token"), `columns.{label,token,created,expires,lastUsed,
 actions}`, `expiresIn` ("in {n} days"), `expiresNever`, `lastUsedNever`,
@@ -216,52 +195,48 @@ expiresField,expiresHelper,submit,cancel}`, `expiry.{d30,d90,d365,never}`,
   `created.{title,description,secretLabel,copy,warning,done}`,
   `revokeConfirm.{title,body,confirm,cancel}`, `empty.{title,body,guideLink}`,
   `toast.{title,body}`.
-- Same locale set the rest of the app ships.
+- Notifications keeps its shipped `settings` keys (5.7.6). Same locale set.
 
 ## Token / a11y rules honoured
 
 - **Colour** strictly via `--el-*` (finding #54): the accent on the active nav
-  row + selected Segmented glyphs + the accent swatch + the CTAs + the on-Switch
-  track; the `--el-tint-peach` expiring chip + warning callout; the
-  `--el-tint-rose` revoke callout; `--el-danger` revoke; `--el-success` toast;
-  `--el-code-bg` token chips; the `--el-tint-yellow` "Soon" chips. No Tier-0
-  `--color-*` / Tailwind Tier-0 utilities. Tints carry the hue in the BACKGROUND
-  with `--el-text-strong` text (finding #35, AA — verified light **and** dark).
+  row glyph; the CTAs + on-Switch track; the `--el-tint-peach` expiring chip +
+  warning callout; the `--el-tint-rose` revoke callout; `--el-danger` revoke;
+  `--el-success` toast; `--el-code-bg` token chips; the `--el-tint-yellow` "Soon"
+  chips. No Tier-0 `--color-*` / Tailwind Tier-0 utilities. Tints carry the hue
+  in the BACKGROUND with `--el-text-strong` text (finding #35, AA — verified
+  light **and** dark).
 - **Shape** via element-semantic tokens only (`--radius-card` / `-input` / `-btn`
   / `-badge` / `-control` / `-modal`, `--shadow-subtle` / `-card` / `-modal` /
   `-elevated`, `--spacing-card-padding` / `-control-*` / `-input-*` / `-chip-*` /
   `-icon-btn`, `--height-control` / `-input` / `-btn-*`) — no Tier-0 scale, no raw
-  `rounded-md` / `p-1` / `h-9`. `rounded-full` only on the avatar / swatches /
-  switch track.
-- **Not colour-alone** (finding #35): Segmented active = raised fill + shadow +
-  glyph hue (not hue alone); the expiring / revoked chips carry text; callouts
-  pair tint + icon + copy; the revoke button is icon + `aria-label`.
-- **A11y**: the rail nav is grouped `SidebarSection`s; Segmented = labelled
-  `role="group"` of `aria-pressed` buttons; swatches = `role="radiogroup"`;
-  switches = `role="switch"` + `aria-label`; the create / shown-once / revoke
-  surfaces are `Modal` (Radix focus trap, ESC, labelled); the secret field is
-  read-only and the ONLY place the plaintext appears (never logged / in a DTO —
-  7.8.1); the toast is `role="status"`.
+  `rounded-md` / `p-1` / `h-9`. `rounded-full` only on the avatar / switch track.
+- **Not colour-alone** (finding #35): the expiring / revoked chips carry text;
+  callouts pair tint + icon + copy; the revoke button is icon + `aria-label`; the
+  "Soon" nav rows carry a text chip, not just muting.
+- **A11y**: the rail nav is grouped `SidebarSection`s; switches = `role="switch"`
+  - `aria-label`; the create / shown-once / revoke surfaces are `Modal` (Radix
+    focus trap, ESC, labelled); the secret field is read-only and the ONLY place
+    the plaintext appears (never logged / in a DTO — 7.8.1); the toast is
+    `role="status"`.
 - **Dark mode** confirmed (toggle in the mock): every surface / text / tint /
   chip flips via the token layer and stays AA.
 
 ## Primitives composed (no hand-rolling)
 
-| Element                       | Shipped primitive                                                        |
-| ----------------------------- | ------------------------------------------------------------------------ |
-| area shell (rail + content)   | `app/(authed)` rail + `SidebarNav` (the 6.5 settings-area shape)         |
-| grouped nav registry          | `lib/settings/accountSettingsNav` (new — mirrors `projectSettingsNav`)   |
-| card / empty                  | `components/ui/Card.tsx` · `components/ui/EmptyState.tsx`                |
-| theme / font / display toggle | `components/ui/Segmented.tsx`                                            |
-| accent swatches               | `components/ui/ColorSwatchPicker.tsx`                                    |
-| notification toggles          | `components/ui/Switch.tsx`                                               |
-| language / expiry select      | `components/ui/Combobox.tsx`                                             |
-| create / revoke / shown-once  | `components/ui/Modal.tsx` (Radix Dialog)                                 |
-| label field                   | `components/ui/Input.tsx` + `components/ui/FormField.tsx`                |
-| chips                         | `components/ui/Pill.tsx` (`severity="warning"` / `tone="neutral"`)       |
-| buttons                       | `components/ui/Button.tsx` (primary / secondary / ghost / danger / icon) |
-| token-prefix chip             | inline `--el-code-bg` / `--el-code-text` code grammar                    |
-| copy confirmation             | `components/ui/Toast.tsx` (`useToast`, `variant="success"`)              |
+| Element                      | Shipped primitive                                                        |
+| ---------------------------- | ------------------------------------------------------------------------ |
+| area shell (rail + content)  | `app/(authed)` rail + `SidebarNav` (the 6.5 settings-area shape)         |
+| grouped nav registry         | `lib/settings/accountSettingsNav` (new — mirrors `projectSettingsNav`)   |
+| card / empty                 | `components/ui/Card.tsx` · `components/ui/EmptyState.tsx`                |
+| notification toggles         | `components/ui/Switch.tsx`                                               |
+| language / expiry select     | `components/ui/Combobox.tsx`                                             |
+| create / revoke / shown-once | `components/ui/Modal.tsx` (Radix Dialog)                                 |
+| label field                  | `components/ui/Input.tsx` + `components/ui/FormField.tsx`                |
+| chips                        | `components/ui/Pill.tsx` (`severity="warning"` / `tone="neutral"`)       |
+| buttons                      | `components/ui/Button.tsx` (primary / secondary / ghost / danger / icon) |
+| token-prefix chip            | inline `--el-code-bg` / `--el-code-text` code grammar                    |
+| copy confirmation            | `components/ui/Toast.tsx` (`useToast`, `variant="success"`)              |
 
 No new design-system primitive is invented for this surface. If a future need
 arises that a shipped primitive can't cover, that is a NEW `design/` subtask, not
