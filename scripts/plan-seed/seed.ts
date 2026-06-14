@@ -154,29 +154,35 @@ async function main() {
     for (const organizationId of organizationIds) {
       await db.organization.delete({ where: { id: organizationId } });
     }
-    // Belt-and-suspenders: also remove any ORPHAN org NAMED `moooon` that's
-    // still around — covers two failure modes that have leaked dupes into prod
-    // (visible as ≥5 `moooon` rows in the org switcher):
+    // Belt-and-suspenders: also remove any other org NAMED `moooon` whose
+    // *every* org-membership belongs to a seed user — i.e. a seed-owned dupe
+    // the workspace-driven sweep above missed. Two failure modes feed this
+    // (visible as ≥5 `moooon` rows in the org switcher today):
     //   (a) past partial-reseed left an org whose workspace was already
-    //       independently deleted, so no current membership points at it
-    //       (invisible to the `organizationIds`-from-memberships sweep above);
+    //       independently deleted, so no workspace-membership points at it
+    //       (invisible to the `organizationIds`-from-WorkspaceMemberships
+    //       sweep above) — but its ORG-memberships for seed users persist;
     //   (b) the slug-retry loop in `workspacesService.createWorkspace` minted
     //       a SUFFIXED slug (`moooon-xxxx`) when the unsuffixed slug was
     //       taken, so a `where: { slug: SEED_WORKSPACE_NAME }` deleteMany
     //       (the prior shape) only caught the one unsuffixed row.
-    // Safety: only drop orgs that have NO remaining workspaces AND NO
-    // remaining memberships — i.e. genuine zombie rows. A real tenant who
-    // happened to name their org `moooon` will have at least a workspace or
-    // a membership, so this never touches their data.
-    const orphanCandidates = await db.organization.findMany({
+    // Safety: only drop orgs whose memberships are a SUBSET of the known seed
+    // user set. A real tenant who happened to name their org `moooon` would
+    // have at least one non-seed-user member (themselves), so they're never
+    // touched. `seedUserIds` covers BOTH the legacy single-owner account AND
+    // the current team (it was built from `knownEmails` above).
+    const seedUserIdSet = new Set(knownUsers.map((u) => u.id));
+    const candidateOrgs = await db.organization.findMany({
       where: { name: SEED_WORKSPACE_NAME },
-      include: { _count: { select: { workspaces: true, memberships: true } } },
+      include: { memberships: { select: { userId: true } } },
     });
-    const orphanOrgIds = orphanCandidates
-      .filter((o) => o._count.workspaces === 0 && o._count.memberships === 0)
+    const seedOnlyOrgIds = candidateOrgs
+      .filter(
+        (o) => o.memberships.length > 0 && o.memberships.every((m) => seedUserIdSet.has(m.userId)),
+      )
       .map((o) => o.id);
-    if (orphanOrgIds.length) {
-      await db.organization.deleteMany({ where: { id: { in: orphanOrgIds } } });
+    if (seedOnlyOrgIds.length) {
+      await db.organization.deleteMany({ where: { id: { in: seedOnlyOrgIds } } });
     }
     const legacy = knownUsers.find((u) => u.email === LEGACY_EMAIL);
     if (legacy) await db.user.delete({ where: { id: legacy.id } });
