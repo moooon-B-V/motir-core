@@ -4,6 +4,7 @@ import { organizationRepository } from '@/lib/repositories/organizationRepositor
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { withOrgContext } from '@/lib/organizations/context';
 import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
@@ -12,6 +13,7 @@ import {
   LastOrgOwnerError,
   OrganizationNotFoundError,
   OrgForbiddenError,
+  OrgInviteeNotFoundError,
   OrgSlugCollisionError,
 } from '@/lib/organizations/errors';
 import {
@@ -264,6 +266,34 @@ export const organizationsService = {
       }
       throw err;
     }
+  },
+
+  /**
+   * Add a member to the org BY EMAIL — the org-admin "invite to organization"
+   * surface (6.10.5). Resolves the email to an EXISTING Motir user, then runs
+   * the same add-to-org flow as `addMember` (org-admin gate + create + the
+   * AlreadyOrgMemberError mapping). Throws OrgInviteeNotFoundError when no
+   * account matches: org membership is the root tenancy tier, so an org member
+   * must already be a Motir user — brand-new people join by accepting a
+   * WORKSPACE invite, which auto-enrols them in that workspace's org via the
+   * upward invariant (6.10.2 §5i). The email lookup is unrelated reference data
+   * (no write yet), so it reads off the singleton; `addMember` owns the
+   * transaction + the gate.
+   */
+  async addMemberByEmail(input: {
+    organizationId: string;
+    email: string;
+    role: OrganizationRole;
+    actorUserId: string;
+  }): Promise<void> {
+    const user = await userRepository.findByEmail(input.email);
+    if (!user) throw new OrgInviteeNotFoundError(input.email);
+    await this.addMember({
+      organizationId: input.organizationId,
+      userId: user.id,
+      role: input.role,
+      actorUserId: input.actorUserId,
+    });
   },
 
   /**

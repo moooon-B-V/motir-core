@@ -2459,5 +2459,106 @@
       "generic": "<s>{actor}</s> updated <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> sent you a notification"
     }
+  },
+  "orgAdmin": {
+    "menu": {
+      "ariaLabel": "Organization menu",
+      "settings": "Settings",
+      "members": "Members",
+      "billing": "Billing & usage",
+      "comingSoon": "Coming soon",
+      "newWorkspace": "New workspace",
+      "newWorkspaceHint": "Adds the workspace switcher",
+      "switchOrg": "Switch organization",
+      "createOrg": "Create organization",
+      "workspacesCount": "{count, plural, one {# workspace} other {# workspaces}}"
+    },
+    "settings": {
+      "title": "Organization settings",
+      "subtitle": "Manage the {org} organization — the account your workspaces live under. Only organization owners and admins can change these.",
+      "general": "General",
+      "generalSub": "The organization’s identity across all its workspaces.",
+      "youreOwner": "You’re an owner",
+      "youreAdmin": "You’re an admin",
+      "nameLabel": "Organization name",
+      "urlLabel": "Organization URL",
+      "urlHint": "Used in links to this organization. Lowercase letters, numbers and hyphens.",
+      "save": "Save changes",
+      "saved": "Organization updated",
+      "saveError": "Couldn’t save changes",
+      "workspacesSummary": "{count, plural, one {# workspace} other {# workspaces}}",
+      "membersSummary": "{count, plural, one {# member} other {# members}}",
+      "billing": "Billing & usage",
+      "billingSub": "Plan, credits and usage roll up to the organization.",
+      "billingNote": "Billing, credits and usage for this organization live here — added in a later release. No billing controls are active yet; this placeholder marks where they’ll sit so the layout stays stable.",
+      "workspaceConfig": "Workspace configuration",
+      "workspaceConfigSub": "Folded in here while you have one workspace — splits into its own area when you add a second.",
+      "workspaceConfigBadge": "{count, plural, one {# workspace} other {# workspaces}}",
+      "workspaceConfigNote": "Workflows & statuses, custom fields, labels, components, automation and dashboards are workspace-scoped — they live on the workspace underneath (there is no org→workspace config inheritance). With one workspace they’re managed in workspace settings; add a second and they split into a per-workspace area, with the new workspace seeded by copying this one’s config so it looks inherited.",
+      "openWorkspaceSettings": "Open workspace settings",
+      "dangerZone": "Danger zone",
+      "deleteOrg": "Delete organization",
+      "deleteOrgNote": "Deleting the organization removes all its workspaces and data. This cannot be undone.",
+      "deleteUnavailable": "Organization deletion isn’t available yet."
+    },
+    "members": {
+      "title": "Members",
+      "subtitle": "Everyone in the {org} organization, across all its workspaces. An organization role applies org-wide; workspace membership is shown per person.",
+      "people": "People",
+      "count": "{count, plural, one {# person} other {# people}}",
+      "invite": "Invite to organization…",
+      "you": " (you)",
+      "noWorkspaces": "No workspaces",
+      "moreWorkspaces": "+{count}",
+      "remove": "Remove",
+      "removed": "{name} removed from the organization",
+      "removeError": "Couldn’t remove member",
+      "roleChanged": "Role updated",
+      "roleChangeError": "Couldn’t change role",
+      "roleLabel": "Organization role for {name}",
+      "pager": "Showing {from}–{to} of {total}",
+      "page": "Page {n} of {m}",
+      "prev": "Prev",
+      "next": "Next"
+    },
+    "roles": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "member": "Member",
+      "ownerDesc": "Full control — billing, delete, all workspaces",
+      "adminDesc": "Manage members + settings + every workspace",
+      "memberDesc": "Belongs to the org; access by workspace role"
+    },
+    "roleHelp": {
+      "adminLine": "Owner / Admin administer the organization and are granted admin on every workspace under it — above any per-workspace role.",
+      "memberLine": "An org Member belongs to the org but has no cross-workspace powers — what they can do inside a workspace is still governed by their workspace role.",
+      "gatingNote": "Org membership gates workspace access: someone removed from the organization loses access to every workspace under it."
+    },
+    "inviteModal": {
+      "title": "Invite to {org}",
+      "description": "Add an existing Motir teammate to this organization and choose their org role. People who aren’t on Motir yet join by accepting a workspace invite — they’re enrolled in the organization automatically.",
+      "emailLabel": "Email",
+      "emailPlaceholder": "teammate@company.com",
+      "roleLabel": "Organization role",
+      "send": "Add to organization",
+      "sent": "{email} added to the organization",
+      "errorNotFound": "No Motir account for {email}. Invite them to a workspace first — they’ll join the organization automatically.",
+      "errorAlready": "{email} is already in this organization.",
+      "errorGeneric": "Couldn’t add that person. Try again."
+    },
+    "states": {
+      "emptyTitle": "It’s just you so far",
+      "emptyDescription": "Invite teammates to the {org} organization. They’ll get access to the workspaces you add them to.",
+      "emptyAction": "Invite people",
+      "errorTitle": "Couldn’t load members",
+      "errorDescription": "Something went wrong fetching this organization’s members. Try again.",
+      "retry": "Retry",
+      "forbiddenTitle": "Organization settings are admin-only",
+      "forbiddenDescription": "Only owners and admins of {org} can manage members and settings. Ask an organization admin if you need a change.",
+      "backToWorkspace": "Back to workspace",
+      "loading": "Loading members…",
+      "noActiveOrgTitle": "No organization",
+      "noActiveOrgDescription": "You don’t belong to an organization yet."
+    }
   }
 }

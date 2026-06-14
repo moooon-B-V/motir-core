@@ -1,8 +1,11 @@
 import { type ReactNode } from 'react';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { organizationsService } from '@/lib/services/organizationsService';
+import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -13,7 +16,7 @@ import { AppLayout } from '@/components/ui/AppLayout';
 import { SidebarDrawer } from '@/components/ui/SidebarDrawer';
 import { TopNav } from './_components/TopNav';
 import { SidebarNav } from './_components/SidebarNav';
-import { WorkspaceSwitcher } from './_components/WorkspaceSwitcher';
+import { ShellTierNav } from './_components/ShellTierNav';
 import { CommandPaletteProvider } from './_components/CommandPaletteProvider';
 import { CreateIssueProvider } from './_components/CreateIssueProvider';
 import { ProjectAccessProvider } from './_components/ProjectAccessProvider';
@@ -41,7 +44,40 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
 
   const ctx = await getWorkspaceContext();
   const workspaceModels = await workspacesService.listUserWorkspaces(session.user.id);
-  const workspaces = workspaceModels.map(toWorkspaceSummaryDTO);
+
+  // The active ORGANIZATION (Story 6.10.5 — the shell org control). It must
+  // agree with the active WORKSPACE: a user who belongs to workspaces across
+  // MULTIPLE orgs (e.g. they accepted an invite into another org's workspace)
+  // has an active org === the org that owns the workspace they're actually in,
+  // so the shell's org + workspace tiers never disagree. The org cookie is only
+  // the fallback when there's no active workspace (e.g. an org-only member);
+  // the service re-validates membership, so a stale/forged id falls back to the
+  // user's first org. PROGRESSIVE DISCLOSURE: the org is ALWAYS the anchor, but
+  // the WORKSPACE switcher shows only when the active org has ≥2 workspaces — so
+  // the workspace list handed to the shell is scoped to the active org, and ITS
+  // length is the reveal test (in ShellTierNav).
+  const orgCookie = (await cookies()).get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
+  const activeWorkspaceModel = ctx
+    ? (workspaceModels.find((w) => w.id === ctx.workspaceId) ?? null)
+    : null;
+  const preferredOrgId = activeWorkspaceModel?.organizationId ?? orgCookie;
+  const currentOrg = await organizationsService.resolveActiveOrganization(
+    session.user.id,
+    preferredOrgId,
+  );
+  const activeOrg = currentOrg
+    ? {
+        id: currentOrg.organization.id,
+        name: currentOrg.organization.name,
+        slug: currentOrg.organization.slug,
+        role: currentOrg.role,
+      }
+    : null;
+  const orgs = currentOrg ? await organizationsService.listUserOrganizations(session.user.id) : [];
+  const scopedWorkspaceModels = activeOrg
+    ? workspaceModels.filter((w) => w.organizationId === activeOrg.id)
+    : workspaceModels;
+  const workspaces = scopedWorkspaceModels.map(toWorkspaceSummaryDTO);
 
   // Project data — only meaningful when there's an active workspace. Without
   // one the sidebar hides the project header + project-scoped nav, so skip
@@ -114,6 +150,8 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
             <AppLayout
               topNav={
                 <TopNav
+                  activeOrg={activeOrg}
+                  orgs={orgs}
                   workspaces={workspaces}
                   activeWorkspaceId={activeWorkspaceId}
                   user={{ name: session.user.name, email: session.user.email }}
@@ -135,12 +173,17 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
 
             {/* Mobile off-canvas nav — opened by the TopNav hamburger (<md). The
             drawer is portaled, so it lives at the layout root rather than in an
-            AppLayout slot. Its header carries the workspace switcher (the rail's
-            workspace switcher lives in the top nav, which the drawer replaces on
-            mobile). */}
+            AppLayout slot. Its header carries the same tenancy-tier cluster (org
+            control + the workspace switcher at ≥2 workspaces) the top nav shows,
+            since the drawer replaces the top nav on mobile. */}
             <SidebarDrawer
               header={
-                <WorkspaceSwitcher workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} />
+                <ShellTierNav
+                  activeOrg={activeOrg}
+                  orgs={orgs}
+                  workspaces={workspaces}
+                  activeWorkspaceId={activeWorkspaceId}
+                />
               }
             >
               <SidebarNav

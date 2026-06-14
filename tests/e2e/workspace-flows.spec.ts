@@ -79,22 +79,19 @@ async function gotoAuthed(page: Page, path: string): Promise<void> {
   }
 }
 
-// Open the switcher's "Create workspace" modal, type a name, submit, and
-// wait for the switcher trigger to show the new name.
+// Create a named workspace under the active org via the always-present org
+// control's "New workspace" entry, and wait for the switcher to show the new
+// name. Story 6.10.5 progressive disclosure hides the workspace switcher at one
+// workspace, so the create entry lives in the org menu (the org control is the
+// create path at any workspace count); creating a 2nd workspace reveals the
+// switcher.
 async function createWorkspace(page: Page, name: string): Promise<void> {
-  // Empty state renders a "Create workspace" button directly; with
-  // existing workspaces it's inside the open popover. Handle both.
-  const directCreate = page.getByRole('button', { name: 'Create workspace' });
-  if (await directCreate.isVisible().catch(() => false)) {
-    await directCreate.click();
-  } else {
-    await page.getByRole('button', { name: 'Switch workspace' }).click();
-    await page.getByRole('button', { name: 'Create workspace' }).click();
-  }
+  await page.getByRole('button', { name: 'Organization menu' }).click();
+  await page.getByRole('button', { name: /New workspace/ }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Workspace name').fill(name);
-  await dialog.getByRole('button', { name: 'Create', exact: true }).click();
-  // Switcher trigger now shows the created workspace.
+  await dialog.getByRole('button', { name: 'New workspace', exact: true }).click();
+  // Switcher (now revealed at ≥2 workspaces) shows the created workspace.
   await expect(page.getByRole('button', { name: 'Switch workspace' })).toContainText(name);
 }
 
@@ -155,12 +152,13 @@ test('@smoke workspace lifecycle: create, rename, invite, accept, switch, leave,
   await inviteePage.getByRole('button', { name: 'Accept invite' }).click();
   await inviteePage.waitForURL('**/dashboard');
 
-  // Accepting switches the active workspace to the joined one, so the
-  // switcher trigger now shows "Acme Renamed" (the invitee also still has
-  // their own auto-created workspace, listed in the popover).
-  await expect(inviteePage.getByRole('button', { name: 'Switch workspace' })).toContainText(
-    'Acme Renamed',
-  );
+  // Accepting switches the active workspace to the joined one. The invitee now
+  // belongs to two orgs (their own + the owner's) with ONE workspace in each,
+  // so the workspace switcher is hidden in both (Story 6.10.5 progressive
+  // disclosure reveals it only at ≥2 workspaces in the active org). Confirm the
+  // join switched the active workspace via the workspace-settings name field.
+  await gotoAuthed(inviteePage, '/settings/workspace');
+  await expect(inviteePage.getByLabel('Workspace name')).toHaveValue('Acme Renamed');
 
   // ─── Owner now sees the invitee in the members list ───
   await gotoAuthed(page, '/settings/workspace');
@@ -186,18 +184,18 @@ test('@smoke workspace lifecycle: create, rename, invite, accept, switch, leave,
 
   // ─── Invitee leaves "Acme Renamed" ───
   // Ensure "Acme Renamed" is the invitee's active workspace before leaving
-  // (accept switched to it; nothing has changed it since).
+  // (accept switched to it; nothing has changed it since). Single workspace in
+  // that org → switcher hidden, so verify via the settings name field.
   await gotoAuthed(inviteePage, '/settings/workspace');
-  await expect(inviteePage.getByRole('button', { name: 'Switch workspace' })).toContainText(
-    'Acme Renamed',
-  );
+  await expect(inviteePage.getByLabel('Workspace name')).toHaveValue('Acme Renamed');
   await inviteePage.getByRole('button', { name: 'Leave' }).click();
   // The invitee still has their own auto-created workspace, so leaving
   // falls back to it (not an empty state) and redirects to the dashboard.
+  // That sole workspace lives in their own org → switcher hidden, so confirm
+  // the fallback via the settings name field.
   await inviteePage.waitForURL('**/dashboard');
-  await expect(inviteePage.getByRole('button', { name: 'Switch workspace' })).toContainText(
-    "e2e-ws-invitee's Workspace",
-  );
+  await gotoAuthed(inviteePage, '/settings/workspace');
+  await expect(inviteePage.getByLabel('Workspace name')).toHaveValue("e2e-ws-invitee's Workspace");
 
   // Owner's members list is back to just themselves.
   await gotoAuthed(page, '/settings/workspace');
