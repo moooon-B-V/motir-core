@@ -240,6 +240,14 @@ export const commentsService = {
       // Story 5.7's opt-out preference will live inside the hook, not here.
       await watchersService.autoWatch(gate.item.id, ctx.userId, tx);
 
+      // Triage snooze-return (Story 6.11 · Subtask 6.11.5, ADR §5): new activity
+      // returns a SNOOZED triage item to the active queue ("a comment / edit
+      // clears `snoozedUntil`"). Only fires when the item is actually snoozed —
+      // a no-op for every ordinary comment.
+      if (gate.item.snoozedUntil) {
+        await workItemRepository.update(gate.item.id, { snoozedUntil: null }, tx);
+      }
+
       return { row: created, storedMentionIds: stored };
     });
 
