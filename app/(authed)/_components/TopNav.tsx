@@ -2,6 +2,7 @@ import { getTranslations } from 'next-intl/server';
 import { ShellTierNav } from './ShellTierNav';
 import { UserMenu } from './UserMenu';
 import { ThemeToggle } from './ThemeToggle';
+import { NotificationBell } from './NotificationBell';
 import { CommandPaletteTrigger } from './CommandPaletteTrigger';
 import { CreateIssueButton } from './CreateIssueButton';
 import { SidebarToggle } from '@/components/ui/SidebarToggle';
@@ -15,7 +16,8 @@ import type { OrgControlActiveOrg } from './OrgControl';
 // always shown, then the workspace switcher only at ≥2 workspaces — Story
 // 6.10.5 progressive disclosure, in ShellTierNav). Right cluster: the cmd-K
 // "Search" trigger + the tri-state theme toggle (both wired in Subtask 1.5.4) +
-// the user menu.
+// the notification bell (Subtask 5.7.5, per-workspace — only when a workspace
+// is active) + the user menu.
 //
 // The project switcher MOVED to the sidebar header in Subtask 1.5.3 — the
 // "Story 1.5 will move project nav into a left sidebar" promise from the
@@ -29,6 +31,10 @@ export interface TopNavProps {
   workspaces: WorkspaceSummaryDTO[];
   activeWorkspaceId: string | null;
   user: { name: string; email: string };
+  /** The session user's unread notification count for the active workspace —
+   * the bell's initial badge value (resolved once in the layout, then polled by
+   * the client). Null when there's no active workspace (the bell is hidden). */
+  initialUnreadCount: number | null;
 }
 
 export async function TopNav({
@@ -37,6 +43,7 @@ export async function TopNav({
   workspaces,
   activeWorkspaceId,
   user,
+  initialUnreadCount,
 }: TopNavProps) {
   const t = await getTranslations('shell');
   return (
@@ -66,6 +73,9 @@ export async function TopNav({
           <CreateIssueButton />
           <CommandPaletteTrigger />
           <ThemeToggle />
+          {initialUnreadCount !== null ? (
+            <NotificationBell initialUnreadCount={initialUnreadCount} />
+          ) : null}
           <UserMenu name={user.name} email={user.email} />
         </div>
       </nav>

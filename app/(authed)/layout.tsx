@@ -9,6 +9,7 @@ import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { notificationsService } from '@/lib/services/notificationsService';
 import { toWorkspaceSummaryDTO } from '@/lib/mappers/workspaceMappers';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AppLayout } from '@/components/ui/AppLayout';
@@ -110,6 +111,20 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
 
   const activeWorkspaceId = ctx?.workspaceId ?? null;
 
+  // The notification bell's initial unread badge (Subtask 5.7.5) — the cheap
+  // partial-index aggregate (5.7.4 getUnreadCount), resolved once here and
+  // threaded into TopNav so the badge paints without a client round-trip; the
+  // bell then polls + refreshes on navigation. Null when there's no active
+  // workspace (the per-workspace bell is hidden).
+  const initialUnreadCount = ctx
+    ? (
+        await notificationsService.getUnreadCount({
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        })
+      ).unreadCount
+    : null;
+
   // The "Ready" nav badge's readiness count (Subtask 7.0.6) — resolved ONCE
   // here and threaded into both the rail and the drawer SidebarNav, so the badge
   // never double-fetches. Bounded count (see workItemsService.countReady); null
@@ -140,6 +155,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                   workspaces={workspaces}
                   activeWorkspaceId={activeWorkspaceId}
                   user={{ name: session.user.name, email: session.user.email }}
+                  initialUnreadCount={initialUnreadCount}
                 />
               }
               sidebar={

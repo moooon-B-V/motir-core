@@ -624,7 +624,7 @@ export const story_6_10: PlanStory = {
       id: '6.10.5',
       title:
         'Org admin UI — org settings, cross-workspace member management, the org switcher in the shell',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 70,
@@ -763,7 +763,7 @@ export const story_6_10: PlanStory = {
     {
       id: '6.10.7',
       title: 'Vitest — org model + membership gating + backfill',
-      status: 'planned',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 50,

@@ -654,23 +654,23 @@ enum PointScale {
 /// only via `archivedAt` — work-item history must survive (the Project
 /// pattern). RLS on this table lands in Subtask 1.4.5, not here.
 model WorkItem {
-  id                String                    @id @default(cuid())
-  workspaceId       String
-  projectId         String
-  parentId          String?
-  kind              WorkItemKind
-  key               Int
-  identifier        String // "PROD-42" — denormalized from project.identifier + key for search/index efficiency
-  title             String
-  descriptionMd     String?                   @db.Text // "what to do" — Markdown source
-  explanationMd     String?                   @db.Text // "why this matters" — distinct from description; mostly AI-drafted, user-owned
-  explanationSource WorkItemExplanationSource @default(user_authored)
-  status            String                    @default("open")
-  priority          WorkItemPriority          @default(medium)
-  assigneeId        String?
-  reporterId        String
-  dueDate           DateTime?
-  estimateMinutes   Int?
+  id                     String                    @id @default(cuid())
+  workspaceId            String
+  projectId              String
+  parentId               String?
+  kind                   WorkItemKind
+  key                    Int
+  identifier             String // "PROD-42" — denormalized from project.identifier + key for search/index efficiency
+  title                  String
+  descriptionMd          String?                   @db.Text // "what to do" — Markdown source
+  explanationMd          String?                   @db.Text // "why this matters" — distinct from description; mostly AI-drafted, user-owned
+  explanationSource      WorkItemExplanationSource @default(user_authored)
+  status                 String                    @default("open")
+  priority               WorkItemPriority          @default(medium)
+  assigneeId             String?
+  reporterId             String
+  dueDate                DateTime?
+  estimateMinutes        Int?
   // Work-item TYPE + EXECUTOR (Story 2.7 · Subtask 2.7.3) — the nature of the
   // executable work (`code` / `design` / `decision` / …) and WHO does it
   // (`coding_agent` | `human`). Both NULLABLE and DISTINCT from `kind`: only
@@ -683,8 +683,8 @@ model WorkItem {
   // overridable. The split exists for the Epic-7 AI dispatch layer (route by
   // `type` → prompt template; by `executor` → agent-dispatch vs human-assign);
   // see docs/decisions/work-item-type-taxonomy.md (the 2.7.2 ADR).
-  type              WorkItemType?
-  executor          Executor?
+  type                   WorkItemType?
+  executor               Executor?
   // The agile STORY-POINT estimate (Story 4.3) — SEPARATE from the `estimateMinutes`
   // TIME estimate above; both columns coexist and the project's `estimationStatistic`
   // config picks which one is THE planning estimate the surfaces display + roll up.
@@ -694,8 +694,8 @@ model WorkItem {
   // NULL = unestimated (contributes 0 to a roll-up). camelCase with NO `@map`, matching
   // this table's existing columns (the same within-table-consistency call recorded for
   // `sprintId` / `backlogRank` — decision-authority rung 2 > the card's `@map` prose).
-  storyPoints       Decimal?                  @db.Decimal(6, 2)
-  position          String                    @db.Text
+  storyPoints            Decimal?                  @db.Decimal(6, 2)
+  position               String                    @db.Text
   // Agile association + backlog rank (Story 4.1). `sprintId` is the issue's
   // sprint (NULL = in the backlog); `onDelete: SetNull` so deleting/clearing a
   // sprint never deletes its issues (they fall back to the backlog). `backlogRank`
@@ -706,11 +706,33 @@ model WorkItem {
   // stay camelCase to match this table's existing columns (the `board` table is
   // snake_case-mapped, but `work_item`'s 20 existing columns are not — within-table
   // consistency wins, decision-authority rung 2 > the card's `@map` prose).
-  sprintId          String?
-  backlogRank       String?                   @db.Text
-  archivedAt        DateTime?
-  createdAt         DateTime                  @default(now())
-  updatedAt         DateTime                  @updatedAt
+  sprintId               String?
+  backlogRank            String?                   @db.Text
+  archivedAt             DateTime?
+  // Triage marker (Story 6.11 · Subtask 6.11.3, per docs/decisions/triage-model.md
+  // §1). NON-NULL ⇔ the item lives in the triage inbox and has NOT graduated to
+  // the planned tree; NULL ⇔ a normal, graduated (or never-triage) item. Set at
+  // intake (6.11.4), cleared ONLY by accept/promote (6.11.5). A DEDICATED column
+  // (not a reserved `status` value) keeps the triage gate ORTHOGONAL to the
+  // workflow status, so a triage item carries a real status (`todo`, or
+  // `cancelled` once declined/merged) the whole time — the exclusion predicate is
+  // the single, total `triagedAt IS NULL`. `DateTime?` (not a boolean) gives the
+  // queue read newest-first ordering + an age display for free.
+  triagedAt              DateTime?
+  // Snooze (6.11.5): a triage item drops out of the ACTIVE queue until this time
+  // OR new activity, whichever first. Does NOT affect the normal-read exclusion —
+  // a snoozed item is still `triagedAt`-marked, so still hidden from every tree /
+  // board / list / ready / search read.
+  snoozedUntil           DateTime?
+  // External-portal submitter identity (6.11.4 · ADR §3) — captured for an
+  // UNAUTHENTICATED public-form submission (no `User` row, no tenant access); NULL
+  // for an in-app member submission (whose `reporter` IS the submitter).
+  // `externalSubmitterEmail IS NOT NULL` is the derived "external submission"
+  // predicate, so no redundant `submittedByUserId` is stored (ADR §3).
+  externalSubmitterName  String?
+  externalSubmitterEmail String?
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
 
   workspace            Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project              Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -767,6 +789,14 @@ model WorkItem {
   // Serves BOTH the backlog read (`sprintId IS NULL`, `backlogRank` order) and a
   // sprint's ranked issues (`sprintId = ?`, `backlogRank` order) off one composite.
   @@index([projectId, sprintId, backlogRank])
+  // Triage queue read + the read-exclusion predicate (Subtask 6.11.3): the queue
+  // read (`triagedAt IS NOT NULL`, newest-first) and every normal read's
+  // `triagedAt IS NULL` exclusion both ride this composite. (The ADR notes a
+  // PARTIAL index `WHERE triagedAt IS NOT NULL` would be tighter, but Prisma can't
+  // express a partial index without `migrate dev` re-proposing a DROP every run —
+  // the migrate-dev-no-drift contract, CLAUDE.md, outranks that preference; the
+  // triage staging set is small, so a plain composite stays cheap.)
+  @@index([projectId, triagedAt])
   // pg_trgm GIN over the free-text contains-match columns (Story 6.1 · 6.1.1,
   // finding #57): the filter builder's `text contains` compiles to ILIKE over
   // title + description, which must not table-scan at 10k issues. A multicolumn

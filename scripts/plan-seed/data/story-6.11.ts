@@ -305,7 +305,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.3',
       title: 'Schema + the read-exclusion-everywhere invariant',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 70,
@@ -360,7 +360,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.4',
       title: 'Submission intake — in-app submit + the rate-limited public portal form',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 65,
@@ -413,7 +413,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.5',
       title: 'Triage actions service — accept / promote / decline / mark-duplicate-merge / snooze',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 70,

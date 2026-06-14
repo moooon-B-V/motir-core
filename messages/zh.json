@@ -2426,6 +2426,40 @@
     "assigned": "已分配",
     "unassigned": "未分配"
   },
+  "notifications": {
+    "bellAria": "{count, plural, =0 {通知，无未读} other {通知，# 条未读}}",
+    "title": "通知",
+    "filterLabel": "筛选通知",
+    "tabs": {
+      "direct": "直接相关",
+      "watching": "关注"
+    },
+    "watchingDisabledTooltip": "关注——将在工作项关注功能上线后可用",
+    "options": "通知选项",
+    "markAllRead": "全部标为已读",
+    "settings": "通知设置",
+    "showMore": "显示更多",
+    "showMoreCount": "显示更多（{count} 条更早）",
+    "markRead": "标为已读",
+    "empty": {
+      "title": "你已全部看完",
+      "body": "暂无通知。提及、评论和指派会显示在这里。"
+    },
+    "error": {
+      "title": "无法加载通知",
+      "body": "获取通知时出现问题。",
+      "retry": "重试"
+    },
+    "actorFallback": "某人",
+    "summary": {
+      "mentioned": "<s>{actor}</s> 在 <s>{key}</s> 中提到了你",
+      "commented": "<s>{actor}</s> 评论了 <s>{key}</s>",
+      "assigned": "<s>{actor}</s> 将 <s>{key}</s> 指派给你",
+      "transitioned": "<s>{actor}</s> 将 <s>{key}</s> 移动到 {status}",
+      "generic": "<s>{actor}</s> 更新了 <s>{key}</s>",
+      "genericNoKey": "<s>{actor}</s> 给你发送了一条通知"
+    }
+  },
   "orgAdmin": {
     "menu": {
       "ariaLabel": "组织菜单",
