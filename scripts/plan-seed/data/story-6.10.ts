@@ -763,7 +763,7 @@ export const story_6_10: PlanStory = {
     {
       id: '6.10.7',
       title: 'Vitest — org model + membership gating + backfill',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 50,
