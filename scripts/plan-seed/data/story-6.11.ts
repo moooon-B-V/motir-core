@@ -595,7 +595,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.8',
       title: 'Tests (vitest) — read-exclusion everywhere + promote/decline/dedupe/snooze',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 60,
