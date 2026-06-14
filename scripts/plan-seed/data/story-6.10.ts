@@ -162,9 +162,22 @@ export const story_6_10: PlanStory = {
     'every-workspace→a-default-org (6.10.3); the org-scoped services + access ' +
     'gating (6.10.4); the org admin UI — settings + cross-workspace members + ' +
     'the shell org switcher (6.10.5); the seed loader modelling the `moooon` ' +
-    'org (6.10.6); vitest (6.10.7); e2e (6.10.8); copy-on-create config clone ' +
-    'for new workspaces (6.10.9); the create-workspace flow design — the ' +
-    'dialog + copy-source picker + the tier-2 first-reveal (6.10.10).\n\n' +
+    'org (6.10.6); vitest (6.10.7); e2e (6.10.8); the create-workspace flow ' +
+    'design — the dialog + the tier-2 first-reveal (6.10.10).\n\n' +
+    '**CANCELLED — copy-on-create config clone (6.10.9), Yue 2026-06-14.** The ' +
+    'plan assumed org/workspace-level settings that a new workspace would ' +
+    'inherit, but the shipped schema keys all of that config — workflow ' +
+    'statuses, boards, custom fields, labels, components, automation rules, ' +
+    'saved filters — to the **project**, not the workspace (only dashboards are ' +
+    'workspace-scoped), and a fresh workspace has no project. So there is no ' +
+    'workspace-level config to clone. Decision (Path B, Yue): a new workspace ' +
+    'just starts with its OWN fresh defaults — intentionally different custom ' +
+    'fields / components / workflow per workspace — and config is NOT copied ' +
+    'automatically. The shipped 6.10.5 create flow is already name-only (no ' +
+    'copy), so this needs no code change. Any future "open pre-configured" UX ' +
+    'belongs at PROJECT create (copy settings from an existing project, Jira’s ' +
+    'shape), not here. 6.10.9 is kept as a `cancelled` tombstone; the 6.10.10 ' +
+    'design’s copy-source-picker panels are superseded (not built).\n\n' +
     '**Out of scope (named so they land in their owning story, not here):** ' +
     'the customer org usage/credit DISPLAY (**7.12.5** — a forward story; ' +
     'wiring it here would be a forward dep, forbidden); the Motir-internal ' +
@@ -878,11 +891,32 @@ export const story_6_10: PlanStory = {
       id: '6.10.9',
       title:
         'Copy-on-create — seed a new workspace’s config from the source workspace (the "looks-inherited" behaviour)',
-      status: 'planned',
+      status: 'cancelled',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 75,
       descriptionMd:
+        '> **❌ CANCELLED (Yue, 2026-06-14) — will NOT be built. Kept as a ' +
+        'tombstone for traceability.** This card assumed config lives at the ' +
+        'org/workspace level and a new workspace would inherit it. The shipped ' +
+        'schema disagrees: workflow statuses, boards, custom fields, labels, ' +
+        'components, automation rules and saved filters are all **`projectId`-' +
+        'scoped** (only dashboards are workspace-scoped), seeded per-project at ' +
+        'project-create from hardcoded defaults — and a freshly-created ' +
+        'workspace has **no project**, so there is nothing workspace-level to ' +
+        'clone. Decision (**Path B**, Yue): a new workspace simply starts with ' +
+        'its **own fresh defaults** — different custom fields / components / ' +
+        'workflow per workspace is desirable, not a bug — and config is **not ' +
+        'copied automatically**. The shipped 6.10.5 create flow ' +
+        '(`createWorkspaceAction` → name-only `workspacesService.createWorkspace`) ' +
+        'already does exactly this, so the cancellation requires **no code ' +
+        'change**. If an "open pre-configured" experience is ever wanted, it ' +
+        'belongs at **PROJECT** create (copy settings from an existing project — ' +
+        'Jira’s actual shape, the cited mirror), as a future enhancement, NOT ' +
+        'here. The 6.10.10 design’s copy-source-picker / "what gets copied" ' +
+        'panels are **superseded** by this decision (the dialog stays ' +
+        'name-only). Original spec below, retained for the record.\n\n' +
+        '---\n\n' +
         'Make a newly-created workspace open **already configured like the ' +
         'workspace it was created from**, so multi-workspace *looks* inherited — ' +
         'WITHOUT any data-inheritance layer (6.10.2 §6e). When a user creates a ' +

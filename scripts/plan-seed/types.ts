@@ -12,7 +12,7 @@
  */
 
 /**
- * Plan-level status — the four states a plan card carries.
+ * Plan-level status — the states a plan card carries.
  *
  * `blocked` is set at expansion time when a freshly-planned subtask has at
  * least one `dependsOn` entry whose own status is NOT yet `done` (the
@@ -21,8 +21,15 @@
  * (category `'todo'`, with allowed transitions `todo ↔ blocked` and
  * `in_progress ↔ blocked`). When every blocker reaches `done`, flip the
  * status to `planned` so the subtask enters the ready set.
+ *
+ * `cancelled` is the terminal "planned-but-won't-build" state — a card kept as
+ * a tombstone (history + traceability) instead of deleted, when a re-plan drops
+ * the work. It maps onto the runtime `workflow_status.key = 'cancelled'` row
+ * (category `'done'`, the terminal admin-added status in `defaultWorkflow.ts`),
+ * so the board shows it in the Cancelled column. A cancelled card is NEVER in
+ * the ready set and is not drawn into a demo sprint.
  */
-export type PlanStatus = 'planned' | 'blocked' | 'in_progress' | 'done';
+export type PlanStatus = 'planned' | 'blocked' | 'in_progress' | 'done' | 'cancelled';
 
 /** Work-item kind a plan LEAF maps to (epics/stories get their kind implicitly). */
 export type PlanLeafKind = 'subtask' | 'bug' | 'task';
@@ -88,6 +95,7 @@ export const PLAN_STATUS_MAP: Record<PlanStatus, string> = {
   blocked: 'blocked',
   in_progress: 'in_progress',
   done: 'done',
+  cancelled: 'cancelled',
 };
 
 /** The epic a dotted id belongs to: "1.0.5" → "1", "2.5" → "2". */
