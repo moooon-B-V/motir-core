@@ -687,7 +687,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.5',
       title:
         'Public submit-to-triage for any account + DUPLICATE DETECTION (surface the existing request to upvote)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
