@@ -2703,7 +2703,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Sprint report on a COMPLETED sprint reads CURRENT membership for the "Issues not completed" list/count — so after carry-over moves the unfinished items out, the report shows 0 (Jira freezes the at-completion snapshot)',
-        status: 'planned',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
