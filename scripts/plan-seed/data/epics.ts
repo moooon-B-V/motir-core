@@ -3003,6 +3003,56 @@ export const EPICS: EpicMeta[] = [
           '`<Modal>` consumer with synthetic long content + asserts no clipping. Not in scope ' +
           'for this bug; the rule of three is the trigger for the refactor pass.',
       },
+      {
+        id: 'bug-sprint-report-burndown-missing-chart-sub',
+        kind: 'bug',
+        title:
+          'Sprint report: the burndown chart is missing its chart-sub meta line (the 4.6.1 design specifies one), so the side-by-side burndown + velocity charts misalign vertically',
+        status: 'in_progress',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** the sprint-report analytics row ' +
+          '(`app/(authed)/backlog/_components/SprintReport.tsx`, Subtask 4.4.6) rendering the ' +
+          'burndown (`app/(authed)/backlog/_components/BurndownChart.tsx`, Subtask 4.6.5) beside ' +
+          'the velocity chart (`app/(authed)/backlog/_components/VelocityChart.tsx`, Subtask ' +
+          '4.6.6) · **Code surface owned by:** Story 4.6 (iteration-measurement charts) · ' +
+          '**Status:** open · **Reported by:** Yue.\n\n' +
+          'On the sprint report the two analytics charts are laid out **side by side** (the 4.4.6 ' +
+          'seam, `design/reports/charts.mock.html` panel 5). `VelocityChart` renders a muted ' +
+          '**chart-sub** meta line under its title (`Last N completed sprints · avg completed X`), ' +
+          'but `BurndownChart` renders **none** — so the burndown’s plot starts one text-line ' +
+          'HIGHER than the velocity’s, and the two charts misalign vertically. The 4.6.1 design ' +
+          'specifies a burndown chart-sub: `charts.mock.html` panel 1 draws ' +
+          '`Jun 2 → Jun 14 · completed · 42 pts committed`, and `design/reports/design-notes.md` ' +
+          'states each chart card "sits in a Card with a serif title + a muted sub-line." The ' +
+          'velocity sub-line shipped (4.6.6) but the burndown one (4.6.5) was missed.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open the `moooon` / `motir` ' +
+          'project, navigate to a COMPLETED sprint’s report (`/sprints/<id>/report`, the standalone ' +
+          'page that feeds BOTH charts server-side so they render together). Observe that the ' +
+          'velocity column has a muted sub-line between its title and its plot while the burndown ' +
+          'column jumps straight from title to plot — the two plot frames do not line up.\n\n' +
+          '**Root cause (high confidence — single missing element).** `VelocityChart` renders ' +
+          '`<span className="text-xs text-(--el-text-muted)">{window · average}</span>` as its ' +
+          'first child; `BurndownChart` returns `<div className="flex flex-col gap-1"><LineChart … />` ' +
+          'with no equivalent sub-line. All the data panel 1 needs is already on ' +
+          '`BurndownSeriesDto` (`startDate` / `endDate` / `state` / `committed`), so this is a ' +
+          'pure presentational miss — no DTO / service / read change.\n\n' +
+          '**Fix (shipped — PR #1035).** Render the chart-sub line in `BurndownChart`’s `full` ' +
+          'variant — `window · state · committed` — mirroring the velocity sub-line’s ' +
+          '`text-xs text-(--el-text-muted)` treatment, and align the full-variant wrapper gap ' +
+          '(`gap-1` → `gap-2`) to the velocity section’s so the plots line up. The `compact` ' +
+          '(scrum-header) form is untouched — its slot carries its own `Sprint N · day X of Y` ' +
+          'line (panel 2), so the sub-line is gated on `full`. Window is month+day (no year) per ' +
+          'the design; the report’s top meta line already carries the year-qualified window. New ' +
+          'i18n keys `burndownSubState` / `burndownSubPoints` / `burndownSubIssues` (committed ' +
+          'phrase is statistic-aware) added to en + zh.\n\n' +
+          '**Class.** A design-spec element that one of two sibling charts implemented and the ' +
+          'other dropped — the asymmetry is the tell (same family as ' +
+          '`bug-sprint-report-modal-clipped-burndown`, where the success-state modal dropped the ' +
+          '`Modal.Body` seam its sibling form-state used). When two surfaces share a design ' +
+          'pattern, a per-surface render review catches the one that skipped it.',
+      },
     ],
   },
   {
