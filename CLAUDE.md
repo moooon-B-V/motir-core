@@ -615,6 +615,18 @@ shape (`bug-e2e-suite-flaky-specs`; the lesson is `notes.html` mistake #37).
 - **Conventional Commits** for commit messages. Type prefixes used so far:
   `feat`, `fix`, `chore`. Scope is the affected area (e.g.
   `feat(workspaces): ...`).
+- **Commit authorship — Yue's GitHub account ONLY; never a `Co-Authored-By`
+  trailer.** Every commit MUST be authored as **`Zhu Yue <zhuyue11@gmail.com>`**
+  (the GitHub account), and the commit message MUST NOT contain a
+  `Co-Authored-By: …` line — in particular never an
+  `…@anthropic.com` / Claude co-author. This repo runs a **`license/cla`** check
+  (cla-assistant) that **fails the PR if any commit author OR co-author is not a
+  CLA signatory**; the Claude co-author and any non-Yue author identity
+  (`zhuyue@motir.co`, `Motir Planner`, `info@moooon.net`) are not signatories, so
+  they block the PR (hit on PR #978). Commit with
+  `git -c user.name="Zhu Yue" -c user.email="zhuyue11@gmail.com" commit --author="Zhu Yue <zhuyue11@gmail.com>" -m "…"`.
+  If a CLA check is already red on a pushed branch, `reset --soft origin/main`,
+  re-commit with the correct author and no trailer, and `push --force-with-lease`.
 - **Migrations — every foreign key MUST be modelled as a Prisma `@relation`,
   never hand-managed in raw migration SQL alone.** A column whose FK is created
   in raw SQL (e.g. `ADD CONSTRAINT ... FOREIGN KEY`) but left as a plain scalar
