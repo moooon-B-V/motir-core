@@ -8,6 +8,7 @@ import { notificationPreferencesService } from '@/lib/services/notificationPrefe
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { mentionExcerpt } from '@/lib/mentions/excerpt';
 import type { WorkItemCommentCreatedData, WorkItemMentionedData } from '@/lib/jobs/types';
+import type { NotificationData } from '@/lib/dto/notifications';
 
 // In-app notification fan-in (Story 5.7 · Subtask 5.7.3). The business logic
 // behind the notificationFanIn jobs (lib/jobs/definitions/notificationFanIn.ts),
@@ -63,23 +64,13 @@ import type { WorkItemCommentCreatedData, WorkItemMentionedData } from '@/lib/jo
 /**
  * The denormalized render payload stored on each `Notification.data` (Json) so
  * the 5.7.4 feed read is a single-table scan (no join storm — the 5.7.2 schema
- * decision). `kind` discriminates the row renderer the 5.7.5 drawer picks.
- *
- * 5.7.3 emits only the `mentioned` shape; a later `transitioned` descriptor
- * (5.4) adds its own arm (from/to status) under the same union — the data
- * shape grows with the registry, no migration.
+ * decision) lives in `@/lib/dto/notifications` (`NotificationData`) — the SINGLE
+ * source-of-truth contract shared by this WRITER and the read mapper, so the two
+ * ends cannot drift again (Subtask 5.7.9; the producer once stored
+ * `workItemKey` / `workItemTitle` while the DTO read `issueKey` / `title`).
+ * `kind` discriminates the row renderer the 5.7.5 drawer picks; 5.7.3 emits only
+ * the `mentioned` arm, the `transitioned` arm is the documented 5.4 slot.
  */
-export type NotificationData = {
-  kind: 'mentioned';
-  /** Which surface mentioned them — picks the row copy in the drawer. */
-  source: 'comment' | 'description';
-  /** The issue key for the deep-link + summary (e.g. `PROD-42`). */
-  workItemKey: string;
-  /** The issue title for the summary line. */
-  workItemTitle: string;
-  /** Plain-text excerpt (mention tokens as @Name), or null when empty. */
-  excerpt: string | null;
-};
 
 /** The minimal event envelope the pipeline needs before dispatching to a
  * descriptor; the descriptor re-narrows to its specific payload. Every
@@ -127,8 +118,8 @@ function buildMentionData(
   return {
     kind: 'mentioned',
     source,
-    workItemKey: item.identifier,
-    workItemTitle: item.title,
+    issueKey: item.identifier,
+    title: item.title,
     excerpt,
   };
 }

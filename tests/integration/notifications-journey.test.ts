@@ -4,9 +4,9 @@ import { db } from '@/lib/db';
 import {
   notificationFanInService,
   NOTIFICATION_FAN_IN_REGISTRY,
-  type NotificationData,
   type NotificationFanInRegistry,
 } from '@/lib/services/notificationFanInService';
+import type { NotificationData } from '@/lib/dto/notifications';
 import { notificationsService } from '@/lib/services/notificationsService';
 import { notificationPreferencesService } from '@/lib/services/notificationPreferencesService';
 import { mentionNotificationsService } from '@/lib/services/mentionNotificationsService';
@@ -163,27 +163,29 @@ describe('a real comment mention is fanned in and read back through the feed (5.
     expect(row.actor).toEqual({ id: j.fx.ownerId, name: 'Owner', image: null });
 
     // The denormalized payload the fan-in (5.7.3) stored — asserted on the raw
-    // row (the producer truth) so the writer→reader tie is exact.
+    // row (the producer truth) so the writer→reader tie is exact. After Subtask
+    // 5.7.9 the producer writes the SHARED `@/lib/dto/notifications`
+    // `NotificationData` keys (`issueKey` / `title`), not the old
+    // `workItemKey` / `workItemTitle`.
     const raw = await db.notification.findFirstOrThrow({ where: { recipientUserId: j.bo.id } });
     const stored = raw.data as unknown as NotificationData;
     expect(stored.kind).toBe('mentioned');
+    if (stored.kind !== 'mentioned') throw new Error('expected a mentioned payload');
     expect(stored.source).toBe('comment');
-    expect(stored.workItemKey).toBe(j.issueIdentifier);
-    expect(stored.workItemTitle).toBe(j.issueTitle);
+    expect(stored.issueKey).toBe(j.issueIdentifier);
+    expect(stored.title).toBe(j.issueTitle);
     expect(stored.excerpt).toBe('Heads up @Bo Philips — please review.');
 
-    // ⚠️ FINDING (pre-existing 5.7.3↔5.7.4 contract mismatch — logged as a bug,
-    // surfaced in the PR body, NOT fixed in this test subtask): the fan-in
-    // writes the payload under `kind` / `source` / `workItemKey` / `workItemTitle`,
-    // but the read API's `NotificationData` DTO (lib/dto/notifications) declares
-    // `issueKey` / `title`, and `toNotificationDto` passes `data` through
-    // UNMAPPED. So a fanned-in row read via the service exposes the producer keys
-    // verbatim — the typed `issueKey` / `title` the future 5.7.5 drawer would
-    // read are `undefined`. This seam test is what surfaces it; the excerpt
-    // (the one field both shapes share) does survive the round-trip.
-    expect(row.data.issueKey).toBeUndefined();
-    expect(row.data.title).toBeUndefined();
-    expect(row.data.excerpt).toBe('Heads up @Bo Philips — please review.');
+    // 5.7.9 regression guard (the seam this story's bug lived in): a fanned-in
+    // row read back through the DTO now exposes the deep-link key + title the
+    // 5.7.5 drawer reads — the producer and the read mapper share ONE
+    // `NotificationData` contract, so the keys round-trip instead of coming back
+    // `undefined` from a blind `as` cast.
+    expect(row.data.issueKey).toBe(j.issueIdentifier);
+    expect(row.data.title).toBe(j.issueTitle);
+    if (row.data.kind === 'mentioned') {
+      expect(row.data.excerpt).toBe('Heads up @Bo Philips — please review.');
+    }
 
     // The author never has a row about their own mention — self-exclusion, all
     // the way through to their feed read.
@@ -361,8 +363,8 @@ async function seedRow(
           data: {
             kind: 'mentioned',
             source: 'comment',
-            workItemKey: j.issueIdentifier,
-            workItemTitle: j.issueTitle,
+            issueKey: j.issueIdentifier,
+            title: j.issueTitle,
             excerpt: null,
           } as Prisma.InputJsonValue,
           dedupeKey: opts.dedupeKey,
@@ -502,8 +504,8 @@ describe('a synthetic watching-category event fans in and surfaces under the Wat
             data: {
               kind: 'mentioned',
               source: 'description',
-              workItemKey: j.issueIdentifier,
-              workItemTitle: j.issueTitle,
+              issueKey: j.issueIdentifier,
+              title: j.issueTitle,
               excerpt: null,
             } satisfies NotificationData,
           };
