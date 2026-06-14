@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import {
   notificationFanInOnCommentCreated,
   notificationFanInOnWorkItemMentioned,
+  notificationFanInOnTransitioned,
 } from '@/lib/jobs/definitions/notificationFanIn';
 import { jobFunctions } from '@/lib/jobs/registry';
 import {
@@ -17,11 +18,16 @@ import { notificationPreferencesService } from '@/lib/services/notificationPrefe
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { commentsService } from '@/lib/services/commentsService';
+import { watchersService } from '@/lib/services/watchersService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import type { WorkItemCommentCreatedData, WorkItemMentionedData } from '@/lib/jobs/types';
+import type {
+  WorkItemCommentCreatedData,
+  WorkItemMentionedData,
+  WorkItemTransitionedData,
+} from '@/lib/jobs/types';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
@@ -416,9 +422,10 @@ describe('notificationFanInService.fanIn — registry extensibility (the 5.4/6.6
 });
 
 describe('notificationFanIn jobs — in-process runs', () => {
-  it('registers both consumers in the job registry', () => {
+  it('registers all three consumers in the job registry', () => {
     expect(jobFunctions).toContain(notificationFanInOnCommentCreated);
     expect(jobFunctions).toContain(notificationFanInOnWorkItemMentioned);
+    expect(jobFunctions).toContain(notificationFanInOnTransitioned);
   });
 
   it('drives the comment-created event end-to-end: rows written, job_run recorded', async () => {
@@ -470,5 +477,39 @@ describe('notificationFanIn jobs — in-process runs', () => {
 
     expect(result).toEqual({ writtenUserIds: [s.member.id] });
     expect(await notificationsFor(s.member.id)).toHaveLength(1);
+  });
+
+  it('drives the transitioned event end-to-end: a watching row for each watcher, job_run recorded (5.7.10)', async () => {
+    const s = await buildScenario();
+    // The member watches the issue; the actor (owner) is excluded by the core.
+    await watchersService.watch(s.issueId, { userId: s.member.id, workspaceId: s.fx.workspaceId });
+
+    const data: WorkItemTransitionedData = {
+      workspaceId: s.fx.workspaceId,
+      workItemId: s.issueId,
+      actorId: s.fx.ownerId,
+      fromStatusKey: 'todo',
+      toStatusKey: 'in_progress',
+      revisionId: 'rev-transition-e2e',
+    };
+    const engine = new InngestTestEngine({
+      function: notificationFanInOnTransitioned,
+      events: [{ name: 'work-item/transitioned', data }],
+    });
+    const { result } = await engine.execute();
+
+    expect(result).toEqual({ writtenUserIds: [s.member.id] });
+    const rows = await notificationsFor(s.member.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.type).toBe('transitioned');
+    expect(rows[0]!.category).toBe('watching');
+    expect(rows[0]!.dedupeKey).toBe('transitioned:rev-transition-e2e');
+
+    const runs = await db.jobRun.findMany({
+      where: { functionId: 'notification-fan-in/transitioned' },
+    });
+    expect(runs).toHaveLength(1);
+    expect(runs[0]!.status).toBe('succeeded');
+    expect(runs[0]!.workspaceId).toBe(s.fx.workspaceId);
   });
 });

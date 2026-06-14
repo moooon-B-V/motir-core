@@ -3,11 +3,17 @@ import { db } from '@/lib/db';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { notificationRepository } from '@/lib/repositories/notificationRepository';
+import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { workflowsService } from '@/lib/services/workflowsService';
 import { notificationPreferencesService } from '@/lib/services/notificationPreferencesService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { mentionExcerpt } from '@/lib/mentions/excerpt';
-import type { WorkItemCommentCreatedData, WorkItemMentionedData } from '@/lib/jobs/types';
+import type {
+  WorkItemCommentCreatedData,
+  WorkItemMentionedData,
+  WorkItemTransitionedData,
+} from '@/lib/jobs/types';
 import type { NotificationData } from '@/lib/dto/notifications';
 
 // In-app notification fan-in (Story 5.7 · Subtask 5.7.3). The business logic
@@ -29,13 +35,15 @@ import type { NotificationData } from '@/lib/dto/notifications';
 // to turn its payload into a fan-in plan (the actor, the candidate recipients,
 // the dedupe scope, the denormalized render payload). Story 5.4's
 // `work-item/transitioned` (the `watching` category) and Story 6.6's
-// `work-item/created` + `work-item/field.changed` fan in LATER by ADDING a
-// registry entry — with NO change to this pipeline and NO dependency on
-// 5.4/6.6 here (those stories document 5.7 as their seam). 5.7.3 registers
-// ONLY the SHIPPED 5.1.6 events; an unregistered event name is a clean no-op,
-// never an error. The `registry` parameter on `fanIn` is the injection point
-// the extensibility test drives (a synthetic descriptor produces rows through
-// the same core).
+// `work-item/created` + `work-item/field.changed` fan in by ADDING a registry
+// entry — with NO change to this pipeline. Subtask 5.7.10 did exactly that for
+// Story 5.4's `work-item/transitioned` (the `watching` category): 5.4 shipped
+// its emitter + email fan-out BEFORE 5.7.3 existed, so the in-app entry was
+// added HERE, not in 5.4 — closing the seam that left the drawer's Watching tab
+// empty (notes.html #40). 6.6 adds its events the same way. An unregistered
+// event name is a clean no-op, never an error. The `registry` parameter on
+// `fanIn` is the injection point the extensibility test drives (a synthetic
+// descriptor produces rows through the same core).
 //
 // The send-time rules (inherited from the 5.1.6 / 5.4 contract, in-app channel):
 //   * the ACTOR is ALWAYS excluded (never notify yourself);
@@ -51,15 +59,19 @@ import type { NotificationData } from '@/lib/dto/notifications';
 //     is nothing to notify about — the fan-out resolves to zero rows, it never
 //     errors (deletion is a normal race, not a failure to retry).
 //
-// SCALE (finding #57): the candidate set is the event's bounded mention list,
-// never an unbounded read. (A future `watching`-category descriptor that walks
-// a large watcher roster pages it the way watcherNotificationsService does.)
+// SCALE (finding #57): a mention descriptor's candidate set is the event's
+// bounded mention list (`candidateUserIds`); the `watching`-category
+// `transitioned` descriptor's candidate set is the FULL watcher roster, so it
+// supplies a PAGED source (`candidatePages`) the way watcherNotificationsService
+// walks it — `fanIn` processes one bounded page at a time (exclude · view-check ·
+// preference-gate · write per page), never an unbounded roster read nor N
+// concurrent capability checks. The page width is `FAN_IN_PAGE_SIZE`.
 //
 // 4-layer note: this is a SERVICE (the job handlers are its only callers, via
 // the injected jobServices bag). It composes repositories + the access policy +
-// the preference gate, owns the ONE transaction the fan-out batch writes in
-// (notificationRepository.createMany), and returns a plain JSON-serializable
-// summary (step.run memoizes the return value).
+// the preference gate, owns the transaction(s) the fan-out batch writes in (one
+// per candidate page via notificationRepository.createMany), and returns a plain
+// JSON-serializable summary (step.run memoizes the return value).
 
 /**
  * The denormalized render payload stored on each `Notification.data` (Json) so
@@ -68,8 +80,8 @@ import type { NotificationData } from '@/lib/dto/notifications';
  * source-of-truth contract shared by this WRITER and the read mapper, so the two
  * ends cannot drift again (Subtask 5.7.9; the producer once stored
  * `workItemKey` / `workItemTitle` while the DTO read `issueKey` / `title`).
- * `kind` discriminates the row renderer the 5.7.5 drawer picks; 5.7.3 emits only
- * the `mentioned` arm, the `transitioned` arm is the documented 5.4 slot.
+ * `kind` discriminates the row renderer the 5.7.5 drawer picks; 5.7.3 emits the
+ * `mentioned` arm and 5.7.10 the `transitioned` (watching) arm.
  */
 
 /** The minimal event envelope the pipeline needs before dispatching to a
@@ -80,13 +92,33 @@ export interface NotificationSourceEvent {
   workItemId: string;
 }
 
+/** A paged candidate source — yields BOUNDED batches of candidate recipient
+ * ids so `fanIn` never builds an unbounded in-memory roster nor fires N
+ * concurrent view/preference checks (finding #57). `fanIn` hands its own page
+ * size in so the page width is one knob (tests shrink it). The mention sources
+ * are bounded by construction and use `candidateUserIds` instead; the watcher
+ * roster (the `transitioned` / `watching` descriptor) uses this. */
+export type CandidatePageSource = (pageSize: number) => AsyncIterable<string[]>;
+
 /** The per-event fan-in plan a descriptor produces from its payload + the
- * (already workspace-verified) work item. `null` = a clean no-op. */
+ * (already workspace-verified) work item. `null` = a clean no-op.
+ *
+ * A plan supplies EITHER `candidateUserIds` (a bounded, in-memory set — the
+ * mention sources) OR `candidatePages` (a paged source — the watcher roster).
+ * `fanIn` normalizes both to a page walk, so the per-recipient pipeline
+ * (actor-exclude · dedupe · view re-check · preference gate · write) is
+ * identical for both and a single page reproduces the pre-5.7.10 behaviour
+ * byte for byte. */
 export interface NotificationFanInPlan {
   /** The actor whose action produced the event — always excluded. */
   actorId: string;
-  /** Candidate recipient ids BEFORE actor-exclude / dedupe / view / preference. */
-  candidateUserIds: string[];
+  /** A BOUNDED candidate set (the mention list), processed as a single page.
+   * Mutually exclusive with `candidatePages`. */
+  candidateUserIds?: string[];
+  /** A PAGED candidate source (the watcher roster), walked page by page —
+   * never loaded whole (finding #57). Mutually exclusive with
+   * `candidateUserIds`. */
+  candidatePages?: CandidatePageSource;
   /** The dedupe source id; the row's `dedupeKey` is `${type}:${dedupeSourceId}`,
    * uniquified per recipient by the 5.7.2 `(dedupeKey, recipientUserId)` unique. */
   dedupeSourceId: string;
@@ -109,6 +141,11 @@ export interface NotificationFanInDescriptor {
 
 export type NotificationFanInRegistry = Record<string, NotificationFanInDescriptor>;
 
+/** The default watcher-roster page width for the `transitioned` fan-in —
+ * bounded reads, never a load-all (finding #57). Mirrors
+ * `watcherNotificationsService.WATCHER_FAN_OUT_PAGE_SIZE`. */
+export const FAN_IN_PAGE_SIZE = 100;
+
 /** Build the `mentioned` render payload shared by both mention sources. */
 function buildMentionData(
   source: 'comment' | 'description',
@@ -124,14 +161,30 @@ function buildMentionData(
   };
 }
 
+/** Walk an issue's watcher roster in BOUNDED pages, yielding each page's user
+ * ids (finding #57 — a 200-watcher issue never builds an unbounded batch).
+ * Cursor-paged oldest-first via `watcherRepository.listByWorkItem`, the same
+ * roster walk `watcherNotificationsService.fanOut` uses for the email twin. */
+async function* watcherRosterPages(workItemId: string, pageSize: number): AsyncGenerator<string[]> {
+  let cursor: string | undefined;
+  do {
+    const page = await watcherRepository.listByWorkItem(workItemId, { take: pageSize, cursor });
+    cursor = page.length === pageSize ? page[page.length - 1]!.id : undefined;
+    if (page.length > 0) yield page.map((w) => w.userId);
+  } while (cursor);
+}
+
 /**
  * The PRODUCTION registry — only the SHIPPED 5.1.6 events. Both mention sources
  * write a `mentioned` / `direct` notification; they differ in copy source
  * (comment body vs description) and dedupe scope (commentId vs revisionId).
  *
- * 5.4 adds `'work-item/transitioned'` → `{ notificationType: 'transitioned',
- * category: 'watching', buildPlan: … }`; 6.6 adds its events. Neither requires
- * a change here — that's the seam.
+ * The `'work-item/transitioned'` → `{ notificationType: 'transitioned',
+ * category: 'watching', … }` entry (Subtask 5.7.10) was the documented 5.4 seam
+ * — added here, NOT in 5.4: Story 5.4 (the emitter + email fan-out, 5.4.5)
+ * shipped BEFORE 5.7.3 existed, so neither story wired the in-app entry and the
+ * drawer's Watching tab stayed empty in prod (notes.html #40). 6.6 adds its
+ * events the same way — a registry entry, no change to the core.
  */
 export const NOTIFICATION_FAN_IN_REGISTRY: NotificationFanInRegistry = {
   'work-item/mentioned': {
@@ -166,6 +219,39 @@ export const NOTIFICATION_FAN_IN_REGISTRY: NotificationFanInRegistry = {
       };
     },
   },
+  'work-item/transitioned': {
+    notificationType: 'transitioned',
+    category: 'watching',
+    async buildPlan(event, item) {
+      const payload = event as WorkItemTransitionedData;
+      // The candidate set is the FULL watcher roster — supplied as a PAGED
+      // source so `fanIn` walks it bounded (finding #57), never load-all. The
+      // actor is excluded by the core (`fanIn` seeds the seen-set with it), so a
+      // non-empty plan here is correct even when the only watcher is the actor.
+      // Resolve the from/to status DISPLAY names (the drawer renders them); a
+      // status renamed/deleted between commit and fan-in falls back to its key
+      // (the move still happened — the row still goes out), mirroring the email
+      // twin's `statusName` fallback.
+      const [fromStatus, toStatus] = await Promise.all([
+        workflowsService.getStatusByKey(item.projectId, payload.fromStatusKey, event.workspaceId),
+        workflowsService.getStatusByKey(item.projectId, payload.toStatusKey, event.workspaceId),
+      ]);
+      return {
+        actorId: payload.actorId,
+        candidatePages: (pageSize) => watcherRosterPages(item.id, pageSize),
+        // Idempotency scope = the revision row (revision × recipient), the same
+        // key the 5.4.5 watcher email job dedupes on.
+        dedupeSourceId: payload.revisionId,
+        data: {
+          kind: 'transitioned',
+          issueKey: item.identifier,
+          title: item.title,
+          fromStatus: fromStatus?.label ?? payload.fromStatusKey,
+          toStatus: toStatus?.label ?? payload.toStatusKey,
+        },
+      };
+    },
+  },
 };
 
 export interface NotificationFanInResult {
@@ -176,22 +262,38 @@ export interface NotificationFanInResult {
 
 const NO_OP: NotificationFanInResult = { writtenUserIds: [] };
 
+/** Wrap a bounded candidate set as a one-page source — the mention path. An
+ * empty set yields no page (the loop never runs → a clean no-op). */
+async function* singlePage(ids: string[]): AsyncGenerator<string[]> {
+  if (ids.length > 0) yield ids;
+}
+
 export const notificationFanInService = {
   /**
    * Fan one channel-agnostic `work-item/*` event into `Notification` rows for
-   * every eligible recipient, in ONE transaction. Resolves (never throws) on a
-   * vanished issue/comment, an unregistered event, or zero survivors.
+   * every eligible recipient, walking the candidate source one BOUNDED page at a
+   * time (each page written in its own transaction). Resolves (never throws) on
+   * a vanished issue/comment, an unregistered event, or zero survivors.
+   *
+   * A `candidateUserIds` plan (the mention sources) is a single page, so this
+   * reproduces the pre-5.7.10 behaviour exactly; a `candidatePages` plan (the
+   * watcher roster) streams pages so a 200-watcher transition never builds an
+   * unbounded batch nor fires N concurrent view/preference checks (finding #57).
    *
    * @param eventName the triggering event name — the registry key.
    * @param event the event payload (re-narrowed by the matched descriptor).
    * @param registry injection point for the extensibility test; defaults to the
    *   production registry. A synthetic entry proves 5.4/6.6 fan in with no core
    *   change.
+   * @param opts.pageSize the candidate-source page width (tests shrink it to
+   *   force a multi-page walk); production omits it (defaults to
+   *   `FAN_IN_PAGE_SIZE`).
    */
   async fanIn<E extends NotificationSourceEvent>(
     eventName: string,
     event: E,
     registry: NotificationFanInRegistry = NOTIFICATION_FAN_IN_REGISTRY,
+    opts: { pageSize?: number } = {},
   ): Promise<NotificationFanInResult> {
     const descriptor = registry[eventName];
     if (!descriptor) return NO_OP; // unregistered event → clean no-op, never an error.
@@ -204,62 +306,84 @@ export const notificationFanInService = {
     const plan = await descriptor.buildPlan(event, item);
     if (!plan) return NO_OP;
 
-    // Dedupe + exclude the actor (never self-notify).
-    const candidateIds = [...new Set(plan.candidateUserIds)].filter((id) => id !== plan.actorId);
-    if (candidateIds.length === 0) return NO_OP;
+    const pageSize = opts.pageSize ?? FAN_IN_PAGE_SIZE;
+    const pages = plan.candidatePages
+      ? plan.candidatePages(pageSize)
+      : singlePage(plan.candidateUserIds ?? []);
 
-    // Re-validate view access AS each candidate (access may have changed since
-    // the write). A project deleted out from under the issue → zero rows, no
-    // error — the same vanish-tolerant behaviour the 5.1.6 fan-out has.
-    let viewableIds: string[];
-    try {
-      const checks = await Promise.all(
-        candidateIds.map(async (userId) => {
-          const caps = await projectAccessService.getCapabilities(item.projectId, {
-            workspaceId: event.workspaceId,
+    // `seen` carries the actor (never self-notify) plus every id already
+    // processed, so candidates are deduped WITHIN and ACROSS pages — a user
+    // mentioned twice, or appearing on two roster pages, gets one row (on top of
+    // the 5.7.2 `(dedupeKey, recipientUserId)` unique that absorbs replays).
+    const dedupeKey = `${descriptor.notificationType}:${plan.dedupeSourceId}`;
+    const seen = new Set<string>([plan.actorId]);
+    const writtenUserIds: string[] = [];
+
+    for await (const rawPage of pages) {
+      const candidateIds: string[] = [];
+      for (const id of rawPage) {
+        if (!seen.has(id)) {
+          seen.add(id);
+          candidateIds.push(id);
+        }
+      }
+      if (candidateIds.length === 0) continue;
+
+      // Re-validate view access AS each candidate (access may have changed since
+      // the write), bounded by the page. A project deleted out from under the
+      // issue → stop the walk (no one can view) — the same vanish-tolerant
+      // behaviour the 5.1.6 fan-out has.
+      let viewableIds: string[];
+      try {
+        const checks = await Promise.all(
+          candidateIds.map(async (userId) => {
+            const caps = await projectAccessService.getCapabilities(item.projectId, {
+              workspaceId: event.workspaceId,
+              userId,
+            });
+            return caps.canBrowse ? userId : null;
+          }),
+        );
+        viewableIds = checks.filter((id): id is string => id !== null);
+      } catch (err) {
+        if (err instanceof ProjectNotFoundError) break;
+        throw err;
+      }
+      if (viewableIds.length === 0) continue;
+
+      // The in-app preference gate, per recipient (5.7.6 resolver). Channel off
+      // → no row. This is what makes the `transitioned · in_app` toggle real for
+      // free — no extra wiring in the descriptor.
+      const gateChecks = await Promise.all(
+        viewableIds.map(async (userId) => {
+          const enabled = await notificationPreferencesService.isChannelEnabled(
             userId,
-          });
-          return caps.canBrowse ? userId : null;
+            descriptor.notificationType,
+            'in_app',
+          );
+          return enabled ? userId : null;
         }),
       );
-      viewableIds = checks.filter((id): id is string => id !== null);
-    } catch (err) {
-      if (err instanceof ProjectNotFoundError) return NO_OP;
-      throw err;
+      const recipientIds = gateChecks.filter((id): id is string => id !== null);
+      if (recipientIds.length === 0) continue;
+
+      // One row per recipient for THIS page, in one transaction. `createMany`'s
+      // skipDuplicates + the `(dedupeKey, recipientUserId)` unique make a replay
+      // / retry idempotent.
+      const rows: Prisma.NotificationCreateManyInput[] = recipientIds.map((recipientUserId) => ({
+        workspaceId: event.workspaceId,
+        recipientUserId,
+        type: descriptor.notificationType,
+        category: descriptor.category,
+        workItemId: item.id,
+        actorId: plan.actorId,
+        data: plan.data as unknown as Prisma.InputJsonValue,
+        dedupeKey,
+      }));
+      await db.$transaction((tx) => notificationRepository.createMany(rows, tx));
+      writtenUserIds.push(...recipientIds);
     }
-    if (viewableIds.length === 0) return NO_OP;
 
-    // The in-app preference gate, per recipient (5.7.6 resolver; permissive
-    // default until then). Channel off → no row.
-    const gateChecks = await Promise.all(
-      viewableIds.map(async (userId) => {
-        const enabled = await notificationPreferencesService.isChannelEnabled(
-          userId,
-          descriptor.notificationType,
-          'in_app',
-        );
-        return enabled ? userId : null;
-      }),
-    );
-    const recipientIds = gateChecks.filter((id): id is string => id !== null);
-    if (recipientIds.length === 0) return NO_OP;
-
-    // One row per recipient, written in ONE transaction. `createMany`'s
-    // skipDuplicates + the `(dedupeKey, recipientUserId)` unique make a replay /
-    // retry idempotent.
-    const dedupeKey = `${descriptor.notificationType}:${plan.dedupeSourceId}`;
-    const rows: Prisma.NotificationCreateManyInput[] = recipientIds.map((recipientUserId) => ({
-      workspaceId: event.workspaceId,
-      recipientUserId,
-      type: descriptor.notificationType,
-      category: descriptor.category,
-      workItemId: item.id,
-      actorId: plan.actorId,
-      data: plan.data as unknown as Prisma.InputJsonValue,
-      dedupeKey,
-    }));
-    await db.$transaction((tx) => notificationRepository.createMany(rows, tx));
-
-    return { writtenUserIds: recipientIds };
+    return { writtenUserIds };
   },
 };
