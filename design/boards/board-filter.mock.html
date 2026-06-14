@@ -240,6 +240,15 @@
         border-radius: var(--radius-card);
         overflow: hidden;
       }
+      /* Popover/dropdown panels: the open Filter popover / Saved menu floats
+         BELOW the toolbar, so the stage must NOT clip it. Overflow visible +
+         a min-height so the floating surface has room within the panel. */
+      .stage.is-pop {
+        overflow: visible;
+      }
+      .stage.is-pop .page {
+        min-height: 580px;
+      }
 
       /* ── Page shell — header + toolbar (mirrors app/(authed)/boards/page.tsx) ── */
       .page {
@@ -1762,7 +1771,7 @@
       Check. Identical to the /issues popover — board-scoped, not a new control.
     </div>
     <div class="panel">
-      <div class="stage">
+      <div class="stage is-pop">
         <div class="page" style="padding-bottom: 24px">
           <div class="page-head" style="margin-bottom: 0">
             <div>
@@ -1905,7 +1914,7 @@
       SIBLING button, never nested in the option), owner/visibility hint, "View all filters" foot.
     </div>
     <div class="panel">
-      <div class="stage">
+      <div class="stage is-pop">
         <div class="page" style="padding-bottom: 24px">
           <div class="page-head" style="margin-bottom: 0">
             <div>
