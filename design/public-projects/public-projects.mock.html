@@ -10,8 +10,23 @@
     <!--
       DESIGN ASSET (HTML mockup) for the PUBLIC PROJECTS surface (Story 6.12) —
       "open source project management": a project made PUBLIC for read-only VIEW
-      to ANY signed-in Motir account (across orgs/workspaces), where the only
-      writes are submit-a-request (into the 6.11 Triage), upvote, and comment.
+      to ANYONE on the web (no sign-in), where the only writes are
+      submit-a-request (into the 6.11 Triage), upvote, and comment.
+
+      ⚠️ MODEL REVISION (Yue, 2026-06-14): a public project page is now FULLY
+      PUBLIC — anyone can VIEW it with NO sign-in, and it is server-rendered +
+      crawlable, optimised for SEO + GEO (head meta/OpenGraph/canonical, JSON-LD
+      SoftwareApplication, semantic HTML, a citable Overview/README + FAQ). This
+      mirrors the 6.13 project-square revision and resolves its click-through
+      knock-on (the anonymous square now lands on an anonymous-readable view).
+      The three WRITES (submit / upvote / comment) STILL require sign-in
+      ("sign-in-to-act" — the GitHub / Canny standard); anonymous WRITES remain
+      out of scope (they need the deferred abuse / anonymous-identity model).
+      This SUPERSEDES the earlier "account-required, NOT anonymous" framing for
+      READ throughout this asset: the top bar shows a Sign-in / Start-free CTA
+      (not a signed-in identity), the banner reads "anyone can view — no account
+      needed; sign in to act", the write surfaces show a sign-in-to-act prompt
+      when logged out, and Panel 9 draws the SEO/GEO scaffolding.
       No design/public-projects/ asset existed; the 6.12.1 design gate produces
       this FIRST. It is the layout source of truth for every UI code subtask in
       Story 6.12 that carries 6.12.1 in dependsOn (all `blocked` until it lands):
@@ -51,8 +66,9 @@
       public viewer is NOT a member, so 6.4 canEdit is false — the three permitted
       writes (submit / upvote / comment) are NEW narrow grants. Internal fields
       (assignees / estimates / internal comments) are stripped by a public
-      PROJECTION at the read layer. Account-required, NOT anonymous (a viewer must
-      be a signed-in Motir account; the share link still requires sign-in).
+      PROJECTION at the read layer. READ is fully public / anonymous (no
+      sign-in; the share link opens with no account); only the three WRITES
+      require sign-in (revision 2026-06-14, above).
       Mirror products (rung 1, verified): OpenProject / Plane / GitHub public
       visibility + the Canny / Productboard / Featurebase feedback-portal set
       (submit + upvote + comment + status roadmap + dedupe-before-create).
@@ -663,6 +679,140 @@
         width: 14px;
         height: 14px;
         color: var(--el-text-faint);
+      }
+      /* sign-in-to-act prompt (logged-out write surfaces) */
+      .signin-cta {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 12px 14px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .signin-cta .ic {
+        width: 17px;
+        height: 17px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .signin-cta b {
+        color: var(--el-text);
+      }
+      .signin-cta .btn {
+        margin-left: auto;
+      }
+      /* SEO + GEO panel */
+      .seo-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-top: 16px;
+        align-items: start;
+      }
+      .codeblk {
+        background: var(--el-muted);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        padding: 14px 16px;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        line-height: 1.7;
+        color: var(--el-text-secondary);
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .codeblk .tag {
+        color: var(--el-accent);
+      }
+      .codeblk .att {
+        color: var(--el-info);
+      }
+      .codeblk .str {
+        color: var(--el-success);
+      }
+      .codeblk .key {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .seo-h {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--el-text);
+        margin: 18px 0 8px;
+      }
+      .seo-h:first-child {
+        margin-top: 0;
+      }
+      .seo-h .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-accent);
+      }
+      .outline {
+        line-height: 1.9;
+      }
+      .outline .lv1 {
+        color: var(--el-text);
+        font-weight: 700;
+      }
+      .outline .lv2 {
+        padding-left: 16px;
+      }
+      .outline .lv3 {
+        padding-left: 32px;
+        color: var(--el-text-muted);
+      }
+      .outline .el {
+        color: var(--el-accent);
+      }
+      .outline .att {
+        color: var(--el-text-faint);
+      }
+      .geo-note {
+        display: flex;
+        gap: 11px;
+        padding: 13px 15px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+        font-size: 13px;
+        line-height: 1.55;
+        margin-top: 12px;
+      }
+      .geo-note .ic {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-success);
+      }
+      .seo-facts {
+        list-style: none;
+        padding: 0;
+        margin: 8px 0 0;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .seo-facts li {
+        display: flex;
+        gap: 9px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+      }
+      .seo-facts .ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-success);
       }
 
       /* ── The board (mirror design/boards/board.mock.html — public PROJECTION) ── */
@@ -2007,19 +2157,16 @@
             </div>
           </div>
           <div class="viewer">
-            <div class="who">
-              <span class="nm">Priya Nair</span>
-              <span class="org">signed in · Acme org</span>
-            </div>
-            <span class="avatar av-sky">PN</span>
+            <a class="btn btn-ghost">Sign in</a>
+            <a class="btn btn-primary">Start free</a>
           </div>
         </div>
 
         <div class="pub-banner">
           <svg class="ic"><use href="#i-globe" /></svg>
           <span
-            ><b>You're viewing a public project.</b> Anyone signed in to Motir can view it and
-            submit, upvote, or comment on requests.</span
+            ><b>You're viewing a public project.</b> Anyone can view it — no account needed. Sign in
+            to submit, upvote, or comment on requests.</span
           >
           <span class="dot">·</span>
           <span class="readonly-note"
@@ -2259,11 +2406,8 @@
             </div>
           </div>
           <div class="viewer">
-            <div class="who">
-              <span class="nm">Priya Nair</span>
-              <span class="org">signed in · Acme org</span>
-            </div>
-            <span class="avatar av-sky">PN</span>
+            <a class="btn btn-ghost">Sign in</a>
+            <a class="btn btn-primary">Start free</a>
           </div>
         </div>
 
@@ -2271,8 +2415,8 @@
         <div class="pub-banner">
           <svg class="ic"><use href="#i-globe" /></svg>
           <span
-            ><b>You're viewing a public project.</b> Anyone signed in to Motir can view it and
-            submit, upvote, or comment on requests.</span
+            ><b>You're viewing a public project.</b> Anyone can view it — no account needed. Sign in
+            to submit, upvote, or comment on requests.</span
           >
           <span class="dot">·</span>
           <span class="readonly-note"
@@ -2708,16 +2852,21 @@
         </div>
 
         <div class="composer">
-          <span class="avatar av-sky">PN</span>
           <div class="body">
-            <div class="textarea"><span class="ph">Add a comment…</span></div>
-            <div class="composer-actions">
-              <button class="btn btn-primary">
-                <svg class="ic"><use href="#i-send" /></svg> Comment
-              </button>
+            <div class="signin-cta">
+              <svg class="ic"><use href="#i-lock" /></svg>
+              <span
+                ><b>Sign in to comment</b> — reading is open to everyone; posting needs a Motir
+                account.</span
+              >
+              <a class="btn btn-primary">Sign in</a>
             </div>
           </div>
         </div>
+        <p class="readonly-note" style="margin-top: 10px">
+          Signed-in viewers get the inline composer (avatar + “Add a comment…” + Comment) — the
+          logged-out state above swaps it for the sign-in prompt.
+        </p>
       </div>
     </div>
 
@@ -2740,8 +2889,9 @@
               <svg class="ic"><use href="#i-globe" /></svg> Public
             </div>
             <div class="dsc">
-              Any signed-in Motir account — across orgs and workspaces — can view this project and
-              submit, upvote, and comment on requests. They can't edit anything else.
+              Anyone on the web can view this project — no account needed, and it's indexable by
+              search engines. Visitors sign in only to submit, upvote, or comment. They can't edit
+              anything else.
             </div>
           </div>
         </div>
@@ -2793,9 +2943,10 @@
           <div class="acct-note">
             <svg class="ic"><use href="#i-shield" /></svg>
             <span
-              >The link is a pointer to the public project — visitors still sign in to Motir to view
-              it. <b>Anonymous, logged-out access isn't supported.</b> Rotating issues a new link
-              and retires the old one; the project key (<code>PROD</code>) doesn't change.</span
+              >The link points to the public project — <b>anyone can open it with no sign-in</b>,
+              and the page is server-rendered + crawlable (SEO/GEO). Visitors sign in only to
+              submit, upvote, or comment. Rotating issues a new link and retires the old one; the
+              project key (<code>PROD</code>) doesn't change.</span
             >
           </div>
         </div>
@@ -3060,11 +3211,130 @@ open source (GPL-3.0) on [GitHub](#).
       </div>
     </div>
 
+    <!-- ════════════════ PANEL 9 — SEO + GEO scaffolding (fully-public, crawlable) ════════════════ -->
+    <div class="panel-label">
+      (9) SEO + GEO scaffolding — a public project page is fully public (no sign-in) +
+      server-rendered + crawlable: head meta / OpenGraph / canonical, JSON-LD structured data,
+      semantic HTML, and the GEO answer-engine framing (the README/Overview is the citable
+      description)
+    </div>
+    <div class="panel">
+      <div class="card">
+        <h3>Built to be found — by search engines and by AI</h3>
+        <p class="csub">
+          A public project is an internet-facing page anyone can read with no account. It is
+          server-rendered so crawlers and generative engines get the full Overview / board /
+          roadmap; signing in is needed ONLY to submit, upvote, or comment.
+        </p>
+
+        <div class="seo-grid">
+          <div>
+            <div class="seo-h">
+              <svg class="ic"><use href="#i-globe" /></svg> Head — meta + OpenGraph
+            </div>
+            <div class="codeblk">
+              <span class="tag">&lt;title&gt;</span>Motir — public project on Motir<span class="tag"
+                >&lt;/title&gt;</span
+              >
+              <span class="tag">&lt;meta</span> <span class="att">name</span>=<span class="str"
+                >"description"</span
+              >
+              <span class="att">content</span>=<span class="str"
+                >"{the project's public Overview tagline}"</span
+              ><span class="tag">&gt;</span> <span class="tag">&lt;link</span>
+              <span class="att">rel</span>=<span class="str">"canonical"</span>
+              <span class="att">href</span>=<span class="str"
+                >"https://motir.co/p/moooon-motir"</span
+              ><span class="tag">&gt;</span> <span class="tag">&lt;meta</span>
+              <span class="att">property</span>=<span class="str">"og:title"</span>
+              <span class="att">content</span>=<span class="str">"Motir — public project"</span
+              ><span class="tag">&gt;</span> <span class="tag">&lt;meta</span>
+              <span class="att">property</span>=<span class="str">"og:image"</span>
+              <span class="att">content</span>=<span class="str"
+                >"/p/moooon-motir/opengraph-image"</span
+              ><span class="tag">&gt;</span>
+            </div>
+
+            <div class="seo-h">
+              <svg class="ic"><use href="#i-code" /></svg> JSON-LD — structured data
+            </div>
+            <div class="codeblk">
+              <span class="tag">&lt;script</span> <span class="att">type</span>=<span class="str"
+                >"application/ld+json"</span
+              ><span class="tag">&gt;</span>
+              {
+              <span class="key">"@context"</span>: <span class="str">"https://schema.org"</span>,
+              <span class="key">"@type"</span>: <span class="str">"SoftwareApplication"</span>,
+              <span class="key">"name"</span>: <span class="str">"Motir"</span>,
+              <span class="key">"applicationCategory"</span>:
+              <span class="str">"DeveloperApplication"</span>, <span class="key">"url"</span>:
+              <span class="str">"https://motir.co/p/moooon-motir"</span>,
+              <span class="key">"description"</span>: <span class="str">"{public Overview}"</span> }
+            </div>
+          </div>
+
+          <div>
+            <div class="seo-h">
+              <svg class="ic"><use href="#i-file-text" /></svg> Semantic outline
+            </div>
+            <div class="codeblk outline">
+              <span class="lv1"
+                >&lt;<span class="el">h1</span>&gt; Motir
+                <span class="att">(the Overview / README hero)</span></span
+              >
+              <span class="lv2">&lt;<span class="el">h2</span>&gt; About this project</span>
+              <span class="lv2"
+                >&lt;<span class="el">h2</span>&gt; Board
+                <span class="att">(public, internal fields stripped)</span></span
+              >
+              <span class="lv2"
+                >&lt;<span class="el">h2</span>&gt; Roadmap
+                <span class="att">(submitted → planned → in progress → done)</span></span
+              >
+              <span class="lv3"
+                >&lt;<span class="el">article</span>&gt; · &lt;<span class="el">h3</span>&gt; a
+                public request + vote count</span
+              >
+              <span class="lv2">&lt;<span class="el">h2</span>&gt; FAQ</span>
+            </div>
+
+            <div class="seo-h">
+              <svg class="ic"><use href="#i-sparkles" /></svg> GEO — answer-engine framing
+            </div>
+            <div class="geo-note">
+              <svg class="ic"><use href="#i-globe" /></svg>
+              <span
+                >The authored Overview/README is the citable description; an FAQ block (“What is
+                this project?”, “Is it free to view?”, “How do I request a feature?”) gives
+                generative engines a clean, attributable answer with the canonical URL as the
+                source.</span
+              >
+            </div>
+            <ul class="seo-facts">
+              <li>
+                <svg class="ic"><use href="#i-check-check" /></svg> Fully public — no sign-in to
+                read; crawlable by Googlebot, Bingbot, GPTBot, etc.
+              </li>
+              <li>
+                <svg class="ic"><use href="#i-check-check" /></svg> Sign-in is needed ONLY to submit
+                / upvote / comment (anonymous writes stay out of scope — abuse model).
+              </li>
+              <li>
+                <svg class="ic"><use href="#i-check-check" /></svg> Internal fields (assignee /
+                estimate / internal comments) stay stripped by the public projection.
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ──────────────── lucide symbol sprite (paths copied 1:1 from lucide) ──────────────── -->
     <svg width="0" height="0" style="position: absolute" aria-hidden="true">
       <defs>
         <!-- bug -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-bug"
           fill="none"
           stroke="currentColor"
@@ -3083,9 +3353,10 @@ open source (GPL-3.0) on [GitHub](#).
           <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
           <path d="M22 13h-4" />
           <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
-        </g>
+        </symbol>
         <!-- task = square-check-big -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-task"
           fill="none"
           stroke="currentColor"
@@ -3095,9 +3366,10 @@ open source (GPL-3.0) on [GitHub](#).
         >
           <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
           <path d="m9 11 3 3L22 4" />
-        </g>
+        </symbol>
         <!-- story = book-open -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-book"
           fill="none"
           stroke="currentColor"
@@ -3109,9 +3381,10 @@ open source (GPL-3.0) on [GitHub](#).
           <path
             d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
           />
-        </g>
+        </symbol>
         <!-- globe -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-globe"
           fill="none"
           stroke="currentColor"
@@ -3122,9 +3395,10 @@ open source (GPL-3.0) on [GitHub](#).
           <circle cx="12" cy="12" r="10" />
           <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
           <path d="M2 12h20" />
-        </g>
+        </symbol>
         <!-- lock -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-lock"
           fill="none"
           stroke="currentColor"
@@ -3134,9 +3408,10 @@ open source (GPL-3.0) on [GitHub](#).
         >
           <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
           <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-        </g>
+        </symbol>
         <!-- eye -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-eye"
           fill="none"
           stroke="currentColor"
@@ -3148,9 +3423,10 @@ open source (GPL-3.0) on [GitHub](#).
             d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
           />
           <circle cx="12" cy="12" r="3" />
-        </g>
+        </symbol>
         <!-- eye-off -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-eye-off"
           fill="none"
           stroke="currentColor"
@@ -3166,9 +3442,10 @@ open source (GPL-3.0) on [GitHub](#).
             d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"
           />
           <path d="m2 2 20 20" />
-        </g>
+        </symbol>
         <!-- users -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-users"
           fill="none"
           stroke="currentColor"
@@ -3180,9 +3457,10 @@ open source (GPL-3.0) on [GitHub](#).
           <circle cx="9" cy="7" r="4" />
           <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
           <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-        </g>
+        </symbol>
         <!-- chevron-up (upvote) -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-chevron-up"
           fill="none"
           stroke="currentColor"
@@ -3191,9 +3469,10 @@ open source (GPL-3.0) on [GitHub](#).
           stroke-linejoin="round"
         >
           <path d="m18 15-6-6-6 6" />
-        </g>
+        </symbol>
         <!-- arrow-up (priority high) -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-arrow-up"
           fill="none"
           stroke="currentColor"
@@ -3203,9 +3482,10 @@ open source (GPL-3.0) on [GitHub](#).
         >
           <path d="m5 12 7-7 7 7" />
           <path d="M12 19V5" />
-        </g>
+        </symbol>
         <!-- minus (priority medium) -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-minus"
           fill="none"
           stroke="currentColor"
@@ -3214,9 +3494,10 @@ open source (GPL-3.0) on [GitHub](#).
           stroke-linejoin="round"
         >
           <path d="M5 12h14" />
-        </g>
+        </symbol>
         <!-- plus -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-plus"
           fill="none"
           stroke="currentColor"
@@ -3226,9 +3507,10 @@ open source (GPL-3.0) on [GitHub](#).
         >
           <path d="M5 12h14" />
           <path d="M12 5v14" />
-        </g>
+        </symbol>
         <!-- route (roadmap) -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-route"
           fill="none"
           stroke="currentColor"
@@ -3239,9 +3521,10 @@ open source (GPL-3.0) on [GitHub](#).
           <circle cx="6" cy="19" r="3" />
           <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
           <circle cx="18" cy="5" r="3" />
-        </g>
+        </symbol>
         <!-- columns (board) -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-columns"
           fill="none"
           stroke="currentColor"
@@ -3252,9 +3535,10 @@ open source (GPL-3.0) on [GitHub](#).
           <rect width="18" height="18" x="3" y="3" rx="2" />
           <path d="M9 3v18" />
           <path d="M15 3v18" />
-        </g>
+        </symbol>
         <!-- list (work items) -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-list"
           fill="none"
           stroke="currentColor"
@@ -3268,9 +3552,10 @@ open source (GPL-3.0) on [GitHub](#).
           <path d="M8 12h13" />
           <path d="M8 18h13" />
           <path d="M8 6h13" />
-        </g>
+        </symbol>
         <!-- inbox -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-inbox"
           fill="none"
           stroke="currentColor"
@@ -3282,9 +3567,10 @@ open source (GPL-3.0) on [GitHub](#).
           <path
             d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
           />
-        </g>
+        </symbol>
         <!-- check-check -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-check-check"
           fill="none"
           stroke="currentColor"
@@ -3294,9 +3580,10 @@ open source (GPL-3.0) on [GitHub](#).
         >
           <path d="M18 6 7 17l-5-5" />
           <path d="m22 10-7.5 7.5L13 16" />
-        </g>
+        </symbol>
         <!-- copy-check (dedupe) -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-copy-check"
           fill="none"
           stroke="currentColor"
@@ -3307,9 +3594,10 @@ open source (GPL-3.0) on [GitHub](#).
           <path d="m12 15 2 2 4-4" />
           <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
           <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-        </g>
+        </symbol>
         <!-- copy -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-copy"
           fill="none"
           stroke="currentColor"
@@ -3319,9 +3607,10 @@ open source (GPL-3.0) on [GitHub](#).
         >
           <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
           <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-        </g>
+        </symbol>
         <!-- link -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-link"
           fill="none"
           stroke="currentColor"
@@ -3331,9 +3620,10 @@ open source (GPL-3.0) on [GitHub](#).
         >
           <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-        </g>
+        </symbol>
         <!-- rotate-cw -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-rotate"
           fill="none"
           stroke="currentColor"
@@ -3343,9 +3633,10 @@ open source (GPL-3.0) on [GitHub](#).
         >
           <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
           <path d="M21 3v5h-5" />
-        </g>
+        </symbol>
         <!-- send -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-send"
           fill="none"
           stroke="currentColor"
@@ -3357,9 +3648,10 @@ open source (GPL-3.0) on [GitHub](#).
             d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
           />
           <path d="m21.854 2.147-10.94 10.939" />
-        </g>
+        </symbol>
         <!-- shield -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-shield"
           fill="none"
           stroke="currentColor"
@@ -3370,9 +3662,10 @@ open source (GPL-3.0) on [GitHub](#).
           <path
             d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
           />
-        </g>
+        </symbol>
         <!-- alarm-clock (rate-limit) -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-alarm"
           fill="none"
           stroke="currentColor"
@@ -3386,9 +3679,10 @@ open source (GPL-3.0) on [GitHub](#).
           <path d="m22 6-3-3" />
           <path d="M6.38 18.7 4 21" />
           <path d="M17.64 18.67 20 21" />
-        </g>
+        </symbol>
         <!-- triangle-alert (error) -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-alert"
           fill="none"
           stroke="currentColor"
@@ -3399,9 +3693,10 @@ open source (GPL-3.0) on [GitHub](#).
           <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
           <path d="M12 9v4" />
           <path d="M12 17h.01" />
-        </g>
+        </symbol>
         <!-- x -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-x"
           fill="none"
           stroke="currentColor"
@@ -3411,9 +3706,10 @@ open source (GPL-3.0) on [GitHub](#).
         >
           <path d="M18 6 6 18" />
           <path d="m6 6 12 12" />
-        </g>
+        </symbol>
         <!-- external-link -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-external-link"
           fill="none"
           stroke="currentColor"
@@ -3424,9 +3720,10 @@ open source (GPL-3.0) on [GitHub](#).
           <path d="M15 3h6v6" />
           <path d="M10 14 21 3" />
           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-        </g>
+        </symbol>
         <!-- github -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-github"
           fill="none"
           stroke="currentColor"
@@ -3438,9 +3735,10 @@ open source (GPL-3.0) on [GitHub](#).
             d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C4 2 3 2 3 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 2 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"
           />
           <path d="M9 18c-4.51 2-5-2-7-2" />
-        </g>
+        </symbol>
         <!-- edit = square-pen -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-edit"
           fill="none"
           stroke="currentColor"
@@ -3452,9 +3750,10 @@ open source (GPL-3.0) on [GitHub](#).
           <path
             d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"
           />
-        </g>
+        </symbol>
         <!-- arrow-left -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-arrow-left"
           fill="none"
           stroke="currentColor"
@@ -3464,9 +3763,10 @@ open source (GPL-3.0) on [GitHub](#).
         >
           <path d="m12 19-7-7 7-7" />
           <path d="M19 12H5" />
-        </g>
+        </symbol>
         <!-- image -->
-        <g
+        <symbol
+          viewBox="0 0 24 24"
           id="i-image"
           fill="none"
           stroke="currentColor"
@@ -3477,7 +3777,51 @@ open source (GPL-3.0) on [GitHub](#).
           <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
           <circle cx="9" cy="9" r="2" />
           <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-        </g>
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-code"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m16 18 6-6-6-6" />
+          <path d="m8 6-6 6 6 6" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-file-text"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" />
+          <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+          <path d="M10 9H8" />
+          <path d="M16 13H8" />
+          <path d="M16 17H8" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-sparkles"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
+          />
+          <path d="M20 3v4" />
+          <path d="M22 5h-4" />
+          <path d="M4 17v2" />
+          <path d="M5 18H3" />
+        </symbol>
       </defs>
     </svg>
   </body>
