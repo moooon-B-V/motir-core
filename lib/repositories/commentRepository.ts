@@ -52,6 +52,28 @@ export const commentRepository = {
   },
 
   /**
+   * Re-point every comment of one work item onto another (Story 6.11 · Subtask
+   * 6.11.5 — mark-duplicate / merge). The triage-merge action folds a duplicate
+   * submission's whole comment thread into the canonical item by moving the
+   * rows wholesale: `parentCommentId` is untouched, so a root and its replies
+   * move together and the one-level thread structure is preserved (mention rows
+   * ride along unchanged — they key off `commentId`, not `workItemId`).
+   * Required `tx` — this commits atomically with the duplicate's cancel + the
+   * `duplicates` link. Returns the number of comments moved.
+   */
+  async reassignWorkItem(
+    fromWorkItemId: string,
+    toWorkItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.comment.updateMany({
+      where: { workItemId: fromWorkItemId },
+      data: { workItemId: toWorkItemId },
+    });
+    return result.count;
+  },
+
+  /**
    * HARD-delete one comment (the Jira-faithful semantics — no tombstone).
    * The DB cascades take the replies (for a root) and every mention row with
    * it; the surviving trace is the `work_item_revision` deletion record the
