@@ -114,10 +114,11 @@ describe('Combobox — menu portaling (bug-inline-edit-clipped-when-table-short)
     label: `Statistic ${i}`,
   }));
 
+  // A hard-clipping dialog panel = the centered Modal (`overflow-hidden`).
   function TallDialogHost() {
     const [value, setValue] = useState<string | null>(null);
     return (
-      <div role="dialog">
+      <div role="dialog" style={{ overflowY: 'hidden' }}>
         <Combobox
           label="Statistic type"
           options={TALL_OPTIONS}
@@ -158,5 +159,44 @@ describe('Combobox — menu portaling (bug-inline-edit-clipped-when-table-short)
     expect(maxH).toBeGreaterThan(0);
     expect(maxH).toBeLessThanOrEqual(188);
     expect(listbox.className).toContain('overflow-y-auto');
+  });
+
+  // Regression for the CI break the first fix caused: the Advanced-filter
+  // builder is an ANCHORED Popover with role="dialog" whose outer box does NOT
+  // clip (only an inner overflow-y-auto body). Clamping/flipping against that
+  // small content-sized box shoved the operator menu up under the popover's own
+  // header, which intercepted the option click. A non-clipping dialog must keep
+  // the original inline behaviour: menu opens BELOW, never flips.
+  function PopoverDialogHost() {
+    const [value, setValue] = useState<string | null>(null);
+    return (
+      // The Advanced-filter shape: an overflow-hidden popover whose body is an
+      // overflow-y-auto SCROLL region (the combobox's nearest clip scrolls, so
+      // the menu can be scrolled into view — no clamp/flip).
+      <div role="dialog" style={{ overflow: 'hidden' }}>
+        <div style={{ overflowY: 'auto', maxHeight: 200 }}>
+          <Combobox label="Operator" options={TALL_OPTIONS} value={value} onChange={setValue} />
+        </div>
+      </div>
+    );
+  }
+
+  it('leaves a non-clipping popover-dialog menu below the trigger (no flip)', () => {
+    render(<PopoverDialogHost />);
+    const dialog = screen.getByRole('dialog');
+    const trigger = screen.getByRole('combobox', { name: 'Operator' });
+
+    // Same lower-half geometry that flips inside a clipping Modal — but this
+    // dialog doesn't clip, so the menu must stay anchored below regardless.
+    dialog.getBoundingClientRect = () => rect(100, 420);
+    trigger.getBoundingClientRect = () => rect(300, 332);
+
+    fireEvent.click(trigger);
+    fireEvent.resize(window);
+
+    const listbox = screen.getByRole('listbox', { name: 'Operator' });
+    const panel = listbox.parentElement as HTMLElement;
+    expect(panel.className).toContain('top-full');
+    expect(panel.className).not.toContain('bottom-full');
   });
 });

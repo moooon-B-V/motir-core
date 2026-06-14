@@ -113,6 +113,23 @@ export interface ComboboxProps<T extends string> {
   onQueryChange?: (query: string) => void;
 }
 
+// Walk up from a node to the nearest ancestor that clips overflow, classifying
+// it as scrolling (overflow auto/scroll — the menu can be scrolled into view)
+// or a hard `hidden`/`clip` box (no scroll — the menu is trapped). Used by the
+// inline (in-dialog) branch to decide whether to clamp + flip the menu (only a
+// hard non-scrolling clip needs it). Stops at <body>; returns null if nothing
+// up the chain clips.
+function nearestClipBox(el: HTMLElement): { box: HTMLElement; scrolls: boolean } | null {
+  let node = el.parentElement;
+  while (node && node !== document.body) {
+    const oy = getComputedStyle(node).overflowY;
+    if (oy === 'auto' || oy === 'scroll') return { box: node, scrolls: true };
+    if (oy === 'hidden' || oy === 'clip') return { box: node, scrolls: false };
+    node = node.parentElement;
+  }
+  return null;
+}
+
 export function Combobox<T extends string>({
   options,
   value,
@@ -225,14 +242,28 @@ export function Combobox<T extends string>({
   // listbox height to it so the menu scrolls INTERNALLY and always fits.
   const updateInlinePosition = useCallback(() => {
     const trigger = triggerRef.current;
-    const dialog = trigger?.closest('[role="dialog"]');
-    if (!trigger || !dialog) return;
+    if (!trigger) return;
+    // Find the nearest ancestor that CLIPS the inline menu. If that ancestor
+    // SCROLLS (overflow auto/scroll — e.g. the Advanced-filter popover's
+    // `overflow-y-auto` body, or a `Modal.Body`), the menu can be scrolled into
+    // view, so leave it exactly as before (top-full, max-h-64) — flipping/
+    // clamping against a scroll box would wrongly shove the menu up under the
+    // panel's header (the regression the first cut caused). Only a NON-scrolling
+    // `overflow: hidden` clip — the centered Modal panel's `overflow-hidden
+    // max-h-[90vh]` box — actually traps the menu (bug-combobox-menu-clipped-
+    // inside-modal); clamp + flip against THAT box.
+    const clip = nearestClipBox(trigger);
+    if (!clip || clip.scrolls) {
+      setInlineAbove(false);
+      setListMaxHeight(256); // == the max-h-64 fallback (original behaviour)
+      return;
+    }
     const rect = trigger.getBoundingClientRect();
-    const dialogRect = dialog.getBoundingClientRect();
+    const clipRect = clip.box.getBoundingClientRect();
     const gap = 4; // matches mt-1 / mb-1
     const inset = 8; // stay a hair inside the panel's rounded clip edge
-    const spaceBelow = dialogRect.bottom - rect.bottom - gap - inset;
-    const spaceAbove = rect.top - dialogRect.top - gap - inset;
+    const spaceBelow = clipRect.bottom - rect.bottom - gap - inset;
+    const spaceAbove = rect.top - clipRect.top - gap - inset;
     const placeAbove = spaceAbove > spaceBelow;
     setInlineAbove(placeAbove);
     const avail = Math.max(80, placeAbove ? spaceAbove : spaceBelow);
