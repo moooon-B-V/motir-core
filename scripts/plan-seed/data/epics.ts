@@ -2374,7 +2374,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Reports hub: all three Agile cards (Burndown chart / Velocity chart / Sprint report) navigate to the SAME `/sprints/[id]/report` URL — collapses three distinct Jira reports onto one page',
-        status: 'in_progress',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
