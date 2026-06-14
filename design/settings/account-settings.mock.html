@@ -1,0 +1,1864 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Account settings AREA — grouped nav (Story 7.8 · 7.8.2)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — the ACCOUNT SETTINGS AREA redesign. Story 7.8's
+      7.8.2 design gate. The account page is being promoted from a flat 2-card
+      stack into a settings AREA with a grouped nav in the rail — the SAME shape as
+      the shipped project-settings area (Story 6.5, `design/projects/settings-area`),
+      so the surface scales as it grows to hold Appearance (theme · accent · font ·
+      display style · language), Notifications, and Security (API tokens), plus a
+      reserved Profile slot.
+
+      WHY the whole area, not one card: the API-tokens card was originally going to
+      bolt onto the flat account page. But the account surface is about to hold many
+      more personal settings (font, colour palette, display style, …); a flat card
+      stack doesn't scale and would lock in the wrong architecture. So 7.8.2 is the
+      whole account-settings redesign, with API tokens as its Security section.
+
+      Built FROM the real design system: the token block is copied 1:1 from
+      app/globals.css (Tier-0 --color-* + shape tokens + Tier-3 --el-*); the markup
+      mirrors the SHIPPED primitives — the settings-area shell (rail grouped nav +
+      content, from `design/projects/settings-area.mock.html`), Card, Segmented,
+      Switch, ColorSwatchPicker, Combobox trigger, Pill, Button, Input + FormField,
+      Modal, EmptyState, Toast. The account nav is driven by an `accountSettingsNav`
+      registry mirroring `lib/settings/projectSettingsNav` (the same grouped-nav +
+      "Soon" placeholder + totality-guard mechanism).
+
+      DESIGNED HERE = only what we'll actually build now: the AREA shell + the real
+      panes (Language · Notifications · API tokens). APPEARANCE IS NOT DESIGNED — it
+      is only a reserved "Soon" nav slot. Mocking concrete appearance controls
+      (theme/accent/font/display-style) would be misleading: we are not going to
+      implement appearance like that, and it gets its own future story (Yue,
+      2026-06-14). Profile is likewise a "Soon" slot. API tokens is 7.8.3.
+
+      Covers (multi-panel — review EACH, mistake #31):
+        (1)  Language pane — the area shell (account rail + grouped nav) + the
+             shipped Language preference inside the area.
+        (2)  Notifications pane — the shipped preference matrix inside the area.
+        (3)  Security & access pane — the API tokens card + table inside the area.
+        (4)  Create-token modal.
+        (5)  Shown-once secret state.
+        (6)  Revoke confirm (destructive).
+        (7)  API tokens empty state.
+        (8)  Copy-confirmation toast.
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-control: 36px;
+        --height-input: 44px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-task: var(--color-info);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #242424;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1040px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 40px auto 10px;
+        padding-left: 2px;
+        max-width: 1040px;
+      }
+      .panel {
+        max-width: 1040px;
+        margin: 0 auto;
+      }
+
+      /* ── App shell (the area chrome: one rail + content) — mirrors
+           design/projects/settings-area.mock.html ─────────────────────────── */
+      .stage {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+      }
+      .shell {
+        display: flex;
+        min-height: 600px;
+        background: var(--el-page-bg);
+      }
+      .rail {
+        flex: none;
+        width: 252px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .rail-head {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .back:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .back svg {
+        width: 16px;
+        height: 16px;
+      }
+      /* the user identity (REPLACES the ProjectSwitcher while in the account area) */
+      .me {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px var(--spacing-control-x) 2px;
+      }
+      .me .av {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .me .meta {
+        min-width: 0;
+      }
+      .me .nm {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .me .em {
+        font-size: 11px;
+        color: var(--el-text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .settings-eyebrow {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--el-text-faint);
+        padding: 0 var(--spacing-control-x);
+        text-transform: uppercase;
+      }
+
+      /* nav groups + rows (SidebarSection.label + SidebarNavItem) */
+      .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .grp + .grp {
+        margin-top: 12px;
+      }
+      .grp-label {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-faint);
+        padding: 0 var(--spacing-control-x);
+        margin-bottom: 2px;
+      }
+      .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .nav-row:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .nav-row .ni {
+        flex: none;
+        display: inline-flex;
+        color: var(--el-text-muted);
+      }
+      .nav-row .ni svg {
+        width: 18px;
+        height: 18px;
+      }
+      .nav-row .nl {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .nav-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 500;
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+      }
+      .nav-row.active .ni {
+        color: var(--el-accent);
+      }
+      .nav-row.soon {
+        cursor: default;
+        color: var(--el-text-faint);
+      }
+      .nav-row.soon:hover {
+        background: transparent;
+        color: var(--el-text-faint);
+      }
+      .nav-row.soon .ni {
+        color: var(--el-text-faint);
+      }
+      .soon-chip {
+        margin-left: auto;
+        font-family: var(--font-sans);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-strong);
+        background: var(--el-tint-yellow);
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+      }
+
+      /* content area */
+      .content {
+        flex: 1;
+        min-width: 0;
+        background: var(--el-page-bg);
+        padding: 30px 32px 36px;
+        overflow: hidden;
+      }
+      .page-head {
+        margin-bottom: 22px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .page-head .sub {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        margin-top: 5px;
+        max-width: 64ch;
+        line-height: 1.5;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        max-width: 680px;
+      }
+
+      /* ── Card primitive (components/ui/Card) — header slot + body ─────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head h3 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .card-head .hsub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 3px;
+        max-width: 54ch;
+        line-height: 1.5;
+      }
+      .card-body {
+        padding: 4px var(--spacing-card-padding) 8px;
+      }
+
+      /* ── Settings row grammar (label/desc on the left, control on the right) ── */
+      .srow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 16px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .srow:last-child {
+        border-bottom: 0;
+      }
+      .srow .sl {
+        min-width: 0;
+      }
+      .srow .sl .name {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .srow .sl .desc {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+        line-height: 1.45;
+        max-width: 42ch;
+      }
+      .srow .sc {
+        flex: none;
+      }
+      /* Combobox trigger (components/ui/Combobox.tsx) — input-shaped select */
+      .select {
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-width: 200px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .select .chev {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+
+      /* Switch (components/ui/Switch.tsx) */
+      .sw {
+        position: relative;
+        width: 36px;
+        height: 20px;
+        flex: none;
+        border-radius: 9999px;
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-muted);
+        cursor: pointer;
+      }
+      .sw .kn {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 14px;
+        height: 14px;
+        border-radius: 9999px;
+        background: var(--el-surface);
+        box-shadow: var(--shadow-subtle);
+        transition: transform 0.12s ease;
+      }
+      .sw.on {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+      }
+      .sw.on .kn {
+        transform: translateX(16px);
+        background: #fff;
+      }
+      .sw.dis {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      /* notifications matrix (NotificationPreferencesCard — grid 1fr 5rem 5rem) */
+      .matrix {
+        display: grid;
+        grid-template-columns: 1fr 5rem 5rem;
+        align-items: center;
+      }
+      .matrix .mh {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        padding: 0 0 10px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .matrix .mh.c {
+        text-align: center;
+      }
+      .matrix .me-row {
+        padding: 14px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .matrix .me-row .ed {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+      .matrix .cell {
+        display: flex;
+        justify-content: center;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .matrix > div:nth-last-child(-n + 3) {
+        border-bottom: 0;
+      }
+
+      /* ── Token table (a Card-held row list; org-members roster grammar) ──── */
+      .ttable {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: var(--font-sans);
+      }
+      .ttable thead th {
+        text-align: left;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        padding: 0 12px 8px;
+        border-bottom: 1px solid var(--el-border);
+        white-space: nowrap;
+      }
+      .ttable thead th.right,
+      .ttable tbody td.right {
+        text-align: right;
+      }
+      .ttable tbody td {
+        padding: 14px 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 14px;
+        color: var(--el-text);
+        vertical-align: middle;
+      }
+      .ttable tbody tr:last-child td {
+        border-bottom: 0;
+      }
+      .ttable .label {
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .ttable .meta {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .ttable .meta.muted {
+        color: var(--el-text-muted);
+      }
+      .ttable tr.revoked td .label,
+      .ttable tr.revoked td .meta {
+        color: var(--el-text-faint);
+      }
+      .code-chip {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 2px 6px;
+        white-space: nowrap;
+      }
+
+      /* Pill (components/ui/Pill.tsx) */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill--warning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+
+      /* Button (components/ui/Button.tsx) */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn .ic {
+        width: 16px;
+        height: 16px;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        font-size: 12px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-primary:hover {
+        opacity: 0.9;
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-secondary:hover {
+        background: var(--el-surface);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn-ghost:hover {
+        background: var(--el-surface);
+      }
+      .btn-danger {
+        background: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      .btn-danger:hover {
+        opacity: 0.9;
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .icon-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-danger);
+      }
+      .icon-btn .ic {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* ── Modal (components/ui/Modal.tsx) — Radix Dialog panel + overlay ──── */
+      .mstage {
+        position: relative;
+        background:
+          repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 10px,
+            rgba(120, 118, 113, 0.04) 10px,
+            rgba(120, 118, 113, 0.04) 20px
+          ),
+          var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 40px 16px;
+        display: flex;
+        justify-content: center;
+      }
+      .overlay-tint {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.18);
+        border-radius: var(--radius-card);
+      }
+      .modal {
+        position: relative;
+        width: 100%;
+        max-width: 28rem;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .modal.modal-sm {
+        max-width: 24rem;
+      }
+      .modal-title {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .modal-desc {
+        margin: 4px 0 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .modal-head {
+        margin-bottom: var(--spacing-md);
+        padding-right: 28px;
+      }
+      .modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .modal-close:hover {
+        color: var(--el-text);
+      }
+      .modal-close .ic {
+        width: 16px;
+        height: 16px;
+      }
+      .modal-body {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .modal-foot {
+        margin-top: 24px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field > label {
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .field .helper {
+        font-family: var(--font-sans);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .input {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+      }
+      .input input {
+        flex: 1;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .select.full {
+        display: flex;
+        width: 100%;
+      }
+      .secret-row {
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+      }
+      .secret-field {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-surface);
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--el-text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .callout {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        background: var(--el-tint-peach);
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+      }
+      .callout .ic {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-warning);
+      }
+      .callout p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-strong);
+      }
+      .callout.danger {
+        background: var(--el-tint-rose);
+      }
+      .callout.danger .ic {
+        color: var(--el-danger);
+      }
+
+      /* ── EmptyState (components/ui/EmptyState.tsx) ───────────────────────── */
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: var(--spacing-card-padding);
+      }
+      .empty .ic-wrap {
+        width: 48px;
+        height: 48px;
+        margin-bottom: var(--spacing-md);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-muted);
+      }
+      .empty .ic-wrap svg {
+        width: 48px;
+        height: 48px;
+      }
+      .empty h2 {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 400;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: var(--spacing-sm) 0 0;
+        max-width: 54ch;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-muted);
+      }
+      .empty p a {
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      .empty .action {
+        margin-top: var(--spacing-md);
+      }
+
+      /* ── Toast (components/ui/Toast.tsx) — success variant ──────────────── */
+      .toast-stage {
+        position: relative;
+        background:
+          repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 10px,
+            rgba(120, 118, 113, 0.04) 10px,
+            rgba(120, 118, 113, 0.04) 20px
+          ),
+          var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        height: 150px;
+        overflow: hidden;
+      }
+      .toast {
+        position: absolute;
+        bottom: 16px;
+        right: 16px;
+        width: 360px;
+        max-width: calc(100% - 32px);
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-success);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 12px 16px;
+      }
+      .toast .t-ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-success);
+      }
+      .toast .t-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .toast .t-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .toast .t-desc {
+        margin-top: 2px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .toast .t-close {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-muted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .toast .t-close .ic {
+        width: 14px;
+        height: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Account settings area — grouped nav redesign</h1>
+        <p>
+          Story 7.8 · design for 7.8.2. The account page becomes a settings AREA (same shape as the
+          shipped project-settings area), holding Appearance · Notifications · Security. Built from
+          the real design system. Multi-panel — review each.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke) — paths copied from lucide-react -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-arrow-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </g>
+        <g
+          id="i-user"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="8" r="5" />
+          <path d="M20 21a8 8 0 0 0-16 0" />
+        </g>
+        <g
+          id="i-palette"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+          <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+          <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+          <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+          <path
+            d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"
+          />
+        </g>
+        <g
+          id="i-bell"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10.268 21a2 2 0 0 0 3.464 0" />
+          <path
+            d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+          />
+        </g>
+        <g
+          id="i-key"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+          />
+          <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g
+          id="i-sun"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2" />
+          <path d="M12 20v2" />
+          <path d="m4.93 4.93 1.41 1.41" />
+          <path d="m17.66 17.66 1.41 1.41" />
+          <path d="M2 12h2" />
+          <path d="M20 12h2" />
+          <path d="m6.34 17.66-1.41 1.41" />
+          <path d="m19.07 4.93-1.41 1.41" />
+        </g>
+        <g
+          id="i-moon"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+        </g>
+        <g
+          id="i-monitor"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="14" x="2" y="3" rx="2" />
+          <line x1="8" x2="16" y1="21" y2="21" />
+          <line x1="12" x2="12" y1="17" y2="21" />
+        </g>
+        <g
+          id="i-type"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="4 7 4 4 20 4 20 7" />
+          <line x1="9" x2="15" y1="20" y2="20" />
+          <line x1="12" x2="12" y1="4" y2="20" />
+        </g>
+        <g
+          id="i-languages"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 8 6 6" />
+          <path d="m4 14 6-6 2-3" />
+          <path d="M2 5h12" />
+          <path d="M7 2h1" />
+          <path d="m22 22-5-10-5 10" />
+          <path d="M14 18h6" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-copy"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+        </g>
+        <g
+          id="i-trash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 6h18" />
+          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+          <line x1="10" x2="10" y1="11" y2="17" />
+          <line x1="14" x2="14" y1="11" y2="17" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-check-circle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- shared rail markup is repeated per panel (a static mock has no router) -->
+
+    <!-- ════════════ PANEL 1 — Language pane (area shell + the shipped Language preference) ════════════ -->
+    <div class="panel-label">
+      1 · Language pane — the account-settings AREA: the rail swaps to the grouped account nav (user
+      identity + General / Preferences / Security; Language active), and the content is the shipped
+      Language preference. Profile AND Appearance are reserved "Soon" slots (the project-area
+      placeholder pattern) — Appearance is NOT designed here (we won't implement it as a mocked
+      control set; it gets its own future story).
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="me">
+                <span class="av">Z</span>
+                <span class="meta">
+                  <span class="nm">Zhu Yue</span>
+                  <span class="em">zhuyue@motir.co</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Account settings</span>
+            </div>
+            <nav aria-label="Account settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row soon">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg
+                  ></span>
+                  <span class="nl">Profile</span>
+                  <span class="soon-chip">Soon</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Preferences</div>
+                <div class="nav-row active">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg
+                  ></span>
+                  <span class="nl">Language</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg
+                  ></span>
+                  <span class="nl">Notifications</span>
+                </div>
+                <div class="nav-row soon">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg
+                  ></span>
+                  <span class="nl">Appearance</span>
+                  <span class="soon-chip">Soon</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Security</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg
+                  ></span>
+                  <span class="nl">API tokens</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+
+          <div class="content">
+            <div class="page-head">
+              <h2>Language &amp; region</h2>
+              <p class="sub">
+                The language Motir's interface is shown in — menus, labels and dates. Personal to
+                you, applied on every device you sign in on.
+              </p>
+            </div>
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Language</h3>
+                    <p class="hsub">Choose your interface language.</p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="srow">
+                    <div class="sl">
+                      <div class="name">Display language</div>
+                      <div class="desc">Menus, labels and dates use this language.</div>
+                    </div>
+                    <div class="sc">
+                      <div class="select">
+                        English<svg class="chev" viewBox="0 0 24 24">
+                          <use href="#i-chevron-down" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 2 — Notifications pane ════════════ -->
+    <div class="panel-label">
+      2 · Notifications pane — the shipped preference matrix (event rows × Email / In-app columns of
+      Switches; Story 5.7.6) now living inside the area. Rail: Notifications active.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="me">
+                <span class="av">Z</span>
+                <span class="meta">
+                  <span class="nm">Zhu Yue</span>
+                  <span class="em">zhuyue@motir.co</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Account settings</span>
+            </div>
+            <nav aria-label="Account settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row soon">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg
+                  ></span>
+                  <span class="nl">Profile</span>
+                  <span class="soon-chip">Soon</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Preferences</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg
+                  ></span>
+                  <span class="nl">Language</span>
+                </div>
+                <div class="nav-row active">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg
+                  ></span>
+                  <span class="nl">Notifications</span>
+                </div>
+                <div class="nav-row soon">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg
+                  ></span>
+                  <span class="nl">Appearance</span>
+                  <span class="soon-chip">Soon</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Security</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg
+                  ></span>
+                  <span class="nl">API tokens</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+
+          <div class="content">
+            <div class="page-head">
+              <h2>Notifications</h2>
+              <p class="sub">
+                Choose how you're notified about activity on the work you care about. Each event can
+                reach you by email, in-app, or both.
+              </p>
+            </div>
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Notification preferences</h3>
+                    <p class="hsub">Per-event delivery channels.</p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="matrix" role="grid" aria-label="Notification preferences">
+                    <div class="mh">Event</div>
+                    <div class="mh c">Email</div>
+                    <div class="mh c">In-app</div>
+
+                    <div class="me-row">
+                      Assigned to you
+                      <div class="ed">A work item is assigned to you.</div>
+                    </div>
+                    <div class="cell">
+                      <span class="sw on"><span class="kn"></span></span>
+                    </div>
+                    <div class="cell">
+                      <span class="sw on"><span class="kn"></span></span>
+                    </div>
+
+                    <div class="me-row">
+                      Mentioned
+                      <div class="ed">Someone @mentions you in a comment.</div>
+                    </div>
+                    <div class="cell">
+                      <span class="sw on"><span class="kn"></span></span>
+                    </div>
+                    <div class="cell">
+                      <span class="sw on"><span class="kn"></span></span>
+                    </div>
+
+                    <div class="me-row">
+                      Commented
+                      <div class="ed">A new comment on a work item you follow.</div>
+                    </div>
+                    <div class="cell">
+                      <span class="sw"><span class="kn"></span></span>
+                    </div>
+                    <div class="cell">
+                      <span class="sw on"><span class="kn"></span></span>
+                    </div>
+
+                    <div class="me-row">
+                      Status changed
+                      <div class="ed">A followed item moves to a new status.</div>
+                    </div>
+                    <div class="cell">
+                      <span class="sw"><span class="kn"></span></span>
+                    </div>
+                    <div class="cell">
+                      <span class="sw on"><span class="kn"></span></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 3 — Security & access pane (API tokens) ════════════ -->
+    <div class="panel-label">
+      3 · Security &amp; access pane — the API tokens card + table inside the area (a live token, an
+      expiring-soon token with the peach chip, and a revoked token shown muted). Rail: API tokens
+      active. This is the 7.8.3 surface.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="me">
+                <span class="av">Z</span>
+                <span class="meta">
+                  <span class="nm">Zhu Yue</span>
+                  <span class="em">zhuyue@motir.co</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Account settings</span>
+            </div>
+            <nav aria-label="Account settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row soon">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg
+                  ></span>
+                  <span class="nl">Profile</span>
+                  <span class="soon-chip">Soon</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Preferences</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg
+                  ></span>
+                  <span class="nl">Language</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg
+                  ></span>
+                  <span class="nl">Notifications</span>
+                </div>
+                <div class="nav-row soon">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg
+                  ></span>
+                  <span class="nl">Appearance</span>
+                  <span class="soon-chip">Soon</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Security</div>
+                <div class="nav-row active">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg
+                  ></span>
+                  <span class="nl">API tokens</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+
+          <div class="content">
+            <div class="page-head">
+              <h2>API tokens</h2>
+              <p class="sub">
+                Personal access tokens let your coding agents reach Motir over the MCP server. Each
+                token acts as you — give every agent its own, and revoke any you no longer use.
+              </p>
+            </div>
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Your tokens</h3>
+                    <p class="hsub">Shown once at creation, then stored only as a hash.</p>
+                  </div>
+                  <button class="btn btn-primary btn-sm">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>Create token
+                  </button>
+                </div>
+                <div class="card-body">
+                  <table class="ttable">
+                    <thead>
+                      <tr>
+                        <th>Label</th>
+                        <th>Token</th>
+                        <th>Created</th>
+                        <th>Expires</th>
+                        <th>Last used</th>
+                        <th class="right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><span class="label">claude-code</span></td>
+                        <td><span class="code-chip">motir_pat_AbC1…</span></td>
+                        <td><span class="meta">12 Jun 2026</span></td>
+                        <td><span class="meta">in 90 days</span></td>
+                        <td><span class="meta">2 hours ago</span></td>
+                        <td class="right">
+                          <button class="icon-btn" aria-label="Revoke token claude-code">
+                            <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                          </button>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td><span class="label">cursor-laptop</span></td>
+                        <td><span class="code-chip">motir_pat_Zq9K…</span></td>
+                        <td><span class="meta">28 May 2026</span></td>
+                        <td><span class="pill pill--warning">in 5 days</span></td>
+                        <td><span class="meta">yesterday</span></td>
+                        <td class="right">
+                          <button class="icon-btn" aria-label="Revoke token cursor-laptop">
+                            <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                          </button>
+                        </td>
+                      </tr>
+                      <tr class="revoked">
+                        <td><span class="label">old-ci-runner</span></td>
+                        <td><span class="code-chip">motir_pat_M4tT…</span></td>
+                        <td><span class="meta muted">02 Apr 2026</span></td>
+                        <td><span class="meta muted">—</span></td>
+                        <td><span class="meta muted">14 May 2026</span></td>
+                        <td class="right"><span class="pill pill--neutral">Revoked</span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 4 — create modal ════════════ -->
+    <div class="panel-label">
+      4 · Create token — the Modal: a label Input + an expiry Combobox (defaults to 90 days). The
+      primary CTA is disabled until a label is entered.
+    </div>
+    <div class="panel">
+      <div class="mstage">
+        <div class="overlay-tint"></div>
+        <div class="modal">
+          <div class="modal-head">
+            <h3 class="modal-title">Create API token</h3>
+            <p class="modal-desc">
+              The token will be shown once, right after you create it. Store it somewhere safe.
+            </p>
+          </div>
+          <button class="modal-close" aria-label="Close">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <div class="modal-body">
+            <div class="field">
+              <label for="m-label">Label</label>
+              <div class="input"><input id="m-label" value="claude-code" /></div>
+              <span class="helper"
+                >A name to recognise this token by — e.g. the agent or machine using it.</span
+              >
+            </div>
+            <div class="field">
+              <label for="m-exp">Expires</label>
+              <div class="select full" id="m-exp">
+                90 days<svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </div>
+              <span class="helper"
+                >After this, the token stops working and agents must be re-issued one.</span
+              >
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Create token</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 5 — shown-once state ════════════ -->
+    <div class="panel-label">
+      5 · Shown once — the same Modal after creation: the full secret in a read-only monospace field
+      with a Copy button, and the one-time warning callout. "Done" closes; the secret is never shown
+      again.
+    </div>
+    <div class="panel">
+      <div class="mstage">
+        <div class="overlay-tint"></div>
+        <div class="modal">
+          <div class="modal-head">
+            <h3 class="modal-title">Token created</h3>
+            <p class="modal-desc">Copy your token now — for security, Motir won't show it again.</p>
+          </div>
+          <button class="modal-close" aria-label="Close">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <div class="modal-body">
+            <div class="field">
+              <label for="m-secret">Your new token</label>
+              <div class="secret-row">
+                <div class="secret-field" id="m-secret">
+                  motir_pat_AbC1dEf2GhI3jKl4MnO5pQr6StU7vWx8
+                </div>
+                <button class="btn btn-secondary">
+                  <svg class="ic" viewBox="0 0 24 24"><use href="#i-copy" /></svg>Copy
+                </button>
+              </div>
+            </div>
+            <div class="callout">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+              <p>
+                This is the only time you'll see this token. If you lose it, revoke it and create a
+                new one.
+              </p>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-primary">Done</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 6 — revoke confirm ════════════ -->
+    <div class="panel-label">
+      6 · Revoke confirm — a destructive Modal (sm) naming the token. The danger callout spells out
+      the consequence; the primary action is a danger Button.
+    </div>
+    <div class="panel">
+      <div class="mstage">
+        <div class="overlay-tint"></div>
+        <div class="modal modal-sm">
+          <div class="modal-head">
+            <h3 class="modal-title">Revoke "cursor-laptop"?</h3>
+          </div>
+          <button class="modal-close" aria-label="Close">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <div class="modal-body">
+            <div class="callout danger">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+              <p>
+                Any agent using this token loses access to Motir immediately. This can't be undone —
+                you'll need to create a new token to reconnect.
+              </p>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-danger">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>Revoke token
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 7 — empty state ════════════ -->
+    <div class="panel-label">
+      7 · Empty state — no tokens yet. The shipped EmptyState primitive (Card + key glyph + title +
+      description with a docs link + the create action), shown in the API tokens pane content.
+    </div>
+    <div class="panel">
+      <div class="card empty">
+        <span class="ic-wrap"
+          ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg
+        ></span>
+        <h2>No API tokens yet</h2>
+        <p>
+          API tokens let your coding agents talk to Motir over the MCP server — list ready work,
+          open work items, move them, and comment, all as you.
+          <a href="#">Read the MCP setup guide</a> to connect your first agent.
+        </p>
+        <div class="action">
+          <button class="btn btn-primary">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>Create token
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 8 — copy-confirmation toast ════════════ -->
+    <div class="panel-label">
+      8 · Copy confirmation — clicking Copy on the shown-once field fires the shipped Toast (success
+      variant), bottom-right of the viewport.
+    </div>
+    <div class="panel">
+      <div class="toast-stage" aria-hidden="true">
+        <div class="toast" role="status">
+          <svg class="t-ic" viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>
+          <div class="t-body">
+            <div class="t-title">Token copied</div>
+            <div class="t-desc">
+              Paste it into your agent's MCP config now — it won't be shown again.
+            </div>
+          </div>
+          <button class="t-close" aria-label="Close">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
