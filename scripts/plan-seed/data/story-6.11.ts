@@ -3,12 +3,28 @@ import type { PlanStory } from '../types';
 /**
  * Story 6.11 (Epic 6) — Triage inbox (bug/feature intake → promote). The
  * incoming-work front door for the PM core: a place where bug reports and
- * feature requests LAND — from a team member's in-app "report a bug / request a
- * feature" widget OR from an external person via a shareable portal form —
- * WITHOUT polluting the planned tree, where an admin then triages each one
- * (accept / promote / decline / mark-duplicate / merge / snooze) into the real
- * backlog. This is a pure motir-core, per-project feature; it touches no AI
- * boundary and carries zero forward dependencies.
+ * feature requests LAND — from a workspace member's in-app "report a bug /
+ * request a feature" widget OR from a signed-in non-member via the 6.12
+ * public-project "Submit a request" form — WITHOUT polluting the planned tree,
+ * where an admin then triages each one (accept / promote / decline /
+ * mark-duplicate / merge / snooze) into the real backlog. This is a pure
+ * motir-core, per-project feature; it touches no AI boundary and carries zero
+ * forward dependencies.
+ *
+ * **Model revision (Yue, 2026-06-14): a work item is created ONLY by a
+ * signed-in account — the unauthenticated public portal form is DROPPED.** The
+ * shipped `workItemsService.createWorkItem` requires a member actor
+ * (`assertReporterMember` + `assertCanEdit`), so an anonymous portal cannot
+ * create through it. Triage intake is therefore two SIGNED-IN surfaces: the
+ * in-app "Report" widget (a workspace member) and the 6.12 public-project
+ * "Submit a request" (a signed-in viewer who is NOT a workspace member —
+ * `canSubmitToTriage`, sign-in-to-act), which posts into THIS triage queue.
+ * Both submitters carry a real `submittedByUserId`; the captured-external
+ * name/email (`externalSubmitter`) and the public form's honeypot / rate-limit /
+ * per-form-token route are removed (6.11.10 retires the schema + ADR). The inbox
+ * still distinguishes a team member from a "public" (non-member) submitter. This
+ * supersedes the public-portal parts of the 2026-06-12 locked model below and
+ * mirrors the 6.12 sign-in-to-act revision.
  *
  * **The locked model (Yue, 2026-06-12): a triage submission IS a `work_item`,
  * in a `triage` STATE that excludes it from EVERY normal read.** We do NOT add
@@ -35,8 +51,9 @@ import type { PlanStory } from '../types';
  *     Slack, Sentry), created when inside of the Triage view, or if members
  *     outside of your specific team create the issue" — plus external people
  *     via **Linear Asks** / support-tool connections (Intercom, Front,
- *     Zendesk). Motir's analogue: the in-app report widget + the shareable
- *     public portal form (6.11.4/6.11.7). (https://linear.app/docs/triage)
+ *     Zendesk). Motir's analogue: the in-app report widget (6.11.4/6.11.7) +
+ *     the signed-in 6.12 public-project "Submit a request" (NOT an anonymous
+ *     portal — see the 2026-06-14 revision above). (https://linear.app/docs/triage)
  *   - **The action set (the exact verbs we mirror):** Accept (`1`) "will offer
  *     the option to leave a comment and then move the issue to your team's
  *     default status"; Mark as Duplicate (`2`) merges into an existing issue
@@ -71,17 +88,17 @@ import type { PlanStory } from '../types';
  * EVERY read (tree, board, list, ready, search) so a future read can't
  * accidentally leak triage items.
  *
- * **Scale (finding #57).** The triage queue is an unbounded inbox (a public
- * form can produce many submissions), so the queue read is paginated/cursor'd
- * and the public form is rate-limited + abuse-guarded — never a load-all list.
+ * **Scale (finding #57).** The triage queue is an unbounded inbox (the 6.12
+ * public submit channel can produce many submissions), so the queue read is
+ * paginated/cursor'd — never a load-all list.
  *
  * **Design gate.** Two distinct UI surfaces ship here — the admin triage inbox
- * (queue + detail + actions) and the submission surfaces (in-app widget + the
- * public portal form). Both are gated behind the FIRST subtask, a `design`
- * card that produces the multi-panel mock + design-notes under
- * `design/triage/`, composing only shipped `components/ui/*` primitives +
- * `--el-*` / `[data-display-style]` tokens. Every UI code subtask
- * (6.11.6/6.11.7) depends on it and is `blocked`.
+ * (queue + detail + actions) and the in-app report widget. Both are gated
+ * behind the FIRST subtask, a `design` card that produces the multi-panel mock +
+ * design-notes under `design/triage/`, composing only shipped `components/ui/*`
+ * primitives + `--el-*` / `[data-display-style]` tokens. Every UI code subtask
+ * (6.11.6/6.11.7) depends on it and is `blocked`. (The external "Submit a
+ * request" surface is designed + built in Story 6.12.)
  *
  * **Cross-story dep audit: PASSES.** Every `dependsOn` id is same-story
  * (6.11.x) or an already-SHIPPED motir-core service (`workItemsService`, the
@@ -96,9 +113,10 @@ export const story_6_11: PlanStory = {
   gitBranch: 'feat/PROD-6.11-triage-inbox',
   descriptionMd:
     'The incoming-work front door for a project. Bug reports and feature ' +
-    'requests arrive — from a team member through an in-app "report a bug / ' +
-    'request a feature" widget, or from anyone through a shareable public ' +
-    'portal form — and land in a **triage inbox**, a staging queue that is ' +
+    'requests arrive — from a workspace member through an in-app "report a bug ' +
+    '/ request a feature" widget, or from a signed-in non-member through the ' +
+    '6.12 public-project "Submit a request" form — and land in a **triage ' +
+    'inbox**, a staging queue that is ' +
     'EXCLUDED from the planned tree until an admin acts on it. The admin ' +
     'triages each item: **accept** it into the backlog, **promote** it under ' +
     'a sprint / epic / story (set parent + position), **decline** it, ' +
@@ -118,19 +136,23 @@ export const story_6_11: PlanStory = {
     'appears in the tree.\n\n' +
     '**Scope:** the design of both surfaces (6.11.1); the triage-model ' +
     'decision (6.11.2); the schema + the read-exclusion-everywhere invariant ' +
-    '(6.11.3); the intake path — in-app submit + the rate-limited public ' +
-    'portal form (6.11.4); the triage-actions service — accept / promote / ' +
-    'decline / mark-duplicate-merge / snooze (6.11.5); the admin triage ' +
-    'inbox UI (6.11.6); the submission form UI — widget + portal (6.11.7); ' +
-    'the read-exclusion + actions tests (6.11.8); and the submit→triage→' +
-    'promote e2e (6.11.9).\n\n' +
+    '(6.11.3); the intake path — the in-app member submit (6.11.4); the ' +
+    'triage-actions service — accept / promote / decline / mark-duplicate-' +
+    'merge / snooze (6.11.5); the admin triage inbox UI (6.11.6); the in-app ' +
+    'report widget UI (6.11.7); the read-exclusion + actions tests (6.11.8); ' +
+    'the submit→triage→promote e2e (6.11.9); and retiring the dropped ' +
+    'external-submitter schema + ADR (6.11.10). (The external "Submit a ' +
+    'request" surface itself is Story 6.12.)\n\n' +
     '**Out of scope (named so they are not silently lost):** AI-assisted ' +
     'auto-triage / dedupe-suggestion (an Epic-7 planner enhancement, not ' +
     'this story); triage-responsibility on-call scheduling (Linear ' +
     'Business-tier; a later 6.x setting); SLA / response-time tracking on ' +
     'submissions; and email/Slack ingestion channels (this story ships the ' +
-    'in-app + public-form channels; integration channels reuse the same ' +
-    'triage-item creation path later).',
+    'in-app member channel and consumes the 6.12 signed-in submit channel; ' +
+    'integration channels reuse the same triage-item creation path later); and ' +
+    'anonymous/unauthenticated submission (a work item is created only by a ' +
+    'signed-in account — the dropped public portal — pending a future ' +
+    'abuse/anonymous-identity model).',
   verificationRecipeMd:
     '- **The exclusion invariant (the load-bearing one).** Submit a bug via ' +
     'the in-app widget for the `PROD` project. Confirm it appears in the ' +
@@ -139,10 +161,11 @@ export const story_6_11: PlanStory = {
     'otherwise match it (e.g. by its title). Then promote it to the backlog ' +
     '→ confirm it now appears in the tree/list/search and is gone from the ' +
     'triage queue.\n' +
-    '- **The public portal form.** Open the shareable form URL ' +
-    'unauthenticated, submit a feature request → it lands in the same triage ' +
-    'inbox with external-submitter attribution; submitting many in quick ' +
-    'succession is rate-limited (the abuse guard fires, not a 500).\n' +
+    '- **The public (non-member) submit.** Signed in as a non-member, submit a ' +
+    'feature request via the 6.12 public-project "Submit a request" form → it ' +
+    'lands in the same triage inbox with a **"Public" submitter** chip (a real ' +
+    '`submittedByUserId`, no tenant access). (The submit surface itself ships ' +
+    'in Story 6.12; 6.11 owns the inbox that receives it.)\n' +
     '- **The action set.** From the inbox: accept an item (→ backlog, ' +
     'default status, optional comment); promote another under a chosen epic/' +
     'story (parent + position set); decline one (→ canceled, optional ' +
@@ -171,6 +194,14 @@ export const story_6_11: PlanStory = {
       executor: 'coding_agent',
       estimateMinutes: 55,
       descriptionMd:
+        '**⚠️ Partially superseded (Yue, 2026-06-14).** The **public portal ' +
+        'form** panel (unauthenticated, captured name/email, confirmation + ' +
+        'rate-limit states) is **dropped** — a work item is created only by a ' +
+        'signed-in account; the external-intake surface is the 6.12 signed-in ' +
+        '"Submit a request". The `design/triage/` asset has been revised ' +
+        'accordingly (in-app widget + inbox only; the "external" chip is now a ' +
+        '"Public" chip). This card is kept as the record of what was designed; ' +
+        'see the story revision note + 6.11.10.\n\n' +
         '**Type:** design (THE design gate — produced FIRST; every UI code ' +
         'subtask here, 6.11.6 and 6.11.7, depends on this card and is ' +
         '`blocked` until it lands). Produce the surface design assets for ' +
@@ -234,6 +265,15 @@ export const story_6_11: PlanStory = {
       executor: 'coding_agent',
       estimateMinutes: 45,
       descriptionMd:
+        '**⚠️ Partially superseded (Yue, 2026-06-14).** §3 below — submitter ' +
+        'attribution "member OR external (captured name/email)" — is **revised**: ' +
+        'a work item is created only by a signed-in account, so EVERY triage ' +
+        'item carries a real `submittedByUserId` (a workspace member, or a ' +
+        'signed-in non-member via 6.12’s `canSubmitToTriage`); the ' +
+        'captured-external `externalSubmitter` and the unauthenticated portal ' +
+        'are dropped. 6.11.10 amends `triage-model.md` §3 + retires the schema. ' +
+        'The rest of this ADR (triage-state, read-exclusion, promote/decline/' +
+        'merge/snooze) stands. Kept as the record of the original decision.\n\n' +
         '**Type:** decision (the keystone ADR the schema + service cards ' +
         'build against; no app behavior ships, but the shapes it fixes are ' +
         'load-bearing). Write `motir-core/docs/decisions/triage-model.md`. It ' +
@@ -310,6 +350,12 @@ export const story_6_11: PlanStory = {
       executor: 'coding_agent',
       estimateMinutes: 70,
       descriptionMd:
+        '**⚠️ Partially superseded (Yue, 2026-06-14).** The `externalSubmitter` ' +
+        'embedded columns added here are now **dead** — intake is signed-in ' +
+        'only, so attribution is always a real `submittedByUserId`. The columns ' +
+        'remain in the DB until **6.11.10** drops them (ADR amend + migration); ' +
+        'this card kept as the record of what shipped. `submittedByUserId` + ' +
+        '`snoozedUntil` + the exclusion invariant are unchanged.\n\n' +
         'Implement the triage marker on `work_item` and enforce the ' +
         'exclusion invariant across EVERY normal read (the load-bearing ' +
         'correctness work of this story). Per 6.11.2:\n\n' +
@@ -359,55 +405,51 @@ export const story_6_11: PlanStory = {
     },
     {
       id: '6.11.4',
-      title: 'Submission intake — in-app submit + the rate-limited public portal form',
+      title: 'Submission intake — the in-app member submit (the shared triage-create service)',
       status: 'planned',
       type: 'code',
       executor: 'coding_agent',
-      estimateMinutes: 65,
+      estimateMinutes: 55,
       descriptionMd:
-        'The intake path that CREATES a triage work_item, from two channels. ' +
-        'Both create a `work_item` (kind `bug` or `task`) with the `triage` ' +
-        'marker set and no parent, through `workItemsService` (so the create ' +
-        'path is the same authority the rest of the app uses):\n\n' +
-        '- **In-app submit** (authenticated member): a service + ' +
-        '`POST /api/.../triage/submissions` route taking ' +
-        '`{ kind, title, descriptionMd, attachment? }`, attributing the ' +
+        'The intake path that CREATES a triage work_item from a **signed-in** ' +
+        'actor. It creates a `work_item` (kind `bug` or `task`) with the ' +
+        '`triage` marker set and no parent, through `workItemsService` (the ' +
+        'same create authority the rest of the app uses — which REQUIRES a ' +
+        'member actor, so intake is signed-in only; the unauthenticated public ' +
+        'portal is dropped, Yue 2026-06-14).\n\n' +
+        '- **In-app submit** (authenticated workspace member): a triage ' +
+        'intake service method + a `POST /api/.../triage/submissions` route ' +
+        'taking `{ kind, title, descriptionMd, attachment? }`, attributing the ' +
         'submission to the session user, scoped to the active project.\n' +
-        '- **Public portal form** (UNAUTHENTICATED): a separate ' +
-        'public-surface route keyed by a per-project shareable token/slug ' +
-        '(the form’s shareable URL). It creates the same triage ' +
-        'work_item with EXTERNAL-submitter attribution (captured name/email, ' +
-        'no tenant access granted). Because it is public it MUST be ' +
-        'rate-limited + abuse-guarded (per-IP / per-token throttle, a size ' +
-        'cap, and a spam/honeypot guard) and must NOT leak project internals ' +
-        '(it only accepts a submission; it returns no tree data). Decide the ' +
-        'shareable-token model (a per-project rotatable form key) so a ' +
-        'project can enable/disable/rotate its public intake.\n\n' +
-        'Stay 4-layer: routes parse + call one service method; the service ' +
-        'owns the transaction and calls `workItemsService` to create the ' +
-        'item; the throttle/guard is a service-layer concern.\n\n' +
+        '- **The service method is the shared triage-create authority.** ' +
+        'Expose it so Story 6.12’s public-project "Submit a request" (a ' +
+        'signed-in NON-member, gated by `canSubmitToTriage`) reuses the SAME ' +
+        'method to create the identical triage work_item, attributed to that ' +
+        'user’s real `submittedByUserId` (no captured name/email). 6.11 owns ' +
+        'the create path; 6.12 owns its public route + grant.\n\n' +
+        'Stay 4-layer: the route parses + calls one service method; the ' +
+        'service owns the transaction and calls `workItemsService` to create ' +
+        'the item. There is NO unauthenticated route, no per-project form ' +
+        'token, and no honeypot/rate-limit here (all were public-portal-only ' +
+        'and are removed).\n\n' +
         '## Acceptance criteria\n\n' +
         '- An authenticated in-app submit creates a triage work_item ' +
         'attributed to the session user, in the right project, invisible to ' +
         'the tree (it shows only in the queue).\n' +
-        '- The public form (unauthenticated, by the project form token) ' +
-        'creates a triage work_item with external-submitter attribution; an ' +
-        'invalid/disabled token is rejected; the response leaks no tree ' +
-        'data.\n' +
-        '- The public endpoint is rate-limited + abuse-guarded (rapid repeat ' +
-        'submits are throttled with a typed error, not a 500; the honeypot/' +
-        'size cap rejects junk).\n' +
-        '- Both paths create through `workItemsService` (no raw Prisma in the ' +
-        'route); the form token can be rotated/disabled per project.\n\n' +
+        '- The intake service method is callable by both the in-app route and ' +
+        'the 6.12 public submit, always attributing a real `submittedByUserId` ' +
+        '(member or signed-in non-member); a logged-out caller is rejected ' +
+        '(401), never creating a work item.\n' +
+        '- Creation goes through `workItemsService` (no raw Prisma in the ' +
+        'route); the kind-parent matrix + 6.4 access are honoured.\n\n' +
         '## Context refs\n\n' +
-        '- 6.11.3 — the triage marker + schema the created item carries.\n' +
+        '- 6.11.3 — the triage marker + `submittedByUserId` the created item ' +
+        'carries.\n' +
         '- `motir-core/lib/services/workItemsService.ts` — the create ' +
-        'authority both channels use.\n' +
-        '- Linear Asks / external intake ' +
-        '(https://linear.app/docs/triage) — the external-submitter channel ' +
-        'being mirrored.\n' +
-        '- `motir-core/CLAUDE.md` § 4-layer; any existing rate-limit / ' +
-        'public-route precedent in the repo.',
+        'authority (`createWorkItem` requires a member `ServiceContext`).\n' +
+        '- Story 6.12 (`canSubmitToTriage`, the public submit) — the second ' +
+        'caller of this intake service.\n' +
+        '- `motir-core/CLAUDE.md` § 4-layer.',
       dependsOn: ['6.11.3'],
     },
     {
@@ -476,8 +518,9 @@ export const story_6_11: PlanStory = {
       descriptionMd:
         'Build the admin triage inbox per the 6.11.1 design, over the 6.11.3 ' +
         'queue read + the 6.11.5 actions service. A paginated/infinite queue ' +
-        'list (kind icon, title, submitter [member avatar OR external chip], ' +
-        'age, snippet) + a detail pane (full body, comments, attachments, ' +
+        'list (kind icon, title, submitter [member avatar, or avatar + a ' +
+        '"Public" chip for a signed-in non-member], age, snippet) + a detail ' +
+        'pane (full body, comments, attachments, ' +
         'attribution) + the action bar wiring Accept, Promote (the backlog / ' +
         'sprint / epic / story parent + position picker), Decline, Mark ' +
         'duplicate / Merge (the canonical-item picker), and Snooze (the time ' +
@@ -499,7 +542,7 @@ export const story_6_11: PlanStory = {
         '/ story + position.\n' +
         '- Only `--el-*` + `[data-display-style]` tokens + shipped ' +
         '`components/ui/*`; the empty + loading + error states render; AA ' +
-        'contrast holds for the external chip + the destructive Decline.\n' +
+        'contrast holds for the "Public" chip + the destructive Decline.\n' +
         '- A promoted item disappears from the queue and (verified in 6.11.9) ' +
         'appears in the tree.\n\n' +
         '## Context refs\n\n' +
@@ -513,40 +556,38 @@ export const story_6_11: PlanStory = {
     },
     {
       id: '6.11.7',
-      title: 'Submission form UI — in-app widget + the public portal form',
+      title: 'Submission form UI — the in-app report widget',
       status: 'blocked',
       type: 'code',
       executor: 'coding_agent',
-      estimateMinutes: 60,
+      estimateMinutes: 40,
       descriptionMd:
-        'Build the two submission surfaces per the 6.11.1 design, over the ' +
-        '6.11.4 intake endpoints:\n\n' +
+        'Build the in-app submission surface per the 6.11.1 design, over the ' +
+        '6.11.4 intake endpoint:\n\n' +
         '- **In-app widget** — a compact "report a bug / request a feature" ' +
         'modal/popover (type toggle bug|feature, title, description, optional ' +
         'attachment) reachable from the app shell; on submit it posts to the ' +
-        'authenticated intake endpoint and confirms.\n' +
-        '- **Public portal form** — an unauthenticated, branded, single-' +
-        'column page at the project’s shareable form URL: the same ' +
-        'fields plus the external submitter’s name/email, a “thanks, we ' +
-        'got it” confirmation state, and graceful rate-limit / validation ' +
-        'error states. It exposes NO tree data and no app chrome that ' +
-        'implies authenticated access.\n\n' +
-        'Both use ONLY shipped `components/ui/*` + `--el-*` / ' +
-        '`[data-display-style]` tokens (no Tier-0 `--color-*`, no raw ' +
-        'spacing/radius), matching the design asset.\n\n' +
+        'authenticated intake endpoint as the session member and confirms with ' +
+        'a toast.\n\n' +
+        'The unauthenticated public portal form is DROPPED (Yue 2026-06-14 — a ' +
+        'work item is created only by a signed-in account). The external ' +
+        '"Submit a request" surface is built in Story 6.12 (it reuses the ' +
+        '6.11.4 intake service); it is NOT part of this subtask.\n\n' +
+        'Use ONLY shipped `components/ui/*` + `--el-*` / `[data-display-style]` ' +
+        'tokens (no Tier-0 `--color-*`, no raw spacing/radius), matching the ' +
+        'design asset.\n\n' +
         '## Acceptance criteria\n\n' +
         '- The in-app widget submits to the authenticated endpoint and shows ' +
         'a success confirmation; it is reachable from the shell.\n' +
-        '- The public form renders unauthenticated at the shareable URL, ' +
-        'submits with external attribution, shows the confirmation state, and ' +
-        'renders the rate-limit + validation error states gracefully (no raw ' +
-        '500).\n' +
+        '- A logged-out user never reaches a work-item-creating submit (no ' +
+        'unauthenticated form ships in this story).\n' +
         '- Only `--el-*` + `[data-display-style]` tokens + shipped ' +
-        'primitives; the public form leaks no tree/project internals.\n' +
-        '- Both match the 6.11.1 design asset.\n\n' +
+        'primitives; matches the 6.11.1 design asset.\n\n' +
         '## Context refs\n\n' +
-        '- 6.11.1 (design asset — required), 6.11.4 (the intake endpoints + ' +
-        'the form token).\n' +
+        '- 6.11.1 (design asset — required), 6.11.4 (the in-app intake ' +
+        'endpoint).\n' +
+        '- Story 6.12 — the external "Submit a request" surface (not built ' +
+        'here).\n' +
         '- `motir-core/components/ui/*` + `app/globals.css` token layers.\n' +
         '- `motir-core/CLAUDE.md` § colour + shape tokens.',
       dependsOn: ['6.11.1', '6.11.4'],
@@ -568,10 +609,11 @@ export const story_6_11: PlanStory = {
         'its title; and assert it IS present in the triage-queue read. (A ' +
         'parameterized test over the read set so adding a new read without ' +
         'the exclusion is caught.)\n' +
-        '- **Intake** — in-app submit attributes to the user; the public ' +
-        'form attributes externally and is rate-limited (rapid repeats ' +
-        'throttle with a typed error); a disabled/invalid form token is ' +
-        'rejected.\n' +
+        '- **Intake** — the in-app submit creates a triage item attributed to ' +
+        'the session member (`submittedByUserId`); the shared intake service ' +
+        'also attributes a signed-in NON-member (the 6.12 path) to a real ' +
+        '`submittedByUserId`; a logged-out caller is rejected (401) and ' +
+        'creates nothing.\n' +
         '- **Actions** — accept lands it in the backlog at default status; ' +
         'promote sets parent + position via `workItemsService` and the item ' +
         'now appears in the tree/search; decline cancels it; mark-duplicate ' +
@@ -585,7 +627,7 @@ export const story_6_11: PlanStory = {
         'exclusion.\n' +
         '- Promote/accept/decline/merge/snooze each assert their post-state ' +
         '(parent/position/status/queue-presence) against a repository read.\n' +
-        '- The public-form rate-limit + invalid-token paths are covered; ' +
+        '- The intake rejects a logged-out caller (no work item created); ' +
         'promote/decline assert 6.4 permission enforcement.\n' +
         '- New service/repository code respects the per-file coverage gate ' +
         '(CLAUDE.md § coverage); tests use the real Postgres helper.\n\n' +
@@ -609,8 +651,8 @@ export const story_6_11: PlanStory = {
         '**Type:** e2e (playwright) — the full intake→triage→' +
         'promote loop across both surfaces, proving the exclusion + promotion ' +
         'end to end in a browser.\n\n' +
-        'Flow: (1) submit a bug via the in-app widget (and/or the public ' +
-        'portal form) for the `PROD` project; (2) confirm it appears in the ' +
+        'Flow: (1) submit a bug via the in-app widget (signed-in member) for ' +
+        'the `PROD` project; (2) confirm it appears in the ' +
         'triage inbox and is ABSENT from the issue tree / a board / a list / ' +
         'search; (3) as an admin, promote it from the inbox to the backlog ' +
         '(or under a chosen epic/story); (4) confirm it is now GONE from the ' +
@@ -626,14 +668,68 @@ export const story_6_11: PlanStory = {
         '- Promoting it removes it from the queue and makes it appear in the ' +
         'tree (and search) under the chosen parent.\n' +
         '- A declined item leaves the queue and never appears in the tree.\n' +
-        '- The public-form leg lands an external submission in the same ' +
-        'inbox.\n\n' +
+        '- (The signed-in non-member "Submit a request" leg is exercised by ' +
+        'Story 6.12’s e2e, which lands a "Public" submission in this same ' +
+        'inbox.)\n\n' +
         '## Context refs\n\n' +
         '- 6.11.6 (inbox UI) + 6.11.7 (submission UIs) — the surfaces driven.\n' +
         '- The prodect e2e selector + run-harness gotcha notes (empty-state ' +
         'headings, combobox option naming, reuse-existing-server).\n' +
         '- `tests/e2e/*` — the existing Playwright setup to mirror.',
       dependsOn: ['6.11.6', '6.11.7'],
+    },
+    {
+      id: '6.11.10',
+      title: 'Retire the dropped external-submitter intake — ADR amend + schema column drop',
+      status: 'blocked',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 45,
+      descriptionMd:
+        'Clean up after the dropped unauthenticated public portal (Yue ' +
+        '2026-06-14 — a work item is created only by a signed-in account). The ' +
+        '6.11.3 schema and the 6.11.2 ADR baked in a **captured-external ' +
+        '`externalSubmitter` (name/email, no account)** attribution that is now ' +
+        'unreachable: every triage item — in-app member OR the 6.12 signed-in ' +
+        'non-member — carries a real `submittedByUserId`. This subtask owns the ' +
+        'full retirement:\n\n' +
+        '- **Schema (drop the dead columns).** Remove the `externalSubmitter` ' +
+        'embedded fields from `work_item` (keep `submittedByUserId` as the ' +
+        '`@relation`, keep `snoozedUntil`). Author the Prisma migration so ' +
+        '`migrate dev` reports no drift afterward (model the change on the ' +
+        'schema, never raw-SQL-only — CLAUDE.md FK-as-relation rule); on the ' +
+        'shared dev DB hand-author + `migrate resolve` per the shared-DB ' +
+        'drift rule rather than letting `migrate dev` propose a reset.\n' +
+        '- **Consumers.** Grep for every `externalSubmitter` reference — DTOs, ' +
+        'mappers, the queue-read attribution shape, the inbox DTO, any test ' +
+        'fixture — and remove/replace it with the `submittedByUserId`-based ' +
+        '"member vs public (non-member)" distinction. Typecheck + the touched ' +
+        'services’ vitest stay green.\n' +
+        '- **ADR amend.** Update `docs/decisions/triage-model.md` §3 ' +
+        '(submitter attribution) to record the revision: attribution is ' +
+        'ALWAYS a real `submittedByUserId` (a workspace member, or a signed-in ' +
+        'non-member via the 6.12 `canSubmitToTriage` grant); the ' +
+        'captured-external name/email and the unauthenticated portal are ' +
+        'removed. Cite the 2026-06-14 decision; leave the rest of the ADR ' +
+        '(triage-state, read-exclusion, promote/decline/merge/snooze) intact.\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- The `externalSubmitter` columns are dropped via a clean migration ' +
+        '(`migrate dev` reports no difference after); `submittedByUserId` + ' +
+        '`snoozedUntil` are unchanged.\n' +
+        '- No `externalSubmitter` reference remains in schema, services, ' +
+        'mappers, DTOs, or tests; typecheck + the affected vitest are green; ' +
+        'the per-file coverage gate holds.\n' +
+        '- `docs/decisions/triage-model.md` §3 records the signed-in-only ' +
+        'attribution revision; the inbox still distinguishes member vs public ' +
+        'submitter off `submittedByUserId` + workspace-membership.\n\n' +
+        '## Context refs\n\n' +
+        '- 6.11.2 ADR (`docs/decisions/triage-model.md` §3) + 6.11.3 schema — ' +
+        'what this retires.\n' +
+        '- 6.11.4 — the intake that establishes `submittedByUserId`-only ' +
+        'attribution; Story 6.12 — the signed-in non-member path.\n' +
+        '- `motir-core/CLAUDE.md` § migration FK-as-relation + the shared-DB ' +
+        'migrate-dev drift rule + the per-file coverage gate.',
+      dependsOn: ['6.11.4', '6.11.8'],
     },
   ],
 };
