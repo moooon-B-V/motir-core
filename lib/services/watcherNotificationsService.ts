@@ -8,6 +8,8 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { mentionExcerpt } from '@/lib/mentions/excerpt';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { sendEvent } from '@/lib/jobs/sendEvent';
+import { notificationPreferencesService } from '@/lib/services/notificationPreferencesService';
+import { NOTIFICATION_EVENT_TYPE } from '@/lib/notifications/preferences';
 
 // Watcher → email fan-out (Story 5.4 · Subtask 5.4.5). The business logic
 // behind the watcherNotify jobs (lib/jobs/definitions/watcherNotify.ts), on
@@ -27,7 +29,14 @@ import { sendEvent } from '@/lib/jobs/sendEvent';
 //     watcher — access may have changed since they started watching);
 //   * a work item / comment hard-deleted between write and send means there
 //     is nothing to notify about — the fan-out resolves to zero sends, it
-//     never errors (deletion is a normal race, not a failure to retry).
+//     never errors (deletion is a normal race, not a failure to retry);
+//   * on a TRANSITION event, the per-user `transitioned · email` channel
+//     preference (Story 5.7 · Subtask 5.7.11) gates each watcher — a watcher
+//     who turned it off is dropped at the SEND decision, the same shape as the
+//     5.7.6 mention-job gate (the event still fires once; no emit site is
+//     touched). The COMMENT branch is deliberately ungated — see the inline
+//     note (the "watching · commented" matrix row is a separate design
+//     question).
 //
 // PAGED fan-out (finding #57): watchers are walked in pages of
 // {@link WATCHER_FAN_OUT_PAGE_SIZE} via the cursor-paged repository read — a
@@ -163,7 +172,32 @@ export const watcherNotificationsService = {
         throw err;
       }
 
-      for (const watcher of viewable) {
+      // Per-user CHANNEL GATE (Story 5.7 · Subtask 5.7.11), TRANSITION branch
+      // only. A watcher who turned `transitioned · email` OFF is dropped HERE,
+      // at the SEND decision — not at any emit site (the event still fired once;
+      // the one-emit-path invariant holds, the same shape as the 5.7.6 mention-
+      // job gate). The gate rides the existing bounded cursor walk: ONE batch
+      // `filterChannelEnabled` query PER PAGE (finding #57 — never a per-watcher
+      // N+1, never a load-all). An unset preference resolves to the documented
+      // default (ON), so untouched watchers are unaffected.
+      //
+      // The COMMENT branch is intentionally left UNGATED: the matrix's
+      // `commented` row is the involved/mention path, not the watching path, so
+      // a "watching · commented" preference is a separate design question (a new
+      // matrix row) — surfaced as a finding, not gated here.
+      let deliverable = viewable;
+      if (input.kind === 'transition') {
+        const emailEnabled = new Set(
+          await notificationPreferencesService.filterChannelEnabled(
+            viewable.map((w) => w.userId),
+            NOTIFICATION_EVENT_TYPE.transitioned,
+            'email',
+          ),
+        );
+        deliverable = viewable.filter((w) => emailEnabled.has(w.userId));
+      }
+
+      for (const watcher of deliverable) {
         if (input.kind === 'comment') {
           await sendEvent('email.send', {
             workspaceId: input.workspaceId,
