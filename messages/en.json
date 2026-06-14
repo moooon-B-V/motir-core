@@ -2676,6 +2676,24 @@
       "declined": "Declined",
       "unsnoozed": "Returned to the queue",
       "error": "Something went wrong. Please try again."
+    },
+    "widget": {
+      "trigger": "Report",
+      "heading": "Report something",
+      "kindLabel": "What are you reporting?",
+      "kindBug": "Bug",
+      "kindFeature": "Feature",
+      "titleLabel": "Title",
+      "titlePlaceholder": "A short summary",
+      "titleRequired": "A title is required.",
+      "titleTooLong": "Keep the title under {max} characters.",
+      "descriptionLabel": "What happened?",
+      "descriptionHint": "Steps, expected vs. actual — optional",
+      "descriptionPlaceholder": "Add any details that help us reproduce or understand it…",
+      "submit": "Submit",
+      "submitted": "Thanks — your report was submitted",
+      "submittedDetail": "Filed as {key}, now waiting in triage.",
+      "error": "Couldn’t submit your report. Please try again."
     }
   }
 }

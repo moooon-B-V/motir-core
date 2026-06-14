@@ -8,6 +8,7 @@ import { Pill } from '@/components/ui/Pill';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { triageService } from '@/lib/services/triageService';
 import { TriageInbox } from './_components/TriageInbox';
+import { ReportButton } from '../_components/ReportButton';
 
 // The admin Triage inbox (Story 6.11 · Subtask 6.11.6) — the incoming-work
 // front door. ACTIVE-project-scoped, mirroring `issues/page.tsx`: a server
@@ -78,7 +79,10 @@ export default async function TriagePage() {
             {t('subtitle', { project: ctx.project.name, key: ctx.project.identifier })}
           </p>
         </div>
-        {/* Report widget trigger: subtask 6.11.7 */}
+        {/* The inbox-header "Report" CTA (design/triage panel 1) — opens the
+            6.11.7 report widget mounted by ReportProvider in the (authed) layout.
+            This page already gates on canEdit, so the trigger renders enabled. */}
+        <ReportButton display="inbox" />
       </header>
 
       <TriageInbox

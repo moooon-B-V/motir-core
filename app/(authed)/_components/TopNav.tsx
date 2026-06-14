@@ -5,6 +5,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { NotificationBell } from './NotificationBell';
 import { CommandPaletteTrigger } from './CommandPaletteTrigger';
 import { CreateIssueButton } from './CreateIssueButton';
+import { ReportButton } from './ReportButton';
 import { SidebarToggle } from '@/components/ui/SidebarToggle';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
 import type { OrganizationDTO } from '@/lib/dto/organizations';
@@ -71,6 +72,7 @@ export async function TopNav({
         </div>
         <div className="flex items-center gap-2">
           <CreateIssueButton />
+          <ReportButton />
           <CommandPaletteTrigger />
           <ThemeToggle />
           {initialUnreadCount !== null ? (
