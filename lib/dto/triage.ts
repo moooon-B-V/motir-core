@@ -5,6 +5,8 @@
 // avatar OR an "external" chip without re-deriving origin.
 
 import type { WorkItemKindDto, WorkItemPriorityDto } from './workItems';
+import type { CommentDTO } from './comments';
+import type { AttachmentDTO } from './attachments';
 
 /**
  * Who submitted a triage item (ADR §3). `member` = an in-app submission whose
@@ -66,6 +68,30 @@ export interface TriageQueueItemDto {
 export interface TriageQueuePageDto {
   items: TriageQueueItemDto[];
   nextCursor: string | null;
+}
+
+/**
+ * The full triage item the inbox DETAIL pane renders (Subtask 6.11.6) — the
+ * read behind a row click. Unlike the lighter {@link TriageQueueItemDto} list
+ * shape it carries the FULL Markdown body plus the item's whole comment +
+ * attachment thread (the SAME shipped `CommentDTO` / `AttachmentDTO` shapes the
+ * issue-detail page renders), so the inbox reuses the existing display
+ * primitives without re-deriving anything. The comments arrive flattened
+ * (roots + their single-level replies) oldest-first; attachments newest-first.
+ */
+export interface TriageItemDetailDto {
+  id: string;
+  /** A submission is born `bug` (bug report) or `task` (feature request). */
+  kind: WorkItemKindDto;
+  identifier: string;
+  title: string;
+  /** The full submission body (Markdown), or null when none was given. */
+  descriptionMd: string | null;
+  submitter: TriageSubmitterDto;
+  /** When the item entered triage (ISO-8601) — the detail renders its age. */
+  triagedAt: string;
+  comments: CommentDTO[];
+  attachments: AttachmentDTO[];
 }
 
 /**
