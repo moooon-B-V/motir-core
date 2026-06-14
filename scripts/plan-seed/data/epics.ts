@@ -1771,7 +1771,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Combobox listbox is clipped by the Modal when opened inside a dialog (Add-widget config modal — Statistic type picker shows only the first 1–2 options)',
-        status: 'in_progress',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
