@@ -406,7 +406,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.4',
       title: 'Submission intake — the in-app member submit (the shared triage-create service)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 55,
