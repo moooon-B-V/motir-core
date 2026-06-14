@@ -1891,7 +1891,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Chinese (zh) glossary leak: the dashboards/reports copy still says `仪表板` for "dashboard" (must be `工作台`) and `问题` for "work item" (must be `工作项`) — messages/zh.json',
-        status: 'planned',
+        status: 'in_progress',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
