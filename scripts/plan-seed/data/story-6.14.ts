@@ -222,7 +222,7 @@ export const story_6_14: PlanStory = {
       id: '6.14.1',
       title:
         'Design — the "this epic is not public" placeholder (tree-expand + detail child-panel) + the private-epic public row + the project-admin set-private control',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 50,
@@ -430,7 +430,7 @@ export const story_6_14: PlanStory = {
     {
       id: '6.14.3',
       title: 'Schema — the epic-privacy flag on `work_item` (epic-kind) + migration',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
