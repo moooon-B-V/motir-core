@@ -122,7 +122,7 @@ export const story_6_15: PlanStory = {
       id: '6.15.1',
       title:
         'Design — board filter surface: the enabled toolbar Filter affordance, the builder + saved-filter picker on the board, active-filter chips, filtered/filtered-empty states (design/boards/)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 40,
