@@ -2,12 +2,26 @@ import type { PlanStory } from '../types';
 
 /**
  * Story 6.12 (Epic 6) — Public projects (open project management). A project can
- * be made **public**: open for read-only VIEW to ANY signed-in Motir account
- * (across orgs/workspaces), where a viewer can change NOTHING except **add bugs
- * / feature requests** (through the 6.11 Triage), **upvote** existing requests,
- * and **comment** on them. This is the marketing-grade "open source project
- * management" / public-feedback-portal concept (Yue), built as a pure motir-core
- * per-project capability with zero AI boundary and zero forward dependency.
+ * be made **public**: open for read-only VIEW to ANYONE on the web (no sign-in),
+ * where a viewer can change NOTHING except **add bugs / feature requests**
+ * (through the 6.11 Triage), **upvote** existing requests, and **comment** on
+ * them — and those three writes require sign-in. This is the marketing-grade
+ * "open source project management" / public-feedback-portal concept (Yue), built
+ * as a pure motir-core per-project capability with zero AI boundary and zero
+ * forward dependency.
+ *
+ * **⚠️ MODEL REVISION (Yue, 2026-06-14).** A public project page is **FULLY
+ * PUBLIC — anyone can VIEW it with NO sign-in**, and it is **server-rendered +
+ * crawlable, optimised for SEO + GEO** (head meta/OpenGraph/canonical, JSON-LD
+ * `SoftwareApplication`, semantic HTML, the Overview/README as the citable
+ * description + an FAQ). Only the three **WRITES** (submit a bug / feature
+ * request, upvote, comment) still require sign-in — "sign-in-to-act", the
+ * GitHub / Canny standard. This SUPERSEDES the "Account-required, NOT anonymous"
+ * decision below for READ; anonymous *writes* stay out of scope (they need the
+ * deferred abuse / anonymous-identity model). Yue: "the project landing page
+ * should be public, no auth, but to actually report a bug or submit a feature
+ * request, the user should be logged in." This mirrors the 6.13 project-square
+ * revision and resolves its anonymous click-through knock-on.
  *
  * **The locked model (Yue, 2026-06-12): `public` is a 4th `ProjectAccessLevel`,
  * and it is the ONLY access level that crosses the org boundary for READ.**
@@ -18,25 +32,28 @@ import type { PlanStory } from '../types';
  *   - **private** → only project members (6.4).
  *   - **limited** → any WORKSPACE member, view + comment, no edit (6.4).
  *   - **open** → any WORKSPACE member, view + edit (6.4).
- *   - **public** → any AUTHENTICATED Motir account, ACROSS orgs/workspaces,
- *     read-only VIEW; the only writes are triage-submit + upvote + comment.
+ *   - **public** → ANYONE on the web (no sign-in), ACROSS orgs/workspaces,
+ *     read-only VIEW; the only writes are triage-submit + upvote + comment, and
+ *     those three REQUIRE sign-in.
  * Every level except `public` is org/workspace-bounded; `public` is the single
- * deliberate exception where 6.4's `canBrowse` returns true for a user with NO
- * org/workspace membership at all (bypassing the 6.10 org gate for READ on public
- * projects ONLY). Every WRITE stays gated: a public viewer is NOT a member, so
- * 6.4 `canEdit` is false for everything; the three permitted writes
- * (triage-submit, upvote, comment) are NEW narrow grants checked explicitly, not
- * a relaxation of `canEdit`. The existing 404-not-403 posture is untouched for
- * NON-public projects (a non-public project a cross-org user hits is still
- * not-found, never forbidden).
+ * deliberate exception where 6.4's `canBrowse` returns true for ANYONE, INCLUDING
+ * no session at all (bypassing the 6.10 org gate for READ on public projects
+ * ONLY). Every WRITE stays gated: a public viewer is NOT a member, so 6.4
+ * `canEdit` is false for everything; the three permitted writes (triage-submit,
+ * upvote, comment) are NEW narrow grants checked explicitly, EACH REQUIRING A
+ * SIGNED-IN ACCOUNT, not a relaxation of `canEdit`. The existing 404-not-403
+ * posture is untouched for NON-public projects (a non-public project a cross-org
+ * user hits is still not-found, never forbidden).
  *
- * **Account-required, NOT anonymous (locked).** A viewer must be a signed-in
- * Motir account (any org). Anonymous/logged-out public access is explicitly
- * FUTURE (named out of scope, not silently dropped) — it would need abuse
- * controls + an anonymous-identity model this story does not build. This is the
- * deliberate narrowing: GitHub-public-repo "anyone can read" semantics, gated to
- * "any authenticated user" so every submit/upvote/comment carries a real account
- * for attribution + rate-limiting.
+ * **READ fully public / anonymous; WRITE requires sign-in (revised 2026-06-14,
+ * supersedes the prior "account-required, NOT anonymous" lock).** Anyone — logged
+ * out included — can VIEW a public project, and the page is server-rendered +
+ * crawlable (SEO/GEO). Only the three writes need a signed-in account, so every
+ * submit/upvote/comment still carries a real account for attribution +
+ * rate-limiting. Anonymous *writes* remain FUTURE / out of scope (named, not
+ * silently dropped) — they would need the abuse + anonymous-identity model this
+ * story does not build. This is GitHub-public-repo semantics applied faithfully:
+ * anyone reads, you sign in to act.
  *
  * **What is VISIBLE vs HIDDEN on the public view (locked).** A public viewer
  * sees the read-only board / work item list and the public ROADMAP (status-grouped
@@ -125,28 +142,33 @@ export const story_6_12: PlanStory = {
   status: 'planned',
   gitBranch: 'feat/PROD-6.12-public-projects',
   descriptionMd:
-    'Make a project **public** — open for read-only VIEW to ANY signed-in ' +
-    'Motir account, ACROSS orgs and workspaces — where a viewer can change ' +
+    'Make a project **public** — open for read-only VIEW to ANYONE on the web ' +
+    '(no sign-in), ACROSS orgs and workspaces — where a viewer can change ' +
     'NOTHING except **submit a bug / feature request** (into the 6.11 ' +
-    'Triage), **upvote** an existing request, and **comment** on it. This is ' +
-    'the "open source project management" / public-feedback-portal posture: a ' +
-    'public roadmap + a public intake, gated to authenticated accounts. A pure ' +
-    'motir-core, per-project capability — no AI boundary, no forward ' +
-    'dependency.\n\n' +
+    'Triage), **upvote** an existing request, and **comment** on it, and those ' +
+    'three writes REQUIRE sign-in. This is the "open source project ' +
+    'management" / public-feedback-portal posture: a fully public, crawlable ' +
+    '(SEO/GEO) roadmap + a sign-in-to-act intake. A pure motir-core, ' +
+    'per-project capability — no AI boundary, no forward dependency.\n\n' +
+    '**Model revision (Yue, 2026-06-14):** READ is fully public / anonymous + ' +
+    'SEO/GEO-optimised; only the three WRITES require sign-in (the GitHub / ' +
+    'Canny standard). Supersedes the earlier "account-required, not anonymous" ' +
+    'framing for READ; anonymous *writes* stay out of scope.\n\n' +
     '**The model (locked — see the module header for the full rationale + the ' +
     'verified mirror):**\n\n' +
     '- **`public` is a 4th `ProjectAccessLevel`, extending 6.4.** Today ' +
     'open / limited / private (6.4, DONE); 6.12 adds **public**. The openness ' +
     'ladder is **public > open > limited > private**. `public` is the ONLY ' +
     'level that crosses the org boundary for READ — 6.4’s `canBrowse` returns ' +
-    'true for ANY authenticated account on a public project (bypassing the ' +
-    'org/workspace gate for READ on public projects only); every other level ' +
-    'stays org/workspace-bounded and the 404-not-403 posture for non-public ' +
-    'projects is untouched.\n' +
-    '- **Account-required, not anonymous.** A viewer must be a signed-in ' +
-    'Motir account (any org). Anonymous/logged-out access is explicitly FUTURE ' +
-    '(out of scope) so every submit/upvote/comment carries a real account for ' +
-    'attribution + rate-limiting.\n' +
+    'true for ANYONE, INCLUDING no session at all, on a public project ' +
+    '(bypassing the org/workspace gate for READ on public projects only); ' +
+    'every other level stays org/workspace-bounded and the 404-not-403 posture ' +
+    'for non-public projects is untouched.\n' +
+    '- **READ anonymous + crawlable; WRITE needs sign-in.** Anyone (logged out ' +
+    'included) can VIEW a public project, and the page is server-rendered + ' +
+    'crawlable (SEO/GEO). The three writes (submit / upvote / comment) require ' +
+    'a signed-in account, so each still carries a real account for attribution ' +
+    '+ rate-limiting. Anonymous *writes* are FUTURE (out of scope).\n' +
     '- **The only writes a public viewer can do** are triage-submit + upvote ' +
     '+ comment — three NEW narrow grants checked explicitly, NOT a relaxation ' +
     'of 6.4 `canEdit` (a public viewer is not a member, so `canEdit` is false ' +
@@ -172,7 +194,9 @@ export const story_6_12: PlanStory = {
     'semantics decision (6.12.2); the schema + access-check extension + the ' +
     '`publicOverviewMd` project field + migration (6.12.3); the public ' +
     'read-only project view + the OVERVIEW/README landing (the default public ' +
-    'tab), internal fields hidden (6.12.4); cross-account submit-to-triage + ' +
+    'tab), internal fields hidden, **anonymous + server-rendered + SEO/GEO ' +
+    '(head metadata, JSON-LD, semantic HTML, sitemap)** (6.12.4); ' +
+    'cross-account submit-to-triage + ' +
     'duplicate detection (6.12.5); upvoting + comments on public requests ' +
     '(6.12.6); the public roadmap view with status tracking (6.12.7); the ' +
     '"make public" toggle + the shareable public link + the Overview/README ' +
@@ -191,10 +215,11 @@ export const story_6_12: PlanStory = {
     'auto-intro (never a blank page). Design: `design/public-projects/` Panel ' +
     '1 (6.12.1, the design gate — DONE).\n\n' +
     '**Out of scope (named so they land in their own story, not here):** ' +
-    'ANONYMOUS / logged-out public access (a future story — needs ' +
-    'anonymous-identity + heavier abuse controls); a fully custom-branded / ' +
-    'white-label public portal domain (this ships the in-app authenticated ' +
-    'public surface, not a separate marketing site); AI-assisted dedupe ' +
+    'ANONYMOUS / logged-out WRITES — submitting / upvoting / commenting without ' +
+    'an account (a future story — needs an anonymous-identity model + heavier ' +
+    'abuse controls; anonymous READ is now IN scope, only the writes need ' +
+    'sign-in); a fully custom-branded / white-label public portal domain; ' +
+    'AI-assisted dedupe ' +
     'suggestion beyond the deterministic match (an Epic-7 planner enhancement); ' +
     'public analytics / vote-trend dashboards; and email digests of public ' +
     'activity.',
@@ -206,15 +231,18 @@ export const story_6_12: PlanStory = {
     'appears (and can be disabled/rotated). Confirm the access level now reads ' +
     '`public` and the four-level control shows public > open > limited > ' +
     'private.\n' +
-    '- **Cross-org read (the load-bearing check).** Sign in as a SECOND Motir ' +
+    '- **Anonymous public read (the load-bearing check).** While **LOGGED OUT** ' +
+    '(no session), open the public link → the read-only board / work item list + ' +
+    'the public roadmap render with NO sign-in; there are NO edit affordances ' +
+    '(no create / move / assign / status controls); **assignees, estimates, and ' +
+    'internal comments are absent** from every work item; and view-source shows a ' +
+    'real `<h1>`, `<meta>`/OpenGraph tags, and a JSON-LD `CollectionPage`/' +
+    '`SoftwareApplication` block (SEO/GEO). Confirm hitting a NON-public project ' +
+    'gets 404-not-403 (not forbidden), proving public is the only cross-org read ' +
+    'exception. Confirm a write control shows a sign-in-to-act prompt.\n' +
+    '- **Submit + duplicate detection (signed in).** Sign in as a SECOND Motir ' +
     'account in a DIFFERENT org with NO membership in the public project’s org/' +
-    'workspace. Open the public link → the read-only board / work item list + the ' +
-    'public roadmap render; there are NO edit affordances (no create / move / ' +
-    'assign / status controls); **assignees, estimates, and internal comments ' +
-    'are absent** from every work item. Confirm the SAME second account hitting a ' +
-    'NON-public project of that org gets 404-not-403 (not forbidden), proving ' +
-    'public is the only cross-org read exception.\n' +
-    '- **Submit + duplicate detection.** As the second account, submit a ' +
+    'workspace, then submit a ' +
     'feature request whose title matches an existing public request → the ' +
     'dedupe surfaces the existing matching request(s) and offers to **upvote** ' +
     'it instead of creating a dupe; upvoting it increments the count (and the ' +
@@ -273,8 +301,9 @@ export const story_6_12: PlanStory = {
         'no drag handles). INTERNAL fields are absent — draw a work item card / ' +
         'row WITHOUT assignee, WITHOUT estimate, and note that internal ' +
         'comments are not shown. Make the "you are viewing a public project" ' +
-        'framing explicit (a banner / chip), and show the signed-in ' +
-        'cross-org viewer’s identity (they ARE authenticated).\n' +
+        'framing explicit (a banner: "anyone can view — no account needed; sign ' +
+        'in to act"), and draw the logged-out top-bar (a Sign-in / Start-free ' +
+        'CTA, not a signed-in identity — the read is anonymous).\n' +
         '- **Panel 2 — the public roadmap.** Status-grouped columns ' +
         '(submitted → planned → in progress → done) of public-facing items, ' +
         'each with its **vote count** + a link to the request; paginated / ' +
@@ -294,10 +323,15 @@ export const story_6_12: PlanStory = {
         '- **Panel 5 — project settings: the make-public toggle + share ' +
         'link.** The four-level Access control extended to ' +
         '**public > open > limited > private** (with one-line copy for each, ' +
-        'and a clear "public = any signed-in Motir account, across orgs, can ' +
-        'view + submit/upvote/comment" explanation), plus the **shareable ' +
-        'public link** (copy, disable, rotate) and the ' +
-        'account-required-not-anonymous note.\n' +
+        'and a clear "public = anyone can view, no account, indexable by search ' +
+        'engines; sign in only to submit/upvote/comment" explanation), plus the ' +
+        '**shareable public link** (copy, disable, rotate) and the ' +
+        'no-sign-in-to-view note.\n' +
+        '- **Panel 9 — SEO + GEO scaffolding.** The fully-public page is ' +
+        'server-rendered + crawlable: head meta / OpenGraph / canonical, JSON-LD ' +
+        '(`SoftwareApplication`), a semantic HTML outline, and the GEO ' +
+        'answer-engine framing (the Overview/README as the citable description + ' +
+        'an FAQ).\n' +
         '- **Panel 6 — empty / loading / error / permission states.** The ' +
         'empty roadmap + empty request list, the paginated loading skeleton, ' +
         'the fetch-error state, and the rate-limited submit state (graceful, ' +
@@ -313,7 +347,8 @@ export const story_6_12: PlanStory = {
         'hand-rolling)" checklist. It MUST state, in writing, that internal ' +
         'fields (assignees / estimates / internal comments) are ABSENT from the ' +
         'public view, that the public surface has NO edit affordances, and that ' +
-        'access is account-required (anonymous is future).\n\n' +
+        'READ is fully public / anonymous + crawlable (SEO/GEO) while the three ' +
+        'WRITES require sign-in (sign-in-to-act).\n\n' +
         '## Acceptance criteria\n\n' +
         '- `design/public-projects/*.mock.html` renders the six panels above, ' +
         'referencing ONLY `--el-*` + `[data-display-style]` tokens (no Tier-0 ' +
@@ -328,11 +363,13 @@ export const story_6_12: PlanStory = {
         'detail draws upvote + comments.\n' +
         '- The Access control is drawn with all FOUR levels ' +
         '(public > open > limited > private) + copy, the shareable link ' +
-        '(copy/disable/rotate), and the account-required note.\n' +
+        '(copy/disable/rotate), and the no-sign-in-to-view note; the SEO/GEO ' +
+        'scaffolding (Panel 9) is drawn.\n' +
         '- `design-notes.md` names every primitive + copy + per-element ' +
         '`--el-*` role, and states the hidden-internal-fields + ' +
-        'no-edit-affordances + account-required invariants; AA contrast holds ' +
-        'for the public banner + the upvote/roadmap tints.\n\n' +
+        'no-edit-affordances + anonymous-READ / sign-in-to-WRITE + SEO/GEO ' +
+        'invariants; AA contrast holds for the public banner + the upvote/' +
+        'roadmap tints.\n\n' +
         '## Context refs\n\n' +
         '- `scripts/plan-seed/data/story-7.0.ts` § 7.0.1 — the multi-panel ' +
         'design-card shape to mirror.\n' +
@@ -370,11 +407,13 @@ export const story_6_12: PlanStory = {
         'ladder is **public > open > limited > private**. State that this is a ' +
         'one-value extension of the 6.4 model + the SAME ' +
         '`projectAccessService` policy — NOT a parallel access system.\n' +
-        '2. **`public` = any AUTHENTICATED Motir account reads CROSS-ORG ' +
-        '(the single exception).** Decide precisely: 6.4’s `canBrowse` returns ' +
-        'true for ANY signed-in user when the project is `public`, BYPASSING ' +
-        'the 6.10 org/workspace membership gate FOR READ ON PUBLIC PROJECTS ' +
-        'ONLY. Every other level stays org/workspace-bounded; the 404-not-403 ' +
+        '2. **`public` = ANYONE reads CROSS-ORG, no sign-in (the single ' +
+        'exception).** Decide precisely: 6.4’s `canBrowse` returns true for ' +
+        'ANYONE — INCLUDING an unauthenticated/anonymous request — when the ' +
+        'project is `public`, BYPASSING the 6.10 org/workspace membership gate ' +
+        'FOR READ ON PUBLIC PROJECTS ONLY. The public read is server-rendered + ' +
+        'crawlable (SEO/GEO). Every other level stays org/workspace-bounded; the ' +
+        '404-not-403 ' +
         'cross-tenant posture is preserved for non-public projects (a cross-org ' +
         'user hitting a non-public project is still not-found, never ' +
         'forbidden). Fix WHERE this exception lives so it is a single, auditable ' +
@@ -400,12 +439,14 @@ export const story_6_12: PlanStory = {
         'Enumerate what IS visible: work item key/title/kind/status/description, ' +
         'board columns, the public roadmap, vote counts, public-request ' +
         'comments.\n' +
-        '5. **Account-required, not anonymous.** Fix that a viewer MUST be a ' +
-        'signed-in Motir account (any org); anonymous access is out of scope ' +
-        '(future). Every submit/upvote/comment is attributed to that account ' +
-        'and rate-limited by it. State the share-link is an entry pointer to ' +
-        'the public project (it still requires sign-in), NOT an ' +
-        'unauthenticated bypass.\n' +
+        '5. **READ anonymous; WRITE requires sign-in (revised 2026-06-14).** ' +
+        'Fix that READING a public project needs NO account (anyone, logged ' +
+        'out, crawlers) — the page is server-rendered + crawlable (SEO/GEO). ' +
+        'The three WRITES (submit / upvote / comment) require a signed-in ' +
+        'account, so each is attributed + rate-limited by it; a logged-out ' +
+        'write surface shows a sign-in-to-act prompt. Anonymous *writes* are ' +
+        'out of scope (future — abuse + anonymous-identity model). State the ' +
+        'share-link opens the public project with NO sign-in.\n' +
         '6. **Submission + dedupe + vote model semantics.** A public ' +
         'submission reuses 6.11’s intake (born a triage `work_item`), ' +
         'attributed to the cross-org account. Fix the duplicate-detection ' +
@@ -426,8 +467,9 @@ export const story_6_12: PlanStory = {
         'comment) as independent of `canEdit`, and the EXACT hidden-field set ' +
         '(assignees, estimates, internal comments) stripped by a public ' +
         'PROJECTION at the read layer.\n' +
-        '- It fixes the account-required (not anonymous) rule, the ' +
-        'duplicate-detection-before-create contract, and the one-vote-per-' +
+        '- It fixes the anonymous-READ / sign-in-to-WRITE rule (+ SEO/GEO ' +
+        'crawlable public read), the duplicate-detection-before-create ' +
+        'contract, and the one-vote-per-' +
         'account model with its storage.\n' +
         '- It cites the verified mirror (OpenProject/Plane/GitHub public ' +
         'visibility + Canny/Productboard/Featurebase portal set) for the ' +
@@ -479,8 +521,11 @@ export const story_6_12: PlanStory = {
         '(6.12.4) only when the project is public.\n' +
         '- **Access-check extension (the single auditable branch):** extend ' +
         '`canBrowse` so that when a project is `public`, it returns true for ' +
-        'ANY authenticated user — bypassing the 6.10 org/workspace membership ' +
-        'gate FOR READ ON PUBLIC PROJECTS ONLY. Every other level keeps its ' +
+        'ANYONE — INCLUDING an unauthenticated request (no session) — ' +
+        'bypassing the 6.10 org/workspace membership gate FOR READ ON PUBLIC ' +
+        'PROJECTS ONLY (so the public view route does NOT `getSession()`-gate ' +
+        'the read; it renders server-side for crawlers + logged-out visitors). ' +
+        'Every other level keeps its ' +
         '6.4 semantics; the 404-not-403 posture is UNTOUCHED for non-public ' +
         'projects (a cross-org user on a non-public project still gets ' +
         'not-found). `canEdit` is UNCHANGED — a public viewer (non-member) ' +
@@ -498,8 +543,9 @@ export const story_6_12: PlanStory = {
         'the nullable `project.publicOverviewMd` Markdown column; ' +
         '`prisma migrate dev` reports no drift; no existing project’s level ' +
         'changes.\n' +
-        '- `canBrowse` returns true for ANY authenticated user on a `public` ' +
-        'project (cross-org), in a single auditable branch; non-public ' +
+        '- `canBrowse` returns true for ANYONE — including an unauthenticated ' +
+        'request — on a `public` project (cross-org), in a single auditable ' +
+        'branch; non-public ' +
         'projects keep 6.4 semantics + the 404-not-403 cross-tenant posture ' +
         'unchanged.\n' +
         '- `canEdit` is unchanged (a public non-member viewer → false for ' +
@@ -531,9 +577,10 @@ export const story_6_12: PlanStory = {
       estimateMinutes: 65,
       descriptionMd:
         'Build the public read-only project view per the 6.12.1 design, over ' +
-        'the 6.12.3 access extension. A cross-org authenticated viewer opens a ' +
+        'the 6.12.3 access extension. ANYONE — logged out included — opens a ' +
         'public project and sees the board columns + work item list READ-ONLY, with ' +
-        'INTERNAL fields hidden and NO edit affordances.\n\n' +
+        'INTERNAL fields hidden and NO edit affordances. The page is ' +
+        'server-rendered (no session gate) so it is fully public + crawlable.\n\n' +
         '- **The public PROJECTION (the load-bearing correctness):** the read ' +
         'goes through a dedicated public read shape / DTO (per 6.12.2) that ' +
         'NEVER includes the hidden internal fields — **assignees, estimates, ' +
@@ -585,24 +632,40 @@ export const story_6_12: PlanStory = {
         'on GitHub). This copy is the design’s `design/public-projects/` Panel 1 ' +
         'text 1:1.\n' +
         '- **The view UI:** render the read-only board + work item list with the ' +
-        '"public project" framing (banner/chip) and the signed-in cross-org ' +
-        'viewer’s identity; NO create / move / assign / status / drag ' +
-        'affordances anywhere (the public surface is view-only besides the ' +
-        '6.12.6 upvote/comment + 6.12.5 submit entry points). Paginated / lazy ' +
-        '(the at-scale rule — a public board is an unbounded read surface).\n' +
-        '- **Gating:** the route is session-gated (a signed-in account is ' +
-        'required — account-required, not anonymous) and access is granted via ' +
-        '6.12.3’s `canBrowse` (true cross-org for public); a non-public project ' +
-        'a cross-org user hits stays 404-not-403.\n\n' +
+        '"public project" framing (banner: "anyone can view — no account ' +
+        'needed; sign in to act") and, for the logged-out state, a Sign-in / ' +
+        'Start-free CTA in the top bar (NOT a signed-in identity); NO create / ' +
+        'move / assign / status / drag affordances anywhere (the public surface ' +
+        'is view-only besides the 6.12.6 upvote/comment + 6.12.5 submit entry ' +
+        'points, which show a sign-in-to-act prompt when logged out). ' +
+        'Paginated / lazy (the at-scale rule — a public board is an unbounded ' +
+        'read surface).\n' +
+        '- **Gating:** the route is NOT session-gated — anyone (logged out, ' +
+        'crawlers) can READ; access is granted via 6.12.3’s `canBrowse` (true, ' +
+        'incl. anonymous, for public); a non-public project a user hits stays ' +
+        '404-not-403. (The 6.12.5/6.12.6 WRITES still require sign-in.)\n' +
+        '- **SEO + GEO (per the 6.12.1 Panel 9 design):** the view is ' +
+        'server-rendered + crawlable — emit head metadata (`title`, ' +
+        '`description` from the Overview tagline, canonical, OpenGraph + a ' +
+        'generated `opengraph-image`, Twitter), JSON-LD structured data ' +
+        '(`SoftwareApplication`/`CreativeWork` for the project), semantic HTML ' +
+        '(the Overview `<h1>` + `<h2>` sections + each work item an ' +
+        '`<article>`), and include the public project URL in the sitemap. The ' +
+        'authored Overview/README is the citable GEO description; add an FAQ ' +
+        'block.\n\n' +
         'Stay 4-layer: the route parses + calls one service method returning ' +
         'the public projection; the projection lives in the service/repository ' +
         'read layer so no future read can leak internal fields.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- A cross-org authenticated viewer opens a public project and lands on ' +
-        'the OVERVIEW/README tab (hero + the `publicOverviewMd` `MarkdownView` ' +
-        'body + links/stats sidebar; empty → the slim auto-intro), and can ' +
-        'switch to the read-only board + work item list — all rendering the 6.12.1 ' +
-        'design; a non-public project stays 404 cross-org.\n' +
+        '- An ANONYMOUS (logged-out) visitor opens a public project and lands ' +
+        'on the OVERVIEW/README tab (hero + the `publicOverviewMd` ' +
+        '`MarkdownView` body + links/stats sidebar; empty → the slim ' +
+        'auto-intro), and can switch to the read-only board + work item list — ' +
+        'all rendering the 6.12.1 design with NO session; a non-public project ' +
+        'stays 404.\n' +
+        '- The page is server-rendered with head metadata + JSON-LD + a single ' +
+        '`<h1>` (SEO/GEO per Panel 9) and the public project URL is in the ' +
+        'sitemap.\n' +
         '- The public projection strips assignees, estimates, and internal ' +
         'comments at the read layer (verified: the hidden fields are absent ' +
         'from the response payload, not merely hidden in the DOM).\n' +
@@ -817,17 +880,17 @@ export const story_6_12: PlanStory = {
         '- **The make-public toggle:** extend the existing 6.4 Access control ' +
         '(open / limited / private) to the FOUR levels ' +
         '**public > open > limited > private**, with the explanatory copy ' +
-        '(public = any signed-in Motir account, across orgs, can view + ' +
-        'submit/upvote/comment). Setting `public` calls the 6.4 ' +
+        '(public = anyone can view, no account, indexable by search engines; ' +
+        'sign in only to submit/upvote/comment). Setting `public` calls the 6.4 ' +
         '`setAccessLevel` service (now accepting the new enum value); ' +
         'project-admin-gated (reuse the 6.4 project-admin check — non-admins ' +
         'see it read-only).\n' +
         '- **The shareable public link:** a per-project public link (a stable ' +
         'public slug / route to the public view) shown when the project is ' +
-        'public, with copy + disable + rotate. The link is an ENTRY POINTER — ' +
-        'it still requires sign-in (account-required, not an unauthenticated ' +
-        'bypass); decide the slug model so a project can rotate/disable its ' +
-        'public link without changing the project key.\n' +
+        'public, with copy + disable + rotate. The link opens the public view ' +
+        'with NO sign-in (the page is fully public + crawlable); decide the slug ' +
+        'model so a project can rotate/disable its public link without changing ' +
+        'the project key.\n' +
         '- **The Overview/README editor — a DEDICATED "Edit overview" view ' +
         '(per the 6.12.1 Panel 7 design): a split `MarkdownEditor` (left) + a ' +
         'LIVE `MarkdownView` PREVIEW (right) of the public landing**, reached ' +
@@ -842,8 +905,9 @@ export const story_6_12: PlanStory = {
         'whole-tree refresh). A note states it shows on the public Overview tab ' +
         'and is hidden while the project is not public.\n' +
         '- **Design-system compliance:** ONLY `--el-*` + `[data-display-' +
-        'style]` tokens + shipped `components/ui/*`; the access-level copy + ' +
-        'the account-required note per the 6.12.1 design; inline edits follow ' +
+        'style]` tokens + shipped `components/ui/*`; the access-level copy ' +
+        '("Public = anyone can view, no account, indexable") + the ' +
+        'no-sign-in-to-view note per the 6.12.1 design; inline edits follow ' +
         'the no-whole-tree-refresh rule (a success response is the ' +
         'confirmation).\n\n' +
         'Stay 4-layer: the route parses + calls one service method ' +
@@ -855,9 +919,9 @@ export const story_6_12: PlanStory = {
         'persists via the 6.4 `setAccessLevel` service; project-admin-gated ' +
         '(read-only for non-admins).\n' +
         '- A shareable public link appears when the project is public, with ' +
-        'copy / disable / rotate; the link requires sign-in (account-required, ' +
-        'no unauthenticated bypass); rotating/disabling does not change the ' +
-        'project key.\n' +
+        'copy / disable / rotate; the link opens the public view with NO ' +
+        'sign-in (fully public + crawlable); rotating/disabling does not change ' +
+        'the project key.\n' +
         '- The dedicated "Edit overview" view (split `MarkdownEditor` + live ' +
         '`MarkdownView` preview), reached from the settings entry point, persists ' +
         '`publicOverviewMd` (body only) via a service method ' +
@@ -892,16 +956,17 @@ export const story_6_12: PlanStory = {
         'cross-org READ but blocks every write except the three grants, (2) ' +
         'duplicate detection matches, and (3) voting is one-per-account. On a ' +
         'real Postgres (the standing rule), covering:\n\n' +
-        '- **Access matrix.** A cross-org account (no membership in the ' +
-        'project’s org/workspace) can READ a `public` project ' +
-        '(`canBrowse` true cross-org) but `canEdit` is FALSE — assert every ' +
-        'normal write (create / move / assign / status / field-edit) is ' +
-        'rejected. The three grants succeed: `canSubmitToTriage`, ' +
-        '`canUpvotePublicRequest`, `canCommentPublicRequest` each allow their ' +
-        'write for a cross-org authed account on a public project. A NON-public ' +
-        'project the same account hits is 404-not-403 (the cross-org read ' +
-        'exception is public-only). An UNauthenticated request is rejected ' +
-        '(account-required).\n' +
+        '- **Access matrix.** An UNAUTHENTICATED (no-session) request can READ ' +
+        'a `public` project (`canBrowse` true with no account — the page is ' +
+        'fully public), as can a cross-org account; `canEdit` is FALSE — assert ' +
+        'every normal write (create / move / assign / status / field-edit) is ' +
+        'rejected. The three grants succeed ONLY for a signed-in account: ' +
+        '`canSubmitToTriage`, `canUpvotePublicRequest`, ' +
+        '`canCommentPublicRequest` each allow their write for an authed account ' +
+        'on a public project, and are REJECTED for an unauthenticated request ' +
+        '(sign-in-to-act). A NON-public project an unauthenticated/cross-org ' +
+        'request hits is 404-not-403 (the cross-org read exception is ' +
+        'public-only).\n' +
         '- **The public projection.** Assert the public read shape EXCLUDES ' +
         'assignees, estimates, and internal comments from the payload (not just ' +
         'the DOM) while including the public-safe fields + public-request ' +
@@ -916,9 +981,10 @@ export const story_6_12: PlanStory = {
         'queue orders by demand); a concurrent vote serializes via the row ' +
         'lock.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- The access matrix is asserted: cross-org READ allowed on public, ' +
-        'every normal write blocked, the three grants allowed, non-public ' +
-        '404-not-403 cross-org, unauthenticated rejected.\n' +
+        '- The access matrix is asserted: anonymous + cross-org READ allowed on ' +
+        'public, every normal write blocked, the three grants allowed only for ' +
+        'a signed-in account (rejected when unauthenticated), non-public ' +
+        '404-not-403.\n' +
         '- The public projection’s hidden-field exclusion is asserted at the ' +
         'payload level; duplicate detection (match → upvote-existing vs ' +
         'submit-new) and one-vote-per-account + the queue sort are each ' +
@@ -938,7 +1004,7 @@ export const story_6_12: PlanStory = {
     {
       id: '6.12.10',
       title:
-        'E2E (playwright) — a second account (different org) reads a public project read-only, submits (dedupe → upvote), comments; a non-public project is not viewable cross-org',
+        'E2E (playwright) — anyone reads a public project LOGGED OUT (+ SEO surface), then signs in to submit (dedupe → upvote) + comment; a non-public project is not viewable',
       status: 'blocked',
       type: 'e2e',
       executor: 'coding_agent',
@@ -950,12 +1016,17 @@ export const story_6_12: PlanStory = {
         'The flow:\n\n' +
         '1. As the `motir` project admin, set the project **public** in ' +
         'project settings (6.12.8) and copy the shareable public link.\n' +
-        '2. Sign in as a SECOND, seeded Motir account in a DIFFERENT org with ' +
-        'NO membership in the public project’s org/workspace. Open the public ' +
-        'link → the read-only board / work item list + the public roadmap render; ' +
-        'assert there are NO edit affordances and that ' +
-        '**assignees / estimates / internal comments are absent**.\n' +
-        '3. Submit a feature request whose title matches an EXISTING public ' +
+        '2. **LOGGED OUT (no session)**, open the public link → the read-only ' +
+        'board / work item list + the public roadmap render with NO sign-in; ' +
+        'assert there are NO edit affordances, that **assignees / estimates / ' +
+        'internal comments are absent**, that the page exposes the SEO surface ' +
+        '(a single `<h1>` + a JSON-LD `application/ld+json` script), and that a ' +
+        'write control (upvote / submit / comment) shows a **sign-in-to-act** ' +
+        'prompt.\n' +
+        '3. **Sign in** as a SECOND, seeded Motir account in a DIFFERENT org ' +
+        'with NO membership in the public project’s org/workspace (proving ' +
+        'cross-org act works once signed in). Submit a feature request whose ' +
+        'title matches an EXISTING public ' +
         'request → the duplicate-detection surfaces the existing one → choose ' +
         '**"upvote this instead"** → the vote count increments and NO duplicate ' +
         'is created. Then add a **comment** on that public request → it ' +
@@ -972,9 +1043,11 @@ export const story_6_12: PlanStory = {
         'not API shortcuts; use a second browser context for the second ' +
         'account.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- The second (different-org) account opens the public project ' +
-        'read-only: board / work items / roadmap render, no edit affordances, ' +
-        'internal fields (assignee / estimate / internal comments) absent.\n' +
+        '- A LOGGED-OUT visitor opens the public project read-only: board / ' +
+        'work items / roadmap render with no sign-in, no edit affordances, ' +
+        'internal fields (assignee / estimate / internal comments) absent, the ' +
+        'SEO surface (single `<h1>` + JSON-LD) present, and the write controls ' +
+        'show a sign-in-to-act prompt.\n' +
         '- Submitting a matching-title request surfaces the dedupe and the ' +
         '"upvote this instead" path (vote increments, no duplicate); a comment ' +
         'on the request appears; a genuinely-new request lands in the admin’s ' +
