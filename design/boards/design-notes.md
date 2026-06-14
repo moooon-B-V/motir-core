@@ -6,15 +6,16 @@ design system (`app/globals.css` `--el-*`/shape tokens + the shipped
 `components/ui/*` and issue-list primitives), so the code subtasks compose the
 same primitives — no Pencil→code gap.
 
-| Surface                               | Asset                                            | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Kanban board (columns + cards)**    | **`board.mock.html`** (HTML mockup)              | The whole board surface — no `design/boards/` asset existed; the 3.2.1 design gate produces this. Multi-panel: board · drag · snap-back · keyboard · scale · unmapped · states · mobile. Gates 3.2.2–3.2.6. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| **Swimlanes + WIP limits**            | **`swimlanes-wip.mock.html`** (HTML mockup)      | EXTENDS the board surface — the 3.2.1 mockup drew a WIP slot only as a NON-enforced placeholder and NO swimlanes / WIP editor / over-limit treatment (unspecified == no design), so the 3.3.1 design gate produces this. Multi-panel: group-by control · swimlanes (assignee/epic/priority + catch-all) · cross-lane drag · WIP config · over-limit · states. Gates 3.3.5–3.3.6. See "Swimlanes + WIP (Story 3.3)" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| **Board configuration (admin)**       | **`board-config.mock.html`** (HTML mockup)       | The board ADMIN surface — the column manager + column ↔ status mapping the 3.2.6 unmapped tray points at; NO `design/boards/` asset drew it (the 3.2.1 board mockup is the board itself; its `[⋯]` menu is a disabled seam), so the 3.6.1 design gate produces this. A SIBLING of the Workflow editor (`settings/project/board`). Multi-panel: page · rename/add column · map-by-drag · map-by-keyboard · delete-confirm + guard · read-only · states · cross-links. Gates 3.6.3. See "Board configuration (Story 3.6)" below.                                                                                                                                                                                                                                                                                                                                                          |
-| **Board load model (correction)**     | **`board-scale.mock.html`** (HTML mockup)        | EXTENDS the board surface — CORRECTS the scale UI (notes.html mistake #33). The 3.2.1/3.2.8 scale panel paged columns ("Load more" → auto scroll-to-load); Jira does NOT page a board, so the corrected model (whole bounded set + virtualize + over-cap "refine filter" banner + Done-age window) was unspecified (== no design), so the 3.8.1 design gate produces this. Multi-panel: bounded whole-set load · Done-age window · over-cap banner · swimlanes-sans-footer. Gates 3.8.3 / 3.8.4 / 3.8.5. See "Board load model (Story 3.8)" below.                                                                                                                                                                                                                                                                                                                                      |
-| **Multiple boards (switcher + CRUD)** | **`multi-board.mock.html`** (HTML mockup)        | EXTENDS the board surface — the **board switcher** + **create / rename / set-default / delete** board UI. The 3.2.1 board mockup draws a SINGLE default board (its column `[⋯]` a disabled seam); the switcher + board-CRUD surfaces are unspecified (== no design), so the 3.7.1 design gate produces this. Multi-panel: header switcher (closed) · switcher open (active checked · default badged · New board) · manage menu (rename/set-default/delete) · New-board modal · rename modal · delete confirm · last-board guard + one-board state · states + permissions. Gates 3.7.4. See "Multiple boards (Story 3.7)" below.                                                                                                                                                                                                                                                         |
-| **Per-board settings (entry + page)** | **`per-board-settings.mock.html`** (HTML mockup) | EXTENDS the 3.6.1 board-config page + the 3.7.1 switcher — makes board SETTINGS **per-board**. The 3.6 admin only configures the project DEFAULT board, and every entry point links there with NO board context; with many boards per project (3.7) each board has its OWN config, so settings must target the SELECTED board. That gap is unspecified (== no design), so the 3.7.7 design gate produces this. Multi-panel: board-scoped settings page (header names the board + switcher) · switcher open (change which board) · manage menu "Board settings" item · cross-links carrying `?board=` · states + permissions. Gates 3.7.8. See "Per-board settings (Story 3.7)" below.                                                                                                                                                                                                   |
-| **Scrum board (sprint view)**         | **`scrum.mock.html`** (HTML mockup)              | EXTENDS the board surface — the SCRUM variant: the same 3.2/3.3 board scoped to a board's active sprint, under a **sprint header** (name + state · goal-with-reveal · dates + time remaining · committed/completed/remaining points · complete-sprint entry point) + **per-column point totals**. The 3.2.1 board mockup drew the Kanban surface only — the sprint header / points / no-active-sprint state / complete-sprint affordance were unspecified (== no design), so the 4.5.1 design gate produces this. CHROME over the reused board — it does NOT redraw columns / cards / drag / swimlanes / WIP. Multi-panel: full scrum board · sprint-header anatomy (Tooltip reveal) · no-active-sprint EmptyState (→ Backlog) · edge states ("—" unestimated · "Ended" overdue · loading skeleton) · column-header slot coexistence. Gates 4.5.3. See "Scrum board (Story 4.5)" below. |
+| Surface                               | Asset                                            | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Kanban board (columns + cards)**    | **`board.mock.html`** (HTML mockup)              | The whole board surface — no `design/boards/` asset existed; the 3.2.1 design gate produces this. Multi-panel: board · drag · snap-back · keyboard · scale · unmapped · states · mobile. Gates 3.2.2–3.2.6. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **Swimlanes + WIP limits**            | **`swimlanes-wip.mock.html`** (HTML mockup)      | EXTENDS the board surface — the 3.2.1 mockup drew a WIP slot only as a NON-enforced placeholder and NO swimlanes / WIP editor / over-limit treatment (unspecified == no design), so the 3.3.1 design gate produces this. Multi-panel: group-by control · swimlanes (assignee/epic/priority + catch-all) · cross-lane drag · WIP config · over-limit · states. Gates 3.3.5–3.3.6. See "Swimlanes + WIP (Story 3.3)" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Board configuration (admin)**       | **`board-config.mock.html`** (HTML mockup)       | The board ADMIN surface — the column manager + column ↔ status mapping the 3.2.6 unmapped tray points at; NO `design/boards/` asset drew it (the 3.2.1 board mockup is the board itself; its `[⋯]` menu is a disabled seam), so the 3.6.1 design gate produces this. A SIBLING of the Workflow editor (`settings/project/board`). Multi-panel: page · rename/add column · map-by-drag · map-by-keyboard · delete-confirm + guard · read-only · states · cross-links. Gates 3.6.3. See "Board configuration (Story 3.6)" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Board load model (correction)**     | **`board-scale.mock.html`** (HTML mockup)        | EXTENDS the board surface — CORRECTS the scale UI (notes.html mistake #33). The 3.2.1/3.2.8 scale panel paged columns ("Load more" → auto scroll-to-load); Jira does NOT page a board, so the corrected model (whole bounded set + virtualize + over-cap "refine filter" banner + Done-age window) was unspecified (== no design), so the 3.8.1 design gate produces this. Multi-panel: bounded whole-set load · Done-age window · over-cap banner · swimlanes-sans-footer. Gates 3.8.3 / 3.8.4 / 3.8.5. See "Board load model (Story 3.8)" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Multiple boards (switcher + CRUD)** | **`multi-board.mock.html`** (HTML mockup)        | EXTENDS the board surface — the **board switcher** + **create / rename / set-default / delete** board UI. The 3.2.1 board mockup draws a SINGLE default board (its column `[⋯]` a disabled seam); the switcher + board-CRUD surfaces are unspecified (== no design), so the 3.7.1 design gate produces this. Multi-panel: header switcher (closed) · switcher open (active checked · default badged · New board) · manage menu (rename/set-default/delete) · New-board modal · rename modal · delete confirm · last-board guard + one-board state · states + permissions. Gates 3.7.4. See "Multiple boards (Story 3.7)" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Per-board settings (entry + page)** | **`per-board-settings.mock.html`** (HTML mockup) | EXTENDS the 3.6.1 board-config page + the 3.7.1 switcher — makes board SETTINGS **per-board**. The 3.6 admin only configures the project DEFAULT board, and every entry point links there with NO board context; with many boards per project (3.7) each board has its OWN config, so settings must target the SELECTED board. That gap is unspecified (== no design), so the 3.7.7 design gate produces this. Multi-panel: board-scoped settings page (header names the board + switcher) · switcher open (change which board) · manage menu "Board settings" item · cross-links carrying `?board=` · states + permissions. Gates 3.7.8. See "Per-board settings (Story 3.7)" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Scrum board (sprint view)**         | **`scrum.mock.html`** (HTML mockup)              | EXTENDS the board surface — the SCRUM variant: the same 3.2/3.3 board scoped to a board's active sprint, under a **sprint header** (name + state · goal-with-reveal · dates + time remaining · committed/completed/remaining points · complete-sprint entry point) + **per-column point totals**. The 3.2.1 board mockup drew the Kanban surface only — the sprint header / points / no-active-sprint state / complete-sprint affordance were unspecified (== no design), so the 4.5.1 design gate produces this. CHROME over the reused board — it does NOT redraw columns / cards / drag / swimlanes / WIP. Multi-panel: full scrum board · sprint-header anatomy (Tooltip reveal) · no-active-sprint EmptyState (→ Backlog) · edge states ("—" unestimated · "Ended" overdue · loading skeleton) · column-header slot coexistence. Gates 4.5.3. See "Scrum board (Story 4.5)" below.                                                                                                                                                                                                                                                  |
+| **Board filtering (toolbar Filter)**  | **`board-filter.mock.html`** (HTML mockup)       | EXTENDS the board surface — wires the permanently-DISABLED `[Filter]` seam (`page.tsx` `filterComingSoon`) into a working board filter, and points the 3.8.4 over-cap banner's "Refine filter" CTA at it. REUSES the shipped /issues filter primitives verbatim (`IssueFilterBar` quick popover · `IssueAdvancedFilter`/`FilterConditionBuilder` builder · `SavedFilterDropdown` + `IssueAppliedFilterBar` picker + applied name-chip) — anchored on the BOARD toolbar, board-scoped + URL-addressable. The board mocks draw `[Filter]` only as a disabled seam; the enabled affordance + the on-board composition + the active-filter summary + the filtered/filtered-EMPTY states + coexistence with the 3.3 group-by Segmented and the 3.8 banner are unspecified (== no design), so the 6.15.1 design gate produces this. CHROME over the reused board — it does NOT redraw columns / cards / drag / swimlanes / WIP. Multi-panel: closed · quick-Filter popover open · Saved dropdown open · active (summary + re-projected board) · filtered-EMPTY · over-cap coexistence. Gates 6.15.3. See "Board filtering (Story 6.15)" below. |
 
 The board is a **pure consumer** of the Story-3.1 board API
 (`GET …/board` → `BoardProjectionDto`; `GET …/board/columns/[id]/cards` → the
@@ -1063,3 +1064,144 @@ mounts); 4.5 only places the entry point.
   Complete-sprint `<button>` and (in the board) the column `[⋯]` buttons; the
   empty-state CTA is an `<a>`; cards stay `<a>` (the 3.2 whole-card link). Every
   icon `<svg>` carries a 24×24 `viewBox`.
+
+---
+
+# Board filtering (Story 6.15) — `board-filter.mock.html`
+
+Wires the board toolbar's permanently-**disabled `[Filter]` seam**
+(`app/(authed)/boards/page.tsx`: "Filter is a disabled seam here — Epic 6 wires
+board filtering", tooltip `filterComingSoon`) into a working board filter, and
+points the 3.8.4 over-cap banner's "Refine filter" CTA at it. The board mocks
+(`board.mock.html`, `board-scale.mock.html`, `swimlanes-wip.mock.html`,
+`scrum.mock.html`) draw `[Filter]` ONLY as a disabled seam; the COMPOSITION on
+the board — the enabled affordance, the builder + saved-picker anchored in the
+board toolbar, the active-filter summary, the filtered + filtered-EMPTY states,
+and coexistence with the 3.3 group-by `Segmented` + the 3.8 over-cap banner — is
+net-new board chrome no board mock depicts. Per the design gate (an element a
+mockup does not depict == NO design → add a `type: design` subtask, never
+improvise), the 6.15.1 gate produces this; the UI code subtask **6.15.3**
+`dependsOn` it.
+
+This is **CHROME over the reused board**, exactly like `scrum.mock.html`: it
+does NOT redraw columns / cards / drag / swimlanes / WIP — it adds the filter
+affordances to the toolbar + a summary row above the columns, and shows the
+board re-projected.
+
+## Where it lives
+
+The `/boards` route (`app/(authed)/boards/page.tsx` + `BoardContainer`). 6.15.3
+drops `disabled` + the `filterComingSoon` tooltip from the existing `[Filter]`
+`ToolbarButton`, mounts the reused filter UI beside the 3.3 group-by
+`Segmented` (which already portals into `#board-toolbar-groupby-slot`), and the
+read goes through **6.15.2** (`boardsService.getBoard` / `loadColumnCards`
+threaded with a compiled 6.1 predicate). No new navigation wiring; no schema
+change.
+
+## REUSE, do not redraw — the primitives this composes (6.15.3 builds with)
+
+Every filter affordance is the SAME shipped /issues component, anchored on the
+board toolbar — there is **no hand-rolled board-specific filter UI**:
+
+- **`IssueFilterBar`** — the quick-filter popover (`[Filter]` trigger →
+  `Popover`/`role="dialog"`): a text quick-filter + the **Kind / Status /
+  Assignee** multi-select listboxes (`role="listbox" aria-multiselectable`,
+  each option a `role="option"` row with a leading glyph — `IssueTypeIcon` in
+  the type hue / status dot / `Avatar` — and a trailing accent `Check`), plus
+  the header **Clear filters**. (See `design/work-items/filter.mock.html`.)
+- **`IssueAdvancedFilter` / `FilterConditionBuilder`** — the `[Advanced]`
+  builder trigger (`i-funnel-plus`), for the structured 6.1 condition builder.
+  (See `design/work-items/filter-builder.mock.html`.)
+- **`SavedFilterDropdown`** — the `[Saved]` dropdown picker
+  (`role="listbox"`): **Starred → My filters → Project filters → Defaults**,
+  server-backed search, a per-row **star toggle** (a SIBLING `<button>` in the
+  option row — never nested inside the option), owner/visibility hint
+  (`i-users` shared · `i-lock` private · "Built-in"), and a "View all filters"
+  foot. (See `design/work-items/saved-filters.mock.html`.)
+- **`IssueAppliedFilterBar`** — the applied-filter **summary row** between the
+  toolbar and the columns: the lavender **name-chip** (`i-bookmark` +
+  visibility glyph; clicking it reopens `[Saved]`) + the condition **`sum-chip`s**
+  (`<strong>` field + operator + value) + **Clear** + a match-count
+  (`role="status"`).
+- **`Segmented`** (3.3 group-by), **`OverCapBanner`** (3.8), **`Button`**,
+  **`EmptyState`** — the existing board/shared primitives the filter coexists
+  with or reuses.
+
+## The trigger states (identical to /issues)
+
+- **Inactive** — plain `ToolbarButton` (the seam's label/icon, now enabled).
+- **Active** — `--el-accent` border + `--el-tint-lavender` fill + accent icon
+  - the **count badge** (`.tb-count`, accent fill, `--el-accent-text`) = the
+    number of active filter values. AA: the badge text is `--el-accent-text` on
+    `--el-accent`; the button label stays `--el-text`.
+- **Open** — `aria-expanded="true"` on the trigger; the popover/menu is an
+  elevated `--shadow-elevated` card anchored under it.
+
+## URL-driven, board-scoped state (6.15.3)
+
+The active filter lives in the **URL** — a `?filter=` AST param and/or a
+saved-filter id — composing with the existing `?board=<id>` selection (the
+3.7 board-selection / 2.5.19 `?peek` URL-state pattern). So it is shareable +
+reload-safe, and **per board**: switching boards does not leak the filter. The
+board re-projects server-side via 6.15.2; the UI waits on the board read
+response before asserting cards (never races the optimistic UI — CLAUDE.md).
+
+## Panels (review EACH, not just the first)
+
+0. **Closed** — toolbar = group-by `Segmented` + enabled `[Filter]` +
+   `[Advanced]` + `[Saved]` + `[New issue]`; full board, full column counts.
+1. **Quick-filter popover open** — `IssueFilterBar` anchored under `[Filter]`:
+   text + Kind/Status/Assignee listboxes + Clear.
+2. **Saved dropdown open** — `SavedFilterDropdown` anchored under `[Saved]`:
+   Starred/My/Project/Defaults groups + star toggles + "View all filters".
+3. **Active** — the `[Filter]` count badge, the `IssueAppliedFilterBar`
+   summary row (name-chip + condition chips + Clear + "5 of 28 cards match"),
+   the board **re-projected** so each column shows only matching cards (counts
+   drop; a column with no match shows the dashed `col-empty` placeholder).
+4. **Filtered-EMPTY** — no card matches → a **distinct `EmptyState`** ("No work
+   items match this filter" + `i-search-x` glyph + a **Clear filter** CTA), NOT
+   the 3.2 brand-new-board empty (which offers "New issue"). The summary +
+   active toolbar stay so the user can see/edit what they filtered on.
+5. **Over-cap coexistence** — the 3.8 yellow `OverCapBanner` whose "Refine
+   filter" CTA is now an **enabled** `<button>` opening the filter (was the
+   disabled `.tr-seam` with `cursor: not-allowed`). The cap / `truncated` are
+   computed over the FILTERED set (6.15.2), so a filter that brings the set
+   under the cap dismisses the banner.
+
+## Scope (out of scope here)
+
+The filter **grammar/compiler** (6.1 owns it — no change); **cross-project**
+boards (still the 3.7 Epic-6 extension); altering the **4.5 Scrum** sprint-scope
+filter (the board filter `AND`-composes WITH it, narrowing WITHIN the active
+sprint, never widening it).
+
+## Token / a11y rules honoured
+
+- **Colour** strictly via `--el-*` (finding #54): the active-trigger
+  `--el-tint-lavender` fill + `--el-accent` border/icon, the count badge
+  `--el-accent` / `--el-accent-text`, the name-chip `--el-tint-lavender` +
+  `--el-text-strong`, the reused type hues (`--el-type-*`) + priority/status
+  `Pill` tones, the over-cap `--el-tint-yellow` tray with `--el-warning` glyph.
+  Tints carry the hue in the BACKGROUND with `--el-text-strong` text (finding
+  #35 AA — never a tinted page surface).
+- **Shape** via element-semantic tokens (`--radius-card` popover/menu/tray ·
+  `--radius-btn` triggers/CTA · `--radius-input` search fields ·
+  `--radius-badge` chips/count · `--radius-control` option rows/star),
+  `--shadow-elevated` for the open popover/menu, `--spacing-control-*` /
+  `-chip-*` / `-icon-btn` / `-card-padding` for box padding,
+  `--height-control` / `-btn-md` for sizing. `rounded-full` only on the
+  genuinely-circular status dot + avatar.
+- **No nested buttons** (axe `nested-interactive`) — the `[Saved]` option row
+  is a `role="option"` div whose star toggle is a SIBLING `<button>`; the
+  applied name-chip is a standalone `<button>`; the Clear / Refine-filter / CTA
+  are standalone `<button>`s; cards stay `<a>` (the 3.2 whole-card link). Every
+  icon `<svg>` carries a 24×24 `viewBox`.
+- **Listbox a11y** — the quick-filter facets are `role="listbox"
+aria-multiselectable="true"` with `role="option" aria-selected`; the empty
+  filtered board uses `EmptyState`/`role="status"`, not an empty listbox
+  (combobox-empty-listbox a11y). Keyboard-operable throughout; the strict axe
+  sweep (closed / open builder / saved picker / active chips / filtered-empty)
+  is the 6.15.4 gate.
+- **next-intl en + zh** — every new string (the summary copy, the filtered-empty
+  EmptyState, the over-cap CTA) is keyed; the `filterComingSoon` key is dropped
+  when the seam is enabled (6.15.3).

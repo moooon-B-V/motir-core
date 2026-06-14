@@ -1,0 +1,2442 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Board filtering — wire the disabled board [Filter] seam (Story 6.15 · 6.15.1)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the BOARD-FILTER surface — Story 6.15.
+
+      Wires the board toolbar's permanently-DISABLED [Filter] seam
+      (app/(authed)/boards/page.tsx: "Filter is a disabled seam here — Epic 6
+      wires board filtering", tooltip filterComingSoon) into a working board
+      filter, and points the 3.8.4 over-cap banner's "Refine filter" CTA at it.
+      The board mocks (board.mock.html, board-scale.mock.html, swimlanes-wip,
+      scrum) draw the [Filter] button ONLY as a disabled seam; the COMPOSITION
+      on the board — the enabled affordance, the builder/saved-picker anchored
+      in the board toolbar, the active-filter summary, the filtered + filtered-
+      EMPTY states, and coexistence with the 3.3 group-by Segmented + the 3.8
+      over-cap banner — is net-new board chrome no board mock depicts. Per the
+      design gate (an element a mockup does not depict == NO design → add a
+      type:design subtask, never improvise), the 6.15.1 design gate produces
+      this; the UI code subtask (6.15.3) dependsOn it.
+
+      REUSE, don't redraw: the filter UI is the SAME quick-filter popover
+      (IssueFilterBar — text · kind · status · assignee), the SAME [Advanced]
+      builder trigger (IssueAdvancedFilter / FilterConditionBuilder), and the
+      SAME [Saved] dropdown picker + applied name-chip (SavedFilterDropdown /
+      IssueAppliedFilterBar) the /issues navigator ships (design/work-items/
+      filter.mock.html, filter-builder.mock.html, saved-filters.mock.html). This
+      mock shows them ANCHORED ON THE BOARD TOOLBAR — it is CHROME over the
+      reused board, exactly like scrum.mock.html: it does NOT redraw columns /
+      cards / drag / swimlanes / WIP.
+
+      Built FROM the real design system: the token block below is copied 1:1
+      from app/globals.css (Tier-0 --color-* + Tier-3 --el-* + the shape
+      tokens), and every surface references --el-* (colour) + element-semantic
+      shape tokens (radius/spacing/sizing) — NEVER Tier-0 --color-* or raw
+      rounded-*/p-*/h-*.
+
+      The board read is a PURE consumer of the Story-3.1 board API; 6.15.2
+      threads a compiled 6.1 filter predicate into getBoard/loadColumnCards so
+      each column projects only matching cards, and the 3.8 cap / `truncated`
+      flag are computed over the FILTERED set. On a Scrum board the predicate
+      AND-composes with the 4.5 active-sprint scope (narrows WITHIN it).
+
+      Covers (multi-panel — review EACH, not just the first):
+        (0) CLOSED — the enabled Filter affordance in the board toolbar beside
+            the 3.3 group-by Segmented + Advanced + Saved + New issue
+        (1) OPEN — the quick Filter popover (IssueFilterBar) anchored on the
+            board toolbar: text · kind · status · assignee + Clear
+        (2) OPEN — the [Saved] dropdown picker anchored on the board toolbar
+        (3) ACTIVE — the applied-filter summary row (name-chip + condition
+            chips + Clear); the board RE-PROJECTED to matching cards; the Filter
+            trigger carries the active-count badge
+        (4) FILTERED-EMPTY — no card matches → an EmptyState distinct from the
+            3.2 brand-new-board empty state (this one offers "Clear filter")
+        (5) OVER-CAP COEXISTENCE — the 3.8 yellow over-cap banner whose "Refine
+            filter" CTA now OPENS the filter (no longer a dead seam)
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-icon-btn: 4px;
+        --spacing-tooltip-x: 10px;
+        --spacing-tooltip-y: 7px;
+        --spacing-btn-x-sm: 14px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1240px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel {
+        max-width: 1240px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 40px auto 10px;
+        padding-left: 2px;
+        max-width: 1240px;
+      }
+      .stage {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+
+      /* ── Page shell — header + toolbar (mirrors app/(authed)/boards/page.tsx) ── */
+      .page {
+        padding: 24px 24px 8px;
+      }
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin: 4px 0 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        position: relative;
+      }
+      /* Group-by control (board-header) — reuses the shipped Segmented primitive (3.3) */
+      .groupby {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .groupby .gb-label {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        font-weight: 500;
+      }
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        padding: 2px;
+        gap: 2px;
+      }
+      .seg button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 12px;
+        border: 0;
+        background: none;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .seg button .ic {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-faint);
+        flex: none;
+      }
+      .seg button[aria-pressed='true'] {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .seg button[aria-pressed='true'] .ic {
+        color: var(--el-accent);
+      }
+      /* Toolbar button — the shipped ToolbarButton shape (h-control) */
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        position: relative;
+      }
+      .tb-btn .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn .caret {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn.primary {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+      }
+      .tb-btn.primary .ic {
+        color: var(--el-accent-text);
+      }
+      /* Filter / Advanced / Saved trigger, ACTIVE — a faint accent ring + accent
+         icon while a filter applies, plus the count badge. AA: text stays
+         --el-text on the lavender tint. (Identical to the /issues toolbar.) */
+      .tb-btn.is-active {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+      }
+      .tb-btn.is-active .ic {
+        color: var(--el-accent);
+      }
+      /* active-filter COUNT badge — the number of active filter values */
+      .tb-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 11px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ── Quick-filter popover — Popover anchored under the [Filter] trigger ── */
+      /* IDENTICAL chrome to the /issues IssueFilterBar popover (filter.mock.html):
+         card radius, hairline border, elevated shadow, scrolling body. */
+      .filter-pop {
+        position: absolute;
+        top: calc(var(--height-control) + 6px);
+        left: 0;
+        z-index: 20;
+        width: 320px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        overflow: hidden;
+      }
+      .fp-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .fp-head .fp-title {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-muted);
+      }
+      .fp-clear {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: none;
+        border: 0;
+        padding: 2px 4px;
+        margin: -2px -4px;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .fp-clear:hover {
+        text-decoration: underline;
+      }
+      .fp-clear .ic {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+      .fp-clear[disabled] {
+        color: var(--el-text-faint);
+        cursor: default;
+        text-decoration: none;
+      }
+      .fp-body {
+        max-height: 440px;
+        overflow-y: auto;
+        padding: 6px;
+      }
+      .fp-search {
+        position: relative;
+        margin: 6px 4px 8px;
+      }
+      .fp-search .si {
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+        pointer-events: none;
+      }
+      .fp-search input {
+        width: 100%;
+        height: var(--height-control);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 0 10px 0 32px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .fp-search input::placeholder {
+        color: var(--el-text-muted);
+      }
+      .fp-search input:focus-visible {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .fp-group {
+        padding: 6px 0;
+      }
+      .fp-group + .fp-group {
+        border-top: 1px solid var(--el-border);
+      }
+      .fp-group-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding: 4px 8px;
+      }
+      .fp-subsearch {
+        position: relative;
+        margin: 2px 4px 4px;
+      }
+      .fp-subsearch .si {
+        position: absolute;
+        left: 9px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+        pointer-events: none;
+      }
+      .fp-subsearch input {
+        width: 100%;
+        height: 32px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 0 10px 0 30px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .fp-subsearch input::placeholder {
+        color: var(--el-text-muted);
+      }
+
+      /* Option row — the Combobox option vocabulary, multi-select */
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .opt:hover,
+      .opt.is-active {
+        background: var(--el-surface);
+      }
+      .opt[aria-selected='true'] {
+        background: var(--el-surface);
+      }
+      .opt .lbl {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .opt .sec {
+        flex: none;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .opt .sec .vg {
+        width: 12px;
+        height: 12px;
+        vertical-align: -1.5px;
+      }
+      .opt .check {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-accent);
+        opacity: 0;
+      }
+      .opt[aria-selected='true'] .check {
+        opacity: 1;
+      }
+      .opt .og {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+
+      /* Leading glyphs */
+      .type-icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        flex: none;
+        border-radius: 9999px;
+        border: 1px solid var(--el-border);
+      }
+      .sd-todo {
+        background: var(--el-text-faint);
+      }
+      .sd-inprogress {
+        background: var(--el-info);
+      }
+      .sd-review {
+        background: var(--el-accent);
+      }
+      .sd-done {
+        background: var(--el-success);
+      }
+      .avatar {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .avatar.unassigned {
+        background: transparent;
+        border: 1px dashed var(--el-border);
+        color: var(--el-text-muted);
+      }
+      .avatar.unassigned svg {
+        width: 13px;
+        height: 13px;
+      }
+
+      /* ── [Saved] dropdown — the SavedFilterDropdown menu (saved-filters.mock) ── */
+      .menu {
+        position: absolute;
+        top: calc(var(--height-control) + 6px);
+        left: 0;
+        z-index: 20;
+        width: 320px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .menu .msearch {
+        position: relative;
+        margin: 2px 2px 4px;
+      }
+      .menu .msearch .si {
+        position: absolute;
+        left: 9px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+        pointer-events: none;
+      }
+      .menu .msearch input {
+        width: 100%;
+        height: 32px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 0 10px 0 30px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .menu .msearch input::placeholder {
+        color: var(--el-text-muted);
+      }
+      .menu .mgroup {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding: 6px 8px 2px;
+      }
+      .star-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: none;
+        color: var(--el-text-faint);
+        cursor: pointer;
+        flex: none;
+      }
+      .star-btn:hover {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      .star-btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .star-btn.starred {
+        color: var(--el-warning);
+      }
+      .star-btn.starred svg {
+        fill: currentColor;
+      }
+      .menu .mfoot {
+        border-top: 1px solid var(--el-border);
+        margin-top: 4px;
+        padding: 8px 10px 6px;
+      }
+      .link-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: none;
+        border: 0;
+        padding: 2px 4px;
+        margin: -2px -4px;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .link-btn:hover {
+        text-decoration: underline;
+      }
+      .link-btn .ic {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+
+      /* ── Applied-filter summary row (the 6.1.3 grammar) + the NAME CHIP ────── */
+      /* On the board this row sits between the toolbar and the columns — the
+         IssueAppliedFilterBar, reused verbatim. */
+      .summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        padding: 0 24px 14px;
+      }
+      .sum-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .sum-chip strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .name-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        border: 1px solid transparent;
+        background: var(--el-tint-lavender);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .name-chip .ng {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        color: var(--el-accent);
+      }
+      .name-chip .vg {
+        width: 12px;
+        height: 12px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .sum-clear {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: none;
+        border: 0;
+        padding: 2px 6px;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .sum-clear:hover {
+        text-decoration: underline;
+      }
+      .sum-clear .ic {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+      .sum-count {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        font-variant-numeric: tabular-nums;
+        margin-left: 2px;
+      }
+
+      /* ── Over-cap banner — REUSES the 3.8.4 yellow-tray treatment verbatim ─── */
+      .tray {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        margin: 0 24px 14px;
+        padding: 10px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-yellow);
+        border: 1px solid transparent;
+      }
+      .tray .tr-ic {
+        width: 18px;
+        height: 18px;
+        color: var(--el-warning);
+        flex: none;
+      }
+      .tray .tr-text {
+        font-size: 13px;
+        color: var(--el-text-strong);
+        flex: 1;
+        min-width: 280px;
+      }
+      .tray .tr-text b {
+        font-weight: 600;
+      }
+      /* 6.15: the banner's CTA is now an ENABLED button that OPENS the filter
+         (it was a disabled seam — `.tr-seam` with cursor:not-allowed — in 3.8). */
+      .tray .tr-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
+        color: var(--el-text);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-page-bg);
+        cursor: pointer;
+      }
+      .tray .tr-cta:hover {
+        border-color: var(--el-border-strong);
+      }
+      .tray .tr-cta svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+
+      /* ── The board: a horizontally-scrolling row of columns ───────────────── */
+      .board {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        overflow-x: auto;
+        padding: 4px 24px 24px;
+        scroll-snap-type: x proximity;
+      }
+      .col {
+        scroll-snap-align: start;
+        flex: 0 0 288px;
+        width: 288px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        display: flex;
+        flex-direction: column;
+        height: 470px;
+      }
+      .col-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 12px 10px;
+      }
+      .col-head .nm {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        letter-spacing: 0.01em;
+      }
+      .col-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 20px;
+        padding: 0 7px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .col-head .spacer {
+        flex: 1;
+      }
+      .col-head .icon-btn {
+        width: 24px;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        border: 0;
+        background: none;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .col-head .icon-btn:hover {
+        background: var(--el-muted);
+      }
+      .col-head .icon-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .col-body {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 0 10px 10px;
+        overflow-y: auto;
+      }
+      .col-empty {
+        margin: 4px 0 12px;
+        padding: 18px 10px;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        text-align: center;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Board card — REUSES the issue primitives, compactly ───────────────── */
+      .bcard {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        cursor: grab;
+        text-decoration: none;
+        color: inherit;
+      }
+      .bcard:hover {
+        border-color: var(--el-border-strong);
+      }
+      .bc-top {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .bc-id {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .bc-top .spacer {
+        flex: 1;
+      }
+      .grip {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-faint);
+        flex: none;
+        opacity: 0;
+      }
+      .bcard:hover .grip {
+        opacity: 1;
+      }
+      .bc-title {
+        font-size: 13.5px;
+        line-height: 1.35;
+        color: var(--el-text);
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .bc-meta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .bc-meta .spacer {
+        flex: 1;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill .pic {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .pill--highest,
+      .pill--high {
+        background: var(--el-tint-rose);
+      }
+      .pill--highest .pic,
+      .pill--high .pic {
+        color: var(--el-danger);
+      }
+      .pill--medium {
+        background: var(--el-tint-sky);
+      }
+      .pill--medium .pic {
+        color: var(--el-info);
+      }
+      .pill--low {
+        background: var(--el-tint-mint);
+      }
+      .pill--low .pic {
+        color: var(--el-success);
+      }
+      .pts {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        font-family: var(--font-mono);
+      }
+
+      /* ── Filtered-EMPTY board — the EmptyState (distinct from new-board empty) ── */
+      .empty {
+        margin: 6px 24px 28px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 56px 24px;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .empty .ic-wrap {
+        width: 48px;
+        height: 48px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-muted);
+        color: var(--el-text-muted);
+        margin-bottom: 14px;
+      }
+      .empty .ic-wrap svg {
+        width: 24px;
+        height: 24px;
+      }
+      .empty h3 {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 0 0 16px;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+        max-width: 380px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn .ic {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+
+      .legend {
+        max-width: 1100px;
+        margin: 10px auto 0;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.7;
+      }
+      .legend code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Board filtering — wire the disabled board [Filter] seam</h1>
+        <p>
+          Story 6.15 · subtask 6.15.1 · CHROME over the reused board — the enabled Filter affordance
+          + the reused IssueFilterBar / [Advanced] / SavedFilterDropdown anchored on the board
+          toolbar, the applied-filter summary, the filtered + filtered-empty states, and coexistence
+          with the 3.3 group-by Segmented + the 3.8 over-cap banner.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- ═══════════ Icon symbol defs (lucide, stroke=currentColor) ═══════════ -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <g
+          id="i-subtask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </g>
+        <g
+          id="i-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+        </g>
+        <g
+          id="i-grip"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="9" cy="6" r="1" />
+          <circle cx="9" cy="12" r="1" />
+          <circle cx="9" cy="18" r="1" />
+          <circle cx="15" cy="6" r="1" />
+          <circle cx="15" cy="12" r="1" />
+          <circle cx="15" cy="18" r="1" />
+        </g>
+        <g
+          id="i-more"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="5" cy="12" r="1" />
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-sliders"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="21" x2="14" y1="4" y2="4" />
+          <line x1="10" x2="3" y1="4" y2="4" />
+          <line x1="21" x2="12" y1="12" y2="12" />
+          <line x1="8" x2="3" y1="12" y2="12" />
+          <line x1="21" x2="16" y1="20" y2="20" />
+          <line x1="12" x2="3" y1="20" y2="20" />
+          <line x1="14" x2="14" y1="2" y2="6" />
+          <line x1="8" x2="8" y1="10" y2="14" />
+          <line x1="16" x2="16" y1="18" y2="22" />
+        </g>
+        <g
+          id="i-funnel-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M13.354 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14v6a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341l1.218-1.348"
+          />
+          <path d="M16 6h6" />
+          <path d="M19 3v6" />
+        </g>
+        <g
+          id="i-bookmark"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-star"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polygon
+            points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+          />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-users"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </g>
+        <g
+          id="i-user"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </g>
+        <g
+          id="i-user-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M14.5 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="7.5" cy="7" r="4" />
+          <line x1="17" x2="22" y1="8" y2="13" />
+          <line x1="22" x2="17" y1="8" y2="13" />
+        </g>
+        <g
+          id="i-flag"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+          <line x1="4" x2="4" y1="22" y2="15" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-filter"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </g>
+        <g
+          id="i-search-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m13.5 8.5-5 5" />
+          <path d="m8.5 8.5 5 5" />
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════════ PANEL 0 — CLOSED, no filter ════════════════ -->
+    <div class="panel-label">
+      0 · CLOSED — the board toolbar carries the 3.3 group-by Segmented + the now-ENABLED [Filter]
+      (was the disabled `filterComingSoon` seam) + [Advanced] + [Saved] + [New issue]. No filter
+      applied, so every column shows its full count.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="page-head">
+            <div>
+              <h2>Board</h2>
+              <p class="sub">Motir · all issues, grouped by status</p>
+            </div>
+            <div class="toolbar">
+              <div class="groupby">
+                <span class="gb-label">Group by</span>
+                <div class="seg" role="group" aria-label="Swimlane group by">
+                  <button aria-pressed="true">None</button>
+                  <button aria-pressed="false">
+                    <span class="ic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg></span
+                    >Assignee
+                  </button>
+                  <button aria-pressed="false">
+                    <span class="ic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg></span
+                    >Epic
+                  </button>
+                </div>
+              </div>
+              <!-- ENABLED quick-filter trigger — replaces the disabled seam -->
+              <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter
+              </button>
+              <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg>Advanced
+              </button>
+              <button class="tb-btn" aria-haspopup="listbox" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>Saved<svg
+                  class="caret"
+                  viewBox="0 0 24 24"
+                >
+                  <use href="#i-chevron-down" />
+                </svg>
+              </button>
+              <button class="tb-btn primary">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="board">
+          <!-- To Do -->
+          <section class="col" aria-label="To Do, 8 issues">
+            <div class="col-head">
+              <span class="nm">To Do</span><span class="col-count">8</span
+              ><span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-31 Google OAuth sign-in">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                  ><span class="bc-id">PROD-31</span><span class="spacer"></span
+                  ><span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Google OAuth sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--high"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+                  ><span class="spacer"></span><span class="pts">5</span
+                  ><span class="avatar">AC</span>
+                </div>
+              </a>
+              <a class="bcard" href="#" aria-label="PROD-44 Crash on empty board">
+                <div class="bc-top">
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                  ><span class="bc-id">PROD-44</span><span class="spacer"></span
+                  ><span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Crash on empty board projection</div>
+                <div class="bc-meta">
+                  <span class="pill pill--highest"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg
+                    >Highest</span
+                  ><span class="spacer"></span><span class="pts">3</span
+                  ><span class="avatar">MO</span>
+                </div>
+              </a>
+              <a class="bcard" href="#" aria-label="PROD-52 Define column mapping">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                  ><span class="bc-id">PROD-52</span><span class="spacer"></span
+                  ><span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Define column → status mapping</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+                  ><span class="spacer"></span><span class="pts">2</span
+                  ><span class="avatar">DK</span>
+                </div>
+              </a>
+            </div>
+          </section>
+          <!-- In Progress -->
+          <section class="col" aria-label="In Progress, 5 issues">
+            <div class="col-head">
+              <span class="nm">In Progress</span><span class="col-count">5</span
+              ><span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-29 Board drag-drop">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                  ><span class="bc-id">PROD-29</span><span class="spacer"></span
+                  ><span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Board drag-drop transitions</div>
+                <div class="bc-meta">
+                  <span class="pill pill--high"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+                  ><span class="spacer"></span><span class="pts">8</span
+                  ><span class="avatar">AC</span>
+                </div>
+              </a>
+              <a class="bcard" href="#" aria-label="PROD-61 Flaky move test">
+                <div class="bc-top">
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                  ><span class="bc-id">PROD-61</span><span class="spacer"></span
+                  ><span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Flaky move-rank test on CI</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+                  ><span class="spacer"></span><span class="pts">2</span
+                  ><span class="avatar">MO</span>
+                </div>
+              </a>
+            </div>
+          </section>
+          <!-- In Review -->
+          <section class="col" aria-label="In Review, 3 issues">
+            <div class="col-head">
+              <span class="nm">In Review</span><span class="col-count">3</span
+              ><span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-58 Swimlane group-by">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                  ><span class="bc-id">PROD-58</span><span class="spacer"></span
+                  ><span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Swimlane group-by control</div>
+                <div class="bc-meta">
+                  <span class="pill pill--low"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg
+                    >Low</span
+                  ><span class="spacer"></span><span class="pts">3</span
+                  ><span class="avatar">DK</span>
+                </div>
+              </a>
+            </div>
+          </section>
+          <!-- Done -->
+          <section class="col" aria-label="Done, 12 issues">
+            <div class="col-head">
+              <span class="nm">Done</span><span class="col-count">12</span
+              ><span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-12 Workspace switcher">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                  ><span class="bc-id">PROD-12</span><span class="spacer"></span
+                  ><span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Workspace switcher</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+                  ><span class="spacer"></span><span class="pts">5</span
+                  ><span class="avatar">JR</span>
+                </div>
+              </a>
+              <a class="bcard" href="#" aria-label="PROD-18 Tenant truncate helper">
+                <div class="bc-top">
+                  <span class="type-icon t-subtask"
+                    ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                  ><span class="bc-id">PROD-18</span><span class="spacer"></span
+                  ><span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Tenant truncate helper</div>
+                <div class="bc-meta">
+                  <span class="pill pill--low"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg
+                    >Low</span
+                  ><span class="spacer"></span><span class="pts">1</span
+                  ><span class="avatar">EC</span>
+                </div>
+              </a>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 1 — quick Filter popover OPEN ════════════════ -->
+    <div class="panel-label">
+      1 · OPEN — the quick-filter popover (the reused IssueFilterBar) anchored under [Filter] on the
+      BOARD toolbar: text · kind · status · assignee, each a multi-select listbox with a trailing
+      Check. Identical to the /issues popover — board-scoped, not a new control.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page" style="padding-bottom: 24px">
+          <div class="page-head" style="margin-bottom: 0">
+            <div>
+              <h2>Board</h2>
+              <p class="sub">Motir · all issues, grouped by status</p>
+            </div>
+            <div class="toolbar">
+              <div class="groupby">
+                <span class="gb-label">Group by</span>
+                <div class="seg" role="group" aria-label="Swimlane group by">
+                  <button aria-pressed="true">None</button>
+                  <button aria-pressed="false">
+                    <span class="ic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg></span
+                    >Assignee
+                  </button>
+                </div>
+              </div>
+              <button class="tb-btn is-active" aria-haspopup="dialog" aria-expanded="true">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter
+              </button>
+              <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg>Advanced
+              </button>
+              <button class="tb-btn" aria-haspopup="listbox" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>Saved<svg
+                  class="caret"
+                  viewBox="0 0 24 24"
+                >
+                  <use href="#i-chevron-down" />
+                </svg>
+              </button>
+              <button class="tb-btn primary">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+              </button>
+
+              <!-- the open quick-filter popover, anchored under [Filter] -->
+              <div class="filter-pop" role="dialog" aria-label="Filter the board">
+                <div class="fp-head">
+                  <span class="fp-title">Filter</span>
+                  <button class="fp-clear">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear filters
+                  </button>
+                </div>
+                <div class="fp-body">
+                  <div class="fp-search">
+                    <svg class="si" viewBox="0 0 24 24"><use href="#i-search" /></svg>
+                    <input type="text" value="oauth" aria-label="Filter by text" />
+                  </div>
+                  <div class="fp-group" role="group" aria-label="Kind">
+                    <div class="fp-group-label">Kind</div>
+                    <div role="listbox" aria-label="Kind" aria-multiselectable="true">
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon t-story"
+                          ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                        ><span class="lbl">Story</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon t-task"
+                          ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                        ><span class="lbl">Task</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="true">
+                        <span class="type-icon t-bug"
+                          ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                        ><span class="lbl">Bug</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon t-subtask"
+                          ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                        ><span class="lbl">Sub-task</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="fp-group" role="group" aria-label="Status">
+                    <div class="fp-group-label">Status</div>
+                    <div role="listbox" aria-label="Status" aria-multiselectable="true">
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="status-dot sd-todo"></span><span class="lbl">To Do</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="true">
+                        <span class="status-dot sd-inprogress"></span
+                        ><span class="lbl">In Progress</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="status-dot sd-review"></span><span class="lbl">In Review</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="status-dot sd-done"></span><span class="lbl">Done</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="fp-group" role="group" aria-label="Assignee">
+                    <div class="fp-group-label">Assignee</div>
+                    <div class="fp-subsearch">
+                      <svg class="si" viewBox="0 0 24 24"><use href="#i-search" /></svg>
+                      <input
+                        type="text"
+                        placeholder="Search members…"
+                        aria-label="Search members"
+                      />
+                    </div>
+                    <div role="listbox" aria-label="Assignee" aria-multiselectable="true">
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="avatar unassigned"
+                          ><svg viewBox="0 0 24 24"><use href="#i-user-x" /></svg></span
+                        ><span class="lbl">Unassigned</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="true">
+                        <span class="avatar">MO</span><span class="lbl">Marco Ortiz</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="avatar">AC</span><span class="lbl">Alice Chen</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 2 — [Saved] dropdown OPEN ════════════════ -->
+    <div class="panel-label">
+      2 · OPEN — the [Saved] dropdown (the reused SavedFilterDropdown) anchored under [Saved] on the
+      board toolbar: Starred → My filters → Project filters → Defaults; per-row star toggle (a
+      SIBLING button, never nested in the option), owner/visibility hint, "View all filters" foot.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page" style="padding-bottom: 24px">
+          <div class="page-head" style="margin-bottom: 0">
+            <div>
+              <h2>Board</h2>
+              <p class="sub">Motir · all issues, grouped by status</p>
+            </div>
+            <div class="toolbar">
+              <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter
+              </button>
+              <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg>Advanced
+              </button>
+              <button class="tb-btn is-active" aria-haspopup="listbox" aria-expanded="true">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>Saved<svg
+                  class="caret"
+                  viewBox="0 0 24 24"
+                >
+                  <use href="#i-chevron-down" />
+                </svg>
+              </button>
+              <button class="tb-btn primary">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+              </button>
+
+              <!-- the open Saved dropdown, anchored under [Saved] (offset to align) -->
+              <div class="menu" role="listbox" aria-label="Saved filters" style="left: 224px">
+                <div class="msearch">
+                  <svg class="si" viewBox="0 0 24 24"><use href="#i-search" /></svg>
+                  <input type="text" placeholder="Find filters…" aria-label="Find filters" />
+                </div>
+                <div class="mgroup">Starred</div>
+                <div class="opt" role="option" aria-selected="true">
+                  <button
+                    class="star-btn starred"
+                    aria-label="Unstar Sprint blockers"
+                    aria-pressed="true"
+                  >
+                    <svg viewBox="0 0 24 24"><use href="#i-star" /></svg>
+                  </button>
+                  <span class="lbl">Sprint blockers</span>
+                  <span class="sec"
+                    ><svg class="vg" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-users" />
+                    </svg>
+                    Zhu Yue</span
+                  >
+                  <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mgroup">My filters</div>
+                <div class="opt" role="option" aria-selected="false">
+                  <button class="star-btn" aria-label="Star My open bugs" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-star" /></svg>
+                  </button>
+                  <span class="lbl">My open bugs</span>
+                  <span class="sec"
+                    ><svg class="vg" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-lock" />
+                    </svg>
+                    Private</span
+                  >
+                  <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mgroup">Project filters</div>
+                <div class="opt" role="option" aria-selected="false">
+                  <button class="star-btn" aria-label="Star Design backlog" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-star" /></svg>
+                  </button>
+                  <span class="lbl">Design backlog</span>
+                  <span class="sec">Bo Philips</span>
+                  <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mgroup">Defaults</div>
+                <div class="opt" role="option" aria-selected="false">
+                  <span class="og" style="width: 24px" aria-hidden="true"></span>
+                  <span class="lbl">My open issues</span>
+                  <span class="sec">Built-in</span>
+                  <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mfoot">
+                  <button class="link-btn">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>View all
+                    filters
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 3 — ACTIVE filter, board re-projected ════════════════ -->
+    <div class="panel-label">
+      3 · ACTIVE — a saved filter ("Sprint blockers") is applied: the [Filter] trigger carries the
+      active-count badge, the applied-filter summary row (reused IssueAppliedFilterBar — the
+      lavender name-chip + condition chips + match count + Clear) sits above the columns, and the
+      board is RE-PROJECTED so each column shows only matching cards (counts drop to the filtered
+      totals).
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="page-head">
+            <div>
+              <h2>Board</h2>
+              <p class="sub">Motir · all issues, grouped by status</p>
+            </div>
+            <div class="toolbar">
+              <div class="groupby">
+                <span class="gb-label">Group by</span>
+                <div class="seg" role="group" aria-label="Swimlane group by">
+                  <button aria-pressed="true">None</button>
+                  <button aria-pressed="false">
+                    <span class="ic"
+                      ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg></span
+                    >Assignee
+                  </button>
+                </div>
+              </div>
+              <button class="tb-btn is-active" aria-haspopup="dialog" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter<span
+                  class="tb-count"
+                  aria-label="3 filters active"
+                  >3</span
+                >
+              </button>
+              <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg>Advanced
+              </button>
+              <button class="tb-btn is-active" aria-haspopup="listbox" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>Saved<svg
+                  class="caret"
+                  viewBox="0 0 24 24"
+                >
+                  <use href="#i-chevron-down" />
+                </svg>
+              </button>
+              <button class="tb-btn primary">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+              </button>
+            </div>
+          </div>
+        </div>
+        <!-- applied-filter summary row (IssueAppliedFilterBar) -->
+        <div class="summary">
+          <button
+            class="name-chip"
+            aria-haspopup="listbox"
+            aria-label="Applied filter: Sprint blockers (starred) — open saved filters"
+          >
+            <svg class="ng" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>Sprint blockers<svg
+              class="vg"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <use href="#i-users" />
+            </svg>
+          </button>
+          <span class="sum-chip"><strong>Kind</strong>&nbsp;is&nbsp;Bug</span>
+          <span class="sum-chip"><strong>Priority</strong>&nbsp;is any of&nbsp;Highest, High</span>
+          <button class="sum-clear">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear
+          </button>
+          <span class="sum-count" role="status">5 of 28 cards match</span>
+        </div>
+        <div class="board">
+          <section class="col" aria-label="To Do, 2 matching issues">
+            <div class="col-head">
+              <span class="nm">To Do</span><span class="col-count">2</span
+              ><span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-44 Crash on empty board">
+                <div class="bc-top">
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                  ><span class="bc-id">PROD-44</span><span class="spacer"></span
+                  ><span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Crash on empty board projection</div>
+                <div class="bc-meta">
+                  <span class="pill pill--highest"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg
+                    >Highest</span
+                  ><span class="spacer"></span><span class="pts">3</span
+                  ><span class="avatar">MO</span>
+                </div>
+              </a>
+              <a class="bcard" href="#" aria-label="PROD-67 Saved filter access leak">
+                <div class="bc-top">
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                  ><span class="bc-id">PROD-67</span><span class="spacer"></span
+                  ><span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Saved-filter access leak across projects</div>
+                <div class="bc-meta">
+                  <span class="pill pill--high"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+                  ><span class="spacer"></span><span class="pts">5</span
+                  ><span class="avatar">DK</span>
+                </div>
+              </a>
+            </div>
+          </section>
+          <section class="col" aria-label="In Progress, 2 matching issues">
+            <div class="col-head">
+              <span class="nm">In Progress</span><span class="col-count">2</span
+              ><span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-61 Flaky move test">
+                <div class="bc-top">
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                  ><span class="bc-id">PROD-61</span><span class="spacer"></span
+                  ><span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Flaky move-rank test on CI</div>
+                <div class="bc-meta">
+                  <span class="pill pill--high"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+                  ><span class="spacer"></span><span class="pts">2</span
+                  ><span class="avatar">MO</span>
+                </div>
+              </a>
+              <a class="bcard" href="#" aria-label="PROD-72 Over-cap banner regression">
+                <div class="bc-top">
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                  ><span class="bc-id">PROD-72</span><span class="spacer"></span
+                  ><span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Over-cap banner shows below the cap</div>
+                <div class="bc-meta">
+                  <span class="pill pill--highest"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg
+                    >Highest</span
+                  ><span class="spacer"></span><span class="pts">3</span
+                  ><span class="avatar">AC</span>
+                </div>
+              </a>
+            </div>
+          </section>
+          <section class="col" aria-label="In Review, 0 matching issues">
+            <div class="col-head">
+              <span class="nm">In Review</span><span class="col-count">0</span
+              ><span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <div class="col-empty">No matching cards</div>
+            </div>
+          </section>
+          <section class="col" aria-label="Done, 1 matching issue">
+            <div class="col-head">
+              <span class="nm">Done</span><span class="col-count">1</span
+              ><span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-40 Drag autoscroll hang">
+                <div class="bc-top">
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                  ><span class="bc-id">PROD-40</span><span class="spacer"></span
+                  ><span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Drag autoscroll hang near viewport bottom</div>
+                <div class="bc-meta">
+                  <span class="pill pill--high"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+                  ><span class="spacer"></span><span class="pts">2</span
+                  ><span class="avatar">JR</span>
+                </div>
+              </a>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 4 — FILTERED-EMPTY board ════════════════ -->
+    <div class="panel-label">
+      4 · FILTERED-EMPTY — the filter matches NO card. This is a DISTINCT EmptyState from the 3.2
+      brand-new-board empty (which says "no issues yet — create one"): it names the filter as the
+      cause and offers "Clear filter", not "New issue". The summary row + active toolbar stay so the
+      user can see + edit what they filtered on.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="page-head">
+            <div>
+              <h2>Board</h2>
+              <p class="sub">Motir · all issues, grouped by status</p>
+            </div>
+            <div class="toolbar">
+              <button class="tb-btn is-active" aria-haspopup="dialog" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter<span
+                  class="tb-count"
+                  aria-label="2 filters active"
+                  >2</span
+                >
+              </button>
+              <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg>Advanced
+              </button>
+              <button class="tb-btn" aria-haspopup="listbox" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>Saved<svg
+                  class="caret"
+                  viewBox="0 0 24 24"
+                >
+                  <use href="#i-chevron-down" />
+                </svg>
+              </button>
+              <button class="tb-btn primary">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="summary">
+          <span class="sum-chip"><strong>Kind</strong>&nbsp;is&nbsp;Epic</span>
+          <span class="sum-chip"><strong>Assignee</strong>&nbsp;is&nbsp;Eikooc</span>
+          <button class="sum-clear">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear
+          </button>
+          <span class="sum-count" role="status">0 of 28 cards match</span>
+        </div>
+        <div class="empty" role="status">
+          <span class="ic-wrap"
+            ><svg viewBox="0 0 24 24"><use href="#i-search-x" /></svg
+          ></span>
+          <h3>No work items match this filter</h3>
+          <p>
+            No card in any column matches the active filter. Adjust or clear it to see the board
+            again.
+          </p>
+          <button class="btn">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear filter
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 5 — OVER-CAP coexistence ════════════════ -->
+    <div class="panel-label">
+      5 · OVER-CAP COEXISTENCE — the 3.8 over-cap banner above the board. 6.15 turns its "Refine
+      filter" CTA from a DISABLED seam (`cursor: not-allowed`, "arrives in Epic 6") into an ENABLED
+      button that OPENS the same filter popover. The cap + `truncated` are computed over the
+      FILTERED set (6.15.2), so applying a filter that brings the set under the cap dismisses this
+      banner.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page" style="padding-bottom: 12px">
+          <div class="page-head" style="margin-bottom: 12px">
+            <div>
+              <h2>Board</h2>
+              <p class="sub">Motir · all issues, grouped by status</p>
+            </div>
+            <div class="toolbar">
+              <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter
+              </button>
+              <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg>Advanced
+              </button>
+              <button class="tb-btn" aria-haspopup="listbox" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>Saved<svg
+                  class="caret"
+                  viewBox="0 0 24 24"
+                >
+                  <use href="#i-chevron-down" />
+                </svg>
+              </button>
+              <button class="tb-btn primary">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New issue
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="tray" role="status">
+          <span class="tr-ic"
+            ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+          ></span>
+          <span class="tr-text">
+            This board has more than <b>5,000</b> work items — refine the board filter to see them
+            all. Only the first 5,000 are shown.
+          </span>
+          <button class="tr-cta" aria-haspopup="dialog">
+            <svg viewBox="0 0 24 24"><use href="#i-filter" /></svg>Refine filter
+          </button>
+        </div>
+        <div class="board" style="padding-top: 0">
+          <section class="col" aria-label="To Do, 3910 issues" style="height: 300px">
+            <div class="col-head">
+              <span class="nm">To Do</span><span class="col-count">3,910</span
+              ><span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-31 Google OAuth sign-in">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                  ><span class="bc-id">PROD-31</span><span class="spacer"></span
+                  ><span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Google OAuth sign-in</div>
+                <div class="bc-meta">
+                  <span class="pill pill--high"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+                  ><span class="spacer"></span><span class="pts">5</span
+                  ><span class="avatar">AC</span>
+                </div>
+              </a>
+              <a class="bcard" href="#" aria-label="PROD-52 Define column mapping">
+                <div class="bc-top">
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                  ><span class="bc-id">PROD-52</span><span class="spacer"></span
+                  ><span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Define column → status mapping</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+                  ><span class="spacer"></span><span class="pts">2</span
+                  ><span class="avatar">DK</span>
+                </div>
+              </a>
+            </div>
+          </section>
+          <section class="col" aria-label="In Progress, 612 issues" style="height: 300px">
+            <div class="col-head">
+              <span class="nm">In Progress</span><span class="col-count">612</span
+              ><span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-29 Board drag-drop">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                  ><span class="bc-id">PROD-29</span><span class="spacer"></span
+                  ><span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Board drag-drop transitions</div>
+                <div class="bc-meta">
+                  <span class="pill pill--high"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+                  ><span class="spacer"></span><span class="pts">8</span
+                  ><span class="avatar">AC</span>
+                </div>
+              </a>
+            </div>
+          </section>
+          <section class="col" aria-label="Done, 478 issues" style="height: 300px">
+            <div class="col-head">
+              <span class="nm">Done</span><span class="col-count">478</span
+              ><span class="spacer"></span>
+              <button class="icon-btn" aria-label="Column actions">
+                <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+              </button>
+            </div>
+            <div class="col-body">
+              <a class="bcard" href="#" aria-label="PROD-12 Workspace switcher">
+                <div class="bc-top">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                  ><span class="bc-id">PROD-12</span><span class="spacer"></span
+                  ><span class="grip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-grip" /></svg
+                  ></span>
+                </div>
+                <div class="bc-title">Workspace switcher</div>
+                <div class="bc-meta">
+                  <span class="pill pill--medium"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+                  ><span class="spacer"></span><span class="pts">5</span
+                  ><span class="avatar">JR</span>
+                </div>
+              </a>
+            </div>
+          </section>
+        </div>
+      </div>
+      <p class="legend">
+        The board filter REUSES the shipped /issues filter primitives verbatim —
+        <code>IssueFilterBar</code> (quick popover), <code>IssueAdvancedFilter</code> /
+        <code>FilterConditionBuilder</code> (the [Advanced] builder),
+        <code>SavedFilterDropdown</code> + <code>IssueAppliedFilterBar</code> (the [Saved] picker +
+        applied name-chip). No hand-rolled board-specific filter UI. State is URL-driven and
+        per-board (<code>?filter=</code> AST + saved-filter id, composing with
+        <code>?board=</code>); the read goes through 6.15.2 (<code>getBoard</code> +
+        <code>loadColumnCards</code> threaded with the 6.1 compiled predicate). Colour via
+        <code>--el-*</code>, shape via element-semantic tokens.
+      </p>
+    </div>
+  </body>
+</html>
