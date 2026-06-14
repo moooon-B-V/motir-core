@@ -430,7 +430,7 @@ export const story_6_14: PlanStory = {
     {
       id: '6.14.3',
       title: 'Schema — the epic-privacy flag on `work_item` (epic-kind) + migration',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 30,
