@@ -94,16 +94,20 @@ async function mentionEmailCount(email: string): Promise<number> {
 /**
  * Post a comment from the mentioner's page that @-mentions every `target` (each
  * a unique-match picker query + its option label), through the 5.1 picker's
- * keyboard path. Waits on the comment POST's 201 — the authoritative commit the
- * post-commit `work-item/comment.created` event fans out from.
+ * keyboard path.
+ *
+ * The submit is a **Server Action** (`commentActions.ts`), not a REST POST, so
+ * there is no comments-endpoint response to wait on. The authoritative commit
+ * signal — the one `comments.spec` itself relies on — is the `new` composer
+ * collapsing back to its rest invitation: it only reappears once the action
+ * RESOLVES, i.e. the comment row is committed and its post-commit
+ * `work-item/comment.created` event is emitted. The async fan-in that event
+ * drives is then awaited separately via the unread-count API (`waitUnread`).
  */
 async function postMention(
   page: Page,
   targets: { query: string; option: RegExp }[],
 ): Promise<void> {
-  const posted = page.waitForResponse(
-    (r) => /\/api\/work-items\/[^/]+\/comments$/.test(r.url()) && r.request().method() === 'POST',
-  );
   await page.getByRole('button', { name: 'Add a comment…' }).click();
   await expect(page.locator('.ProseMirror')).toBeVisible();
   await page.locator('.ProseMirror').click();
@@ -119,8 +123,8 @@ async function postMention(
     await page.keyboard.type(' ');
   }
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
-  expect((await posted).status()).toBe(201);
-  // The `new` composer collapses back to its rest invitation on success.
+  // Composer collapsed → the Server Action resolved → comment committed + event
+  // emitted (the deterministic commit signal; fan-in is gated by waitUnread).
   await expect(page.getByRole('button', { name: 'Add a comment…' })).toBeVisible();
 }
 
