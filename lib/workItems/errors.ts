@@ -26,7 +26,8 @@ export type WorkItemErrorTag =
   | 'UNKNOWN_STATUS'
   | 'ILLEGAL_TRANSITION'
   | 'STALE_WORK_ITEM'
-  | 'TYPE_NOT_ALLOWED_ON_KIND';
+  | 'TYPE_NOT_ALLOWED_ON_KIND'
+  | 'NOT_EPIC';
 
 /**
  * Base class for every work-items typed error. Concrete subclasses set a
@@ -223,6 +224,23 @@ export class TypeNotAllowedOnKindError extends WorkItemError {
   constructor(kind: string) {
     super(`A ${kind} cannot carry a type or executor (those are leaf-only).`);
     this.name = 'TypeNotAllowedOnKindError';
+  }
+}
+
+/**
+ * Epic privacy (Story 6.14 · `publicChildrenHidden`) was set on a non-epic work
+ * item. The flag is meaningful ONLY for an epic-kind item (ADR §1) — hiding "an
+ * epic's children + aggregate tells" has no meaning on a story/task/subtask. The
+ * write layer (`setEpicPrivacy`) REJECTS rather than silently coercing to a
+ * no-op, so a caller bug surfaces instead of returning a misleading 200. The
+ * route maps this to 422 (a malformed-for-this-target request).
+ */
+export class NotEpicError extends WorkItemError {
+  readonly tag = 'NOT_EPIC' as const;
+  readonly code = 'NOT_EPIC' as const;
+  constructor(kind: string) {
+    super(`Epic privacy can only be set on an epic — this work item is a ${kind}.`);
+    this.name = 'NotEpicError';
   }
 }
 

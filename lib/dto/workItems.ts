@@ -101,6 +101,15 @@ export interface WorkItemDto {
    * backfill (none in practice).
    */
   backlogRank: string | null;
+  /**
+   * Epic-level privacy (Story 6.14 · Subtask 6.14.3). When `true` on an
+   * EPIC-kind item, a public/non-member viewer of a public project sees the
+   * epic ROW but NOT its children or aggregate tells (the server-side exclusion
+   * lands in 6.14.4). A no-op marker on any other kind / non-public project.
+   * Carried on the internal (member/admin) DTO so the 6.14.7 admin control can
+   * seed its toggle from the authoritative value.
+   */
+  publicChildrenHidden: boolean;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;

@@ -51,6 +51,10 @@ export function toWorkItemDto(row: WorkItem): WorkItemDto {
     position: row.position,
     sprintId: row.sprintId,
     backlogRank: row.backlogRank,
+    // Epic-level privacy flag (Story 6.14). Pass the raw boolean through on the
+    // INTERNAL DTO; the public PROJECTION (6.14.4) is where it gets stripped /
+    // turned into the "children-hidden" marker for a non-member viewer.
+    publicChildrenHidden: row.publicChildrenHidden,
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
