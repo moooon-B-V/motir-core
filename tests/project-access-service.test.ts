@@ -7,7 +7,13 @@ import { boardsService } from '@/lib/services/boardsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { canBrowse, canEdit } from '@/lib/projects/access';
+import {
+  canBrowse,
+  canCommentPublicRequest,
+  canEdit,
+  canSubmitToTriage,
+  canUpvotePublicRequest,
+} from '@/lib/projects/access';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ProjectAccessLevel } from '@prisma/client';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
@@ -99,13 +105,20 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   });
   const ownerCtx = ctxFor(owner.id, workspace.id);
 
-  // Set the access level before adding the rest of the actors.
-  await projectMembersService.setAccessLevel({
-    key: project.identifier,
-    actorUserId: owner.id,
-    ctx: ownerCtx,
-    level,
-  });
+  // Set the access level before adding the rest of the actors. `public` is not
+  // yet settable through the service setter (its make-public toggle is Subtask
+  // 6.12.8, and `asAccessLevel` deliberately still rejects it), so seed it
+  // directly at the data layer; the 3 settable levels go through the real setter.
+  if (level === 'public') {
+    await db.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
+  } else {
+    await projectMembersService.setAccessLevel({
+      key: project.identifier,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      level,
+    });
+  }
 
   // Workspace admin — a pure workspace manager, NO project role.
   const wsAdmin = await makeUser(`wsadmin-${slug}@ex.com`, 'WsAdmin');
@@ -188,8 +201,27 @@ const EXPECTED: Record<
     admin: { browse: true, edit: true },
     nonMember: { browse: false, edit: false },
   },
+  // `public` (Story 6.12) — EVERYONE browses (incl. the non-member: the cross-org
+  // read exception). Normal EDIT is unchanged: a non-member never edits (the
+  // null-deny rail); internal members edit like `open`; a viewer is read-only.
+  // (The cross-org / ANONYMOUS read path proper — `resolvePublicInputs` /
+  // `getPublicCapabilities` with a null or out-of-workspace actor — is exercised
+  // by Subtask 6.12.9; here every actor resolves through the workspace-scoped
+  // `getCapabilities`, which still proves a workspace non-member browses public.)
+  public: {
+    owner: { browse: true, edit: true },
+    wsAdmin: { browse: true, edit: true },
+    plainMember: { browse: true, edit: true },
+    viewer: { browse: true, edit: false },
+    member: { browse: true, edit: true },
+    admin: { browse: true, edit: true },
+    nonMember: { browse: true, edit: false },
+  },
 };
 
+// The org-bounded levels drive the existing matrix + the non-member-denied pure
+// test. `public` is deliberately EXCLUDED here — its read semantics invert the
+// non-member rule — and is covered by its own describe block below + 6.12.9.
 const LEVELS: ProjectAccessLevel[] = ['open', 'limited', 'private'];
 const ROLES = [
   'owner',
@@ -286,12 +318,88 @@ describe('canBrowse / canEdit — pure policy', () => {
     }
   });
 
-  it('a non-workspace-member is denied at every level', () => {
+  it('a non-workspace-member is denied at every ORG-BOUNDED level', () => {
+    // Excludes `public` — its read semantics (the cross-org exception) admit a
+    // non-member, asserted separately below.
     for (const accessLevel of LEVELS) {
       const inputs = { accessLevel, workspaceRole: null, projectRole: null };
       expect(canBrowse(inputs)).toBe(false);
       expect(canEdit(inputs)).toBe(false);
     }
+  });
+});
+
+// Story 6.12 — the `public` access level: the cross-org READ exception + the
+// three public-viewer WRITE grants, and `canEdit` staying closed to non-members.
+describe('public access level (Story 6.12)', () => {
+  it('canBrowse admits ANYONE on a public project — incl. a null-role / anonymous actor', () => {
+    // The leading public branch returns true regardless of workspace/project role,
+    // so a logged-out / cross-org viewer (both roles null) reads a public project.
+    expect(canBrowse({ accessLevel: 'public', workspaceRole: null, projectRole: null })).toBe(true);
+    expect(
+      canBrowse({ accessLevel: 'public', workspaceRole: 'member', projectRole: 'viewer' }),
+    ).toBe(true);
+  });
+
+  it('canEdit stays CLOSED to a public non-member, OPEN to an internal member', () => {
+    // A public VIEWER (non-member) never edits — the null-deny rail, unchanged.
+    expect(canEdit({ accessLevel: 'public', workspaceRole: null, projectRole: null })).toBe(false);
+    // A public project's internal workspace member edits like `open` (most-open rung).
+    expect(canEdit({ accessLevel: 'public', workspaceRole: 'member', projectRole: null })).toBe(
+      true,
+    );
+    // A project viewer is still read-only on a public project.
+    expect(canEdit({ accessLevel: 'public', workspaceRole: 'member', projectRole: 'viewer' })).toBe(
+      false,
+    );
+  });
+
+  it('the three write grants are true IFF the project is public, independent of role', () => {
+    for (const grant of [canSubmitToTriage, canUpvotePublicRequest, canCommentPublicRequest]) {
+      // true on public for any role (a non-member included — authentication is
+      // enforced upstream, not by these pure predicates).
+      expect(grant({ accessLevel: 'public', workspaceRole: null, projectRole: null })).toBe(true);
+      expect(grant({ accessLevel: 'public', workspaceRole: 'member', projectRole: 'member' })).toBe(
+        true,
+      );
+      // false on every non-public level — no other write path keys off "public".
+      for (const accessLevel of LEVELS) {
+        expect(grant({ accessLevel, workspaceRole: 'admin', projectRole: 'admin' })).toBe(false);
+      }
+    }
+  });
+
+  it('getCapabilities matrix on a public project (a workspace non-member STILL browses)', async () => {
+    for (const role of ROLES) {
+      const want = EXPECTED.public[role];
+      const s = await buildScenario('public', `public-${role}`);
+      const caps = await projectAccessService.getCapabilities(s.projectId, s.ctxs[role]);
+      expect(caps).toEqual({ canBrowse: want.browse, canEdit: want.edit });
+    }
+  });
+
+  it('getPublicCapabilities: anonymous (null actor) browses; non-public is 404; grants need public', async () => {
+    const pub = await buildScenario('public', 'pubcap-anon');
+    // Anonymous (null actor) READ on a public project.
+    const anon = await projectAccessService.getPublicCapabilities(pub.projectId, null);
+    expect(anon.canBrowse).toBe(true);
+    // The three write grants are granted on a public project (authentication is
+    // enforced by the calling route, not this capability read).
+    expect(anon).toEqual({
+      canBrowse: true,
+      canSubmitToTriage: true,
+      canUpvotePublicRequest: true,
+      canCommentPublicRequest: true,
+    });
+    // A NON-public project is 404 through the public path — no existence leak,
+    // anonymous or cross-org (the 404-not-403 posture is preserved).
+    const priv = await buildScenario('private', 'pubcap-private');
+    await expect(
+      projectAccessService.getPublicCapabilities(priv.projectId, null),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
+    await expect(
+      projectAccessService.assertCanBrowsePublic(priv.projectId, null),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 });
 

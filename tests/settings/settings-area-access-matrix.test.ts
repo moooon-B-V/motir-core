@@ -80,12 +80,19 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   });
   const ownerCtx = ctxFor(owner.id, workspace.id);
 
-  await projectMembersService.setAccessLevel({
-    key: project.identifier,
-    actorUserId: owner.id,
-    ctx: ownerCtx,
-    level,
-  });
+  // `public` is not yet settable through the service setter (the make-public
+  // toggle is Subtask 6.12.8; `asAccessLevel` still rejects it), so seed it
+  // directly at the data layer; the 3 settable levels go through the real setter.
+  if (level === 'public') {
+    await db.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
+  } else {
+    await projectMembersService.setAccessLevel({
+      key: project.identifier,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      level,
+    });
+  }
 
   const wsAdmin = await makeUser(`wsadmin-${slug}@ex.com`, 'WsAdmin');
   await workspacesService.addMember({
@@ -164,9 +171,24 @@ const EXPECTED: Record<ProjectAccessLevel, Record<Role, { browse: boolean; manag
     admin: { browse: true, manage: true },
     nonMember: { browse: false, manage: false },
   },
+  // `public` (Story 6.12) — browse is true for EVERYONE (the cross-org read
+  // exception); `manage` is unchanged (workspace owner/admin or project admin),
+  // so the settings-area row mirrors `open`. These actors all resolve through
+  // the workspace-scoped getSettingsCapabilities; the anonymous public-READ path
+  // is the public-VIEW surface's concern (6.12.4 / 6.12.9) — settings stays
+  // member-facing.
+  public: {
+    owner: { browse: true, manage: true },
+    wsAdmin: { browse: true, manage: true },
+    plainMember: { browse: true, manage: false },
+    viewer: { browse: true, manage: false },
+    member: { browse: true, manage: false },
+    admin: { browse: true, manage: true },
+    nonMember: { browse: true, manage: false },
+  },
 };
 
-const LEVELS: ProjectAccessLevel[] = ['open', 'limited', 'private'];
+const LEVELS: ProjectAccessLevel[] = ['open', 'limited', 'private', 'public'];
 const ROLES: Role[] = ['owner', 'wsAdmin', 'plainMember', 'viewer', 'member', 'admin', 'nonMember'];
 
 describe('settings-area role-gating matrix — capabilities ride the 6.4.3 policy', () => {

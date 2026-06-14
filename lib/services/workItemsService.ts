@@ -483,7 +483,7 @@ function buildTreeLevel(rows: WorkItemTreeRow[], take: number, total: number): T
  */
 async function resolveDescriptionMentionable(
   projectId: string,
-  accessLevel: 'open' | 'limited' | 'private',
+  accessLevel: 'open' | 'limited' | 'private' | 'public',
   ctx: ServiceContext,
 ): Promise<Set<string>> {
   const members = await assignableMembersService.list({ projectId, accessLevel, ctx });

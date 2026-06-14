@@ -1290,12 +1290,14 @@
       "level": {
         "open": "Open",
         "limited": "Limited",
-        "private": "Private"
+        "private": "Private",
+        "public": "Public"
       },
       "levelDesc": {
         "open": "Any member of the {workspaceName} workspace can view and edit this project.",
         "limited": "Any workspace member can view and comment, but only project members can edit.",
-        "private": "Only people added to the project below can find or open it. Hidden from everyone else."
+        "private": "Only people added to the project below can find or open it. Hidden from everyone else.",
+        "public": "Anyone on the web can view this project without signing in. Only signed-in accounts can submit requests, upvote, or comment."
       },
       "goPrivateNote": "The {count, plural, one {# person} other {# people}} who can currently access <strong>{projectName}</strong> will be added as project members so no one loses access. You can adjust roles or remove them in the Members list.",
       "levelChangedToast": "Project access set to {level}",

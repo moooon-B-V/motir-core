@@ -16,5 +16,5 @@ export interface ProjectMemberDTO {
 export interface ProjectAccessDTO {
   /** The project's `identifier` ("key", e.g. PROD) — the stable URL handle. */
   key: string;
-  accessLevel: 'open' | 'limited' | 'private';
+  accessLevel: 'open' | 'limited' | 'private' | 'public';
 }
