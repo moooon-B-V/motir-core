@@ -897,7 +897,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.12',
       title:
         'Flip the `transitioned` matrix seam to settable + real copy (en/zh) — depends on both channels being real (5.7.10 + 5.7.11)',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 16,
