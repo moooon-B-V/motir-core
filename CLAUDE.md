@@ -603,6 +603,50 @@ shape (`bug-e2e-suite-flaky-specs`; the lesson is `notes.html` mistake #37).
 
 ---
 
+## ⚠️ Page state after a mutation — server refresh vs. client-island refetch
+
+**EXTREMELY IMPORTANT: a mutation made on a page MUST update EVERY surface it
+affects. Before shipping any create/update/delete, enumerate the surfaces it
+changes and route each to the correct update mechanism by HOW that surface
+renders. The recurring bug is assuming one mechanism (usually `router.refresh()`)
+covers all of them — it does not.**
+
+There are three surface kinds, and they update differently:
+
+1. **The edited field's OWN cell (inline edit).** The success response IS the
+   confirmation. Do **NOT** `router.refresh()` / `revalidatePath()` the cell's
+   own value — keep the optimistic value. The refresh fan-out re-reads stale data
+   and CAUSES a visible revert (`inline-edit-no-tree-refresh`; PR #619's
+   defend-the-cell approach was rejected — remove the refresh instead).
+
+2. **A SERVER-rendered surface elsewhere on the page** — a Server-Component
+   count, header, badge, or list rendered directly from a server read.
+   `router.refresh()` re-runs the server read and updates it. This is the ONLY
+   thing `router.refresh()` reaches.
+
+3. **A CLIENT island that owns its own state** — a `'use client'` component
+   seeded from server props via `useState(initialProps)` (a board, the triage
+   inbox queue, any optimistic list). **`router.refresh()` CANNOT reach it:** the
+   `useState` initializer runs ONCE at mount, so re-rendered server props are
+   silently ignored. Such an island MUST be given an explicit refetch trigger:
+   - **A provider TICK** — a monotonic counter bumped by the mutation, which the
+     island watches in a `useEffect` and refetches on. The canonical instance is
+     `CreateIssueProvider.issuesChangedAt` (the board watches it);
+     `ReportProvider.submissionsChangedAt` (the triage inbox watches it) is the
+     same shape. Skip the mount run; refetch silently on each bump.
+   - **OR an optimistic local insert/remove** when the mutation fires from
+     INSIDE that same island (e.g. the triage terminal actions remove the row
+     locally, seq-guarded).
+
+A mutation that touches BOTH a server surface AND a client island does BOTH:
+`router.refresh()` for the server bits **and** bump the tick for the island.
+Never assume the refresh alone updated the island. (Worked example — 6.11.7: the
+report widget created a triage item and called `router.refresh()`, but the inbox
+queue is a client island seeding `useState(initialItems)`, so the new row never
+appeared until the widget also bumped a tick the inbox refetches on.)
+
+---
+
 ## Project conventions (non-architecture)
 
 - **Manual merge mode.** Subtask PRs open as drafts targeting `main`; the

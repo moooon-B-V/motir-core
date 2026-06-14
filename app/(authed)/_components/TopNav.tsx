@@ -72,8 +72,8 @@ export async function TopNav({
         </div>
         <div className="flex items-center gap-2">
           <CreateIssueButton />
-          <ReportButton />
           <CommandPaletteTrigger />
+          <ReportButton />
           <ThemeToggle />
           {initialUnreadCount !== null ? (
             <NotificationBell initialUnreadCount={initialUnreadCount} />

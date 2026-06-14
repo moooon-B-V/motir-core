@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Inbox } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
 import { Spinner } from '@/components/ui/Spinner';
 import type { TriageQueueItemDto, TriageItemDetailDto } from '@/lib/dto/triage';
+import { useReport } from '../../_components/ReportProvider';
 import { TriageQueue } from './TriageQueue';
 import { TriageDetail, type TriageActionHandlers } from './TriageDetail';
 import type { PromoteTarget } from './PromotePopover';
@@ -49,6 +50,45 @@ export function TriageInbox({ initialItems, initialNextCursor, projectKey }: Tri
   // (no `busy` dep) and never read a ref during render.
   const seqRef = useRef(0);
   const busyRef = useRef(false);
+
+  // A new submission from the in-app report widget (6.11.7) lands in THIS queue
+  // but is created on a different surface (the shell/inbox-header modal). The
+  // widget bumps ReportProvider's `submissionsChangedAt` tick on success; we
+  // refetch page 1 so the new row appears. `router.refresh()` alone can't do this
+  // — this island seeds `items` from `useState(initialItems)`, whose initializer
+  // runs once, so a server re-render never reaches it (the page-state-after-
+  // mutation rule). Background refresh: silent on failure (not user-initiated),
+  // and selection survives if its row is still present.
+  const { submissionsChangedAt } = useReport();
+  const didMountRef = useRef(false);
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/projects/${encodeURIComponent(projectKey)}/triage/queue`);
+        if (cancelled || !res.ok) return;
+        const page = (await res.json()) as {
+          items: TriageQueueItemDto[];
+          nextCursor: string | null;
+        };
+        if (cancelled) return;
+        setItems(page.items);
+        setNextCursor(page.nextCursor);
+        setSelectedId((cur) =>
+          cur && page.items.some((i) => i.id === cur) ? cur : (page.items[0]?.id ?? null),
+        );
+      } catch {
+        // Non-fatal; the next action or navigation re-reads the queue.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [submissionsChangedAt, projectKey]);
 
   const selectRow = useCallback(
     async (id: string) => {

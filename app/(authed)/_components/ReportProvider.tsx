@@ -27,6 +27,16 @@ interface ReportContextValue {
   setOpen: (open: boolean) => void;
   openReport: () => void;
   canReport: boolean;
+  /**
+   * A monotonically increasing tick bumped each time a submission is
+   * successfully created (mirrors CreateIssueProvider.issuesChangedAt). A
+   * `router.refresh()` re-renders SERVER surfaces (e.g. the triage header
+   * count), but it CANNOT reach a client island that seeds its list from
+   * `useState(initialProps)` — the TriageInbox queue does. Such islands watch
+   * this tick and refetch. It carries no payload: "a submission was created,
+   * re-read if you cache the queue".
+   */
+  submissionsChangedAt: number;
 }
 
 const ReportContext = createContext<ReportContextValue | null>(null);
@@ -43,19 +53,28 @@ export function ReportProvider({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [submissionsChangedAt, setSubmissionsChangedAt] = useState(0);
 
   const openReport = useCallback(() => setOpen(true), []);
+  // The modal calls this on a successful submit; bumping the tick lets
+  // client-fetched surfaces (the triage inbox queue) refetch.
+  const notifySubmitted = useCallback(() => setSubmissionsChangedAt((n) => n + 1), []);
 
   const value = useMemo<ReportContextValue>(
-    () => ({ open, setOpen, openReport, canReport: Boolean(projectKey) }),
-    [open, openReport, projectKey],
+    () => ({ open, setOpen, openReport, canReport: Boolean(projectKey), submissionsChangedAt }),
+    [open, openReport, projectKey, submissionsChangedAt],
   );
 
   return (
     <ReportContext.Provider value={value}>
       {children}
       {projectKey && canEdit && (
-        <ReportWidgetModal open={open} onOpenChange={setOpen} projectKey={projectKey} />
+        <ReportWidgetModal
+          open={open}
+          onOpenChange={setOpen}
+          projectKey={projectKey}
+          onSubmitted={notifySubmitted}
+        />
       )}
     </ReportContext.Provider>
   );
