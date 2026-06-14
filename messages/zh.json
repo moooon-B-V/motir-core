@@ -2167,7 +2167,7 @@
       "agileGroup": "敏捷",
       "analysisGroup": "工作项分析",
       "burndownTitle": "燃尽图",
-      "burndownBody": "当前 Sprint 的剩余点数。位于 Sprint 报告中。",
+      "burndownBody": "某个 Sprint 的剩余点数，可切换 Sprint。",
       "velocityTitle": "速度图",
       "velocityBody": "近期各 Sprint 的承诺点数与完成点数对比。",
       "sprintReportTitle": "Sprint 报告",
@@ -2245,6 +2245,18 @@
       "builtinGroup": "字段",
       "customGroup": "自定义字段",
       "unknownStatistic": "未知"
+    },
+    "burndown": {
+      "title": "燃尽图",
+      "sprintLabel": "Sprint",
+      "sprintSearch": "搜索 Sprint…",
+      "activeGroup": "进行中",
+      "completedGroup": "已完成",
+      "noSprintsTitle": "尚无已开始的 Sprint",
+      "noSprintsBody": "从待办列表开始一个 Sprint，即可查看其燃尽图。"
+    },
+    "velocity": {
+      "title": "速度图"
     },
     "statistic": {
       "kind": "类型",
