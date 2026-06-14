@@ -196,8 +196,31 @@ test.describe('sprint lifecycle (4.4.7)', () => {
     // The footer (Open full report + Done) stays pinned, not scrolled away.
     await expect(reportDialog.getByRole('button', { name: 'Done' })).toBeInViewport();
 
-    // Close the report (the "Done" button).
+    // ── Regression (bug 11): the carried items land in the LIVE backlog with NO
+    //    manual reload ─────────────────────────────────────────────────────────
+    // Closing the report fires the dialog's `onCompleted`, which (besides
+    // re-reading `/api/sprints` metadata) bumps the shared issues-refresh signal
+    // so EVERY region's issue list re-reads — here the backlog, the carry-over
+    // destination. Before the fix, only the sprint metadata refetched, so the
+    // already-mounted backlog list kept its pre-move rows and the carried issues
+    // were invisible until a manual reload. Arm the authoritative `/api/backlog`
+    // refetch wait BEFORE the close that triggers it (the CLAUDE.md E2E rule:
+    // never lean on assertion auto-retry to "catch up" to an async refetch).
+    const backlogRefetched = page.waitForResponse(
+      (r) =>
+        /\/api\/backlog(?:\?|$)/.test(r.url()) &&
+        r.request().method() === 'GET' &&
+        r.status() === 200,
+    );
     await reportDialog.getByRole('button', { name: 'Done' }).click();
+    await backlogRefetched;
+
+    // No `page.goto` / reload — the rows appear in the backlog region that was
+    // mounted behind the dialog the whole time.
+    await expect(backlogRow(page, seed.mainIssues[1]!.identifier)).toBeVisible();
+    await expect(backlogRow(page, seed.mainIssues[2]!.identifier)).toBeVisible();
+    // The done issue did NOT return to the backlog (source side unregressed).
+    await expect(backlogRow(page, seed.mainIssues[0]!.identifier)).toHaveCount(0);
 
     // ── Post-conditions: the sprint is complete; the unfinished work carried
     //    back to the backlog; the done issue stayed on the sprint ─────────────
@@ -213,13 +236,5 @@ test.describe('sprint lifecycle (4.4.7)', () => {
     expect(
       (await db.workItem.findUnique({ where: { id: seed.mainIssues[2]!.id } }))?.sprintId,
     ).toBeNull();
-
-    // And the carried issues are visible in the backlog list after a reload.
-    await page.goto('/backlog');
-    await expect(page.getByTestId('backlog-count')).toBeVisible({ timeout: 30_000 });
-    await expect(backlogRow(page, seed.mainIssues[1]!.identifier)).toBeVisible();
-    await expect(backlogRow(page, seed.mainIssues[2]!.identifier)).toBeVisible();
-    // The done issue did NOT return to the backlog.
-    await expect(backlogRow(page, seed.mainIssues[0]!.identifier)).toHaveCount(0);
   });
 });

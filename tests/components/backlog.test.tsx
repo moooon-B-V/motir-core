@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import type { ReactElement } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import type { SprintDto } from '@/lib/dto/sprints';
@@ -284,5 +284,143 @@ describe('BacklogContainer (4.2.3 read render)', () => {
     expect(row.getAttribute('aria-roledescription')).toBe('sortable');
     expect(row.getAttribute('role')).toBe('row');
     expect(row.className).toContain('cursor-grab');
+  });
+});
+
+// ── Bug 11: completing a sprint refreshes EVERY region's issue list ───────────
+// The complete dialog's `onCompleted` previously only re-read `/api/sprints`
+// metadata (which sprints exist + their counts). The destination of the carry-
+// over move — the backlog OR a target planned-sprint card — keeps its OWN
+// `/api/sprints/[id]/issues` / `/api/backlog` read, which was never invalidated,
+// so the moved items stayed invisible until a manual reload. The fix threads a
+// shared refresh signal into every region, so completion re-reads them all. This
+// proves the container-side wiring (the dialog-fires-onCompleted contract is
+// already covered by complete-sprint-dialog.test.tsx) by driving the real flow
+// and asserting the FAN-OUT: after completion, BOTH the backlog AND a non-target
+// planned-sprint card re-fetch (the same mechanism that makes a carry INTO a
+// planned sprint show its moved rows), and the carried row appears with no reload.
+describe('BacklogContainer — sprint completion refreshes destination regions (bug 11)', () => {
+  // The complete dialog mounts a Modal (focus trap) + a Combobox; both touch
+  // browser APIs happy-dom omits (mirrors complete-sprint-dialog.test.tsx).
+  beforeAll(() => {
+    globalThis.ResizeObserver ??= class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+    Element.prototype.scrollIntoView ??= () => {};
+    Element.prototype.hasPointerCapture ??= () => false;
+    Element.prototype.setPointerCapture ??= () => {};
+    Element.prototype.releasePointerCapture ??= () => {};
+  });
+
+  function okJson(body: unknown) {
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(body),
+    } as Response);
+  }
+
+  it('re-reads the backlog and every sprint card after a sprint completes (carry → backlog)', async () => {
+    const calls: string[] = [];
+    let completed = false;
+    // active1 has unfinished work; planned1 is an untouched future-sprint card —
+    // it must STILL re-read on completion (the fan-out that makes a carry INTO a
+    // planned sprint work). The carried item (PROD-300) lands in the backlog,
+    // which is empty until the move commits.
+    global.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.includes('/points')) return okJson({ committed: 0, completed: 0, remaining: 0 });
+      if (url.includes('/report'))
+        return okJson({
+          sprintId: 'active1',
+          state: 'active',
+          points: { committed: 5, completed: 0, notCompleted: 5 },
+          completed: { items: [], nextCursor: null, totalCount: 0 },
+          incomplete: {
+            items: [item({ id: 'm1', key: 300, status: 'in_progress' })],
+            nextCursor: null,
+            totalCount: 1,
+          },
+          addedAfterStart: 0,
+        });
+      if (url.includes('/burndown'))
+        return okJson({
+          sprintId: 'active1',
+          state: 'complete',
+          statistic: 'story_points',
+          committed: 5,
+          startDate: '2026-06-09T00:00:00.000Z',
+          endDate: '2026-06-22T00:00:00.000Z',
+          days: [],
+          scopeChanges: [],
+        });
+      if (url.includes('/complete') && init?.method === 'POST') {
+        completed = true;
+        return okJson(sprint({ id: 'active1', name: 'Sprint 24', state: 'complete' }));
+      }
+      if (url.includes('/issues')) return okJson({ items: [], nextCursor: null, totalCount: 0 });
+      if (url.startsWith('/api/sprints'))
+        return okJson({
+          sprints: [
+            sprint({
+              id: 'active1',
+              name: 'Sprint 24',
+              state: completed ? 'complete' : 'active',
+              sequence: 1,
+              issueCount: 5,
+            }),
+            sprint({ id: 'planned1', name: 'Sprint 25', state: 'planned', sequence: 2 }),
+          ],
+        });
+      if (url.startsWith('/api/backlog'))
+        return okJson(
+          completed
+            ? { items: [item({ id: 'm1', key: 300 })], nextCursor: null, totalCount: 1 }
+            : { items: [], nextCursor: null, totalCount: 0 },
+        );
+      return okJson({});
+    }) as unknown as typeof fetch;
+
+    render(<BacklogContainer workflow={workflow} members={members} projectName="motir" />);
+
+    // Open the complete flow from the active sprint, confirm (backlog is the
+    // default carry-over), then close the success report.
+    fireEvent.click(await screen.findByTestId('complete-sprint-active1'));
+    const dialog = await screen.findByRole('dialog', { name: 'Complete sprint' });
+    const confirm = (await within(dialog).findByRole('button', {
+      name: 'Complete sprint',
+    })) as HTMLButtonElement;
+    // The confirm enables once the report preview load resolves (no jest-dom in
+    // this suite — assert the DOM `disabled` property directly).
+    await waitFor(() => expect(confirm.disabled).toBe(false));
+
+    const backlogCallsBeforeComplete = calls.filter((u) => u.startsWith('/api/backlog')).length;
+    const planned1CallsBeforeComplete = calls.filter((u) =>
+      u.startsWith('/api/sprints/planned1/issues'),
+    ).length;
+
+    fireEvent.click(confirm);
+    // The success-state report appears once the POST resolves.
+    const report = await screen.findByRole('dialog', { name: /Sprint 24 report/ });
+    fireEvent.click(within(report).getByRole('button', { name: 'Done' }));
+
+    // The fan-out: completion re-reads the backlog (the carry destination) AND
+    // the untouched planned-sprint card (proving a carry INTO a planned sprint
+    // would refresh its card the same way).
+    await waitFor(() =>
+      expect(calls.filter((u) => u.startsWith('/api/backlog')).length).toBeGreaterThan(
+        backlogCallsBeforeComplete,
+      ),
+    );
+    await waitFor(() =>
+      expect(
+        calls.filter((u) => u.startsWith('/api/sprints/planned1/issues')).length,
+      ).toBeGreaterThan(planned1CallsBeforeComplete),
+    );
+    // And the carried row is now in the backlog with no remount / reload.
+    expect(await screen.findByTestId('backlog-row-PROD-300')).toBeTruthy();
   });
 });

@@ -62,6 +62,13 @@ export function BacklogContainer({
   const [sprints, setSprints] = useState<SprintDto[]>([]);
   const [status, setStatus] = useState<SprintsStatus>('loading');
   const [reloadKey, setReloadKey] = useState(0);
+  // A refetch signal threaded into every region's `useRankedIssues` (each sprint
+  // card + the backlog). `reloadKey` only re-reads the `/api/sprints` metadata
+  // (which sprints exist + their counts); it does NOT touch the per-region issue
+  // LISTS, which own separate `/api/sprints/[id]/issues` / `/api/backlog` reads.
+  // Completing a sprint MOVES the unfinished items into a destination region, so
+  // that region's list must re-read too — bumping this is how it gets told (bug 11).
+  const [issuesRefreshKey, setIssuesRefreshKey] = useState(0);
 
   // `status` starts 'loading'; `retry`/`refetch` flip it before bumping
   // `reloadKey`, so the effect never calls setState synchronously (board pattern).
@@ -86,6 +93,17 @@ export function BacklogContainer({
   const refetchSprints = useCallback(async () => {
     setReloadKey((k) => k + 1);
   }, []);
+
+  // Sprint completion carries the unfinished items into the backlog or a target
+  // sprint, so BOTH the sprint metadata (the completed one drops out of the
+  // planning view; the target's count changes) AND every region's issue list
+  // (the destination must show the moved rows) have to re-read. `refetchSprints`
+  // alone left the destination list stale → the carried items were invisible
+  // until a manual reload (bug 11).
+  const handleSprintCompleted = useCallback(async () => {
+    setIssuesRefreshKey((k) => k + 1);
+    await refetchSprints();
+  }, [refetchSprints]);
 
   // Keep a sprint header's issue-count badge in sync with an optimistic
   // cross-region drag (Subtask 4.2.4) — the badge reads `sprint.issueCount`, so a
@@ -141,7 +159,8 @@ export function BacklogContainer({
             activeSprint={activeSprint}
             plannedSprints={plannedSprints}
             onStarted={refetchSprints}
-            onCompleted={refetchSprints}
+            onCompleted={handleSprintCompleted}
+            issuesRefreshKey={issuesRefreshKey}
           />
         ))}
 
@@ -153,6 +172,7 @@ export function BacklogContainer({
           statusByKey={statusByKey}
           assigneeNameById={assigneeNameById}
           regionOrder={planning.length}
+          issuesRefreshKey={issuesRefreshKey}
         />
       </div>
     </BacklogDndProvider>
@@ -166,14 +186,17 @@ function BacklogRegion({
   statusByKey,
   assigneeNameById,
   regionOrder,
+  issuesRefreshKey,
 }: {
   statusByKey: ReturnType<typeof buildStatusByKey>;
   assigneeNameById: Map<string, string>;
   regionOrder: number;
+  /** Bumped when a sprint completes with carry-over to the backlog (bug 11). */
+  issuesRefreshKey: number;
 }) {
   const t = useTranslations('backlog');
   const [collapsed, setCollapsed] = useState(false);
-  const state = useRankedIssues('/api/backlog');
+  const state = useRankedIssues('/api/backlog', issuesRefreshKey);
 
   return (
     <section

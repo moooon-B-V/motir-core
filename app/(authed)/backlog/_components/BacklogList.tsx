@@ -68,8 +68,20 @@ export interface RankedIssuesState {
   setTotalCount: Dispatch<SetStateAction<number>>;
 }
 
-/** Owns a single endpoint's cursor-paginated read (page 1 + lazy `loadMore`). */
-export function useRankedIssues(endpoint: string): RankedIssuesState {
+/**
+ * Owns a single endpoint's cursor-paginated read (page 1 + lazy `loadMore`).
+ *
+ * `refreshKey` is an EXTERNAL refetch signal: bumping it re-runs the page-1 read
+ * (resetting to a fresh first page + authoritative `totalCount`) WITHOUT a
+ * `retry()`-style loading flash — the current rows stay mounted until the new
+ * page resolves. The backlog container bumps it after a sprint completes so the
+ * MOVE's destination region (the target sprint card or the backlog) re-reads:
+ * `refetchSprints` only re-fetches `/api/sprints` metadata (which sprints exist
+ * + their counts), NOT each region's own `/api/sprints/[id]/issues` or
+ * `/api/backlog` list, so without this the carried issues never appear until a
+ * manual reload (bug 11).
+ */
+export function useRankedIssues(endpoint: string, refreshKey = 0): RankedIssuesState {
   const [items, setItems] = useState<WorkItemSummaryDto[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -88,9 +100,12 @@ export function useRankedIssues(endpoint: string): RankedIssuesState {
     itemsRef.current = items;
   }, [items]);
 
-  // Page 1 (and a retry refetch). Resets the accumulated list. `status` starts
-  // 'loading' and `retry()` flips it back before bumping `reloadKey`, so the
-  // effect never calls setState synchronously in its body (the board pattern).
+  // Page 1 (a retry refetch, or an external `refreshKey` bump). Resets the
+  // accumulated list. `status` starts 'loading' and `retry()` flips it back
+  // before bumping `reloadKey`, so the effect never calls setState
+  // synchronously in its body (the board pattern). A `refreshKey` refresh leaves
+  // `status` 'ready', so the existing rows stay on screen until the new page
+  // lands (no flash) and then swap to the post-move set.
   useEffect(() => {
     let active = true;
     fetch(endpoint, { headers: { accept: 'application/json' } })
@@ -110,7 +125,7 @@ export function useRankedIssues(endpoint: string): RankedIssuesState {
     return () => {
       active = false;
     };
-  }, [endpoint, reloadKey]);
+  }, [endpoint, reloadKey, refreshKey]);
 
   const loadMore = useCallback(() => {
     if (inFlight.current || !cursor) return;

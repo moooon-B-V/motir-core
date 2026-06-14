@@ -55,6 +55,7 @@ export function SprintContainer({
   plannedSprints,
   onStarted,
   onCompleted,
+  issuesRefreshKey,
 }: {
   sprint: SprintDto;
   /** Top-to-bottom stack position (sprints precede the backlog) — shift-range order (4.2.5). */
@@ -73,13 +74,16 @@ export function SprintContainer({
   /** Refresh the sprint list after a sprint is completed (it drops out of the
    *  planning view). Fires on the complete dialog's close (Subtask 4.4.6). */
   onCompleted: () => void | Promise<void>;
+  /** Bumped when ANY sprint completes — re-reads this card's issue list so a
+   *  carry-over INTO this (planned target) sprint shows the moved rows (bug 11). */
+  issuesRefreshKey: number;
 }) {
   const t = useTranslations('backlog');
   const locale = useLocale();
   const [collapsed, setCollapsed] = useState(false);
   const [startOpen, setStartOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
-  const state = useRankedIssues(`/api/sprints/${sprint.id}/issues`);
+  const state = useRankedIssues(`/api/sprints/${sprint.id}/issues`, issuesRefreshKey);
   // Live committed-points roll-up (Subtask 4.4.9 — finding #69) filling the
   // Story-4.3 seam: a null read or a wholly-unestimated sprint renders "—".
   const points = useSprintPoints(sprint.id);
