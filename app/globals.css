@@ -94,8 +94,13 @@
   --color-destructive-foreground: #ffffff;
   --color-info: #0075de;
 
-  /* Link blue (NOT primary purple — distinct role) */
-  --color-link: #0075de;
+  /* Link blue (NOT primary purple — distinct role). Tuned to clear WCAG AA
+     (4.5:1) on BOTH the white page (#ffffff → 4.94:1) AND the slightly darker
+     --color-surface-soft (#fafaf9 → 4.73:1) that hovered rows paint behind it,
+     so a link on a hovered soft-surface row stays accessible
+     (bug-filters-directory-name-link-hover-aa-contrast — #0075de was 4.37:1
+     on the soft surface). */
+  --color-link: #0070d2;
   --color-link-pressed: #005bab;
 
   /* ── Typography ─────────────────────────────────────────────────── */
