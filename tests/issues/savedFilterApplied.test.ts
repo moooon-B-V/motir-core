@@ -109,7 +109,12 @@ describe('appliedFromResolved', () => {
   it('a built-in carries null owner/visibility, canOverwrite=false, builtin=true', () => {
     const applied = appliedFromResolved(
       resolved({
-        filter: { id: 'builtin:my-open-issues', name: 'My open issues', builtin: true },
+        filter: {
+          id: 'builtin:my-open-issues',
+          slug: 'my-open-issues',
+          name: 'My open issues',
+          builtin: true,
+        },
         capabilities: {
           canManage: false,
           canDelete: false,

@@ -477,7 +477,7 @@ function BuiltinOption({
       selected={selected}
       applying={applying}
       onApply={onApply}
-      label={builtin.name}
+      label={t(`builtinNames.${builtin.slug}`)}
       secondary={<span className="truncate">{t('visibility.builtin')}</span>}
     />
   );

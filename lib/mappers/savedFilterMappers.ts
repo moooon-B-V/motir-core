@@ -36,7 +36,9 @@ export function toSavedFilterSummaryDto(row: SavedFilterWithStars): SavedFilterS
 }
 
 export function toBuiltinFilterSummaryDto(def: BuiltinFilterDef): BuiltinFilterSummaryDto {
-  return { id: builtinFilterId(def.slug), name: def.name, builtin: true };
+  // `slug` is the locale-independent key the UI threads `t(...)` over for the
+  // label; `name` rides along as the English fallback for non-`t` callers.
+  return { id: builtinFilterId(def.slug), slug: def.slug, name: def.name, builtin: true };
 }
 
 /** A subscription row → its wire shape (Subtask 6.2.5) — schedule fields only;

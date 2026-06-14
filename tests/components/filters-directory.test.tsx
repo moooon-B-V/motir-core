@@ -157,7 +157,9 @@ describe('FiltersDirectory — rendering + gating', () => {
     mockList({
       items: [],
       total: 0,
-      builtins: [{ id: 'builtin:my-open', name: 'My open issues', builtin: true }],
+      builtins: [
+        { id: 'builtin:my-open', slug: 'my-open-issues', name: 'My open issues', builtin: true },
+      ],
     });
     renderDirectory(<FiltersDirectory projectKey="PROD" viewer={viewer()} />);
 
