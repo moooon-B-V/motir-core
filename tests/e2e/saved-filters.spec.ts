@@ -320,6 +320,13 @@ test.describe('saved filters', () => {
     const row = adminPage.getByRole('row', { name: /Release gate/ });
     await expect(row).toBeVisible();
 
+    // Park the pointer in the top-left corner so NO name row is in `:hover`
+    // during the whole-page sweep. The name link only switches to its link
+    // colour on `group-hover`, so a sweep run with the cursor resting on a row
+    // would otherwise pass/fail based on cursor position
+    // (bug-filters-directory-name-link-hover-aa-contrast) — normalise it.
+    await adminPage.mouse.move(0, 0);
+
     // axe sweep — the directory table + pager.
     await expectNoAxe(adminPage, null, 'filters directory');
 
