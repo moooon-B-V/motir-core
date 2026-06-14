@@ -495,7 +495,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.3',
       title:
         'Schema + access — add `public` to `ProjectAccessLevel`; extend the access-check cross-org for READ; migration',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
@@ -571,7 +571,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.4',
       title:
         'Public read-only project view (overview/README landing + board / work items) — internal fields hidden, no edit affordances',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 65,
@@ -687,7 +687,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.5',
       title:
         'Public submit-to-triage for any account + DUPLICATE DETECTION (surface the existing request to upvote)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
@@ -752,7 +752,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.6',
       title:
         'Upvoting + comments on public requests — the vote model (the demand signal the triage queue sorts by)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
@@ -869,7 +869,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.8',
       title:
         'Project settings — the "make public" toggle + the shareable public link + the Overview/README editor',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 55,
