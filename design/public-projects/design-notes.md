@@ -1,12 +1,22 @@
 # Public projects — design notes
 
 Design reference for the `public-projects` UI area — **"open source project
-management"**: a project made **public** for read-only VIEW by ANY signed-in
-Motir account (across orgs/workspaces), where the only writes are **submit a
-request** (into the 6.11 Triage), **upvote**, and **comment** (Story 6.12).
-Built FROM the real design system (`app/globals.css` `--el-*` colour tokens +
-`[data-display-style]` shape tokens + the shipped `components/ui/*` primitives),
-so the code subtasks compose the same primitives — no Pencil→code gap.
+management"**: a project made **public** for read-only VIEW by **anyone on the
+web (no sign-in)**, where the only writes are **submit a request** (into the
+6.11 Triage), **upvote**, and **comment** (Story 6.12) — and those three writes
+require sign-in. Built FROM the real design system (`app/globals.css` `--el-*`
+colour tokens + `[data-display-style]` shape tokens + the shipped
+`components/ui/*` primitives), so the code subtasks compose the same primitives —
+no Pencil→code gap.
+
+> **⚠️ Model revision (Yue, 2026-06-14).** A public project page is now **fully
+> public — anyone can VIEW it with no sign-in**, and it is **server-rendered +
+> crawlable, optimised for SEO + GEO**. Only the three **writes** (submit a bug /
+> feature request, upvote, comment) still require sign-in ("sign-in-to-act" — the
+> GitHub / Canny standard); anonymous _writes_ stay out of scope (they need the
+> deferred abuse / anonymous-identity model). This supersedes the earlier
+> "account-required, not anonymous" framing for READ, mirrors the 6.13
+> project-square revision, and resolves its anonymous click-through knock-on.
 
 | Surface                       | Asset                       | Gates                                                   |
 | ----------------------------- | --------------------------- | ------------------------------------------------------- |
@@ -25,12 +35,13 @@ Every UI code subtask in Story 6.12 (6.12.4 / 6.12.6 / 6.12.7 / 6.12.8) carries
 
 `public` is a **4th `ProjectAccessLevel`** extending 6.4 (DONE: open / limited /
 private). The openness ladder is **public > open > limited > private**, and
-`public` is the **ONLY** level that crosses the org boundary for READ — 6.4's
-`canBrowse` returns true for ANY authenticated account on a public project,
-bypassing the 6.10 org/workspace gate **for READ on public projects only**. A
-public viewer is **NOT a member**, so 6.4 `canEdit` is false; the three permitted
-writes — **submit-to-triage, upvote, comment** — are NEW narrow grants
-(`canSubmitToTriage` / `canUpvotePublicRequest` / `canCommentPublicRequest`),
+`public` is the **ONLY** level that crosses the org boundary for READ — for a
+public project `canBrowse` returns true **for ANYONE, including no session at
+all** (the READ is anonymous + crawlable), bypassing the 6.10 org/workspace gate
+**for READ on public projects only**. A public viewer is **NOT a member**, so 6.4
+`canEdit` is false; the three permitted writes — **submit-to-triage, upvote,
+comment** — are NEW narrow grants (`canSubmitToTriage` / `canUpvotePublicRequest`
+/ `canCommentPublicRequest`) that **require a signed-in account** (sign-in-to-act),
 checked explicitly, never a `canEdit` relaxation.
 
 Three invariants this asset draws and `design-notes` states in writing:
@@ -44,9 +55,12 @@ Three invariants this asset draws and `design-notes` states in writing:
 2. **NO edit affordances** anywhere on the public surface — no create / move /
    assign / status / drag. The only interactive elements are Submit-a-request,
    Upvote, and Comment.
-3. **Account-required, NOT anonymous.** A viewer must be a signed-in Motir
-   account (any org). The share link is a pointer that still requires sign-in;
-   anonymous/logged-out access is explicitly FUTURE (out of scope).
+3. **Fully public READ — anonymous + crawlable; sign-in only to ACT.** Anyone
+   on the web can view a public project with no sign-in, and the page is
+   server-rendered + indexable (SEO/GEO — see Panel 9). The three writes (submit
+   a bug / feature request, upvote, comment) require sign-in: a logged-out write
+   surface shows a "Sign in to act" prompt. Anonymous _writes_ stay out of scope
+   (they'd need the deferred abuse / anonymous-identity model).
 
 **Verified mirror (rung 1, cited 2026-06-12):** OpenProject / Plane / GitHub
 public-repo visibility for the public-project + public-roadmap posture; Canny /
@@ -62,10 +76,11 @@ duplicate-detection portal set.
    stats + CTAs) + an authored Markdown body + a links / at-a-glance sidebar. The
    **default** public tab.
 2. **(2)** the public read-only project view (**Board** tab) — the read-only
-   **board** (To Do / In Progress / In Review / Done) as a NON-member cross-org
-   viewer sees it: NO edit affordances, INTERNAL fields absent, the public-project
-   BANNER + the signed-in cross-org viewer identity, a read-only Overview / Board
-   / Work items / Roadmap nav.
+   **board** (To Do / In Progress / In Review / Done) as an anonymous (logged-out)
+   visitor sees it: NO edit affordances, INTERNAL fields absent, the public-project
+   BANNER ("anyone can view — no account needed; sign in to act") + a Sign-in /
+   Start-free CTA in the top bar (no signed-in identity), a read-only Overview /
+   Board / Work items / Roadmap nav.
 3. **(3)** the public **roadmap** — status-grouped columns (submitted → planned →
    in progress → done) with vote counts + per-column pagination.
 4. **(4)** **submit a request + DUPLICATE DETECTION** — the form (type toggle,
@@ -73,21 +88,27 @@ duplicate-detection portal set.
    the confirmation.
 5. **(5)** a public **request detail** — the body, the upvote control + count
    (voted state), the public comment thread + composer.
-6. **(6)** project **settings** — the four-level Access control + the shareable
-   public link (copy / disable / rotate) + the account-required note + **the
-   Overview/README authoring entry point** (opens Panel 7).
+6. **(6)** project **settings** — the four-level Access control (the Public
+   option now reads "anyone can view, no account, indexable by search engines") +
+   the shareable public link (copy / disable / rotate) + the no-sign-in-to-view
+   note + **the Overview/README authoring entry point** (opens Panel 7).
 7. **(7)** **Edit overview** — the dedicated authoring view: a **split Markdown
    editor (left) + live preview (right)** of the public landing; edits the
    `publicOverviewMd` body only.
 8. **(8)** **states** — empty roadmap, empty request list, the paginated loading
    skeleton, the fetch-error, the rate-limited submit.
+9. **(9)** **SEO + GEO scaffolding** — the fully-public page is server-rendered +
+   crawlable: head meta / OpenGraph / canonical, JSON-LD (`SoftwareApplication`),
+   a semantic HTML outline, and the GEO answer-engine framing (the Overview/README
+   as the citable description + an FAQ). States the read-anonymous /
+   write-needs-sign-in / internal-fields-stripped facts.
 
 ## Where it lives
 
 ```
 design/public-projects/
   design-notes.md            ← this spec
-  public-projects.mock.html  ← the asset SOURCE (8 panels, one self-contained file)
+  public-projects.mock.html  ← the asset SOURCE (9 panels, one self-contained file)
   public-projects.png        ← the full-page PNG export (board-visible face)
 ```
 
@@ -165,12 +186,13 @@ roadmap / external links). The authoring editor lives in Panel 6 (settings).
 - **Top bar** (`.pub-topbar`, `--el-surface-soft`): the project logo tile
   (`.pub-logo`, `--el-accent` fill + `--el-accent-text`), the project name + a
   **`Pill` `pill-public`** (`globe` lucide, `--el-public-banner-bg` /
-  `--el-public-banner-text`), the project key + workspace, and on the right the
-  **signed-in cross-org viewer** identity (name + "signed in · {org}" + an
-  initial Avatar). This makes the authenticated-not-anonymous fact visible.
+  `--el-public-banner-text`), the project key + workspace, and on the right a
+  **Sign in (`btn-ghost`) + Start free (`btn-primary`) CTA** — the logged-out
+  state (no signed-in identity), since the page is anonymous to view.
 - **Public banner** (`.pub-banner`, full-width `--el-public-banner-bg`): the
-  explicit framing — _"You're viewing a public project. Anyone signed in to Motir
-  can view it and submit, upvote, or comment on requests."_ + a `lock`-glyph
+  explicit framing — _"You're viewing a public project. Anyone can view it — no
+  account needed. Sign in to submit, upvote, or comment on requests."_ + a
+  `lock`-glyph
   **"View-only — you can't edit work items"** note.
 - **Sub-bar nav** (`.seg`, a read-only `Segmented`): **Board / Work items / Roadmap**
   (Board active) + the primary **"Submit a request"** button (`globe`/`plus`).
@@ -267,9 +289,10 @@ disabled resting state).
   read-only). Setting Public calls the 6.4 `setAccessLevel` service with the new
   enum value (6.12.8 — extend, don't fork).
 - **Public link** (`.sharelink`): a mono link field + **Copy** / **Rotate** /
-  **Disable** (`btn-danger`, rose tint). The `.acct-note` states the link is a
-  pointer that still requires sign-in, anonymous access is unsupported, and
-  rotating issues a new link without changing the project key.
+  **Disable** (`btn-danger`, rose tint). The `.acct-note` states the link opens
+  with **no sign-in** (the page is public + crawlable), that visitors sign in only
+  to submit / upvote / comment, and that rotating issues a new link without
+  changing the project key.
 - **Project overview entry point** (`.ov-entry`): a row showing a one-line snippet
   of the current `publicOverviewMd` + an **"Edit overview"** button that opens the
   dedicated editor (Panel 7). The `.acct-note` states it shows on the public
@@ -428,16 +451,24 @@ swap layer must reach every element).
   attribute it to your account."** · **"View roadmap" / "Submit another"**.
 - Request detail: **"opened by {name}"** · **"N comments"** · composer placeholder
   **"Add a comment…"** · **"Comment"**.
-- Access levels: **"Public"** — _"Any signed-in Motir account — across orgs and
-  workspaces — can view this project and submit, upvote, and comment on requests.
-  They can't edit anything else."_ · **"Open"** — _"Any member of this workspace
-  can view and edit."_ · **"Limited"** — _"Any member of this workspace can view
-  and comment, but not edit."_ · **"Private"** — _"Only people added to this
-  project can see it."_
+- Access levels: **"Public"** — _"Anyone on the web can view this project — no
+  account needed, and it's indexable by search engines. Visitors sign in only to
+  submit, upvote, or comment. They can't edit anything else."_ · **"Open"** —
+  _"Any member of this workspace can view and edit."_ · **"Limited"** — _"Any
+  member of this workspace can view and comment, but not edit."_ · **"Private"** —
+  _"Only people added to this project can see it."_
 - Share link: **"Public link"** · **"Copy" / "Rotate" / "Disable"** · note: _"The
-  link is a pointer to the public project — visitors still sign in to Motir to
-  view it. Anonymous, logged-out access isn't supported. Rotating issues a new
-  link and retires the old one; the project key (PROD) doesn't change."_
+  link points to the public project — anyone can open it with no sign-in, and the
+  page is server-rendered + crawlable (SEO/GEO). Visitors sign in only to submit,
+  upvote, or comment. Rotating issues a new link and retires the old one; the
+  project key (PROD) doesn't change."_
+- Sign-in-to-act (logged-out write surfaces): **"Sign in to comment"** /
+  **"Sign in to upvote"** / **"Sign in to submit a request"** — _"reading is open
+  to everyone; posting needs a Motir account."_ + **"Sign in"**.
+- SEO/GEO panel (9): **"Built to be found — by search engines and by AI"**; facts —
+  **"Fully public — no sign-in to read; crawlable by Googlebot, Bingbot, GPTBot."**
+  / **"Sign-in is needed ONLY to submit / upvote / comment."** / **"Internal
+  fields stay stripped by the public projection."**
 - States: **"Nothing on the roadmap yet"** / **"No requests yet"** / **"Be the
   first — submit a bug or feature request for this project."** / **"Couldn't load
   this project"** / **"You're submitting a little too fast. … Your draft is
