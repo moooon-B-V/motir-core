@@ -660,7 +660,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.8',
       title:
         'Playwright E2E — mention → bell increment → drawer → click → issue → marked read → badge decrement; preference-off stops the channel',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 28,
