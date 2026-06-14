@@ -250,7 +250,7 @@ export const story_6_13: PlanStory = {
       id: '6.13.1',
       title:
         'Design — the project square: the fully-public marketing-site page (hero + cards), search, category/tag filters, sort/rank tabs, the SEO/GEO scaffolding',
-      status: 'in_progress',
+      status: 'done',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 50,
