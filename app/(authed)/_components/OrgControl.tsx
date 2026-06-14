@@ -119,7 +119,6 @@ export function OrgControl({ activeOrg, orgs }: OrgControlProps) {
               >
                 <Plus className="text-(--el-text-muted) h-4 w-4" aria-hidden />
                 <span className="flex-1">{t('menu.newWorkspace')}</span>
-                <span className="text-(--el-text-faint) text-xs">{t('menu.newWorkspaceHint')}</span>
               </button>
             </li>
           </ul>

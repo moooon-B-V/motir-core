@@ -150,14 +150,34 @@ async function main() {
     }
     // The orgs are now childless — drop them (cascades their OrganizationMembership
     // rows). This is slug-agnostic, so it also cleans an org whose slug a past
-    // collision suffixed. Belt-and-suspenders: also remove any org still carrying
-    // the seed slug that a PRE-6.10.6 reseed left orphaned (its workspace delete
-    // never reached up to it), so the createWorkspace below mints slug `moooon`,
-    // not a suffixed retry. `slug` is @unique, so this drops at most one row.
+    // collision suffixed.
     for (const organizationId of organizationIds) {
       await db.organization.delete({ where: { id: organizationId } });
     }
-    await db.organization.deleteMany({ where: { slug: SEED_WORKSPACE_NAME } });
+    // Belt-and-suspenders: also remove any ORPHAN org NAMED `moooon` that's
+    // still around — covers two failure modes that have leaked dupes into prod
+    // (visible as ≥5 `moooon` rows in the org switcher):
+    //   (a) past partial-reseed left an org whose workspace was already
+    //       independently deleted, so no current membership points at it
+    //       (invisible to the `organizationIds`-from-memberships sweep above);
+    //   (b) the slug-retry loop in `workspacesService.createWorkspace` minted
+    //       a SUFFIXED slug (`moooon-xxxx`) when the unsuffixed slug was
+    //       taken, so a `where: { slug: SEED_WORKSPACE_NAME }` deleteMany
+    //       (the prior shape) only caught the one unsuffixed row.
+    // Safety: only drop orgs that have NO remaining workspaces AND NO
+    // remaining memberships — i.e. genuine zombie rows. A real tenant who
+    // happened to name their org `moooon` will have at least a workspace or
+    // a membership, so this never touches their data.
+    const orphanCandidates = await db.organization.findMany({
+      where: { name: SEED_WORKSPACE_NAME },
+      include: { _count: { select: { workspaces: true, memberships: true } } },
+    });
+    const orphanOrgIds = orphanCandidates
+      .filter((o) => o._count.workspaces === 0 && o._count.memberships === 0)
+      .map((o) => o.id);
+    if (orphanOrgIds.length) {
+      await db.organization.deleteMany({ where: { id: { in: orphanOrgIds } } });
+    }
     const legacy = knownUsers.find((u) => u.email === LEGACY_EMAIL);
     if (legacy) await db.user.delete({ where: { id: legacy.id } });
   }
