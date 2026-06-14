@@ -188,12 +188,22 @@ export function CompleteSprintDialog({
         title={t('sprintReport.title', { name: completedSprint.name })}
         size="lg"
       >
-        <SprintReport
-          report={report}
-          sprint={completedSprint}
-          statusByKey={statusByKey}
-          carryOverLabel={carryOverLabel}
-        />
+        {/* Wrap the report in Modal.Body so it inherits the panel's
+            `flex-1 overflow-y-auto` scroll recipe (the panel caps at
+            `max-h-[90vh] overflow-hidden`). Without it the report — meta line,
+            points rollup, both issue lists, AND the burndown/velocity analytics
+            row — lays out at its natural height and is clipped off the bottom
+            with no scroll affordance (bug-sprint-report-modal-clipped-burndown).
+            SprintReport keeps its own `gap-4` column; this body is just the
+            scroll seam, so the Modal.Footer below stays pinned. */}
+        <Modal.Body data-testid="sprint-report-modal-body">
+          <SprintReport
+            report={report}
+            sprint={completedSprint}
+            statusByKey={statusByKey}
+            carryOverLabel={carryOverLabel}
+          />
+        </Modal.Body>
         <Modal.Footer>
           {/* The standalone closed-sprint report (a bookmarkable route) — Jira
               keeps closed-sprint reports reachable after the success state closes.
