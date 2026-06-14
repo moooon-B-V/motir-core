@@ -653,7 +653,7 @@ export const story_6_14: PlanStory = {
     {
       id: '6.14.7',
       title: 'Project-admin control — set/unset an epic as private (project-admin-gated via 6.4)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 40,
