@@ -24,6 +24,39 @@ function actorFor(row: Notification, actorsById: Map<string, User>): Notificatio
   return { id: user.id, name: user.name, image: user.image ?? null };
 }
 
+const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+
+/**
+ * Translate the stored `Notification.data` JSON into the typed
+ * `NotificationData` union at the READ boundary (Subtask 5.7.9). The fan-in
+ * (5.7.3) writes this exact shape via the SAME `@/lib/dto/notifications`
+ * contract, so the reader and writer cannot drift — but the column is `Json`, so
+ * this reads the known keys EXPLICITLY by `kind` rather than blind-casting the
+ * raw value (the blind `as NotificationData` cast is what let the old
+ * `workItemKey`/`workItemTitle` ↔ `issueKey`/`title` mismatch ship unnoticed).
+ * A null / malformed payload degrades to an empty `mentioned` shape rather than
+ * crashing the feed read.
+ */
+function toNotificationData(raw: Notification['data']): NotificationData {
+  const d = (raw ?? {}) as Record<string, unknown>;
+  if (d.kind === 'transitioned') {
+    return {
+      kind: 'transitioned',
+      issueKey: str(d.issueKey),
+      title: str(d.title),
+      fromStatus: str(d.fromStatus),
+      toStatus: str(d.toStatus),
+    };
+  }
+  return {
+    kind: 'mentioned',
+    source: d.source === 'description' ? 'description' : 'comment',
+    issueKey: str(d.issueKey),
+    title: str(d.title),
+    excerpt: typeof d.excerpt === 'string' ? d.excerpt : null,
+  };
+}
+
 export function toNotificationDto(
   row: Notification,
   actorsById: Map<string, User>,
@@ -34,11 +67,7 @@ export function toNotificationDto(
     category: row.category,
     actor: actorFor(row, actorsById),
     workItemId: row.workItemId,
-    // The `data Json` column is the denormalized render payload captured at
-    // fan-in (5.7.3). Its shape is the NotificationData contract; an absent /
-    // malformed payload renders as the empty object rather than crashing the
-    // feed read.
-    data: (row.data ?? {}) as NotificationData,
+    data: toNotificationData(row.data),
     readAt: row.readAt ? row.readAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
   };

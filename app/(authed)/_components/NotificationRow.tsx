@@ -69,7 +69,12 @@ export function NotificationRow({
   const read = notification.readAt !== null;
   const meta = TYPE_META[notification.type] ?? DEFAULT_META;
   const { Icon } = meta;
-  const issueKey = notification.data.issueKey ?? null;
+  // `data` is a discriminated union (5.7.9) — narrow on `kind` for the
+  // arm-specific nouns; `issueKey` / `title` are shared across arms.
+  const data = notification.data;
+  const issueKey = data.issueKey || null;
+  const excerpt = data.kind === 'mentioned' ? data.excerpt : null;
+  const toStatus = data.kind === 'transitioned' ? data.toStatus : '';
   const actorName = notification.actor?.name ?? t('actorFallback');
   const createdAt = new Date(notification.createdAt);
 
@@ -88,7 +93,7 @@ export function NotificationRow({
   const summary = t.rich(summaryKey(notification.type, issueKey !== null), {
     actor: actorName,
     key: issueKey ?? '',
-    status: notification.data.toStatus ?? '',
+    status: toStatus,
     s: strong,
   });
 
@@ -139,14 +144,14 @@ export function NotificationRow({
             {format.relativeTime(createdAt)}
           </span>
         </span>
-        {notification.data.excerpt ? (
+        {excerpt ? (
           <span
             className={cn(
               'truncate text-xs leading-[1.4]',
               read ? 'text-(--el-text-faint)' : 'text-(--el-text-muted)',
             )}
           >
-            {notification.data.excerpt}
+            {excerpt}
           </span>
         ) : null}
       </span>

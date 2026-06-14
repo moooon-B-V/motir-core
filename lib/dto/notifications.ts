@@ -19,24 +19,54 @@ export interface NotificationActorDTO {
 /**
  * The denormalized render payload captured at FAN-IN time (5.7.3 writes it;
  * 5.7.4 surfaces it) so the feed read is a single-table scan — no join storm
- * per row (Story 5.7 description; the 5.7.2 `data Json` column). Every field is
- * optional because the shape grows with the event types that fan in: 5.1.6's
- * `mentioned` / `commented` carry `issueKey` + `title` (+ a comment `excerpt`),
- * 5.4's `transitioned` adds `fromStatus` / `toStatus`, 6.6's events add their
- * own — all via the registry seam, with no change to this reader. The client
+ * per row (Story 5.7 description; the 5.7.2 `data Json` column). The client
  * (5.7.5) composes the human sentence ("**Zhu Yue** mentioned you on
- * **PROD-42: …**") from `type` + actor + these nouns.
+ * **PROD-42: …**") from `kind` + actor + these nouns.
+ *
+ * **This is the SINGLE source-of-truth contract for `Notification.data`** —
+ * imported by BOTH the fan-in WRITER (`notificationFanInService`) and the read
+ * MAPPER (`notificationMappers.toNotificationDto`). Subtask 5.7.9 collapsed the
+ * two divergent definitions that had drifted: the writer stored
+ * `workItemKey` / `workItemTitle`, this DTO declared `issueKey` / `title`, and
+ * `toNotificationDto` passed `data` through with a blind `as` cast — so a
+ * fanned-in row read back through the DTO exposed the producer keys verbatim and
+ * `issueKey` / `title` came out `undefined`. One type now governs both ends, and
+ * the mapper translates explicitly at the read boundary (no blind cast).
+ *
+ * A discriminated union on `kind`: the shape grows with the event types that
+ * fan in via the registry seam — `mentioned` ships now (the 5.1.6 events); the
+ * `transitioned` arm is the documented Story 5.4 slot (no producer yet, no
+ * forward dep). `issueKey` is the deep-link target the drawer routes to
+ * (`/issues/[key]`, per `design/notifications/drawer.mock.html`).
  */
-export interface NotificationData {
+export type NotificationData = NotificationMentionedData | NotificationTransitionedData;
+
+/** A mention — the SHIPPED 5.1.6 `work-item/mentioned` + `work-item/comment.created`
+ * events. `source` selects the row copy (comment body vs item description);
+ * `excerpt` is the plain-text body (mention tokens already rendered as @Name),
+ * `null` when empty. */
+export interface NotificationMentionedData {
+  kind: 'mentioned';
+  source: 'comment' | 'description';
   /** The deep-link target's issue key (e.g. `PROD-42`) — the row click target. */
-  issueKey?: string;
+  issueKey: string;
   /** The work item's title, for the summary line. */
-  title?: string;
-  /** A plain-text comment excerpt (mention tokens already rendered as @Name). */
-  excerpt?: string;
-  /** Status transition nouns (the 5.4 `transitioned` fan-in slot). */
-  fromStatus?: string;
-  toStatus?: string;
+  title: string;
+  /** A plain-text comment/description excerpt, or `null` when there is none. */
+  excerpt: string | null;
+}
+
+/** A status transition — the Story 5.4 `work-item/transitioned` fan-in slot (a
+ * documented seam; no producer yet, no forward dep on 5.4 here). */
+export interface NotificationTransitionedData {
+  kind: 'transitioned';
+  /** The deep-link target's issue key (e.g. `PROD-42`). */
+  issueKey: string;
+  /** The work item's title, for the summary line. */
+  title: string;
+  /** Status transition nouns. */
+  fromStatus: string;
+  toStatus: string;
 }
 
 export interface NotificationDTO {

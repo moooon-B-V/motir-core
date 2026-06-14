@@ -82,7 +82,13 @@ async function seed(
         category: r.category ?? 'direct',
         workItemId: s.issue.id,
         actorId: r.actorId === undefined ? s.actor.id : r.actorId,
-        data: { issueKey: s.issue.identifier, title: s.issue.title },
+        data: {
+          kind: 'mentioned',
+          source: 'comment',
+          issueKey: s.issue.identifier,
+          title: s.issue.title,
+          excerpt: null,
+        },
         dedupeKey: r.dedupeKey,
         readAt: r.readAt ?? null,
         createdAt: r.createdAt ?? new Date(Date.now() + i * 1000),
@@ -310,7 +316,13 @@ describe('toNotificationDto (mapper)', () => {
     category: 'direct',
     workItemId: 'wi-1',
     actorId: 'actor-1',
-    data: { issueKey: 'PROD-42', title: 'A task' },
+    data: {
+      kind: 'mentioned',
+      source: 'comment',
+      issueKey: 'PROD-42',
+      title: 'A task',
+      excerpt: null,
+    },
     dedupeKey: 'mention:c1',
     readAt: null,
     createdAt: new Date('2026-06-13T00:00:00.000Z'),
@@ -328,9 +340,43 @@ describe('toNotificationDto (mapper)', () => {
       name: 'Zhu Yue',
       image: 'https://example.com/a.png',
     });
-    expect(dto.data).toEqual({ issueKey: 'PROD-42', title: 'A task' });
+    // The stored payload round-trips through the explicit read-boundary
+    // normalizer (5.7.9) — the producer and the mapper share ONE
+    // `NotificationData` contract, so `issueKey` / `title` survive.
+    expect(dto.data).toEqual({
+      kind: 'mentioned',
+      source: 'comment',
+      issueKey: 'PROD-42',
+      title: 'A task',
+      excerpt: null,
+    });
     expect(dto.readAt).toBeNull();
     expect(dto.createdAt).toBe('2026-06-13T00:00:00.000Z');
+  });
+
+  it('translates a transitioned payload (the 5.4 fan-in slot) by kind', () => {
+    const dto = toNotificationDto(
+      {
+        ...baseRow,
+        type: 'transitioned',
+        category: 'watching',
+        data: {
+          kind: 'transitioned',
+          issueKey: 'PROD-7',
+          title: 'Ship it',
+          fromStatus: 'todo',
+          toStatus: 'done',
+        },
+      },
+      new Map([[actor.id, actor]]),
+    );
+    expect(dto.data).toEqual({
+      kind: 'transitioned',
+      issueKey: 'PROD-7',
+      title: 'Ship it',
+      fromStatus: 'todo',
+      toStatus: 'done',
+    });
   });
 
   it('renders null actor when actorId is null (system notification)', () => {
@@ -343,12 +389,21 @@ describe('toNotificationDto (mapper)', () => {
     expect(dto.actor).toBeNull();
   });
 
-  it('surfaces an absent data payload as the empty object and serialises readAt', () => {
+  it('degrades an absent/malformed data payload to an empty mentioned shape and serialises readAt', () => {
     const dto = toNotificationDto(
       { ...baseRow, data: {}, readAt: new Date('2026-06-13T01:00:00.000Z') },
       new Map(),
     );
-    expect(dto.data).toEqual({});
+    // The read boundary normalizer (5.7.9) never crashes the feed on a
+    // null/malformed payload — it degrades to an empty `mentioned` shape rather
+    // than passing arbitrary JSON through.
+    expect(dto.data).toEqual({
+      kind: 'mentioned',
+      source: 'comment',
+      issueKey: '',
+      title: '',
+      excerpt: null,
+    });
     expect(dto.readAt).toBe('2026-06-13T01:00:00.000Z');
   });
 });

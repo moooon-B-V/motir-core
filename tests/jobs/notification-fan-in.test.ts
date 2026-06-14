@@ -10,9 +10,9 @@ import { jobFunctions } from '@/lib/jobs/registry';
 import {
   notificationFanInService,
   NOTIFICATION_FAN_IN_REGISTRY,
-  type NotificationData,
   type NotificationFanInRegistry,
 } from '@/lib/services/notificationFanInService';
+import type { NotificationData } from '@/lib/dto/notifications';
 import { notificationPreferencesService } from '@/lib/services/notificationPreferencesService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -120,11 +120,12 @@ describe('notificationFanInService.fanIn — comment mentions', () => {
     expect(row.actorId).toBe(s.fx.ownerId);
     expect(row.readAt).toBeNull();
     expect(row.dedupeKey).toBe(`mentioned:${comment.id}`);
-    const data = row.data as NotificationData;
+    const data = row.data as unknown as NotificationData;
     expect(data.kind).toBe('mentioned');
+    if (data.kind !== 'mentioned') throw new Error('expected a mentioned payload');
     expect(data.source).toBe('comment');
-    expect(data.workItemKey).toBe(s.issueIdentifier);
-    expect(data.workItemTitle).toBe(s.issueTitle);
+    expect(data.issueKey).toBe(s.issueIdentifier);
+    expect(data.title).toBe(s.issueTitle);
     // Plain-text excerpt: the mention token reads @Name, Markdown stripped, the
     // raw `mention:` scheme never leaks.
     expect(data.excerpt).toBe('Heads up @Mention Target — please review.');
@@ -319,7 +320,8 @@ describe('notificationFanInService.fanIn — description mentions', () => {
     const rows = await notificationsFor(s.member.id);
     expect(rows).toHaveLength(1);
     expect(rows[0]!.dedupeKey).toBe('mentioned:rev-123');
-    const data = rows[0]!.data as NotificationData;
+    const data = rows[0]!.data as unknown as NotificationData;
+    if (data.kind !== 'mentioned') throw new Error('expected a mentioned payload');
     expect(data.source).toBe('description');
     expect(data.excerpt).toBe('Owned by @Mention Target.');
   });
@@ -379,8 +381,8 @@ describe('notificationFanInService.fanIn — registry extensibility (the 5.4/6.6
             data: {
               kind: 'mentioned',
               source: 'description',
-              workItemKey: s.issueIdentifier,
-              workItemTitle: s.issueTitle,
+              issueKey: s.issueIdentifier,
+              title: s.issueTitle,
               excerpt: null,
             } satisfies NotificationData,
           };
