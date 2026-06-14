@@ -33,6 +33,14 @@ async function makeUser(email: string, name = 'Owner') {
   return createUser({ email, password: 'hunter2hunter2', name });
 }
 
+// Force the pool to open ≥ n physical connections so two racing transactions
+// each get their own and run truly concurrently — the FOR-UPDATE lock (not a
+// single shared connection) is then what serializes them. A cold pool would
+// serialize the writes and mask the last-member race.
+async function warmPool(n = 6): Promise<void> {
+  await Promise.all(Array.from({ length: n }, () => db.$queryRaw`SELECT 1`));
+}
+
 describe('createWorkspace', () => {
   it('creates the workspace and the owner membership in a transaction', async () => {
     const owner = await makeUser('owner@example.com');
@@ -185,6 +193,29 @@ describe('removeMember', () => {
     await expect(
       removeMember({ userId: owner.id, workspaceId: workspace.id }),
     ).rejects.toBeInstanceOf(LastMemberError);
+  });
+
+  it('two concurrent leaves of a 2-member workspace leave exactly ONE member — never zero (warm pool)', async () => {
+    // Regression for the last-member analogue of bug-org-last-owner-race: a plain
+    // COUNT let both leaves observe count = 2 and both delete, orphaning the
+    // workspace. The guard now locks the membership rows FOR UPDATE, so the racers
+    // serialize and exactly one leave is refused with LastMemberError.
+    const owner = await makeUser('owner@example.com');
+    const invitee = await makeUser('invitee@example.com');
+    const { workspace } = await createWorkspace({ name: 'Team', ownerUserId: owner.id });
+    await addMember({ userId: invitee.id, workspaceId: workspace.id });
+
+    await warmPool();
+    const results = await Promise.allSettled([
+      removeMember({ userId: owner.id, workspaceId: workspace.id }),
+      removeMember({ userId: invitee.id, workspaceId: workspace.id }),
+    ]);
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.reason).toBeInstanceOf(LastMemberError);
+    expect(await db.workspaceMembership.count({ where: { workspaceId: workspace.id } })).toBe(1);
   });
 });
 

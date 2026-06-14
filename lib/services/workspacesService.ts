@@ -436,10 +436,13 @@ export const workspacesService = {
    * Enforces the last-member guard: if the target is the only remaining
    * membership, throws LastMemberError instead of deleting — a workspace
    * with zero members is unreachable and undeletable through the UI, so
-   * the last member must use Delete, not Leave. The count and the delete
-   * run in one transaction (countByWorkspace + delete both take `tx`) so
-   * two concurrent leaves can't both observe count > 1 and orphan the
-   * workspace.
+   * the last member must use Delete, not Leave. The guard LOCKS the
+   * workspace's membership rows `FOR UPDATE` before counting
+   * (countByWorkspaceForUpdate), all in one transaction, so two concurrent
+   * leaves of a 2-member workspace serialize — the second blocks, re-counts
+   * after the first commits, and is refused — and the workspace can never be
+   * orphaned (the lock-before-read-derived-update rule; mirrors the org
+   * last-owner guard).
    *
    * Runs inside withWorkspaceContext so the count read and the delete
    * both see the workspace_membership RLS GUCs. The actor must be a
@@ -467,7 +470,13 @@ export const workspacesService = {
     // Not a member → idempotent no-op (matches the prior contract).
     if (!existing) return null;
 
-    const memberCount = await workspaceMembershipRepository.countByWorkspace(input.workspaceId, tx);
+    // Lock the workspace's membership rows before counting so two concurrent
+    // leaves serialize (lock-before-read-derived-update) — a plain COUNT would
+    // let both observe count > 1 and both delete, orphaning the workspace.
+    const memberCount = await workspaceMembershipRepository.countByWorkspaceForUpdate(
+      input.workspaceId,
+      tx,
+    );
     if (memberCount <= 1) {
       throw new LastMemberError(input.workspaceId);
     }

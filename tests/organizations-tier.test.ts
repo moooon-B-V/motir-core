@@ -252,20 +252,100 @@ describe('cross-workspace roster — at-scale + org-only members', () => {
   });
 });
 
-// NOTE on the last-owner guard under TRUE concurrency: writing this suite
-// surfaced a pre-existing race in the shipped 6.10.4 service. `removeMember` /
-// `changeMemberRole` guard the last owner by reading `countOwnersByOrg` (a plain
-// COUNT, no SELECT ... FOR UPDATE) inside a default-isolation (READ COMMITTED)
-// `withOrgContext`. Two concurrent removals of the TWO owners of a 2-owner org
-// both observe count = 2, both pass the guard, and both delete → the org drops
-// to ZERO owners (reproduced deterministically once the connection pool is
-// warm: owners = 0). That is a real lost-update bug, NOT something this
-// test-only subtask should fix or assert as a flaky red — it is logged as a bug
-// work item in the seed and called out in the PR body (the pre-existing-bug
-// protocol, CLAUDE.md § "A failed test … is DEBUGGED"). The deterministic,
-// genuinely-protected concurrency guarantees (the unique-constraint races) are
-// locked below; the last-owner concurrency case lands a regression test with
-// its fix.
+// NOTE on the last-owner guard under TRUE concurrency: writing the 6.10.7 suite
+// surfaced a pre-existing race in the shipped 6.10.4 service — the last-owner
+// guard read `countOwnersByOrg` (a plain COUNT, no SELECT ... FOR UPDATE) inside
+// a default-isolation (READ COMMITTED) `withOrgContext`, so two concurrent
+// removals of the TWO owners of a 2-owner org both observed count = 2, both
+// passed the guard, and both deleted → the org dropped to ZERO owners. That bug
+// (bug-org-last-owner-race) is now FIXED: assertNotLastOwner reads
+// `countOwnersByOrgForUpdate`, which LOCKS the owner rows FOR UPDATE before
+// counting, so the racers serialize. The regression tests below assert the
+// invariant under a WARM connection pool (the race only manifests when the two
+// transactions truly run in parallel — a cold pool serializes them and masks it).
+async function warmPool(n = 6): Promise<void> {
+  // Force the pool to open ≥ n physical connections so the two racing
+  // transactions below each get their own and run truly concurrently — the
+  // FOR-UPDATE lock (not a single shared connection) is then what serializes
+  // them. Without this the cold pool would serialize the writes and hide the
+  // race the fix targets.
+  await Promise.all(Array.from({ length: n }, () => db.$queryRaw`SELECT 1`));
+}
+
+describe('concurrency — the last-owner guard under a WARM pool (bug-org-last-owner-race)', () => {
+  it('two concurrent removals of a 2-owner org leave exactly ONE owner — never zero', async () => {
+    const a = await createTestUser();
+    const b = await createTestUser();
+    const { workspace } = await workspacesService.createWorkspace({
+      name: 'Acme',
+      ownerUserId: a.id,
+    });
+    const orgId = await orgIdOfWorkspace(workspace.id);
+    await organizationsService.addMember({
+      organizationId: orgId,
+      userId: b.id,
+      role: 'owner',
+      actorUserId: a.id,
+    });
+
+    await warmPool();
+    // Both owners self-leave at the same instant. Pre-fix this left zero owners;
+    // the FOR-UPDATE lock makes the second block, re-count, and be refused.
+    const results = await Promise.allSettled([
+      organizationsService.removeMember({ organizationId: orgId, userId: a.id, actorUserId: a.id }),
+      organizationsService.removeMember({ organizationId: orgId, userId: b.id, actorUserId: b.id }),
+    ]);
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.reason).toBeInstanceOf(LastOrgOwnerError);
+    // The invariant: exactly one owner survives — the org is never orphaned.
+    expect(
+      await db.organizationMembership.count({ where: { organizationId: orgId, role: 'owner' } }),
+    ).toBe(1);
+  });
+
+  it('two concurrent demotions of a 2-owner org leave exactly ONE owner — changeMemberRole is locked too', async () => {
+    const a = await createTestUser();
+    const b = await createTestUser();
+    const { workspace } = await workspacesService.createWorkspace({
+      name: 'Acme',
+      ownerUserId: a.id,
+    });
+    const orgId = await orgIdOfWorkspace(workspace.id);
+    await organizationsService.addMember({
+      organizationId: orgId,
+      userId: b.id,
+      role: 'owner',
+      actorUserId: a.id,
+    });
+
+    await warmPool();
+    // Both owners demote themselves to member at the same instant.
+    const results = await Promise.allSettled([
+      organizationsService.changeMemberRole({
+        organizationId: orgId,
+        userId: a.id,
+        role: 'member',
+        actorUserId: a.id,
+      }),
+      organizationsService.changeMemberRole({
+        organizationId: orgId,
+        userId: b.id,
+        role: 'member',
+        actorUserId: b.id,
+      }),
+    ]);
+    const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.reason).toBeInstanceOf(LastOrgOwnerError);
+    expect(
+      await db.organizationMembership.count({ where: { organizationId: orgId, role: 'owner' } }),
+    ).toBe(1);
+  });
+});
+
 describe('concurrency — unique-constraint races (the deterministic guarantees)', () => {
   it('two concurrent identical addMember calls yield exactly one membership + one AlreadyOrgMemberError', async () => {
     const owner = await createTestUser();
@@ -323,9 +403,9 @@ describe('concurrency — unique-constraint races (the deterministic guarantees)
   });
 
   it('the last-owner guard holds against a SEQUENTIAL second removal (the single-actor path)', async () => {
-    // The sequential guard works (the concurrent two-owner case is the logged
-    // bug — see the note above this describe). After one owner is removed, the
-    // remaining sole owner cannot be removed.
+    // The single-actor path: after one owner is removed, the remaining sole
+    // owner cannot be removed (the concurrent two-owner case is covered by the
+    // WARM-pool describe above).
     const a = await createTestUser();
     const b = await createTestUser();
     const { workspace } = await workspacesService.createWorkspace({
