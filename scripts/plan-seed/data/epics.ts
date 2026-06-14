@@ -1771,7 +1771,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Filters directory (/filters): built-in filter names render in English, the search field renders collapsed, and the name column is too narrow — the FiltersDirectory table',
-        status: 'planned',
+        status: 'in_progress',
         type: 'bug',
         dependsOn: ['bug-builtin-filter-names-not-localized'],
         descriptionMd:
