@@ -104,7 +104,7 @@ import type { PlanStory } from '../types';
 export const story_5_7: PlanStory = {
   id: '5.7',
   title: 'In-app notifications (bell + unread feed)',
-  status: 'done',
+  status: 'in_progress',
   gitBranch: 'feat/PROD-5.7-in-app-notifications',
   descriptionMd:
     'The in-app half of the notification surface — a bell in the shell header with an unread ' +
@@ -768,6 +768,188 @@ export const story_5_7: PlanStory = {
         'seeds DTO-shaped `{ issueKey, title }` data, masking the divergence)\n' +
         '- Story 5.7.5 (the bell/drawer) — the consumer that will read these keys; its design pins ' +
         'the final names',
+    },
+    {
+      id: '5.7.10',
+      title:
+        'In-app `transitioned`/`watching` fan-in delivery — add the registry entry + a `work-item/transitioned` job consumer (paged watcher roster; the in_app gate falls out)',
+      status: 'planned',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 34,
+      dependsOn: ['5.7.3', '5.4.5'],
+      descriptionMd:
+        '**Why this exists (the seam nobody owned — notes.html mistake #40).** 5.7.3 built the ' +
+        'fan-in as an EXTENSIBLE registry and documented the `transitioned`/`watching` entry as ' +
+        'added "when those events land — those stories document 5.7 as their seam." But Story 5.4 ' +
+        '(the `work-item/transitioned` emitter + watcher fan-out, 5.4.5) shipped BEFORE 5.7.3 ' +
+        'existed, so NEITHER story added the entry: `NOTIFICATION_FAN_IN_REGISTRY` holds only ' +
+        '`mentioned` / `comment.created` today, and watchers receive ZERO in-app rows on a ' +
+        'transition (the drawer "Watching" tab is always empty in prod). This subtask closes that ' +
+        'seam.\n\n' +
+        "**Registry entry.** Add `'work-item/transitioned'` → `{ notificationType: " +
+        "'transitioned', category: 'watching', buildPlan }` to `NOTIFICATION_FAN_IN_REGISTRY` " +
+        '(`lib/services/notificationFanInService.ts`). `buildPlan` resolves the recipient set from ' +
+        'the **watcher roster** (`watcherRepository`), excludes the actor (the never-self-notify ' +
+        'rule), sets `dedupeSourceId = revisionId`, and builds a `data` payload carrying the ' +
+        'from/to status names the drawer renders (the `fromStatus`/`toStatus` slot the 5.7.9 ' +
+        'shared `NotificationData` anticipates).\n\n' +
+        '**Job consumer.** Add `notificationFanInOnTransitioned` (`lib/jobs/definitions/' +
+        'notificationFanIn.ts`, the `defineJob` harness) triggered on `work-item/transitioned` — ' +
+        'an ADDITIONAL consumer beside the 5.4.5 `watcher-notify/transitioned` email job (same ' +
+        'event, distinct id; one function per id, many functions per event), handing the event to ' +
+        "`notificationFanInService.fanIn`. `retryPolicy: 'transient'`; idempotency per " +
+        '(revisionId × recipient) via the 5.7.2 `(dedupeKey, recipientUserId)` unique.\n\n' +
+        '**SCALE — page the watcher roster (finding #57).** The generic `fanIn` path is mention-' +
+        "BOUNDED (candidate set = the comment's mentioned users) and walks candidates with an " +
+        'unpaged `Promise.all`. A transitioned candidate set is the FULL watcher roster — a ' +
+        '200-watcher issue must not build an unbounded in-memory batch nor fire 200 concurrent ' +
+        '`getCapabilities` checks. So the transitioned fan-in MUST read + process the roster in ' +
+        "bounded pages, mirroring `watcherNotificationsService.fanOut`'s `WATCHER_FAN_OUT_PAGE_SIZE` " +
+        'cursor walk. Either extend `fanIn` to accept a paged candidate source, or give the ' +
+        'watching-category descriptor its own paged path — pick the durable shape, not a load-all.\n\n' +
+        '**The in_app preference gate falls out for free.** The generic fan-in already calls ' +
+        '`notificationPreferencesService.isChannelEnabled(userId, descriptor.notificationType, ' +
+        "'in_app')` per recipient, so once the descriptor exists, a user who turned " +
+        '`transitioned · in_app` OFF gets no row — no extra gate wiring here (the matrix flip is ' +
+        '5.7.12; the email-channel twin is 5.7.11).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- A `work-item/transitioned` event writes ONE `watching`-category `Notification` row per ' +
+        'watcher (actor excluded; view access re-validated AS each watcher at fan-in time), with ' +
+        'the from/to-status `data` payload; a vanished issue → clean no-op.\n' +
+        '- The roster is walked in BOUNDED pages (no load-all `Promise.all` over the full roster); ' +
+        'a 200-watcher issue never builds an unbounded batch (finding #57).\n' +
+        '- Turning `transitioned · in_app` OFF suppresses the row; default-on (unset) still writes ' +
+        'it — verified by an integration test (mirror `notifications-journey.test.ts`; the existing ' +
+        'SYNTHETIC `watching` descriptor test can become a real-registry assertion).\n' +
+        '- Idempotent per (revisionId × recipient): replay / retry never double-writes; failures ' +
+        'land in the DLQ. No emit site is touched; no second "also notify" call is added beside the ' +
+        'email send.\n' +
+        '- `pnpm test:coverage` holds the ≥90% gate on the touched fan-in service + job files.\n\n' +
+        '## Context refs\n\n' +
+        '- `lib/services/notificationFanInService.ts` — `NOTIFICATION_FAN_IN_REGISTRY` + the ' +
+        "generic `fanIn` (the per-recipient `isChannelEnabled('in_app')` gate already there)\n" +
+        '- `lib/jobs/definitions/notificationFanIn.ts` (the consumers to extend) + ' +
+        '`lib/jobs/definitions/watcherNotify.ts` (the 5.4.5 email twin — same event, the second-' +
+        'consumer pattern) + `lib/jobs/types.ts` (`WorkItemTransitionedData`)\n' +
+        '- `lib/repositories/watcherRepository.ts` + `watcherNotificationsService.fanOut` — the ' +
+        'PAGED roster walk to mirror (`WATCHER_FAN_OUT_PAGE_SIZE`, finding #57)\n' +
+        '- `lib/dto/notifications.ts` `NotificationData` (the shared shape from 5.7.9 — the ' +
+        '`fromStatus`/`toStatus` slot) + `tests/integration/notifications-journey.test.ts` (the ' +
+        'synthetic `watching` seam test to make real)\n' +
+        '- notes.html mistake #40 (the planning gap this closes)',
+    },
+    {
+      id: '5.7.11',
+      title:
+        'Gate the watcher TRANSITION email by the `transitioned · email` preference — `watcherNotificationsService` never consults the resolver',
+      status: 'planned',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 22,
+      dependsOn: ['5.7.6', '5.4.5'],
+      descriptionMd:
+        '**Why this exists (the seam nobody owned — notes.html mistake #40).** 5.7.6 built the ' +
+        'channel-preference resolver and wired the EMAIL gate into the 5.1.6 **mention** job ' +
+        '(`mentionNotificationsService.filterChannelEnabled`) only. The 5.4.5 **watcher** email ' +
+        'fan-out (`watcherNotificationsService.fanOut`) shipped earlier and was never wired — it ' +
+        'enqueues an `email.send` for every viewable watcher with NO `isChannelEnabled` / ' +
+        '`filterChannelEnabled` call. So a watcher who turns `transitioned · email` OFF still ' +
+        'receives the transition email: without this fix the matrix toggle (5.7.12) would be ' +
+        'DECORATIVE — the "worse than disabled" defect the bug card warns about.\n\n' +
+        '**Fix.** In `watcherNotificationsService.fanOut`, on the TRANSITION branch, gate each ' +
+        'watcher page through `notificationPreferencesService.filterChannelEnabled(pageUserIds, ' +
+        "'transitioned', 'email')` BEFORE enqueuing `email.send` — applied per page so the gate " +
+        'rides the existing bounded cursor walk (finding #57), one batch query per page. Keep the ' +
+        'existing exclusions (actor; on comments, mentioned users) and the send-time view re-check ' +
+        'unchanged. The event still fires once; the job just asks the resolver before dispatching ' +
+        '(the one-emit-path invariant — same shape as the 5.7.6 mention-job gate). An unset ' +
+        'preference resolves to the documented default (ON), so untouched watchers are unaffected.\n\n' +
+        '**Scope note (out of scope — log as a finding, do NOT absorb).** The watcher COMMENT ' +
+        "email (the `kind: 'comment'` branch) is ALSO ungated, but it has no clean matrix row: " +
+        "the matrix's `commented` row is the involved/mention path, not the watching path. A " +
+        '"watching · commented" preference is a separate design question (a new matrix row) — note ' +
+        'it in the PR body as a finding; this subtask gates the TRANSITION branch by `transitioned` ' +
+        'only.\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- With `transitioned · email` set OFF, a `work-item/transitioned` event the watcher would ' +
+        'otherwise receive does NOT enqueue `email.send` for that watcher — verified by an ' +
+        'integration test against the real `watcherNotificationsService.fanOut` (mirror the ' +
+        'existing watcher fan-out tests).\n' +
+        '- An unset / ON preference still delivers (default-on preserved); other recipients on the ' +
+        'same event are unaffected; the actor/mention exclusions and the send-time view re-check ' +
+        'are unchanged.\n' +
+        '- The gate is applied PER PAGE (one `filterChannelEnabled` batch query per watcher page) — ' +
+        'no per-watcher N+1, no load-all (finding #57).\n' +
+        '- The watcher COMMENT branch is explicitly left as-is with a PR-body finding (no silent ' +
+        'scope creep); `pnpm test:coverage` holds the ≥90% gate on the touched service.\n\n' +
+        '## Context refs\n\n' +
+        '- `lib/services/watcherNotificationsService.ts` — `fanOut` (the transition branch + the ' +
+        'paged roster walk to gate)\n' +
+        '- `lib/services/notificationPreferencesService.ts` — `filterChannelEnabled` (the batch ' +
+        'email gate, already used by the mention job) / `isChannelEnabled`\n' +
+        '- `lib/services/mentionNotificationsService.ts` — the 5.7.6 mention-job gate this mirrors ' +
+        '(the wiring pattern)\n' +
+        '- `lib/notifications/preferences.ts` (`transitioned` event-type meta + defaults)\n' +
+        '- notes.html mistake #40 (the planning gap this closes)',
+    },
+    {
+      id: '5.7.12',
+      title:
+        'Flip the `transitioned` matrix seam to settable + real copy (en/zh) — depends on both channels being real (5.7.10 + 5.7.11)',
+      status: 'blocked',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 16,
+      dependsOn: ['5.7.10', '5.7.11'],
+      descriptionMd:
+        '**Why this exists + why BLOCKED.** This is the surface symptom of the bug ' +
+        '(`/settings/account` draws the "An item you\'re watching changes status" row disabled with ' +
+        'a "Soon" tag + "Available once issue-watching ships (Story 5.4)" copy, though 5.4 shipped). ' +
+        '5.7.6 drew it "disabled until 5.4 lands" with no flip-subtask, and 5.4 had already landed — ' +
+        'the static disable became permanent (notes.html mistake #40). The flip is one boolean + two ' +
+        'strings, BUT it MUST land AFTER 5.7.10 (in-app delivery) and 5.7.11 (email gate) — ' +
+        'otherwise enabling the toggles ships DECORATIVE controls (the "worse than disabled" defect). ' +
+        'Hence `dependsOn: [5.7.10, 5.7.11]`; seeded `blocked` until both are `done`, then flip to ' +
+        '`planned` in the same `seed/*` PR that lands the second blocker.\n\n' +
+        '**Fix.**\n' +
+        '1. `lib/notifications/preferences.ts` — flip the `transitioned` row `settable: false` → ' +
+        '`true`; rewrite the line-70 comment from the "drawn disabled until issue-watching ships" ' +
+        'seam note to one that states: watcher transition events (Story 5.4 — shipped) are fanned ' +
+        'in by 5.7.10 (in_app) + 5.4.5/5.7.11 (email), gated by the user’s transitioned·{channel} ' +
+        'cell. (Defaults are already `{ email: true, in_app: true }` — correct; the resolver does the ' +
+        'right thing the moment the flag flips.)\n' +
+        '2. `messages/en.json` + `messages/zh.json` — replace `settings.account.notifications.' +
+        'events.transitioned.desc` (KEEP the label) with real present-tense copy mirroring the ' +
+        'other three rows, e.g. en "Someone changes the status of an item you watch (including ' +
+        'moves to done or back open)."; zh a translation of the same (replace the 即将推出 / Story-5.4 ' +
+        'placeholder). Both locales flip together.\n' +
+        '3. No UI change — `NotificationPreferencesCard.tsx` already branches on `row.settable` ' +
+        '(the "Soon" tag drops, the switches enable, the aria-label flips `cellAriaSoon` → ' +
+        '`cellAria` automatically).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- The `/settings/account` matrix `transitioned` row is ENABLED: both switches clickable, ' +
+        'no "Soon"/即将推出 tag, helper text is the new real copy (en + zh both updated); aria-label ' +
+        'is `cellAria` not `cellAriaSoon`.\n' +
+        '- `notificationPreferencesService.setPreference` no longer throws ' +
+        '`NotificationEventTypeNotSettableError` for `eventType: "transitioned"`; the matrix DTO ' +
+        'from `GET /api/notification-preferences` reports `settable: true` for the row.\n' +
+        '- Toggling each cell persists and the cell trusts the response (the inline-edit no-tree-' +
+        'refresh contract holds); the three existing rows are unchanged (defaults, AA contrast).\n' +
+        '- Audit grep (`grep -rn "Available once\\|settable: false\\|until.*ships\\|ships (Story"`) ' +
+        'across `app components lib messages` finds no remaining stale "coming once Story X ships" ' +
+        'guard whose Story X is already `done` (the audit is the rule, not just this row).\n\n' +
+        '## Context refs\n\n' +
+        '- `lib/notifications/preferences.ts` (the `transitioned` `settable` flag + line-70 ' +
+        'comment)\n' +
+        '- `messages/en.json` + `messages/zh.json` — `settings.account.notifications.events.' +
+        'transitioned`\n' +
+        '- `app/(authed)/settings/account/_components/NotificationPreferencesCard.tsx` (no change; ' +
+        'branches on `row.settable` / `cellAria` vs `cellAriaSoon` already)\n' +
+        '- `lib/services/notificationPreferencesService.ts` (`setPreference` — the not-settable ' +
+        'throw that stops gating once flipped) + the matrix DTO\n' +
+        '- The superseded bug `bug-notification-pref-transitioned-still-disabled-after-5-4-shipped` ' +
+        '(tombstoned — its "minimal flip" premise was wrong) + notes.html mistake #40',
     },
   ],
 };
