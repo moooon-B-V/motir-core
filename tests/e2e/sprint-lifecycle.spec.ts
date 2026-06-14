@@ -133,6 +133,23 @@ test.describe('sprint lifecycle (4.4.7)', () => {
     await expect(completeDialog).toBeVisible();
     // 1 done · 2 incomplete — the chooser offers where the 2 unfinished go.
     await expect(completeDialog).toContainText('2 incomplete work items');
+
+    // Constrain the viewport height so the report body (meta + 3-up points +
+    // scope line + two issue lists + the burndown/velocity analytics row)
+    // exceeds the modal's `max-h-[90vh]` cap — the condition under which the
+    // bottom of the report was clipped with no scroll affordance
+    // (bug-sprint-report-modal-clipped-burndown).
+    await page.setViewportSize({ width: 1024, height: 640 });
+
+    // The success state's burndown slot self-fetches client-side; arm the wait
+    // BEFORE the confirm so the report has its FULL height (real chart, not the
+    // skeleton) before we measure scrollability.
+    const burndownLoaded = page.waitForResponse(
+      (r) =>
+        new RegExp(`/api/sprints/${seed.mainSprintId}/burndown`).test(r.url()) &&
+        r.request().method() === 'GET' &&
+        r.status() === 200,
+    );
     // Backlog is the default carry-over destination; confirm.
     await completeDialog.getByRole('button', { name: 'Complete sprint' }).click();
 
@@ -153,6 +170,31 @@ test.describe('sprint lifecycle (4.4.7)', () => {
     await expect(
       reportDialog.getByTestId(`report-row-${seed.mainIssues[1]!.identifier}`),
     ).toBeVisible();
+
+    // ── Regression: the report body scrolls; the burndown isn't clipped ──────
+    // Wait on the authoritative burndown response so the chart (not the
+    // skeleton) is in place before measuring.
+    await burndownLoaded;
+    const reportBody = reportDialog.getByTestId('sprint-report-modal-body');
+    // The body's content is taller than its clip box — i.e. it genuinely
+    // overflows and therefore MUST offer a scroll affordance.
+    expect(await reportBody.evaluate((el) => el.scrollHeight > el.clientHeight + 1)).toBe(true);
+    // The burndown section, at the bottom of the report, is reachable by
+    // scrolling INSIDE the modal body (Modal.Body owns the overflow-y-auto
+    // recipe). Before the fix it was clipped by the panel's overflow-hidden cap
+    // with nothing scrollable, so scrollIntoViewIfNeeded could not surface it.
+    const burndownHeading = reportDialog.getByText('Burndown', { exact: true });
+    await burndownHeading.scrollIntoViewIfNeeded();
+    expect(
+      await burndownHeading.evaluate((el) => {
+        const dialog = el.closest('[role="dialog"]')!;
+        const r = el.getBoundingClientRect();
+        const d = dialog.getBoundingClientRect();
+        return r.top >= d.top - 1 && r.bottom <= d.bottom + 1;
+      }),
+    ).toBe(true);
+    // The footer (Open full report + Done) stays pinned, not scrolled away.
+    await expect(reportDialog.getByRole('button', { name: 'Done' })).toBeInViewport();
 
     // Close the report (the "Done" button).
     await reportDialog.getByRole('button', { name: 'Done' }).click();
