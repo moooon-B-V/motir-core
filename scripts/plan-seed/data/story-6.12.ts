@@ -355,7 +355,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.2',
       title:
         'Decision — the `public` access-level semantics: cross-org read, write-grants, visible-vs-hidden, the openness ladder',
-      status: 'in_progress',
+      status: 'done',
       type: 'decision',
       executor: 'coding_agent',
       estimateMinutes: 45,
