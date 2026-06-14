@@ -372,7 +372,7 @@ export const story_7_8: PlanStory = {
     {
       id: '7.8.6',
       title: 'Search tool — `search_work_items` riding the 6.1.1 versioned FilterAST envelope',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 40,
