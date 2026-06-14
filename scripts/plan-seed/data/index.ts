@@ -1,5 +1,5 @@
-import { epicIdOf, type PlanEpic, type PlanStory } from '../types';
-import { EPICS } from './epics';
+import { epicIdOf, type PlanEpic, type PlanItem, type PlanStory } from '../types';
+import { EPICS, PARENTLESS_BUGS } from './epics';
 import { STUB_STORIES } from './stubs';
 import { story_1_0 } from './story-1.0';
 import { story_1_0_5 } from './story-1.0.5';
@@ -196,3 +196,10 @@ export const PLAN: PlanEpic[] = EPICS.map((epic) => ({
     cmpDotted(a.id, b.id),
   ),
 }));
+
+/**
+ * Top-level **parentless** bugs (root siblings of the epics). The loader
+ * iterates this after the epic pass and creates each entry with
+ * `parentId: null`. See `PARENTLESS_BUGS` in `./epics` for the rule.
+ */
+export const ROOT_BUGS: PlanItem[] = PARENTLESS_BUGS;
