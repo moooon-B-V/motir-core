@@ -1472,7 +1472,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Kanban board — dragging a card from In Review to Done does not move it (card snaps back, status unchanged)',
-        status: 'planned',
+        status: 'in_progress',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
