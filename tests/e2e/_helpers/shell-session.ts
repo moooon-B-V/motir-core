@@ -49,24 +49,20 @@ export async function createFirstProject(page: Page, name: string): Promise<void
   await expect(page.getByText('Project created').first()).toBeVisible({ timeout: 5_000 });
 }
 
-// Create an additional named workspace via the top-nav switcher and switch to
-// it (the new workspace becomes active, with zero projects). Mirrors the
+// Create an additional named workspace via the ALWAYS-PRESENT org control's
+// "New workspace" entry and switch to it (the new workspace becomes active,
+// with zero projects). Story 6.10.5's progressive disclosure HIDES the
+// workspace switcher at one workspace, so "New workspace" lives in the org menu
+// — the org control is the create path at any workspace count. Mirrors the
 // helper in workspace-flows.spec.ts; lifted here so the shell journey spec can
 // stand up two workspaces with distinct projects for the cmd-k switch path.
 export async function createWorkspace(page: Page, name: string): Promise<void> {
-  // With existing workspaces the "Create workspace" entry lives inside the
-  // open switcher popover; a brand-new account's empty state surfaces it
-  // directly. Handle both so callers don't have to know the current state.
-  const directCreate = page.getByRole('button', { name: 'Create workspace' });
-  if (await directCreate.isVisible().catch(() => false)) {
-    await directCreate.click();
-  } else {
-    await page.getByRole('button', { name: 'Switch workspace' }).click();
-    await page.getByRole('button', { name: 'Create workspace' }).click();
-  }
+  await page.getByRole('button', { name: 'Organization menu' }).click();
+  await page.getByRole('button', { name: /New workspace/ }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Workspace name').fill(name);
-  await dialog.getByRole('button', { name: 'Create', exact: true }).click();
-  // The switcher trigger reflects the new (now-active) workspace.
+  await dialog.getByRole('button', { name: 'New workspace', exact: true }).click();
+  // Creating a second workspace reveals the switcher, which reflects the new
+  // (now-active) workspace.
   await expect(page.getByRole('button', { name: 'Switch workspace' })).toContainText(name);
 }

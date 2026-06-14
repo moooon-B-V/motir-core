@@ -44,16 +44,25 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   const ctx = await getWorkspaceContext();
   const workspaceModels = await workspacesService.listUserWorkspaces(session.user.id);
 
-  // The active ORGANIZATION (Story 6.10.5 — the shell org control). Resolved
-  // from the org cookie (membership re-validated by the service; a stale/forged
-  // id falls back to the user's first org). PROGRESSIVE DISCLOSURE: the org is
-  // ALWAYS the anchor, but the WORKSPACE switcher shows only when the active
-  // org has ≥2 workspaces — so the workspace list handed to the shell is scoped
-  // to the active org, and ITS length is the reveal test (in ShellTierNav).
+  // The active ORGANIZATION (Story 6.10.5 — the shell org control). It must
+  // agree with the active WORKSPACE: a user who belongs to workspaces across
+  // MULTIPLE orgs (e.g. they accepted an invite into another org's workspace)
+  // has an active org === the org that owns the workspace they're actually in,
+  // so the shell's org + workspace tiers never disagree. The org cookie is only
+  // the fallback when there's no active workspace (e.g. an org-only member);
+  // the service re-validates membership, so a stale/forged id falls back to the
+  // user's first org. PROGRESSIVE DISCLOSURE: the org is ALWAYS the anchor, but
+  // the WORKSPACE switcher shows only when the active org has ≥2 workspaces — so
+  // the workspace list handed to the shell is scoped to the active org, and ITS
+  // length is the reveal test (in ShellTierNav).
   const orgCookie = (await cookies()).get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
+  const activeWorkspaceModel = ctx
+    ? (workspaceModels.find((w) => w.id === ctx.workspaceId) ?? null)
+    : null;
+  const preferredOrgId = activeWorkspaceModel?.organizationId ?? orgCookie;
   const currentOrg = await organizationsService.resolveActiveOrganization(
     session.user.id,
-    orgCookie,
+    preferredOrgId,
   );
   const activeOrg = currentOrg
     ? {
