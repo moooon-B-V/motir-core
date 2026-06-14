@@ -3,11 +3,26 @@ import type { PlanStory } from '../types';
 /**
  * Story 6.13 (Epic 6) — The Project Square (a SYSTEM-level public-project
  * directory). The cross-org DISCOVERY surface for every project made `public`
- * in 6.12: a top-level gallery / explore page any signed-in Motir account can
- * browse, search, filter by category/tag, and rank (trending / popular /
- * recent-new), then click through to a project's public read-only view
- * (6.12.4). Yue: "a 'project square' where all the public projects are showing
- * on the Motir SYSTEM level."
+ * in 6.12: a FULLY PUBLIC (no sign-in) web page anyone can browse, search,
+ * filter by category/tag, and rank (trending / popular / recent-new), then
+ * click through to a project's public read-only view (6.12.4). Yue: "a 'project
+ * square' where all the public projects are showing on the Motir SYSTEM level."
+ *
+ * **⚠️ MODEL REVISION (Yue, 2026-06-14).** The square is **FULLY PUBLIC — NO
+ * AUTH** (open to anyone, logged-out included; NOT account-required), it is
+ * **NOT in the app left-nav / not an app-shell route** (it is a standalone web
+ * page reached from the Motir MARKETING SITE — motir.co/explore, wired later),
+ * the redundant per-card **"Public" pill is dropped** (every project on the page
+ * is public by definition), and the page is **SEO + GEO OPTIMISED** (server-
+ * rendered + crawlable: a real <h1> + descriptive lede, semantic HTML, JSON-LD
+ * structured data, head meta / OpenGraph / canonical, an XML sitemap of real
+ * URLs — each rank / search / topic / page its own indexable URL + per-topic
+ * landing pages — and a GEO answer-engine framing). This SUPERSEDES the earlier
+ * "account-required (not anonymous)" + "shell entry" framing throughout this
+ * story. (Knock-on flagged: 6.12.4's public view, which a card links into, is
+ * still account-required under the 6.12 model — that decision likely needs the
+ * same anonymous revision; tracked as a finding for the 6.12 re-plan, NOT
+ * resolved here.)
  *
  * **Where this sits relative to 6.12 (the story it builds ON).** 6.12 made a
  * single project openable — `public` as the 4th `ProjectAccessLevel` (6.12.3),
@@ -15,12 +30,12 @@ import type { PlanStory } from '../types';
  * and the upvote / activity demand signals (6.12.6). But 6.12 is PER-PROJECT:
  * you reach a public project only if you already hold its share-link. 6.13 is
  * the missing DISCOVERY half — the system-level place where ALL public projects
- * across EVERY org/workspace surface together so a signed-in account can FIND
+ * across EVERY org/workspace surface together so anyone (no sign-in) can FIND
  * them without a link. It is the open-source-gallery layer on top of 6.12's
- * open-project layer. It adds NO new access semantics: it lists ONLY projects
- * whose access level is already `public` (the single cross-org READ exception
- * 6.12.3 fixed), and every card click lands on the 6.12.4 public view that
- * already enforces the projection + the account-required (not anonymous) gate.
+ * open-project layer. It adds NO new write and NO new cross-org grant: it lists
+ * ONLY projects whose access level is already `public` (the single cross-org
+ * READ exception 6.12.3 fixed), and every card click lands on the 6.12.4 public
+ * view that already enforces the public projection.
  *
  * **The verified mirror (rung 1 — public-project / open-source discovery
  * galleries; checked 2026-06-12, cited not asserted).** Every proven explore
@@ -88,14 +103,15 @@ import type { PlanStory } from '../types';
  * categories themselves sorted by project count. Tags are bounded + searchable;
  * the per-tag listing rides the same cursor-paginated rank reads.
  *
- * **Design gate.** The project square is a NEW user-facing system-level surface
- * (the gallery/explore page, the cards, the search bar, the category/tag
- * filters, the sort/rank tabs, and the shell entry point). So the FIRST subtask
- * (6.13.1) is a `design` card producing the multi-panel mock + design-notes
- * under `design/project-square/`, composing ONLY shipped `components/ui/*`
- * primitives + `--el-*` colour tokens + `[data-display-style]` shape tokens (NO
- * Tier-0 `--color-*`, no hand-rolled spacing/radius). The single UI code subtask
- * (6.13.6) depends on it and is `blocked`.
+ * **Design gate.** The project square is a NEW user-facing surface — a fully
+ * public web page (the marketing-site top bar + footer, the SEO hero, the
+ * gallery/cards, the search bar, the category/tag filters, the sort/rank tabs,
+ * and the SEO + GEO scaffolding — NO app shell / no left-nav entry). So the
+ * FIRST subtask (6.13.1) is a `design` card producing the multi-panel mock +
+ * design-notes under `design/project-square/`, composing ONLY shipped
+ * `components/ui/*` primitives + `--el-*` colour tokens + `[data-display-style]`
+ * shape tokens (NO Tier-0 `--color-*`, no hand-rolled spacing/radius). The
+ * single UI code subtask (6.13.6) depends on it and is `blocked`.
  *
  * **Cross-story dep audit (notes.html #32): PASSES — NO forward deps.** Every
  * `dependsOn` id's story number is ≤ 6.13: same-story 6.13.x, or backward to
@@ -112,24 +128,38 @@ export const story_6_13: PlanStory = {
   gitBranch: 'feat/PROD-6.13-project-square',
   descriptionMd:
     'The **project square** — a SYSTEM-level directory of every project made ' +
-    '**public** in 6.12. A top-level gallery / explore page any signed-in ' +
-    'Motir account can browse: **project cards** (name, org, description, ' +
-    'viewer / upvote / activity stats), a **search bar**, **category / tag ' +
-    'filters**, and **sort / rank tabs** (trending / popular / recent-new), ' +
-    'paginated at scale — then click any card through to that project’s public ' +
-    'read-only view (6.12.4). It is the cross-org DISCOVERY surface that 6.12 ' +
-    'was missing: 6.12 made each project openable but reachable only by ' +
-    'share-link; 6.13 is the place all public projects surface together so an ' +
-    'account can FIND them without a link.\n\n' +
+    '**public** in 6.12, as a **fully public (no sign-in) web page** at ' +
+    '`motir.co/explore`, reached from the Motir **marketing site** (NOT an ' +
+    'app-shell route, NO left-nav entry). A crawlable gallery anyone can ' +
+    'browse: **project cards** (name, org, description, viewer / upvote / ' +
+    'activity stats — NO redundant “Public” pill), a **search bar**, ' +
+    '**category / tag filters**, and **sort / rank tabs** (trending / popular ' +
+    '/ recent-new), paginated at scale, **SEO + GEO optimised** (server-' +
+    'rendered, JSON-LD, semantic HTML, sitemap’d real URLs + per-topic landing ' +
+    'pages, answer-engine framing) — then click any card through to that ' +
+    'project’s public read-only view (6.12.4). It is the cross-org DISCOVERY ' +
+    'surface that 6.12 was missing: 6.12 made each project openable but ' +
+    'reachable only by share-link; 6.13 is the place all public projects ' +
+    'surface together so anyone can FIND them without a link.\n\n' +
+    '**Model revision (Yue, 2026-06-14):** fully public / no auth; not in the ' +
+    'left nav (a marketing-site page); no per-card “Public” pill; SEO + GEO ' +
+    'optimised. Supersedes the earlier account-required + shell-entry framing.\n\n' +
     '**The model (locked — see the module header for the full rationale + the ' +
     'verified mirror):**\n\n' +
     '- **A thin DISCOVERY index over 6.12, not a new access system.** The ' +
     'square lists ONLY projects whose access level is already `public` (the ' +
     'single cross-org READ exception 6.12.3 fixed); a private / open / limited ' +
     'project NEVER appears, for any viewer. It adds NO new write, NO new ' +
-    'cross-org grant — every card click lands on the 6.12.4 public view that ' +
-    'already enforces the public projection + the account-required (not ' +
-    'anonymous) gate.\n' +
+    'cross-org grant — the page itself is fully public (no sign-in), and every ' +
+    'card click lands on the 6.12.4 public view that already enforces the ' +
+    'public projection.\n' +
+    '- **A public, crawlable web page (SEO + GEO), not an app surface.** ' +
+    'Server-rendered with a real `<h1>` + descriptive lede, semantic HTML, ' +
+    'JSON-LD (`CollectionPage` › `ItemList`), head meta / OpenGraph / ' +
+    'canonical, and a sitemap of real indexable URLs (each rank / search / ' +
+    'topic / page) + per-topic landing pages (`/explore/topic/<slug>`); a GEO ' +
+    'answer-engine framing (citable lead + FAQ). Reached from the marketing ' +
+    'site, NOT the app left-nav.\n' +
     '- **The card projection.** A card shows name, org, description, and the ' +
     'three public demand signals from 6.12.6 (viewers / upvotes / recent ' +
     'activity) — the directory read surfaces ONLY these card-projection ' +
@@ -152,14 +182,14 @@ export const story_6_13: PlanStory = {
     'non-public projects (6.13.2); search + category/tag filtering (6.13.3); ' +
     'the trending / popular / recent ranking (6.13.4); the public-project ' +
     'categories/tags model + tagging + tag-facet (6.13.5); the project-square ' +
-    'UI — gallery + cards + search/filter/sort tabs + the shell entry, each ' +
+    'UI — the fully-public marketing-site page (top bar + footer), the SEO ' +
+    'hero, gallery + cards + search/filter/sort tabs + the SEO/GEO scaffolding ' +
+    '(metadata, JSON-LD, semantic HTML, sitemap, topic landing pages), each ' +
     'card linking to the 6.12.4 public view (6.13.6); the directory + ranking ' +
-    '+ search/filter + pagination tests (6.13.7); the browse → search → ' +
-    'sort-by-trending → click-into-public-view e2e (6.13.8).\n\n' +
-    '**Out of scope (named so they land in their own story, not here):** ' +
-    'ANONYMOUS / logged-out access to the square (inherits 6.12’s ' +
-    'account-required decision — a future story with the anonymous-identity + ' +
-    'abuse model); a curated / editorially-featured "collections" surface ' +
+    '+ search/filter + pagination tests (6.13.7); the anonymous browse → ' +
+    'search → sort-by-trending → click-into-public-view e2e (6.13.8).\n\n' +
+    '**Out of scope (named so they land in their own story, not here):** a ' +
+    'curated / editorially-featured "collections" surface ' +
     '(GitHub Collections — a later editorial layer; 6.13 ships the algorithmic ' +
     'ranks + the category browse); per-account personalization / "projects for ' +
     'you" recommendation (a signal-driven enhancement); cross-org GLOBAL search ' +
@@ -171,11 +201,14 @@ export const story_6_13: PlanStory = {
     'local Postgres (`localhost:5433`); `pnpm dev`. Seed a HANDFUL of public ' +
     'projects across MORE THAN ONE org (with varied upvote/viewer/activity + ' +
     'made-public timestamps) plus at least one NON-public project per org.\n' +
-    '- **The square shows only public projects, cross-org.** Sign in as any ' +
-    'Motir account; open the project square from the shell entry → the gallery ' +
+    '- **The square shows only public projects, cross-org — fully public, no ' +
+    'sign-in.** Open `/explore` while LOGGED OUT (no session) → the gallery ' +
     'renders project CARDS (name, org, description, viewer / upvote / activity ' +
-    'stats) for the public projects across ALL orgs — including orgs the ' +
-    'account has NO membership in. Confirm the seeded NON-public projects are ' +
+    'stats — NO “Public” pill) for the public projects across ALL orgs. ' +
+    'Confirm the page is reached as a standalone web page (NOT from the app ' +
+    'left-nav — there is no left-nav entry), and view-source shows a real ' +
+    '`<h1>`, `<meta>`/OpenGraph tags, and a JSON-LD `CollectionPage` block ' +
+    '(SEO/GEO). Confirm the seeded NON-public projects are ' +
     'ABSENT from the square for everyone (a private/open/limited project never ' +
     'appears), and that the 404-not-403 posture for those projects is ' +
     'unchanged when hit directly.\n' +
@@ -195,8 +228,8 @@ export const story_6_13: PlanStory = {
     '- **Click-through to the public view.** Click a card → it lands on that ' +
     'project’s 6.12.4 public read-only view (the board / issues / public ' +
     'roadmap), which still enforces the public projection (internal fields ' +
-    'absent) + account-required gate — proving the square is a discovery index ' +
-    'over the 6.12 surface, not a second view path.\n' +
+    'absent) — proving the square is a discovery index over the 6.12 surface, ' +
+    'not a second view path.\n' +
     '- `pnpm test` (6.13.7) covers: the directory lists ONLY public projects ' +
     'cross-org (non-public excluded); each rank’s ordering correctness + ' +
     'determinism + cursor pagination (no skip/dupe); search + category/tag ' +
@@ -216,7 +249,7 @@ export const story_6_13: PlanStory = {
     {
       id: '6.13.1',
       title:
-        'Design — the project square: the gallery/explore page (cards), the search bar, category/tag filters, the sort/rank tabs, the shell entry',
+        'Design — the project square: the fully-public marketing-site page (hero + cards), search, category/tag filters, sort/rank tabs, the SEO/GEO scaffolding',
       status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
@@ -232,17 +265,22 @@ export const story_6_13: PlanStory = {
         'shape.\n\n' +
         'The surfaces to draw (every panel — the multi-panel rule, mistake ' +
         '#31):\n\n' +
-        '- **Panel 1 — the gallery / explore page (the square itself).** The ' +
-        'system-level grid of **project cards**: each card draws the project ' +
-        'name, its **org** (the cross-org context — this is a system surface, ' +
-        'so the owning org is shown), the description (truncated), and the ' +
-        'three public stat signals from 6.12.6 (**viewers / upvotes / recent ' +
-        'activity**) with their glyphs. Draw the card hover/focus state and ' +
-        'the whole-card click affordance (the card links to the 6.12.4 public ' +
-        'view). The grid is paginated / lazy (the at-scale rule — NOT ' +
-        'load-all; draw the "load more" / next-page affordance + the ' +
-        'page-boundary skeleton). Mirror the GitHub-Trending / GitLab-Explore ' +
-        'card row.\n' +
+        '- **Panel 1 — the public page (marketing-site chrome + hero + ' +
+        'gallery).** A standalone, fully-public web page: the **marketing-site ' +
+        'top bar** (Motir logo + minimal nav + sign-in/CTA) and **footer** (an ' +
+        'SEO link surface with topic landing links) — NOT the app shell. The ' +
+        '**SEO hero**: a real `<h1>`, a descriptive lede (human + crawler), the ' +
+        'search, and a "no sign-up required" trust line. Then the grid of ' +
+        '**project cards**: each card draws the project name, its **org** (the ' +
+        'cross-org context — the owning org is shown), the description ' +
+        '(truncated), and the three public stat signals from 6.12.6 (**viewers ' +
+        '/ upvotes / recent activity**) with their glyphs. **NO per-card ' +
+        '"Public" pill** (every project here is public by definition). Draw the ' +
+        'card hover/focus state and the whole-card click affordance (a real ' +
+        '`<a href>` to the 6.12.4 public view). The grid is paginated / lazy ' +
+        '(the at-scale rule — NOT load-all; draw the "load more" / next-page ' +
+        'affordance + the page-boundary skeleton). Mirror the GitHub-Trending / ' +
+        'GitLab-Explore card row.\n' +
         '- **Panel 2 — the sort / rank tabs.** The **Trending / Popular / ' +
         'Recent (New)** tab control (the GitLab-Explore-tabs shape), with ' +
         'one-line copy for each ("Trending = surging now", "Popular = ' +
@@ -257,11 +295,16 @@ export const story_6_13: PlanStory = {
         'search + tag + the rank tab COMPOSE (all three active at once). Draw ' +
         'the categories-browse view (topics listed with their project ' +
         'counts).\n' +
-        '- **Panel 4 — the shell entry point.** Where the project square lives ' +
-        'in the navigation shell (a top-level "Explore" / "Project square" ' +
-        'entry, distinct from the workspace-scoped project nav — this is a ' +
-        'SYSTEM-level surface that crosses orgs). Draw the entry in the shell ' +
-        'and the "you are exploring public projects across Motir" framing.\n' +
+        '- **Panel 4 — the SEO + GEO scaffolding.** The page is fully public + ' +
+        'server-rendered + crawlable. Draw the head `<title>` / `<meta ' +
+        'description>` / canonical / OpenGraph / Twitter, the JSON-LD ' +
+        'structured data (`CollectionPage` › `ItemList` of `SoftwareApplication` ' +
+        '+ `BreadcrumbList`), the semantic HTML outline (one `<h1>`, `<h2>` ' +
+        'sections, each card an `<article>` with an `<h3>`, topic browse in a ' +
+        '`<nav>`), the real indexable URLs / sitemap (each rank / search / ' +
+        'topic / page) + per-topic landing pages (`/explore/topic/<slug>`), and ' +
+        'the GEO answer-engine framing (a citable lead + FAQ). State it is ' +
+        'reached from the marketing site, NOT the app left-nav.\n' +
         '- **Panel 5 — empty / loading / error / no-results states.** The ' +
         'empty square (no public projects yet), the paginated loading ' +
         'skeleton, the fetch-error state, and the no-search-results / ' +
@@ -285,25 +328,29 @@ export const story_6_13: PlanStory = {
         '`--color-*`, no hand-rolled spacing/radius) + shipped ' +
         '`components/ui/*`.\n' +
         '- The card draws name + ORG + description + the three 6.12.6 stats ' +
-        '(viewers / upvotes / activity) and a whole-card click to the 6.12.4 ' +
-        'view; the gallery is drawn paginated / lazy (not load-all).\n' +
+        '(viewers / upvotes / activity) with NO "Public" pill, and a ' +
+        'whole-card `<a href>` to the 6.12.4 view; the gallery is drawn ' +
+        'paginated / lazy (not load-all).\n' +
         '- The Trending / Popular / Recent tabs are drawn (with the default ' +
         'tab + any recency-window selector), the search bar + category/tag ' +
         'filter are drawn composing with the active tab, and the ' +
         'categories-by-count browse view is drawn.\n' +
-        '- The shell entry point is drawn (a top-level Explore / Project-square ' +
-        'entry, distinct from workspace project nav) with the cross-org ' +
-        'framing.\n' +
+        '- The page is drawn as a standalone fully-public marketing-site page ' +
+        '(top bar + footer, SEO hero), NOT an app-shell route / no left-nav ' +
+        'entry; the SEO + GEO scaffolding (head meta/OpenGraph, JSON-LD, ' +
+        'semantic outline, sitemap/topic landing pages, GEO framing) is drawn.\n' +
         '- `design-notes.md` names every primitive + copy + per-element ' +
-        '`--el-*` role, and states the public-only + org-on-card + ' +
-        'links-to-6.12.4 invariants; AA contrast holds for the stat / tab / ' +
-        'tag-chip tints.\n\n' +
+        '`--el-*` role, and states the fully-public (no-auth) + public-only + ' +
+        'org-on-card + no-"Public"-pill + links-to-6.12.4 invariants; AA ' +
+        'contrast holds for the stat / tab / tag-chip tints.\n\n' +
         '## Context refs\n\n' +
         '- `scripts/plan-seed/data/story-7.0.ts` § 7.0.1 — the multi-panel ' +
         'design-card shape to mirror.\n' +
         '- `scripts/plan-seed/data/story-6.12.ts` § 6.12.1 — the public-view + ' +
-        'public-roadmap design the cards link INTO (the projection + the ' +
-        'account-required framing to stay consistent with).\n' +
+        'public-roadmap design the cards link INTO (the projection to stay ' +
+        'consistent with; NB the square itself is now ANONYMOUS, while 6.12.4 ' +
+        'is still account-required — see the header revision + the 6.12 ' +
+        'finding).\n' +
         '- GitHub Trending (https://github.com/trending) + Explore ' +
         '(https://github.com/explore) — the card row (owner/repo, language, ' +
         'description, stats) + the Topics/Collections browse being mirrored.\n' +
@@ -337,8 +384,10 @@ export const story_6_13: PlanStory = {
         'open / limited project NEVER appears, for any viewer; the 6.12.3 ' +
         '404-not-403 posture for non-public projects is untouched (a ' +
         'non-public project is simply absent from the set, never "forbidden"). ' +
-        'Session-gated (a signed-in account is required — account-required, ' +
-        'not anonymous, inheriting 6.12’s decision).\n' +
+        '**Anonymous-readable: the directory read requires NO session** (the ' +
+        'page is fully public — model revision 2026-06-14); it must run on the ' +
+        'server with no `getSession()` gate so crawlers / logged-out visitors ' +
+        'get the full list.\n' +
         '- **The card projection (a dedicated read shape / DTO):** the read ' +
         'returns ONLY the card fields — project name, the owning ORG (name / ' +
         'slug — the cross-org context the square shows), description, and the ' +
@@ -371,8 +420,9 @@ export const story_6_13: PlanStory = {
         'deterministic total order (stable id tiebreak) — paging past a ' +
         'boundary skips/duplicates no row; it is NOT load-all / not ' +
         'OFFSET-the-world.\n' +
-        '- Session-gated (account-required); 4-layer respected (the filter + ' +
-        'projection in the service/repository, no raw Prisma in the route).\n\n' +
+        '- Anonymous-readable (NO session required — the route has no ' +
+        '`getSession()` gate); 4-layer respected (the filter + projection in ' +
+        'the service/repository, no raw Prisma in the route).\n\n' +
         '## Context refs\n\n' +
         '- `scripts/plan-seed/data/story-6.12.ts` § 6.12.3 (the `public` ' +
         '`ProjectAccessLevel` value + the cross-org read exception) + § 6.12.6 ' +
@@ -580,15 +630,18 @@ export const story_6_13: PlanStory = {
     {
       id: '6.13.6',
       title:
-        'The project-square UI — gallery + cards + search/filter/sort tabs + the shell entry, each card linking to the 6.12.4 public view',
+        'The project-square UI — the fully-public, SEO/GEO-optimised marketing-site page (hero + cards + search/filter/sort), each card linking to the 6.12.4 public view',
       status: 'blocked',
       type: 'code',
       executor: 'coding_agent',
-      estimateMinutes: 65,
+      estimateMinutes: 75,
       descriptionMd:
         'Build the project-square surface per the 6.13.1 design, over the ' +
-        '6.13.3 search/filter + the 6.13.4 ranking. The system-level gallery a ' +
-        'signed-in account browses to discover public projects.\n\n' +
+        '6.13.3 search/filter + the 6.13.4 ranking. A **fully public (no ' +
+        'sign-in), server-rendered, SEO + GEO-optimised web page** at ' +
+        '`/explore`, reached from the Motir marketing site — NOT an app-shell ' +
+        'route, NO left-nav entry. It renders for logged-out visitors and ' +
+        'crawlers with no `getSession()` gate.\n\n' +
         '- **The gallery + cards:** render the grid of project cards (name, ' +
         'org, description, the three 6.12.6 stats) from the 6.13.2 card ' +
         'projection; each card is a whole-card LINK to that project’s 6.12.4 ' +
@@ -605,18 +658,30 @@ export const story_6_13: PlanStory = {
         'COMPOSE with the rank tab + the cursor; the categories-browse view ' +
         '(topics by count) from the 6.13.5 facet read; the active-filter + ' +
         'clear states.\n' +
-        '- **The shell entry:** the top-level "Explore" / "Project square" ' +
-        'entry in the navigation shell (distinct from the workspace-scoped ' +
-        'project nav — this is the system-level cross-org surface), with the ' +
-        '"exploring public projects across Motir" framing.\n' +
+        '- **The page chrome (marketing-site, NOT app shell):** the public top ' +
+        'bar (logo + minimal nav + sign-in/CTA) and footer (an SEO link ' +
+        'surface with the per-topic landing links). There is NO app sidebar / ' +
+        'NO left-nav entry — the page is reached from the marketing site. The ' +
+        'SEO hero leads with a real `<h1>` + descriptive lede + the search.\n' +
+        '- **SEO + GEO (the build contract):** server-render the page (no ' +
+        'client-only gate) so it is fully crawlable. Emit head metadata ' +
+        '(`title`, `description`, canonical, OpenGraph + a generated ' +
+        '`/explore/opengraph-image`, Twitter), JSON-LD structured data ' +
+        '(`CollectionPage` › `ItemList` of `SoftwareApplication` + a ' +
+        '`BreadcrumbList` on topic pages), semantic HTML (one `<h1>`, `<h2>` ' +
+        'sections, each card an `<article>`/`<h3>`, topic browse in a `<nav>`), ' +
+        'and an XML sitemap of the real indexable URLs (`/explore`, each rank / ' +
+        '`?q=` / `?tag=` / `?page=`, and the `/explore/topic/<slug>` landing ' +
+        'pages). Cards are real `<a href>` (crawlable without JS). Add a ' +
+        'concise citable lead + an FAQ block for GEO (answer-engine framing).\n' +
         '- **States:** the empty square, the paginated loading skeleton, the ' +
         'fetch-error, and the no-results / no-projects-in-category states per ' +
         'the 6.13.1 design.\n\n' +
         'Use ONLY shipped `components/ui/*` + `--el-*` / `[data-display-style]` ' +
         'tokens (palette tones for the stats / tabs / tag chips, not ' +
-        'grey-only); strings via next-intl. Stay 4-layer: the page/route reads ' +
-        'through the 6.13.2/6.13.3/6.13.4 services (no view-specific query ' +
-        'code, no raw Prisma in the route).\n\n' +
+        'grey-only); strings via next-intl. Cards carry NO "Public" pill. Stay ' +
+        '4-layer: the page/route reads through the 6.13.2/6.13.3/6.13.4 ' +
+        'services (no view-specific query code, no raw Prisma in the route).\n\n' +
         '## Acceptance criteria\n\n' +
         '- The square renders the card gallery (name / org / description / the ' +
         'three stats) per the 6.13.1 design; each card links to the project’s ' +
@@ -625,9 +690,12 @@ export const story_6_13: PlanStory = {
         '- The Trending / Popular / Recent tabs drive the 6.13.4 rank; the ' +
         'search bar + category/tag filter drive 6.13.3; rank + search + tag are ' +
         'carried in composable URL params (reload/share restores state).\n' +
-        '- The shell entry is a top-level Explore / Project-square entry ' +
-        '(distinct from workspace project nav); the empty / loading / error / ' +
-        'no-results states render.\n' +
+        '- The page renders as a fully-public, server-rendered marketing-site ' +
+        'page (top bar + footer, SEO hero) for a LOGGED-OUT visitor — NOT an ' +
+        'app-shell route, no left-nav entry; it emits the head metadata + ' +
+        'JSON-LD + semantic HTML + sitemap/topic landing pages (SEO/GEO); cards ' +
+        'carry NO "Public" pill; the empty / loading / error / no-results ' +
+        'states render.\n' +
         '- Only `--el-*` + `[data-display-style]` tokens + shipped ' +
         '`components/ui/*`; matches the 6.13.1 design; next-intl; 4-layer ' +
         'respected (reads through the services, no raw Prisma in the route).\n\n' +
@@ -637,9 +705,9 @@ export const story_6_13: PlanStory = {
         '- `scripts/plan-seed/data/story-6.12.ts` § 6.12.4 — the public ' +
         'read-only view each card links INTO.\n' +
         '- `motir-core/components/ui/*` + `app/globals.css` token layers; the ' +
-        'shipped shell navigation (where the top-level Explore entry lives); ' +
-        'the URL-driven list-param conventions (`?view/?sort/?page`) the ' +
-        'rank/search/tag params compose with.\n' +
+        'URL-driven list-param conventions (`?view/?sort/?page`) the ' +
+        'rank/search/tag params compose with; Next.js Metadata API + ' +
+        '`opengraph-image` + `sitemap.ts` (the SEO/GEO surface).\n' +
         '- `motir-core/CLAUDE.md` § 4-layer + § colour/shape tokens; the i18n ' +
         'threading pattern.',
       dependsOn: ['6.13.1', '6.13.3', '6.13.4'],
@@ -664,8 +732,9 @@ export const story_6_13: PlanStory = {
         'requesting account has no membership in) and EXCLUDES every ' +
         'non-public project for every viewer; assert the card projection ' +
         'payload contains ONLY name + org + the three stats + description and ' +
-        'NO internal project field. Assert an unauthenticated request is ' +
-        'rejected (account-required).\n' +
+        'NO internal project field. Assert an UNAUTHENTICATED (no-session) ' +
+        'request SUCCEEDS and returns the same public list (the page is fully ' +
+        'public — there is no account gate to reject it).\n' +
         '- **Ranking.** With timestamped seed votes/activity: Trending orders ' +
         'by recent (windowed) signal (a fresh upvote burst lifts a project ' +
         'above a higher-lifetime-but-stale one); Popular orders by lifetime ' +
@@ -684,7 +753,7 @@ export const story_6_13: PlanStory = {
         '## Acceptance criteria\n\n' +
         '- The public-only-cross-org guarantee is asserted (every public ' +
         'project listed, every non-public excluded, the projection leaks no ' +
-        'internal field, unauthenticated rejected).\n' +
+        'internal field, an unauthenticated request succeeds — fully public).\n' +
         '- Each rank’s ordering + determinism, the search + category/tag ' +
         'filter correctness + composition, the tag-facet public-only count, ' +
         'and the cursor no-skip/no-dupe pagination are each asserted.\n' +
@@ -704,24 +773,27 @@ export const story_6_13: PlanStory = {
     {
       id: '6.13.8',
       title:
-        'E2E (playwright) — browse the project square, search + sort by trending, click a card → its public read-only view',
+        'E2E (playwright) — browse the public project square LOGGED OUT, search + sort by trending, click a card → its public read-only view',
       status: 'blocked',
       type: 'e2e',
       executor: 'coding_agent',
       estimateMinutes: 50,
       descriptionMd:
-        '**Type:** e2e (playwright) — the full discovery loop in a browser: ' +
-        'browse the system-level square, search + sort by trending, and click ' +
-        'a card through to its public read-only view, proving the discovery → ' +
-        'view handoff end to end.\n\n' +
+        '**Type:** e2e (playwright) — the full discovery loop in a browser, ' +
+        '**logged out**: browse the public square, search + sort by trending, ' +
+        'and click a card through to its public read-only view, proving the ' +
+        'discovery → view handoff end to end without a session.\n\n' +
         'The flow:\n\n' +
         '1. Seed several public projects across MORE THAN ONE org (varied ' +
         'upvotes / viewers / activity + made-public times) and at least one ' +
-        'non-public project. Sign in as a Motir account.\n' +
-        '2. Open the **project square** from the top-level shell entry → the ' +
-        'gallery of project CARDS renders (name / org / description / the three ' +
-        'stats) for the public projects across orgs; assert a seeded ' +
-        'non-public project is ABSENT.\n' +
+        'non-public project. Do NOT sign in — visit as an anonymous ' +
+        '(logged-out) visitor.\n' +
+        '2. Navigate directly to `/explore` (the public page — there is NO ' +
+        'app left-nav entry) → the gallery of project CARDS renders (name / ' +
+        'org / description / the three stats, NO "Public" pill) for the public ' +
+        'projects across orgs; assert a seeded non-public project is ABSENT, ' +
+        'and assert the page exposes the SEO surface (a single `<h1>`, a ' +
+        'JSON-LD `application/ld+json` script).\n' +
         '3. Switch to the **Trending** sort tab → assert the order reflects ' +
         'recent demand (the project given the fresh upvote burst is near the ' +
         'top); then type a **search** query → the gallery narrows to matching ' +
@@ -732,14 +804,20 @@ export const story_6_13: PlanStory = {
         'read-only view (the board / issues / public roadmap); assert there ' +
         'are NO edit affordances and that internal fields (assignee / estimate ' +
         '/ internal comments) are absent — the 6.12 projection still holds ' +
-        'through the discovery entry.\n\n' +
+        'through the discovery entry. **NB (knock-on):** under the current 6.12 ' +
+        'model the 6.12.4 view is still account-required, so the logged-out ' +
+        'click-through would hit a sign-in redirect — this step assumes the ' +
+        '6.12-side anonymous revision flagged in the header lands first; until ' +
+        'then assert the redirect, not the view.\n\n' +
         'Mind the prodect e2e selector + harness gotchas (combobox option = ' +
         'label + secondary; exact/level on heading selectors; the empty-state ' +
         'headings; run the dev server yourself + reuse it). Drive the real UI, ' +
         'not API shortcuts.\n\n' +
         '## Acceptance criteria\n\n' +
-        '- The square opens from the shell entry and renders the cross-org ' +
-        'card gallery; a seeded non-public project is absent.\n' +
+        '- The square opens at `/explore` for a LOGGED-OUT visitor (no app ' +
+        'left-nav entry) and renders the cross-org card gallery (no "Public" ' +
+        'pill); a seeded non-public project is absent; the SEO surface (single ' +
+        '`<h1>` + JSON-LD) is present.\n' +
         '- Sorting by Trending reflects recent demand; a search query + a ' +
         'category/tag each narrow the gallery; the rank + search + tag are in ' +
         'the URL (reload restores state).\n' +
