@@ -332,7 +332,8 @@
       "settings": "Settings",
       "jobRuns": "Job runs",
       "docs": "Docs",
-      "backlog": "Backlog"
+      "backlog": "Backlog",
+      "triage": "Triage"
     },
     "topNav": {
       "global": "Global"
@@ -2584,6 +2585,97 @@
       "loading": "Loading members…",
       "noActiveOrgTitle": "No organization",
       "noActiveOrgDescription": "You don’t belong to an organization yet."
+    }
+  },
+  "triage": {
+    "heading": "Triage",
+    "count": "{count, plural, other {# to triage}}",
+    "subtitle": "{project} · {key} — incoming bug reports & feature requests, excluded from the tree until you act",
+    "noAccessTitle": "No access to triage",
+    "noAccessDescription": "You don’t have access to triage for this project.",
+    "loadError": "Couldn’t load the triage queue. Please try again.",
+    "queueLabel": "Queue · newest first",
+    "searchPlaceholder": "Search submissions",
+    "searchAria": "Search submissions",
+    "loadOlder": "Load older",
+    "loadingMore": "Loading…",
+    "noSearchResults": "No submissions match your search.",
+    "selectPrompt": "Select a submission to triage",
+    "selectPromptBody": "Pick a row from the queue to see its full report and act on it.",
+    "detailLoading": "Loading submission…",
+    "publicChip": "Public",
+    "snoozedChip": "Snoozed · {day}",
+    "bugReport": "Bug report",
+    "featureRequest": "Feature request",
+    "memberMeta": "Team member · reported from the in-app widget",
+    "externalMeta": "Public submitter · {name}",
+    "unknownSubmitter": "Unknown submitter",
+    "attachmentsLabel": "Attachments",
+    "commentsLabel": "Comments",
+    "noComments": "No comments yet.",
+    "empty": {
+      "title": "No items to triage",
+      "description": "New bug reports and feature requests land here — from the in-app “Report” button or a signed-in “Submit a request” on the public project page."
+    },
+    "actions": {
+      "accept": "Accept",
+      "promote": "Promote",
+      "markDuplicate": "Mark duplicate",
+      "snooze": "Snooze",
+      "decline": "Decline"
+    },
+    "promote": {
+      "heading": "Promote into",
+      "backlog": "Backlog",
+      "backlogSub": "Unparented, default status",
+      "sprint": "Active sprint",
+      "sprintSub": "Add to a sprint in progress",
+      "epic": "Under an epic",
+      "story": "Under a story",
+      "position": "Position in backlog",
+      "positionTop": "Top of backlog",
+      "positionBottom": "Bottom",
+      "pickSprint": "Choose a sprint",
+      "pickSprintEmpty": "No active sprints",
+      "pickEpic": "Choose an epic",
+      "pickEpicEmpty": "No epics to parent under",
+      "pickStory": "Choose a story",
+      "pickStoryEmpty": "No stories to parent under",
+      "pickSearch": "Search",
+      "confirm": "Promote",
+      "back": "Back"
+    },
+    "merge": {
+      "heading": "Mark as a duplicate of",
+      "searchLabel": "Search work items",
+      "searchPlaceholder": "Search by key or title",
+      "empty": "No work items match.",
+      "note": "Folds comments & attachments into {key} and cancels this submission.",
+      "confirm": "Mark duplicate"
+    },
+    "snoozePopover": {
+      "heading": "Snooze until",
+      "tomorrow": "Tomorrow",
+      "nextWeek": "Next week",
+      "pickDate": "Pick a date…",
+      "pickDateAria": "Snooze until date",
+      "note": "Returns early on new activity",
+      "confirm": "Snooze"
+    },
+    "declinePopover": {
+      "heading": "Decline this submission?",
+      "commentPlaceholder": "Add a note (optional)",
+      "confirm": "Decline"
+    },
+    "toast": {
+      "accepted": "Accepted",
+      "promotedBacklog": "Promoted to the backlog",
+      "promoted": "Promoted",
+      "merged": "Merged into {key}",
+      "snoozed": "Snoozed until {day}",
+      "declined": "Declined",
+      "unsnoozed": "Returned to the queue",
+      "error": "Something went wrong. Please try again."
     }
   }
 }

@@ -6,9 +6,12 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
+import { commentsService } from '@/lib/services/commentsService';
+import { attachmentsService } from '@/lib/services/attachmentsService';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { SprintNotFoundError, CrossProjectSprintAssignmentError } from '@/lib/sprints/errors';
 import { WorkItemNotFoundError, CrossProjectParentError } from '@/lib/workItems/errors';
@@ -17,8 +20,13 @@ import { keyForAppend, keyBetween } from '@/lib/workItems/positioning';
 import { toWorkItemDto } from '@/lib/mappers/workItemMappers';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { WorkItemDto } from '@/lib/dto/workItems';
-import type { TriageQueuePageDto, TriageSubmissionResultDto } from '@/lib/dto/triage';
+import type { WorkItemKindDto, WorkItemDto } from '@/lib/dto/workItems';
+import type {
+  TriageQueuePageDto,
+  TriageItemDetailDto,
+  TriageSubmitterDto,
+  TriageSubmissionResultDto,
+} from '@/lib/dto/triage';
 import { toTriageQueueItemDto } from '@/lib/mappers/triageMappers';
 import { clampTriageLimit, decodeTriageCursor, encodeTriageCursor } from '@/lib/triage/triageQueue';
 import {
@@ -110,25 +118,78 @@ export const triageService = {
       throw new ProjectNotFoundError(projectId);
     }
     await projectAccessService.assertCanBrowse(projectId, ctx);
+    return readTriageQueuePage(project.id, project.workspaceId, params);
+  },
 
-    const limit = clampTriageLimit(params.limit);
-    const cursor = params.cursor ? decodeTriageCursor(params.cursor) : undefined;
+  /**
+   * The same ACTIVE triage queue page as {@link getTriageQueue}, but addressed
+   * by the project's human IDENTIFIER ("PROD") rather than its id — the shape
+   * the inbox's `GET /api/projects/[key]/triage/queue` "Load older" pagination
+   * binds to (the page itself reads page 1 via `getTriageQueue` on the active
+   * project). Resolves + gates the key exactly like `createSubmission` (a
+   * missing / cross-workspace / non-browsable key reads as `ProjectNotFoundError`
+   * → 404, no existence leak), then shares the paged-read body.
+   */
+  async getTriageQueueByKey(
+    projectKey: string,
+    params: { cursor?: string; limit?: number },
+    ctx: ServiceContext,
+  ): Promise<TriageQueuePageDto> {
+    const project = await projectRepository.findByIdentifier(
+      ctx.workspaceId,
+      projectKey.trim().toUpperCase(),
+    );
+    if (!project) throw new ProjectNotFoundError(projectKey);
+    try {
+      await projectAccessService.assertCanBrowse(project.id, ctx);
+    } catch (err) {
+      if (err instanceof ProjectAccessDeniedError && err.kind === 'browse') {
+        throw new ProjectNotFoundError(projectKey);
+      }
+      throw err;
+    }
+    return readTriageQueuePage(project.id, project.workspaceId, params);
+  },
 
-    const rows = await workItemRepository.findTriageQueue(projectId, project.workspaceId, {
-      limit: limit + 1,
-      cursor: cursor ? { triagedAt: new Date(cursor.triagedAt), id: cursor.id } : undefined,
-    });
+  /**
+   * The full triage item the inbox DETAIL pane renders (Subtask 6.11.6) — the
+   * read behind a queue-row click. `workItemRepository.findById` returns triage
+   * items (it is NOT triage-excluded). Gate: tenant (`workspaceId`) then browse
+   * (6.4); assert the item is still IN triage (`triagedAt !== null`) else
+   * `NotInTriageError` (a graduated/never-a-submission item is a 409, not a
+   * missing one). The submitter is resolved into the SHIPPED
+   * {@link TriageSubmitterDto} shape; the body + comments + attachments reuse
+   * the issue-detail reads so the pane shares the existing display primitives.
+   */
+  async getTriageItemDetail(workItemId: string, ctx: ServiceContext): Promise<TriageItemDetailDto> {
+    const item = await workItemRepository.findById(workItemId);
+    if (!item || item.workspaceId !== ctx.workspaceId) {
+      throw new WorkItemNotFoundError(workItemId);
+    }
+    await projectAccessService.assertCanBrowse(item.projectId, ctx);
+    if (item.triagedAt === null) throw new NotInTriageError(workItemId);
 
-    const hasMore = rows.length > limit;
-    const pageRows = hasMore ? rows.slice(0, limit) : rows;
-    const items = pageRows.map(toTriageQueueItemDto);
-    const last = pageRows[pageRows.length - 1];
-    const nextCursor =
-      hasMore && last
-        ? encodeTriageCursor({ triagedAt: last.triagedAt!.toISOString(), id: last.id })
-        : null;
+    const submitter = await resolveSubmitter(item);
+    const [commentsPage, attachmentsPage] = await Promise.all([
+      commentsService.listComments(workItemId, { order: 'asc' }, ctx),
+      attachmentsService.listForWorkItem(workItemId, {}, ctx),
+    ]);
+    // Flatten roots + their single-level replies (oldest-first) — the detail
+    // pane renders a read-only thread, not the paged composer surface.
+    const comments = commentsPage.threads.flatMap((thread) => [thread, ...thread.replies]);
 
-    return { items, nextCursor };
+    return {
+      id: item.id,
+      kind: item.kind as WorkItemKindDto,
+      identifier: item.identifier,
+      title: item.title,
+      descriptionMd: item.descriptionMd,
+      submitter,
+      // Non-null by the `triagedAt !== null` gate above.
+      triagedAt: item.triagedAt.toISOString(),
+      comments,
+      attachments: attachmentsPage.attachments,
+    };
   },
 
   /**
@@ -575,4 +636,64 @@ async function emitTransition(
     toStatusKey: transition.toStatusKey,
     revisionId: transition.revisionId,
   });
+}
+
+/**
+ * The shared paged-read body for `getTriageQueue` / `getTriageQueueByKey` (the
+ * project + browse gate is the caller's, so this assumes an already-authorised
+ * project). Fetches `limit + 1` rows so `hasMore` needs no separate COUNT
+ * (finding #57 — cursor-forward, never load-all); `nextCursor` is the opaque
+ * `(triagedAt, id)` seek-after token, or null on the last page.
+ */
+async function readTriageQueuePage(
+  projectId: string,
+  workspaceId: string,
+  params: { cursor?: string; limit?: number },
+): Promise<TriageQueuePageDto> {
+  const limit = clampTriageLimit(params.limit);
+  const cursor = params.cursor ? decodeTriageCursor(params.cursor) : undefined;
+
+  const rows = await workItemRepository.findTriageQueue(projectId, workspaceId, {
+    limit: limit + 1,
+    cursor: cursor ? { triagedAt: new Date(cursor.triagedAt), id: cursor.id } : undefined,
+  });
+
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+  const items = pageRows.map(toTriageQueueItemDto);
+  const last = pageRows[pageRows.length - 1];
+  const nextCursor =
+    hasMore && last
+      ? encodeTriageCursor({ triagedAt: last.triagedAt!.toISOString(), id: last.id })
+      : null;
+
+  return { items, nextCursor };
+}
+
+/**
+ * Resolve a triage item's submitter into the SHIPPED {@link TriageSubmitterDto}
+ * discriminated shape (mirrors `triageMappers.toSubmitterDto`, which works over
+ * the joined queue row; the detail read has only the bare `WorkItem`, so it
+ * looks the reporter up via the user repository). An external submission is the
+ * one with a captured `externalSubmitterEmail`; otherwise it is a member
+ * submission whose reporter IS the submitter.
+ */
+async function resolveSubmitter(item: WorkItem): Promise<TriageSubmitterDto> {
+  if (item.externalSubmitterEmail !== null) {
+    return {
+      kind: 'external',
+      userId: null,
+      name: item.externalSubmitterName,
+      email: item.externalSubmitterEmail,
+      image: null,
+    };
+  }
+  const reporter = await userRepository.findById(item.reporterId);
+  return {
+    kind: 'member',
+    userId: item.reporterId,
+    name: reporter?.name ?? null,
+    email: reporter?.email ?? null,
+    image: reporter?.image ?? null,
+  };
 }

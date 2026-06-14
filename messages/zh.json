@@ -332,7 +332,8 @@
       "settings": "设置",
       "jobRuns": "任务运行",
       "docs": "文档",
-      "backlog": "待办列表"
+      "backlog": "待办列表",
+      "triage": "分流"
     },
     "topNav": {
       "global": "全局"
@@ -2584,6 +2585,97 @@
       "loading": "正在加载成员…",
       "noActiveOrgTitle": "无组织",
       "noActiveOrgDescription": "你还不属于任何组织。"
+    }
+  },
+  "triage": {
+    "heading": "分流",
+    "count": "{count, plural, other {# 项待分流}}",
+    "subtitle": "{project} · {key} — 新的缺陷报告与功能请求，在你处理之前不会进入工作项树",
+    "noAccessTitle": "无分流权限",
+    "noAccessDescription": "你没有此项目的分流权限。",
+    "loadError": "无法加载分流队列，请重试。",
+    "queueLabel": "队列 · 最新优先",
+    "searchPlaceholder": "搜索提交",
+    "searchAria": "搜索提交",
+    "loadOlder": "加载更早",
+    "loadingMore": "加载中…",
+    "noSearchResults": "没有符合搜索条件的提交。",
+    "selectPrompt": "选择一项以进行分流",
+    "selectPromptBody": "从队列中选择一行，查看完整报告并进行处理。",
+    "detailLoading": "正在加载提交…",
+    "publicChip": "公开",
+    "snoozedChip": "已暂缓 · {day}",
+    "bugReport": "缺陷报告",
+    "featureRequest": "功能请求",
+    "memberMeta": "团队成员 · 通过应用内反馈提交",
+    "externalMeta": "公开提交者 · {name}",
+    "unknownSubmitter": "未知提交者",
+    "attachmentsLabel": "附件",
+    "commentsLabel": "评论",
+    "noComments": "暂无评论。",
+    "empty": {
+      "title": "没有待分流的事项",
+      "description": "新的缺陷报告和功能请求会出现在这里 — 来自应用内的“反馈”按钮，或公开项目页面上已登录用户的“提交请求”。"
+    },
+    "actions": {
+      "accept": "接受",
+      "promote": "晋升",
+      "markDuplicate": "标记重复",
+      "snooze": "暂缓",
+      "decline": "拒绝"
+    },
+    "promote": {
+      "heading": "晋升到",
+      "backlog": "待办列表",
+      "backlogSub": "无父级，默认状态",
+      "sprint": "进行中的 Sprint",
+      "sprintSub": "加入一个进行中的 Sprint",
+      "epic": "归入篇章",
+      "story": "归入故事",
+      "position": "在待办列表中的位置",
+      "positionTop": "待办列表顶部",
+      "positionBottom": "底部",
+      "pickSprint": "选择一个 Sprint",
+      "pickSprintEmpty": "没有进行中的 Sprint",
+      "pickEpic": "选择一个篇章",
+      "pickEpicEmpty": "没有可作为父级的篇章",
+      "pickStory": "选择一个故事",
+      "pickStoryEmpty": "没有可作为父级的故事",
+      "pickSearch": "搜索",
+      "confirm": "晋升",
+      "back": "返回"
+    },
+    "merge": {
+      "heading": "标记为重复项，归并到",
+      "searchLabel": "搜索工作项",
+      "searchPlaceholder": "按编号或标题搜索",
+      "empty": "没有匹配的工作项。",
+      "note": "将评论和附件并入 {key}，并取消此提交。",
+      "confirm": "标记重复"
+    },
+    "snoozePopover": {
+      "heading": "暂缓至",
+      "tomorrow": "明天",
+      "nextWeek": "下周",
+      "pickDate": "选择日期…",
+      "pickDateAria": "暂缓至日期",
+      "note": "有新动态时会提前返回",
+      "confirm": "暂缓"
+    },
+    "declinePopover": {
+      "heading": "拒绝此提交？",
+      "commentPlaceholder": "添加备注（可选）",
+      "confirm": "拒绝"
+    },
+    "toast": {
+      "accepted": "已接受",
+      "promotedBacklog": "已晋升到待办列表",
+      "promoted": "已晋升",
+      "merged": "已并入 {key}",
+      "snoozed": "已暂缓至 {day}",
+      "declined": "已拒绝",
+      "unsnoozed": "已返回队列",
+      "error": "出了点问题，请重试。"
     }
   }
 }

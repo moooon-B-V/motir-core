@@ -8,6 +8,7 @@ import {
   CircleDot,
   CirclePlay,
   Columns3,
+  Inbox,
   LayoutDashboard,
   LayoutList,
   ListChecks,
@@ -194,6 +195,15 @@ export function SidebarNav({
           label: t('nav.backlog'),
           href: '/backlog',
           active: isActive(pathname, '/backlog'),
+        },
+        {
+          // The incoming-work front door (Story 6.11 · Subtask 6.11.6) — the
+          // triage inbox of un-acted-on bug reports & feature requests. `Inbox`
+          // is the 6.11 design-notes glyph; sits after Backlog.
+          icon: <Inbox />,
+          label: t('nav.triage'),
+          href: '/triage',
+          active: isActive(pathname, '/triage'),
         },
         {
           icon: <BarChart3 />,
