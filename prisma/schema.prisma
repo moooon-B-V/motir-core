@@ -323,6 +323,7 @@ model Workspace {
   // the finding-#26 tenancy gate (every notification read filters on it).
   // Cascade with the workspace, the comments pattern.
   notifications            Notification[]
+  sprintReportEntries      SprintReportEntry[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -786,6 +787,12 @@ model WorkItem {
   // back-relation) with the SetNull action the migration uses, so `migrate dev`
   // reports "No difference detected" — the FK-drift rule (bug-attachment-fk-migration-drift).
   sprint               Sprint?                   @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  // At-completion sprint-report snapshot rows (bug-sprint-report-incomplete-
+  // list-zero-after-carry-over). One row per sprint this issue was a member of
+  // at the moment that sprint completed; Cascade so hard-deleting an issue
+  // removes its frozen report rows with it (the FK is modelled here + on
+  // SprintReportEntry to keep `migrate dev` drift-free).
+  sprintReportEntries  SprintReportEntry[]
   // Back-relations for WorkItemLink (Subtask 1.4.3). Two named relations
   // because there are two distinct WorkItem↔WorkItemLink edges (from/to).
   // Cascading delete on both sides: removing an issue removes its links.
@@ -1325,16 +1332,65 @@ model Sprint {
   createdAt           DateTime    @default(now()) @map("created_at")
   updatedAt           DateTime    @updatedAt @map("updated_at")
 
-  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace     Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   // Back-relation for WorkItem.sprint. The FK lives on work_item with
   // onDelete: SetNull (deleting a sprint frees its issues to the backlog).
-  workItems WorkItem[]
+  workItems     WorkItem[]
+  // The frozen at-completion report snapshot (one row per member issue at
+  // close). Cascade so deleting a sprint removes its snapshot too.
+  reportEntries SprintReportEntry[]
 
   @@index([workspaceId])
   // Resolve the active sprint + list a project's sprints.
   @@index([projectId, state])
   @@map("sprint")
+}
+
+/// The FROZEN at-completion snapshot of a sprint's report
+/// (bug-sprint-report-incomplete-list-zero-after-carry-over). `completeSprint`
+/// (Story 4.4.3) writes ONE row per non-archived issue that was a member of the
+/// sprint at the moment it closed, BEFORE the carry-over moves the unfinished
+/// issues out. `getSprintReport` (Story 4.4.4/4.4.6) reads this snapshot for a
+/// `complete` sprint so the "Completed" / "Issues not completed" split,
+/// counts, points, and "added during sprint" figure stay frozen at close —
+/// exactly like Jira, where carrying issues into the next sprint never empties
+/// the closed sprint's report. An `active`/`planned` sprint has no snapshot and
+/// is reported from live membership (the complete-modal preview).
+///
+/// Only the BUCKET membership (`completed`), the order (`backlogRank`), and the
+/// scope-change flag (`addedAfterStart`) are frozen; the issue ROW content
+/// (title / status / assignee / estimate) is read LIVE through the `workItem`
+/// relation, matching Jira ("the grouping is frozen; the row reflects the
+/// issue's current state"). The committed baseline (`Sprint.committedPoints`,
+/// 4.4.2) is the symmetric at-START snapshot.
+model SprintReportEntry {
+  id              String   @id @default(cuid())
+  workspaceId     String   @map("workspace_id")
+  sprintId        String   @map("sprint_id")
+  workItemId      String   @map("work_item_id")
+  // The done-category bucket AT CLOSE: true = completed, false = not completed
+  // (carried over). Frozen — unaffected by later status/membership changes.
+  completed       Boolean
+  // Whether the issue was associated with the sprint AFTER its startDate (the
+  // Jira "added during sprint" figure), frozen at close so a later carry-over
+  // can't drop it from the count.
+  addedAfterStart Boolean  @map("added_after_start")
+  // The issue's `backlogRank` at close — the frozen list order (nullable, like
+  // work_item.backlogRank; the report read tiebreaks on workItemId).
+  backlogRank     String?  @map("backlog_rank") @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sprint    Sprint    @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  workItem  WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  // One snapshot row per (sprint, issue).
+  @@unique([sprintId, workItemId])
+  // The report's per-bucket, rank-ordered, cursor-paginated list read.
+  @@index([sprintId, completed, backlogRank, workItemId])
+  @@index([workspaceId])
+  @@map("sprint_report_entry")
 }
 
 /// Sprint lifecycle state (Story 4.1). `planned → active → complete`, mirroring

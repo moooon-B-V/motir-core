@@ -87,14 +87,19 @@ describe('sprint lifecycle — composed journey (4.4.7)', () => {
     expect(completed.completedAt).not.toBeNull();
 
     // Report: the immutable committed baseline (10) survives the carry-over; the
-    // done work (a = 3) is the completed total; b + c are back in the backlog.
+    // done work (a = 3) is the completed total. b + c left the live sprint
+    // membership for the backlog, but the report is FROZEN at completion, so it
+    // still shows them as "not completed" (b 2 + c 5 = 7) —
+    // bug-sprint-report-incomplete-list-zero-after-carry-over.
     const report = await sprintsService.getSprintReport(sprint.id, {}, fx.ctx);
     expect(report.state).toBe('complete');
     expect(report.points.committed).toBe(10);
     expect(report.points.completed).toBe(3);
+    expect(report.points.notCompleted).toBe(7);
     expect(report.completed.totalCount).toBe(1);
     expect(report.completed.items.map((i) => i.id)).toEqual([a]);
-    expect(report.incomplete.totalCount).toBe(0); // the unfinished left the sprint
+    expect(report.incomplete.totalCount).toBe(2);
+    expect(report.incomplete.items.map((i) => i.id).sort()).toEqual([b, c].sort());
     expect((await db.workItem.findUnique({ where: { id: b! } }))!.sprintId).toBeNull();
     expect((await db.workItem.findUnique({ where: { id: c! } }))!.sprintId).toBeNull();
   });

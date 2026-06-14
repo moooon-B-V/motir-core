@@ -10,6 +10,7 @@ import { toWorkItemDto } from '@/lib/mappers/workItemMappers';
 import { toEstimationConfigDto, toSprintPointsDto } from '@/lib/mappers/estimationMappers';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { sprintReportEntryRepository } from '@/lib/repositories/sprintReportEntryRepository';
 import { SprintNotFoundError } from '@/lib/sprints/errors';
 import {
   EstimationConfigForbiddenError,
@@ -171,6 +172,32 @@ export const estimationService = {
       statistic,
     );
     return toSprintPointsDto(committed, completed);
+  },
+
+  /**
+   * The FROZEN completed / not-completed point sums for a COMPLETED sprint's
+   * report (bug-sprint-report-incomplete-list-zero-after-carry-over) — the
+   * project's configured estimation statistic summed over the at-completion
+   * snapshot (`sprint_report_entry`), split by the FROZEN `completed` bucket
+   * rather than live membership. Resolves the statistic the same way
+   * `rollupForSprint` does (so a points / time / count project all read
+   * correctly), then defers the SUM to `sprintReportEntryRepository`. Used by
+   * `sprintsService.getSprintReport` only for a `complete` sprint; an active /
+   * planned sprint has no snapshot and uses the live `rollupForSprint`. A sprint
+   * with no snapshot rows yields `{ 0, 0 }` (the totals stay total). The
+   * committed baseline is read separately from `sprint.committedPoints`.
+   *
+   * Throws: `SprintNotFoundError` (404 — unknown / cross-workspace sprint).
+   */
+  async rollupForSprintSnapshot(
+    sprintId: string,
+    ctx: ServiceContext,
+  ): Promise<{ completed: number; notCompleted: number }> {
+    const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
+    if (!sprint) throw new SprintNotFoundError(sprintId);
+
+    const statistic = await resolveStatistic(sprint.projectId);
+    return sprintReportEntryRepository.sumPointsByCompletion(sprintId, ctx.workspaceId, statistic);
   },
 
   /**

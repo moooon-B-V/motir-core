@@ -93,7 +93,7 @@ describe('sprintsService.getSprintReport', () => {
     expect(report.addedAfterStart).toBe(1);
   });
 
-  it('reports a COMPLETED sprint after carry-over: the done issues stay, the unfinished are carried out', async () => {
+  it('FREEZES the completed/incomplete split + counts + points of a COMPLETED sprint, even after carry-over to the backlog empties the live membership (bug-sprint-report-incomplete-list-zero-after-carry-over)', async () => {
     const fx = await makeWorkItemFixture();
     const sprint = await sprintsService.createSprint(fx.projectId, { name: 'S' }, fx.ctx);
     const a = await addIssue(fx, sprint.id, 'a');
@@ -106,17 +106,128 @@ describe('sprintsService.getSprintReport', () => {
     await markDone(a); // a ships; b + c do not
     await sprintsService.completeSprint(sprint.id, { carryOverTo: 'backlog' }, fx.ctx);
 
+    // The carry-over really DID move b + c out of the live sprint membership…
+    expect(await db.workItem.findUnique({ where: { id: b }, select: { sprintId: true } })).toEqual({
+      sprintId: null,
+    });
+    expect(await db.workItem.findUnique({ where: { id: c }, select: { sprintId: true } })).toEqual({
+      sprintId: null,
+    });
+
+    // …yet the closed sprint's report still shows them as "not completed",
+    // because it reads the at-completion snapshot, not the live membership.
     const report = await sprintsService.getSprintReport(sprint.id, {}, fx.ctx);
     expect(report.state).toBe('complete');
-    // The immutable committed baseline (10) outlives the carry-over; completed is
-    // the done work that stayed (a = 3). b + c carried to the backlog, so the
-    // sprint now holds only done issues — the live remainder is 0.
-    expect(report.points.committed).toBe(10);
-    expect(report.points.completed).toBe(3);
-    expect(report.points.notCompleted).toBe(0);
+    expect(report.points.committed).toBe(10); // immutable at-start baseline
+    expect(report.points.completed).toBe(3); // a shipped (3)
+    expect(report.points.notCompleted).toBe(7); // b (2) + c (5) carried out, still counted
     expect(report.completed.totalCount).toBe(1);
     expect(report.completed.items.map((i) => i.id)).toEqual([a]);
-    expect(report.incomplete.totalCount).toBe(0);
+    expect(report.incomplete.totalCount).toBe(2);
+    expect(report.incomplete.items.map((i) => i.id).sort()).toEqual([b, c].sort());
+  });
+
+  it('freezes the report after carry-over INTO another planned sprint (the carried issues keep their frozen bucket despite being re-pointed + re-ranked)', async () => {
+    const fx = await makeWorkItemFixture();
+    const s1 = await sprintsService.createSprint(fx.projectId, { name: 'S1' }, fx.ctx);
+    const s2 = await sprintsService.createSprint(fx.projectId, { name: 'S2' }, fx.ctx);
+    const a = await addIssue(fx, s1.id, 'a');
+    const b = await addIssue(fx, s1.id, 'b');
+    await setPoints(a, 3);
+    await setPoints(b, 4);
+    await sprintsService.startSprint(s1.id, {}, fx.ctx);
+    await markDone(a);
+    await sprintsService.completeSprint(s1.id, { carryOverTo: { sprintId: s2.id } }, fx.ctx);
+
+    // b is now a member of S2, not S1.
+    expect(await db.workItem.findUnique({ where: { id: b }, select: { sprintId: true } })).toEqual({
+      sprintId: s2.id,
+    });
+
+    const report = await sprintsService.getSprintReport(s1.id, {}, fx.ctx);
+    expect(report.completed.items.map((i) => i.id)).toEqual([a]);
+    expect(report.incomplete.totalCount).toBe(1);
+    expect(report.incomplete.items.map((i) => i.id)).toEqual([b]);
+    expect(report.points.completed).toBe(3);
+    expect(report.points.notCompleted).toBe(4);
+  });
+
+  it('keeps the closed report STABLE when its issues change after close (a carried-over issue is finished elsewhere; a completed issue is reopened)', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'S' }, fx.ctx);
+    const a = await addIssue(fx, sprint.id, 'a');
+    const b = await addIssue(fx, sprint.id, 'b');
+    await setPoints(a, 3);
+    await setPoints(b, 2);
+    await sprintsService.startSprint(sprint.id, {}, fx.ctx);
+    await markDone(a); // a completed, b not
+    await sprintsService.completeSprint(sprint.id, { carryOverTo: 'backlog' }, fx.ctx);
+
+    // After close: b gets finished in the backlog, and a is reopened. Neither
+    // change touches the frozen snapshot, so the closed report is unchanged
+    // (Jira freezes "Completed / Not Completed" at sprint close — both buckets).
+    await markDone(b);
+    await db.workItem.update({ where: { id: a }, data: { status: 'todo' } });
+
+    const report = await sprintsService.getSprintReport(sprint.id, {}, fx.ctx);
+    expect(report.completed.items.map((i) => i.id)).toEqual([a]);
+    expect(report.incomplete.items.map((i) => i.id)).toEqual([b]);
+    expect(report.points.completed).toBe(3);
+    expect(report.points.notCompleted).toBe(2);
+  });
+
+  it('freezes addedAfterStart so an issue added during the sprint and then carried out is still counted', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'S' }, fx.ctx);
+    const a = await addIssue(fx, sprint.id, 'a');
+    await sprintsService.startSprint(sprint.id, {}, fx.ctx);
+    await markDone(a);
+    // f is added AFTER start and is NOT completed → it carries out on close.
+    const f = await addIssue(fx, sprint.id, 'f');
+    await sprintsService.completeSprint(sprint.id, { carryOverTo: 'backlog' }, fx.ctx);
+
+    expect(await db.workItem.findUnique({ where: { id: f }, select: { sprintId: true } })).toEqual({
+      sprintId: null,
+    });
+    const report = await sprintsService.getSprintReport(sprint.id, {}, fx.ctx);
+    expect(report.addedAfterStart).toBe(1); // f counted despite being carried out
+    expect(report.incomplete.items.map((i) => i.id)).toEqual([f]);
+  });
+
+  it('paginates the incomplete list of a COMPLETED sprint from the frozen snapshot', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'S' }, fx.ctx);
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i++) ids.push(await addIssue(fx, sprint.id, `issue-${i}`)); // all incomplete
+    await sprintsService.startSprint(sprint.id, {}, fx.ctx);
+    await sprintsService.completeSprint(sprint.id, { carryOverTo: 'backlog' }, fx.ctx);
+
+    const seen = new Set<string>();
+    const page1 = await sprintsService.getSprintReport(sprint.id, { limit: 2 }, fx.ctx);
+    expect(page1.state).toBe('complete');
+    expect(page1.incomplete.items).toHaveLength(2);
+    expect(page1.incomplete.totalCount).toBe(5); // count is the full aggregate, not the page
+    expect(page1.incomplete.nextCursor).not.toBeNull();
+    page1.incomplete.items.forEach((i) => seen.add(i.id));
+
+    const page2 = await sprintsService.getSprintReport(
+      sprint.id,
+      { limit: 2, incompleteCursor: page1.incomplete.nextCursor! },
+      fx.ctx,
+    );
+    expect(page2.incomplete.items).toHaveLength(2);
+    expect(page2.incomplete.items.some((i) => seen.has(i.id))).toBe(false); // cursor advances, no overlap
+    page2.incomplete.items.forEach((i) => seen.add(i.id));
+
+    const page3 = await sprintsService.getSprintReport(
+      sprint.id,
+      { limit: 2, incompleteCursor: page2.incomplete.nextCursor! },
+      fx.ctx,
+    );
+    expect(page3.incomplete.items).toHaveLength(1);
+    expect(page3.incomplete.nextCursor).toBeNull(); // last page
+    page3.incomplete.items.forEach((i) => seen.add(i.id));
+    expect(seen.size).toBe(5); // every snapshot row paged exactly once
   });
 
   it('returns total 0/null points and empty/typed lists for a wholly unestimated sprint', async () => {
