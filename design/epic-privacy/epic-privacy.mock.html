@@ -1,0 +1,1567 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Epic-level privacy on public projects (Story 6.14 · 6.14.1)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for EPIC-LEVEL PRIVACY on public projects
+      (Story 6.14). No `design/epic-privacy/` asset existed; the 6.14.1 design
+      gate produces this. It is the layout source of truth for the UI code
+      subtasks that depend on it — 6.14.5 (tree-expand placeholder),
+      6.14.6 (detail child-panel placeholder), 6.14.7 (project-admin
+      set-private control) — each carries 6.14.1 in `dependsOn` and is
+      `blocked` until this lands.
+
+      Built FROM the real design system: the token block below is copied 1:1
+      from app/globals.css (Tier-0 --color-* + the shape tokens + Tier-3 --el-*),
+      and the markup mirrors the SHIPPED primitives — the work-item tree-grid row
+      (cell-tree + 22px-per-level indent + rotate-on-expand chevron, from
+      design/work-items/tree-scale), IssueTypeIcon (lucide glyph in the
+      --el-type-* hue), Pill (the priority/status chips + a NEW `private` tone),
+      EmptyState (Card + icon + title + desc — the placeholder), Switch (the
+      admin toggle, components/ui/Switch.tsx), and the public board/roadmap card
+      (from design/public-projects). The private-epic surfaces are a NEW
+      ARRANGEMENT of these primitives — no new vocabulary.
+
+      Covers (multi-panel — review EACH, mistake #31):
+        (1) the private epic's PUBLIC tree row — title + kind icon + "Not public"
+            badge, and crucially NO child count / NO progress / NO point total,
+            contrasted directly against a normal epic row that shows all three.
+        (2) the TREE-EXPAND placeholder — expanding the private epic replaces its
+            children with a single inline "This epic is not public" row at the
+            child indent.
+        (3) the DETAIL child-panel placeholder — the epic's work-item detail
+            "Child issues" panel shows the same statement instead of a child list.
+        (4) the project-admin "set epic private" control — a Switch + explanatory
+            copy, its ON and OFF states, and the read-only (non-admin) treatment.
+        (5) the MEMBER view (the contrast / control case) — the SAME private epic
+            as a project member: children present, real count / progress / points,
+            NO placeholder.
+        (6) states — the badge at list density (a dense tree), the badge at
+            board + roadmap card scale, and the admin control's loading /
+            disabled / error states.
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        /* Tier 0 — colour (light defaults) */
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Tier 0 — shape (default display style) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1080px;
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 70ch;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 40px auto 10px;
+        padding-left: 2px;
+        max-width: 1080px;
+      }
+      .panel-label .note {
+        text-transform: none;
+        letter-spacing: 0;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+      }
+      .panel {
+        max-width: 1080px;
+        margin: 0 auto;
+      }
+      .anno {
+        max-width: 1080px;
+        margin: 8px auto 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        line-height: 1.5;
+      }
+      .anno svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin-top: 2px;
+        color: var(--el-text-faint);
+      }
+
+      /* ── Card (components/ui/Card) ───────────────────────────────────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+      }
+
+      /* ── Pill (components/ui/Pill) — hue in the tint bg, --el-text-strong text (AA, finding #35) ── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill .pic {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .pill--inprogress {
+        background: var(--el-tint-sky);
+      }
+      .pill--done {
+        background: var(--el-tint-mint);
+      }
+      .pill--warning {
+        background: var(--el-tint-peach);
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      /* NEW tone `private` — lavender tint + --el-text-strong (same AA recipe as
+         the `planned`/`admin-role` tones). Carries a lock glyph. Added to the
+         shipped Pill as `tone="private"` (see design-notes › primitive growth). */
+      .pill--private {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      /* members-only variant of the private marker — neutral surface, muted, a
+         quieter affordance that says "you can see this because you're a member". */
+      .pill--members {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+
+      /* ── IssueTypeIcon — lucide glyph in the type hue ────────────────────── */
+      .type-icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .type-icon svg {
+        width: 16px;
+        height: 16px;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+
+      /* ── Work-item TREE-GRID row (design/work-items/tree-scale) ──────────── */
+      .tree {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .tree-head {
+        display: grid;
+        grid-template-columns: 1fr 116px 132px 96px 112px;
+        gap: 12px;
+        align-items: center;
+        padding: 8px 16px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .tree-head .end {
+        text-align: right;
+      }
+      .tt-row {
+        display: grid;
+        grid-template-columns: 1fr 116px 132px 96px 112px;
+        gap: 12px;
+        align-items: center;
+        padding: 0 16px;
+        min-height: 44px;
+        border-bottom: 1px solid var(--el-border);
+        position: relative;
+      }
+      .tt-row:last-child {
+        border-bottom: 0;
+      }
+      .tt-row.is-private {
+        background: color-mix(in srgb, var(--el-tint-lavender) 26%, transparent);
+      }
+      .cell-tree {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .chevron {
+        width: 20px;
+        height: 20px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        background: transparent;
+        border-radius: var(--radius-control);
+        color: var(--el-text-muted);
+        cursor: pointer;
+        padding: 0;
+      }
+      .chevron svg {
+        width: 16px;
+        height: 16px;
+        transition: transform 0.12s ease;
+      }
+      .chevron.is-open svg {
+        transform: rotate(90deg);
+      }
+      .chevron-slot {
+        width: 20px;
+        flex: none;
+      }
+      .lr-id {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-faint);
+        flex: none;
+      }
+      .ttl {
+        font-size: 14px;
+        color: var(--el-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .muted-cell {
+        color: var(--el-text-faint);
+        font-size: 13px;
+      }
+      .end {
+        justify-self: end;
+        text-align: right;
+      }
+
+      /* the aggregate TELLS that a private epic row OMITS for the public:
+         child-count chip + progress meter + point total */
+      .tells {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .count-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-variant-numeric: tabular-nums;
+        color: var(--el-text-secondary);
+      }
+      .count-chip svg {
+        width: 13px;
+        height: 13px;
+        color: var(--el-text-faint);
+      }
+      .meter {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .meter .track {
+        width: 72px;
+        height: 6px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        overflow: hidden;
+        flex: none;
+      }
+      .meter .fill {
+        height: 100%;
+        border-radius: var(--radius-badge);
+        background: var(--el-type-story);
+      }
+      .meter .pct {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+      .pts {
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        color: var(--el-text-secondary);
+      }
+      /* the explicit "stripped" marker that REPLACES the tells for the public.
+         --el-text-secondary (not -faint): "Contents hidden" / "Hidden" carry
+         meaning, so they must clear AA on the lavender-tinted private row and
+         the surface-soft slot (sidebar-caption-AA lesson). */
+      .stripped {
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        font-style: italic;
+      }
+
+      /* ── EmptyState (components/ui/EmptyState) — the placeholder ─────────── */
+      .ph-inline {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .ph-inline:last-child {
+        border-bottom: 0;
+      }
+      .ph-inline .ph-ic {
+        width: 20px;
+        height: 20px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .ph-inline .ph-ic svg {
+        width: 20px;
+        height: 20px;
+      }
+      .ph-inline .ph-txt {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        min-width: 0;
+      }
+      .ph-inline .ph-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .ph-inline .ph-sub {
+        font-size: 12px;
+        /* -secondary not -muted: the inline placeholder sits on --el-surface-soft,
+           where -muted falls to ~4.35:1 (sub-AA); -secondary clears it. */
+        color: var(--el-text-secondary);
+      }
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 32px 24px;
+      }
+      .empty .ic-wrap {
+        width: 44px;
+        height: 44px;
+        margin-bottom: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-muted);
+      }
+      .empty .ic-wrap svg {
+        width: 40px;
+        height: 40px;
+      }
+      .empty h3 {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        font-weight: 400;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 8px 0 0;
+        max-width: 46ch;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Detail-page framing (panel 3) ───────────────────────────────────── */
+      .detail {
+        display: grid;
+        grid-template-columns: 1fr 280px;
+        gap: 20px;
+      }
+      .detail-main {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .detail-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .detail-head .lr-id {
+        font-size: 13px;
+      }
+      .detail-head h2 {
+        font-family: var(--font-serif);
+        font-weight: 400;
+        font-size: 22px;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .section-label {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        margin: 0 0 2px;
+      }
+      .panel-box {
+        padding: var(--spacing-card-padding);
+      }
+      .side-card {
+        padding: 16px;
+      }
+      .side-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 13px;
+        padding: 7px 0;
+      }
+      .side-row + .side-row {
+        border-top: 1px solid var(--el-border);
+      }
+      .side-row .k {
+        color: var(--el-text-muted);
+      }
+      .side-row .v {
+        color: var(--el-text);
+        font-weight: 500;
+      }
+
+      /* ── Switch (components/ui/Switch) — h-5 w-9 rounded-full ────────────── */
+      .vis-card {
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .vis-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 20px;
+      }
+      .vis-text .vis-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .vis-text .vis-desc {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        margin-top: 4px;
+        line-height: 1.5;
+        max-width: 52ch;
+      }
+      .switch {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        height: 20px;
+        width: 36px;
+        flex: none;
+        border-radius: 9999px;
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-muted);
+        cursor: pointer;
+        padding: 0;
+        transition: background 0.12s ease;
+      }
+      .switch .knob {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 9999px;
+        background: var(--el-surface);
+        box-shadow: var(--shadow-subtle);
+        transform: translateX(2px);
+        transition: transform 0.12s ease;
+      }
+      .switch.on {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+      }
+      .switch.on .knob {
+        transform: translateX(18px);
+        background: var(--el-accent-text);
+      }
+      .switch.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .switch .spin {
+        position: absolute;
+        left: 3px;
+        width: 12px;
+        height: 12px;
+        border-radius: 9999px;
+        border: 2px solid color-mix(in srgb, var(--el-text-faint) 40%, transparent);
+        border-top-color: var(--el-text-secondary);
+      }
+      .helper {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .helper.err {
+        color: var(--el-danger);
+      }
+      .helper svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .state-tag {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        margin-bottom: 8px;
+      }
+
+      /* ── Board + roadmap cards (panel 6 · design/public-projects) ────────── */
+      .grid3 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 16px;
+        align-items: start;
+      }
+      .mini-h {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        margin: 0 0 8px;
+      }
+      .bc {
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .bc-top {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .bc-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+        line-height: 1.35;
+      }
+      .bc-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .rm-up {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: 2px 8px;
+      }
+      .rm-up svg {
+        width: 13px;
+        height: 13px;
+      }
+      .two-up {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        align-items: start;
+      }
+      .lbl-on,
+      .lbl-off {
+        font-size: 12px;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+      .lbl-on {
+        color: var(--el-accent);
+      }
+      .lbl-off {
+        color: var(--el-text-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Epic-level privacy on public projects</h1>
+        <p>
+          Story 6.14 · subtask 6.14.1 — on a <b>public</b> project, an admin marks an EPIC private:
+          its row stays visible as a placeholder, but its children + aggregate tells are hidden from
+          non-members (server-side). Members see everything.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke, used by <use>) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <!-- epic = zap -->
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <!-- story = book-open -->
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <!-- task = square-check-big -->
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <!-- subtask = list-checks -->
+        <g
+          id="i-subtask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <!-- chevron-right (rotates on expand) -->
+        <g
+          id="i-chevron-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </g>
+        <!-- lock (the "Not public" badge glyph) -->
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <!-- eye-off (the placeholder glyph — hidden from you) -->
+        <g
+          id="i-eye-off"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"
+          />
+          <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" />
+          <path
+            d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"
+          />
+          <path d="m2 2 20 20" />
+        </g>
+        <!-- shield (admin visibility section) -->
+        <g
+          id="i-shield"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+        </g>
+        <!-- alert-triangle (error state) -->
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <!-- info -->
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+        <!-- chevron-up (roadmap upvote) -->
+        <g
+          id="i-chevron-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m18 15-6-6-6 6" />
+        </g>
+        <!-- arrow-up (priority highest) -->
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <!-- minus (priority medium) -->
+        <g
+          id="i-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         PANEL 1 — the private epic's PUBLIC tree row (no tells)
+         ════════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 1 — Public viewer · the private-epic ROW
+      <span class="note"
+        >· title + “Not public” badge, NO child count / progress / points — contrasted with a normal
+        epic row that shows all three</span
+      >
+    </div>
+    <div class="panel">
+      <div class="tree" role="treegrid" aria-label="Public project work items">
+        <div class="tree-head">
+          <span>Work item</span>
+          <span>Children</span>
+          <span>Progress</span>
+          <span class="end">Points</span>
+          <span class="end">Status</span>
+        </div>
+
+        <!-- normal epic — public viewer DOES see count/progress/points -->
+        <div class="tt-row" role="row" aria-level="1" aria-expanded="false">
+          <span class="cell-tree">
+            <button class="chevron" aria-label="Expand row">
+              <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+            </button>
+            <span class="type-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+            ></span>
+            <span class="lr-id">PROD-12</span>
+            <span class="ttl">Q3 launch — Auth &amp; sign-in</span>
+          </span>
+          <span class="count-chip"
+            ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg>12 items</span
+          >
+          <span class="meter"
+            ><span class="track"><span class="fill" style="width: 58%"></span></span
+            ><span class="pct">58%</span></span
+          >
+          <span class="pts end">34 pts</span>
+          <span class="end"><span class="pill pill--inprogress">In progress</span></span>
+        </div>
+
+        <!-- PRIVATE epic — public viewer sees the row + badge, but NO tells -->
+        <div class="tt-row is-private" role="row" aria-level="1" aria-expanded="false">
+          <span class="cell-tree">
+            <button class="chevron" aria-label="Expand row">
+              <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+            </button>
+            <span class="type-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+            ></span>
+            <span class="lr-id">PROD-48</span>
+            <span class="ttl">Billing &amp; subscriptions</span>
+            <span class="pill pill--private"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-lock" /></svg>Not public</span
+            >
+          </span>
+          <span class="stripped" style="grid-column: span 3">Contents hidden</span>
+          <span class="end"><span class="pill pill--inprogress">In progress</span></span>
+        </div>
+
+        <!-- another normal epic for context -->
+        <div class="tt-row" role="row" aria-level="1" aria-expanded="false">
+          <span class="cell-tree">
+            <button class="chevron" aria-label="Expand row">
+              <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+            </button>
+            <span class="type-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+            ></span>
+            <span class="lr-id">PROD-61</span>
+            <span class="ttl">Reporting &amp; dashboards</span>
+          </span>
+          <span class="count-chip"
+            ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg>7 items</span
+          >
+          <span class="meter"
+            ><span class="track"><span class="fill" style="width: 22%"></span></span
+            ><span class="pct">22%</span></span
+          >
+          <span class="pts end">18 pts</span>
+          <span class="end"><span class="pill pill--inprogress">In progress</span></span>
+        </div>
+      </div>
+    </div>
+    <div class="anno">
+      <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+      <span
+        >The child count, progress meter, and point total are <b>stripped server-side</b> in the
+        6.12.4 public projection — they are absent from the response payload, not merely hidden in
+        the DOM. The epic row itself is never a 404; it stays as a deliberate “there is an epic
+        here, its details are private” placeholder.</span
+      >
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         PANEL 2 — the TREE-EXPAND placeholder
+         ════════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 2 — Public viewer · TREE-EXPAND placeholder
+      <span class="note"
+        >· expanding the private epic replaces its children with one inline row</span
+      >
+    </div>
+    <div class="panel">
+      <div class="tree" role="treegrid" aria-label="Public project work items">
+        <div class="tree-head">
+          <span>Work item</span>
+          <span>Children</span>
+          <span>Progress</span>
+          <span class="end">Points</span>
+          <span class="end">Status</span>
+        </div>
+
+        <!-- the private epic, now EXPANDED (chevron open) -->
+        <div class="tt-row is-private" role="row" aria-level="1" aria-expanded="true">
+          <span class="cell-tree">
+            <button class="chevron is-open" aria-label="Collapse row">
+              <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+            </button>
+            <span class="type-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+            ></span>
+            <span class="lr-id">PROD-48</span>
+            <span class="ttl">Billing &amp; subscriptions</span>
+            <span class="pill pill--private"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-lock" /></svg>Not public</span
+            >
+          </span>
+          <span class="stripped" style="grid-column: span 3">Contents hidden</span>
+          <span class="end"><span class="pill pill--inprogress">In progress</span></span>
+        </div>
+
+        <!-- the placeholder, inline at the CHILD indent (22px) -->
+        <div class="ph-inline" style="padding-left: 50px">
+          <span class="ph-ic"
+            ><svg viewBox="0 0 24 24"><use href="#i-eye-off" /></svg
+          ></span>
+          <span class="ph-txt">
+            <span class="ph-title">This epic is not public</span>
+            <span class="ph-sub">The project admin has kept this epic’s contents private.</span>
+          </span>
+        </div>
+      </div>
+    </div>
+    <div class="anno">
+      <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+      <span
+        >The placeholder sits at the children’s indent so it reads as “this is where the children
+        would be”. No child rows are fetched or sent — expanding makes no child request for a
+        non-member.</span
+      >
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         PANEL 3 — the DETAIL child-panel placeholder
+         ════════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 3 — Public viewer · the epic DETAIL page child-panel
+      <span class="note">· the “Child issues” panel shows the statement instead of a list</span>
+    </div>
+    <div class="panel">
+      <div class="detail">
+        <div class="detail-main">
+          <div class="detail-head">
+            <span class="type-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+            ></span>
+            <span class="lr-id">PROD-48</span>
+            <h2>Billing &amp; subscriptions</h2>
+            <span class="pill pill--private"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-lock" /></svg>Not public</span
+            >
+          </div>
+          <div class="card panel-box">
+            <p class="section-label">Child issues</p>
+            <div class="empty">
+              <span class="ic-wrap"
+                ><svg viewBox="0 0 24 24"><use href="#i-eye-off" /></svg
+              ></span>
+              <h3>This epic is not public</h3>
+              <p>The project admin has kept this epic’s contents private.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card side-card">
+          <div class="side-row">
+            <span class="k">Status</span><span class="v">In progress</span>
+          </div>
+          <div class="side-row"><span class="k">Type</span><span class="v">Epic</span></div>
+          <div class="side-row">
+            <span class="k">Children</span><span class="v stripped">Hidden</span>
+          </div>
+          <div class="side-row">
+            <span class="k">Progress</span><span class="v stripped">Hidden</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="anno">
+      <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+      <span
+        >Same copy as the tree-expand placeholder (panel 2), drawn in the detail-page child-panel
+        slot. The detail sidebar’s Children / Progress rollups read “Hidden” — stripped from the
+        public projection, same as the tree row.</span
+      >
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         PANEL 4 — the project-admin "set epic private" control
+         ════════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 4 — Project admin · the “set epic private” control
+      <span class="note">· ON / OFF + the read-only (non-admin) treatment</span>
+    </div>
+    <div class="panel two-up">
+      <div>
+        <div class="lbl-off">OFF — public epic (default)</div>
+        <div class="card vis-card">
+          <div class="vis-row">
+            <div class="vis-text">
+              <div class="vis-title">
+                <span class="type-icon t-epic" style="color: var(--el-text-muted)"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                Make this epic private
+              </div>
+              <div class="vis-desc">
+                Private epics stay visible as a row to the public, but their stories, tasks, and
+                progress are hidden from non-members. Members still see everything.
+              </div>
+            </div>
+            <button
+              class="switch"
+              role="switch"
+              aria-checked="false"
+              aria-label="Make this epic private"
+            >
+              <span class="knob"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="lbl-on">ON — private epic</div>
+        <div class="card vis-card">
+          <div class="vis-row">
+            <div class="vis-text">
+              <div class="vis-title">
+                <span class="type-icon t-epic" style="color: var(--el-accent)"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                Make this epic private
+              </div>
+              <div class="vis-desc">
+                Private epics stay visible as a row to the public, but their stories, tasks, and
+                progress are hidden from non-members. Members still see everything.
+              </div>
+            </div>
+            <button
+              class="switch on"
+              role="switch"
+              aria-checked="true"
+              aria-label="Make this epic private"
+            >
+              <span class="knob"></span>
+            </button>
+          </div>
+          <div class="helper">
+            <svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>
+            Non-members now see only this epic’s row — its contents are hidden.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="anno">
+      <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+      <span
+        >The toggle is the shipped <code>Switch</code> primitive (role="switch"). It is shown in the
+        epic’s settings / actions area and is <b>project-admin-gated</b> — a non-admin member sees
+        it read-only (panel 6c), never hidden, so the state is legible to everyone with
+        access.</span
+      >
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         PANEL 5 — the MEMBER view (contrast / control case)
+         ════════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 5 — Project MEMBER · the same private epic
+      <span class="note">· children present, real count / progress / points, NO placeholder</span>
+    </div>
+    <div class="panel">
+      <div class="tree" role="treegrid" aria-label="Project work items (member)">
+        <div class="tree-head">
+          <span>Work item</span>
+          <span>Children</span>
+          <span>Progress</span>
+          <span class="end">Points</span>
+          <span class="end">Status</span>
+        </div>
+
+        <!-- the SAME private epic, expanded — member sees tells + children -->
+        <div class="tt-row" role="row" aria-level="1" aria-expanded="true">
+          <span class="cell-tree">
+            <button class="chevron is-open" aria-label="Collapse row">
+              <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+            </button>
+            <span class="type-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+            ></span>
+            <span class="lr-id">PROD-48</span>
+            <span class="ttl">Billing &amp; subscriptions</span>
+            <span class="pill pill--members"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-lock" /></svg>Members only</span
+            >
+          </span>
+          <span class="count-chip"
+            ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg>9 items</span
+          >
+          <span class="meter"
+            ><span class="track"><span class="fill" style="width: 44%"></span></span
+            ><span class="pct">44%</span></span
+          >
+          <span class="pts end">26 pts</span>
+          <span class="end"><span class="pill pill--inprogress">In progress</span></span>
+        </div>
+
+        <!-- the real children — member sees them normally -->
+        <div class="tt-row" role="row" aria-level="2">
+          <span class="cell-tree" style="padding-left: 22px">
+            <span class="chevron-slot"></span>
+            <span class="type-icon t-story"
+              ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+            ></span>
+            <span class="lr-id">PROD-49</span>
+            <span class="ttl">Stripe checkout integration</span>
+          </span>
+          <span class="muted-cell">—</span>
+          <span class="meter"
+            ><span class="track"><span class="fill" style="width: 80%"></span></span
+            ><span class="pct">80%</span></span
+          >
+          <span class="pts end">13 pts</span>
+          <span class="end"><span class="pill pill--inprogress">In progress</span></span>
+        </div>
+        <div class="tt-row" role="row" aria-level="2">
+          <span class="cell-tree" style="padding-left: 22px">
+            <span class="chevron-slot"></span>
+            <span class="type-icon t-story"
+              ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+            ></span>
+            <span class="lr-id">PROD-54</span>
+            <span class="ttl">Plan upgrade / downgrade flow</span>
+          </span>
+          <span class="muted-cell">—</span>
+          <span class="meter"
+            ><span class="track"><span class="fill" style="width: 10%"></span></span
+            ><span class="pct">10%</span></span
+          >
+          <span class="pts end">8 pts</span>
+          <span class="end"><span class="pill pill--done">Done</span></span>
+        </div>
+      </div>
+    </div>
+    <div class="anno">
+      <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+      <span
+        >Members bypass the exclusion entirely — the children load with the real rollups and there
+        is no placeholder. The quiet <b>“Members only”</b> chip (neutral tone, distinct from the
+        public “Not public” lavender badge) signals the epic IS private to the public while making
+        clear the member can see it — mirroring Jira showing a security-level marker to those
+        cleared for it.</span
+      >
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         PANEL 6 — states (density · card scale · admin control states)
+         ════════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 6 — States
+      <span class="note"
+        >· badge at list density · badge at board + roadmap scale · admin control states</span
+      >
+    </div>
+    <div class="panel">
+      <p class="mini-h">6a · the badge in a dense tree (many epic siblings)</p>
+      <div class="tree" role="treegrid" aria-label="Dense tree">
+        <div class="tt-row" role="row" aria-level="1">
+          <span class="cell-tree">
+            <span class="chevron-slot"></span>
+            <span class="type-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+            ></span>
+            <span class="lr-id">PROD-12</span
+            ><span class="ttl">Q3 launch — Auth &amp; sign-in</span>
+          </span>
+          <span class="count-chip"
+            ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg>12</span
+          >
+          <span class="meter"
+            ><span class="track"><span class="fill" style="width: 58%"></span></span
+            ><span class="pct">58%</span></span
+          >
+          <span class="pts end">34</span
+          ><span class="end"><span class="pill pill--inprogress">In progress</span></span>
+        </div>
+        <div class="tt-row is-private" role="row" aria-level="1">
+          <span class="cell-tree">
+            <span class="chevron-slot"></span>
+            <span class="type-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+            ></span>
+            <span class="lr-id">PROD-48</span><span class="ttl">Billing &amp; subscriptions</span>
+            <span class="pill pill--private"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-lock" /></svg>Not public</span
+            >
+          </span>
+          <span class="stripped" style="grid-column: span 3">Contents hidden</span>
+          <span class="end"><span class="pill pill--inprogress">In progress</span></span>
+        </div>
+        <div class="tt-row" role="row" aria-level="1">
+          <span class="cell-tree">
+            <span class="chevron-slot"></span>
+            <span class="type-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+            ></span>
+            <span class="lr-id">PROD-61</span><span class="ttl">Reporting &amp; dashboards</span>
+          </span>
+          <span class="count-chip"
+            ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg>7</span
+          >
+          <span class="meter"
+            ><span class="track"><span class="fill" style="width: 22%"></span></span
+            ><span class="pct">22%</span></span
+          >
+          <span class="pts end">18</span
+          ><span class="end"><span class="pill pill--inprogress">In progress</span></span>
+        </div>
+        <div class="tt-row" role="row" aria-level="1">
+          <span class="cell-tree">
+            <span class="chevron-slot"></span>
+            <span class="type-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+            ></span>
+            <span class="lr-id">PROD-73</span><span class="ttl">Mobile app — read-only</span>
+          </span>
+          <span class="count-chip"
+            ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg>5</span
+          >
+          <span class="meter"
+            ><span class="track"><span class="fill" style="width: 0%"></span></span
+            ><span class="pct">0%</span></span
+          >
+          <span class="pts end">9</span
+          ><span class="end"><span class="pill pill--neutral">To do</span></span>
+        </div>
+      </div>
+
+      <p class="mini-h" style="margin-top: 24px">6b · the badge at board + roadmap card scale</p>
+      <div class="grid3">
+        <div class="card bc">
+          <div class="bc-top">
+            <span class="type-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+            ></span>
+            <span class="lr-id">PROD-48</span>
+          </div>
+          <div class="bc-title">Billing &amp; subscriptions</div>
+          <div class="bc-meta">
+            <span class="pill pill--private"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-lock" /></svg>Not public</span
+            >
+          </div>
+        </div>
+        <div class="card bc">
+          <div class="bc-top">
+            <span class="type-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+            ></span>
+            <span class="lr-id">PROD-48</span>
+          </div>
+          <div class="bc-title">Billing &amp; subscriptions</div>
+          <div class="bc-meta">
+            <span class="rm-up"
+              ><svg viewBox="0 0 24 24"><use href="#i-chevron-up" /></svg>—</span
+            >
+            <span class="pill pill--private"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-lock" /></svg>Not public</span
+            >
+          </div>
+        </div>
+        <div class="card bc">
+          <div class="bc-top">
+            <span class="type-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+            ></span>
+            <span class="lr-id">PROD-12</span>
+          </div>
+          <div class="bc-title">Q3 launch — Auth &amp; sign-in</div>
+          <div class="bc-meta">
+            <span class="count-chip"
+              ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg>12 items</span
+            >
+            <span>·</span><span>58%</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="mini-h" style="margin-top: 24px">
+        6c · the admin control — loading · disabled (non-admin) · error
+      </p>
+      <div class="grid3">
+        <div class="card vis-card">
+          <div class="state-tag">Loading</div>
+          <div class="vis-row">
+            <div class="vis-text">
+              <div class="vis-title">Make this epic private</div>
+              <div class="vis-desc">Saving…</div>
+            </div>
+            <button
+              class="switch on disabled"
+              role="switch"
+              aria-checked="true"
+              aria-busy="true"
+              aria-label="Make this epic private"
+            >
+              <span class="spin"></span>
+            </button>
+          </div>
+        </div>
+        <div class="card vis-card">
+          <div class="state-tag">Disabled · non-admin</div>
+          <div class="vis-row">
+            <div class="vis-text">
+              <div class="vis-title">Make this epic private</div>
+              <div class="vis-desc">Only project admins can change epic visibility.</div>
+            </div>
+            <button
+              class="switch disabled"
+              role="switch"
+              aria-checked="false"
+              aria-disabled="true"
+              aria-label="Make this epic private"
+            >
+              <span class="knob"></span>
+            </button>
+          </div>
+        </div>
+        <div class="card vis-card">
+          <div class="state-tag">Error</div>
+          <div class="vis-row">
+            <div class="vis-text">
+              <div class="vis-title">Make this epic private</div>
+              <div class="vis-desc">The change didn’t save.</div>
+            </div>
+            <button
+              class="switch"
+              role="switch"
+              aria-checked="false"
+              aria-label="Make this epic private"
+            >
+              <span class="knob"></span>
+            </button>
+          </div>
+          <div class="helper err">
+            <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+            Couldn’t update visibility. Try again.
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
