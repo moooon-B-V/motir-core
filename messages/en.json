@@ -1415,7 +1415,7 @@
           },
           "transitioned": {
             "label": "An item you're watching changes status",
-            "desc": "Available once issue-watching ships (Story 5.4)."
+            "desc": "Someone changes the status of an item you watch (including moves to done or back open)."
           }
         },
         "soon": "Soon",

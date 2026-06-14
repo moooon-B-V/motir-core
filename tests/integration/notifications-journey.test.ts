@@ -639,11 +639,10 @@ describe('a real `work-item/transitioned` event fans into the Watching feed (5.7
     await watchersService.watch(j.issueId, j.boCtx);
     const odie = await watchingMember(j, 'odie@example.com');
 
-    // Bo turns transitioned·in_app OFF. The matrix toggle is not settable
-    // through the service until 5.7.12, so write the row directly — the resolver
-    // honours any stored row regardless of the settable flag, proving the
-    // descriptor's `transitioned` type flows through the SAME gate (no extra
-    // wiring in the descriptor).
+    // Bo turns transitioned·in_app OFF. (Settable via the service since 5.7.12;
+    // seeded directly here as a test shortcut.) The resolver honours the stored
+    // row, proving the descriptor's `transitioned` type flows through the SAME
+    // gate (no extra wiring in the descriptor).
     await db.$transaction((tx) =>
       notificationPreferenceRepository.upsert(
         { userId: j.bo.id, eventType: 'transitioned', channel: 'in_app', enabled: false },

@@ -317,9 +317,9 @@ describe('watcherNotificationsService.fanOut — transition events', () => {
 // The `transitioned · email` channel gate (Story 5.7 · Subtask 5.7.11). The
 // watcher transition email is the `email` channel of the `transitioned` event
 // type; a watcher who turned it OFF must be dropped at the SEND decision. The
-// `transitioned` row is not settable through the service yet (the matrix flip
-// is 5.7.12), so the preference row is seeded directly via the repository — the
-// gate (`filterChannelEnabled`) reads the stored value regardless of `settable`.
+// `transitioned` row is settable via the service since 5.7.12; the preference
+// row is seeded directly via the repository here as a test shortcut — the gate
+// (`filterChannelEnabled`) reads the stored value regardless of `settable`.
 async function setTransitionedEmailPref(userId: string, enabled: boolean) {
   await db.$transaction((tx) =>
     notificationPreferenceRepository.upsert(
