@@ -4,85 +4,88 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>
-      Design mock · The project square — system-level public-project directory (Story 6.13 · 6.13.1)
+      Design mock · The project square — public, SEO/GEO-optimised project directory (Story 6.13 ·
+      6.13.1)
     </title>
     <!--
       DESIGN ASSET (HTML mockup) for THE PROJECT SQUARE (Story 6.13 · 6.13.1) — a
-      SYSTEM-level directory of every project made PUBLIC in 6.12. A top-level
-      gallery / explore page any signed-in Motir account can browse: project CARDS
-      (name, ORG, description, viewer / upvote / activity stats), a SEARCH bar,
-      CATEGORY / TAG filters, and SORT / RANK tabs (Trending / Popular / New),
-      paginated at scale — then click any card through to that project's 6.12.4
-      public read-only view. It is the cross-org DISCOVERY half 6.12 was missing:
-      6.12 made each project openable but reachable only by share-link; 6.13 is the
-      place all public projects surface together so an account can FIND them.
+      FULLY PUBLIC, SEO + GEO-optimised web page (motir.co/explore) that lists
+      every project made public in 6.12. A crawlable gallery any visitor can
+      browse with NO sign-in: project CARDS (name, owning ORG, description,
+      viewer / upvote / activity stats), a SEARCH bar, CATEGORY / TAG filters, and
+      SORT / RANK tabs (Trending / Popular / New), paginated at scale — then click
+      any card through to that project's public read-only view.
+
+      ⚠️ MODEL REVISION (Yue, 2026-06-14 — supersedes the first 6.13.1 pass):
+        - FULLY PUBLIC / NO AUTH. The page is open to anyone, logged-out included —
+          NOT account-required. (This reverses the earlier "account-required, not
+          anonymous" framing; anonymous access is now IN scope for this page.)
+        - NOT IN THE LEFT NAV. The square is NOT an app-shell route and has NO
+          left-nav / sidebar entry. It is a standalone public web page reached
+          from the Motir MARKETING SITE (a top-bar "Explore" link, a footer link,
+          etc. — wired later). So the mock draws the marketing-site chrome (top bar
+          + footer), not the app sidebar.
+        - NO "PUBLIC" PILL. Every project on this page is public by definition, so
+          the per-card "Public" badge is redundant and removed. The card top shows
+          only the owning ORG.
+        - SEO + GEO OPTIMISED. The page is server-rendered and crawlable: a real
+          <h1> hero + descriptive lede, semantic heading hierarchy, JSON-LD
+          structured data (CollectionPage › ItemList › SoftwareApplication +
+          BreadcrumbList), head meta / OpenGraph / Twitter / canonical, an
+          XML-sitemap'd set of real URLs (each rank / search / topic / page is its
+          own indexable URL), topic LANDING pages (/explore/topic/<slug>), and a
+          GEO (generative-engine) framing — a concise citable lead + FAQ so answer
+          engines (GPTBot, etc.) can attribute the page. The cards are real
+          <a href> links (crawlable without JS).
+
+      WHAT STAYS from the locked 6.13 model: PUBLIC-ONLY (the directory lists ONLY
+      access_level = 'public' projects; a private/open/limited project NEVER
+      appears, the 6.12.3 404-not-403 posture untouched); the card surfaces ONLY
+      the projection (name / org / description / the three 6.12.6 stats), never an
+      internal field; the THREE deterministic + cursor-paginated ranks (Trending =
+      recent upvotes+activity in a window; Popular = lifetime upvotes+viewers; New =
+      madePublicAt) — never load-all (finding #57); each card links to that
+      project's public read-only view (6.12.4).
 
       This is the design gate for Story 6.13: the single UI code subtask 6.13.6
       carries 6.13.1 in dependsOn and is `blocked` until this asset lands. It is
       the layout source of truth for that build.
-
-      THE LOAD-BEARING INVARIANTS this asset draws and design-notes.md states in
-      writing (the discovery index is a THIN layer over 6.12, adding NO new access
-      semantics):
-        - PUBLIC-ONLY. The square lists ONLY projects whose access level is
-          already `public` (the single cross-org READ exception 6.12.3 fixed). A
-          private / open / limited project NEVER appears, for any viewer, ever —
-          the directory read is filtered on access_level = 'public' at the
-          repository layer; the 6.12.3 404-not-403 posture is untouched.
-        - ORG ON EACH CARD. This is a SYSTEM surface that crosses orgs, so every
-          card shows the owning ORG (the cross-org context), never an internal
-          project field — only the card projection (name / org / description / the
-          three 6.12.6 stats).
-        - LINKS TO THE 6.12.4 PUBLIC VIEW. Every whole-card click lands on that
-          project's 6.12.4 public read-only view, which still enforces the public
-          projection (internal fields absent) + the account-required (NOT
-          anonymous) gate. The square is a discovery index, not a second view path.
-
-      THE RANK MODEL (the GitHub-Trending / GitLab-Explore-tabs set), deterministic
-      + cursor-paginated (finding #57 — a system list could be thousands, never
-      load-all): Trending = recent upvotes + activity in a recency window (a
-      freshly-surging project rises); Popular = total upvotes + viewers (lifetime);
-      New = newly made public (madePublicAt). Each is a stable total order
-      (tiebreak on project id) computed at the read layer over the 6.12.6 signals.
 
       Built FROM the real design system: the token block below is copied 1:1 from
       app/globals.css (Tier-0 --color-* + the [data-display-style] shape tokens +
       Tier-3 --el-*), and the project-square classes (after it) reference ONLY the
       --el-* colour tokens + the shape tokens — NO Tier-0 --color-*, NO hand-rolled
       rounded-*/p-*/h-* on any surface. The markup mirrors the SHIPPED primitives:
-      Card, Button (primary / outline / ghost), Pill (neutral + the tint tones +
-      pill-public), Segmented (the rank tabs + the trending-window selector), Input
-      (the search), the initial-letter Avatar, EmptyState / ErrorState, the
-      Spinner/skeleton, the Sidebar (the shell entry). The three demand-signal
-      stats use distinct palette hues (viewers --el-info, upvotes --el-accent,
-      activity --el-success) — not grey-only (finding #54). AA-safe; read as text +
-      glyph, not colour alone (finding #35). Toggle dark mode to confirm token
-      parity.
+      Card, Button (primary / outline / ghost), Pill (the tint tones), Segmented
+      (the rank tabs + the trending-window selector), Input (the search), the
+      EmptyState / ErrorState, the Spinner/skeleton. The three demand-signal stats
+      use distinct palette hues (viewers --el-info, upvotes --el-accent, activity
+      --el-success) — not grey-only (finding #54). AA-safe; read as text + glyph,
+      not colour alone (finding #35). Toggle dark mode to confirm token parity.
 
-      Verified mirror (rung 1, cited 2026-06-12 — see story-6.13.ts header): GitHub
-      Trending + Explore (the card row + Topics/Collections browse), GitLab Explore
-      Projects (the Trending / Most-starred / All TABS + sort + Topic filter + name
-      search), OpenProject / Plane public project lists. Adopted shape: project
-      cards + search + category/tag filters + sort/rank tabs, paginated at scale.
+      Verified mirror (rung 1, cited 2026-06-12): GitHub Trending + Explore (the
+      card row + Topics/Collections browse), GitLab Explore Projects (the
+      Trending / Most-starred / All TABS + sort + Topic filter + name search). For
+      the public-directory + SEO posture: npm / PyPI / Product Hunt / Awesome-lists
+      — public, server-rendered, crawlable directories with per-item + per-topic
+      landing pages.
 
       Covers (multi-panel — review EACH, mistake #31):
-        (1)  the GALLERY / explore page — the system-level grid of project cards
-             (name / ORG / description / the three 6.12.6 stats), the whole-card
-             click to the 6.12.4 view, paginated (the cursor "Load more", NOT
-             load-all). One card shows the hover/focus state.
-        (2)  the SORT / RANK tabs — Trending / Popular / New (the default tab +
-             one-line copy each), the Trending recency-window selector
-             (Today / This week / This month).
-        (3)  the SEARCH bar + the CATEGORY / TAG filters — the search input, the
-             tag facet row + the active-filter state (selected chip + clear), how
-             search + tag + the rank tab COMPOSE under one cursored read, and the
-             categories-by-count browse view.
-        (4)  the SHELL ENTRY — a top-level system "Project square / Explore" entry
-             in the nav rail (distinct from the workspace-scoped project nav), with
-             the "exploring public projects across Motir" framing banner.
+        (1)  the PUBLIC WEB PAGE — the marketing-site top bar, the SEO hero (H1 +
+             descriptive lede + search + no-signup trust line), the card gallery
+             (real <a href> links, NO "Public" pill), the cursor "Load more", and
+             the SEO footer (topic landing links). NO app shell / NO left nav.
+        (2)  the SORT / RANK tabs — Trending (default) / Popular / New + the
+             Trending recency window; each rank a real crawlable URL.
+        (3)  the SEARCH bar + CATEGORY / TAG filters — search + tag + rank COMPOSE
+             as URL params; the categories-by-count browse, each topic a crawlable
+             /explore/topic/<slug> landing page.
+        (4)  SEO + GEO SCAFFOLDING — head meta / OpenGraph / canonical, the JSON-LD
+             structured data, the semantic HTML outline, and the GEO answer-engine
+             framing (citable lead + FAQ). (Replaces the old shell-entry panel.)
         (5)  STATES — the empty square, the paginated loading skeleton, the
              fetch-error (ErrorState), and the no-search-results / no-projects-in-
-             category state (each with its recovery copy).
+             topic state (each with its recovery copy).
       See design-notes.md for the full spec.
     -->
     <style>
@@ -2410,31 +2413,34 @@
         color: var(--el-text-muted);
       }
 
-      /* ── the navigation shell (panel 4) ── */
-      .appshell {
-        display: grid;
-        grid-template-columns: 232px 1fr;
+      /* ── the public web page (NO app shell — a standalone, fully-public,
+         crawlable page linked from the Motir marketing site) ── */
+      .webpage {
         border: 1px solid var(--el-border);
         border-radius: var(--radius-card);
         overflow: hidden;
         box-shadow: var(--shadow-card);
-        min-height: 540px;
+        background: var(--el-page-bg);
       }
-      .side {
-        background: var(--el-sidebar-bg, var(--el-surface));
-        border-right: 1px solid var(--el-border);
-        padding: 14px 12px;
+
+      /* the marketing-site top bar (the page lives at motir.co/explore) */
+      .site-top {
         display: flex;
-        flex-direction: column;
-        gap: 4px;
+        align-items: center;
+        gap: 18px;
+        padding: 14px 24px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
       }
-      .side-brand {
+      .site-brand {
         display: flex;
         align-items: center;
         gap: 9px;
-        padding: 4px 8px 14px;
+        font-weight: 700;
+        color: var(--el-text);
+        font-size: 15px;
       }
-      .side-logo {
+      .site-logo {
         width: 28px;
         height: 28px;
         border-radius: var(--radius-control);
@@ -2447,87 +2453,254 @@
         font-weight: 700;
         font-size: 16px;
       }
-      .side-brand b {
-        font-size: 15px;
-        color: var(--el-text);
-        font-weight: 700;
-      }
-      .side-lbl {
-        font-size: 10.5px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--el-text-secondary);
-        padding: 12px 8px 4px;
-      }
-      .side-item {
+      .site-nav {
         display: flex;
         align-items: center;
-        gap: 10px;
-        padding: var(--spacing-control-y) var(--spacing-control-x);
-        border-radius: var(--radius-control);
+        gap: 4px;
+        margin-left: 8px;
+      }
+      .site-nav a {
         font-size: 13.5px;
         font-weight: 500;
         color: var(--el-text-secondary);
         text-decoration: none;
-        cursor: pointer;
+        padding: 6px 10px;
+        border-radius: var(--radius-control);
       }
-      .side-item .ic {
-        width: 17px;
-        height: 17px;
+      .site-nav a.on {
+        color: var(--el-text);
+        font-weight: 600;
+        background: var(--el-surface);
+      }
+      .site-actions {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      /* the SEO hero — the H1, the descriptive (human + crawler) intro, the
+         search, and the no-signup trust line */
+      .sq-hero {
+        text-align: center;
+        padding: 52px 24px 40px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background:
+          radial-gradient(60% 120% at 50% -10%, var(--el-tint-lavender) 0%, transparent 60%),
+          var(--el-page-bg);
+      }
+      .sq-hero .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-accent);
+        margin-bottom: 14px;
+      }
+      .sq-hero .eyebrow .ic {
+        width: 15px;
+        height: 15px;
+      }
+      .sq-hero h1 {
+        font-family: var(--font-serif);
+        font-size: 38px;
+        line-height: 1.12;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0 auto;
+        max-width: 18ch;
+        letter-spacing: -0.02em;
+      }
+      .sq-hero .lede {
+        margin: 16px auto 0;
+        font-size: 16px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 62ch;
+      }
+      .hero-search {
+        margin: 26px auto 0;
+        max-width: 560px;
+      }
+      .hero-search input {
+        height: 48px;
+        font-size: 15px;
+      }
+      .sq-trust {
+        margin: 18px 0 0;
+        display: flex;
+        gap: 8px 18px;
+        justify-content: center;
+        flex-wrap: wrap;
+        font-size: 13px;
         color: var(--el-text-muted);
       }
-      .side-item:hover {
-        background: var(--el-page-bg);
+      .sq-trust span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
       }
-      .side-item.on {
-        background: var(--el-accent-soft, var(--el-tint-lavender));
-        color: var(--el-text-strong);
-        font-weight: 600;
+      .sq-trust .ic {
+        width: 14px;
+        height: 14px;
+        color: var(--el-success);
       }
-      .side-item.on .ic {
-        color: var(--el-accent);
+      .webpage-body {
+        padding: 26px 24px;
       }
-      .side-item .count {
-        margin-left: auto;
+
+      /* the marketing-site footer (SEO link surface — topic landing links) */
+      .site-foot {
+        border-top: 1px solid var(--el-border);
+        background: var(--el-surface);
+        padding: 28px 24px 22px;
+        display: grid;
+        grid-template-columns: 1.4fr 1fr 1fr 1fr;
+        gap: 24px;
+      }
+      .foot-col h6 {
         font-size: 11px;
         font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-muted);
+        margin: 0 0 12px;
+      }
+      .foot-col a {
+        display: block;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+        margin-bottom: 8px;
+      }
+      .foot-brand .ic {
+        width: 16px;
+        height: 16px;
         color: var(--el-text-muted);
       }
-      .side-ws {
-        display: flex;
-        align-items: center;
-        gap: 9px;
-        margin-top: auto;
-        padding: 10px 8px 2px;
-        border-top: 1px solid var(--el-border-soft);
+      .foot-tag {
         font-size: 12.5px;
+        color: var(--el-text-muted);
+        line-height: 1.6;
+        margin: 10px 0 0;
+        max-width: 34ch;
+      }
+
+      /* ── SEO + GEO scaffolding (panel — replaces the old shell-entry panel) ── */
+      .seo-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-top: 16px;
+        align-items: start;
+      }
+      .codeblk {
+        background: var(--el-muted);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        padding: 14px 16px;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        line-height: 1.7;
+        color: var(--el-text-secondary);
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .codeblk .tag {
+        color: var(--el-accent);
+      }
+      .codeblk .att {
+        color: var(--el-info);
+      }
+      .codeblk .str {
+        color: var(--el-success);
+      }
+      .codeblk .key {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .seo-h {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--el-text);
+        margin: 18px 0 8px;
+      }
+      .seo-h:first-child {
+        margin-top: 0;
+      }
+      .seo-h .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-accent);
+      }
+      /* the semantic-HTML outline tree */
+      .outline {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1.9;
         color: var(--el-text-secondary);
       }
-      .shell-main {
-        background: var(--el-page-bg);
-        padding: 22px 24px;
-        overflow: hidden;
+      .outline .lv1 {
+        color: var(--el-text);
+        font-weight: 700;
       }
-      .explore-banner {
+      .outline .lv2 {
+        padding-left: 16px;
+      }
+      .outline .lv3 {
+        padding-left: 32px;
+        color: var(--el-text-muted);
+      }
+      .outline .el {
+        color: var(--el-accent);
+      }
+      /* a GEO citation / answer-card callout */
+      .geo-note {
         display: flex;
-        align-items: center;
         gap: 11px;
-        padding: 12px 14px;
+        padding: 13px 15px;
         border-radius: var(--radius-card);
-        background: var(--el-public-banner-bg);
-        color: var(--el-public-banner-text);
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
         font-size: 13px;
-        margin-bottom: 18px;
+        line-height: 1.55;
+        margin-top: 12px;
       }
-      .explore-banner .ic {
+      .geo-note .ic {
         width: 18px;
         height: 18px;
-        color: var(--el-info);
         flex: none;
+        margin-top: 1px;
+        color: var(--el-success);
       }
-      .explore-banner b {
-        font-weight: 700;
+      .seo-facts {
+        list-style: none;
+        padding: 0;
+        margin: 8px 0 0;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .seo-facts li {
+        display: flex;
+        gap: 9px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+      }
+      .seo-facts .ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-success);
       }
 
       /* loading skeleton (panel 5) */
@@ -2566,11 +2739,13 @@
   <body>
     <div class="review-head">
       <div>
-        <h1>The project square — system-level public-project directory</h1>
+        <h1>The project square — public, SEO/GEO-optimised project directory</h1>
         <p>
-          Story 6.13 · 6.13.1 — the design gate for 6.13.6 (the square UI). A cross-org gallery of
-          every project made <b>public</b> in 6.12: cards · search · category/tag filters ·
-          sort/rank tabs · the shell entry. Each card links to the 6.12.4 public read-only view.
+          Story 6.13 · 6.13.1 — the design gate for 6.13.6 (the square UI). A
+          <b>fully public</b> (no sign-in) web page at <code>motir.co/explore</code>, linked from
+          the Motir marketing site: a crawlable gallery of every project made public in 6.12 — cards
+          · search · category/tag filters · sort/rank tabs — built for SEO + GEO. No app shell, no
+          left-nav entry. Each card links to that project's public read-only view.
         </p>
       </div>
       <button
@@ -2584,299 +2759,334 @@
       </button>
     </div>
 
-    <!-- ════════════════ PANEL 1 — the gallery / explore page (the square itself) ════════════════ -->
+    <!-- ════════════════ PANEL 1 — the public web page (site chrome + hero + gallery + footer) ════════════════ -->
     <div class="panel-label">
-      (1) The gallery / explore page — the system-level grid of project CARDS (name · ORG ·
-      description · viewers / upvotes / activity), paginated (NOT load-all). The whole card links to
-      the 6.12.4 public view
+      (1) The public page — a standalone, fully-public, crawlable web page (motir.co/explore): the
+      marketing-site top bar, the SEO hero (H1 + descriptive intro + search), the card gallery (NO
+      “Public” pill — every project here is public), and the SEO footer
     </div>
     <div class="panel">
-      <div class="surface-card" style="padding: 22px 24px">
-        <div class="sq-head">
-          <div>
-            <div class="sq-eyebrow">
-              <svg class="ic"><use href="#i-compass" /></svg> Explore
-            </div>
-            <h2>Project square</h2>
-            <p class="sq-sub">
-              Discover public projects across every Motir org &amp; workspace — open project
-              management, in the open. Click any project to open its public read-only view.
-            </p>
+      <div class="webpage">
+        <!-- the marketing-site top bar -->
+        <header class="site-top">
+          <span class="site-brand"><span class="site-logo">M</span> Motir</span>
+          <nav class="site-nav">
+            <a>Product</a>
+            <a class="on">Explore</a>
+            <a>Docs</a>
+            <a>Pricing</a>
+          </nav>
+          <div class="site-actions">
+            <button class="btn btn-ghost">Sign in</button>
+            <button class="btn btn-primary">
+              Start free <svg class="ic"><use href="#i-arrow-right" /></svg>
+            </button>
           </div>
-          <div class="sq-count"><b>1,284</b> public projects</div>
-        </div>
+        </header>
 
-        <!-- toolbar: rank tabs (left) + search (right) -->
-        <div class="sq-toolbar">
-          <div class="seg" role="tablist" aria-label="Sort public projects">
-            <button class="on" role="tab" aria-selected="true">
-              <svg class="ic"><use href="#i-trending" /></svg> Trending
-            </button>
-            <button role="tab" aria-selected="false">
-              <svg class="ic"><use href="#i-star" /></svg> Popular
-            </button>
-            <button role="tab" aria-selected="false">
-              <svg class="ic"><use href="#i-clock" /></svg> New
-            </button>
+        <!-- the SEO hero -->
+        <section class="sq-hero">
+          <div class="eyebrow">
+            <svg class="ic"><use href="#i-compass" /></svg> Project square
           </div>
-          <label class="search" aria-label="Search public projects">
+          <h1>Explore public project plans built on Motir</h1>
+          <p class="lede">
+            Browse real, public product roadmaps and project plans from teams building in the open —
+            issues, boards, and sprints, free to read with no sign-up. Search by name, filter by
+            topic, and sort by what's trending.
+          </p>
+          <label class="search lg hero-search" aria-label="Search public projects">
             <svg class="ic"><use href="#i-search" /></svg>
-            <input type="text" placeholder="Search public projects by name or description…" />
+            <input type="text" placeholder="Search public projects by name or topic…" />
           </label>
+          <div class="sq-trust">
+            <span
+              ><svg class="ic"><use href="#i-check-check" /></svg> 1,284 public projects</span
+            >
+            <span
+              ><svg class="ic"><use href="#i-check-check" /></svg> No sign-up required</span
+            >
+            <span
+              ><svg class="ic"><use href="#i-check-check" /></svg> Updated daily</span
+            >
+          </div>
+        </section>
+
+        <div class="webpage-body">
+          <!-- toolbar: rank tabs + tag facet -->
+          <div class="sq-toolbar">
+            <div class="seg" role="tablist" aria-label="Sort public projects">
+              <button class="on" role="tab" aria-selected="true">
+                <svg class="ic"><use href="#i-trending" /></svg> Trending
+              </button>
+              <button role="tab" aria-selected="false">
+                <svg class="ic"><use href="#i-star" /></svg> Popular
+              </button>
+              <button role="tab" aria-selected="false">
+                <svg class="ic"><use href="#i-clock" /></svg> New
+              </button>
+            </div>
+            <div class="tagrow">
+              <button class="tagchip on">
+                <svg class="ic"><use href="#i-tag" /></svg> developer-tools
+                <svg class="x ic"><use href="#i-x" /></svg>
+              </button>
+              <button class="tagchip">
+                <svg class="ic"><use href="#i-tag" /></svg> design
+              </button>
+              <button class="tagchip">
+                <svg class="ic"><use href="#i-tag" /></svg> ai
+              </button>
+              <button class="tagchip" style="color: var(--el-text-muted)">
+                <svg class="ic"><use href="#i-sliders" /></svg> All topics
+              </button>
+            </div>
+          </div>
+
+          <!-- the card grid — real <a href> links (crawlable); one card shows hover -->
+          <div class="pgrid">
+            <a class="pcard hover" href="/explore/moooon/motir" aria-label="Motir — public project">
+              <div class="pcard-top">
+                <span class="pcard-org">
+                  <svg class="ic"><use href="#i-building" /></svg> <span>moooon</span>
+                </span>
+              </div>
+              <h4>Motir</h4>
+              <p class="desc">
+                The AI-native project tracker — plan in chat, track work items on boards, dispatch
+                to coding agents. Open core.
+              </p>
+              <div class="pcard-tags">
+                <span class="minichip"
+                  ><svg class="ic"><use href="#i-tag" /></svg> developer-tools</span
+                >
+                <span class="minichip">open-source</span>
+              </div>
+              <div class="pstats">
+                <span class="pstat views"
+                  ><svg class="ic"><use href="#i-eye" /></svg> <b>3.4k</b></span
+                >
+                <span class="pstat votes"
+                  ><svg class="ic"><use href="#i-chevron-up" /></svg> <b>612</b></span
+                >
+                <span class="pstat activity"
+                  ><svg class="ic"><use href="#i-activity" /></svg> <b>89</b></span
+                >
+                <span class="pstat go"
+                  ><svg class="ic"><use href="#i-arrow-right" /></svg
+                ></span>
+              </div>
+            </a>
+
+            <a class="pcard" href="/explore/doooo/taq">
+              <div class="pcard-top">
+                <span class="pcard-org">
+                  <svg class="ic"><use href="#i-building" /></svg> <span>doooo</span>
+                </span>
+              </div>
+              <h4>Taq — habit OS</h4>
+              <p class="desc">
+                A calm daily-habit tracker. Public roadmap + feature voting; we ship what the
+                community upvotes most.
+              </p>
+              <div class="pcard-tags">
+                <span class="minichip"
+                  ><svg class="ic"><use href="#i-tag" /></svg> productivity</span
+                >
+                <span class="minichip">mobile</span>
+              </div>
+              <div class="pstats">
+                <span class="pstat views"
+                  ><svg class="ic"><use href="#i-eye" /></svg> <b>1.9k</b></span
+                >
+                <span class="pstat votes"
+                  ><svg class="ic"><use href="#i-chevron-up" /></svg> <b>430</b></span
+                >
+                <span class="pstat activity"
+                  ><svg class="ic"><use href="#i-activity" /></svg> <b>54</b></span
+                >
+              </div>
+            </a>
+
+            <a class="pcard" href="/explore/lumen-labs/aperture-sdk">
+              <div class="pcard-top">
+                <span class="pcard-org">
+                  <svg class="ic"><use href="#i-building" /></svg> <span>Lumen Labs</span>
+                </span>
+              </div>
+              <h4>Aperture SDK</h4>
+              <p class="desc">
+                Open-source camera + imaging SDK. Browse the public board to see what's in progress
+                for the next release.
+              </p>
+              <div class="pcard-tags">
+                <span class="minichip"
+                  ><svg class="ic"><use href="#i-tag" /></svg> developer-tools</span
+                >
+                <span class="minichip">sdk</span>
+              </div>
+              <div class="pstats">
+                <span class="pstat views"
+                  ><svg class="ic"><use href="#i-eye" /></svg> <b>980</b></span
+                >
+                <span class="pstat votes"
+                  ><svg class="ic"><use href="#i-chevron-up" /></svg> <b>275</b></span
+                >
+                <span class="pstat activity"
+                  ><svg class="ic"><use href="#i-activity" /></svg> <b>120</b></span
+                >
+              </div>
+            </a>
+
+            <a class="pcard" href="/explore/northwind/atlas-design-system">
+              <div class="pcard-top">
+                <span class="pcard-org">
+                  <svg class="ic"><use href="#i-building" /></svg> <span>Northwind</span>
+                </span>
+              </div>
+              <h4>Atlas Design System</h4>
+              <p class="desc">
+                A token-driven component library. The public roadmap tracks accessibility + theming
+                work in the open.
+              </p>
+              <div class="pcard-tags">
+                <span class="minichip"
+                  ><svg class="ic"><use href="#i-tag" /></svg> design</span
+                >
+                <span class="minichip">a11y</span>
+              </div>
+              <div class="pstats">
+                <span class="pstat views"
+                  ><svg class="ic"><use href="#i-eye" /></svg> <b>2.1k</b></span
+                >
+                <span class="pstat votes"
+                  ><svg class="ic"><use href="#i-chevron-up" /></svg> <b>318</b></span
+                >
+                <span class="pstat activity"
+                  ><svg class="ic"><use href="#i-activity" /></svg> <b>33</b></span
+                >
+              </div>
+            </a>
+
+            <a class="pcard" href="/explore/seedling/grove-cms">
+              <div class="pcard-top">
+                <span class="pcard-org">
+                  <svg class="ic"><use href="#i-building" /></svg> <span>Seedling Co.</span>
+                </span>
+              </div>
+              <h4>Grove CMS</h4>
+              <p class="desc">
+                Headless content platform. Newly public — peek at the early roadmap and upvote the
+                integrations you want.
+              </p>
+              <div class="pcard-tags">
+                <span class="minichip"
+                  ><svg class="ic"><use href="#i-tag" /></svg> open-source</span
+                >
+                <span class="minichip">content</span>
+              </div>
+              <div class="pstats">
+                <span class="pstat views"
+                  ><svg class="ic"><use href="#i-eye" /></svg> <b>410</b></span
+                >
+                <span class="pstat votes"
+                  ><svg class="ic"><use href="#i-chevron-up" /></svg> <b>96</b></span
+                >
+                <span class="pstat activity"
+                  ><svg class="ic"><use href="#i-activity" /></svg> <b>71</b></span
+                >
+              </div>
+            </a>
+
+            <a class="pcard" href="/explore/vantage/pulse-analytics">
+              <div class="pcard-top">
+                <span class="pcard-org">
+                  <svg class="ic"><use href="#i-building" /></svg> <span>Vantage</span>
+                </span>
+              </div>
+              <h4>Pulse Analytics</h4>
+              <p class="desc">
+                Privacy-first product analytics. Public feature board — vote on what we build next,
+                no account gymnastics.
+              </p>
+              <div class="pcard-tags">
+                <span class="minichip"
+                  ><svg class="ic"><use href="#i-tag" /></svg> ai</span
+                >
+                <span class="minichip">analytics</span>
+              </div>
+              <div class="pstats">
+                <span class="pstat views"
+                  ><svg class="ic"><use href="#i-eye" /></svg> <b>1.2k</b></span
+                >
+                <span class="pstat votes"
+                  ><svg class="ic"><use href="#i-chevron-up" /></svg> <b>204</b></span
+                >
+                <span class="pstat activity"
+                  ><svg class="ic"><use href="#i-activity" /></svg> <b>47</b></span
+                >
+              </div>
+            </a>
+          </div>
+
+          <div class="loadmore">
+            <a class="btn btn-outline" href="/explore?page=2">
+              <svg class="ic"><use href="#i-plus" /></svg> Load more projects
+            </a>
+          </div>
+          <p
+            style="
+              text-align: center;
+              margin: 10px 0 0;
+              font-size: 12px;
+              color: var(--el-text-faint);
+              font-family: var(--font-mono);
+            "
+          >
+            keyset cursor · 24 per page · each page a real crawlable URL (?page=2) · no skip / no
+            dupe
+          </p>
         </div>
 
-        <!-- tag facet row -->
-        <div class="tagrow" style="margin-bottom: 16px">
-          <button class="tagchip on">
-            <svg class="ic"><use href="#i-tag" /></svg> developer-tools
-            <svg class="x ic"><use href="#i-x" /></svg>
-          </button>
-          <button class="tagchip">
-            <svg class="ic"><use href="#i-tag" /></svg> design
-          </button>
-          <button class="tagchip">
-            <svg class="ic"><use href="#i-tag" /></svg> open-source
-          </button>
-          <button class="tagchip">
-            <svg class="ic"><use href="#i-tag" /></svg> productivity
-          </button>
-          <button class="tagchip">
-            <svg class="ic"><use href="#i-tag" /></svg> ai
-          </button>
-          <button class="tagchip" style="color: var(--el-text-muted)">
-            <svg class="ic"><use href="#i-sliders" /></svg> All topics
-          </button>
-        </div>
-
-        <!-- the card grid (one card shows the hover/focus state) -->
-        <div class="pgrid">
-          <a class="pcard hover" href="#" aria-label="Open Motir — public view">
-            <div class="pcard-top">
-              <span class="pcard-org">
-                <svg class="ic"><use href="#i-building" /></svg> <span>moooon</span>
-              </span>
-              <span class="pill pill-public"
-                ><svg class="ic"><use href="#i-globe" /></svg> Public</span
-              >
-            </div>
-            <h4>Motir</h4>
-            <p class="desc">
-              The AI-native project tracker — plan in chat, track work items on boards, dispatch to
-              coding agents. Open core.
+        <!-- the marketing-site footer (an SEO link surface) -->
+        <footer class="site-foot">
+          <div class="foot-col foot-brand">
+            <span class="site-brand"><span class="site-logo">M</span> Motir</span>
+            <p class="foot-tag">
+              The AI-native way to plan, track, and ship — explore what teams are building in the
+              open.
             </p>
-            <div class="pcard-tags">
-              <span class="minichip"
-                ><svg class="ic"><use href="#i-tag" /></svg> developer-tools</span
-              >
-              <span class="minichip">open-source</span>
-            </div>
-            <div class="pstats">
-              <span class="pstat views"
-                ><svg class="ic"><use href="#i-eye" /></svg> <b>3.4k</b></span
-              >
-              <span class="pstat votes"
-                ><svg class="ic"><use href="#i-chevron-up" /></svg> <b>612</b></span
-              >
-              <span class="pstat activity"
-                ><svg class="ic"><use href="#i-activity" /></svg> <b>89</b></span
-              >
-              <span class="pstat go"
-                ><svg class="ic"><use href="#i-arrow-right" /></svg
-              ></span>
-            </div>
-          </a>
-
-          <a class="pcard" href="#">
-            <div class="pcard-top">
-              <span class="pcard-org">
-                <svg class="ic"><use href="#i-building" /></svg> <span>doooo</span>
-              </span>
-              <span class="pill pill-public"
-                ><svg class="ic"><use href="#i-globe" /></svg> Public</span
-              >
-            </div>
-            <h4>Taq — habit OS</h4>
-            <p class="desc">
-              A calm daily-habit tracker. Public roadmap + feature voting; we ship what the
-              community upvotes most.
-            </p>
-            <div class="pcard-tags">
-              <span class="minichip"
-                ><svg class="ic"><use href="#i-tag" /></svg> productivity</span
-              >
-              <span class="minichip">mobile</span>
-            </div>
-            <div class="pstats">
-              <span class="pstat views"
-                ><svg class="ic"><use href="#i-eye" /></svg> <b>1.9k</b></span
-              >
-              <span class="pstat votes"
-                ><svg class="ic"><use href="#i-chevron-up" /></svg> <b>430</b></span
-              >
-              <span class="pstat activity"
-                ><svg class="ic"><use href="#i-activity" /></svg> <b>54</b></span
-              >
-            </div>
-          </a>
-
-          <a class="pcard" href="#">
-            <div class="pcard-top">
-              <span class="pcard-org">
-                <svg class="ic"><use href="#i-building" /></svg> <span>Lumen Labs</span>
-              </span>
-              <span class="pill pill-public"
-                ><svg class="ic"><use href="#i-globe" /></svg> Public</span
-              >
-            </div>
-            <h4>Aperture SDK</h4>
-            <p class="desc">
-              Open-source camera + imaging SDK. Browse the public board to see what's in progress
-              for the next release.
-            </p>
-            <div class="pcard-tags">
-              <span class="minichip"
-                ><svg class="ic"><use href="#i-tag" /></svg> developer-tools</span
-              >
-              <span class="minichip">sdk</span>
-            </div>
-            <div class="pstats">
-              <span class="pstat views"
-                ><svg class="ic"><use href="#i-eye" /></svg> <b>980</b></span
-              >
-              <span class="pstat votes"
-                ><svg class="ic"><use href="#i-chevron-up" /></svg> <b>275</b></span
-              >
-              <span class="pstat activity"
-                ><svg class="ic"><use href="#i-activity" /></svg> <b>120</b></span
-              >
-            </div>
-          </a>
-
-          <a class="pcard" href="#">
-            <div class="pcard-top">
-              <span class="pcard-org">
-                <svg class="ic"><use href="#i-building" /></svg> <span>Northwind</span>
-              </span>
-              <span class="pill pill-public"
-                ><svg class="ic"><use href="#i-globe" /></svg> Public</span
-              >
-            </div>
-            <h4>Atlas Design System</h4>
-            <p class="desc">
-              A token-driven component library. The public roadmap tracks accessibility + theming
-              work in the open.
-            </p>
-            <div class="pcard-tags">
-              <span class="minichip"
-                ><svg class="ic"><use href="#i-tag" /></svg> design</span
-              >
-              <span class="minichip">a11y</span>
-            </div>
-            <div class="pstats">
-              <span class="pstat views"
-                ><svg class="ic"><use href="#i-eye" /></svg> <b>2.1k</b></span
-              >
-              <span class="pstat votes"
-                ><svg class="ic"><use href="#i-chevron-up" /></svg> <b>318</b></span
-              >
-              <span class="pstat activity"
-                ><svg class="ic"><use href="#i-activity" /></svg> <b>33</b></span
-              >
-            </div>
-          </a>
-
-          <a class="pcard" href="#">
-            <div class="pcard-top">
-              <span class="pcard-org">
-                <svg class="ic"><use href="#i-building" /></svg> <span>Seedling Co.</span>
-              </span>
-              <span class="pill pill-public"
-                ><svg class="ic"><use href="#i-globe" /></svg> Public</span
-              >
-            </div>
-            <h4>Grove CMS</h4>
-            <p class="desc">
-              Headless content platform. Newly public — peek at the early roadmap and upvote the
-              integrations you want.
-            </p>
-            <div class="pcard-tags">
-              <span class="minichip"
-                ><svg class="ic"><use href="#i-tag" /></svg> open-source</span
-              >
-              <span class="minichip">content</span>
-            </div>
-            <div class="pstats">
-              <span class="pstat views"
-                ><svg class="ic"><use href="#i-eye" /></svg> <b>410</b></span
-              >
-              <span class="pstat votes"
-                ><svg class="ic"><use href="#i-chevron-up" /></svg> <b>96</b></span
-              >
-              <span class="pstat activity"
-                ><svg class="ic"><use href="#i-activity" /></svg> <b>71</b></span
-              >
-            </div>
-          </a>
-
-          <a class="pcard" href="#">
-            <div class="pcard-top">
-              <span class="pcard-org">
-                <svg class="ic"><use href="#i-building" /></svg> <span>Vantage</span>
-              </span>
-              <span class="pill pill-public"
-                ><svg class="ic"><use href="#i-globe" /></svg> Public</span
-              >
-            </div>
-            <h4>Pulse Analytics</h4>
-            <p class="desc">
-              Privacy-first product analytics. Public feature board — vote on what we build next, no
-              account gymnastics.
-            </p>
-            <div class="pcard-tags">
-              <span class="minichip"
-                ><svg class="ic"><use href="#i-tag" /></svg> ai</span
-              >
-              <span class="minichip">analytics</span>
-            </div>
-            <div class="pstats">
-              <span class="pstat views"
-                ><svg class="ic"><use href="#i-eye" /></svg> <b>1.2k</b></span
-              >
-              <span class="pstat votes"
-                ><svg class="ic"><use href="#i-chevron-up" /></svg> <b>204</b></span
-              >
-              <span class="pstat activity"
-                ><svg class="ic"><use href="#i-activity" /></svg> <b>47</b></span
-              >
-            </div>
-          </a>
-        </div>
-
-        <!-- cursor pagination — load more (NOT load-all) -->
-        <div class="loadmore">
-          <button class="btn btn-outline">
-            <svg class="ic"><use href="#i-plus" /></svg> Load more projects
-          </button>
-        </div>
-        <p
-          style="
-            text-align: center;
-            margin: 10px 0 0;
-            font-size: 12px;
-            color: var(--el-text-faint);
-            font-family: var(--font-mono);
-          "
-        >
-          keyset cursor · 24 per page · stable id tiebreak (no skip / no dupe at the boundary)
-        </p>
+          </div>
+          <div class="foot-col">
+            <h6>Explore by topic</h6>
+            <a href="/explore/topic/developer-tools">Developer tools</a>
+            <a href="/explore/topic/design">Design</a>
+            <a href="/explore/topic/ai">AI</a>
+            <a href="/explore/topic/open-source">Open source</a>
+          </div>
+          <div class="foot-col">
+            <h6>Product</h6>
+            <a>Overview</a>
+            <a>AI planning</a>
+            <a>Boards &amp; sprints</a>
+            <a>Pricing</a>
+          </div>
+          <div class="foot-col">
+            <h6>Company</h6>
+            <a>About</a>
+            <a>Blog</a>
+            <a>Open source</a>
+            <a>Contact</a>
+          </div>
+        </footer>
       </div>
     </div>
 
     <!-- ════════════════ PANEL 2 — the sort / rank tabs ════════════════ -->
     <div class="panel-label">
       (2) The sort / rank tabs — Trending (surging now) · Popular (most-upvoted overall) · New
-      (recently made public). Trending is the DEFAULT landing tab + carries a recency-window
-      selector
+      (recently made public). Trending is the DEFAULT + carries a recency-window selector; each rank
+      is its own crawlable URL
     </div>
     <div class="panel">
       <div class="card">
@@ -2884,7 +3094,8 @@
         <p class="csub">
           The GitHub-Trending / GitLab-Explore tab set. Each rank is a deterministic total order
           computed at the read layer over the 6.12.6 vote + activity signals, riding the same keyset
-          cursor — never a precomputed column, never load-all.
+          cursor — never a precomputed column, never load-all. Each rank + window is a real,
+          shareable, crawlable URL.
         </p>
 
         <div class="seg" role="tablist" aria-label="Sort" style="margin-bottom: 4px">
@@ -2899,7 +3110,6 @@
           </button>
         </div>
 
-        <!-- Trending's recency-window selector (the GitHub daily/weekly/monthly bucket) -->
         <div
           style="display: flex; align-items: center; gap: 10px; margin: 14px 0 4px; flex-wrap: wrap"
         >
@@ -2924,7 +3134,7 @@
               Surging now. Upvotes + project activity inside the recency window, so a
               freshly-surging project rises above a higher-lifetime-but-stale one.
             </p>
-            <div class="formula">Σ(upvotes + activity) within window · recent-weighted</div>
+            <div class="formula">/explore?rank=trending&amp;window=week</div>
           </div>
           <div class="rankcard popular">
             <div class="rankcard-h">
@@ -2934,7 +3144,7 @@
               Most-upvoted overall. Lifetime demand — total upvotes + total viewers across the
               project's whole public life.
             </p>
-            <div class="formula">total upvotes + total viewers (lifetime)</div>
+            <div class="formula">/explore?rank=popular</div>
           </div>
           <div class="rankcard new">
             <div class="rankcard-h">
@@ -2944,7 +3154,7 @@
               Recently made public. Ordered by the moment the project's access level turned
               <code>public</code> (<code>madePublicAt</code>), newest first.
             </p>
-            <div class="formula">order by madePublicAt desc</div>
+            <div class="formula">/explore?rank=new</div>
           </div>
         </div>
         <p
@@ -2960,8 +3170,8 @@
           <svg class="ic" style="width: 14px; height: 14px; color: var(--el-text-faint)">
             <use href="#i-arrow-right" />
           </svg>
-          The active rank is carried in the URL (<code>?rank=trending&amp;window=week</code>) and
-          composes with the search + tag params.
+          The active rank, window, search, and tag are all real URL params — server-rendered, so
+          each state is its own indexable page.
         </p>
       </div>
     </div>
@@ -2969,14 +3179,16 @@
     <!-- ════════════════ PANEL 3 — search + category/tag filters ════════════════ -->
     <div class="panel-label">
       (3) The search bar + category / tag filters (the GitHub-Topics / GitLab-Topics browse axis) —
-      the active-filter state + how search + tag + rank COMPOSE, and the categories-by-count view
+      the active-filter compose state, and the categories-by-count view (each topic its own
+      crawlable landing page)
     </div>
     <div class="panel cols2 uneven">
       <div class="card">
         <h3>Search &amp; filter</h3>
         <p class="csub">
           A name / description search over public projects (rides the shipped 6.1.1 FilterAST where
-          it fits) + the category/tag filter. Both narrow the same cursored directory read.
+          it fits) + the category/tag filter. Both narrow the same cursored directory read; both are
+          server-rendered URLs.
         </p>
 
         <label class="search lg" aria-label="Search public projects" style="margin-bottom: 14px">
@@ -3004,7 +3216,6 @@
           </button>
         </div>
 
-        <!-- the active-filter summary: search + tag + rank all compose -->
         <div class="filterbar">
           <span class="lbl">Active</span>
           <span class="pill pill-sky"
@@ -3026,183 +3237,177 @@
             font-family: var(--font-mono);
           "
         >
-          ?q=analytics&amp;tag=ai&amp;rank=trending&amp;window=week — one cursored read ·
-          public-only · injection-safe
+          /explore?q=analytics&amp;tag=ai&amp;rank=trending — one cursored read · public-only ·
+          injection-safe
         </p>
       </div>
 
       <div class="card">
-        <h3>Browse by category</h3>
+        <h3>Browse by topic</h3>
         <p class="csub">
-          Topics sorted by their PUBLIC-project count (a tag with only non-public projects never
-          inflates the square).
+          Topics sorted by their PUBLIC-project count. Each is a crawlable landing page
+          (<code>/explore/topic/&lt;slug&gt;</code>) — the SEO surface for “{topic} project
+          management”.
         </p>
         <div class="cats">
-          <div class="catrow">
+          <a class="catrow" href="/explore/topic/developer-tools">
             <svg class="ic"><use href="#i-tag" /></svg>
             <span class="catname">developer-tools</span>
             <span class="catbar"><i style="width: 100%"></i></span>
             <span class="catcount">312</span>
-          </div>
-          <div class="catrow">
+          </a>
+          <a class="catrow" href="/explore/topic/open-source">
             <svg class="ic"><use href="#i-tag" /></svg>
             <span class="catname">open-source</span>
             <span class="catbar"><i style="width: 82%"></i></span>
             <span class="catcount">256</span>
-          </div>
-          <div class="catrow">
+          </a>
+          <a class="catrow" href="/explore/topic/design">
             <svg class="ic"><use href="#i-tag" /></svg>
             <span class="catname">design</span>
             <span class="catbar"><i style="width: 61%"></i></span>
             <span class="catcount">189</span>
-          </div>
-          <div class="catrow">
+          </a>
+          <a class="catrow" href="/explore/topic/productivity">
             <svg class="ic"><use href="#i-tag" /></svg>
             <span class="catname">productivity</span>
             <span class="catbar"><i style="width: 48%"></i></span>
             <span class="catcount">148</span>
-          </div>
-          <div class="catrow">
+          </a>
+          <a class="catrow" href="/explore/topic/ai">
             <svg class="ic"><use href="#i-tag" /></svg>
             <span class="catname">ai</span>
             <span class="catbar"><i style="width: 40%"></i></span>
             <span class="catcount">124</span>
-          </div>
-          <div class="catrow">
+          </a>
+          <a class="catrow" href="/explore/topic/content">
             <svg class="ic"><use href="#i-tag" /></svg>
             <span class="catname">content</span>
             <span class="catbar"><i style="width: 22%"></i></span>
             <span class="catcount">67</span>
-          </div>
+          </a>
         </div>
       </div>
     </div>
 
-    <!-- ════════════════ PANEL 4 — the shell entry point ════════════════ -->
+    <!-- ════════════════ PANEL 4 — SEO + GEO scaffolding ════════════════ -->
     <div class="panel-label">
-      (4) The shell entry — a top-level system-level “Explore” entry (distinct from the
-      workspace-scoped project nav), with the “exploring public projects across Motir” framing
+      (4) SEO + GEO scaffolding — the fully-public page is server-rendered + crawlable: head meta /
+      OpenGraph / canonical, JSON-LD structured data, a semantic HTML outline, and the GEO
+      (generative-engine) framing so LLM answer engines can cite it
     </div>
     <div class="panel">
-      <div class="appshell">
-        <nav class="side">
-          <div class="side-brand">
-            <span class="side-logo">M</span>
-            <b>Motir</b>
-          </div>
+      <div class="card">
+        <h3>Built to be found — by search engines and by AI</h3>
+        <p class="csub">
+          No auth, no client-only render: the square is a server-rendered public page so crawlers
+          and generative engines read the full content. This is the design contract 6.13.6
+          implements.
+        </p>
 
-          <div class="side-lbl">System</div>
-          <a class="side-item on">
-            <svg class="ic"><use href="#i-compass" /></svg> Project square
-          </a>
-          <a class="side-item">
-            <svg class="ic"><use href="#i-inbox" /></svg> Notifications <span class="count">3</span>
-          </a>
-
-          <div class="side-lbl">moooon · Motir</div>
-          <a class="side-item"
-            ><svg class="ic"><use href="#i-columns" /></svg> Board</a
-          >
-          <a class="side-item"
-            ><svg class="ic"><use href="#i-list" /></svg> Work items</a
-          >
-          <a class="side-item"
-            ><svg class="ic"><use href="#i-route" /></svg> Roadmap</a
-          >
-          <a class="side-item"
-            ><svg class="ic"><use href="#i-book" /></svg> Backlog</a
-          >
-
-          <div class="side-ws">
-            <span class="avatar av-mint">Y</span>
-            <span>moooon workspace</span>
-          </div>
-        </nav>
-
-        <div class="shell-main">
-          <div class="explore-banner">
-            <svg class="ic"><use href="#i-globe" /></svg>
-            <span
-              >You're exploring <b>public projects across Motir</b> — every project any org has made
-              public. Read-only; click through to open one.</span
-            >
-          </div>
-
-          <div class="sq-head">
-            <div>
-              <div class="sq-eyebrow">
-                <svg class="ic"><use href="#i-compass" /></svg> Explore
-              </div>
-              <h2>Project square</h2>
+        <div class="seo-grid">
+          <div>
+            <div class="seo-h">
+              <svg class="ic"><use href="#i-share" /></svg> Head — meta + OpenGraph
             </div>
-            <div class="sq-count"><b>1,284</b> public projects</div>
-          </div>
-
-          <div class="sq-toolbar">
-            <div class="seg" role="tablist" aria-label="Sort">
-              <button class="on" role="tab" aria-selected="true">
-                <svg class="ic"><use href="#i-trending" /></svg> Trending
-              </button>
-              <button role="tab" aria-selected="false">
-                <svg class="ic"><use href="#i-star" /></svg> Popular
-              </button>
-              <button role="tab" aria-selected="false">
-                <svg class="ic"><use href="#i-clock" /></svg> New
-              </button>
+            <div class="codeblk">
+              <span class="tag">&lt;title&gt;</span>Explore public project plans · Motir<span
+                class="tag"
+                >&lt;/title&gt;</span
+              >
+              <span class="tag">&lt;meta</span> <span class="att">name</span>=<span class="str"
+                >"description"</span
+              >
+              <span class="att">content</span>=<span class="str"
+                >"Browse public product roadmaps and project plans built on Motir — free to read, no
+                sign-up."</span
+              ><span class="tag">&gt;</span> <span class="tag">&lt;link</span>
+              <span class="att">rel</span>=<span class="str">"canonical"</span>
+              <span class="att">href</span>=<span class="str">"https://motir.co/explore"</span
+              ><span class="tag">&gt;</span> <span class="tag">&lt;meta</span>
+              <span class="att">property</span>=<span class="str">"og:title"</span>
+              <span class="att">content</span>=<span class="str"
+                >"Explore public projects on Motir"</span
+              ><span class="tag">&gt;</span> <span class="tag">&lt;meta</span>
+              <span class="att">property</span>=<span class="str">"og:image"</span>
+              <span class="att">content</span>=<span class="str">"/explore/opengraph-image"</span
+              ><span class="tag">&gt;</span> <span class="tag">&lt;meta</span>
+              <span class="att">name</span>=<span class="str">"twitter:card"</span>
+              <span class="att">content</span>=<span class="str">"summary_large_image"</span
+              ><span class="tag">&gt;</span>
             </div>
-            <label class="search" aria-label="Search public projects">
-              <svg class="ic"><use href="#i-search" /></svg>
-              <input type="text" placeholder="Search public projects…" />
-            </label>
+
+            <div class="seo-h">
+              <svg class="ic"><use href="#i-code" /></svg> JSON-LD — structured data
+            </div>
+            <div class="codeblk">
+              <span class="tag">&lt;script</span> <span class="att">type</span>=<span class="str"
+                >"application/ld+json"</span
+              ><span class="tag">&gt;</span>
+              {
+              <span class="key">"@context"</span>: <span class="str">"https://schema.org"</span>,
+              <span class="key">"@type"</span>: <span class="str">"CollectionPage"</span>,
+              <span class="key">"name"</span>: <span class="str">"Project square"</span>,
+              <span class="key">"mainEntity"</span>: { <span class="key">"@type"</span>:
+              <span class="str">"ItemList"</span>, <span class="key">"itemListElement"</span>: [{
+              <span class="key">"@type"</span>: <span class="str">"SoftwareApplication"</span>,
+              <span class="key">"name"</span>: <span class="str">"Motir"</span>,
+              <span class="key">"applicationCategory"</span>:
+              <span class="str">"DeveloperApplication"</span>, <span class="key">"url"</span>:
+              <span class="str">"/explore/moooon/motir"</span> }, <span class="att">…</span>] } }
+            </div>
           </div>
 
-          <div class="pgrid two">
-            <a class="pcard" href="#">
-              <div class="pcard-top">
-                <span class="pcard-org">
-                  <svg class="ic"><use href="#i-building" /></svg> <span>moooon</span>
-                </span>
-                <span class="pill pill-public"
-                  ><svg class="ic"><use href="#i-globe" /></svg> Public</span
-                >
-              </div>
-              <h4>Motir</h4>
-              <p class="desc">The AI-native project tracker — plan in chat, track on boards.</p>
-              <div class="pstats">
-                <span class="pstat views"
-                  ><svg class="ic"><use href="#i-eye" /></svg> <b>3.4k</b></span
-                >
-                <span class="pstat votes"
-                  ><svg class="ic"><use href="#i-chevron-up" /></svg> <b>612</b></span
-                >
-                <span class="pstat activity"
-                  ><svg class="ic"><use href="#i-activity" /></svg> <b>89</b></span
-                >
-              </div>
-            </a>
-            <a class="pcard" href="#">
-              <div class="pcard-top">
-                <span class="pcard-org">
-                  <svg class="ic"><use href="#i-building" /></svg> <span>Northwind</span>
-                </span>
-                <span class="pill pill-public"
-                  ><svg class="ic"><use href="#i-globe" /></svg> Public</span
-                >
-              </div>
-              <h4>Atlas Design System</h4>
-              <p class="desc">A token-driven component library; a11y + theming in the open.</p>
-              <div class="pstats">
-                <span class="pstat views"
-                  ><svg class="ic"><use href="#i-eye" /></svg> <b>2.1k</b></span
-                >
-                <span class="pstat votes"
-                  ><svg class="ic"><use href="#i-chevron-up" /></svg> <b>318</b></span
-                >
-                <span class="pstat activity"
-                  ><svg class="ic"><use href="#i-activity" /></svg> <b>33</b></span
-                >
-              </div>
-            </a>
+          <div>
+            <div class="seo-h">
+              <svg class="ic"><use href="#i-file-text" /></svg> Semantic outline
+            </div>
+            <div class="codeblk outline">
+              <span class="lv1"
+                >&lt;<span class="el">h1</span>&gt; Explore public project plans built on
+                Motir</span
+              >
+              <span class="lv2">&lt;<span class="el">h2</span>&gt; Trending projects</span>
+              <span class="lv3"
+                >&lt;<span class="el">article</span>&gt; · &lt;<span class="el">h3</span>&gt; Motir
+                — moooon</span
+              >
+              <span class="lv3"
+                >&lt;<span class="el">article</span>&gt; · &lt;<span class="el">h3</span>&gt; Taq —
+                doooo</span
+              >
+              <span class="lv2">&lt;<span class="el">h2</span>&gt; Browse by topic</span>
+              <span class="lv3">&lt;<span class="el">nav</span>&gt; · topic landing links</span>
+              <span class="lv2"
+                >&lt;<span class="el">h2</span>&gt; What is the project square?</span
+              >
+            </div>
+
+            <div class="seo-h">
+              <svg class="ic"><use href="#i-quote" /></svg> GEO — answer-engine framing
+            </div>
+            <div class="geo-note">
+              <svg class="ic"><use href="#i-sparkles" /></svg>
+              <span
+                >A concise, citable lead paragraph + an FAQ block (“What is the project square?”,
+                “Are these projects free to view?”) gives generative engines a clean, attributable
+                answer — with the canonical URL as the source.</span
+              >
+            </div>
+            <ul class="seo-facts">
+              <li>
+                <svg class="ic"><use href="#i-check-check" /></svg> Fully public — no sign-in, no
+                paywall, crawlable by Googlebot, Bingbot, GPTBot, etc.
+              </li>
+              <li>
+                <svg class="ic"><use href="#i-check-check" /></svg> Server-rendered — every card,
+                rank, search, and topic state is a real URL in the sitemap.
+              </li>
+              <li>
+                <svg class="ic"><use href="#i-check-check" /></svg> Reached from the marketing site
+                — NOT an app-shell route; no left-nav entry.
+              </li>
+            </ul>
           </div>
         </div>
       </div>
@@ -3215,7 +3420,6 @@
     </div>
     <div class="panel">
       <div class="state-grid two">
-        <!-- empty square -->
         <div class="state-box">
           <div class="state-cap">Empty — no public projects yet</div>
           <div class="empty">
@@ -3224,15 +3428,14 @@
             ></span>
             <h5>No public projects yet</h5>
             <p>
-              When a team makes a project public, it shows up here for everyone to discover. Be the
-              first to open yours.
+              When a team makes a project public, it shows up here for everyone to discover. Check
+              back soon.
             </p>
           </div>
         </div>
 
-        <!-- no results -->
         <div class="state-box">
-          <div class="state-cap">No results — search / category empty</div>
+          <div class="state-cap">No results — search / topic empty</div>
           <div class="empty">
             <span class="glyph"
               ><svg class="ic"><use href="#i-search" /></svg
@@ -3241,13 +3444,12 @@
             <p>
               Try a different search or topic — or clear your filters to browse the full square.
             </p>
-            <button class="btn btn-outline" style="margin-top: 14px">
+            <a class="btn btn-outline" href="/explore" style="margin-top: 14px">
               <svg class="ic"><use href="#i-x" /></svg> Clear filters
-            </button>
+            </a>
           </div>
         </div>
 
-        <!-- loading skeleton -->
         <div class="state-box">
           <div class="state-cap">Loading — paginated skeleton</div>
           <div class="pgrid two" style="pointer-events: none">
@@ -3282,7 +3484,6 @@
           </div>
         </div>
 
-        <!-- fetch error -->
         <div class="state-box">
           <div class="state-cap">Fetch error — ErrorState</div>
           <div class="empty error">
@@ -3293,9 +3494,9 @@
             <p>
               Something went wrong fetching public projects. Check your connection and try again.
             </p>
-            <button class="btn btn-outline" style="margin-top: 14px">
+            <a class="btn btn-outline" href="/explore" style="margin-top: 14px">
               <svg class="ic"><use href="#i-rotate" /></svg> Retry
-            </button>
+            </a>
           </div>
         </div>
       </div>
@@ -3961,6 +4162,66 @@
           <line x1="2" x2="6" y1="14" y2="14" />
           <line x1="10" x2="14" y1="8" y2="8" />
           <line x1="18" x2="22" y1="16" y2="16" />
+        </symbol>
+        <!-- code (JSON-LD / structured data) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-code"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m16 18 6-6-6-6" />
+          <path d="m8 6-6 6 6 6" />
+        </symbol>
+        <!-- file-text (semantic outline) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-file-text"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" />
+          <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+          <path d="M10 9H8" />
+          <path d="M16 13H8" />
+          <path d="M16 17H8" />
+        </symbol>
+        <!-- quote (GEO citation) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-quote"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"
+          />
+          <path
+            d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"
+          />
+        </symbol>
+        <!-- share (OpenGraph) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-share"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+          <polyline points="16 6 12 2 8 6" />
+          <line x1="12" x2="12" y1="2" y2="15" />
         </symbol>
       </defs>
     </svg>
