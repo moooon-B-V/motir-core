@@ -2199,6 +2199,361 @@ export const EPICS: EpicMeta[] = [
           'overflow-escape primitive instead of a third branch.',
       },
       {
+        id: 'bug-promote-sprint-picker-clipped-inside-popover',
+        kind: 'bug',
+        title:
+          'Combobox listbox is clipped by the parent Popover / Modal at every Combobox-in-dialog site (12 occurrences across 9 files: triage Promote popover ×3 + triage Merge popover + CreateIssueModal ×5 pickers + 5 other settings/filter modals). Reported repro: triage Promote → Active sprint shows the search input + 1 row, rest of sprint list cut off below popover edge.',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** triage promote flow (`app/(authed)/triage/_components/' +
+          'PromotePopover.tsx`, Subtask 6.11.5 — the four-target picker after clicking ' +
+          'the row-level **Promote** action) · shared components ' +
+          '`components/ui/Combobox.tsx`, `components/ui/Popover.tsx` · ' +
+          '**Status:** open · **Reported by:** Yue.\n\n' +
+          "On the triage queue, opening a row's **Promote** popover and clicking " +
+          '**Active sprint** flips the popover to step 2 — a searchable **Combobox** ' +
+          "over the project's open sprints (`label: t('promote.pickSprint')`, " +
+          "`searchable`, `searchPlaceholder: t('promote.pickSearch')`). When the " +
+          "combobox opens, the listbox is **clipped by the popover's " +
+          '`overflow-hidden` boundary**: the screenshot shows the Combobox trigger ' +
+          '("Select…"), the search input ("Search"), and the FIRST option row ' +
+          '("Sprint 4 · Sp… — Sprint entity, backlog rank…") visible, with every ' +
+          'subsequent sprint cut off below the popover edge. The popover itself ' +
+          'shows no scroll affordance because the listbox is positioned absolutely ' +
+          "inside the trigger's container and lives OUTSIDE the popover-body scroll " +
+          'flow — same shape as the Modal-clipped case below.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open the `moooon` / ' +
+          '`motir` project → **Triage**. Make sure the project has 2+ open sprints ' +
+          '(the seed populates several). On any triaged row, click the row-level ' +
+          '**Promote** button to open the promote popover, then click **Active ' +
+          'sprint**. Observe: the step-2 panel renders the sprint Combobox; click ' +
+          'its trigger ("Select…"). The opened listbox extends below the popover and ' +
+          'is clipped — only the search input + the first sprint row are reachable; ' +
+          'arrowing further down is invisible. The popover itself does not scroll.\n\n' +
+          '**Root cause (high confidence — identical to `bug-combobox-menu-clipped-' +
+          'inside-modal`, but the parent container is a `Popover` instead of a ' +
+          '`Modal`).** `components/ui/Combobox.tsx` (lines ~125-134, ~294-298, ' +
+          '~386-413) branches its menu rendering by parent context:\n\n' +
+          '- **Outside a dialog** → the menu is **portaled to `document.body`** with ' +
+          'viewport-anchored `position: fixed`, so it escapes every overflow ancestor.\n' +
+          '- **Inside a Radix Dialog** (detected via ' +
+          '`triggerRef.current?.closest("[role=\\"dialog\\"]")`) → the menu is ' +
+          'rendered **INLINE** as `absolute left-0 top-full ...` inside the ' +
+          "trigger's `relative` container, because a portal would land outside the " +
+          "dialog's focus scope and a centered dialog's CSS transform breaks fixed-" +
+          "positioned children's viewport coordinates.\n\n" +
+          '**Radix `PopoverContent` renders with `role="dialog"` by default** — it ' +
+          'shares the focus-trap / outside-click contract with `DialogContent`. So ' +
+          'when the Combobox is opened inside `Popover.Content`, the `closest("[role=' +
+          '\\"dialog\\"]")` check matches the **popover** as its containing dialog ' +
+          'and the menu falls through the INLINE branch. The popover panel itself ' +
+          'declares `overflow-hidden` on its content (`components/ui/Popover.tsx:63`, ' +
+          "matching the Modal's clipping boundary by design — the popover MUST stay " +
+          "capped so it doesn't bleed past its anchored rect). The inline menu's " +
+          "`max-h-64` (`16rem`) listbox is taller than the popover's remaining " +
+          'vertical space (the promote popover is `width={320}` and step 2 stacks ' +
+          'the back link, the label, the trigger, and a confirm button above the ' +
+          "menu), so the moment the listbox's bottom edge crosses the popover's " +
+          'bottom edge, it is clipped. **The menu has nowhere to scroll to**: an ' +
+          '`absolute` child does not contribute to the popover-body scroll height.\n\n' +
+          '**This is the SECOND surface of the same defect** that ' +
+          '`bug-combobox-menu-clipped-inside-modal` documents (Combobox menu clipped ' +
+          'by `Popover`/`Modal` `overflow-hidden`; the inline branch loses ' +
+          'reachability for the focus-trap and positioning correctness it gains). ' +
+          'The bugs are siblings, not duplicates: the fix site is the same ' +
+          "(`Combobox.tsx`'s inline branch), but the bounding ancestor whose " +
+          '`getBoundingClientRect` the menu must clamp against is the **popover ' +
+          'panel** here, not the **modal panel**. The two share `role="dialog"` so ' +
+          'the existing `closest("[role=\\"dialog\\"]")` ancestry lookup already ' +
+          "finds the right element; the fix's rect-measurement just needs to work " +
+          'against whichever dialog ancestor is nearest. Same `bug-inline-edit-' +
+          'clipped-when-table-short` portal branch — uninvolved — stays UNTOUCHED.\n' +
+          '\n' +
+          '**Fix shapes (mirror the Modal sibling — decide at fix time).**\n' +
+          "1. **Clamp the inline menu's height to the nearest dialog ancestor's " +
+          'available space** (durable). When `inDialog` is true, compute ' +
+          '`listMaxHeight` from the containing `[role="dialog"]` ancestor\'s bottom ' +
+          "edge minus the trigger's bottom edge (with a small gap), and set the " +
+          "listbox's `maxHeight` to that — mirroring the portaled branch's " +
+          '`updatePosition` logic (`Combobox.tsx:166-189`) against ' +
+          '`triggerRef.current.closest("[role=\\"dialog\\"]").getBoundingClientRect()` ' +
+          'instead of `window.innerHeight`. The menu then SCROLLS INTERNALLY, ' +
+          "the popover/modal doesn't, and clipping is gone for BOTH surfaces.\n" +
+          '2. **Flip the menu above the trigger when the space below is shorter** ' +
+          '(complement of 1). The portaled branch already does this; mirror it for ' +
+          'inline. Combine with 1 so the menu picks the taller side AND clamps to it.\n' +
+          '\n' +
+          'Net: a **single** fix in the Combobox inline branch should resolve both ' +
+          'this bug AND `bug-combobox-menu-clipped-inside-modal` — the dialog-ancestor ' +
+          'rect lookup is parent-type-agnostic. Combining the two siblings into one ' +
+          "fix Subtask is the natural shape; reference both ids in the fix's Context " +
+          'refs.\n\n' +
+          '**Wider impact — full system scan (2026-06-15).** The reported repro ' +
+          '(`PromotePopover.tsx:193`) is ONE of MANY affected sites. A full scan of ' +
+          '`Combobox`-rendered-inside-`Popover` AND `Combobox`-rendered-inside-`Modal` ' +
+          'across the codebase enumerates every surface that hits the same inline-branch ' +
+          'clipping; ALL of them are fixed by the single fix shape above. The fix ' +
+          'Subtask MUST verify each one renders correctly post-fix (the clipping is ' +
+          'load-bearing for keyboard reachability of every clipped option).\n' +
+          '\n' +
+          '_Triage page (the surface in the report):_\n' +
+          '- `app/(authed)/triage/_components/PromotePopover.tsx:193` — sprint ' +
+          'Combobox (THE REPORTED ONE, step 2 of the Promote popover after picking ' +
+          '**Active sprint**).\n' +
+          '- `app/(authed)/triage/_components/PromotePopover.tsx:217` — epic / story ' +
+          'parent Combobox (step 2 of Promote after picking **Under an epic** or ' +
+          '**Under a story**); same Popover, same clipping.\n' +
+          '- `app/(authed)/triage/_components/PromotePopover.tsx:173` — Top / Bottom ' +
+          'placement Combobox (step 1 of Promote, lives in the FOOTER of the same ' +
+          "popover above the four target rows). Two options only, so it's borderline " +
+          "visually — but it's the same inline-clipped branch and would clip if a third " +
+          'placement option were ever added.\n' +
+          '- `app/(authed)/triage/_components/MergePicker.tsx:78` — query-driven ' +
+          'work-item Combobox (the **Mark duplicate / merge** triage action) ' +
+          'rendered inside a Popover (`width={360}`). The search-driven option list ' +
+          'is taller than the popover when 2+ results land; same clipping shape.\n' +
+          '\n' +
+          '_Other Combobox-in-Modal sites across the system (each is its own ' +
+          'occurrence of the SAME defect; the original `bug-combobox-menu-clipped-' +
+          'inside-modal` only named the Widget-config / Statistic-type case):_\n' +
+          '- `app/(authed)/_components/CreateIssueModal.tsx` — **HIGHEST density** — ' +
+          '5 Combobox-backed pickers + 1 DatePicker stacked in one modal: ' +
+          '`<TypePicker>` (line 193), `<ParentPicker>` (line 211), ' +
+          '`<WorkItemTypePicker>` (line 251), `<ExecutorPicker>` (line 264), ' +
+          '`<PriorityPicker>` (line 331), `<DatePicker>` (line 339). Each picker in ' +
+          '`components/issues/*Picker.tsx` wraps `Combobox`. The lower-half pickers ' +
+          '(`PriorityPicker`, `WorkItemTypePicker`, `ExecutorPicker`) will be MOST ' +
+          'severely clipped because they sit near the bottom of a tall modal — every ' +
+          'option past the first 1–2 is unreachable. ' +
+          '**`components/issues/WorkItemTypePicker.tsx:16` even carries a source ' +
+          'comment acknowledging "Because the create modal is a `role=\\"dialog\\"`, ' +
+          'the Combobox renders [inline]"** — the engineer who wrote the picker knew ' +
+          'about the inline branch but did not realise it clips below the modal floor.\n' +
+          '- `app/(authed)/settings/project/fields/_components/' +
+          'FieldsSettingsEditor.tsx:623` — `<TypePicker>` inside the Create / Edit ' +
+          'custom-field modal (the same TypePicker → Combobox wrap; renders the ' +
+          'custom-field type list).\n' +
+          '- `app/(authed)/filters/_components/ChangeOwnerDialog.tsx:96` — owner ' +
+          'Combobox (workspace member list — can be long; the picker is the ONLY ' +
+          'field in this modal so clipping below the modal floor is the dominant ' +
+          'failure mode).\n' +
+          '- `app/(authed)/filters/_components/SubscribeDialog.tsx:200, 213` — two ' +
+          'stacked Comboboxes (subscription frequency + delivery channel) inside the ' +
+          'subscribe modal.\n' +
+          '- `app/(authed)/settings/organization/members/_components/' +
+          'OrgMembersClient.tsx:479` — role Combobox inside the `<InviteModal>` ' +
+          '(org-roles list — short, but clips when the trigger sits low in the modal). ' +
+          'NOTE: the SAME file has another `<Combobox>` at line 361, but that one is ' +
+          'on the page-level members table row (not inside a modal) — **unaffected**.\n' +
+          '- `app/(authed)/settings/project/components/_components/' +
+          'ComponentsSettingsEditor.tsx:821` — move-target Combobox inside ' +
+          '`<DeleteComponentModal>` (lists every OTHER component in the project as ' +
+          'a re-parent target; clips when a project has many components). NOTE: the ' +
+          'SAME file has a `<Combobox>` at line 413 on the page-level filter bar ' +
+          '(outside the modals) — **unaffected**.\n' +
+          '- `app/(authed)/backlog/_components/CompleteSprintDialog.tsx:321` — ' +
+          'Combobox inside the complete-sprint modal (likely the carry-over target ' +
+          'sprint picker; the open-sprint list).\n' +
+          '- `app/(authed)/dashboard/_components/WidgetConfigModal.tsx:228` — ' +
+          'Statistic-type Combobox. **This is the ORIGINAL repro surface from ' +
+          '`bug-combobox-menu-clipped-inside-modal`** — listed here for completeness ' +
+          'so the fix Subtask covers ALL known occurrences in one sweep.\n' +
+          '\n' +
+          '_Verified safe (no Combobox inside the Modal):_ ' +
+          '`AddWidgetModal.tsx`, `CreateProjectModal.tsx`, `WorkspaceSwitcher.tsx`, ' +
+          '`BoardSwitcher.tsx`, `EditFilterDialog.tsx`, `SaveFilterDialog.tsx`, ' +
+          '`DeleteFilterDialog.tsx`, `StartSprintDialog.tsx` (uses `<DatePicker>` ' +
+          'only, which goes through its OWN Popover — not the Combobox inline ' +
+          'branch), `ReleaseKeyModal.tsx`, `ArchiveProjectModal.tsx`, ' +
+          '`ChangeKeyModal.tsx`, `BoardConfigEditor.tsx`, `WorkflowEditor.tsx`, ' +
+          '`AddWidgetModal.tsx`, `CreateDashboardModal.tsx`, `ShortcutsCheatsheet.tsx`, ' +
+          '`OrgControl.tsx`, `AttachmentPreview.tsx`, `IssueQuickView.tsx`. ' +
+          '`AutomationRuleEditor.tsx` has 9 Comboboxes but is a full-page editor, ' +
+          'NOT a modal — also unaffected.\n' +
+          '\n' +
+          '_Out-of-scope (different primitive, different clipping shape, NOT ' +
+          'covered by this fix):_ `<DatePicker>` inside a Modal opens its OWN ' +
+          '`<Popover>` (not a Combobox), so the inline-vs-portal branch above does ' +
+          "NOT apply — Radix's nested-Popover-inside-Dialog has its own focus-trap " +
+          'and clipping interactions that are out of scope here. If a follow-up ' +
+          'report surfaces DatePicker clipping, log it as a separate bug — same ' +
+          'family, different fix site.\n' +
+          '\n' +
+          '**Total: 12 affected Combobox-in-{Popover,Modal} sites across 9 files, ' +
+          'all fixed by the single inline-branch clamp.** The fix Subtask should ' +
+          'have a regression assertion per AFFECTED FILE (not per Combobox), opening ' +
+          'each modal/popover at a viewport where the menu would have clipped pre-' +
+          "fix and asserting the listbox's bottom-edge fits inside the dialog " +
+          "ancestor's bottom-edge via `getBoundingClientRect`.\n\n" +
+          '**Test gap that let it ship.** Same as the Modal sibling — Combobox tests ' +
+          "cover the inline branch's opens/closes/keyboard-nav semantics but not its " +
+          'rendered geometry inside a constrained parent. The fix MUST add a render ' +
+          'or Playwright assertion: open the menu inside a `Popover.Content` whose ' +
+          "remaining space is < the menu's natural height, then assert the " +
+          "listbox's bottom-edge fits inside the popover's bottom-edge " +
+          '(getBoundingClientRect). Pair it with the existing Modal-surface ' +
+          'regression so the same `listMaxHeight` fix is covered on both parents.\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/triage/_components/PromotePopover.tsx:191-202` — the ' +
+          'concrete repro surface (the `<Combobox options={sprintOptions} searchable …>` ' +
+          'rendered inside `Popover.Content` after `goToSprint` flips `step` to ' +
+          '`sprint`)\n' +
+          '- `components/ui/Popover.tsx:56-74` — `RadixPopover.Content` portal + ' +
+          '`overflow-hidden rounded-(--radius-card)` panel; the `role="dialog"` source ' +
+          "(Radix default) that triggers Combobox's inline branch\n" +
+          '- `components/ui/Combobox.tsx:125-134, 166-189, 288-310, 386-413` — the ' +
+          "inline-vs-portal branch + the portaled branch's viewport clamping (the " +
+          "shape to mirror) + the inline branch's `absolute left-0 top-full` " +
+          'rendering (the fix site)\n' +
+          '- `bug-combobox-menu-clipped-inside-modal` (sibling) — the FIRST surface ' +
+          'of the same defect (Combobox clipped by `Modal` `overflow-hidden`); the ' +
+          "fix should subsume both and reference this bug's id\n" +
+          '- `bug-inline-edit-clipped-when-table-short` (cousin) — the original ' +
+          'table-overflow case that justified the portaled branch; the contract this ' +
+          'fix must NOT regress\n' +
+          '- `motir-core/CLAUDE.md` — colour via `--el-*`, shape via element-shape ' +
+          'tokens (applies to whatever wrapper the fix introduces)\n\n' +
+          '**Refactor signal (rule of three).** This is the THIRD documented ' +
+          'occurrence of "menu/popover clipped by an ancestor\'s overflow" — first ' +
+          'was `bug-inline-edit-clipped-when-table-short` (table → body-portal ' +
+          'branch added), second was `bug-combobox-menu-clipped-inside-modal` ' +
+          '(Modal → inline branch fails the same way in reverse), now this one ' +
+          '(Popover, same shape as the Modal). The Combobox already encodes both ' +
+          'branches inside one component with a `closest("[role=\\"dialog\\"]")` ' +
+          'switch; this third occurrence does NOT add a new branch (Popover already ' +
+          'matches `role="dialog"`), but it confirms the per-context-branch shape ' +
+          'is at its ceiling. If a fourth occurrence surfaces in a NEW container ' +
+          'type (e.g. a sticky-header data-grid or a drawer panel without ' +
+          '`role="dialog"`), unify behind a single overflow-escape primitive ' +
+          'instead of a fourth branch.',
+      },
+      {
+        id: 'bug-account-notifications-row-divider-broken-by-cell-padding',
+        kind: 'bug',
+        title:
+          "Account settings → Notifications: per-row divider lines are visibly broken (gap before the EMAIL column) because each row's border-b is drawn on individual grid cells and the event cell's pr-4 ends the border 1rem short of the toggle columns",
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** account settings page → **Notifications** card ' +
+          '(`app/(authed)/settings/account/_components/' +
+          'NotificationPreferencesCard.tsx`, Subtask 5.7.x — the per-event ' +
+          'email/in-app preferences grid) · **Status:** open · **Reported by:** Yue.\n\n' +
+          'On the **Account settings** page, the **Notifications** card renders an ' +
+          "EVENT × {EMAIL, IN-APP} grid (Mentioned / Commented on an item you're " +
+          "involved in / Assigned to you / An item you're watching changes status / " +
+          '…). Each row is meant to be separated from the next by a single ' +
+          'horizontal divider that spans the full card width. Instead, every ' +
+          'divider is **visibly broken**: the line under the event-label cell ends ' +
+          '~1rem BEFORE the EMAIL column starts, producing a small but conspicuous ' +
+          'gap right where the toggles begin. The result is a ragged "stitched" ' +
+          'look — three disconnected segments per row (event | email | in-app) ' +
+          "instead of one continuous rule. The card's outer border + the column-" +
+          'header rule (which IS continuous) make the per-row breakage stand out.\n' +
+          '\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, navigate to ' +
+          '**Settings → Account**. Scroll to the **Notifications** card. Observe: ' +
+          "the row between **Mentioned** and **Commented on an item you're " +
+          'involved in** (and every row below it) shows a horizontal rule that ' +
+          'breaks ~1rem before the EMAIL toggle column begins — a visible gap, ' +
+          'then the rule resumes under the EMAIL cell, then under the IN-APP cell. ' +
+          'The COLUMN-HEADER rule (under EVENT / EMAIL / IN-APP) is continuous, ' +
+          "because the header cells don't carry the `pr-4` the event cells do.\n" +
+          '\n' +
+          '**Root cause (high confidence — source confirms it).** ' +
+          '`NotificationPreferencesCard.tsx` lays the grid out as ' +
+          '`<div role="grid" className="mt-2 grid grid-cols-[1fr_5rem_5rem] ' +
+          'items-center">`. Each ROW is rendered as THREE separate sibling cells ' +
+          '(an `<EventRow>` returns a `<>…</>` fragment of three `<div>`s — one ' +
+          'event-label div + two `<NotificationCell>` toggle divs):\n' +
+          '\n' +
+          '- Event cell: `<div className="border-(--el-border-soft) border-b ' +
+          'py-3.5 pr-4">` (`NotificationPreferencesCard.tsx:152`) — note the ' +
+          '`pr-4` right-padding.\n' +
+          '- Each toggle cell: `<div className="border-(--el-border-soft) flex ' +
+          'justify-center border-b py-3.5">` (`NotificationPreferencesCard.tsx:196`) ' +
+          '— no `pr-4`.\n' +
+          '\n' +
+          'Because the bottom border is painted on each INDIVIDUAL grid cell, the ' +
+          "event cell's `border-b` ends at the cell's **content-box** right edge, " +
+          'which is shifted left by exactly `pr-4` (1rem). The neighbouring EMAIL ' +
+          "cell's `border-b` starts at ITS left content edge with no compensating " +
+          'left padding, so a 1rem horizontal gap appears between the two borders. ' +
+          'This repeats once more (smaller, often invisible) between EMAIL and IN-' +
+          'APP if their box-sizing leaves any inter-cell gap; the dominant visible ' +
+          'break is the 1rem one before EMAIL.\n' +
+          '\n' +
+          'The COLUMN-HEADER rule (`NotificationPreferencesCard.tsx:116-124`) does ' +
+          'NOT exhibit the bug because its three cells use the SAME padding ' +
+          '(`pb-3` on all, no `pr-4` on the EVENT header) — so the three borders ' +
+          'meet flush. The bug is purely structural to the per-cell-border + ' +
+          'asymmetric-padding combination on the data rows.\n' +
+          '\n' +
+          '**Fix shapes (decide at fix time — listed by durability).**\n' +
+          '1. **Lift the divider OFF the cells and onto a row-spanning element ' +
+          '(durable, recommended).** The grid is a flat `grid-cols-[1fr_5rem_5rem]` ' +
+          'with cells laid out left-to-right per row; there is no row-spanning DOM ' +
+          'element to attach the border to. Two sub-shapes:\n' +
+          '   - **(a) Subgrid + per-row wrapper.** Wrap each row in a single ' +
+          '`<div role="row" className="grid grid-cols-subgrid col-span-3 border-b ' +
+          'border-(--el-border-soft)">` (Tailwind v4 supports `grid-cols-subgrid`); ' +
+          'move the three cells inside. The border is now on ONE row-spanning ' +
+          'element, so it spans uninterrupted regardless of per-cell padding. ' +
+          'Bonus: cleaner DOM semantics (real `role="row"` instead of fragment).\n' +
+          '   - **(b) Separator pseudo-row.** Between each row, insert a ' +
+          '`<div className="col-span-3 border-b border-(--el-border-soft)" />` — ' +
+          'simpler but adds an inert DOM node per row.\n' +
+          '2. **Drop `pr-4` from the event cell and use `gap-x-*` on the grid for ' +
+          'inter-column spacing instead** (minimal change). The grid becomes ' +
+          "`grid grid-cols-[1fr_5rem_5rem] gap-x-4 items-center`; the event cell's " +
+          "border now extends flush with the toggle cells'. **Risk:** changes the " +
+          'visual spacing of the column-header rule (it currently has zero gap-x), ' +
+          'and the column-header rule then also gains gap-x — verify the headers ' +
+          'still read correctly. Lower-touch but couples spacing to bordering.\n' +
+          '\n' +
+          '**Recommended:** fix 1a (subgrid + per-row wrapper). It is the standard ' +
+          'shape for "borders should be row-level, not cell-level" in a CSS-grid ' +
+          'layout (Jira, Linear, GitHub all use it for their grid-shaped tables), ' +
+          'and it future-proofs the card against any additional asymmetric per-cell ' +
+          'padding the design might introduce (e.g. a leading icon column, a ' +
+          'trailing description column).\n' +
+          '\n' +
+          '**Test gap that let it ship.** The existing Notifications-card tests ' +
+          'cover the toggle interaction + the persisted preference value + the ' +
+          '"Soon" disabled row, but not the **rendered geometry of the row ' +
+          'dividers**. The fix MUST add either a render-test or Playwright ' +
+          "assertion: the bounding rect of each row's border-bottom spans the " +
+          "card's full inner width (left content-edge to right content-edge), with " +
+          'no horizontal gap. Pair it with an axe sweep to confirm the cosmetic ' +
+          "cleanup doesn't regress contrast.\n" +
+          '\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/settings/account/_components/' +
+          'NotificationPreferencesCard.tsx:110-129` — the grid container ' +
+          '(`grid grid-cols-[1fr_5rem_5rem]`) + the column-header cells (continuous ' +
+          'rule, no `pr-4`) — the comparison case\n' +
+          '- `app/(authed)/settings/account/_components/' +
+          'NotificationPreferencesCard.tsx:139-176` — `EventRow` (returns a ' +
+          'fragment of three sibling cells; the event cell has `border-b … pr-4` ' +
+          '— the fix site)\n' +
+          '- `app/(authed)/settings/account/_components/' +
+          'NotificationPreferencesCard.tsx:178-205` — `NotificationCell` (the ' +
+          'toggle cells; `border-b` without compensating left padding)\n' +
+          '- `motir-core/CLAUDE.md` — colour via `--el-*` (the `--el-border-soft` ' +
+          'used here is correct), shape via element-shape tokens (applies to ' +
+          'whatever wrapper the fix introduces)\n' +
+          '\n' +
+          '**Class.** "Per-cell border in a CSS-grid table breaks at any cell with ' +
+          'asymmetric inline padding" — a structural rendering bug, not a token / ' +
+          'colour / a11y issue. First documented occurrence in this codebase; ' +
+          'flag the row-level-divider pattern (fix 1a) as the project standard for ' +
+          "grid-based tables going forward, so the same defect doesn't reappear in " +
+          'future settings cards or other key-value grids.',
+      },
+      {
         id: 'bug-notification-pref-transitioned-still-disabled-after-5-4-shipped',
         kind: 'bug',
         title:
@@ -3095,6 +3450,155 @@ export const EPICS: EpicMeta[] = [
           'opts out, OR (b) a Storybook/RTL render test that mounts every existing ' +
           '`<Modal>` consumer with synthetic long content + asserts no clipping. Not in scope ' +
           'for this bug; the rule of three is the trigger for the refactor pass.',
+      },
+      {
+        id: 'bug-card-header-loses-padding-when-body-overrides-p-0',
+        kind: 'bug',
+        title:
+          'Settings → Project → Details: the "Project details" card title and the Admin pill render flush against the card edges, because the editable variant overrides Card padding to `p-0` (to let body dividers extend edge-to-edge) but the Card header slot has no padding of its own and inherited the outer pad',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** project settings → **Details** page → `ProjectDetailsCard` ' +
+          '(`app/(authed)/settings/project/_components/ProjectDetailsCard.tsx`, Story 6.8) ' +
+          'AND the shared `Card` primitive ' +
+          '(`components/ui/Card.tsx`) — the API gap is in the primitive, the visible symptom is on ' +
+          'the Details page · **Status:** open · **Reported by:** Yue.\n\n' +
+          'On **Settings → Project → Details** (admin view), the card header row — the ' +
+          '**"Project details"** title (left) and the **Admin** pill (right) — sits visibly flush ' +
+          "against the card's outer edges. The title hugs the left border and the Admin pill " +
+          'hugs the right border, with no horizontal breathing room. The body BELOW the header ' +
+          '(Avatar / Name / Key field stack) is correctly padded, so the asymmetry is loud: the ' +
+          'header looks like a separate, mis-styled slab on top of a normal card.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open the `moooon` / `motir` ' +
+          'project, go to **Settings → Project → Details**. Observe the **Project details** card: ' +
+          'the h2 title on the left and the Admin pill on the right have **zero left/right ' +
+          'padding** against the card border. The "Your project\'s name, avatar and key. …" ' +
+          'description copy ABOVE the card is also flush left against the page gutter — adjacent ' +
+          'but a separate finding (page-level intro is unpadded too). The READ-ONLY variant ' +
+          '(non-admin member) does NOT exhibit the bug, because that branch renders the card with ' +
+          'default Card padding (no `p-0` override) — the comparison case.\n\n' +
+          '**Root cause (high confidence — source confirms it).** `Card` ' +
+          '(`components/ui/Card.tsx:21–24, 65`) paints its padding on the OUTER box via ' +
+          '`p-(--spacing-card-padding)` from `cardVariants`, then renders the header slot as ' +
+          '`<div className="mb-(--spacing-md)">{header}</div>` — **the header has only a bottom ' +
+          'margin; no inline padding of its own.** The header was implicitly inheriting the outer ' +
+          "`p-(--spacing-card-padding)` from the Card's box.\n\n" +
+          'The editable Details branch ' +
+          '(`ProjectDetailsCard.tsx:170–171`) overrides Card to `className="p-0"` and re-pads ' +
+          'ONLY the body: `<Card header={<CardHead canManage t={td} />} className="p-0"> <div ' +
+          'className="flex flex-col p-(--spacing-card-padding)">…</div></Card>`. The override ' +
+          'exists for a real reason — the body uses an inline FieldStack list with full-width ' +
+          'dividers (`border-b border-(--el-border)`) between fields, and the dividers must ' +
+          "extend edge-to-edge inside the card, which only works if the Card's outer padding is " +
+          "OFF and the body re-pads itself. But the same `p-0` ALSO strips the header's " +
+          'inherited padding, leaving `CardHead` (the title + Admin pill in a ' +
+          "`flex items-center justify-between` row) flush against the card's outer border.\n\n" +
+          'The read-only branch (`ProjectDetailsCard.tsx:71–95`) uses plain ' +
+          '`<Card header={…}>…</Card>` with default padding, so the header inherits ' +
+          '`p-(--spacing-card-padding)` and renders correctly — confirming the bug is the ' +
+          '`p-0` override path, not the `CardHead` component itself.\n\n' +
+          '**This is a Card API gap, not a one-off mistake.** There is no documented way for a ' +
+          'caller to say "give me a card whose HEADER is padded but whose BODY extends edge-to-' +
+          'edge" — the two are coupled to a single `p-(--spacing-card-padding)` on the outer ' +
+          'box. Any consumer that wants edge-to-edge body content (a list with full-width row ' +
+          'dividers, a table whose header rule spans the full card width, a media tile with a ' +
+          'flush-left thumbnail) hits this. **Class:** "Primitive\'s padding lives on the wrong ' +
+          'DOM box for the layout we actually wanted." Same shape as the sibling ' +
+          '`bug-account-notifications-row-divider-broken-by-cell-padding` earlier in this PR ' +
+          '(border-on-each-cell vs. border-on-row-wrapper).\n\n' +
+          '**Fix shapes (decide at fix time — listed by durability).**\n' +
+          '1. **Slot-level padding in `Card` (durable, recommended).** Move the ' +
+          "`p-(--spacing-card-padding)` OFF the Card's outer box and ONTO each slot " +
+          'individually: the header slot, the children/body slot, and the footer slot each get ' +
+          'their own `p-(--spacing-card-padding)`. Add an opt-out per slot — e.g. ' +
+          '`<Card bodyFlush>` (or a per-slot `headerClassName` / `bodyClassName` prop) — for the ' +
+          'edge-to-edge case so the body can drop its padding while the header KEEPS its own. ' +
+          'This makes `<Card bodyFlush header={…}>` the canonical shape for the ' +
+          '`ProjectDetailsCard` editable variant and any future list/table card. **Why durable:** ' +
+          'every consumer that wants flush body content (the list-with-dividers pattern is going ' +
+          'to recur — see the Notifications card sibling bug) is the same Card API gap; fixing ' +
+          'it once at the primitive prevents the next occurrence. Aligns with the `Modal` ' +
+          'precedent: `Modal.Body` is the documented seam for "let the body do its own padding."\n' +
+          '2. **Pad the header inline at the consumer (minimal change, fragile).** Inside ' +
+          '`ProjectDetailsCard.tsx:170`, replace `header={<CardHead … />}` with ' +
+          '`header={<div className="p-(--spacing-card-padding) pb-0"><CardHead … /></div>}`. ' +
+          'Fixes the visible symptom in one file. **Why fragile:** the next card that wants the ' +
+          'same edge-to-edge body shape will repeat the workaround; the Card API gap stays. Also ' +
+          'every consumer ends up reimplementing the same padding math, which silently drifts.\n\n' +
+          '**Recommended:** fix 1 (slot-level padding in `Card`). It is the same shape as the ' +
+          '`Modal.Body` seam (let the body opt out of the outer padding, header/footer stay ' +
+          'padded), and it eliminates the API gap that will otherwise re-bite the next consumer. ' +
+          'The migration is mechanical: scan the codebase for every existing `<Card>` use, and ' +
+          'for the ones that need the OLD behavior (header + body share one padded box) nothing ' +
+          'changes since slot padding sums to the same outer pad; for the ones that overrode ' +
+          '`className="p-0"` (this card, and grep for any others) replace with `bodyFlush` so the ' +
+          'header recovers its padding.\n\n' +
+          '**Adjacent finding (NOT in this bug, but observed).** The Details PAGE header — the ' +
+          '**"Details"** h1 title + the "Your project\'s name, avatar and key. …" intro copy ' +
+          'above the card — also hugs the page gutter without left padding. That is a page-' +
+          'level layout concern (the `SettingsLayout` container or the page itself), not a Card ' +
+          'concern; it is out of scope for this bug and should be logged separately if it is a ' +
+          'real defect rather than the intended design.\n\n' +
+          '**Test gap that let it ship.** The existing `ProjectDetailsCard` tests cover the ' +
+          'editable flow (name save, avatar pick, key change modal), but no test renders the ' +
+          "card and asserts the **rendered geometry of the header** — the title's left edge " +
+          "should sit `p-(--spacing-card-padding)` away from the card's outer left edge, and " +
+          "the Admin pill's right edge should sit `p-(--spacing-card-padding)` away from the " +
+          "card's outer right edge. The fix MUST add either a render-test or Playwright " +
+          "measurement: render the admin view, measure the title's `getBoundingClientRect().left " +
+          '- card.getBoundingClientRect().left`, assert it equals the card padding token value.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- On **Settings → Project → Details** (admin view), the **"Project details"** card ' +
+          'title and the **Admin** pill render with the standard card padding on the left and ' +
+          'right — NO flush-against-edge appearance, visually consistent with the read-only ' +
+          "variant's header.\n" +
+          '- The body FieldStack (Avatar / Name / Key) and its full-width dividers continue to ' +
+          'extend edge-to-edge inside the card — the fix must NOT regress the body layout to a ' +
+          'doubly-padded shape that shrinks the dividers.\n' +
+          '- The read-only variant (`canManage={false}`) renders identically to today ' +
+          '(regression guard on the green-path layout).\n' +
+          '- A render-test (`tests/components/project-details-card-*.test.tsx`) or Playwright ' +
+          "assertion measures the rendered geometry: the card-header title's `boundingClientRect " +
+          ".left` minus the card's `boundingClientRect.left` equals the card padding token, and " +
+          "the Admin pill's right inset is symmetric.\n" +
+          '- AA contrast preserved (no colour change); the header copy + Admin pill keep their ' +
+          'current `--el-*` tokens.\n' +
+          '- If fix 1 is taken (slot-level padding in `Card`): every existing `<Card>` consumer ' +
+          'in the codebase is audited and updated where the new slot model changes the rendered ' +
+          'output; the `bodyFlush` (or chosen prop) shape is documented in the `Card.tsx` ' +
+          'doc-comment as the canonical seam for edge-to-edge body content.\n\n' +
+          '## Context refs\n\n' +
+          '- `components/ui/Card.tsx:21–24, 65` — `cardVariants` puts `p-(--spacing-card-padding)` ' +
+          'on the outer box; the header slot is `<div className="mb-(--spacing-md)">` with no ' +
+          'inline padding of its own (the API gap)\n' +
+          '- `app/(authed)/settings/project/_components/ProjectDetailsCard.tsx:170–171` — the ' +
+          'editable branch overrides `<Card className="p-0">` and re-pads ONLY the body via the ' +
+          'inner `<div className="flex flex-col p-(--spacing-card-padding)">`, stripping the ' +
+          "header's inherited padding (the visible fix site)\n" +
+          '- `app/(authed)/settings/project/_components/ProjectDetailsCard.tsx:71–95` — the ' +
+          'read-only branch (default Card padding; the comparison case — no symptom)\n' +
+          '- `app/(authed)/settings/project/_components/ProjectDetailsCard.tsx:303–320` — ' +
+          '`CardHead` (the title + Admin/Read-only Pill row inside the header slot; not at fault)\n' +
+          '- `components/ui/Modal.tsx` — the `Modal.Body` precedent: opt-in scroll seam that ' +
+          'inverts which slot owns the padding; same shape as the recommended `bodyFlush` Card ' +
+          'opt-in\n' +
+          '- `motir-core/CLAUDE.md` — shape via element-shape tokens (the fix introduces no new ' +
+          'tokens; this is purely a layout API change to how `Card` distributes its existing ' +
+          '`--spacing-card-padding` across slots)\n' +
+          '- Sibling bug `bug-account-notifications-row-divider-broken-by-cell-padding` (this ' +
+          'same PR) — same class: "primitive\'s padding lives on the wrong DOM box for the ' +
+          'layout we actually wanted." Both fixes lift the padding/border onto a different DOM ' +
+          'level so the layout can express edge-to-edge content without losing the surrounding ' +
+          'shell.\n\n' +
+          '**Refactor signal (rule of three watch).** This is the SECOND documented occurrence ' +
+          'of "consumer needed edge-to-edge body content and resorted to overriding the ' +
+          "primitive's outer padding to `p-0`, losing the header/footer shell's padding as a " +
+          'side-effect" (the first being any existing `<Card className="p-0">` use in the ' +
+          'codebase — grep at fix time). The third occurrence justifies promoting the slot-' +
+          'level-padding shape to the project standard for ALL shell primitives ' +
+          '(Card / Panel / Sheet), not just Card.',
       },
     ],
   },
