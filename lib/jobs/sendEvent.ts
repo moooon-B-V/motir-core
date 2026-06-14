@@ -29,5 +29,24 @@ export async function sendEvent<N extends WorkspaceScopedEventName>(
         `or null for a cross-workspace/system event.`,
     );
   }
-  await inngest.send({ name, data });
+  // BEST-EFFORT transport. `sendEvent` is ALWAYS called POST-COMMIT (every call
+  // site emits after its `$transaction` has committed — see the call-site
+  // comments). The enqueue is a NOTIFICATION side-effect, never part of the
+  // mutation's success contract, so a transport failure (Inngest unreachable or
+  // unconfigured — a local `pnpm dev` with no dev server, or a deploy missing
+  // INNGEST_EVENT_KEY) must NOT propagate: it would turn an already-committed
+  // mutation into a 500, and the caller's optimistic UI would then REVERT a
+  // change the database actually kept (the board-drag / status inline-edit
+  // "snaps back but a refresh shows it moved" bug — PROD-443). Drop + log the
+  // event instead; the durable state stands. The argument validation above
+  // still throws — that's a programming error, not a transport one.
+  try {
+    await inngest.send({ name, data });
+  } catch (err) {
+    console.error(
+      `sendEvent("${name}") failed to enqueue (workspaceId=${String(workspaceId)}); ` +
+        `the mutation committed but the event was dropped:`,
+      err,
+    );
+  }
 }
