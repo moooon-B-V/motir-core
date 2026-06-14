@@ -177,6 +177,24 @@ describe('FiltersDirectory — rendering + gating', () => {
 
     expect(await screen.findByText('No saved filters yet')).toBeTruthy();
   });
+
+  // The built-in defaults are real rows in the table, so the footer total must
+  // count them — not just the paginated saved-filter `total`. Regression: with
+  // 0 saved filters the footer read "0 filters" while eight built-in rows were
+  // visible.
+  it('counts the built-in defaults in the footer total, not just saved filters', async () => {
+    const builtinCount = BUILTIN_FILTERS.length;
+    mockList({
+      items: [row({ name: 'Sprint blockers' })],
+      total: 1,
+      builtins: BUILTIN_FILTERS.map(toBuiltinFilterSummaryDto),
+    });
+    renderDirectory(<FiltersDirectory projectKey="PROD" viewer={viewer()} />);
+
+    await screen.findByText('Sprint blockers');
+    // 1 saved + N built-ins — the footer must not report just "1 filter".
+    expect(screen.getByRole('status').textContent).toContain(`${1 + builtinCount} filters`);
+  });
 });
 
 // Regression for bug-filters-directory-builtins-i18n-and-layout (defect 1): the
