@@ -154,8 +154,15 @@ export function BoardColumn({
       </header>
 
       {empty ? (
-        <div className="p-2.5">
-          <p className="my-1 rounded-(--radius-card) border border-dashed border-(--el-border) px-2.5 py-4 text-center text-xs text-(--el-text-muted)">
+        // Empty column: the whole body is the drop region. It FILLS the column
+        // (`flex-1`) and the dashed placeholder carries a `min-h` floor, so a
+        // zero-card column is still a generously-sized, reliable drop target
+        // rather than a short caption pinned to the top (bug-board-cannot-drag-
+        // from-in-review-to-done — the empty-column backstop). The `<section>`
+        // is the dnd-kit droppable, so a drop anywhere in this region resolves
+        // to this column.
+        <div className="min-h-0 flex-1 p-2.5">
+          <p className="flex min-h-[120px] w-full items-center justify-center rounded-(--radius-card) border border-dashed border-(--el-border) px-2.5 py-4 text-center text-xs text-(--el-text-muted)">
             {t('emptyColumn')}
           </p>
         </div>

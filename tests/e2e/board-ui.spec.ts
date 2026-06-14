@@ -29,7 +29,7 @@
 // board-card / board-column / board-completeness); this proves them composed,
 // over the real stack.
 
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 import { getBoard, columnByStatus, cardIdsIn } from './_helpers/board';
@@ -116,6 +116,116 @@ async function pointerDrag(
   );
   await page.mouse.up();
   return move;
+}
+
+// ONE drag gesture of the card onto `columnTestId`, AUTO-SCROLLING the
+// horizontal column row when that column starts past the fold (bug-board-cannot-
+// drag-from-in-review-to-done). On a laptop-width viewport the trailing columns
+// (Done, Cancelled) sit off-screen; the fix scrolls the row when the dragged
+// card nears the right edge, so this gesture holds the pointer at the row's
+// right edge until the target is fully on screen, then drops onto it (the nudge
+// loop exits immediately for an already-visible target). It is NON-THROWING and
+// makes no assertion — `closestCorners` can resolve `over` to a stale element at
+// release (a known dnd-kit quirk this very bug touches), so a single gesture may
+// miss; `dragUntilInColumn` wraps it in the CLAUDE.md "retry the gesture until
+// it commits" loop. A missed/rejected move changes nothing server-side, so
+// re-dragging is safe.
+async function dragGesture(
+  page: Page,
+  cardIdentifier: string,
+  columnTestId: string,
+  dropYFrac = 0.4,
+): Promise<void> {
+  const from = page.getByTestId(cardTid(cardIdentifier));
+  const f = await from.boundingBox();
+  if (!f) return; // card not mounted (e.g. transiently); the caller will retry
+  await page.mouse.move(f.x + f.width / 2, f.y + f.height / 2);
+  await page.mouse.down();
+  // Clear the 8px activation constraint.
+  await page.mouse.move(f.x + 14, f.y + 8, { steps: 5 });
+
+  const board = page.getByTestId('board');
+  const target = page.getByTestId(columnTestId);
+  const vw = page.viewportSize()!.width;
+  const boardBox = (await board.boundingBox())!;
+  const edgeX = boardBox.x + boardBox.width - 6;
+  const midY = boardBox.y + boardBox.height / 2;
+  const fullyVisible = (b: { x: number; width: number } | null) =>
+    !!b && b.x >= 0 && b.x + b.width <= vw;
+
+  // PHASE A — bring the target on screen IF it is past the fold: hold the
+  // pointer at the row's right edge so the fix's edge auto-scroll advances
+  // `scrollLeft`. Bounded; if the target is already fully visible this exits at
+  // once and no scroll happens.
+  let scrolled = false;
+  for (let i = 0; i < 80; i++) {
+    if (fullyVisible(await target.boundingBox())) break;
+    scrolled = true;
+    await page.mouse.move(edgeX - (i % 2), midY + (i % 3), { steps: 2 });
+    await page.waitForTimeout(40);
+  }
+  if (scrolled) {
+    // Move off the edge band so auto-scroll halts, then wait for `scrollLeft` to
+    // settle (poll until two consecutive reads match — no fixed-timeout guess);
+    // the target's box is only stable once the row stops moving.
+    await page.mouse.move(boardBox.x + boardBox.width / 2, midY, { steps: 6 });
+    let prevScroll = Number.NaN;
+    await expect
+      .poll(
+        async () => {
+          const cur = await board.evaluate((el) => el.scrollLeft);
+          const stable = cur === prevScroll;
+          prevScroll = cur;
+          return stable;
+        },
+        { timeout: 5_000 },
+      )
+      .toBe(true);
+  }
+
+  // PHASE B — drop onto the (now-stable, on-screen) target. Two settling moves
+  // onto its body let the live `onDragOver` relocate commit before release.
+  const t = await target.boundingBox();
+  if (!t) {
+    await page.mouse.up();
+    return;
+  }
+  const tx = t.x + t.width / 2;
+  const ty = t.y + t.height * dropYFrac;
+  await page.mouse.move(tx, ty, { steps: 16 });
+  await page.mouse.move(tx, ty, { steps: 4 });
+  // Give the optimistic relocate a chance to commit before release (non-throwing
+  // — if it missed, the retry wrapper re-drags).
+  await target
+    .getByTestId(cardTid(cardIdentifier))
+    .waitFor({ state: 'visible', timeout: 2_000 })
+    .catch(() => {});
+  await page.mouse.up();
+  await page.waitForTimeout(150); // let the move POST + reconcile settle before the next read
+}
+
+// Drag the card into `columnTestId` and KEEP RETRYING the gesture until the
+// authoritative projection shows it committed to `toStatusKey` (the CLAUDE.md
+// dnd discipline: verify the committed state, retry until it lands — never trust
+// one drop). Returns once committed; fails loudly if it never lands.
+async function dragUntilInColumn(
+  page: Page,
+  request: APIRequestContext,
+  itemId: string,
+  cardIdentifier: string,
+  columnTestId: string,
+  toStatusKey: string,
+): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        if (cardIdsIn(await getBoard(request), toStatusKey).includes(itemId)) return true;
+        await dragGesture(page, cardIdentifier, columnTestId);
+        return cardIdsIn(await getBoard(request), toStatusKey).includes(itemId);
+      },
+      { timeout: 30_000, intervals: [500, 1_000, 1_500, 2_000] },
+    )
+    .toBe(true);
 }
 
 test.beforeEach(async () => {
@@ -345,5 +455,124 @@ test.describe('board-ui @smoke', () => {
     const after = await getBoard(page.request);
     expect(cardIdsIn(after, 'todo')).not.toContain(mover.id);
     expect(cardIdsIn(after, 'blocked')).toContain(mover.id);
+  });
+});
+
+// Regression for bug-board-cannot-drag-from-in-review-to-done. The default
+// workflow has SIX columns (todo · blocked · in_progress · in_review · done ·
+// cancelled); on a laptop-width viewport the trailing ones (Done, Cancelled)
+// render PAST the horizontal fold. Before the fix, dragging a card toward an
+// off-screen column did nothing — the row never scrolled, so the off-screen
+// column never became the drop target and the move silently snapped back with
+// no `POST /api/board/move`. The user hit this on the `in_review → done` edge
+// (In Review is the last on-screen column, Done the first off-screen one).
+test.describe('board-ui auto-scroll to off-screen columns @smoke', () => {
+  const NARROW = 1500; // In Review fully visible (ends ~1472); Done off-screen (starts ~1488)
+
+  // Open the board at a laptop width where Done/Cancelled sit past the fold, and
+  // assert the projection layout actually puts Done off-screen (the precondition
+  // the bug needs — if a layout change ever makes all six fit, this flags it).
+  async function openNarrowBoard(page: Page): Promise<void> {
+    await page.setViewportSize({ width: NARROW, height: 1080 });
+    await page.goto('/boards');
+    await expect(page.getByTestId('board')).toBeVisible({ timeout: 15_000 });
+  }
+
+  test('a card drags from the last on-screen column into the OFF-SCREEN Done column — the row auto-scrolls and the move commits', async ({
+    page,
+  }) => {
+    await signUp(page, OWNER_EMAIL);
+    const { projectId } = await seedActiveProject(OWNER_EMAIL);
+    const item = await createItem(page.request, projectId, 'review to done');
+    // Park it in In Review (the last on-screen column) via the API.
+    expect((await transition(page.request, item.id, 'in_progress')).status()).toBe(200);
+    expect((await transition(page.request, item.id, 'in_review')).status()).toBe(200);
+
+    const board = await getBoard(page.request);
+    const inReviewCol = columnByStatus(board, 'in_review');
+    const doneCol = columnByStatus(board, 'done');
+    const card = inReviewCol.cards.find((c) => c.id === item.id)!;
+
+    await openNarrowBoard(page);
+
+    // Precondition: Done is genuinely off-screen at this width (otherwise the
+    // test wouldn't exercise the auto-scroll path the bug is about).
+    const doneBox = await page.getByTestId(`board-column-${doneCol.id}`).boundingBox();
+    expect(doneBox, 'Done column has a box').not.toBeNull();
+    expect(
+      (doneBox!.x ?? 0) + (doneBox!.width ?? 0),
+      'Done column starts off-screen at laptop width',
+    ).toBeGreaterThan(NARROW);
+
+    // Drag In Review → the off-screen Done column. Auto-scroll brings Done in;
+    // the move commits to `done` (verified against the authoritative projection,
+    // retrying the gesture until it lands).
+    await dragUntilInColumn(
+      page,
+      page.request,
+      item.id,
+      card.identifier,
+      `board-column-${doneCol.id}`,
+      'done',
+    );
+
+    // The card lands in Done in the DOM, and left In Review.
+    await expect(
+      page.getByTestId(`board-column-${doneCol.id}`).getByTestId(cardTid(card.identifier)),
+    ).toBeVisible();
+    const after = await getBoard(page.request);
+    expect(cardIdsIn(after, 'done')).toContain(item.id);
+    expect(cardIdsIn(after, 'in_review')).not.toContain(item.id);
+
+    // …and it survives a reload (committed server-side, not just optimistic).
+    await page.reload();
+    await expect(page.getByTestId('board')).toBeVisible({ timeout: 15_000 });
+    const reloaded = await getBoard(page.request);
+    expect(cardIdsIn(reloaded, 'done')).toContain(item.id);
+  });
+
+  test('the full forward path drags edge-by-edge — todo → in_progress → in_review → done — each transition commits', async ({
+    page,
+  }) => {
+    await signUp(page, OWNER_EMAIL);
+    const { projectId } = await seedActiveProject(OWNER_EMAIL);
+    const item = await createItem(page.request, projectId, 'walks the lifecycle');
+
+    const board = await getBoard(page.request);
+    const colId = (key: string) => columnByStatus(board, key).id;
+    // The board card's testid keys off the work item IDENTIFIER (BUI-N), which
+    // the projection carries — createItem returns only { id, status }.
+    const ident = columnByStatus(board, 'todo').cards.find((c) => c.id === item.id)!.identifier;
+
+    await openNarrowBoard(page);
+
+    // Each forward edge of the default workflow, dragged in turn on the SAME
+    // card. The last one (in_review → done) targets the off-screen column and
+    // exercises auto-scroll; the earlier ones are on-screen. Each edge verifies
+    // the card committed to the target status (and lands in its DOM column)
+    // before moving to the next.
+    const edges: Array<[from: string, to: string]> = [
+      ['todo', 'in_progress'],
+      ['in_progress', 'in_review'],
+      ['in_review', 'done'],
+    ];
+    for (const [, toKey] of edges) {
+      await dragUntilInColumn(
+        page,
+        page.request,
+        item.id,
+        ident,
+        `board-column-${colId(toKey)}`,
+        toKey,
+      );
+      await expect(
+        page.getByTestId(`board-column-${colId(toKey)}`).getByTestId(cardTid(ident)),
+      ).toBeVisible();
+    }
+
+    // Final committed state: the card is in Done after the whole forward walk.
+    await page.reload();
+    await expect(page.getByTestId('board')).toBeVisible({ timeout: 15_000 });
+    expect(cardIdsIn(await getBoard(page.request), 'done')).toContain(item.id);
   });
 });
