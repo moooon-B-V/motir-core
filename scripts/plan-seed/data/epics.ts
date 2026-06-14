@@ -1767,6 +1767,126 @@ export const EPICS: EpicMeta[] = [
           'forbids server-shipped user-facing English from crossing the boundary.',
       },
       {
+        id: 'bug-filters-directory-builtins-i18n-and-layout',
+        kind: 'bug',
+        title:
+          'Filters directory (/filters): built-in filter names render in English, the search field renders collapsed, and the name column is too narrow — the FiltersDirectory table',
+        status: 'planned',
+        type: 'bug',
+        dependsOn: ['bug-builtin-filter-names-not-localized'],
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surface:** the saved-filters directory page `/filters` — ' +
+          '`app/(authed)/filters/_components/FiltersDirectory.tsx` (Story 6.2 · ' +
+          'Subtask 6.2.4) · **Status:** open · **Reported by:** Yue.\n\n' +
+          'Three defects on the `/filters` directory table, reported together. Two of ' +
+          'them (search field + name column) share ONE root cause; the third is the ' +
+          'sibling i18n leak.\n\n' +
+          '**Defect 1 — built-in filter names are not translated (i18n leak).** The ' +
+          '`BuiltinFilterRow` renders the English registry literal directly: ' +
+          '`app/(authed)/filters/_components/FiltersDirectory.tsx:506` reads ' +
+          '`name={builtin.name}` (via the shared `ApplyNameButton`). This is the SAME ' +
+          'defect as `bug-builtin-filter-names-not-localized` (the issues-list ' +
+          '`SavedFilterDropdown`) — a SECOND consumer of the same DTO that the first ' +
+          "fix's audit missed (the `/filters` directory lists the eight built-ins in " +
+          'the same table as saved rows, under a `默认`-equivalent grouping). So under ' +
+          '`zh` the built-in rows show `My open issues / All issues / …` while the rest ' +
+          'of the table chrome is localised. **This defect DEPENDED ON ' +
+          '`bug-builtin-filter-names-not-localized`** (PR #1007, now MERGED — so this ' +
+          'card is `planned`/ready): that fix added `slug` to `BuiltinFilterSummaryDto` ' +
+          'and the `savedFilters.builtinNames.<slug>` catalog block, so the fix here is ' +
+          'a one-line change — `BuiltinFilterRow` passes ' +
+          '`name={t(`builtinNames.${builtin.slug}`)}` instead of `builtin.name`. (The ' +
+          'persisted saved-filter rows are user-authored text and correctly stay ' +
+          'verbatim — only the eight built-ins need threading.)\n\n' +
+          '**Defect 2 — the search field renders collapsed (the "search style is off").** ' +
+          'The search `Input` is wrapped in `<div className="max-w-sm">` at ' +
+          '`FiltersDirectory.tsx:195`. **`max-w-sm` is one of the named `max-w-*` ' +
+          "utilities that are BROKEN in motir-core**: `app/globals.css`'s `@theme` " +
+          'redefines the spacing scale and ships NO `--container-*` scale, so Tailwind ' +
+          "v4's `max-w-{sm,md,lg,3xl}` resolve to a near-zero width and collapse the box " +
+          'to roughly the addon-icon width (~40px). The search input therefore renders as ' +
+          'a tiny icon-sized control rather than a full search field — which reads as ' +
+          '"the search button style is off." The codebase already documents this trap ' +
+          '(`app/(authed)/reports/_components/ReportPageChrome.tsx:36-38`, ' +
+          '`app/(auth)/layout.tsx:16-18`, `app/tokens/markdown-editor/page.tsx:51-53`) ' +
+          'and the established fix is an arbitrary rem value (e.g. `max-w-[20rem]`), used ' +
+          'in ~70 places already.\n\n' +
+          '**Defect 3 — the name column is too narrow.** SAME root cause as defect 2: the ' +
+          '`ApplyNameButton` is capped by `className="group flex max-w-md items-start …"` ' +
+          'at `FiltersDirectory.tsx:400`. `max-w-md` collapses the same way `max-w-sm` ' +
+          'does, crushing the name button to ~40px so the filter name wraps / truncates ' +
+          'hard even when the table has ample room. The `<th>`/`<td>` for the name column ' +
+          'also carry no width hint, so once the button stops collapsing the name column ' +
+          'should additionally be allowed to take the slack (e.g. a `w-full` / `min-w` on ' +
+          'the name cell with `min-w-0` truncation on the button, per the ' +
+          'min-w-0-overflow rule) so it is visibly the widest column. Fix at minimum the ' +
+          'broken `max-w-md`; confirm the column then reads at a comfortable width against ' +
+          'real names.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open `moooon` / `motir` ' +
+          '→ `/filters`. (1) Set UI language to Chinese → the eight built-in rows stay ' +
+          'English while the columns/chrome are `zh`. (2) In any locale, note the search ' +
+          'field is collapsed to an icon-sized box at the top-left. (3) Note the filter ' +
+          'name column is narrower than the content wants, truncating names that would ' +
+          'otherwise fit.\n\n' +
+          '**Fix shapes.**\n\n' +
+          '1. **Defect 1 (i18n):** once `bug-builtin-filter-names-not-localized` lands, ' +
+          'change `BuiltinFilterRow` to thread `t(`builtinNames.${builtin.slug}`)` over ' +
+          'the slug (the DTO already carries `slug` by then). No new catalog keys — reuse ' +
+          'the `savedFilters.builtinNames` block that fix added.\n' +
+          '2. **Defects 2 & 3 (layout):** replace the broken named `max-w-sm` ' +
+          '(search wrapper) and `max-w-md` (name button) with arbitrary rem values — the ' +
+          'repo-wide workaround — and give the name column the width slack (so it is the ' +
+          'widest column) while keeping `min-w-0` truncation. NO design subtask needed: ' +
+          'this restores the INTENDED layout the broken utility silently ate, it does not ' +
+          'invent a new one.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- In the `zh` locale, all eight built-in rows in the `/filters` directory ' +
+          'render their Chinese labels (reusing `savedFilters.builtinNames`), matching ' +
+          'the issues-list dropdown after `bug-builtin-filter-names-not-localized`. The ' +
+          '`en` locale is unchanged.\n' +
+          '- The search field renders at a normal search-input width (not collapsed to ' +
+          'an icon-sized box) — no named `max-w-*` utility remains on the wrapper.\n' +
+          '- The filter-name column renders comfortably wide (visibly the widest column), ' +
+          'no longer truncating names that fit the table; the name button no longer ' +
+          'carries a broken named `max-w-*`. Long names still truncate gracefully via ' +
+          '`min-w-0`, not overflow.\n' +
+          '- No named `max-w-{sm,md,lg,xl,2xl,3xl}` utilities remain in ' +
+          '`FiltersDirectory.tsx` (grep clean); arbitrary rem values used instead.\n' +
+          '- A render test (happy-dom) asserts the built-in rows localise under `zh` in ' +
+          'the directory (mirrors the dropdown test from the sibling fix); existing ' +
+          '`filters-directory.test.tsx` stays green.\n' +
+          '- AA contrast and the design-system primitives (`Input`, `Button`, `Pill`) are ' +
+          'preserved; no service / DTO / route change (pure client layout + i18n thread).\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/filters/_components/FiltersDirectory.tsx:506` — ' +
+          '`BuiltinFilterRow` renders `name={builtin.name}` (defect 1 fix site).\n' +
+          '- `app/(authed)/filters/_components/FiltersDirectory.tsx:195` — the ' +
+          '`max-w-sm` search wrapper (defect 2 fix site).\n' +
+          '- `app/(authed)/filters/_components/FiltersDirectory.tsx:400` — the ' +
+          '`ApplyNameButton` `max-w-md` cap (defect 3 fix site); the name `<th>`/`<td>` ' +
+          'are at lines ~232 / ~440.\n' +
+          '- `app/globals.css` `@theme` — redefines `--spacing-*` and ships NO ' +
+          '`--container-*` scale, which is why named `max-w-{sm,md,3xl}` collapse.\n' +
+          '- `app/(authed)/reports/_components/ReportPageChrome.tsx:36-38`, ' +
+          '`app/(auth)/layout.tsx:16-18`, `app/tokens/markdown-editor/page.tsx:51-53` — ' +
+          'the documented `max-w-[…rem]`-not-`max-w-3xl` workaround precedent.\n' +
+          '- `bug-builtin-filter-names-not-localized` — the sibling i18n fix this card ' +
+          'depends on; it adds `slug` to `BuiltinFilterSummaryDto` + the ' +
+          '`savedFilters.builtinNames` catalog block this card reuses.\n' +
+          '- `lib/mappers/savedFilterMappers.ts` — `toBuiltinFilterSummaryDto` (already ' +
+          'ships `slug` once the sibling fix merges).\n' +
+          '- `motir-core/CLAUDE.md` — shape/colour token rules; `motir-meta` design notes ' +
+          'on the broken named `max-w-*` scale.\n\n' +
+          '**Note (audit gap that let defect 1 ship).** ' +
+          '`bug-builtin-filter-names-not-localized` fixed only the issues-list ' +
+          '`SavedFilterDropdown`; its consumer audit concluded the report scope + ' +
+          'dashboard pickers list no built-ins (true) but MISSED that the `/filters` ' +
+          'directory table renders them too. When the next i18n-key-vs-literal bug is ' +
+          'fixed, grep ALL consumers of the DTO (`BuiltinFilterSummaryDto`) before ' +
+          'declaring the surface list complete.',
+      },
+      {
         id: 'bug-combobox-menu-clipped-inside-modal',
         kind: 'bug',
         title:
