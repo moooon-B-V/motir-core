@@ -1887,6 +1887,86 @@ export const EPICS: EpicMeta[] = [
           'declaring the surface list complete.',
       },
       {
+        id: 'bug-zh-dashboards-reports-stale-glossary',
+        kind: 'bug',
+        title:
+          'Chinese (zh) glossary leak: the dashboards/reports copy still says `仪表板` for "dashboard" (must be `工作台`) and `问题` for "work item" (must be `工作项`) — messages/zh.json',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surface:** `messages/zh.json` — the `dashboards.*` block (and the ' +
+          'adjacent `reports.*` analytics copy) · **Status:** open · ' +
+          '**Reported by:** Yue.\n\n' +
+          'The Simplified-Chinese catalog ships two STALE glossary terms that the ' +
+          'locked zh PM glossary explicitly BANS. Both are the same defect class as ' +
+          '`bug-backlog-zh-sprint-translated-as-chongci` (a word-by-word / pre-rename ' +
+          'term that survived into a shipped surface), and both live in the same ' +
+          '`dashboards`/`reports` region of `messages/zh.json`, so they are fixed in one ' +
+          'pass.\n\n' +
+          '**Defect 1 (PRIMARY — the reported one): `仪表板` → `工作台`.** "Dashboard" ' +
+          'is rendered `仪表板` throughout the `dashboards` block. The locked glossary ' +
+          'is unambiguous: **dashboard → `工作台`** (what Teambition / Tapd / 飞书 call ' +
+          'the home landing); **`仪表板` is BANNED** (the literal "instrument panel" ' +
+          'calque). ~17 occurrences, all in the `dashboards` block: `dashboards.title` ' +
+          '(`仪表板`), `newDashboard` (`新建仪表板`), `groupMine` (`我的仪表板`), ' +
+          '`optionsAria` (`仪表板选项`), `backToList`, the empty-state `title`/`body`, ' +
+          'the create/rename/delete dialog `title`/`body`/`confirm`/`submit`, ' +
+          '`switchAria` (`切换仪表板`), the widget empty bodies, the `capBody` cap ' +
+          'message, and the `createError`/`renameError`/`deleteError` toasts ' +
+          '(`messages/zh.json:2261-2412`). Every `仪表板` → `工作台` (e.g. `新建仪表板` ' +
+          '→ `新建工作台`, `切换仪表板` → `切换工作台`, `删除仪表板` → `删除工作台`).\n\n' +
+          '**Defect 2 (SECONDARY — same defect class, same block): `问题` → `工作项` ' +
+          'where it means "work item".** Motir renamed the tracked-unit noun ' +
+          '**work item → `工作项` (BANNED: `问题`, the old Jira-ish "issue/question" ' +
+          'term)**, but the dashboards/reports analytics copy still says `问题`: ' +
+          '`dashboards` widget catalog + empty states — `仪表板将小组件——问题表格…` ' +
+          '(`:2279`), `没有匹配的问题` (`:2337`), `分页问题表格…` (`:2353`), ' +
+          '`…对问题进行细分…` (`:2355`), `创建的问题与已解决的问题…` (`:2357`), ' +
+          '`问题类型` (`:2388`); and the `reports` block — `按{statistic}统计的问题` ' +
+          '(`:2399`), `个问题` (`:2419`), `…的圆环图` body (`:2420`), ' +
+          '`暂无可绘制的问题` (`:2421`). Each `问题` that denotes a tracked unit → ' +
+          '`工作项` (`问题表格` → `工作项表格`, `问题类型` → `工作项类型`, `个问题` → ' +
+          '`个工作项`, etc.).\n\n' +
+          '**⚠️ Do NOT touch the legitimate `问题` idioms.** `出了点问题` / ' +
+          '`出现问题` = "something went wrong" (error-state copy) is CORRECT Chinese ' +
+          'and unrelated to the work-item noun — leave every `…出了点问题…` / ' +
+          '`…出现问题…` string as-is. Only the occurrences that NAME a tracked unit ' +
+          '(table/row/type/count of work items) are leaks. The fixer must grep ' +
+          '`问题` and hand-classify, not blanket-replace.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, set UI language to ' +
+          'Chinese, open the `工作台` area (the dashboards landing) and the report ' +
+          'pages: the nav/title/dialogs read `仪表板` (should be `工作台`), and the ' +
+          'widget-catalog / report descriptions read `问题` (should be `工作项`).\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- No `仪表板` remains anywhere in `messages/zh.json` (grep clean); every ' +
+          'former `仪表板` reads `工作台`, matching the locked glossary and the rest of ' +
+          'the app (e.g. the sidebar/nav already use `工作台`).\n' +
+          '- No `问题` remains in `messages/zh.json` where it denotes a tracked unit ' +
+          '(dashboards widget catalog + empty states + report descriptions) — each such ' +
+          'occurrence reads `工作项`. The `出了点问题` / `出现问题` error idiom is ' +
+          'UNCHANGED.\n' +
+          '- `en` catalog is untouched (byte-identical); `tests/i18n-catalog.test.ts` ' +
+          'parity stays green (no key add/remove — value-only edits).\n' +
+          '- A grep check (or a small catalog test) asserts `仪表板` count is 0 and that ' +
+          'no work-item-denoting `问题` remains, so a regression is caught.\n\n' +
+          '## Context refs\n\n' +
+          '- `messages/zh.json:2261-2412` — the `dashboards.*` block; all `仪表板` ' +
+          'occurrences + the `问题` leaks at `:2279`, `:2337`, `:2353`, `:2355`, ' +
+          '`:2357`, `:2388`.\n' +
+          '- `messages/zh.json:2399`, `:2419-2421` — the `reports.*` analytics copy ' +
+          '`问题` leaks.\n' +
+          '- The locked zh glossary (planner memory `zh-translation-style`): ' +
+          '**dashboard → `工作台` (❌ `仪表板`)**, **work item → `工作项` (❌ `问题`)**, ' +
+          'reports → `报表`. The `en` catalog values stay byte-identical (tests assert ' +
+          'English).\n' +
+          '- `bug-backlog-zh-sprint-translated-as-chongci` (PR #502) — the precedent: a ' +
+          'banned zh term (`冲刺` for Sprint) shipped to a surface; same shape, fixed by ' +
+          'normalising the catalog values.\n' +
+          '- `motir-core/CLAUDE.md` — i18n strings live in `messages/{en,zh}.json`; ' +
+          'value-only edits, no service/DTO change.',
+      },
+      {
         id: 'bug-combobox-menu-clipped-inside-modal',
         kind: 'bug',
         title:
