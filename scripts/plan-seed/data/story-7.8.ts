@@ -187,7 +187,7 @@ export const story_7_8: PlanStory = {
     {
       id: '7.8.2',
       title: 'Design — API tokens settings surface (list / create / shown-once / revoke / empty)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'design',
       executor: 'coding_agent',
       estimateMinutes: 35,
