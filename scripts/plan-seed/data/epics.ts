@@ -2199,6 +2199,140 @@ export const EPICS: EpicMeta[] = [
           'overflow-escape primitive instead of a third branch.',
       },
       {
+        id: 'bug-promote-sprint-picker-clipped-inside-popover',
+        kind: 'bug',
+        title:
+          'Triage promote → Active sprint: the sprint Combobox listbox is clipped by the Popover (the searchable sprint dropdown shows the search input + one row, the rest of the sprint list is cut off below the popover edge)',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** triage promote flow (`app/(authed)/triage/_components/' +
+          'PromotePopover.tsx`, Subtask 6.11.5 — the four-target picker after clicking ' +
+          'the row-level **Promote** action) · shared components ' +
+          '`components/ui/Combobox.tsx`, `components/ui/Popover.tsx` · ' +
+          '**Status:** open · **Reported by:** Yue.\n\n' +
+          "On the triage queue, opening a row's **Promote** popover and clicking " +
+          '**Active sprint** flips the popover to step 2 — a searchable **Combobox** ' +
+          "over the project's open sprints (`label: t('promote.pickSprint')`, " +
+          "`searchable`, `searchPlaceholder: t('promote.pickSearch')`). When the " +
+          "combobox opens, the listbox is **clipped by the popover's " +
+          '`overflow-hidden` boundary**: the screenshot shows the Combobox trigger ' +
+          '("Select…"), the search input ("Search"), and the FIRST option row ' +
+          '("Sprint 4 · Sp… — Sprint entity, backlog rank…") visible, with every ' +
+          'subsequent sprint cut off below the popover edge. The popover itself ' +
+          'shows no scroll affordance because the listbox is positioned absolutely ' +
+          "inside the trigger's container and lives OUTSIDE the popover-body scroll " +
+          'flow — same shape as the Modal-clipped case below.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open the `moooon` / ' +
+          '`motir` project → **Triage**. Make sure the project has 2+ open sprints ' +
+          '(the seed populates several). On any triaged row, click the row-level ' +
+          '**Promote** button to open the promote popover, then click **Active ' +
+          'sprint**. Observe: the step-2 panel renders the sprint Combobox; click ' +
+          'its trigger ("Select…"). The opened listbox extends below the popover and ' +
+          'is clipped — only the search input + the first sprint row are reachable; ' +
+          'arrowing further down is invisible. The popover itself does not scroll.\n\n' +
+          '**Root cause (high confidence — identical to `bug-combobox-menu-clipped-' +
+          'inside-modal`, but the parent container is a `Popover` instead of a ' +
+          '`Modal`).** `components/ui/Combobox.tsx` (lines ~125-134, ~294-298, ' +
+          '~386-413) branches its menu rendering by parent context:\n\n' +
+          '- **Outside a dialog** → the menu is **portaled to `document.body`** with ' +
+          'viewport-anchored `position: fixed`, so it escapes every overflow ancestor.\n' +
+          '- **Inside a Radix Dialog** (detected via ' +
+          '`triggerRef.current?.closest("[role=\\"dialog\\"]")`) → the menu is ' +
+          'rendered **INLINE** as `absolute left-0 top-full ...` inside the ' +
+          "trigger's `relative` container, because a portal would land outside the " +
+          "dialog's focus scope and a centered dialog's CSS transform breaks fixed-" +
+          "positioned children's viewport coordinates.\n\n" +
+          '**Radix `PopoverContent` renders with `role="dialog"` by default** — it ' +
+          'shares the focus-trap / outside-click contract with `DialogContent`. So ' +
+          'when the Combobox is opened inside `Popover.Content`, the `closest("[role=' +
+          '\\"dialog\\"]")` check matches the **popover** as its containing dialog ' +
+          'and the menu falls through the INLINE branch. The popover panel itself ' +
+          'declares `overflow-hidden` on its content (`components/ui/Popover.tsx:63`, ' +
+          "matching the Modal's clipping boundary by design — the popover MUST stay " +
+          "capped so it doesn't bleed past its anchored rect). The inline menu's " +
+          "`max-h-64` (`16rem`) listbox is taller than the popover's remaining " +
+          'vertical space (the promote popover is `width={320}` and step 2 stacks ' +
+          'the back link, the label, the trigger, and a confirm button above the ' +
+          "menu), so the moment the listbox's bottom edge crosses the popover's " +
+          'bottom edge, it is clipped. **The menu has nowhere to scroll to**: an ' +
+          '`absolute` child does not contribute to the popover-body scroll height.\n\n' +
+          '**This is the SECOND surface of the same defect** that ' +
+          '`bug-combobox-menu-clipped-inside-modal` documents (Combobox menu clipped ' +
+          'by `Popover`/`Modal` `overflow-hidden`; the inline branch loses ' +
+          'reachability for the focus-trap and positioning correctness it gains). ' +
+          'The bugs are siblings, not duplicates: the fix site is the same ' +
+          "(`Combobox.tsx`'s inline branch), but the bounding ancestor whose " +
+          '`getBoundingClientRect` the menu must clamp against is the **popover ' +
+          'panel** here, not the **modal panel**. The two share `role="dialog"` so ' +
+          'the existing `closest("[role=\\"dialog\\"]")` ancestry lookup already ' +
+          "finds the right element; the fix's rect-measurement just needs to work " +
+          'against whichever dialog ancestor is nearest. Same `bug-inline-edit-' +
+          'clipped-when-table-short` portal branch — uninvolved — stays UNTOUCHED.\n' +
+          '\n' +
+          '**Fix shapes (mirror the Modal sibling — decide at fix time).**\n' +
+          "1. **Clamp the inline menu's height to the nearest dialog ancestor's " +
+          'available space** (durable). When `inDialog` is true, compute ' +
+          '`listMaxHeight` from the containing `[role="dialog"]` ancestor\'s bottom ' +
+          "edge minus the trigger's bottom edge (with a small gap), and set the " +
+          "listbox's `maxHeight` to that — mirroring the portaled branch's " +
+          '`updatePosition` logic (`Combobox.tsx:166-189`) against ' +
+          '`triggerRef.current.closest("[role=\\"dialog\\"]").getBoundingClientRect()` ' +
+          'instead of `window.innerHeight`. The menu then SCROLLS INTERNALLY, ' +
+          "the popover/modal doesn't, and clipping is gone for BOTH surfaces.\n" +
+          '2. **Flip the menu above the trigger when the space below is shorter** ' +
+          '(complement of 1). The portaled branch already does this; mirror it for ' +
+          'inline. Combine with 1 so the menu picks the taller side AND clamps to it.\n' +
+          '\n' +
+          'Net: a **single** fix in the Combobox inline branch should resolve both ' +
+          'this bug AND `bug-combobox-menu-clipped-inside-modal` — the dialog-ancestor ' +
+          'rect lookup is parent-type-agnostic. Combining the two siblings into one ' +
+          "fix Subtask is the natural shape; reference both ids in the fix's Context " +
+          'refs.\n\n' +
+          '**Test gap that let it ship.** Same as the Modal sibling — Combobox tests ' +
+          "cover the inline branch's opens/closes/keyboard-nav semantics but not its " +
+          'rendered geometry inside a constrained parent. The fix MUST add a render ' +
+          'or Playwright assertion: open the menu inside a `Popover.Content` whose ' +
+          "remaining space is < the menu's natural height, then assert the " +
+          "listbox's bottom-edge fits inside the popover's bottom-edge " +
+          '(getBoundingClientRect). Pair it with the existing Modal-surface ' +
+          'regression so the same `listMaxHeight` fix is covered on both parents.\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/triage/_components/PromotePopover.tsx:191-202` — the ' +
+          'concrete repro surface (the `<Combobox options={sprintOptions} searchable …>` ' +
+          'rendered inside `Popover.Content` after `goToSprint` flips `step` to ' +
+          '`sprint`)\n' +
+          '- `components/ui/Popover.tsx:56-74` — `RadixPopover.Content` portal + ' +
+          '`overflow-hidden rounded-(--radius-card)` panel; the `role="dialog"` source ' +
+          "(Radix default) that triggers Combobox's inline branch\n" +
+          '- `components/ui/Combobox.tsx:125-134, 166-189, 288-310, 386-413` — the ' +
+          "inline-vs-portal branch + the portaled branch's viewport clamping (the " +
+          "shape to mirror) + the inline branch's `absolute left-0 top-full` " +
+          'rendering (the fix site)\n' +
+          '- `bug-combobox-menu-clipped-inside-modal` (sibling) — the FIRST surface ' +
+          'of the same defect (Combobox clipped by `Modal` `overflow-hidden`); the ' +
+          "fix should subsume both and reference this bug's id\n" +
+          '- `bug-inline-edit-clipped-when-table-short` (cousin) — the original ' +
+          'table-overflow case that justified the portaled branch; the contract this ' +
+          'fix must NOT regress\n' +
+          '- `motir-core/CLAUDE.md` — colour via `--el-*`, shape via element-shape ' +
+          'tokens (applies to whatever wrapper the fix introduces)\n\n' +
+          '**Refactor signal (rule of three).** This is the THIRD documented ' +
+          'occurrence of "menu/popover clipped by an ancestor\'s overflow" — first ' +
+          'was `bug-inline-edit-clipped-when-table-short` (table → body-portal ' +
+          'branch added), second was `bug-combobox-menu-clipped-inside-modal` ' +
+          '(Modal → inline branch fails the same way in reverse), now this one ' +
+          '(Popover, same shape as the Modal). The Combobox already encodes both ' +
+          'branches inside one component with a `closest("[role=\\"dialog\\"]")` ' +
+          'switch; this third occurrence does NOT add a new branch (Popover already ' +
+          'matches `role="dialog"`), but it confirms the per-context-branch shape ' +
+          'is at its ceiling. If a fourth occurrence surfaces in a NEW container ' +
+          'type (e.g. a sticky-header data-grid or a drawer panel without ' +
+          '`role="dialog"`), unify behind a single overflow-escape primitive ' +
+          'instead of a fourth branch.',
+      },
+      {
         id: 'bug-notification-pref-transitioned-still-disabled-after-5-4-shipped',
         kind: 'bug',
         title:
