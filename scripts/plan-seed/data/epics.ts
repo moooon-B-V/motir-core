@@ -3393,7 +3393,7 @@ export const PARENTLESS_BUGS: PlanItem[] = [
     id: '11',
     kind: 'bug',
     title: 'Sprint complete: target sprint card / backlog not refreshed when unfinished items move',
-    status: 'planned',
+    status: 'in_progress',
     type: 'bug',
     descriptionMd:
       '**Type:** bug · **Parent:** none (root sibling — Epic 4 Agile planning is `done`, so per ' +
