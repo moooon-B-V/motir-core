@@ -612,6 +612,9 @@ async function runSprintPass(args: {
     in_progress: [],
     planned: [],
     blocked: [],
+    // Cancelled (won't-build tombstone) cards are never sprinted — no SprintSpec
+    // draws from this bucket; it exists only to satisfy the Record's totality.
+    cancelled: [],
   };
   for (const leaf of leaves) buckets[leaf.status].push(leaf);
 
