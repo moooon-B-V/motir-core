@@ -406,7 +406,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.4',
       title: 'Submission intake — the in-app member submit (the shared triage-create service)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 55,
@@ -557,7 +557,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.7',
       title: 'Submission form UI — the in-app report widget',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 40,
@@ -595,7 +595,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.8',
       title: 'Tests (vitest) — read-exclusion everywhere + promote/decline/dedupe/snooze',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 60,
