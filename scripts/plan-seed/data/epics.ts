@@ -2333,6 +2333,130 @@ export const EPICS: EpicMeta[] = [
           'instead of a fourth branch.',
       },
       {
+        id: 'bug-account-notifications-row-divider-broken-by-cell-padding',
+        kind: 'bug',
+        title:
+          "Account settings → Notifications: per-row divider lines are visibly broken (gap before the EMAIL column) because each row's border-b is drawn on individual grid cells and the event cell's pr-4 ends the border 1rem short of the toggle columns",
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** account settings page → **Notifications** card ' +
+          '(`app/(authed)/settings/account/_components/' +
+          'NotificationPreferencesCard.tsx`, Subtask 5.7.x — the per-event ' +
+          'email/in-app preferences grid) · **Status:** open · **Reported by:** Yue.\n\n' +
+          'On the **Account settings** page, the **Notifications** card renders an ' +
+          "EVENT × {EMAIL, IN-APP} grid (Mentioned / Commented on an item you're " +
+          "involved in / Assigned to you / An item you're watching changes status / " +
+          '…). Each row is meant to be separated from the next by a single ' +
+          'horizontal divider that spans the full card width. Instead, every ' +
+          'divider is **visibly broken**: the line under the event-label cell ends ' +
+          '~1rem BEFORE the EMAIL column starts, producing a small but conspicuous ' +
+          'gap right where the toggles begin. The result is a ragged "stitched" ' +
+          'look — three disconnected segments per row (event | email | in-app) ' +
+          "instead of one continuous rule. The card's outer border + the column-" +
+          'header rule (which IS continuous) make the per-row breakage stand out.\n' +
+          '\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, navigate to ' +
+          '**Settings → Account**. Scroll to the **Notifications** card. Observe: ' +
+          "the row between **Mentioned** and **Commented on an item you're " +
+          'involved in** (and every row below it) shows a horizontal rule that ' +
+          'breaks ~1rem before the EMAIL toggle column begins — a visible gap, ' +
+          'then the rule resumes under the EMAIL cell, then under the IN-APP cell. ' +
+          'The COLUMN-HEADER rule (under EVENT / EMAIL / IN-APP) is continuous, ' +
+          "because the header cells don't carry the `pr-4` the event cells do.\n" +
+          '\n' +
+          '**Root cause (high confidence — source confirms it).** ' +
+          '`NotificationPreferencesCard.tsx` lays the grid out as ' +
+          '`<div role="grid" className="mt-2 grid grid-cols-[1fr_5rem_5rem] ' +
+          'items-center">`. Each ROW is rendered as THREE separate sibling cells ' +
+          '(an `<EventRow>` returns a `<>…</>` fragment of three `<div>`s — one ' +
+          'event-label div + two `<NotificationCell>` toggle divs):\n' +
+          '\n' +
+          '- Event cell: `<div className="border-(--el-border-soft) border-b ' +
+          'py-3.5 pr-4">` (`NotificationPreferencesCard.tsx:152`) — note the ' +
+          '`pr-4` right-padding.\n' +
+          '- Each toggle cell: `<div className="border-(--el-border-soft) flex ' +
+          'justify-center border-b py-3.5">` (`NotificationPreferencesCard.tsx:196`) ' +
+          '— no `pr-4`.\n' +
+          '\n' +
+          'Because the bottom border is painted on each INDIVIDUAL grid cell, the ' +
+          "event cell's `border-b` ends at the cell's **content-box** right edge, " +
+          'which is shifted left by exactly `pr-4` (1rem). The neighbouring EMAIL ' +
+          "cell's `border-b` starts at ITS left content edge with no compensating " +
+          'left padding, so a 1rem horizontal gap appears between the two borders. ' +
+          'This repeats once more (smaller, often invisible) between EMAIL and IN-' +
+          'APP if their box-sizing leaves any inter-cell gap; the dominant visible ' +
+          'break is the 1rem one before EMAIL.\n' +
+          '\n' +
+          'The COLUMN-HEADER rule (`NotificationPreferencesCard.tsx:116-124`) does ' +
+          'NOT exhibit the bug because its three cells use the SAME padding ' +
+          '(`pb-3` on all, no `pr-4` on the EVENT header) — so the three borders ' +
+          'meet flush. The bug is purely structural to the per-cell-border + ' +
+          'asymmetric-padding combination on the data rows.\n' +
+          '\n' +
+          '**Fix shapes (decide at fix time — listed by durability).**\n' +
+          '1. **Lift the divider OFF the cells and onto a row-spanning element ' +
+          '(durable, recommended).** The grid is a flat `grid-cols-[1fr_5rem_5rem]` ' +
+          'with cells laid out left-to-right per row; there is no row-spanning DOM ' +
+          'element to attach the border to. Two sub-shapes:\n' +
+          '   - **(a) Subgrid + per-row wrapper.** Wrap each row in a single ' +
+          '`<div role="row" className="grid grid-cols-subgrid col-span-3 border-b ' +
+          'border-(--el-border-soft)">` (Tailwind v4 supports `grid-cols-subgrid`); ' +
+          'move the three cells inside. The border is now on ONE row-spanning ' +
+          'element, so it spans uninterrupted regardless of per-cell padding. ' +
+          'Bonus: cleaner DOM semantics (real `role="row"` instead of fragment).\n' +
+          '   - **(b) Separator pseudo-row.** Between each row, insert a ' +
+          '`<div className="col-span-3 border-b border-(--el-border-soft)" />` — ' +
+          'simpler but adds an inert DOM node per row.\n' +
+          '2. **Drop `pr-4` from the event cell and use `gap-x-*` on the grid for ' +
+          'inter-column spacing instead** (minimal change). The grid becomes ' +
+          "`grid grid-cols-[1fr_5rem_5rem] gap-x-4 items-center`; the event cell's " +
+          "border now extends flush with the toggle cells'. **Risk:** changes the " +
+          'visual spacing of the column-header rule (it currently has zero gap-x), ' +
+          'and the column-header rule then also gains gap-x — verify the headers ' +
+          'still read correctly. Lower-touch but couples spacing to bordering.\n' +
+          '\n' +
+          '**Recommended:** fix 1a (subgrid + per-row wrapper). It is the standard ' +
+          'shape for "borders should be row-level, not cell-level" in a CSS-grid ' +
+          'layout (Jira, Linear, GitHub all use it for their grid-shaped tables), ' +
+          'and it future-proofs the card against any additional asymmetric per-cell ' +
+          'padding the design might introduce (e.g. a leading icon column, a ' +
+          'trailing description column).\n' +
+          '\n' +
+          '**Test gap that let it ship.** The existing Notifications-card tests ' +
+          'cover the toggle interaction + the persisted preference value + the ' +
+          '"Soon" disabled row, but not the **rendered geometry of the row ' +
+          'dividers**. The fix MUST add either a render-test or Playwright ' +
+          "assertion: the bounding rect of each row's border-bottom spans the " +
+          "card's full inner width (left content-edge to right content-edge), with " +
+          'no horizontal gap. Pair it with an axe sweep to confirm the cosmetic ' +
+          "cleanup doesn't regress contrast.\n" +
+          '\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/settings/account/_components/' +
+          'NotificationPreferencesCard.tsx:110-129` — the grid container ' +
+          '(`grid grid-cols-[1fr_5rem_5rem]`) + the column-header cells (continuous ' +
+          'rule, no `pr-4`) — the comparison case\n' +
+          '- `app/(authed)/settings/account/_components/' +
+          'NotificationPreferencesCard.tsx:139-176` — `EventRow` (returns a ' +
+          'fragment of three sibling cells; the event cell has `border-b … pr-4` ' +
+          '— the fix site)\n' +
+          '- `app/(authed)/settings/account/_components/' +
+          'NotificationPreferencesCard.tsx:178-205` — `NotificationCell` (the ' +
+          'toggle cells; `border-b` without compensating left padding)\n' +
+          '- `motir-core/CLAUDE.md` — colour via `--el-*` (the `--el-border-soft` ' +
+          'used here is correct), shape via element-shape tokens (applies to ' +
+          'whatever wrapper the fix introduces)\n' +
+          '\n' +
+          '**Class.** "Per-cell border in a CSS-grid table breaks at any cell with ' +
+          'asymmetric inline padding" — a structural rendering bug, not a token / ' +
+          'colour / a11y issue. First documented occurrence in this codebase; ' +
+          'flag the row-level-divider pattern (fix 1a) as the project standard for ' +
+          "grid-based tables going forward, so the same defect doesn't reappear in " +
+          'future settings cards or other key-value grids.',
+      },
+      {
         id: 'bug-notification-pref-transitioned-still-disabled-after-5-4-shipped',
         kind: 'bug',
         title:
