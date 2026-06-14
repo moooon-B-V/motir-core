@@ -113,6 +113,23 @@ export interface ComboboxProps<T extends string> {
   onQueryChange?: (query: string) => void;
 }
 
+// Walk up from a node to the nearest ancestor that clips overflow, classifying
+// it as scrolling (overflow auto/scroll — the menu can be scrolled into view)
+// or a hard `hidden`/`clip` box (no scroll — the menu is trapped). Used by the
+// inline (in-dialog) branch to decide whether to clamp + flip the menu (only a
+// hard non-scrolling clip needs it). Stops at <body>; returns null if nothing
+// up the chain clips.
+function nearestClipBox(el: HTMLElement): { box: HTMLElement; scrolls: boolean } | null {
+  let node = el.parentElement;
+  while (node && node !== document.body) {
+    const oy = getComputedStyle(node).overflowY;
+    if (oy === 'auto' || oy === 'scroll') return { box: node, scrolls: true };
+    if (oy === 'hidden' || oy === 'clip') return { box: node, scrolls: false };
+    node = node.parentElement;
+  }
+  return null;
+}
+
 export function Combobox<T extends string>({
   options,
   value,
@@ -155,6 +172,10 @@ export function Combobox<T extends string>({
   // height, recomputed from the trigger rect on open / scroll / resize.
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
   const [listMaxHeight, setListMaxHeight] = useState(256);
+  // Inline (in-dialog) branch only: whether the menu is flipped ABOVE the
+  // trigger because there's more room there than below within the dialog's
+  // overflow-hidden clip box (bug-combobox-menu-clipped-inside-modal).
+  const [inlineAbove, setInlineAbove] = useState(false);
   const baseId = useId();
   const listId = `${baseId}-listbox`;
   const optionId = (i: number) => `${baseId}-opt-${i}`;
@@ -210,6 +231,47 @@ export function Combobox<T extends string>({
     setMenuStyle(style);
   }, [searchable]);
 
+  // The in-dialog branch renders INLINE (an absolute child of the trigger),
+  // so — unlike the body-portaled branch — it cannot escape the modal's
+  // `overflow-hidden` panel: an absolute child contributes nothing to the
+  // dialog body's scroll height, so a menu taller than the room below the
+  // trigger is simply CLIPPED, not scrolled-to (bug-combobox-menu-clipped-
+  // inside-modal). Mirror the portaled branch's logic against the DIALOG's
+  // clip box instead of the viewport: measure the space above/below the
+  // trigger inside the dialog, flip to whichever side is taller, and clamp the
+  // listbox height to it so the menu scrolls INTERNALLY and always fits.
+  const updateInlinePosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    // Find the nearest ancestor that CLIPS the inline menu. If that ancestor
+    // SCROLLS (overflow auto/scroll — e.g. the Advanced-filter popover's
+    // `overflow-y-auto` body, or a `Modal.Body`), the menu can be scrolled into
+    // view, so leave it exactly as before (top-full, max-h-64) — flipping/
+    // clamping against a scroll box would wrongly shove the menu up under the
+    // panel's header (the regression the first cut caused). Only a NON-scrolling
+    // `overflow: hidden` clip — the centered Modal panel's `overflow-hidden
+    // max-h-[90vh]` box — actually traps the menu (bug-combobox-menu-clipped-
+    // inside-modal); clamp + flip against THAT box.
+    const clip = nearestClipBox(trigger);
+    if (!clip || clip.scrolls) {
+      setInlineAbove(false);
+      setListMaxHeight(256); // == the max-h-64 fallback (original behaviour)
+      return;
+    }
+    const rect = trigger.getBoundingClientRect();
+    const clipRect = clip.box.getBoundingClientRect();
+    const gap = 4; // matches mt-1 / mb-1
+    const inset = 8; // stay a hair inside the panel's rounded clip edge
+    const spaceBelow = clipRect.bottom - rect.bottom - gap - inset;
+    const spaceAbove = rect.top - clipRect.top - gap - inset;
+    const placeAbove = spaceAbove > spaceBelow;
+    setInlineAbove(placeAbove);
+    const avail = Math.max(80, placeAbove ? spaceAbove : spaceBelow);
+    // Reserve room for the optional search input + container padding (same
+    // budget as the portaled branch).
+    setListMaxHeight(Math.max(80, Math.min(256, avail - (searchable ? 52 : 12))));
+  }, [searchable]);
+
   // On open: focus the right control (the only side effect — query/active reset
   // happens in openMenu so this effect never calls setState).
   useEffect(() => {
@@ -236,6 +298,22 @@ export function Combobox<T extends string>({
       window.removeEventListener('resize', onReflow);
     };
   }, [open, mounted, updatePosition, filtered.length]);
+
+  // Inline (in-dialog) counterpart: measure the menu against the dialog's clip
+  // box before paint and keep it clamped while open (re-measure on resize, and
+  // on capture-phase scroll so a scrolling dialog body re-anchors it).
+  useIsomorphicLayoutEffect(() => {
+    if (!(open && mounted)) return;
+    if (!triggerRef.current?.closest('[role="dialog"]')) return;
+    updateInlinePosition();
+    const onReflow = () => updateInlinePosition();
+    window.addEventListener('scroll', onReflow, true);
+    window.addEventListener('resize', onReflow);
+    return () => {
+      window.removeEventListener('scroll', onReflow, true);
+      window.removeEventListener('resize', onReflow);
+    };
+  }, [open, mounted, updateInlinePosition, filtered.length]);
 
   // Click-outside closes, restoring focus to the trigger. The menu is portaled
   // out of containerRef, so a click on it must also count as "inside".
@@ -359,9 +437,11 @@ export function Combobox<T extends string>({
         tabIndex={hasOptions && !searchable ? 0 : -1}
         aria-activedescendant={hasOptions && !searchable ? activeId : undefined}
         onKeyDown={hasOptions && !searchable ? onListKeyDown : undefined}
-        // Portaled menu caps its height to the measured viewport space (inline
-        // style wins over max-h-64); the inline (in-dialog) menu keeps max-h-64.
-        style={inDialog ? undefined : { maxHeight: listMaxHeight }}
+        // Both branches cap height to their measured available space (inline
+        // style wins over the max-h-64 fallback): the portaled menu against the
+        // viewport, the inline (in-dialog) menu against the dialog's clip box —
+        // so an over-tall list scrolls internally instead of being clipped.
+        style={{ maxHeight: listMaxHeight }}
         className="max-h-64 overflow-y-auto focus:outline-none"
       >
         {loading ? (
@@ -426,8 +506,11 @@ export function Combobox<T extends string>({
     <div
       ref={menuRef}
       className={cn(
-        'absolute left-0 top-full z-50 mt-1 w-max min-w-full max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-1',
+        'absolute left-0 z-50 w-max min-w-full max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-1',
         'shadow-(--shadow-elevated) border border-(--el-border)',
+        // Flip above the trigger when the dialog has more room there, so a tall
+        // list near the modal's bottom edge isn't clipped (clamped + scrolled).
+        inlineAbove ? 'bottom-full mb-1' : 'top-full mt-1',
       )}
     >
       {menuInner}

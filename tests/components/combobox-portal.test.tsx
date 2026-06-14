@@ -85,4 +85,118 @@ describe('Combobox — menu portaling (bug-inline-edit-clipped-when-table-short)
     fireEvent.click(screen.getByRole('option', { name: 'In Progress' }));
     expect(screen.getByRole('combobox', { name: 'Status' }).textContent).toContain('In Progress');
   });
+
+  // Regression for bug-combobox-menu-clipped-inside-modal: inside a Modal's
+  // overflow-hidden panel the inline menu cannot escape, so a long option list
+  // opened near the bottom of a short modal used to be CLIPPED (only the first
+  // 1–2 options reachable — the Add-widget Statistic-type picker). The inline
+  // menu must now CLAMP its listbox height to the dialog's available space and
+  // FLIP above when that side is taller, so it always fits + scrolls internally.
+  // happy-dom does no layout, so we drive getBoundingClientRect with explicit
+  // rects to exercise the clamp geometry (the same posture as the swimlane /
+  // detail-overflow geometry tests — measured, not CSS-asserted).
+  function rect(top: number, bottom: number): DOMRect {
+    return {
+      top,
+      bottom,
+      left: 0,
+      right: 360,
+      width: 360,
+      height: bottom - top,
+      x: 0,
+      y: top,
+      toJSON: () => ({}),
+    } as DOMRect;
+  }
+
+  const TALL_OPTIONS: ComboboxOption<string>[] = Array.from({ length: 8 }, (_, i) => ({
+    value: `s${i}`,
+    label: `Statistic ${i}`,
+  }));
+
+  // A hard-clipping dialog panel = the centered Modal (`overflow-hidden`).
+  function TallDialogHost() {
+    const [value, setValue] = useState<string | null>(null);
+    return (
+      <div role="dialog" style={{ overflowY: 'hidden' }}>
+        <Combobox
+          label="Statistic type"
+          options={TALL_OPTIONS}
+          value={value}
+          onChange={setValue}
+          searchable
+        />
+      </div>
+    );
+  }
+
+  it('clamps the inline menu height + flips above when the modal clips it', () => {
+    render(<TallDialogHost />);
+    const dialog = screen.getByRole('dialog');
+    const trigger = screen.getByRole('combobox', { name: 'Statistic type' });
+
+    // A short modal (height 320) whose trigger sits in the lower half: ~76px
+    // below the trigger inside the panel, ~188px above it. The unclamped 16rem
+    // (256px) menu would overflow the panel's bottom edge and be clipped.
+    dialog.getBoundingClientRect = () => rect(100, 420);
+    trigger.getBoundingClientRect = () => rect(300, 332);
+
+    fireEvent.click(trigger);
+    // Re-measure with the mocked rects in place (the open-time layout effect ran
+    // against happy-dom's zero rects; the resize listener recomputes).
+    fireEvent.resize(window);
+
+    const listbox = screen.getByRole('listbox', { name: 'Statistic type' });
+    const panel = listbox.parentElement as HTMLElement;
+
+    // Flipped ABOVE (188px > 76px) so it opens into the taller side…
+    expect(panel.className).toContain('bottom-full');
+    expect(panel.className).not.toContain('top-full');
+
+    // …and clamped to fit that side (≤ the ~188px of room above the trigger),
+    // with overflow-y-auto so it scrolls internally rather than being clipped.
+    const maxH = parseInt(listbox.style.maxHeight, 10);
+    expect(maxH).toBeGreaterThan(0);
+    expect(maxH).toBeLessThanOrEqual(188);
+    expect(listbox.className).toContain('overflow-y-auto');
+  });
+
+  // Regression for the CI break the first fix caused: the Advanced-filter
+  // builder is an ANCHORED Popover with role="dialog" whose outer box does NOT
+  // clip (only an inner overflow-y-auto body). Clamping/flipping against that
+  // small content-sized box shoved the operator menu up under the popover's own
+  // header, which intercepted the option click. A non-clipping dialog must keep
+  // the original inline behaviour: menu opens BELOW, never flips.
+  function PopoverDialogHost() {
+    const [value, setValue] = useState<string | null>(null);
+    return (
+      // The Advanced-filter shape: an overflow-hidden popover whose body is an
+      // overflow-y-auto SCROLL region (the combobox's nearest clip scrolls, so
+      // the menu can be scrolled into view — no clamp/flip).
+      <div role="dialog" style={{ overflow: 'hidden' }}>
+        <div style={{ overflowY: 'auto', maxHeight: 200 }}>
+          <Combobox label="Operator" options={TALL_OPTIONS} value={value} onChange={setValue} />
+        </div>
+      </div>
+    );
+  }
+
+  it('leaves a non-clipping popover-dialog menu below the trigger (no flip)', () => {
+    render(<PopoverDialogHost />);
+    const dialog = screen.getByRole('dialog');
+    const trigger = screen.getByRole('combobox', { name: 'Operator' });
+
+    // Same lower-half geometry that flips inside a clipping Modal — but this
+    // dialog doesn't clip, so the menu must stay anchored below regardless.
+    dialog.getBoundingClientRect = () => rect(100, 420);
+    trigger.getBoundingClientRect = () => rect(300, 332);
+
+    fireEvent.click(trigger);
+    fireEvent.resize(window);
+
+    const listbox = screen.getByRole('listbox', { name: 'Operator' });
+    const panel = listbox.parentElement as HTMLElement;
+    expect(panel.className).toContain('top-full');
+    expect(panel.className).not.toContain('bottom-full');
+  });
 });
