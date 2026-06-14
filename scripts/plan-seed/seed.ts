@@ -269,6 +269,23 @@ async function main() {
   const idMap = new Map<string, string>(); // dotted plan id → work_item id
   const dependsEdges: Array<{ from: string; to: string }> = [];
 
+  // A VALID, GLOBALLY-UNIQUE fractional-index `position` per item, chained in
+  // creation order. `position` MUST be a real fractional-index key (the shape
+  // `lib/workItems/positioning.ts` mints) — NOT a zero-padded number. A padded
+  // number like "00000612" has head '0', which `generateKeyBetween` rejects
+  // ("invalid order key head: 0"), so ANY board drag landing next to such a card
+  // throws → the move API 500s and the board shows "Move not allowed" (the same
+  // class of bug the `backlogRank` chain below already avoids).
+  //
+  // The chain is GLOBAL, not per-parent: a board column orders cards by
+  // `position` ACROSS parents, so two items must never share a key — otherwise
+  // dropping a card between two equal-keyed neighbours calls keyBetween(k, k),
+  // which throws "prev >= next" → another 500. A single ascending chain keeps
+  // every key distinct (matching the old padded WORK-ITEM-NUMBER's global
+  // ordering) while staying valid; siblings are created consecutively so each
+  // parent's children still sort correctly under the tree.
+  let lastPosition: string | null = null;
+
   async function createItem(args: {
     kind: 'epic' | 'story' | 'subtask' | 'bug' | 'task';
     planId: string;
@@ -290,6 +307,9 @@ async function main() {
     const reporterId = pick(memberIds, `${args.planId}:reporter`);
     const assigneeId = pick(memberIds, `${args.planId}:assignee`);
     const priority = pick(PRIORITIES, `${args.planId}:priority`);
+    // Mint this item's globally-unique fractional-index position (ascending).
+    const position = keyForAppend(lastPosition);
+    lastPosition = position;
     const id = await db.$transaction(async (tx: Prisma.TransactionClient) => {
       const key = await projectRepository.allocateWorkItemNumber(project.id, tx);
       const row = await workItemRepository.create(
@@ -310,7 +330,7 @@ async function main() {
           executor: args.executor ?? undefined,
           reporterId,
           assigneeId,
-          position: String(key).padStart(8, '0'),
+          position,
         },
         tx,
       );
