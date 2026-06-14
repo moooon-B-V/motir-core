@@ -190,7 +190,7 @@ export const story_6_15: PlanStory = {
       id: '6.15.2',
       title:
         'Filtered board read — thread a compiled filter predicate (6.1 AST) into getBoard/loadColumnCards; cap + `truncated` over the filtered set; Scrum-scope compose',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 32,
