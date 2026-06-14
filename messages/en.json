@@ -1976,6 +1976,16 @@
       "project": "Project",
       "builtin": "Built-in"
     },
+    "builtinNames": {
+      "my-open-issues": "My open issues",
+      "reported-by-me": "Reported by me",
+      "all-issues": "All issues",
+      "open-issues": "Open issues",
+      "done-issues": "Done issues",
+      "created-recently": "Created recently",
+      "updated-recently": "Updated recently",
+      "resolved-recently": "Resolved recently"
+    },
     "visibilityHint": {
       "private": "Only you and project admins can see it.",
       "project": "Everyone who can browse this project can see and apply it."

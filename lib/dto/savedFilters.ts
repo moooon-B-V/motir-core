@@ -24,6 +24,13 @@ export interface SavedFilterSummaryDto {
 export interface BuiltinFilterSummaryDto {
   /** `builtin:<slug>` — rides the same resolve read as row ids. */
   id: string;
+  /** The locale-independent registry slug (e.g. `my-open-issues`). Every UI
+   * consumer threads `t('savedFilters.builtinNames.<slug>')` over THIS for the
+   * displayed label — the localised name never crosses the wire as text. */
+  slug: string;
+  /** The canonical English name from the registry — the FALLBACK for callers
+   * without a `t` in scope (server-side search/match, tools, logs). NOT the
+   * user-facing label: every UI consumer localises via {@link slug}. */
   name: string;
   builtin: true;
 }
