@@ -20,6 +20,8 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
+import { notificationPreferenceRepository } from '@/lib/repositories/notificationPreferenceRepository';
+import { NOTIFICATION_EVENT_TYPE } from '@/lib/notifications/preferences';
 import { IllegalTransitionError } from '@/lib/workItems/errors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import type { WorkItemCommentCreatedData, WorkItemTransitionedData } from '@/lib/jobs/types';
@@ -309,6 +311,130 @@ describe('watcherNotificationsService.fanOut — transition events', () => {
     const evt = capture.events[0]!.data;
     if (evt.template !== 'watcher-transition-notification') throw new Error('unreachable');
     expect(evt.data.statusName).toBe('vanished_status');
+  });
+});
+
+// The `transitioned · email` channel gate (Story 5.7 · Subtask 5.7.11). The
+// watcher transition email is the `email` channel of the `transitioned` event
+// type; a watcher who turned it OFF must be dropped at the SEND decision. The
+// `transitioned` row is not settable through the service yet (the matrix flip
+// is 5.7.12), so the preference row is seeded directly via the repository — the
+// gate (`filterChannelEnabled`) reads the stored value regardless of `settable`.
+async function setTransitionedEmailPref(userId: string, enabled: boolean) {
+  await db.$transaction((tx) =>
+    notificationPreferenceRepository.upsert(
+      { userId, eventType: NOTIFICATION_EVENT_TYPE.transitioned, channel: 'email', enabled },
+      tx,
+    ),
+  );
+}
+
+describe('watcherNotificationsService.fanOut — transition email channel gate (5.7.11)', () => {
+  const transitionInput = (s: Scenario) => ({
+    kind: 'transition' as const,
+    workspaceId: s.fx.workspaceId,
+    workItemId: s.issueId,
+    actorId: s.fx.ownerId,
+    revisionId: 'rev-pref',
+    fromStatusKey: 'todo',
+    toStatusKey: 'in_progress',
+  });
+
+  it('suppresses the email for a watcher who turned `transitioned · email` OFF', async () => {
+    const s = await buildScenario();
+    await setTransitionedEmailPref(s.watcher.id, false);
+    const capture = captureEmailEvents();
+
+    const result = await watcherNotificationsService.fanOut(transitionInput(s));
+
+    expect(result.notifiedUserIds).toEqual([]);
+    expect(capture.events).toHaveLength(0);
+  });
+
+  it('still delivers when the preference is unset (default ON) or explicitly ON', async () => {
+    const s = await buildScenario();
+    const capture = captureEmailEvents();
+
+    // Unset → documented default ON.
+    const unset = await watcherNotificationsService.fanOut(transitionInput(s));
+    expect(unset.notifiedUserIds).toEqual([s.watcher.id]);
+
+    // Explicit ON → still delivered.
+    await setTransitionedEmailPref(s.watcher.id, true);
+    capture.events.length = 0;
+    const on = await watcherNotificationsService.fanOut({
+      ...transitionInput(s),
+      revisionId: 'rev-on',
+    });
+    expect(on.notifiedUserIds).toEqual([s.watcher.id]);
+    expect(capture.events).toHaveLength(1);
+  });
+
+  it('gates only the opted-out watcher; others on the same event still receive it', async () => {
+    const s = await buildScenario();
+    const { user: second, ctx: secondCtx } = await addWsMember(
+      s.fx,
+      'keeps-email@example.com',
+      'Keeps Email',
+    );
+    await watchersService.watch(s.issueId, secondCtx);
+    await setTransitionedEmailPref(s.watcher.id, false); // only the first opts out
+    const capture = captureEmailEvents();
+
+    const result = await watcherNotificationsService.fanOut(transitionInput(s));
+
+    expect(result.notifiedUserIds).toEqual([second.id]);
+    expect(capture.events).toHaveLength(1);
+    expect(capture.events[0]!.data.to).toBe('keeps-email@example.com');
+  });
+
+  it('applies the gate per page across a paged roster walk', async () => {
+    const s = await buildScenario();
+    // 4 more watchers (5 total); pageSize 2 → 3 pages. Opt two of them out,
+    // spanning a page boundary, to prove the gate runs on every page.
+    const extra: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const { user, ctx } = await addWsMember(s.fx, `pref${i}@example.com`, `Pref ${i}`);
+      await watchersService.watch(s.issueId, ctx);
+      extra.push(user.id);
+    }
+    await setTransitionedEmailPref(s.watcher.id, false); // page 1
+    await setTransitionedEmailPref(extra[2]!, false); // page 2/3 boundary
+    const capture = captureEmailEvents();
+
+    const result = await watcherNotificationsService.fanOut(transitionInput(s), { pageSize: 2 });
+
+    // 5 watchers − 2 opted out = 3 delivered, each exactly once.
+    expect(result.notifiedUserIds).toHaveLength(3);
+    expect(result.notifiedUserIds).not.toContain(s.watcher.id);
+    expect(result.notifiedUserIds).not.toContain(extra[2]);
+    expect(capture.events).toHaveLength(3);
+  });
+
+  it('does NOT gate the COMMENT branch by `transitioned · email` (the comment email still sends)', async () => {
+    const s = await buildScenario();
+    // Opting out of transition email must not affect comment emails — the
+    // comment branch is intentionally ungated (a separate matrix question).
+    await setTransitionedEmailPref(s.watcher.id, false);
+    const capture = captureEmailEvents();
+    const comment = await commentsService.addComment(
+      s.issueId,
+      { bodyMd: 'Still mailed.' },
+      s.fx.ctx,
+    );
+    capture.events.length = 0;
+
+    const result = await watcherNotificationsService.fanOut({
+      kind: 'comment',
+      workspaceId: s.fx.workspaceId,
+      workItemId: s.issueId,
+      actorId: s.fx.ownerId,
+      commentId: comment.id,
+      mentionedUserIds: [],
+    });
+
+    expect(result.notifiedUserIds).toEqual([s.watcher.id]);
+    expect(capture.events).toHaveLength(1);
   });
 });
 
