@@ -149,6 +149,12 @@ model User {
   // fan-in (5.7.3) and the DONE email job (5.1.6). Cascade: preferences are
   // personal substrate, they die with the user (the notifications pattern).
   notificationPreferences   NotificationPreference[]  @relation("UserNotificationPreferences")
+  // Personal access tokens (Story 7.8 · Subtask 7.8.1) — the per-user bearer
+  // credentials AI agents present to the MCP server. Cascade: a token is
+  // personal auth substrate, it dies with the user (the notifications /
+  // notificationPreferences pattern). Modelled on both sides per the
+  // FK-`@relation` rule so `migrate dev` reports no drift.
+  apiTokens                 ApiToken[]
 
   @@map("user")
 }
@@ -2462,4 +2468,45 @@ model DashboardWidget {
   // The project-delete cascade fan-out.
   @@index([projectId])
   @@map("dashboard_widget")
+}
+
+/// Personal access token (Story 7.8 · Subtask 7.8.1) — the per-user bearer
+/// credential AI agents present to the MCP server (`Authorization: Bearer
+/// motir_pat_…`). The Jira / GitHub API-token shape: generated once, shown
+/// once, stored ONLY as a sha-256 hash, expiring, revocable.
+///
+/// The plaintext secret is NEVER persisted — only `tokenHash` (the lookup
+/// key) and `tokenPrefix` (the display-only first chars, so the list can show
+/// `motir_pat_AbC1…` without holding anything sensitive). `revokedAt` is a
+/// SOFT revoke: the row stays for the audit trail and a revoked token simply
+/// fails `verify`. RLS: a token row is visible/mutable to its owning user
+/// (`app.user_id`) for the settings surface, OR under the trusted system
+/// context (`app.system_admin`) — the MCP bearer gate resolves tokens BEFORE
+/// any user context exists (the pre-auth lookup), so it reads under the
+/// system context (the job-ledger precedent).
+model ApiToken {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  /// User-facing name, e.g. "claude-code".
+  label       String
+  /// sha-256 hex of the full secret — the lookup key. Unique so `verify` is a
+  /// single equality probe on a unique index (constant work per call).
+  tokenHash   String    @unique @map("token_hash")
+  /// First 12 chars of the secret (display-only), so the list can show
+  /// `motir_pat_AbC1…`. Never enough to reconstruct the secret.
+  tokenPrefix String    @map("token_prefix")
+  /// Null = never expires. The boundary is checked in `verify`.
+  expiresAt   DateTime? @map("expires_at")
+  /// Throttled in `verify` (skip the write if touched < 5 min ago) so a
+  /// chatty agent session does not write-amplify.
+  lastUsedAt  DateTime? @map("last_used_at")
+  /// Soft revoke — set, never deleted. A revoked token fails `verify`.
+  revokedAt   DateTime? @map("revoked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // The settings-surface read: a user's tokens, newest first.
+  @@index([userId])
+  @@map("api_token")
 }

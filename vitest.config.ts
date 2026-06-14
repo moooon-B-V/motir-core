@@ -175,6 +175,16 @@ export default defineConfig({
         // 6.6.2 — the execution engine + its audit-row leaf join the gate.
         'lib/services/automationEngineService.ts',
         'lib/repositories/automationRuleExecutionRepository.ts',
+        // Story 7.8 (MCP server) · Subtask 7.8.1 — the PAT auth substrate
+        // every other 7.8 subtask rides gates from day one: the create/verify/
+        // revoke lifecycle, the secret-never-persisted fence, and the
+        // last-used throttle are the contract. (7.8.9 extends the gate to the
+        // MCP registry + tool modules.)
+        'lib/services/apiTokensService.ts',
+        'lib/repositories/apiTokenRepository.ts',
+        'lib/mappers/apiTokenMappers.ts',
+        'lib/apiTokens/token.ts',
+        'lib/apiTokens/errors.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -315,6 +325,12 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
+        // Story 7.8 · Subtask 7.8.1 — the PAT auth substrate.
+        'lib/services/apiTokensService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/apiTokenRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mappers/apiTokenMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/apiTokens/token.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/apiTokens/errors.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },
