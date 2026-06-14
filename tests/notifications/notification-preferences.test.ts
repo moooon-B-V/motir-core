@@ -4,7 +4,6 @@ import { db } from '@/lib/db';
 import { notificationPreferencesService } from '@/lib/services/notificationPreferencesService';
 import { notificationPreferenceRepository } from '@/lib/repositories/notificationPreferenceRepository';
 import {
-  NotificationEventTypeNotSettableError,
   UnknownNotificationChannelError,
   UnknownNotificationEventTypeError,
 } from '@/lib/notifications/preferenceErrors';
@@ -60,9 +59,11 @@ describe('notificationPreferencesService.getMatrix', () => {
       expect(event.channels.email).toBe(true);
       expect(event.channels.in_app).toBe(true);
     }
-    // The Story 5.4 seam row is the only non-settable one.
-    expect(matrix.events.find((e) => e.eventType === 'transitioned')?.settable).toBe(false);
-    expect(matrix.events.find((e) => e.eventType === 'mentioned')?.settable).toBe(true);
+    // Every row is settable now — the Story 5.4 `transitioned` seam flipped
+    // settable once both its channels became real (5.7.10 in_app + 5.7.11 email).
+    for (const event of matrix.events) {
+      expect(event.settable).toBe(true);
+    }
     // No rows were written just by reading.
     expect(await notificationPreferenceRepository.findByUser(user.id)).toHaveLength(0);
   });
@@ -106,7 +107,7 @@ describe('notificationPreferencesService.setPreference', () => {
     expect(await notificationPreferenceRepository.findByUser(user.id)).toHaveLength(1);
   });
 
-  it('rejects an unknown channel, an unknown event type, and the disabled 5.4 seam', async () => {
+  it('rejects an unknown channel and an unknown event type', async () => {
     const user = await makeUser('validate@example.com');
 
     await expect(
@@ -125,16 +126,30 @@ describe('notificationPreferencesService.setPreference', () => {
       }),
     ).rejects.toBeInstanceOf(UnknownNotificationEventTypeError);
 
-    await expect(
-      notificationPreferencesService.setPreference(user.id, {
-        eventType: 'transitioned',
-        channel: 'email',
-        enabled: true,
-      }),
-    ).rejects.toBeInstanceOf(NotificationEventTypeNotSettableError);
-
     // No rejection wrote a row.
     expect(await notificationPreferenceRepository.findByUser(user.id)).toHaveLength(0);
+  });
+
+  it('persists a `transitioned` toggle — the Story 5.4 seam is now settable (5.7.12)', async () => {
+    const user = await makeUser('transitioned@example.com');
+
+    // Was rejected with NotificationEventTypeNotSettableError until 5.7.10 +
+    // 5.7.11 made both channels real; now it upserts like any other row.
+    const cell = await notificationPreferencesService.setPreference(user.id, {
+      eventType: 'transitioned',
+      channel: 'email',
+      enabled: false,
+    });
+    expect(cell).toEqual({ eventType: 'transitioned', channel: 'email', enabled: false });
+    expect(await notificationPreferenceRepository.findByUser(user.id)).toHaveLength(1);
+
+    // The gate now reflects the stored value; the untouched in_app cell stays on.
+    expect(
+      await notificationPreferencesService.isChannelEnabled(user.id, 'transitioned', 'email'),
+    ).toBe(false);
+    expect(
+      await notificationPreferencesService.isChannelEnabled(user.id, 'transitioned', 'in_app'),
+    ).toBe(true);
   });
 });
 

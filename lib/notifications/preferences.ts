@@ -7,7 +7,8 @@ import type { $Enums } from '@prisma/client';
 // 5.1.6 email job (`email`). This module is the one source of truth for:
 //   * the closed CHANNEL set;
 //   * the event-type rows the settings matrix renders (and whether each is
-//     SETTABLE yet — the Story 5.4 `transitioned` row is drawn disabled);
+//     SETTABLE — the `settable: false` mechanism stays for any FUTURE
+//     "drawn disabled until Story X ships" seam, though no row needs it today);
 //   * the DEFAULT for an UNSET (event, channel) cell — the resolver supplies
 //     it, so an untouched user has ZERO rows yet still gets the documented
 //     behaviour (direct/mention events ON for both channels). An unset row is
@@ -39,18 +40,20 @@ export interface NotificationPreferenceEventTypeMeta {
   /** The discriminator stored on `NotificationPreference.eventType`. */
   readonly type: string;
   /** `false` ⇒ drawn DISABLED in the matrix and REJECTED on write — a
-   * documented future seam, not yet active. `transitioned` is Story 5.4's
-   * (issue-watching) event: the 5.7.3 fan-in consumes it with no 5.7 change
-   * when 5.4 lands, at which point this flips to `true`. */
+   * documented future seam ("available once Story X ships"), not yet active.
+   * Every CURRENT row is settable; this flag is kept as the mechanism a future
+   * not-yet-shipped event type would use (the 5.4 `transitioned` seam used it
+   * until both its channels became real — 5.7.10 in-app + 5.7.11 email). */
   readonly settable: boolean;
   /** The default for an UNSET row, per channel (the resolver supplies it). */
   readonly defaults: Readonly<Record<NotificationChannel, boolean>>;
 }
 
-/** The event-type rows, in matrix display order. Direct/mention events default
- * ON for both channels (the Jira personal-notification-settings shape + the
- * design's annotated default). `transitioned` carries defaults too (so it is
- * correct the moment 5.4 flips `settable`), but is not settable today. */
+/** The event-type rows, in matrix display order. All default ON for both
+ * channels (the Jira personal-notification-settings shape + the design's
+ * annotated default). `transitioned` (Story 5.4 — shipped) is fanned in by
+ * 5.7.10 (in_app) + 5.4.5/5.7.11 (email), gated by the user's
+ * transitioned·{channel} cell — so it is settable like the other three. */
 export const NOTIFICATION_PREFERENCE_EVENT_TYPES: readonly NotificationPreferenceEventTypeMeta[] = [
   {
     type: NOTIFICATION_EVENT_TYPE.mentioned,
@@ -67,10 +70,11 @@ export const NOTIFICATION_PREFERENCE_EVENT_TYPES: readonly NotificationPreferenc
     settable: true,
     defaults: { email: true, in_app: true },
   },
-  // Story 5.4 seam — drawn disabled, rejected on write, until issue-watching ships.
+  // Story 5.4 (issue-watching) — SHIPPED. Watcher transition events are fanned
+  // in by 5.7.10 (in_app) + 5.4.5/5.7.11 (email), gated by this row's cells.
   {
     type: NOTIFICATION_EVENT_TYPE.transitioned,
-    settable: false,
+    settable: true,
     defaults: { email: true, in_app: true },
   },
 ];
