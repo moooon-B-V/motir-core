@@ -1621,7 +1621,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Built-in saved-filter names render in English even when the UI locale is `zh` — the SavedFilterDropdown (and every other consumer) ships the English literal from the registry',
-        status: 'planned',
+        status: 'in_progress',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
