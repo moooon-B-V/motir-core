@@ -1038,6 +1038,111 @@ export const EPICS: EpicMeta[] = [
           '- Related: `bug-backlog-zh-sprint-translated-as-chongci` (sibling Epic-4 bug filed in ' +
           'the same session — same surface, different shape)',
       },
+      {
+        id: 'bug-sprint-report-incomplete-list-zero-after-carry-over',
+        kind: 'bug',
+        title:
+          'Sprint report on a COMPLETED sprint shows 0 "Issues not completed" — it reads CURRENT membership instead of the frozen at-completion snapshot (carry-over moved them out)',
+        status: 'in_progress',
+        type: 'bug',
+        executor: 'coding_agent',
+        estimateMinutes: 80,
+        descriptionMd:
+          '**Type:** bug (correctness — wrong data on a shipped report) · **Parent:** Epic 4 ' +
+          '(Agile planning) · **Code surface owned by:** Story **4.4.4/4.4.6** ' +
+          '(`sprintsService.getSprintReport` — the report read) crossed with Story **4.4.3** ' +
+          '(`sprintsService.completeSprint` — the carry-over) · **Status:** open · ' +
+          '**Reported by:** Yue.\n\n' +
+          'On a **completed** sprint, the sprint report’s **"Issues not completed"** list and ' +
+          'count read **0**, even though the sprint finished with unfinished work. The report ' +
+          'computes its completed/incomplete split from the issues’ **current sprint ' +
+          'membership** (`work_item.sprintId = <sprint>`), but `completeSprint` (4.4.3) has already ' +
+          '**carried the unfinished issues OUT** of the sprint (cleared their `sprintId` to the ' +
+          'backlog, or re-pointed it at the carry-over target sprint). So by the time anyone opens ' +
+          'the report, the not-done issues are no longer members — and the membership-based ' +
+          'read returns an empty incomplete list. The done issues stay on the sprint, so the ' +
+          '**completed** side looks fine; only the incomplete side collapses. This is the exact ' +
+          'opposite of how the mirror product behaves: **Jira freezes the sprint report at the ' +
+          'moment of completion** — "Completed Issues" and "Issues Not Completed" are a ' +
+          'snapshot of the membership AT CLOSE, and the carry-over that moves issues to the next ' +
+          'sprint does not erase them from the closed sprint’s report (rung 1).\n\n' +
+          '**Same root cause breaks three figures, not just the list** (all read CURRENT ' +
+          'membership):\n' +
+          '1. **The incomplete list + count** — `findSprintIssuesByDoneMembership` / ' +
+          '`countSprintIssuesByDoneMembership` keyed on `sprintId` → **0** after carry-over ' +
+          '(the headline symptom).\n' +
+          '2. **`points.notCompleted`** — sourced from `estimationService.rollupForSprint` ' +
+          '(`committed − completed` over CURRENT members) → **0** after carry-over. The ' +
+          '4.4.4 code comment rationalised this ("committed − completed = how much went ' +
+          'unfinished"), but the DTO actually ships `rollup.remaining`, which is 0 — so the ' +
+          'report shows N incomplete issues with "0 points not completed". Internally inconsistent.\n' +
+          '3. **`addedAfterStart`** — `countItemsAddedToSprintAfter` filters its revision walk ' +
+          'to issues CURRENTLY in the sprint (`workItem: { sprintId }`), so any issue that was ' +
+          'added during the sprint AND carried out drops from the "added during sprint" figure too.\n\n' +
+          'The existing integration test `tests/integration/sprints/sprint-report.test.ts` ' +
+          '("reports a COMPLETED sprint after carry-over") **codifies the bug** — it asserts ' +
+          '`report.incomplete.totalCount` is `0` and `report.points.notCompleted` is `0`. That ' +
+          'test is updated to the frozen-snapshot contract as part of the fix.\n\n' +
+          '**Fix (Jira-faithful: freeze the at-completion snapshot).** Add a per-issue completion ' +
+          'snapshot table **`SprintReportEntry`** (one row per non-archived sprint issue, written ' +
+          'inside `completeSprint`’s existing transaction BEFORE the carry-over moves anything): ' +
+          '`{ sprintId, workItemId, completed, backlogRank, addedAfterStart }` — `completed` is ' +
+          'the frozen done-category bucket, `backlogRank` the frozen order, `addedAfterStart` the ' +
+          'frozen "added during sprint" flag. `getSprintReport` then branches on state: a ' +
+          '**`complete`** sprint reads its counts / lists / points / `addedAfterStart` from the ' +
+          'frozen snapshot (so carry-over can never empty it), while **`active`** (the complete-' +
+          'modal live preview) and **`planned`** keep the existing current-membership read ' +
+          '(nothing has moved yet). Issue ROW content (title / status / assignee / estimate) stays ' +
+          'LIVE — only the bucket membership + order are frozen, matching Jira ("the grouping ' +
+          'is frozen; the row reflects the issue’s current state"). The committed baseline ' +
+          '(`sprint.committedPoints`, 4.4.2) is already a frozen snapshot — this makes the ' +
+          'completed / not-completed figures symmetric with it. The DTO + route + UI shapes are ' +
+          'UNCHANGED (`SprintReportDto`); the fix is entirely in the data layer (schema + repo + ' +
+          'the two service methods). The new table carries the standard workspace-gate RLS policy ' +
+          "(ENABLE + FORCE + `workspace_id = current_setting('app.workspace_id')`), like `sprint`.\n\n" +
+          '## Acceptance criteria\n\n' +
+          '- After `completeSprint` carries the unfinished issues out (to the backlog OR a target ' +
+          'sprint), the completed-sprint report’s **`incomplete` list + `totalCount`** show the ' +
+          'issues that were not done AT CLOSE (not 0), with the carried-over issues still listed ' +
+          'and cursor-paginated.\n' +
+          '- **`points.notCompleted`** is the not-completed points AT CLOSE (the configured ' +
+          'estimation statistic), no longer 0; `points.completed` and `points.committed` are ' +
+          'unchanged; the three figures are mutually consistent.\n' +
+          '- **`addedAfterStart`** counts the issues added during the sprint regardless of whether ' +
+          'they were later carried out.\n' +
+          '- The **completed** side is likewise frozen at close (a done issue later reopened / moved ' +
+          'does not change a closed sprint’s report).\n' +
+          '- An **`active`** sprint’s report (the complete-modal live preview) and a ' +
+          '**`planned`** sprint’s report are UNCHANGED (still the live current-membership ' +
+          'split — nothing has moved).\n' +
+          '- The snapshot is written inside `completeSprint`’s single transaction (a rollback ' +
+          'leaves no partial snapshot); the new table has the workspace-gate RLS policy so the ' +
+          'write passes under the non-bypass `prodect_app` role.\n' +
+          '- `SprintReportDto` / the report route / `SprintReport.tsx` are unchanged (pure ' +
+          'data-layer fix); the existing "reports a COMPLETED sprint after carry-over" integration ' +
+          'test is rewritten to the frozen contract, and new tests cover carry-over-to-sprint + a ' +
+          're-completed-elsewhere issue (frozen bucket) + the snapshot write.\n' +
+          '- Targeted Vitest (`sprint-report`, `complete-sprint`, the new repo tests) green; ' +
+          '`pnpm typecheck` + Prettier + ESLint clean; the coverage gate holds on any gated file ' +
+          'touched (`workItemRevisionRepository`).\n\n' +
+          '## Context refs\n\n' +
+          '- `lib/services/sprintsService.ts` — `getSprintReport` (the membership read to ' +
+          'branch) + `completeSprint` (where the snapshot is written, inside the carry-over ' +
+          'transaction, before the moves)\n' +
+          '- `lib/repositories/workItemRepository.ts` — `findSprintIssuesByDoneMembership` / ' +
+          '`countSprintIssuesByDoneMembership` (the current-membership reads, kept for the ' +
+          'active/planned preview) + `sumPointsForSprint` (the live points sum)\n' +
+          '- `lib/repositories/workItemRevisionRepository.ts` — `countItemsAddedToSprintAfter` ' +
+          '(the current-membership-scoped scope-change read); a sibling ids-at-completion read is ' +
+          'added for the frozen flag\n' +
+          '- `prisma/schema.prisma` (`Sprint.committedPoints` — the at-START frozen baseline ' +
+          'this mirrors at-COMPLETE) + a new `SprintReportEntry` model + migration with the ' +
+          'standard `sprint`-style RLS policy\n' +
+          '- `lib/dto/sprints.ts` / `lib/mappers/sprintMappers.ts` (`SprintReportDto` — ' +
+          'unchanged wire shape) + `tests/integration/sprints/sprint-report.test.ts` + ' +
+          '`complete-sprint.test.ts` (the contract tests)\n' +
+          '- Mirror: Jira sprint report freezes "Completed / Not Completed" at sprint close (rung 1)',
+      },
     ],
   },
   {
