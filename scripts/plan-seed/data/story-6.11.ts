@@ -595,7 +595,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.8',
       title: 'Tests (vitest) — read-exclusion everywhere + promote/decline/dedupe/snooze',
-      status: 'in_progress',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 60,
@@ -681,7 +681,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.10',
       title: 'Retire the dropped external-submitter intake — ADR amend + schema column drop',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 45,
