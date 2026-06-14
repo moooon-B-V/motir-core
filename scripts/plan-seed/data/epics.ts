@@ -3451,6 +3451,155 @@ export const EPICS: EpicMeta[] = [
           '`<Modal>` consumer with synthetic long content + asserts no clipping. Not in scope ' +
           'for this bug; the rule of three is the trigger for the refactor pass.',
       },
+      {
+        id: 'bug-card-header-loses-padding-when-body-overrides-p-0',
+        kind: 'bug',
+        title:
+          'Settings → Project → Details: the "Project details" card title and the Admin pill render flush against the card edges, because the editable variant overrides Card padding to `p-0` (to let body dividers extend edge-to-edge) but the Card header slot has no padding of its own and inherited the outer pad',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surfaces:** project settings → **Details** page → `ProjectDetailsCard` ' +
+          '(`app/(authed)/settings/project/_components/ProjectDetailsCard.tsx`, Story 6.8) ' +
+          'AND the shared `Card` primitive ' +
+          '(`components/ui/Card.tsx`) — the API gap is in the primitive, the visible symptom is on ' +
+          'the Details page · **Status:** open · **Reported by:** Yue.\n\n' +
+          'On **Settings → Project → Details** (admin view), the card header row — the ' +
+          '**"Project details"** title (left) and the **Admin** pill (right) — sits visibly flush ' +
+          "against the card's outer edges. The title hugs the left border and the Admin pill " +
+          'hugs the right border, with no horizontal breathing room. The body BELOW the header ' +
+          '(Avatar / Name / Key field stack) is correctly padded, so the asymmetry is loud: the ' +
+          'header looks like a separate, mis-styled slab on top of a normal card.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open the `moooon` / `motir` ' +
+          'project, go to **Settings → Project → Details**. Observe the **Project details** card: ' +
+          'the h2 title on the left and the Admin pill on the right have **zero left/right ' +
+          'padding** against the card border. The "Your project\'s name, avatar and key. …" ' +
+          'description copy ABOVE the card is also flush left against the page gutter — adjacent ' +
+          'but a separate finding (page-level intro is unpadded too). The READ-ONLY variant ' +
+          '(non-admin member) does NOT exhibit the bug, because that branch renders the card with ' +
+          'default Card padding (no `p-0` override) — the comparison case.\n\n' +
+          '**Root cause (high confidence — source confirms it).** `Card` ' +
+          '(`components/ui/Card.tsx:21–24, 65`) paints its padding on the OUTER box via ' +
+          '`p-(--spacing-card-padding)` from `cardVariants`, then renders the header slot as ' +
+          '`<div className="mb-(--spacing-md)">{header}</div>` — **the header has only a bottom ' +
+          'margin; no inline padding of its own.** The header was implicitly inheriting the outer ' +
+          "`p-(--spacing-card-padding)` from the Card's box.\n\n" +
+          'The editable Details branch ' +
+          '(`ProjectDetailsCard.tsx:170–171`) overrides Card to `className="p-0"` and re-pads ' +
+          'ONLY the body: `<Card header={<CardHead canManage t={td} />} className="p-0"> <div ' +
+          'className="flex flex-col p-(--spacing-card-padding)">…</div></Card>`. The override ' +
+          'exists for a real reason — the body uses an inline FieldStack list with full-width ' +
+          'dividers (`border-b border-(--el-border)`) between fields, and the dividers must ' +
+          "extend edge-to-edge inside the card, which only works if the Card's outer padding is " +
+          "OFF and the body re-pads itself. But the same `p-0` ALSO strips the header's " +
+          'inherited padding, leaving `CardHead` (the title + Admin pill in a ' +
+          "`flex items-center justify-between` row) flush against the card's outer border.\n\n" +
+          'The read-only branch (`ProjectDetailsCard.tsx:71–95`) uses plain ' +
+          '`<Card header={…}>…</Card>` with default padding, so the header inherits ' +
+          '`p-(--spacing-card-padding)` and renders correctly — confirming the bug is the ' +
+          '`p-0` override path, not the `CardHead` component itself.\n\n' +
+          '**This is a Card API gap, not a one-off mistake.** There is no documented way for a ' +
+          'caller to say "give me a card whose HEADER is padded but whose BODY extends edge-to-' +
+          'edge" — the two are coupled to a single `p-(--spacing-card-padding)` on the outer ' +
+          'box. Any consumer that wants edge-to-edge body content (a list with full-width row ' +
+          'dividers, a table whose header rule spans the full card width, a media tile with a ' +
+          'flush-left thumbnail) hits this. **Class:** "Primitive\'s padding lives on the wrong ' +
+          'DOM box for the layout we actually wanted." Same shape as the sibling ' +
+          '`bug-account-notifications-row-divider-broken-by-cell-padding` earlier in this PR ' +
+          '(border-on-each-cell vs. border-on-row-wrapper).\n\n' +
+          '**Fix shapes (decide at fix time — listed by durability).**\n' +
+          '1. **Slot-level padding in `Card` (durable, recommended).** Move the ' +
+          "`p-(--spacing-card-padding)` OFF the Card's outer box and ONTO each slot " +
+          'individually: the header slot, the children/body slot, and the footer slot each get ' +
+          'their own `p-(--spacing-card-padding)`. Add an opt-out per slot — e.g. ' +
+          '`<Card bodyFlush>` (or a per-slot `headerClassName` / `bodyClassName` prop) — for the ' +
+          'edge-to-edge case so the body can drop its padding while the header KEEPS its own. ' +
+          'This makes `<Card bodyFlush header={…}>` the canonical shape for the ' +
+          '`ProjectDetailsCard` editable variant and any future list/table card. **Why durable:** ' +
+          'every consumer that wants flush body content (the list-with-dividers pattern is going ' +
+          'to recur — see the Notifications card sibling bug) is the same Card API gap; fixing ' +
+          'it once at the primitive prevents the next occurrence. Aligns with the `Modal` ' +
+          'precedent: `Modal.Body` is the documented seam for "let the body do its own padding."\n' +
+          '2. **Pad the header inline at the consumer (minimal change, fragile).** Inside ' +
+          '`ProjectDetailsCard.tsx:170`, replace `header={<CardHead … />}` with ' +
+          '`header={<div className="p-(--spacing-card-padding) pb-0"><CardHead … /></div>}`. ' +
+          'Fixes the visible symptom in one file. **Why fragile:** the next card that wants the ' +
+          'same edge-to-edge body shape will repeat the workaround; the Card API gap stays. Also ' +
+          'every consumer ends up reimplementing the same padding math, which silently drifts.\n\n' +
+          '**Recommended:** fix 1 (slot-level padding in `Card`). It is the same shape as the ' +
+          '`Modal.Body` seam (let the body opt out of the outer padding, header/footer stay ' +
+          'padded), and it eliminates the API gap that will otherwise re-bite the next consumer. ' +
+          'The migration is mechanical: scan the codebase for every existing `<Card>` use, and ' +
+          'for the ones that need the OLD behavior (header + body share one padded box) nothing ' +
+          'changes since slot padding sums to the same outer pad; for the ones that overrode ' +
+          '`className="p-0"` (this card, and grep for any others) replace with `bodyFlush` so the ' +
+          'header recovers its padding.\n\n' +
+          '**Adjacent finding (NOT in this bug, but observed).** The Details PAGE header — the ' +
+          '**"Details"** h1 title + the "Your project\'s name, avatar and key. …" intro copy ' +
+          'above the card — also hugs the page gutter without left padding. That is a page-' +
+          'level layout concern (the `SettingsLayout` container or the page itself), not a Card ' +
+          'concern; it is out of scope for this bug and should be logged separately if it is a ' +
+          'real defect rather than the intended design.\n\n' +
+          '**Test gap that let it ship.** The existing `ProjectDetailsCard` tests cover the ' +
+          'editable flow (name save, avatar pick, key change modal), but no test renders the ' +
+          "card and asserts the **rendered geometry of the header** — the title's left edge " +
+          "should sit `p-(--spacing-card-padding)` away from the card's outer left edge, and " +
+          "the Admin pill's right edge should sit `p-(--spacing-card-padding)` away from the " +
+          "card's outer right edge. The fix MUST add either a render-test or Playwright " +
+          "measurement: render the admin view, measure the title's `getBoundingClientRect().left " +
+          '- card.getBoundingClientRect().left`, assert it equals the card padding token value.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- On **Settings → Project → Details** (admin view), the **"Project details"** card ' +
+          'title and the **Admin** pill render with the standard card padding on the left and ' +
+          'right — NO flush-against-edge appearance, visually consistent with the read-only ' +
+          "variant's header.\n" +
+          '- The body FieldStack (Avatar / Name / Key) and its full-width dividers continue to ' +
+          'extend edge-to-edge inside the card — the fix must NOT regress the body layout to a ' +
+          'doubly-padded shape that shrinks the dividers.\n' +
+          '- The read-only variant (`canManage={false}`) renders identically to today ' +
+          '(regression guard on the green-path layout).\n' +
+          '- A render-test (`tests/components/project-details-card-*.test.tsx`) or Playwright ' +
+          "assertion measures the rendered geometry: the card-header title's `boundingClientRect " +
+          ".left` minus the card's `boundingClientRect.left` equals the card padding token, and " +
+          "the Admin pill's right inset is symmetric.\n" +
+          '- AA contrast preserved (no colour change); the header copy + Admin pill keep their ' +
+          'current `--el-*` tokens.\n' +
+          '- If fix 1 is taken (slot-level padding in `Card`): every existing `<Card>` consumer ' +
+          'in the codebase is audited and updated where the new slot model changes the rendered ' +
+          'output; the `bodyFlush` (or chosen prop) shape is documented in the `Card.tsx` ' +
+          'doc-comment as the canonical seam for edge-to-edge body content.\n\n' +
+          '## Context refs\n\n' +
+          '- `components/ui/Card.tsx:21–24, 65` — `cardVariants` puts `p-(--spacing-card-padding)` ' +
+          'on the outer box; the header slot is `<div className="mb-(--spacing-md)">` with no ' +
+          'inline padding of its own (the API gap)\n' +
+          '- `app/(authed)/settings/project/_components/ProjectDetailsCard.tsx:170–171` — the ' +
+          'editable branch overrides `<Card className="p-0">` and re-pads ONLY the body via the ' +
+          'inner `<div className="flex flex-col p-(--spacing-card-padding)">`, stripping the ' +
+          "header's inherited padding (the visible fix site)\n" +
+          '- `app/(authed)/settings/project/_components/ProjectDetailsCard.tsx:71–95` — the ' +
+          'read-only branch (default Card padding; the comparison case — no symptom)\n' +
+          '- `app/(authed)/settings/project/_components/ProjectDetailsCard.tsx:303–320` — ' +
+          '`CardHead` (the title + Admin/Read-only Pill row inside the header slot; not at fault)\n' +
+          '- `components/ui/Modal.tsx` — the `Modal.Body` precedent: opt-in scroll seam that ' +
+          'inverts which slot owns the padding; same shape as the recommended `bodyFlush` Card ' +
+          'opt-in\n' +
+          '- `motir-core/CLAUDE.md` — shape via element-shape tokens (the fix introduces no new ' +
+          'tokens; this is purely a layout API change to how `Card` distributes its existing ' +
+          '`--spacing-card-padding` across slots)\n' +
+          '- Sibling bug `bug-account-notifications-row-divider-broken-by-cell-padding` (this ' +
+          'same PR) — same class: "primitive\'s padding lives on the wrong DOM box for the ' +
+          'layout we actually wanted." Both fixes lift the padding/border onto a different DOM ' +
+          'level so the layout can express edge-to-edge content without losing the surrounding ' +
+          'shell.\n\n' +
+          '**Refactor signal (rule of three watch).** This is the SECOND documented occurrence ' +
+          'of "consumer needed edge-to-edge body content and resorted to overriding the ' +
+          "primitive's outer padding to `p-0`, losing the header/footer shell's padding as a " +
+          'side-effect" (the first being any existing `<Card className="p-0">` use in the ' +
+          'codebase — grep at fix time). The third occurrence justifies promoting the slot-' +
+          'level-padding shape to the project standard for ALL shell primitives ' +
+          '(Card / Panel / Sheet), not just Card.',
+      },
     ],
   },
   {
