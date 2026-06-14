@@ -13,7 +13,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { estimationService } from '@/lib/services/estimationService';
-import { keyBetween, keyForAppend } from '@/lib/workItems/positioning';
+import { keyBetweenSafe, keyForAppend } from '@/lib/workItems/positioning';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { isOwnerRole } from '@/lib/workspaces/roles';
 import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
@@ -501,22 +501,17 @@ export const boardsService = {
           appliedStatus = targetStatus.key;
         }
 
-        // RANK. The new position sorts strictly between the bracketing neighbours
-        // (a missing neighbour = the open end of the column). A pure within-column
-        // reorder reaches here having attempted NO transition.
+        // RANK. The new position sorts between the bracketing neighbours (a
+        // missing neighbour = the open end of the column). A pure within-column
+        // reorder reaches here having attempted NO transition. Use the TOLERANT
+        // bracketer: a drop in a recency-ranked terminal column (Done/Cancelled)
+        // can hand the neighbours over position-inverted, and a board still
+        // carrying legacy/invalid `position` keys (a tenant not yet reseeded —
+        // PR #1020) would otherwise make `keyBetween` throw and 500 the move.
+        // `keyBetweenSafe` always returns a valid key for both cases.
         const prev = await resolveNeighbourPosition(target.beforeId, board.projectId, ctx, tx);
         const next = await resolveNeighbourPosition(target.afterId, board.projectId, ctx, tx);
-        // Bracket by the neighbours' ACTUAL key order, not their before/after
-        // role. A TERMINAL column (Done / Cancelled) is displayed ranked by
-        // RECENCY, not by `position` (see the projection's load model), so the
-        // drop's display-neighbours can arrive position-inverted — `prev` may
-        // sort AFTER `next`. Passing them straight to `keyBetween` would throw
-        // ("prev >= next") and 500 the move (the in_review → done failure on a
-        // populated board). Ordering the bounds keeps `keyBetween` valid; the
-        // exact key is immaterial there since the column re-sorts by recency.
-        const [lo, hi] =
-          prev !== null && next !== null && prev > next ? [next, prev] : [prev, next];
-        const position = keyBetween(lo, hi);
+        const position = keyBetweenSafe(prev, next);
         const row = await workItemRepository.update(workItemId, { position }, tx);
 
         return {

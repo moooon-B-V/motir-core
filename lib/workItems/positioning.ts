@@ -44,3 +44,46 @@ export function keyForPrepend(first: string | null): string {
 export function keyBetween(prev: string | null, next: string | null): string {
   return generateKeyBetween(prev, next);
 }
+
+/**
+ * Whether `k` is a valid fractional-index key — one `generateKeyBetween` will
+ * accept as a bound. A `null`/empty value, or a malformed key (e.g. a legacy
+ * zero-padded number, head `'0'`), is invalid. Probes the library's own
+ * validation by using `k` as a lower bound against an open upper end.
+ */
+export function isValidOrderKey(k: string | null | undefined): k is string {
+  if (k === null || k === undefined || k === '') return false;
+  try {
+    generateKeyBetween(k, null);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Like {@link keyBetween}, but TOLERANT of bad bounds — it ALWAYS returns a
+ * valid key instead of throwing. Two real-world inputs make the raw
+ * `generateKeyBetween` throw, and neither should ever 500 a user's reorder:
+ *
+ *  1. A **malformed/legacy bound** — a stored `position` that isn't a valid
+ *     fractional-index key (e.g. a zero-padded number from an old seed). Such a
+ *     bound is treated as an open end (`null`).
+ *  2. An **inverted pair** (`prev > next`) — the bounds arrive in display order,
+ *     but a surface whose display order ≠ `position` order (a recency-ranked
+ *     terminal board column) can hand them over position-inverted. The bounds
+ *     are ordered by their actual key; an exact tie drops the upper bound so the
+ *     new key appends after the lower one.
+ *
+ * The resulting key is always valid; its exact value is immaterial on the
+ * surfaces that hit these cases (they re-sort by their own rule, or the bad data
+ * is transient until a reseed).
+ */
+export function keyBetweenSafe(prev: string | null, next: string | null): string {
+  let lo = isValidOrderKey(prev) ? prev : null;
+  let hi = isValidOrderKey(next) ? next : null;
+  if (lo !== null && hi !== null && lo >= hi) {
+    [lo, hi] = lo > hi ? [hi, lo] : [lo, null];
+  }
+  return keyBetween(lo, hi);
+}

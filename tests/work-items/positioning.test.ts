@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { keyBetween, keyForAppend, keyForPrepend } from '@/lib/workItems/positioning';
+import {
+  isValidOrderKey,
+  keyBetween,
+  keyBetweenSafe,
+  keyForAppend,
+  keyForPrepend,
+} from '@/lib/workItems/positioning';
 
 // Unit tests for the fractional-indexing wrappers (lib/workItems/positioning).
 // Fixtures are the known base-62 outputs of `generateKeyBetween` (verified
@@ -56,5 +62,46 @@ describe('keyBetween', () => {
 
   it('throws when the bounds are out of order (prev >= next)', () => {
     expect(() => keyBetween('a1', 'a0')).toThrow();
+  });
+});
+
+describe('isValidOrderKey', () => {
+  it('accepts real fractional-index keys', () => {
+    expect(isValidOrderKey('a0')).toBe(true);
+    expect(isValidOrderKey('a0V')).toBe(true);
+    expect(isValidOrderKey('Zz')).toBe(true);
+  });
+
+  it('rejects null / empty / malformed keys (e.g. a legacy zero-padded number)', () => {
+    expect(isValidOrderKey(null)).toBe(false);
+    expect(isValidOrderKey(undefined)).toBe(false);
+    expect(isValidOrderKey('')).toBe(false);
+    expect(isValidOrderKey('00000612')).toBe(false); // head '0' — the old seed's invalid key
+  });
+});
+
+describe('keyBetweenSafe', () => {
+  it('matches keyBetween on well-formed, ordered bounds', () => {
+    expect(keyBetweenSafe('a0', 'a1')).toBe(keyBetween('a0', 'a1'));
+    expect(keyBetweenSafe(null, null)).toBe('a0');
+    expect(keyBetweenSafe('a0', null)).toBe('a1');
+  });
+
+  it('does NOT throw on inverted bounds — it orders them by key', () => {
+    const k = keyBetweenSafe('a1', 'a0'); // raw keyBetween throws here
+    expect('a0' < k && k < 'a1').toBe(true);
+  });
+
+  it('does NOT throw on a malformed bound — it treats it as an open end', () => {
+    // A board still carrying legacy padded positions must not 500 a move.
+    expect(() => keyBetweenSafe('00000612', '00000613')).not.toThrow();
+    expect(isValidOrderKey(keyBetweenSafe('00000612', '00000613'))).toBe(true);
+    // One valid, one malformed → brackets against the valid side, stays valid.
+    expect(isValidOrderKey(keyBetweenSafe('00000612', 'a5'))).toBe(true);
+    expect(isValidOrderKey(keyBetweenSafe('a5', '00000612'))).toBe(true);
+  });
+
+  it('returns a valid key when both bounds are equal valid keys (drops the upper)', () => {
+    expect(isValidOrderKey(keyBetweenSafe('a5', 'a5'))).toBe(true);
   });
 });
