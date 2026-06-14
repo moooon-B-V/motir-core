@@ -280,6 +280,11 @@ describe('SprintReport burndown (4.6.5)', () => {
     expect(screen.getAllByText('Guideline').length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText('Remaining').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('Scope added')).toBeTruthy();
+    // The muted chart-sub line (window · state · committed) — the velocity
+    // chart has its own sub-line; without this the side-by-side plots
+    // misaligned vertically (bug-sprint-report-burndown-missing-chart-sub).
+    // Assert the TZ-independent tail (the window dates depend on the runner TZ).
+    expect(screen.getByText(/· completed · 40 pts committed/)).toBeTruthy();
     // The committed baseline + end-point annotations and the scope label.
     expect(screen.getByText('40 committed')).toBeTruthy();
     expect(screen.getByText('12 left')).toBeTruthy();

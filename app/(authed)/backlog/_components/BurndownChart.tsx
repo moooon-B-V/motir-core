@@ -1,6 +1,6 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { LineChart, chartColor, niceTicks } from '@/components/ui/charts';
 import type {
   AxisTick,
@@ -53,6 +53,12 @@ const STATISTIC_LABEL_KEY = {
   issue_count: 'statisticIssueCount',
 } as const;
 
+/** Month + day, no year — the chart-sub window form (`Jun 2 → Jun 14`, panel 1);
+ *  the report's top meta line already carries the year-qualified window. */
+function formatChartDay(iso: string, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+}
+
 export function BurndownChart({
   burndown,
   variant,
@@ -62,6 +68,7 @@ export function BurndownChart({
 }) {
   const t = useTranslations('backlog');
   const tStat = useTranslations('settings.estimation');
+  const locale = useLocale();
 
   const full = variant === 'full';
   const { days, committed, scopeChanges, state } = burndown;
@@ -258,8 +265,26 @@ export function BurndownChart({
     rows,
   };
 
+  // The muted chart-sub line under the section title (panel 1 / design-notes:
+  // "a serif title + a muted sub-line") — window · state · committed. The
+  // VELOCITY chart renders its own (window · average); the burndown lacked it,
+  // so the two side-by-side report charts started their plots at different
+  // heights (bug-sprint-report-burndown-missing-chart-sub). Full form only —
+  // the compact scrum-header slot carries its own "Sprint N · day X of Y" line.
+  const subLine = [
+    t('sprintReport.metaWindow', {
+      start: formatChartDay(burndown.startDate, locale),
+      end: formatChartDay(burndown.endDate, locale),
+    }),
+    t('sprintReport.burndownSubState', { state }),
+    burndown.statistic === 'story_points'
+      ? t('sprintReport.burndownSubPoints', { committed })
+      : t('sprintReport.burndownSubIssues', { committed }),
+  ].join(' · ');
+
   return (
-    <div className="flex flex-col gap-1">
+    <div className={`flex flex-col ${full ? 'gap-2' : 'gap-1'}`}>
+      {full ? <span className="text-xs text-(--el-text-muted)">{subLine}</span> : null}
       <LineChart
         series={series}
         x={{
