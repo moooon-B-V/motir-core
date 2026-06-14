@@ -45,6 +45,7 @@ import {
   IllegalTransitionError,
   NoInitialStatusError,
   ReporterNotInWorkspaceError,
+  NotEpicError,
   StaleWorkItemError,
   TypeNotAllowedOnKindError,
   UnknownStatusError,
@@ -52,7 +53,9 @@ import {
 } from '@/lib/workItems/errors';
 import { CrossWorkspaceLinkError, WorkItemLinkNotFoundError } from '@/lib/workItems/linkErrors';
 import { ComponentNotFoundError, CrossProjectComponentError } from '@/lib/components/errors';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/errors';
+import { isWorkspaceManager } from '@/lib/projects/roles';
+import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import {
@@ -2217,7 +2220,98 @@ export const workItemsService = {
     }
     return { count, hasMore: true };
   },
+
+  /**
+   * Set or unset an epic's `publicChildrenHidden` privacy flag (Story 6.14 ·
+   * Subtask 6.14.7 — the admin-gated write path that turns epic privacy on/off).
+   * Per the epic-privacy ADR (§1, §5):
+   *
+   *   - **Epic-only** — the flag is meaningful ONLY on an epic-kind item; a
+   *     non-epic target is REJECTED with `NotEpicError` (422), not silently
+   *     coerced to a no-op, so a caller bug surfaces.
+   *   - **Project-admin only** — set/unset is gated to the project admin,
+   *     reusing the SAME 6.4 gate as `customFieldsService` /
+   *     `projectMembersService` (workspace owner/admin always pass, else a
+   *     project membership with role `admin`); everyone else → 403
+   *     (`NotProjectAdminError`). No new permission is introduced.
+   *
+   * The write is the single `publicChildrenHidden` column. It records NO
+   * activity revision — an admin visibility setting is not a content edit on the
+   * issue's history feed (and keeping it out of the revision diff keeps the
+   * activity totality-guard registry untouched). The 6.14.4 server-side
+   * exclusion is what gives the flag its effect on public reads; this method
+   * only owns the authoritative write + the gates.
+   *
+   * Throws: `WorkItemNotFoundError` (404 — unknown / cross-workspace item),
+   * `NotProjectAdminError` (403 — non-admin), `NotEpicError` (422 — non-epic).
+   */
+  async setEpicPrivacy(
+    id: string,
+    publicChildrenHidden: boolean,
+    ctx: ServiceContext,
+  ): Promise<WorkItemDto> {
+    return db.$transaction(async (tx) => {
+      // Lock + re-read under the lock (mirrors updateWorkItem): two concurrent
+      // toggles serialize on the FOR UPDATE lock, and the explicit workspace
+      // check is the finding-#26 tenant gate (a cross-workspace item is an
+      // indistinguishable 404, primary even under the dev/CI BYPASSRLS role).
+      const locked = await workItemRepository.lockById(id, tx);
+      if (!locked) throw new WorkItemNotFoundError(id);
+      const current = await workItemRepository.findById(id, tx);
+      if (!current || current.workspaceId !== ctx.workspaceId) {
+        throw new WorkItemNotFoundError(id);
+      }
+
+      // Project-admin gate (ADR §5) — the SAME 6.4 check the members / custom
+      // fields admin writes use. Inside the tx so it shares the lock's snapshot.
+      await assertCanManageProject(ctx.userId, ctx.workspaceId, current.projectId, tx);
+
+      // Epic-only (ADR §1) — reject a non-epic target rather than no-op'ing it.
+      if (current.kind !== 'epic') throw new NotEpicError(current.kind);
+
+      // No-op when unchanged — skip the write (and the `updatedAt` bump) so a
+      // re-set of the same value is idempotent.
+      if (current.publicChildrenHidden === publicChildrenHidden) {
+        return toWorkItemDto(current);
+      }
+
+      const row = await workItemRepository.update(id, { publicChildrenHidden }, tx);
+      return toWorkItemDto(row);
+    });
+  },
 };
+
+/**
+ * The project-management gate (Story 6.4) — workspace owner/admin always pass
+ * (`isWorkspaceManager`), otherwise the actor needs a project membership with
+ * role `admin`; everyone else → `NotProjectAdminError` (403). This is the SAME
+ * decision `projectMembersService.assertCanManage` /
+ * `customFieldsService.assertCanManage` enforce — replicated here (not imported)
+ * to keep the small gate a leaf the work-items domain owns, the established
+ * per-service pattern. Reuses no new permission.
+ */
+async function assertCanManageProject(
+  actorUserId: string,
+  workspaceId: string,
+  projectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const wsMembership = await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
+    actorUserId,
+    workspaceId,
+    tx,
+  );
+  if (wsMembership && isWorkspaceManager(wsMembership.role)) return;
+
+  const projectMembership = await projectMembershipRepository.findByUserAndProject(
+    actorUserId,
+    projectId,
+    tx,
+  );
+  if (projectMembership?.role === 'admin') return;
+
+  throw new NotProjectAdminError(projectId);
+}
 
 // Quick-search bounds (Subtask 6.9.1) live in the pure `lib/workItems/quickSearch`
 // module so the client link pickers (6.9.2) can import them too; re-exported here

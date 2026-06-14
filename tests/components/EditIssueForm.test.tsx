@@ -56,6 +56,7 @@ const issue: WorkItemDto = {
   position: 'a0',
   sprintId: null,
   backlogRank: 'a0',
+  publicChildrenHidden: false,
   archivedAt: null,
   createdAt: '2026-06-01T00:00:00.000Z',
   updatedAt: '2026-06-01T00:00:00.000Z',

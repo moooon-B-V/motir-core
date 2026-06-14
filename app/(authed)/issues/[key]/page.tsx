@@ -24,6 +24,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { CoreFieldsPanel } from './_components/CoreFieldsPanel';
+import { EpicPrivacyControl } from './_components/EpicPrivacyControl';
 import { WatchControl } from './_components/WatchControl';
 import { ContentSectionCard } from './_components/ContentSectionCard';
 import { IssueExplanation } from './_components/IssueExplanation';
@@ -381,6 +382,17 @@ export default async function IssueDetailPage({
                 canManageProject,
               }}
             />
+            {/* Epic-level privacy (Story 6.14 · 6.14.7) — the project-admin
+              set/unset control, EPIC-kind only. A non-admin member sees it
+              read-only (design invariant #4); public-read hiding is enforced
+              server-side (6.14.4). */}
+            {item.kind === 'epic' ? (
+              <EpicPrivacyControl
+                workItemId={item.id}
+                initialHidden={item.publicChildrenHidden}
+                canManageProject={canManageProject}
+              />
+            ) : null}
             {/* The 2.4.3 parent breadcrumb lives in the header (per detail.png),
               not here. Epic 5: custom fields · attachments. */}
           </aside>
