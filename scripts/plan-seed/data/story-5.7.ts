@@ -104,7 +104,7 @@ import type { PlanStory } from '../types';
 export const story_5_7: PlanStory = {
   id: '5.7',
   title: 'In-app notifications (bell + unread feed)',
-  status: 'planned',
+  status: 'done',
   gitBranch: 'feat/PROD-5.7-in-app-notifications',
   descriptionMd:
     'The in-app half of the notification surface — a bell in the shell header with an unread ' +
@@ -660,7 +660,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.8',
       title:
         'Playwright E2E — mention → bell increment → drawer → click → issue → marked read → badge decrement; preference-off stops the channel',
-      status: 'planned',
+      status: 'done',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 28,

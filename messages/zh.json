@@ -1976,6 +1976,16 @@
       "project": "项目",
       "builtin": "内置"
     },
+    "builtinNames": {
+      "my-open-issues": "我的未完成工作项",
+      "reported-by-me": "我创建的工作项",
+      "all-issues": "全部工作项",
+      "open-issues": "未完成工作项",
+      "done-issues": "已完成工作项",
+      "created-recently": "最近创建",
+      "updated-recently": "最近更新",
+      "resolved-recently": "最近解决"
+    },
     "visibilityHint": {
       "private": "仅你和项目管理员可见。",
       "project": "所有能浏览此项目的人都可查看并应用。"
@@ -2248,28 +2258,28 @@
     }
   },
   "dashboards": {
-    "title": "仪表板",
+    "title": "工作台",
     "subtitle": "将项目和已保存筛选器上的小组件组织为可共享的命名网格。",
-    "newDashboard": "新建仪表板",
-    "groupMine": "我的仪表板",
+    "newDashboard": "新建工作台",
+    "groupMine": "我的工作台",
     "groupShared": "与工作区共享",
     "ownedByYou": "由你拥有",
     "widgetCount": "{count, plural, other {# 个小组件}}",
     "viewOnly": "仅查看",
     "accessPrivate": "私有",
     "accessWorkspace": "工作区",
-    "optionsAria": "仪表板选项",
+    "optionsAria": "工作台选项",
     "open": "打开",
     "rename": "重命名",
     "changeAccess": "更改访问权限",
     "delete": "删除",
-    "backToList": "仪表板",
+    "backToList": "工作台",
     "empty": {
-      "title": "创建你的第一个仪表板",
-      "body": "仪表板将小组件——问题表格、图表和报表——汇集到一个可共享的视图中，覆盖你的项目和已保存筛选器。"
+      "title": "创建你的第一个工作台",
+      "body": "工作台将小组件——工作项表格、图表和报表——汇集到一个可共享的视图中，覆盖你的项目和已保存筛选器。"
     },
     "create": {
-      "title": "新建仪表板",
+      "title": "新建工作台",
       "nameLabel": "名称",
       "namePlaceholder": "例如：团队概览",
       "accessLabel": "访问权限",
@@ -2277,10 +2287,10 @@
       "privateDesc": "只有你能查看和编辑。",
       "workspaceTitle": "工作区",
       "workspaceDesc": "工作区中的所有人都能查看，由你编辑。",
-      "submit": "创建仪表板"
+      "submit": "创建工作台"
     },
     "renameModal": {
-      "title": "重命名仪表板",
+      "title": "重命名工作台",
       "label": "名称",
       "submit": "保存"
     },
@@ -2290,11 +2300,11 @@
     },
     "deleteModal": {
       "title": "删除“{name}”？",
-      "body": "这会为所有人移除该仪表板及其小组件，且无法撤销。",
-      "confirm": "删除仪表板"
+      "body": "这会为所有人移除该工作台及其小组件，且无法撤销。",
+      "confirm": "删除工作台"
     },
     "grid": {
-      "switchAria": "切换仪表板",
+      "switchAria": "切换工作台",
       "edit": "编辑",
       "done": "完成",
       "cancel": "取消",
@@ -2307,9 +2317,9 @@
       "capReachedNote": "{max} / {max} 个小组件——请移除一个再添加",
       "dropHere": "拖放到此处",
       "emptyTitle": "尚无小组件",
-      "emptyBody": "添加一个小组件，开始搭建这个仪表板。",
+      "emptyBody": "添加一个小组件，开始搭建这个工作台。",
       "emptyViewerTitle": "这里还没有内容",
-      "emptyViewerBody": "所有者尚未向该仪表板添加任何小组件。",
+      "emptyViewerBody": "所有者尚未向该工作台添加任何小组件。",
       "reorderAria": "重新排序 {title}",
       "columnAria": "第 {n} 列",
       "ownerMeta": "由你拥有 · {count, plural, other {# 个小组件}}",
@@ -2324,7 +2334,7 @@
     },
     "states": {
       "loadingAria": "正在加载小组件…",
-      "emptyTitle": "没有匹配的问题",
+      "emptyTitle": "没有匹配的工作项",
       "emptyBody": "目前没有匹配的内容。",
       "errorTitle": "加载失败",
       "errorBody": "获取该小组件的数据时出错。",
@@ -2335,16 +2345,16 @@
       "staleBody": "该小组件使用的已保存筛选器已被删除，因此无法加载结果。",
       "chooseFilter": "选择筛选器",
       "capTitle": "已达小组件上限",
-      "capBody": "一个仪表板最多容纳 {max} 个小组件，请移除一个再添加。"
+      "capBody": "一个工作台最多容纳 {max} 个小组件，请移除一个再添加。"
     },
     "add": {
       "title": "添加小组件",
       "filter_results_name": "筛选结果",
-      "filter_results_desc": "来自已保存筛选器或项目的分页问题表格（每页最多 50 行）。",
+      "filter_results_desc": "来自已保存筛选器或项目的分页工作项表格（每页最多 50 行）。",
       "distribution_name": "分布",
-      "distribution_desc": "按状态、经办人、优先级、类型等对问题进行细分的圆环图。",
+      "distribution_desc": "按状态、经办人、优先级、类型等对工作项进行细分的圆环图。",
       "created_vs_resolved_name": "创建对比解决",
-      "created_vs_resolved_desc": "随时间推移，创建的问题与已解决的问题的双序列趋势。"
+      "created_vs_resolved_desc": "随时间推移，创建的工作项与已解决的工作项的双序列趋势。"
     },
     "config": {
       "addTitle_filter_results": "筛选结果",
@@ -2375,7 +2385,7 @@
       "sourceRequired": "请选择一个数据源。"
     },
     "statistic": {
-      "kind": "问题类型",
+      "kind": "工作项类型",
       "status": "状态",
       "priority": "优先级",
       "assignee": "经办人",
@@ -2386,7 +2396,7 @@
     },
     "widgetTitle": {
       "filter_results": "筛选结果",
-      "distribution": "按{statistic}统计的问题",
+      "distribution": "按{statistic}统计的工作项",
       "created_vs_resolved": "创建对比解决"
     },
     "source": {
@@ -2396,20 +2406,20 @@
     },
     "toast": {
       "errorTitle": "出错了",
-      "createError": "无法创建仪表板。",
-      "renameError": "无法重命名仪表板。",
+      "createError": "无法创建工作台。",
+      "renameError": "无法重命名工作台。",
       "accessError": "无法更改访问权限。",
-      "deleteError": "无法删除仪表板。",
+      "deleteError": "无法删除工作台。",
       "layoutError": "无法更改布局。",
       "addWidgetError": "无法添加小组件。",
       "updateWidgetError": "无法保存小组件。",
       "removeWidgetError": "无法移除小组件。",
       "moveWidgetError": "无法移动小组件。"
     },
-    "totalNoun": "个问题",
-    "donutDesc": "按{statistic}分组的 {total} 个问题的圆环图。",
-    "donutEmpty": "暂无可绘制的问题。",
-    "cvrDesc": "过去 {days} 天内每{period}创建与解决的问题对比。",
+    "totalNoun": "个工作项",
+    "donutDesc": "按{statistic}分组的 {total} 个工作项的圆环图。",
+    "donutEmpty": "暂无可绘制的工作项。",
+    "cvrDesc": "过去 {days} 天内每{period}创建与解决的工作项对比。",
     "unitDay": "日",
     "unitWeek": "周",
     "unitMonth": "月",

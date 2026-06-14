@@ -19,6 +19,18 @@ function flatten(obj: Record<string, unknown>, prefix = ''): string[] {
   });
 }
 
+// Like `flatten`, but returns [keyPath, stringValue] pairs so a test can assert
+// on the actual rendered copy (not just the key set).
+function flattenEntries(obj: Record<string, unknown>, prefix = ''): [string, string][] {
+  return Object.entries(obj).flatMap(([key, value]): [string, string][] => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return flattenEntries(value as Record<string, unknown>, path);
+    }
+    return typeof value === 'string' ? [[path, value]] : [];
+  });
+}
+
 describe('message catalogs', () => {
   const enKeys = flatten(en).sort();
 
@@ -34,5 +46,36 @@ describe('message catalogs', () => {
     const orphanInZh = zhKeys.filter((k) => !enKeys.includes(k));
     expect(missingInZh, `keys missing from zh.json: ${missingInZh.join(', ')}`).toEqual([]);
     expect(orphanInZh, `orphan keys in zh.json: ${orphanInZh.join(', ')}`).toEqual([]);
+  });
+});
+
+// Regression guard for `bug-zh-dashboards-reports-stale-glossary`: the locked zh
+// PM glossary BANS `仪表板` for "dashboard" (must be `工作台`) and `问题` for the
+// tracked-unit noun "work item" (must be `工作项`). Both had leaked into the
+// dashboards/reports copy. Note: `问题` is ALSO legitimate Chinese for "problem"
+// in the `出了点问题` / `出现问题` error idioms — those are NOT work items and must
+// stay, so the `问题` check is scoped to the `dashboards` namespace, where every
+// occurrence denoted a tracked unit (no error idioms live there).
+describe('zh glossary (locked terms)', () => {
+  const zhEntries = flattenEntries(zh as Record<string, unknown>);
+
+  it('never renders the banned `仪表板`; "dashboard" is always `工作台`', () => {
+    const leaks = zhEntries.filter(([, value]) => value.includes('仪表板'));
+    expect(
+      leaks.map(([path]) => path),
+      `banned 仪表板 (use 工作台) at: ${leaks.map(([p]) => p).join(', ')}`,
+    ).toEqual([]);
+    // positive anchor: the dashboards landing title is the native term
+    expect((zh as { dashboards: { title: string } }).dashboards.title).toBe('工作台');
+  });
+
+  it('never uses `问题` for the work-item noun in the dashboards namespace (use `工作项`)', () => {
+    const leaks = zhEntries.filter(
+      ([path, value]) => path.startsWith('dashboards.') && value.includes('问题'),
+    );
+    expect(
+      leaks.map(([path]) => path),
+      `banned work-item 问题 (use 工作项) at: ${leaks.map(([p]) => p).join(', ')}`,
+    ).toEqual([]);
   });
 });

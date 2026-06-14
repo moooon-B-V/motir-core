@@ -10,9 +10,12 @@ import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
-import { workItemsService } from '@/lib/services/workItemsService';
+import { workItemsService, loadFilterReferents } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { estimationService } from '@/lib/services/estimationService';
+import { savedFiltersService } from '@/lib/services/savedFiltersService';
+import { resolveFilterAst, type ProjectFilterReferents } from '@/lib/filters/registry';
+import type { FilterAst } from '@/lib/filters/ast';
 import { keyBetweenSafe, keyForAppend } from '@/lib/workItems/positioning';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { isOwnerRole } from '@/lib/workspaces/roles';
@@ -35,6 +38,7 @@ import type {
   BoardColumnDto,
   BoardColumnStatusDto,
   BoardDto,
+  BoardFilterInput,
   BoardProjectionDto,
   BoardSummaryDto,
   BoardSwimlaneDto,
@@ -200,6 +204,7 @@ export const boardsService = {
     projectId: string,
     ctx: ServiceContext,
     boardId?: string,
+    filter?: BoardFilterInput,
   ): Promise<BoardProjectionDto> {
     // Project access gate (6.4.3): the board projection is a read of the
     // project — a non-browser (a non-member of a private project) gets a 404,
@@ -214,6 +219,15 @@ export const boardsService = {
     if (!board || board.projectId !== projectId) {
       throw new BoardNotFoundError(boardId ?? `default board for project ${projectId}`);
     }
+
+    // The advanced board filter (Story 6.15.2). Resolved ONCE here — an inline
+    // AST is validated (bad condition → typed 422), a saved-filter id resolves
+    // through the 6.2 access gate (unknown/unauthorized → SavedFilterNotFound →
+    // 404 at the 6.15.3 route). `undefined` when no filter narrows the board, in
+    // which case every read below is byte-for-byte the unfiltered projection.
+    // Resolved before the scrum no-sprint early return so an invalid filter is
+    // rejected consistently regardless of the board's sprint state.
+    const boardFilter = await resolveBoardFilter(projectId, filter, ctx);
 
     const [columns, mappings, statuses] = await Promise.all([
       boardColumnRepository.findByBoard(board.id, ctx.workspaceId),
@@ -316,6 +330,7 @@ export const boardsService = {
           cap,
           ctx,
           sprintScopeId,
+          boardFilter,
         );
       }),
     );
@@ -340,11 +355,16 @@ export const boardsService = {
     const boardStatusKeys = [...new Set(built.flatMap((b) => b.statusKeys))];
     const [swimlaneKeyByCard, swimlanes, boardTotal] = await Promise.all([
       resolveSwimlaneKeys(groupBy, allRows, ctx),
-      buildSwimlanes(groupBy, projectId, boardStatusKeys, ctx, sprintScopeId),
+      buildSwimlanes(groupBy, projectId, boardStatusKeys, ctx, sprintScopeId, boardFilter),
       boardStatusKeys.length
         ? workItemRepository.countProjectIssues(projectId, ctx.workspaceId, {
             statuses: boardStatusKeys,
             ...(sprintScopeId ? { sprintId: sprintScopeId } : {}),
+            // 6.15.2 — the truncation denominator counts the FILTERED set, so a
+            // filter that brings the board under the cap clears `truncated`.
+            ...(boardFilter
+              ? { ast: boardFilter.ast, filterReferents: boardFilter.referents }
+              : {}),
           })
         : Promise.resolve(0),
     ]);
@@ -1255,6 +1275,66 @@ function byPosition(a: WorkflowStatusDto, b: WorkflowStatusDto): number {
   return a.position < b.position ? -1 : a.position > b.position ? 1 : 0;
 }
 
+/** A resolved + validated board filter (Story 6.15.2): the compiled `FilterAst`
+ * plus the Epic-5 referents its label/component/custom-field conditions resolve
+ * against. Threaded into every board read so the board, its column counts, its
+ * `truncated`/cap, and its swimlane lanes all narrow to the matching set. */
+type ResolvedBoardFilter = { ast: FilterAst; referents?: ProjectFilterReferents };
+
+/**
+ * Resolve the optional board FILTER input (Story 6.15.2) into a compiled
+ * `{ ast, referents }`, or `undefined` when no filter narrows the board (no
+ * input, or an empty AST — both leave the projection byte-for-byte unfiltered).
+ *
+ * REUSE, not rebuild: a `savedFilterId` (a row id or a `builtin:<slug>`)
+ * resolves through `savedFiltersService.resolve` — the SAME 6.2 read the
+ * `/issues` navigator uses, with its access gate (an unknown / unauthorized id
+ * throws `SavedFilterNotFoundError`, which the 6.15.3 route maps to 404; a
+ * stored envelope gone stale resolves to `ast: null`, which degrades to "no
+ * filter" exactly like the navigator's read, leaving the degraded-state notice
+ * to the 6.15.3 surface). An inline `ast` (the quick-filter builder's output)
+ * is validated by `resolveFilterAst` — an unknown field/operator id or a bad
+ * value throws a typed `FilterValidationError` (→ 422). `savedFilterId` wins
+ * when both are present. Epic-5 referents load through the bounded
+ * `loadFilterReferents` the navigator already uses (finding #57 — never
+ * load-all). The compiler re-resolves in depth (defence in depth, the
+ * `findProjectIssuesFlat` precedent).
+ */
+async function resolveBoardFilter(
+  projectId: string,
+  filter: BoardFilterInput | undefined,
+  ctx: ServiceContext,
+): Promise<ResolvedBoardFilter | undefined> {
+  if (!filter) return undefined;
+
+  let ast: FilterAst | undefined;
+  if (filter.savedFilterId) {
+    // Saved filters resolve by the project's IDENTIFIER (the `PROD`-style key),
+    // not its id — `getBoard` already browse-gated the project, so this read is
+    // for the key only.
+    const project = await projectRepository.findById(projectId);
+    /* istanbul ignore next -- defensive: getBoard's assertCanBrowse already resolved the project; a null here would mean it vanished mid-request */
+    if (!project) throw new ProjectNotFoundError(projectId);
+    const resolved = await savedFiltersService.resolve(
+      project.identifier,
+      filter.savedFilterId,
+      ctx,
+    );
+    ast = resolved.ast ?? undefined;
+  } else {
+    ast = filter.ast;
+  }
+
+  if (!ast || ast.conditions.length === 0) return undefined;
+
+  const referents = await loadFilterReferents(projectId, ctx.workspaceId, ast);
+  // Validate against the registry (an inline board query's path to a typed 422);
+  // a saved-filter AST is already validated by `resolve`, so this is a cheap
+  // re-check there.
+  resolveFilterAst(ast, referents);
+  return { ast, referents };
+}
+
 /**
  * Build one column's projection (Subtask 3.8.2): its FULL card count + the
  * column's bounded card set (terminal columns ordered by recency and windowed to
@@ -1277,6 +1357,7 @@ async function buildColumnCards(
   cap: number,
   ctx: ServiceContext,
   sprintId?: string,
+  filter?: ResolvedBoardFilter,
 ): Promise<{
   col: BoardColumn;
   statusKeys: string[];
@@ -1286,17 +1367,27 @@ async function buildColumnCards(
   if (statusKeys.length === 0) {
     return { col, statusKeys, rows: [], totalCount: 0 };
   }
+  // 6.15.2 — the same compiled filter AND-ed into BOTH the count denominator
+  // and the card load, so the column shows only matching cards and its
+  // `totalCount` header reflects the filtered set. `undefined` → byte-for-byte
+  // the unfiltered column read.
   const [totalCount, rows] = await Promise.all([
     workItemRepository.countProjectIssues(projectId, ctx.workspaceId, {
       statuses: statusKeys,
       ...(sprintId ? { sprintId } : {}),
+      ...(filter ? { ast: filter.ast, filterReferents: filter.referents } : {}),
     }),
     workItemRepository.findColumnCards(
       projectId,
       ctx.workspaceId,
       statusKeys,
       terminal ? 'recent' : 'position',
-      { limit: cap, updatedSince: terminal ? doneSince : undefined, sprintId },
+      {
+        limit: cap,
+        updatedSince: terminal ? doneSince : undefined,
+        sprintId,
+        ...(filter ? { ast: filter.ast, referents: filter.referents } : {}),
+      },
     ),
   ]);
   return { col, statusKeys, rows, totalCount };
@@ -1375,8 +1466,15 @@ async function buildSwimlanes(
   statusKeys: string[],
   ctx: ServiceContext,
   sprintId?: string,
+  filter?: ResolvedBoardFilter,
 ): Promise<BoardSwimlaneDto[]> {
   if (groupBy === 'none' || statusKeys.length === 0) return [];
+
+  // 6.15.2 — the lane aggregates AND in the SAME compiled filter as the columns
+  // so a filtered, grouped board's lanes + counts reflect only matching cards
+  // (a lane whose cards all fail the filter disappears). `undefined` → the
+  // byte-for-byte unfiltered 3.3.4 aggregate.
+  const laneFilter = filter ? { ast: filter.ast, referents: filter.referents } : undefined;
 
   if (groupBy === 'assignee') {
     const rows = await workItemRepository.aggregateBoardLanesByAssignee(
@@ -1384,6 +1482,7 @@ async function buildSwimlanes(
       ctx.workspaceId,
       statusKeys,
       sprintId,
+      laneFilter,
     );
     const assigneeIds = rows.map((r) => r.assigneeId).filter((id): id is string => id !== null);
     const users = await userRepository.findByIds(assigneeIds);
@@ -1415,6 +1514,7 @@ async function buildSwimlanes(
       ctx.workspaceId,
       statusKeys,
       sprintId,
+      laneFilter,
     );
     return rows
       .map((r) => ({
@@ -1434,6 +1534,7 @@ async function buildSwimlanes(
     ctx.workspaceId,
     statusKeys,
     sprintId,
+    laneFilter,
   );
   const epics = await workItemRepository.findByIds(rows.map((r) => r.epicId));
   const epicById = new Map(epics.map((e) => [e.id, e]));
@@ -1457,6 +1558,9 @@ async function buildSwimlanes(
   const total = await workItemRepository.countProjectIssues(projectId, ctx.workspaceId, {
     statuses: statusKeys,
     ...(sprintId ? { sprintId } : {}),
+    // The "No epic" catch-all is DERIVED (filtered total − Σ epic-lane counts),
+    // so this denominator must use the SAME 6.15.2 filter as the epic aggregate.
+    ...(filter ? { ast: filter.ast, filterReferents: filter.referents } : {}),
   });
   const noEpicCount = total - epicCardCount;
   if (noEpicCount > 0) {

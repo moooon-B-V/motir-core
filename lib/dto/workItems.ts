@@ -466,6 +466,20 @@ export interface CreateWorkItemInput {
    * plain create.
    */
   componentIds?: string[];
+  /**
+   * Triage intake (Story 6.11 · Subtask 6.11.4). When set, the new work_item is
+   * born in the TRIAGE inbox: the service stamps `triagedAt = now()` and records
+   * `submittedByUserId` (the human who submitted it). A triage item is excluded
+   * from EVERY normal read — the tree, every board, every list, the ready set,
+   * and search — until an admin promotes it (6.11.5); the triage-queue read is
+   * the only read that returns it. Created through the SAME `createWorkItem`
+   * authority as an ordinary item (one create = one transaction), so a triage
+   * submission still allocates a key, records its `created` revision, and runs
+   * the kind-parent + access gates. The triage `triageService.createSubmission`
+   * caller passes a parentless `bug`/`task` and this marker; omitted → an
+   * ordinary create, unchanged.
+   */
+  triage?: { submittedByUserId: string };
 }
 
 /**

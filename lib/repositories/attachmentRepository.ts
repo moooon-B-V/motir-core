@@ -108,6 +108,26 @@ export const attachmentRepository = {
     return result.count;
   },
 
+  /**
+   * Re-point every attachment of one work item onto another (Story 6.11 ·
+   * Subtask 6.11.5 — mark-duplicate / merge). The triage-merge action folds a
+   * duplicate submission's attachments into the canonical item — mirroring
+   * Linear moving attachments to the canonical issue. `source` is kept as-is
+   * (it records how the row entered, not which issue holds it). Required `tx` —
+   * commits atomically with the duplicate's cancel. Returns the count moved.
+   */
+  async reassignWorkItem(
+    fromWorkItemId: string,
+    toWorkItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.attachment.updateMany({
+      where: { workItemId: fromWorkItemId },
+      data: { workItemId: toWorkItemId },
+    });
+    return result.count;
+  },
+
   /** Hard-delete one row (5.2.7 GC sweep). No tombstone. */
   async delete(id: string, tx: Prisma.TransactionClient): Promise<Attachment> {
     return tx.attachment.delete({ where: { id } });

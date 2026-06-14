@@ -27,9 +27,13 @@ export interface BuiltinFilterInputs {
 }
 
 export interface BuiltinFilterDef {
-  /** The stable slug after {@link BUILTIN_FILTER_ID_PREFIX}. */
+  /** The stable slug after {@link BUILTIN_FILTER_ID_PREFIX}. ALSO the i18n key:
+   * the UI threads `t('savedFilters.builtinNames.<slug>')` over it for the
+   * localised label (the DTO carries `slug` for exactly this). */
   slug: string;
-  /** English display name (the 6.2.3 UI threads i18n over the slug). */
+  /** English fallback name. NOT the user-facing label — every UI consumer
+   * localises via the slug; this is only used by callers without a `t` in
+   * scope (the `q` search match in savedFiltersService, tools, logs). */
   name: string;
   build: (inputs: BuiltinFilterInputs) => FilterAst;
 }

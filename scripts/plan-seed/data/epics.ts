@@ -1043,7 +1043,7 @@ export const EPICS: EpicMeta[] = [
   {
     id: '5',
     title: 'Collaboration & fields',
-    status: 'in_progress',
+    status: 'done',
     descriptionMd:
       'The layer that turns an issue from a record into a team workspace: **comments**, ' +
       '**@mentions**, **attachments**, **custom fields**, labels / components, assignees / ' +
@@ -1472,7 +1472,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Kanban board — dragging a card from In Review to Done does not move it (card snaps back, status unchanged)',
-        status: 'planned',
+        status: 'in_progress',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
@@ -1621,7 +1621,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Built-in saved-filter names render in English even when the UI locale is `zh` — the SavedFilterDropdown (and every other consumer) ships the English literal from the registry',
-        status: 'planned',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
@@ -1767,11 +1767,211 @@ export const EPICS: EpicMeta[] = [
           'forbids server-shipped user-facing English from crossing the boundary.',
       },
       {
+        id: 'bug-filters-directory-builtins-i18n-and-layout',
+        kind: 'bug',
+        title:
+          'Filters directory (/filters): built-in filter names render in English, the search field renders collapsed, and the name column is too narrow — the FiltersDirectory table',
+        status: 'in_progress',
+        type: 'bug',
+        dependsOn: ['bug-builtin-filter-names-not-localized'],
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surface:** the saved-filters directory page `/filters` — ' +
+          '`app/(authed)/filters/_components/FiltersDirectory.tsx` (Story 6.2 · ' +
+          'Subtask 6.2.4) · **Status:** open · **Reported by:** Yue.\n\n' +
+          'Three defects on the `/filters` directory table, reported together. Two of ' +
+          'them (search field + name column) share ONE root cause; the third is the ' +
+          'sibling i18n leak.\n\n' +
+          '**Defect 1 — built-in filter names are not translated (i18n leak).** The ' +
+          '`BuiltinFilterRow` renders the English registry literal directly: ' +
+          '`app/(authed)/filters/_components/FiltersDirectory.tsx:506` reads ' +
+          '`name={builtin.name}` (via the shared `ApplyNameButton`). This is the SAME ' +
+          'defect as `bug-builtin-filter-names-not-localized` (the issues-list ' +
+          '`SavedFilterDropdown`) — a SECOND consumer of the same DTO that the first ' +
+          "fix's audit missed (the `/filters` directory lists the eight built-ins in " +
+          'the same table as saved rows, under a `默认`-equivalent grouping). So under ' +
+          '`zh` the built-in rows show `My open issues / All issues / …` while the rest ' +
+          'of the table chrome is localised. **This defect DEPENDED ON ' +
+          '`bug-builtin-filter-names-not-localized`** (PR #1007, now MERGED — so this ' +
+          'card is `planned`/ready): that fix added `slug` to `BuiltinFilterSummaryDto` ' +
+          'and the `savedFilters.builtinNames.<slug>` catalog block, so the fix here is ' +
+          'a one-line change — `BuiltinFilterRow` passes ' +
+          '`name={t(`builtinNames.${builtin.slug}`)}` instead of `builtin.name`. (The ' +
+          'persisted saved-filter rows are user-authored text and correctly stay ' +
+          'verbatim — only the eight built-ins need threading.)\n\n' +
+          '**Defect 2 — the search field renders collapsed (the "search style is off").** ' +
+          'The search `Input` is wrapped in `<div className="max-w-sm">` at ' +
+          '`FiltersDirectory.tsx:195`. **`max-w-sm` is one of the named `max-w-*` ' +
+          "utilities that are BROKEN in motir-core**: `app/globals.css`'s `@theme` " +
+          'redefines the spacing scale and ships NO `--container-*` scale, so Tailwind ' +
+          "v4's `max-w-{sm,md,lg,3xl}` resolve to a near-zero width and collapse the box " +
+          'to roughly the addon-icon width (~40px). The search input therefore renders as ' +
+          'a tiny icon-sized control rather than a full search field — which reads as ' +
+          '"the search button style is off." The codebase already documents this trap ' +
+          '(`app/(authed)/reports/_components/ReportPageChrome.tsx:36-38`, ' +
+          '`app/(auth)/layout.tsx:16-18`, `app/tokens/markdown-editor/page.tsx:51-53`) ' +
+          'and the established fix is an arbitrary rem value (e.g. `max-w-[20rem]`), used ' +
+          'in ~70 places already.\n\n' +
+          '**Defect 3 — the name column is too narrow.** SAME root cause as defect 2: the ' +
+          '`ApplyNameButton` is capped by `className="group flex max-w-md items-start …"` ' +
+          'at `FiltersDirectory.tsx:400`. `max-w-md` collapses the same way `max-w-sm` ' +
+          'does, crushing the name button to ~40px so the filter name wraps / truncates ' +
+          'hard even when the table has ample room. The `<th>`/`<td>` for the name column ' +
+          'also carry no width hint, so once the button stops collapsing the name column ' +
+          'should additionally be allowed to take the slack (e.g. a `w-full` / `min-w` on ' +
+          'the name cell with `min-w-0` truncation on the button, per the ' +
+          'min-w-0-overflow rule) so it is visibly the widest column. Fix at minimum the ' +
+          'broken `max-w-md`; confirm the column then reads at a comfortable width against ' +
+          'real names.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open `moooon` / `motir` ' +
+          '→ `/filters`. (1) Set UI language to Chinese → the eight built-in rows stay ' +
+          'English while the columns/chrome are `zh`. (2) In any locale, note the search ' +
+          'field is collapsed to an icon-sized box at the top-left. (3) Note the filter ' +
+          'name column is narrower than the content wants, truncating names that would ' +
+          'otherwise fit.\n\n' +
+          '**Fix shapes.**\n\n' +
+          '1. **Defect 1 (i18n):** once `bug-builtin-filter-names-not-localized` lands, ' +
+          'change `BuiltinFilterRow` to thread `t(`builtinNames.${builtin.slug}`)` over ' +
+          'the slug (the DTO already carries `slug` by then). No new catalog keys — reuse ' +
+          'the `savedFilters.builtinNames` block that fix added.\n' +
+          '2. **Defects 2 & 3 (layout):** replace the broken named `max-w-sm` ' +
+          '(search wrapper) and `max-w-md` (name button) with arbitrary rem values — the ' +
+          'repo-wide workaround — and give the name column the width slack (so it is the ' +
+          'widest column) while keeping `min-w-0` truncation. NO design subtask needed: ' +
+          'this restores the INTENDED layout the broken utility silently ate, it does not ' +
+          'invent a new one.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- In the `zh` locale, all eight built-in rows in the `/filters` directory ' +
+          'render their Chinese labels (reusing `savedFilters.builtinNames`), matching ' +
+          'the issues-list dropdown after `bug-builtin-filter-names-not-localized`. The ' +
+          '`en` locale is unchanged.\n' +
+          '- The search field renders at a normal search-input width (not collapsed to ' +
+          'an icon-sized box) — no named `max-w-*` utility remains on the wrapper.\n' +
+          '- The filter-name column renders comfortably wide (visibly the widest column), ' +
+          'no longer truncating names that fit the table; the name button no longer ' +
+          'carries a broken named `max-w-*`. Long names still truncate gracefully via ' +
+          '`min-w-0`, not overflow.\n' +
+          '- No named `max-w-{sm,md,lg,xl,2xl,3xl}` utilities remain in ' +
+          '`FiltersDirectory.tsx` (grep clean); arbitrary rem values used instead.\n' +
+          '- A render test (happy-dom) asserts the built-in rows localise under `zh` in ' +
+          'the directory (mirrors the dropdown test from the sibling fix); existing ' +
+          '`filters-directory.test.tsx` stays green.\n' +
+          '- AA contrast and the design-system primitives (`Input`, `Button`, `Pill`) are ' +
+          'preserved; no service / DTO / route change (pure client layout + i18n thread).\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/filters/_components/FiltersDirectory.tsx:506` — ' +
+          '`BuiltinFilterRow` renders `name={builtin.name}` (defect 1 fix site).\n' +
+          '- `app/(authed)/filters/_components/FiltersDirectory.tsx:195` — the ' +
+          '`max-w-sm` search wrapper (defect 2 fix site).\n' +
+          '- `app/(authed)/filters/_components/FiltersDirectory.tsx:400` — the ' +
+          '`ApplyNameButton` `max-w-md` cap (defect 3 fix site); the name `<th>`/`<td>` ' +
+          'are at lines ~232 / ~440.\n' +
+          '- `app/globals.css` `@theme` — redefines `--spacing-*` and ships NO ' +
+          '`--container-*` scale, which is why named `max-w-{sm,md,3xl}` collapse.\n' +
+          '- `app/(authed)/reports/_components/ReportPageChrome.tsx:36-38`, ' +
+          '`app/(auth)/layout.tsx:16-18`, `app/tokens/markdown-editor/page.tsx:51-53` — ' +
+          'the documented `max-w-[…rem]`-not-`max-w-3xl` workaround precedent.\n' +
+          '- `bug-builtin-filter-names-not-localized` — the sibling i18n fix this card ' +
+          'depends on; it adds `slug` to `BuiltinFilterSummaryDto` + the ' +
+          '`savedFilters.builtinNames` catalog block this card reuses.\n' +
+          '- `lib/mappers/savedFilterMappers.ts` — `toBuiltinFilterSummaryDto` (already ' +
+          'ships `slug` once the sibling fix merges).\n' +
+          '- `motir-core/CLAUDE.md` — shape/colour token rules; `motir-meta` design notes ' +
+          'on the broken named `max-w-*` scale.\n\n' +
+          '**Note (audit gap that let defect 1 ship).** ' +
+          '`bug-builtin-filter-names-not-localized` fixed only the issues-list ' +
+          '`SavedFilterDropdown`; its consumer audit concluded the report scope + ' +
+          'dashboard pickers list no built-ins (true) but MISSED that the `/filters` ' +
+          'directory table renders them too. When the next i18n-key-vs-literal bug is ' +
+          'fixed, grep ALL consumers of the DTO (`BuiltinFilterSummaryDto`) before ' +
+          'declaring the surface list complete.',
+      },
+      {
+        id: 'bug-zh-dashboards-reports-stale-glossary',
+        kind: 'bug',
+        title:
+          'Chinese (zh) glossary leak: the dashboards/reports copy still says `仪表板` for "dashboard" (must be `工作台`) and `问题` for "work item" (must be `工作项`) — messages/zh.json',
+        status: 'done',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surface:** `messages/zh.json` — the `dashboards.*` block (and the ' +
+          'adjacent `reports.*` analytics copy) · **Status:** open · ' +
+          '**Reported by:** Yue.\n\n' +
+          'The Simplified-Chinese catalog ships two STALE glossary terms that the ' +
+          'locked zh PM glossary explicitly BANS. Both are the same defect class as ' +
+          '`bug-backlog-zh-sprint-translated-as-chongci` (a word-by-word / pre-rename ' +
+          'term that survived into a shipped surface), and both live in the same ' +
+          '`dashboards`/`reports` region of `messages/zh.json`, so they are fixed in one ' +
+          'pass.\n\n' +
+          '**Defect 1 (PRIMARY — the reported one): `仪表板` → `工作台`.** "Dashboard" ' +
+          'is rendered `仪表板` throughout the `dashboards` block. The locked glossary ' +
+          'is unambiguous: **dashboard → `工作台`** (what Teambition / Tapd / 飞书 call ' +
+          'the home landing); **`仪表板` is BANNED** (the literal "instrument panel" ' +
+          'calque). ~17 occurrences, all in the `dashboards` block: `dashboards.title` ' +
+          '(`仪表板`), `newDashboard` (`新建仪表板`), `groupMine` (`我的仪表板`), ' +
+          '`optionsAria` (`仪表板选项`), `backToList`, the empty-state `title`/`body`, ' +
+          'the create/rename/delete dialog `title`/`body`/`confirm`/`submit`, ' +
+          '`switchAria` (`切换仪表板`), the widget empty bodies, the `capBody` cap ' +
+          'message, and the `createError`/`renameError`/`deleteError` toasts ' +
+          '(`messages/zh.json:2261-2412`). Every `仪表板` → `工作台` (e.g. `新建仪表板` ' +
+          '→ `新建工作台`, `切换仪表板` → `切换工作台`, `删除仪表板` → `删除工作台`).\n\n' +
+          '**Defect 2 (SECONDARY — same defect class, same block): `问题` → `工作项` ' +
+          'where it means "work item".** Motir renamed the tracked-unit noun ' +
+          '**work item → `工作项` (BANNED: `问题`, the old Jira-ish "issue/question" ' +
+          'term)**, but the dashboards/reports analytics copy still says `问题`: ' +
+          '`dashboards` widget catalog + empty states — `仪表板将小组件——问题表格…` ' +
+          '(`:2279`), `没有匹配的问题` (`:2337`), `分页问题表格…` (`:2353`), ' +
+          '`…对问题进行细分…` (`:2355`), `创建的问题与已解决的问题…` (`:2357`), ' +
+          '`问题类型` (`:2388`); and the `reports` block — `按{statistic}统计的问题` ' +
+          '(`:2399`), `个问题` (`:2419`), `…的圆环图` body (`:2420`), ' +
+          '`暂无可绘制的问题` (`:2421`). Each `问题` that denotes a tracked unit → ' +
+          '`工作项` (`问题表格` → `工作项表格`, `问题类型` → `工作项类型`, `个问题` → ' +
+          '`个工作项`, etc.).\n\n' +
+          '**⚠️ Do NOT touch the legitimate `问题` idioms.** `出了点问题` / ' +
+          '`出现问题` = "something went wrong" (error-state copy) is CORRECT Chinese ' +
+          'and unrelated to the work-item noun — leave every `…出了点问题…` / ' +
+          '`…出现问题…` string as-is. Only the occurrences that NAME a tracked unit ' +
+          '(table/row/type/count of work items) are leaks. The fixer must grep ' +
+          '`问题` and hand-classify, not blanket-replace.\n\n' +
+          '**Repro.** Sign in as `zhuyue@motir.co` / `!QAZ1qaz`, set UI language to ' +
+          'Chinese, open the `工作台` area (the dashboards landing) and the report ' +
+          'pages: the nav/title/dialogs read `仪表板` (should be `工作台`), and the ' +
+          'widget-catalog / report descriptions read `问题` (should be `工作项`).\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- No `仪表板` remains anywhere in `messages/zh.json` (grep clean); every ' +
+          'former `仪表板` reads `工作台`, matching the locked glossary and the rest of ' +
+          'the app (e.g. the sidebar/nav already use `工作台`).\n' +
+          '- No `问题` remains in `messages/zh.json` where it denotes a tracked unit ' +
+          '(dashboards widget catalog + empty states + report descriptions) — each such ' +
+          'occurrence reads `工作项`. The `出了点问题` / `出现问题` error idiom is ' +
+          'UNCHANGED.\n' +
+          '- `en` catalog is untouched (byte-identical); `tests/i18n-catalog.test.ts` ' +
+          'parity stays green (no key add/remove — value-only edits).\n' +
+          '- A grep check (or a small catalog test) asserts `仪表板` count is 0 and that ' +
+          'no work-item-denoting `问题` remains, so a regression is caught.\n\n' +
+          '## Context refs\n\n' +
+          '- `messages/zh.json:2261-2412` — the `dashboards.*` block; all `仪表板` ' +
+          'occurrences + the `问题` leaks at `:2279`, `:2337`, `:2353`, `:2355`, ' +
+          '`:2357`, `:2388`.\n' +
+          '- `messages/zh.json:2399`, `:2419-2421` — the `reports.*` analytics copy ' +
+          '`问题` leaks.\n' +
+          '- The locked zh glossary (planner memory `zh-translation-style`): ' +
+          '**dashboard → `工作台` (❌ `仪表板`)**, **work item → `工作项` (❌ `问题`)**, ' +
+          'reports → `报表`. The `en` catalog values stay byte-identical (tests assert ' +
+          'English).\n' +
+          '- `bug-backlog-zh-sprint-translated-as-chongci` (PR #502) — the precedent: a ' +
+          'banned zh term (`冲刺` for Sprint) shipped to a surface; same shape, fixed by ' +
+          'normalising the catalog values.\n' +
+          '- `motir-core/CLAUDE.md` — i18n strings live in `messages/{en,zh}.json`; ' +
+          'value-only edits, no service/DTO change.',
+      },
+      {
         id: 'bug-combobox-menu-clipped-inside-modal',
         kind: 'bug',
         title:
           'Combobox listbox is clipped by the Modal when opened inside a dialog (Add-widget config modal — Statistic type picker shows only the first 1–2 options)',
-        status: 'planned',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +

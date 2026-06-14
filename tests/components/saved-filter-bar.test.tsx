@@ -8,6 +8,10 @@ import { EMPTY_FILTER, type IssueFilter } from '@/lib/issues/issueListFilter';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import { ToastProvider } from '@/components/ui/Toast';
 import { renderWithIntl } from '../helpers/renderWithIntl';
+import enMessages from '@/messages/en.json';
+import zhMessages from '@/messages/zh.json';
+import { BUILTIN_FILTERS } from '@/lib/savedFilters/builtins';
+import { toBuiltinFilterSummaryDto } from '@/lib/mappers/savedFilterMappers';
 import type { Viewer } from '@/app/(authed)/filters/_components/savedFiltersClient';
 import { SavedFilterSessionProvider } from '@/app/(authed)/issues/_components/SavedFilterContext';
 import { SavedFilterDropdown } from '@/app/(authed)/issues/_components/SavedFilterDropdown';
@@ -97,7 +101,9 @@ const PAGE: SavedFilterPageDto = {
   ],
   nextCursor: null,
   total: 3,
-  builtins: [{ id: 'builtin:my-open-issues', name: 'My open issues', builtin: true }],
+  builtins: [
+    { id: 'builtin:my-open-issues', slug: 'my-open-issues', name: 'My open issues', builtin: true },
+  ],
 };
 
 function resolved(over: Partial<ResolvedSavedFilterDto> = {}): ResolvedSavedFilterDto {
@@ -300,5 +306,66 @@ describe('IssueAppliedFilterBar — dirty state + Save split', () => {
     expect(
       await screen.findByRole('button', { name: /Applied filter: Sprint blockers/i }),
     ).toBeTruthy();
+  });
+});
+
+// Regression for bug-builtin-filter-names-not-localized: the eight built-in
+// names used to leak English into every non-`en` locale because the DTO shipped
+// the registry's English `name` and the dropdown rendered it directly. The fix
+// adds `slug` to the DTO and threads `t('savedFilters.builtinNames.<slug>')` —
+// so the rows must localise under `zh` and stay English under `en`, for ALL
+// eight (a half-translated catalog would slip past a single-name assertion).
+describe('SavedFilterDropdown — built-in name localisation (zh/en)', () => {
+  // The full registry → DTO list (carries `slug`), all eight builtins, no rows.
+  const ALL_BUILTINS = BUILTIN_FILTERS.map(toBuiltinFilterSummaryDto);
+  const BUILTINS_ONLY: SavedFilterPageDto = {
+    items: [],
+    nextCursor: null,
+    total: 0,
+    builtins: ALL_BUILTINS,
+  };
+  const enNames = enMessages.savedFilters.builtinNames as Record<string, string>;
+  const zhNames = zhMessages.savedFilters.builtinNames as Record<string, string>;
+
+  function renderLocale(locale: 'en' | 'zh') {
+    return renderWithIntl(<Harness ast={null} />, {
+      locale,
+      messages: locale === 'zh' ? (zhMessages as Record<string, unknown>) : enMessages,
+    });
+  }
+
+  async function openLocale(locale: 'en' | 'zh') {
+    const trigger = (locale === 'zh' ? zhMessages : enMessages).savedFilters.dropdown.trigger;
+    fireEvent.click(screen.getByRole('button', { name: trigger }));
+    await screen.findByText(
+      (locale === 'zh' ? zhMessages : enMessages).savedFilters.dropdown.defaults,
+    );
+  }
+
+  it('renders all eight built-in names in Chinese under the zh locale (no English leak)', async () => {
+    mockApi({ page: BUILTINS_ONLY });
+    renderLocale('zh');
+    await openLocale('zh');
+
+    // Every built-in row shows its zh label…
+    for (const def of ALL_BUILTINS) {
+      expect(screen.getByText(zhNames[def.slug]!)).toBeTruthy();
+    }
+    // …and none of the English registry literals leaks through.
+    for (const def of ALL_BUILTINS) {
+      expect(screen.queryByText(def.name)).toBeNull();
+    }
+  });
+
+  it('renders all eight built-in names in English under the en locale (green path)', async () => {
+    mockApi({ page: BUILTINS_ONLY });
+    renderLocale('en');
+    await openLocale('en');
+
+    for (const def of ALL_BUILTINS) {
+      // The en catalog value equals the registry English name (byte-identical).
+      expect(enNames[def.slug]).toBe(def.name);
+      expect(screen.getByText(def.name)).toBeTruthy();
+    }
   });
 });

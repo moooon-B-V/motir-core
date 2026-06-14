@@ -988,11 +988,65 @@ export const workItemRepository = {
     workspaceId: string,
     statusKeys: string[],
     order: 'position' | 'recent',
-    opts: { limit: number; updatedSince?: Date; sprintId?: string },
+    opts: {
+      limit: number;
+      updatedSince?: Date;
+      sprintId?: string;
+      // The advanced board filter (Story 6.15.2) — a compiled FilterAST AND-ed
+      // into the card read so a column shows ONLY matching cards. Omitted on the
+      // unfiltered board (the byte-for-byte 3.8.2 builder read below).
+      ast?: FilterAst;
+      referents?: ProjectFilterReferents;
+    },
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
     if (statusKeys.length === 0) return [];
     const client = tx ?? db;
+
+    // Advanced filter active (Story 6.15.2): AND the compiled FilterAST (alias
+    // `w`) into the column read. The AST can't be expressed through the Prisma
+    // query builder — it compiles to a parameterized SQL fragment over the full
+    // row (incl. the 6.1.2 label/component/custom-field EXISTS probes) — so we
+    // resolve the matching, ordered, capped ids in ONE raw query that applies
+    // the SAME base predicates as the builder path, then hydrate the real
+    // `WorkItem` rows through the builder (keeping the row type exact for the
+    // board mapper) and restore the raw query's order. No AST → the existing
+    // builder read, byte-for-byte the 3.8.2 projection (no regression).
+    if (opts.ast && opts.ast.conditions.length > 0) {
+      const orderSql =
+        order === 'recent'
+          ? Prisma.sql`w."updatedAt" DESC, w."key" ASC`
+          : Prisma.sql`w."position" ASC, w."key" ASC`;
+      // Bind the cutoff as a JS Date param (never SQL NOW()) so the comparison
+      // stays timestamptz-correct, mirroring `aggregateCreatedByBucket`.
+      const updatedSinceSql = opts.updatedSince
+        ? Prisma.sql`AND w."updatedAt" >= ${opts.updatedSince}`
+        : Prisma.empty;
+      const sprintScope = opts.sprintId
+        ? Prisma.sql`AND w."sprintId" = ${opts.sprintId}`
+        : Prisma.empty;
+      const idRows = await client.$queryRaw<Array<{ id: string }>>`
+        SELECT w."id"
+          FROM "work_item" w
+          WHERE w."projectId" = ${projectId}
+            AND w."workspaceId" = ${workspaceId}
+            AND w."archivedAt" IS NULL
+            AND ${notInTriageSql('w')}
+            AND w."status" = ANY(${statusKeys})
+            ${updatedSinceSql}
+            ${sprintScope}
+            AND (${compileFilterConditionsSql(opts.ast, opts.referents)})
+          ORDER BY ${orderSql}
+          LIMIT ${opts.limit}`;
+      const ids = idRows.map((r) => r.id);
+      if (ids.length === 0) return [];
+      const rows = await client.workItem.findMany({ where: { id: { in: ids } } });
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      // `findMany({ id: { in } })` does not preserve the id list order — restore
+      // the raw query's order/window so the board rank is honoured.
+      return ids.map((id) => byId.get(id)).filter((r): r is WorkItem => r !== undefined);
+    }
+
     const orderBy: Prisma.WorkItemOrderByWithRelationInput[] =
       order === 'recent'
         ? [{ updatedAt: 'desc' }, { key: 'asc' }]
@@ -1146,23 +1200,26 @@ export const workItemRepository = {
     workspaceId: string,
     statusKeys: string[],
     sprintId?: string,
+    filter?: BoardCardFilter,
   ): Promise<Array<{ assigneeId: string | null; count: number }>> {
     if (statusKeys.length === 0) return [];
-    const rows = await db.workItem.groupBy({
-      by: ['assigneeId'],
-      where: {
-        projectId,
-        workspaceId,
-        archivedAt: null,
-        // Read-exclusion (Subtask 6.11.3): a triage item never counts toward a
-        // swimlane lane — keeps the lane counts consistent with `findColumnCards`.
-        triagedAt: null,
-        status: { in: statusKeys },
-        ...(sprintId ? { sprintId } : {}),
-      },
-      _count: { _all: true },
-    });
-    return rows.map((r) => ({ assigneeId: r.assigneeId, count: r._count._all }));
+    // Raw GROUP BY (not the Prisma builder) so the optional 6.15.2 FilterAST —
+    // a parameterized SQL fragment over alias `w` — can be AND-ed in; the lane
+    // counts then track the FILTERED board exactly as `findColumnCards` does.
+    // No filter → the fragment is `TRUE`, so the counts are byte-for-byte the
+    // 3.3.4 aggregate. Read-exclusion (6.11.3): a triage item never counts.
+    const sprintScope = sprintId ? Prisma.sql`AND w."sprintId" = ${sprintId}` : Prisma.empty;
+    return db.$queryRaw<Array<{ assigneeId: string | null; count: number }>>`
+      SELECT w."assigneeId" AS "assigneeId", COUNT(*)::int AS "count"
+        FROM "work_item" w
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND ${notInTriageSql('w')}
+          AND w."status" = ANY(${statusKeys})
+          ${sprintScope}
+          AND (${boardCardFilterSql(filter)})
+        GROUP BY w."assigneeId"`;
   },
 
   /**
@@ -1175,23 +1232,25 @@ export const workItemRepository = {
     workspaceId: string,
     statusKeys: string[],
     sprintId?: string,
+    filter?: BoardCardFilter,
   ): Promise<Array<{ priority: WorkItemPriority; count: number }>> {
     if (statusKeys.length === 0) return [];
-    const rows = await db.workItem.groupBy({
-      by: ['priority'],
-      where: {
-        projectId,
-        workspaceId,
-        archivedAt: null,
-        // Read-exclusion (Subtask 6.11.3): a triage item never counts toward a
-        // swimlane lane — keeps the lane counts consistent with `findColumnCards`.
-        triagedAt: null,
-        status: { in: statusKeys },
-        ...(sprintId ? { sprintId } : {}),
-      },
-      _count: { _all: true },
-    });
-    return rows.map((r) => ({ priority: r.priority, count: r._count._all }));
+    // Raw GROUP BY so the optional 6.15.2 FilterAST AND-s in (see
+    // `aggregateBoardLanesByAssignee`); `priority::text` returns the enum's
+    // string value (= the WorkItemPriority union members), so the shape matches
+    // the prior `groupBy` result. No filter → `TRUE` (byte-for-byte 3.3.4).
+    const sprintScope = sprintId ? Prisma.sql`AND w."sprintId" = ${sprintId}` : Prisma.empty;
+    return db.$queryRaw<Array<{ priority: WorkItemPriority; count: number }>>`
+      SELECT w."priority"::text AS "priority", COUNT(*)::int AS "count"
+        FROM "work_item" w
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND ${notInTriageSql('w')}
+          AND w."status" = ANY(${statusKeys})
+          ${sprintScope}
+          AND (${boardCardFilterSql(filter)})
+        GROUP BY w."priority"`;
   },
 
   /**
@@ -1211,11 +1270,15 @@ export const workItemRepository = {
     workspaceId: string,
     statusKeys: string[],
     sprintId?: string,
+    filter?: BoardCardFilter,
   ): Promise<Array<{ epicId: string; count: number }>> {
     if (statusKeys.length === 0) return [];
     // Sprint scope (Story 4.5.2): only the anchor (the board CARDS) is sprint-
     // filtered; the upward climb to the ancestor epic must NOT be (an epic
     // ancestor is rarely itself in the sprint). Bound param, never interpolated.
+    // The 6.15.2 FilterAST likewise constrains only the anchor CARDS (the climb
+    // is structural) — so the epic lanes/counts track the FILTERED board. No
+    // filter → `TRUE` (byte-for-byte the 3.3.4 epic aggregate).
     const sprintScope = sprintId ? Prisma.sql`AND w."sprintId" = ${sprintId}` : Prisma.empty;
     return db.$queryRaw<Array<{ epicId: string; count: number }>>`
       WITH RECURSIVE up AS (
@@ -1227,6 +1290,7 @@ export const workItemRepository = {
             AND ${notInTriageSql('w')}
             AND w."status" = ANY(${statusKeys})
             ${sprintScope}
+            AND (${boardCardFilterSql(filter)})
         UNION ALL
         SELECT u.card_id, p."id", p."parentId", p."kind"::text
           FROM up u
@@ -1914,6 +1978,31 @@ export interface RepoIssueFilter {
    * degrade rule, never an error). Built-in-only ASTs don't need it.
    */
   filterReferents?: ProjectFilterReferents;
+}
+
+/**
+ * The optional advanced-filter axis for the BOARD reads (Story 6.15.2) — a
+ * compiled {@link FilterAst} (+ the per-project Epic-5 {@link
+ * ProjectFilterReferents} its label/component/custom-field conditions resolve
+ * against) AND-ed into the board's card read + lane aggregates so a filtered
+ * board shows ONLY matching cards (and the cap/`truncated`/lane counts are
+ * computed over that filtered set). The board reads take it positionally rather
+ * than through {@link RepoIssueFilter} because they already thread `statusKeys`
+ * / `sprintId` positionally; the service resolves the same `{ ast, referents }`
+ * it passes to `countProjectIssues` via `RepoIssueFilter`.
+ */
+export interface BoardCardFilter {
+  ast?: FilterAst;
+  referents?: ProjectFilterReferents;
+}
+
+/** The board filter as a `Prisma.Sql` predicate over alias `w`: the compiled
+ * FilterAST when one is active, else `TRUE` (so an absent filter is a no-op and
+ * the board read stays byte-for-byte the unfiltered projection). */
+function boardCardFilterSql(filter?: BoardCardFilter): Prisma.Sql {
+  return filter?.ast && filter.ast.conditions.length > 0
+    ? Prisma.sql`(${compileFilterConditionsSql(filter.ast, filter.referents)})`
+    : Prisma.sql`TRUE`;
 }
 
 // ---------------------------------------------------------------------------

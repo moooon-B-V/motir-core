@@ -67,3 +67,19 @@ export interface TriageQueuePageDto {
   items: TriageQueueItemDto[];
   nextCursor: string | null;
 }
+
+/**
+ * What the intake path returns after creating a triage submission (Subtask
+ * 6.11.4). A thin confirmation — the in-app widget (6.11.7) only needs to toast
+ * success and may deep-link by `identifier`; the full body lives in the inbox
+ * (the queue / detail reads). The created item is in the `triage` state, so it
+ * is NOT yet in the tree / board / list / search.
+ */
+export interface TriageSubmissionResultDto {
+  id: string;
+  /** A submission is born `bug` (bug report) or `task` (feature request). */
+  kind: WorkItemKindDto;
+  /** The allocated work-item identifier (e.g. "PROD-42"). */
+  identifier: string;
+  title: string;
+}

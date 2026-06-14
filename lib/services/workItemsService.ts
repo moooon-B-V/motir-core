@@ -687,6 +687,15 @@ export const workItemsService = {
         ...(input.priority ? { priority: input.priority } : {}),
         assigneeId,
         reporterId: ctx.userId,
+        // Triage intake (Story 6.11 · Subtask 6.11.4): when the caller marks
+        // this a triage submission, the item is born in the inbox —
+        // `triagedAt` stamped now (the read-exclusion marker, 6.11.3) and
+        // `submittedByUserId` recording the real submitter (a member, or — via
+        // 6.12 — a signed-in non-member; DISTINCT from the `reporterId` above,
+        // which stays a member). Omitted → a normal create (`triagedAt` NULL).
+        ...(input.triage
+          ? { triagedAt: new Date(), submittedByUserId: input.triage.submittedByUserId }
+          : {}),
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         estimateMinutes: input.estimateMinutes ?? null,
         // Work-item type + executor (Story 2.7) — leaf-only validated + executor
