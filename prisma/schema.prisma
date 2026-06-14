@@ -75,6 +75,10 @@ model User {
   // it). Named relations because there are two distinct User↔WorkItem edges.
   reportedWorkItems         WorkItem[]                @relation("WorkItemReporter")
   assignedWorkItems         WorkItem[]                @relation("WorkItemAssignee")
+  // Back-relation for the triage submitter (Subtask 6.11.4). A user may have
+  // submitted many triage items (in-app, or — via 6.12 — as a signed-in
+  // non-member). SetNull on the FK: a deleted submitter just loses attribution.
+  submittedTriageItems      WorkItem[]                @relation("WorkItemTriageSubmitter")
   // Back-relation for WorkItemLink (Subtask 1.4.3). A user creates many
   // issue-to-issue links (createdBy — Restrict: a user with links on record
   // cannot be hard-deleted, mirroring the reporter pattern).
@@ -724,13 +728,29 @@ model WorkItem {
   // a snoozed item is still `triagedAt`-marked, so still hidden from every tree /
   // board / list / ready / search read.
   snoozedUntil           DateTime?
-  // External-portal submitter identity (6.11.4 · ADR §3) — captured for an
-  // UNAUTHENTICATED public-form submission (no `User` row, no tenant access); NULL
-  // for an in-app member submission (whose `reporter` IS the submitter).
-  // `externalSubmitterEmail IS NOT NULL` is the derived "external submission"
-  // predicate, so no redundant `submittedByUserId` is stored (ADR §3).
+  // External-portal submitter identity (ADR §3 — the ORIGINAL model). DEAD as of
+  // the 2026-06-14 signed-in-only revision (Subtask 6.11.4): intake is signed-in
+  // only, so attribution is ALWAYS a real `submittedByUserId`. These columns are
+  // unreachable and are DROPPED by Subtask 6.11.10 (the ADR §3 amend + migration);
+  // kept here until then so 6.11.4 ships an additive migration with no consumer
+  // churn.
   externalSubmitterName  String?
   externalSubmitterEmail String?
+  // Triage submitter (Story 6.11 · Subtask 6.11.4, the 2026-06-14 signed-in-only
+  // revision). The human who SUBMITTED a triage item — ALWAYS a real account: a
+  // workspace member (the in-app "report a bug / request a feature" widget) OR a
+  // signed-in non-member (Story 6.12's public-project "Submit a request", granted
+  // by `canSubmitToTriage`). DISTINCT from `reporterId`, which stays the non-null
+  // tenant reporter (a workspace member): for an in-app member submit the two are
+  // EQUAL; for a 6.12 non-member submit the reporter is the project's intake
+  // member while THIS records the real (non-member) submitter. The inbox derives
+  // "member vs public" from this + workspace membership (the captured name/email
+  // shape is retired by 6.11.10). NULL on every non-triage item (and on a
+  // never-attributed legacy triage row). `SetNull` (NOT `Restrict`): deleting the
+  // submitter must never delete or block the work item — the `reporter`
+  // (`Restrict`) is the durable owner; a departed submitter just loses
+  // attribution.
+  submittedByUserId      String?
   // Epic-level privacy on public projects (Story 6.14 · Subtask 6.14.3, per
   // docs/decisions/epic-privacy.md §1). When TRUE on an EPIC-kind item, the
   // epic's DESCENDANTS (stories / tasks / subtasks) and its aggregate TELLS
@@ -758,6 +778,10 @@ model WorkItem {
   children             WorkItem[]                @relation("WorkItemParent")
   assignee             User?                     @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   reporter             User                      @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  // Triage submitter (Subtask 6.11.4) — the real human who submitted a triage
+  // item (member or, via 6.12, a signed-in non-member). SetNull so a departed
+  // submitter never deletes the work item (the reporter is the durable owner).
+  submittedBy          User?                     @relation("WorkItemTriageSubmitter", fields: [submittedByUserId], references: [id], onDelete: SetNull)
   // The sprint side of the association. Modelled on BOTH sides (Sprint.workItems
   // back-relation) with the SetNull action the migration uses, so `migrate dev`
   // reports "No difference detected" — the FK-drift rule (bug-attachment-fk-migration-drift).
