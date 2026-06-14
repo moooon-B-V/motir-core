@@ -486,7 +486,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.5',
       title:
         'The bell + unread badge + notification drawer in the shell header — live count, deep links, mark-read on open (no whole-tree refresh)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
@@ -660,7 +660,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.8',
       title:
         'Playwright E2E — mention → bell increment → drawer → click → issue → marked read → badge decrement; preference-off stops the channel',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 28,
