@@ -9,10 +9,13 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCorners,
+  pointerWithin,
   useSensor,
   useSensors,
   type Announcements,
+  type CollisionDetection,
   type DragEndEvent,
+  type DragMoveEvent,
   type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
@@ -469,6 +472,95 @@ function BoardDnd({
   }, [columns]);
   const snapshotRef = useRef<BoardColumnDto[] | null>(null);
 
+  // Horizontal edge auto-scroll for the flat board (bug-board-cannot-drag-from-
+  // in-review-to-done). The flat board is a horizontally-scrolling column row
+  // (`scrollRef`, `overflow-x-auto`): on a laptop-width viewport the trailing
+  // columns (Done, Cancelled) sit PAST the fold, so dragging a card toward them
+  // requires the row to scroll. dnd-kit's built-in auto-scroll handles this
+  // container too aggressively — its default ~20% edge threshold slams the row
+  // straight to its scroll boundary the instant the dragged card enters the
+  // zone, overshooting the intended column (Done) to the LAST one (Cancelled),
+  // so the card can never be landed on Done (it commits to Cancelled or snaps
+  // back). So we take this row off dnd-kit's auto-scroll (the `autoScroll.
+  // canScroll` gate on the DndContext below) and drive it ourselves with a
+  // CONTROLLED scroll: only a NARROW edge band activates it, off the REAL
+  // pointer, at a gentle speed. As a hidden column scrolls under the pointer
+  // dnd-kit re-measures droppables (`measuring` re-runs on scroll) and `over`
+  // resolves to it, so the existing `onDragOver` relocation + drop commit fire
+  // normally. Only the flat row uses `scrollRef`; in swimlane mode it is null,
+  // so this is a no-op there (swimlane keeps dnd-kit's auto-scroll — out of
+  // scope for this bug).
+  const autoScrollRafRef = useRef<number | null>(null);
+  const autoScrollSpeedRef = useRef(0);
+  const stopAutoScroll = useCallback(() => {
+    if (autoScrollRafRef.current != null) {
+      cancelAnimationFrame(autoScrollRafRef.current);
+      autoScrollRafRef.current = null;
+    }
+    autoScrollSpeedRef.current = 0;
+  }, []);
+  // Start the rAF loop that advances `scrollLeft` by the current speed each
+  // frame until the speed is cleared or a scroll boundary is reached. `step` is
+  // a local named function so it can schedule itself without a forward
+  // self-reference to a `useCallback`.
+  const startAutoScroll = useCallback(() => {
+    if (autoScrollRafRef.current != null) return; // already running
+    const step = () => {
+      const el = scrollRef.current;
+      const speed = autoScrollSpeedRef.current;
+      if (!el || speed === 0) {
+        autoScrollRafRef.current = null;
+        return;
+      }
+      const max = el.scrollWidth - el.clientWidth;
+      const next = Math.max(0, Math.min(max, el.scrollLeft + speed));
+      if (next === el.scrollLeft) {
+        // Hit a scroll boundary — idle the loop until the speed changes.
+        autoScrollSpeedRef.current = 0;
+        autoScrollRafRef.current = null;
+        return;
+      }
+      el.scrollLeft = next;
+      autoScrollRafRef.current = requestAnimationFrame(step);
+    };
+    autoScrollRafRef.current = requestAnimationFrame(step);
+  }, []);
+  // Recompute the auto-scroll speed from the real pointer's X. `EDGE` is the
+  // activation band at each side; speed ramps 0→MAX across it.
+  const updateAutoScroll = useCallback(
+    (pointerX: number | null) => {
+      const el = scrollRef.current;
+      if (!el || pointerX == null) {
+        stopAutoScroll();
+        return;
+      }
+      // A NARROW activation band at each side. It must be smaller than half a
+      // column so resting the pointer on the last on-screen column (whose right
+      // edge hugs the row's right edge) does NOT trigger a scroll — only a
+      // pointer pushed into the thin strip past that column's body scrolls.
+      const EDGE = 48;
+      const MAX = 18;
+      const rect = el.getBoundingClientRect();
+      const canScrollRight = el.scrollLeft < el.scrollWidth - el.clientWidth - 1;
+      const canScrollLeft = el.scrollLeft > 1;
+      let speed = 0;
+      if (pointerX > rect.right - EDGE && canScrollRight) {
+        speed = MAX * Math.min(1, (pointerX - (rect.right - EDGE)) / EDGE);
+      } else if (pointerX < rect.left + EDGE && canScrollLeft) {
+        speed = -MAX * Math.min(1, (rect.left + EDGE - pointerX) / EDGE);
+      }
+      autoScrollSpeedRef.current = speed;
+      if (speed !== 0) {
+        startAutoScroll();
+      } else {
+        stopAutoScroll();
+      }
+    },
+    [stopAutoScroll, startAutoScroll],
+  );
+  // Stop any in-flight loop if the board unmounts mid-drag.
+  useEffect(() => stopAutoScroll, [stopAutoScroll]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, {
@@ -680,6 +772,23 @@ function BoardDnd({
     setActiveCard(findCard(columnsRef.current, String(e.active.id)));
   }, []);
 
+  // Drive the flat board's horizontal edge auto-scroll from the live pointer, so
+  // trailing off-screen columns become reachable mid-drag (see the auto-scroll
+  // refs above).
+  const handleDragMove = useCallback(
+    (e: DragMoveEvent) => {
+      // Key auto-scroll off the ACTUAL pointer (activator + accumulated delta),
+      // not the wide dragged card's centre — the card can overlap the edge band
+      // while the user's cursor is still resting on a column's body. Keyboard
+      // drags have no pointer coordinate (and move column-by-column), so they
+      // pass null and never edge-scroll.
+      const act = e.activatorEvent;
+      const clientX = act && 'clientX' in act ? (act as PointerEvent).clientX : null;
+      updateAutoScroll(clientX == null ? null : clientX + e.delta.x);
+    },
+    [updateAutoScroll],
+  );
+
   const handleDragOver = useCallback(
     (e: DragOverEvent) => {
       const { active, over } = e;
@@ -732,6 +841,7 @@ function BoardDnd({
       const { active, over } = e;
       setActiveCard(null);
       setOverLaneKey(null);
+      stopAutoScroll();
       const snapshot = snapshotRef.current ?? columnsRef.current;
       snapshotRef.current = null;
       const cols = columnsRef.current;
@@ -829,17 +939,18 @@ function BoardDnd({
         });
       }
     },
-    [swimlaned, colName, runMove, runTransition, runReassign],
+    [swimlaned, colName, runMove, runTransition, runReassign, stopAutoScroll],
   );
 
   const handleDragCancel = useCallback(() => {
     setActiveCard(null);
     setOverLaneKey(null);
+    stopAutoScroll();
     if (snapshotRef.current) {
       setColumns(snapshotRef.current);
       snapshotRef.current = null;
     }
-  }, []);
+  }, [stopAutoScroll]);
 
   // aria-live narration. In swimlane mode the DROP announcement distinguishes a
   // reassign (lane only) / transition (column only) / diagonal (both) per the
@@ -909,11 +1020,42 @@ function BoardDnd({
   // can ever activate (the cards stay rendered + peekable, just not movable).
   const activeSensors = canEdit ? sensors : [];
 
+  // FLAT board: resolve the drop to the droppable the POINTER is literally
+  // inside (`pointerWithin`), not the nearest corners (`closestCorners`).
+  // closestCorners measures corner distance, so a drop on a TALL EMPTY column
+  // (e.g. an In Review with no cards) loses to a nearby POPULATED column's
+  // small card — the card silently lands in the wrong column (often an illegal
+  // transition → "Move not allowed"), and an empty column becomes un-droppable.
+  // pointerWithin fixes that; fall back to closestCorners only when the pointer
+  // is outside every droppable (a gutter / past the last column) so a drop is
+  // never lost. SWIMLANE mode keeps closestCorners — its (column×lane) grid was
+  // tuned around it (handleDragOver) and is out of scope for this bug.
+  const collisionDetectionStrategy: CollisionDetection = useCallback(
+    (args) => {
+      if (swimlaned) return closestCorners(args);
+      const pointer = pointerWithin(args);
+      return pointer.length > 0 ? pointer : closestCorners(args);
+    },
+    [swimlaned],
+  );
+
   return (
     <DndContext
       sensors={activeSensors}
-      collisionDetection={closestCorners}
+      collisionDetection={collisionDetectionStrategy}
+      // dnd-kit's built-in auto-scroll handles VERTICAL scrolling inside a tall
+      // column (drag a card to a column's top/bottom edge), but its default
+      // HORIZONTAL behaviour on the flat column row is too aggressive: its 20%
+      // edge threshold slams the row to its scroll boundary the instant the card
+      // enters it, overshooting past the intended column (Done) to the last one
+      // (Cancelled) — the bug-board-cannot-drag-from-in-review-to-done failure.
+      // So we take the flat row (`scrollRef`) off dnd-kit's auto-scroll and drive
+      // it ourselves (handleDragMove → updateAutoScroll: a narrow edge band, the
+      // real pointer, a gentle speed), while leaving every OTHER scrollable
+      // (column bodies, the swimlane grid) on dnd-kit's auto-scroll.
+      autoScroll={{ canScroll: (el) => el !== scrollRef.current }}
       onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}

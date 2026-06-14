@@ -16,7 +16,7 @@ import { estimationService } from '@/lib/services/estimationService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { resolveFilterAst, type ProjectFilterReferents } from '@/lib/filters/registry';
 import type { FilterAst } from '@/lib/filters/ast';
-import { keyBetween, keyForAppend } from '@/lib/workItems/positioning';
+import { keyBetweenSafe, keyForAppend } from '@/lib/workItems/positioning';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { isOwnerRole } from '@/lib/workspaces/roles';
 import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
@@ -521,12 +521,17 @@ export const boardsService = {
           appliedStatus = targetStatus.key;
         }
 
-        // RANK. The new position sorts strictly between the bracketing neighbours
-        // (a missing neighbour = the open end of the column). A pure within-column
-        // reorder reaches here having attempted NO transition.
+        // RANK. The new position sorts between the bracketing neighbours (a
+        // missing neighbour = the open end of the column). A pure within-column
+        // reorder reaches here having attempted NO transition. Use the TOLERANT
+        // bracketer: a drop in a recency-ranked terminal column (Done/Cancelled)
+        // can hand the neighbours over position-inverted, and a board still
+        // carrying legacy/invalid `position` keys (a tenant not yet reseeded —
+        // PR #1020) would otherwise make `keyBetween` throw and 500 the move.
+        // `keyBetweenSafe` always returns a valid key for both cases.
         const prev = await resolveNeighbourPosition(target.beforeId, board.projectId, ctx, tx);
         const next = await resolveNeighbourPosition(target.afterId, board.projectId, ctx, tx);
-        const position = keyBetween(prev, next);
+        const position = keyBetweenSafe(prev, next);
         const row = await workItemRepository.update(workItemId, { position }, tx);
 
         return {
