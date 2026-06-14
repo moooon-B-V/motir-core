@@ -125,14 +125,33 @@ export const workspaceMembershipRepository = {
   },
 
   /**
-   * Count of memberships in a workspace. Takes `tx` so the last-member
-   * guard in workspacesService.removeMember reads the count and deletes
-   * the row in the same transaction — preventing a TOCTOU race where two
-   * concurrent leaves both see count > 1 and both delete, orphaning the
-   * workspace.
+   * Count of memberships in a workspace, LOCKING those rows `FOR UPDATE` inside
+   * the caller's transaction — the race-safe read the last-member guard in
+   * workspacesService.removeMember uses (lock-before-read-derived-update,
+   * CLAUDE.md § 4-layer; mirrors organizationMembershipRepository
+   * .countOwnersByOrgForUpdate). A plain same-transaction COUNT does NOT lock
+   * the rows another transaction deletes, so two concurrent leaves of a
+   * 2-member workspace could both see `count = 2`, both pass the guard, and both
+   * delete → ZERO members (an orphaned, unreachable workspace). Locking the
+   * membership rows serializes the racers: the second blocks until the first
+   * commits, re-reads the reduced set, and correctly hits LastMemberError.
+   *
+   * `ORDER BY "id"` pins a deterministic lock order so the racers can't
+   * deadlock; Postgres forbids `count(*) … FOR UPDATE`, so we SELECT the row ids
+   * under the lock and count them in JS. `tx` REQUIRED — the lock lives only for
+   * its transaction.
    */
-  async countByWorkspace(workspaceId: string, tx: Prisma.TransactionClient): Promise<number> {
-    return tx.workspaceMembership.count({ where: { workspaceId } });
+  async countByWorkspaceForUpdate(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "workspace_membership"
+      WHERE "workspaceId" = ${workspaceId}
+      ORDER BY "id"
+      FOR UPDATE
+    `;
+    return rows.length;
   },
 
   /**

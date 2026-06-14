@@ -299,8 +299,10 @@ export const organizationsService = {
   /**
    * Change a member's org role. Requires the actor to be an org owner/admin.
    * Guards the last owner: demoting the only remaining owner is refused
-   * (LastOrgOwnerError) — the count and the update run in one transaction so a
-   * concurrent demotion can't drop the org to zero owners.
+   * (LastOrgOwnerError). The guard LOCKS the org's owner rows `FOR UPDATE`
+   * before counting (assertNotLastOwner), so two concurrent demotions of a
+   * 2-owner org serialize — the second blocks, re-counts after the first
+   * commits, and is refused — and the org can never drop to zero owners.
    */
   async changeMemberRole(input: {
     organizationId: string;
@@ -331,8 +333,10 @@ export const organizationsService = {
    * workspace access (the gate denies once the org membership is gone — 6.10.2
    * §5iii); we deliberately do NOT delete the workspace_membership rows (the
    * asymmetry: leaving a workspace doesn't drop org membership, and the gate is
-   * what enforces access, not row presence). Guards the last owner. Idempotent:
-   * removing a non-member is a no-op.
+   * what enforces access, not row presence). Guards the last owner — the guard
+   * LOCKS the org's owner rows `FOR UPDATE` before counting (assertNotLastOwner),
+   * so two concurrent removals of a 2-owner org serialize and the org can never
+   * drop to zero owners. Idempotent: removing a non-member is a no-op.
    */
   async removeMember(input: {
     organizationId: string;
@@ -532,6 +536,14 @@ async function assertNotLastOwner(
   // Only removing/demoting an OWNER can drop the owner count; a non-owner target
   // (or a non-member) can't, so there's nothing to guard.
   if (!target || target.role !== ORGANIZATION_ROLE.owner) return;
-  const owners = await organizationMembershipRepository.countOwnersByOrg(organizationId, tx);
+  // Lock the org's owner rows before counting (lock-before-read-derived-update):
+  // a plain COUNT doesn't lock the rows a concurrent remove/demote mutates, so
+  // two racers could both see count = 2 and both write → zero owners. The
+  // FOR-UPDATE read serializes them — the second blocks, re-reads the reduced
+  // owner set, and correctly hits LastOrgOwnerError.
+  const owners = await organizationMembershipRepository.countOwnersByOrgForUpdate(
+    organizationId,
+    tx,
+  );
   if (owners <= 1) throw new LastOrgOwnerError(organizationId);
 }

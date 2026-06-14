@@ -94,16 +94,35 @@ export const organizationMembershipRepository = {
   },
 
   /**
-   * Count of OWNER memberships in an organization. Takes `tx` so the
-   * last-owner guard in organizationsService (remove / demote) reads the count
-   * and mutates in the SAME transaction — an org with zero owners is
-   * unadministrable, so removing or demoting the last owner must be blocked
-   * without a TOCTOU window.
+   * Count of OWNER memberships in an organization, LOCKING those owner rows
+   * `FOR UPDATE` inside the caller's transaction — the race-safe read the
+   * last-owner guard in organizationsService (remove / demote) uses
+   * (lock-before-read-derived-update, CLAUDE.md § 4-layer). A plain
+   * same-transaction `COUNT` does NOT lock the rows another transaction
+   * deletes/demotes, so two concurrent removals of a 2-owner org could both
+   * observe `count = 2`, both pass the guard, and both write → ZERO owners (an
+   * unadministrable org). Locking the owner rows serializes the racers: the
+   * second blocks until the first commits, then the FOR UPDATE re-reads the
+   * now-reduced set (a deleted/demoted owner no longer matches `role = 'owner'`)
+   * and correctly sees a single owner, so the guard fires `LastOrgOwnerError`.
+   *
+   * `ORDER BY "id"` pins a deterministic lock-acquisition order across
+   * concurrent callers so the two transactions can't deadlock. Postgres forbids
+   * `count(*) … FOR UPDATE` (a locking clause can't combine with an aggregate),
+   * so we SELECT the owner row ids under the lock and count them in JS. `tx`
+   * REQUIRED — a row lock only lives for its transaction.
    */
-  async countOwnersByOrg(organizationId: string, tx: Prisma.TransactionClient): Promise<number> {
-    return tx.organizationMembership.count({
-      where: { organizationId, role: 'owner' },
-    });
+  async countOwnersByOrgForUpdate(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "organization_membership"
+      WHERE "organizationId" = ${organizationId} AND "role" = 'owner'
+      ORDER BY "id"
+      FOR UPDATE
+    `;
+    return rows.length;
   },
 
   /**
