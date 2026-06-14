@@ -6,6 +6,7 @@ import { NEXT_READY_TOOL_NAME, registerNextReady } from './tools/nextReady';
 import { CREATE_WORK_ITEM_TOOL_NAME, registerCreateWorkItem } from './tools/createWorkItem';
 import { TRANSITION_STATUS_TOOL_NAME, registerTransitionStatus } from './tools/transitionStatus';
 import { ADD_COMMENT_TOOL_NAME, registerAddComment } from './tools/addComment';
+import { SEARCH_WORK_ITEMS_TOOL_NAME, registerSearchWorkItems } from './tools/searchWorkItems';
 
 // The MCP tool registry (Story 7.8 · Subtask 7.8.4, extended by 7.8.5) — the
 // single place that assembles the server's tool surface. This is the SEAM the
@@ -27,6 +28,7 @@ export const MCP_TOOL_NAMES = [
   CREATE_WORK_ITEM_TOOL_NAME,
   TRANSITION_STATUS_TOOL_NAME,
   ADD_COMMENT_TOOL_NAME,
+  SEARCH_WORK_ITEMS_TOOL_NAME,
 ] as const;
 
 /** Register every MCP tool on `server`, wiring each to `resolveContext`. */
@@ -39,6 +41,8 @@ export function registerMcpTools(server: McpServer, resolveContext: McpContextRe
   registerCreateWorkItem(server, resolveContext);
   registerTransitionStatus(server, resolveContext);
   registerAddComment(server, resolveContext);
+  // Query tool (7.8.6).
+  registerSearchWorkItems(server, resolveContext);
 }
 
 /**
