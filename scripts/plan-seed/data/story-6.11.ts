@@ -557,7 +557,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.7',
       title: 'Submission form UI — the in-app report widget',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 40,
