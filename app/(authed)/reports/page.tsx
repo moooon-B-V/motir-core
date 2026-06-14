@@ -43,10 +43,14 @@ export default async function ReportsPage() {
     );
   }
 
-  // The agile reports all live in the SPRINT REPORT (the 4.4.6 surface that
-  // mounts the 4.6.5 burndown + 4.6.6 velocity). Deep-link to the current
-  // sprint's report — the active sprint, else the most recently completed; with
-  // no sprints yet, fall back to the backlog (where sprints are created).
+  // The three Agile cards link to THREE distinct reports (Jira's Reports menu
+  // lists Burndown / Velocity / Sprint report as separate pages — mirror-product
+  // rung 1; bug-reports-hub-agile-cards-collapse-to-one-url). The burndown +
+  // sprint-report cards deep-link to a sprint (the active sprint, else the most
+  // recently completed; the list is oldest→newest, so `.at(-1)` of the completes
+  // is the most recent); velocity is project-level cross-sprint history, so it
+  // needs no sprint. With no sprints yet, the sprint-report card falls back to
+  // the backlog and the burndown page shows its own no-sprints empty state.
   const sprints = await sprintsService.listByProject(ctx.projectId, {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
@@ -55,7 +59,9 @@ export default async function ReportsPage() {
     sprints.find((s) => s.state === 'active') ??
     sprints.filter((s) => s.state === 'complete').at(-1) ??
     null;
-  const agileHref = current ? `/sprints/${current.id}/report` : '/backlog';
+  const burndownHref = current ? `/reports/burndown?sprint=${current.id}` : '/reports/burndown';
+  const velocityHref = '/reports/velocity';
+  const sprintReportHref = current ? `/sprints/${current.id}/report` : '/backlog';
 
   return (
     <div className="flex flex-col gap-6">
@@ -67,21 +73,21 @@ export default async function ReportsPage() {
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <HubCard
-            href={agileHref}
+            href={burndownHref}
             muted
             icon={<TrendingDown className="h-5 w-5" aria-hidden />}
             title={t('hub.burndownTitle')}
             body={t('hub.burndownBody')}
           />
           <HubCard
-            href={agileHref}
+            href={velocityHref}
             muted
             icon={<BarChart3 className="h-5 w-5" aria-hidden />}
             title={t('hub.velocityTitle')}
             body={t('hub.velocityBody')}
           />
           <HubCard
-            href={agileHref}
+            href={sprintReportHref}
             muted
             icon={<ListTree className="h-5 w-5" aria-hidden />}
             title={t('hub.sprintReportTitle')}

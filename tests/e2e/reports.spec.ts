@@ -21,6 +21,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
+import { sprintsService } from '@/lib/services/sprintsService';
+import { backlogService } from '@/lib/services/backlogService';
 import { createTestWorkItem, makeWorkItemFixture, TEST_PASSWORD } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
 import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
@@ -250,7 +252,99 @@ test.describe('reports @smoke', () => {
     expect(lineBox!.width).toBeLessThanOrEqual(820);
     expect(await reportCardWidth(page)).toBeGreaterThanOrEqual(640);
   });
+
+  test('F — the three Agile cards link to three DISTINCT reports (burndown · velocity · sprint report)', async ({
+    page,
+  }) => {
+    const sprint = await seedStartedSprintTenant();
+    await signIn(page, sprint.ownerEmail, TEST_PASSWORD);
+
+    await page.goto('/reports');
+    await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
+
+    // The bug: all three Agile cards pointed at one `/sprints/[id]/report` URL.
+    // Each must now link to its OWN report (Jira's three separate report pages).
+    const burndownLink = page.getByRole('link', { name: /Burndown chart/ });
+    const velocityLink = page.getByRole('link', { name: /Velocity chart/ });
+    const sprintReportLink = page.getByRole('link', { name: /Sprint report/ });
+    const [bHref, vHref, sHref] = await Promise.all([
+      burndownLink.getAttribute('href'),
+      velocityLink.getAttribute('href'),
+      sprintReportLink.getAttribute('href'),
+    ]);
+    expect(bHref).toContain('/reports/burndown');
+    expect(bHref).toContain(`sprint=${sprint.id}`);
+    expect(vHref).toBe('/reports/velocity');
+    expect(sHref).toBe(`/sprints/${sprint.id}/report`);
+    expect(new Set([bHref, vHref, sHref]).size).toBe(3); // three distinct URLs
+
+    // Burndown → its own page: the sprint picker + the full burndown chart.
+    await burndownLink.click();
+    await page.waitForURL(/\/reports\/burndown\?sprint=/);
+    await expect(page.getByRole('heading', { name: 'Burndown chart' })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Sprint' })).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Burndown' })).toBeVisible({ timeout: 15_000 });
+    // The ?sprint= param round-trips on reload (a shareable/bookmarkable report).
+    await page.reload();
+    await expect(page).toHaveURL(new RegExp(`sprint=${sprint.id}`));
+    await expect(page.getByRole('img', { name: 'Burndown' })).toBeVisible({ timeout: 15_000 });
+
+    // Velocity → its own cross-sprint page (one started sprint = low-history
+    // state, but the page chrome + title render — it is NOT a sprint URL).
+    await page.getByRole('link', { name: 'Reports' }).first().click();
+    await page.waitForURL(/\/reports$/);
+    await velocityLink.click();
+    await page.waitForURL(/\/reports\/velocity$/);
+    await expect(page.getByRole('heading', { name: 'Velocity chart' })).toBeVisible();
+
+    // Sprint report → the existing standalone per-sprint report.
+    await page.getByRole('link', { name: 'Reports' }).first().click();
+    await page.waitForURL(/\/reports$/);
+    await sprintReportLink.click();
+    await page.waitForURL(new RegExp(`/sprints/${sprint.id}/report`));
+    await expect(page.getByRole('heading', { name: `${sprint.name} report` })).toBeVisible();
+  });
 });
+
+/** A fresh tenant (active project pinned) whose project has ONE active, started
+ * sprint with a single estimated issue — the minimal shape the three agile
+ * reports read. A dedicated fixture (not `seedTenant`) on purpose: `seedTenant`
+ * inserts items via the zero-padded-position test helper, which poisons the
+ * fractional `backlogRank` space `createBacklogIssue` appends into. Starting an
+ * empty-backlog project keeps the append valid. Returns the owner email + the
+ * sprint id/name for the URL + heading assertions. */
+async function seedStartedSprintTenant(): Promise<{
+  ownerEmail: string;
+  id: string;
+  name: string;
+}> {
+  seq += 1;
+  const fx = await makeWorkItemFixture({ name: 'Acme', identifier: `RS${seq}` });
+  await db.workspaceMembership.update({
+    where: { userId_workspaceId: { userId: fx.ownerId, workspaceId: fx.workspaceId } },
+    data: { activeProjectId: fx.projectId },
+  });
+  const name = 'Reports Sprint';
+  const sprint = await sprintsService.createSprint(
+    fx.projectId,
+    { name, goal: 'Ship the reports split' },
+    fx.ctx,
+  );
+  const issue = await backlogService.createBacklogIssue(
+    fx.projectId,
+    { kind: 'story', title: 'Sprint scope item', sprintId: sprint.id },
+    fx.ctx,
+  );
+  // Estimate directly (the points-write path is Story 4.3's concern; here we only
+  // need the committed baseline populated — the scrum-board-seed shortcut).
+  await db.workItem.update({ where: { id: issue.id }, data: { storyPoints: 5 } });
+  await sprintsService.startSprint(
+    sprint.id,
+    { endDate: new Date(Date.now() + 5 * DAY).toISOString() },
+    fx.ctx,
+  );
+  return { ownerEmail: fx.owner.email, id: sprint.id, name };
+}
 
 /** Rendered width of the bounded report Card (the `--radius-card` container that
  * wraps the report body). Guards against a layout collapse the chart-size caps

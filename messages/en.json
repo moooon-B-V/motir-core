@@ -2167,7 +2167,7 @@
       "agileGroup": "Agile",
       "analysisGroup": "Work item analysis",
       "burndownTitle": "Burndown chart",
-      "burndownBody": "Points remaining across the active sprint. Lives in the sprint report.",
+      "burndownBody": "Points remaining across a sprint, with a sprint picker.",
       "velocityTitle": "Velocity chart",
       "velocityBody": "Committed vs completed points over recent sprints.",
       "sprintReportTitle": "Sprint report",
@@ -2245,6 +2245,18 @@
       "builtinGroup": "Fields",
       "customGroup": "Custom fields",
       "unknownStatistic": "Unknown"
+    },
+    "burndown": {
+      "title": "Burndown chart",
+      "sprintLabel": "Sprint",
+      "sprintSearch": "Search sprints…",
+      "activeGroup": "Active",
+      "completedGroup": "Completed",
+      "noSprintsTitle": "No started sprints",
+      "noSprintsBody": "Start a sprint from the backlog to see its burndown."
+    },
+    "velocity": {
+      "title": "Velocity chart"
     },
     "statistic": {
       "kind": "Type",
