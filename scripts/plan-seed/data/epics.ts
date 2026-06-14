@@ -1,4 +1,4 @@
-import type { EpicMeta } from '../types';
+import type { EpicMeta, PlanItem } from '../types';
 
 /**
  * The 8 v1 epics (metadata only — stories are attached in `index.ts`).
@@ -3370,5 +3370,98 @@ export const EPICS: EpicMeta[] = [
       '(bug/feature intake → promote) is a customer-facing PM feature and lives in Epic 6 (6.11), ' +
       'not here. Future 10.x (named in the story headers, deferred not forgotten): abuse / content ' +
       'moderation, DSAR / compliance export-delete, status & maintenance banners, email-delivery ops.',
+  },
+];
+
+/**
+ * Top-level **parentless** bugs — root siblings of the epics themselves.
+ *
+ * When a bug surfaces against a code surface whose owning epic is already
+ * `status: 'done'`, parenting the bug to that epic would re-open sealed work
+ * and contradict the done state. The MOTIR.md bug-parent rule says to log it
+ * **without** a parent instead — `bug.parentId IS NULL` is legal under the
+ * kind-parent matrix (`work_item_triggers.sql`). The id is a **single integer
+ * with no dot** — the next free top-level id that doesn't collide with an
+ * existing epic id (currently `1`–`10`) or a previously-logged parentless bug.
+ *
+ * The loader (`seed.ts`) iterates this array AFTER the epic pass and creates
+ * each entry with `parentId: null` and `kind: 'bug'`, so they appear at the
+ * project root next to the epics in Motir's tree views.
+ */
+export const PARENTLESS_BUGS: PlanItem[] = [
+  {
+    id: '11',
+    kind: 'bug',
+    title: 'Sprint complete: target sprint card / backlog not refreshed when unfinished items move',
+    status: 'planned',
+    type: 'bug',
+    descriptionMd:
+      '**Type:** bug · **Parent:** none (root sibling — Epic 4 Agile planning is `done`, so per ' +
+      'MOTIR.md the bug logs parentless) · **Discovered in:** Story 4.4 (sprint lifecycle — ' +
+      '`completeSprint` from subtask 4.4.3) + Story 4.5 (backlog list) · **Reported by:** Yue.\n\n' +
+      'After completing a sprint that still has unfinished work items, the user picks a target — ' +
+      'either a **future (planned) sprint** or the **backlog** — to receive those incomplete ' +
+      'issues. The complete-sprint write itself succeeds: the active sprint flips to `complete` ' +
+      'and the unfinished items reparent to the chosen target. BUT the **destination surface is ' +
+      'NOT refreshed**: the future sprint card on the sprints page shows its pre-move issue list ' +
+      '(no new rows / count), and the backlog list likewise still reads the pre-move state. The ' +
+      'moved items are visible only after a manual page refresh or after navigating away and back. ' +
+      'The board / list reads as if the move silently failed.\n\n' +
+      '**Repro:** sign in as `zhuyue@motir.co` / `!QAZ1qaz`, open the `moooon` / `motir` project ' +
+      '→ Sprints page. Pick an `active` sprint that has at least one issue not in the done ' +
+      'category. Click **Complete sprint** and in the dialog choose **Move to <a planned sprint>** ' +
+      '(or **Move to backlog**). Confirm. Observe: the active sprint flips to complete (correct), ' +
+      'but the target planned-sprint card on the same page does NOT show the moved issues / its ' +
+      'committed count is unchanged. Reload the page → the moved issues now appear in the target ' +
+      'card. Same shape if the target is the backlog (Story 4.5): the backlog list reads pre-move ' +
+      "until reload. **Compare:** the active sprint's own card DOES refresh (its in-place flip to " +
+      'complete works), so the gap is specifically the **destination** of the move, not the ' +
+      'source.\n\n' +
+      '**Root cause (suspected — to be confirmed during fix).** `completeSprint` (subtask 4.4.3) ' +
+      'is one transaction that flips the sprint state + reparents the unfinished items, returning ' +
+      'a DTO. The Sprints page client invalidates the **active-sprint** view on success but does ' +
+      'NOT invalidate the **target** view — neither the planned-sprint card list nor the backlog ' +
+      "list — so React's cached fetch for those surfaces stays. The right fix is to broaden the " +
+      'mutation-success invalidation set so EVERY surface whose item set changed re-fetches: the ' +
+      'completing-sprint card, the chosen target sprint card (when target is a sprint), the ' +
+      'backlog list (when target is backlog), and any sprint-aware aggregates on the page (sprint ' +
+      'rollup / committed counts from 4.3.3). Likely sites: the Sprints page hook calling ' +
+      "`completeSprint`, the backlog page hook, and the sprint-card components' fetch keys.\n\n" +
+      '## Acceptance criteria\n\n' +
+      '- After **Complete sprint → Move to <planned sprint X>**, the planned sprint X card on the ' +
+      'Sprints page immediately shows the moved issues (its list grows; its committed-issue / ' +
+      'point counts reflect the new total) — **without a manual reload**.\n' +
+      '- After **Complete sprint → Move to backlog**, the backlog list (Story 4.5) immediately ' +
+      'shows the moved issues without a manual reload (whether viewed on the Sprints page backlog ' +
+      'section or on the dedicated backlog surface).\n' +
+      "- The completing sprint's own card still correctly flips to `complete` and stops showing " +
+      'the moved items (the source side is unregressed).\n' +
+      '- Other on-page aggregates that depend on the move (e.g. velocity baseline for the now-' +
+      'complete sprint, committed-count for the target sprint) re-render with the post-move ' +
+      'numbers, not pre-move ones.\n' +
+      '- A regression test (component or E2E) drives **Complete sprint → Move to planned sprint** ' +
+      'and **→ Move to backlog**, asserts the target surface re-fetches on the success response ' +
+      '(see the E2E `waitForResponse` discipline in motir-core CLAUDE.md), and asserts the moved ' +
+      'issue is visible in the target card / backlog list on the SAME page render (no reload).\n\n' +
+      '## Context refs\n\n' +
+      '- `lib/services/sprintsService.ts` — `completeSprint` (subtask 4.4.3): the write returns ' +
+      'the updated active sprint; check whether the response DTO names the target so the client ' +
+      'can invalidate it deterministically.\n' +
+      '- `app/(authed)/projects/[key]/sprints/_components/*` — the Sprints page client: the ' +
+      'complete-sprint dialog + the on-success invalidation set (almost certainly missing the ' +
+      'target-side keys).\n' +
+      "- `app/(authed)/projects/[key]/backlog/_components/*` — Story 4.5's backlog list: the " +
+      'cache key the move must invalidate when target is backlog.\n' +
+      '- `lib/services/workItemsService.ts` — issue list / sprint-membership queries the target ' +
+      'surfaces read.\n' +
+      '- Story 4.3 `rollupForSprint` — the committed/completed/remaining aggregate the target ' +
+      'card displays; must re-read post-move so the count is right.\n\n' +
+      '**Why this matters.** The complete-sprint flow is the load-bearing seam between an active ' +
+      "sprint and the next one. A user who can't see the move land on the destination reasonably " +
+      'concludes the move silently failed and re-runs it (or worse, manually drags the items, ' +
+      'creating double-moves). The fix is small and local — broaden the invalidation set on the ' +
+      'mutation success — but the symptom is high-confusion. Fits the Story 4.4 fix surface; the ' +
+      'closing-out subtask should land under Story 4.4 (or a fresh follow-up story under Epic 4 ' +
+      "if Yue prefers to scope it separately) with the bug's id (`11`) named in its Context refs.",
   },
 ];

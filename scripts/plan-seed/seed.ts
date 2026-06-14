@@ -59,7 +59,7 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { keyForAppend } from '@/lib/workItems/positioning';
 import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
-import { PLAN } from './data';
+import { PLAN, ROOT_BUGS } from './data';
 import { composeDescription, mapTypeAndExecutor } from './mapItem';
 import { PLAN_STATUS_MAP, type PlanItem, type PlanLeafKind, type PlanStatus } from './types';
 
@@ -426,6 +426,26 @@ async function main() {
       });
       for (const dep of item.dependsOn ?? []) dependsEdges.push({ from: item.id, to: dep });
     }
+  }
+
+  // Top-level parentless bugs (root siblings of the epics — MOTIR.md's
+  // bug-parent rule when the related epic is `done`). `bug.parentId IS NULL`
+  // is legal under the kind-parent matrix in work_item_triggers.sql.
+  for (const item of ROOT_BUGS) {
+    const { type, executor } = mapTypeAndExecutor(item);
+    await createItem({
+      kind: item.kind ?? 'bug',
+      planId: item.id,
+      title: `${item.id} ${item.title}`,
+      status: PLAN_STATUS_MAP[item.status],
+      descriptionMd: composeDescription(item),
+      explanationMd: item.explanationMd?.trim() ?? null,
+      estimateMinutes: item.estimateMinutes ?? null,
+      type,
+      executor,
+      parentId: null,
+    });
+    for (const dep of item.dependsOn ?? []) dependsEdges.push({ from: item.id, to: dep });
   }
 
   // ── Link pass: depends_on → `is_blocked_by` (fromItem is_blocked_by toItem) ─
