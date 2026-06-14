@@ -1125,7 +1125,7 @@ export const story_6_10: PlanStory = {
       kind: 'bug',
       title:
         'Org last-owner guard has no row lock — concurrent removals can drop an org to zero owners',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 40,
