@@ -128,6 +128,39 @@ export const workItemRevisionRepository = {
   },
 
   /**
+   * The IDS of the issues currently in `sprintId` that were associated with it
+   * AFTER `after` — the same "added during sprint" set
+   * `countItemsAddedToSprintAfter` counts, returned as ids so
+   * `sprintsService.completeSprint` can FREEZE the flag per issue into the
+   * sprint-report snapshot (bug-sprint-report-incomplete-list-zero-after-carry-
+   * over). Called inside the completion transaction BEFORE the carry-over moves
+   * anything, so the `workItem: { sprintId }` relation filter still matches the
+   * about-to-be-carried issues; takes an optional `tx` so the read shares that
+   * transaction. `distinct` collapses an issue with several such revisions to
+   * one; `workspaceId` gates the read (finding #26). Bounded by the sprint's own
+   * additions (finding #57).
+   */
+  async findItemIdsAddedToSprintAfter(
+    sprintId: string,
+    workspaceId: string,
+    after: Date,
+    tx?: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const client = tx ?? db;
+    const rows = await client.workItemRevision.findMany({
+      where: {
+        changeKind: 'updated',
+        changedAt: { gt: after },
+        diff: { path: ['sprintId', 'to'], equals: sprintId },
+        workItem: { sprintId, workspaceId, archivedAt: null },
+      },
+      distinct: ['workItemId'],
+      select: { workItemId: true },
+    });
+    return rows.map((r) => r.workItemId);
+  },
+
+  /**
    * The BOUNDED per-day event aggregate that drives the in-sprint BURNDOWN
    * actual line (Story 4.6.3). In ONE grouped `$queryRaw` — never a load-all of
    * the revision rows + a client reduce (finding #57) — it walks the

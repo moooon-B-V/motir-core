@@ -243,4 +243,61 @@ describe('sprintsService.completeSprint', () => {
       SprintNotFoundError,
     );
   });
+
+  it('writes the at-completion report snapshot — one frozen row per member, with its done-category bucket and addedAfterStart flag (bug-sprint-report-incomplete-list-zero-after-carry-over)', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'S' }, fx.ctx);
+    const [a, b] = await seedSprintIssues(fx, sprint.id, 2); // a done, b not
+    await markDone(a!);
+    await sprintsService.startSprint(sprint.id, {}, fx.ctx);
+    const c = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'c-added-after' },
+      fx.ctx,
+    );
+    await backlogService.assignToSprint(c.id, sprint.id, undefined, fx.ctx); // added AFTER start, not done
+
+    await sprintsService.completeSprint(sprint.id, { carryOverTo: 'backlog' }, fx.ctx);
+
+    const rows = await db.sprintReportEntry.findMany({
+      where: { sprintId: sprint.id },
+      orderBy: { workItemId: 'asc' },
+    });
+    // One row per non-archived member at close (a, b, c) — frozen, even though
+    // b + c were carried out of the live membership by the same transaction.
+    expect(rows).toHaveLength(3);
+    const byItem = new Map(rows.map((r) => [r.workItemId, r]));
+    expect(byItem.get(a!)!.completed).toBe(true);
+    expect(byItem.get(b!)!.completed).toBe(false);
+    expect(byItem.get(c.id)!.completed).toBe(false);
+    // Only c was associated with the sprint after start.
+    expect(byItem.get(a!)!.addedAfterStart).toBe(false);
+    expect(byItem.get(b!)!.addedAfterStart).toBe(false);
+    expect(byItem.get(c.id)!.addedAfterStart).toBe(true);
+    // Every row carries the tenant + the frozen rank.
+    expect(rows.every((r) => r.workspaceId === fx.ctx.workspaceId)).toBe(true);
+    expect(rows.every((r) => r.backlogRank !== null)).toBe(true);
+  });
+
+  it('rolls the snapshot back with the rest of the transaction on a mid-batch carry-over failure', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'S' }, fx.ctx);
+    await seedSprintIssues(fx, sprint.id, 2); // both unfinished → both carried
+    await sprintsService.startSprint(sprint.id, {}, fx.ctx);
+
+    // Force the SECOND carry-over move to throw — the whole tx (snapshot + moves)
+    // must roll back, leaving no orphan snapshot rows.
+    const original = workItemRepository.setSprint.bind(workItemRepository);
+    let calls = 0;
+    vi.spyOn(workItemRepository, 'setSprint').mockImplementation(async (itemId, sprintId, tx) => {
+      calls += 1;
+      if (calls === 2) throw new Error('boom');
+      return original(itemId, sprintId, tx);
+    });
+
+    await expect(
+      sprintsService.completeSprint(sprint.id, { carryOverTo: 'backlog' }, fx.ctx),
+    ).rejects.toThrow('boom');
+
+    expect(await db.sprintReportEntry.count({ where: { sprintId: sprint.id } })).toBe(0);
+  });
 });

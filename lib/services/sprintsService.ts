@@ -4,6 +4,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
+import { sprintReportEntryRepository } from '@/lib/repositories/sprintReportEntryRepository';
 import { boardsService } from '@/lib/services/boardsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
@@ -402,12 +403,49 @@ export const sprintsService = {
           throw new SprintNotCompletableError(id, existing.state);
         }
 
-        // The WHOLE unfinished set, moved atomically (bounded by the sprint's
-        // own scope — a team sprint, not the unbounded backlog; finding #57).
-        const unfinished = await workItemRepository.findSprintIssuesExcludingStatuses(
+        // The WHOLE non-archived member set, read ONCE and split by done-
+        // category (bounded by the sprint's own scope — a team sprint, not the
+        // unbounded backlog; finding #57). An empty `excludeStatusKeys` applies
+        // no status filter, so this is every member; `unfinished` is the subset
+        // to carry over, in the same `backlogRank` order the carry-over appends.
+        const allIssues = await workItemRepository.findSprintIssuesExcludingStatuses(
           id,
           ctx.workspaceId,
-          doneStatusKeys,
+          [],
+          tx,
+        );
+        const doneSet = new Set(doneStatusKeys);
+        const unfinished = allIssues.filter((item) => !doneSet.has(item.status));
+
+        // FREEZE the at-completion report snapshot BEFORE the carry-over moves
+        // the unfinished set out (bug-sprint-report-incomplete-list-zero-after-
+        // carry-over). One row per member issue records its done-category
+        // BUCKET, its `backlogRank` AT CLOSE (the carry-over re-ranks issues
+        // moved into a target sprint, so freezing it here keeps the closed
+        // report's order stable), and whether it was added after start (the
+        // "added during sprint" figure — frozen so a carried-out addition still
+        // counts). `getSprintReport` reads this for a `complete` sprint; the
+        // issue ROW content stays live. A sprint never started has no anchor for
+        // "added after", so that flag is all-false.
+        const addedAfterIds = existing.startDate
+          ? new Set(
+              await workItemRevisionRepository.findItemIdsAddedToSprintAfter(
+                id,
+                ctx.workspaceId,
+                existing.startDate,
+                tx,
+              ),
+            )
+          : new Set<string>();
+        await sprintReportEntryRepository.createSnapshot(
+          allIssues.map((item) => ({
+            workspaceId: ctx.workspaceId,
+            sprintId: id,
+            workItemId: item.id,
+            completed: doneSet.has(item.status),
+            addedAfterStart: addedAfterIds.has(item.id),
+            backlogRank: item.backlogRank,
+          })),
           tx,
         );
 
@@ -524,15 +562,62 @@ export const sprintsService = {
     if (!sprint) throw new SprintNotFoundError(id);
 
     const take = clampReportLimit(options.limit);
+    // The committed baseline is the immutable at-START snapshot (4.4.2) in BOTH
+    // report modes — never the live roll-up's `committed` (which moves with
+    // scope); that contrast is the report's point.
+    const committed = sprint.committedPoints === null ? null : sprint.committedPoints.toNumber();
+
+    // A COMPLETED sprint reads its report from the FROZEN at-completion snapshot
+    // (`completeSprint` wrote one row per member issue at close) —
+    // bug-sprint-report-incomplete-list-zero-after-carry-over. The carry-over
+    // has already moved the unfinished issues OUT of the live membership, so a
+    // membership read would show 0 incomplete (and 0 not-completed points, and
+    // undercount "added during sprint"). The snapshot preserves the
+    // completed/incomplete split, order, point sums, and scope-change figure as
+    // they were at close, exactly like Jira. The issue ROW content stays LIVE
+    // (read through the snapshot's `workItem` relation). An `active` (the
+    // complete-modal live preview) / `planned` sprint has NO snapshot and falls
+    // through to the live-membership read below.
+    if (sprint.state === 'complete') {
+      const [snapPoints, completedCount, incompleteCount, completedRows, incompleteRows, added] =
+        await Promise.all([
+          estimationService.rollupForSprintSnapshot(id, ctx),
+          sprintReportEntryRepository.countByCompletion(id, ctx.workspaceId, true),
+          sprintReportEntryRepository.countByCompletion(id, ctx.workspaceId, false),
+          sprintReportEntryRepository.findByCompletion(id, ctx.workspaceId, {
+            completed: true,
+            take,
+            cursor: options.completedCursor,
+          }),
+          sprintReportEntryRepository.findByCompletion(id, ctx.workspaceId, {
+            completed: false,
+            take,
+            cursor: options.incompleteCursor,
+          }),
+          sprintReportEntryRepository.countAddedAfterStart(id, ctx.workspaceId),
+        ]);
+      return toSprintReportDto({
+        sprintId: sprint.id,
+        state: sprint.state as SprintDto['state'],
+        points: {
+          committed,
+          completed: snapPoints.completed,
+          notCompleted: snapPoints.notCompleted,
+        },
+        completed: toSprintReportPage(completedRows, take, completedCount),
+        incomplete: toSprintReportPage(incompleteRows, take, incompleteCount),
+        addedAfterStart: added,
+      });
+    }
+
     const doneStatusKeys = [
       ...(await workflowsService.getTerminalStatusKeys(sprint.projectId, ctx.workspaceId)),
     ];
 
-    // Points: the live done/not-done sums REUSE the 4.3.3 bounded roll-up; the
-    // committed figure is the immutable baseline snapshot, NOT the live roll-up's
-    // `committed` (which moves with scope) — that contrast is the report's point.
+    // Live preview (active / planned): the done/not-done sums REUSE the 4.3.3
+    // bounded roll-up over CURRENT membership — correct here because nothing has
+    // been carried out yet.
     const rollup = await estimationService.rollupForSprint(id, ctx);
-    const committed = sprint.committedPoints === null ? null : sprint.committedPoints.toNumber();
 
     // Grouped aggregate counts (not page sums) + one bounded page of each list.
     const [completedCount, incompleteCount, completedRows, incompleteRows] = await Promise.all([
