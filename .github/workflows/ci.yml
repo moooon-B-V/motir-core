@@ -167,12 +167,26 @@ jobs:
     # container, so there is zero cross-leg DB contention (the local shared-:5433
     # flake does not exist between CI jobs). Wall-clock goes from sum(all specs)
     # to max(slowest leg).
-    #   • 4 "bulk" legs — the non-at-scale suite split by Playwright's native
-    #     `--shard=i/4` (it filters by --grep* first, then shards the result).
+    #   • 5 "bulk" legs — the non-at-scale, non-a11y suite split by Playwright's
+    #     native `--shard=i/5` (it filters by --grep* first, then shards the
+    #     result). Bumped 4→5 to shrink the slowest bulk leg; pulling the @a11y
+    #     sweeps out into their own leg (below) already removed the worst long
+    #     pole, so 5 is the balance — each leg re-pays the install + dual-webServer
+    #     boot, and more legs past this give diminishing returns for the cost.
+    #   • 1 "a11y" leg — every `@a11y` axe sweep, pulled into its own leg via
+    #     `--grep "@a11y"` (and `--grep-invert`-ed OUT of the bulk legs). WHY a
+    #     dedicated leg and not just more bulk shards: Playwright's count-based
+    #     sharding keeps whole files together in DISCOVERY ORDER and slices
+    #     contiguously, so the (alphabetically adjacent) shell-a11y* files always
+    #     cluster into ONE bulk shard no matter the shard count — that shard was
+    #     the bulk-3 long-pole (16 slow axe sweeps in one leg). Selecting by the
+    #     @a11y TAG instead spreads nothing back into the bulks and lets the axe
+    #     suite run as its own parallel leg. The shell-a11y file is also split
+    #     three ways (shell-a11y / -tokens / -detail) so this leg can itself be
+    #     sharded later if it becomes the long pole.
     #   • 2 "at-scale" legs — board(-scrum)-at-scale and collab-at-scale, which
     #     need distinct env overrides (issue-cap / seed knobs) and so can't share
-    #     a shard. They now run IN PARALLEL with the bulk legs instead of as the
-    #     trailing two steps of one serial job.
+    #     a shard. They run IN PARALLEL with the bulk legs.
     # The at-scale override env is supplied per-leg from the matrix; bulk legs
     # leave those vars empty (''), which playwright.config.ts treats as unset
     # (BOARD_LOAD_SEAM_ENV skips empty values) so the shipped 5,000/14 board
@@ -199,16 +213,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # The non-at-scale suite, split four ways. `--grep-invert` excludes the
-          # three at-scale tags; `--shard=i/4` then partitions what remains.
+          # The non-at-scale, non-a11y suite, split five ways. `--grep-invert`
+          # excludes the three at-scale tags AND the @a11y sweeps (their own leg
+          # below); `--shard=i/5` then partitions what remains.
           - id: bulk-1
-            args: '--grep-invert "(board(-scrum)?|collab)-at-scale" --shard=1/4'
+            args: '--grep-invert "(board(-scrum)?|collab)-at-scale|@a11y" --shard=1/5'
           - id: bulk-2
-            args: '--grep-invert "(board(-scrum)?|collab)-at-scale" --shard=2/4'
+            args: '--grep-invert "(board(-scrum)?|collab)-at-scale|@a11y" --shard=2/5'
           - id: bulk-3
-            args: '--grep-invert "(board(-scrum)?|collab)-at-scale" --shard=3/4'
+            args: '--grep-invert "(board(-scrum)?|collab)-at-scale|@a11y" --shard=3/5'
           - id: bulk-4
-            args: '--grep-invert "(board(-scrum)?|collab)-at-scale" --shard=4/4'
+            args: '--grep-invert "(board(-scrum)?|collab)-at-scale|@a11y" --shard=4/5'
+          - id: bulk-5
+            args: '--grep-invert "(board(-scrum)?|collab)-at-scale|@a11y" --shard=5/5'
+          # Every @a11y axe sweep (the shell-a11y* files + the per-feature a11y
+          # closers), pulled into one parallel leg so the slow sweeps stop
+          # clustering into a single bulk shard. Standard board/collab defaults
+          # apply (no override env). Split the shell-a11y file further or shard
+          # this leg (`--grep "@a11y" --shard=i/2`) if it becomes the long pole.
+          - id: a11y
+            args: '--grep "@a11y"'
           # Stories 3.5 + 4.7 — board journeys AT SCALE (Kanban + Scrum). The
           # specs self-seed; these overrides lower the issue cap + Done-age
           # window so the over-cap banner + Done-age trim are reachable with tens
