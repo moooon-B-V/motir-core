@@ -320,7 +320,16 @@ export function BacklogRows({
             style={windowing ? { height: totalSize } : undefined}
           >
             {indices.map((index) => {
-              const item = items[index]!;
+              // `range` is recomputed in a layout effect AFTER the render that
+              // changed the row count, so a refetch/drag/move that SHRINKS the
+              // list leaves ONE render where a windowed index points past the
+              // new end. Guard the deref — an out-of-range slot renders nothing
+              // for that one frame, then the layout effect re-windows. Without
+              // this, `items[index]!` is `undefined` and the row crashes the page
+              // (e.g. completing a sprint refetches its now-shorter issue list
+              // before the container unmounts — the windowing-OOB class).
+              const item = items[index];
+              if (!item) return null;
               return (
                 <div
                   key={item.id}

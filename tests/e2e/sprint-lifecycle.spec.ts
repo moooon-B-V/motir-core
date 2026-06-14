@@ -25,7 +25,12 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
-import { seedSprintLifecycle, type LifecycleSeed } from './_helpers/sprint-lifecycle-seed';
+import {
+  seedBigActiveSprint,
+  seedSprintLifecycle,
+  type BigSprintSeed,
+  type LifecycleSeed,
+} from './_helpers/sprint-lifecycle-seed';
 
 // The in-process seed (sprints + issues, each its own create transaction) plus
 // repeated real sign-ins and the start→board→backlog navigation need more than
@@ -236,5 +241,81 @@ test.describe('sprint lifecycle (4.4.7)', () => {
     expect(
       (await db.workItem.findUnique({ where: { id: seed.mainIssues[2]!.id } }))?.sprintId,
     ).toBeNull();
+  });
+});
+
+// ── Bug 11 follow-up: completing a VIRTUALIZED sprint must not crash ──────────
+// The refresh fix (bug 11) re-reads every region's issue list on completion. The
+// COMPLETING sprint's own list re-reads too (before its card unmounts) and comes
+// back SHORTER — the unfinished issues have carried out. When that list was long
+// enough to virtualize, its window `range` (recomputed in a post-render layout
+// effect) out-ran the now-shorter list for one render, and the row map
+// dereferenced an out-of-range index → the page crashed. This proves a crowded
+// (windowed) active sprint completes cleanly with no uncaught page error.
+test.describe('sprint completion — virtualized source list (bug 11 follow-up)', () => {
+  let seed: BigSprintSeed;
+
+  test.beforeAll(async () => {
+    await resetDatabase();
+    seed = await seedBigActiveSprint('sprint-complete-virtualized-owner@motir.dev');
+  });
+
+  test('completing a crowded (virtualized) sprint with carry-over does not crash the page', async ({
+    page,
+  }) => {
+    // Catch any uncaught client error — the crash surfaced as exactly this.
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+
+    // A short viewport so the 16-issue sprint list overflows its 50vh cap and the
+    // container actually WINDOWS (the condition for the out-of-range render).
+    await page.setViewportSize({ width: 1024, height: 600 });
+    await signIn(page, seed.email, seed.password);
+    await page.goto('/backlog');
+    await expect(page.getByTestId('backlog-count')).toBeVisible({ timeout: 30_000 });
+    // The crowded sprint is present with its full count.
+    await expect(page.getByTestId(`sprint-count-${seed.bigSprintId}`)).toHaveText('16');
+
+    // Complete it, carrying the 14 unfinished issues to the backlog (the default).
+    await page.getByTestId(`complete-sprint-${seed.bigSprintId}`).click();
+    const completeDialog = page.getByRole('dialog', { name: 'Complete sprint' });
+    await expect(completeDialog).toBeVisible();
+    await expect(completeDialog).toContainText('14 incomplete work items');
+
+    const burndownLoaded = page.waitForResponse(
+      (r) =>
+        new RegExp(`/api/sprints/${seed.bigSprintId}/burndown`).test(r.url()) &&
+        r.request().method() === 'GET',
+    );
+    await completeDialog.getByRole('button', { name: 'Complete sprint' }).click();
+
+    // Success report, then close — closing fires the refresh that re-reads the
+    // (shrinking) source list, the frame that used to crash.
+    const reportDialog = page.getByRole('dialog', {
+      name: new RegExp(`${seed.bigSprintName} report`),
+    });
+    await expect(reportDialog).toBeVisible({ timeout: 30_000 });
+    await burndownLoaded;
+    const backlogRefetched = page.waitForResponse(
+      (r) =>
+        /\/api\/backlog(?:\?|$)/.test(r.url()) &&
+        r.request().method() === 'GET' &&
+        r.status() === 200,
+    );
+    await reportDialog.getByRole('button', { name: 'Done' }).click();
+    await backlogRefetched;
+
+    // The page survived: no uncaught error, the completed card is gone, and the
+    // carried issues are live in the backlog.
+    expect(pageErrors, `uncaught page error(s): ${pageErrors.join(' | ')}`).toEqual([]);
+    await expect(page.getByTestId(`sprint-count-${seed.bigSprintId}`)).toHaveCount(0);
+    await expect(page.getByTestId('backlog-count')).toBeVisible();
+    const firstCarried = await db.workItem.findUnique({
+      where: { id: seed.unfinishedIssueIds[0]! },
+      select: { identifier: true },
+    });
+    await expect(
+      backlogList(page).getByTestId(`backlog-row-${firstCarried!.identifier}`),
+    ).toBeVisible();
   });
 });

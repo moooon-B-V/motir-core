@@ -101,6 +101,67 @@ async function addIssue(
   return { id: dto.id, identifier: dto.identifier, title };
 }
 
+export interface BigSprintSeed {
+  email: string;
+  password: string;
+  projectName: string;
+  /** An ACTIVE sprint holding many issues (enough to overflow the 50vh list →
+   *  it virtualizes). A couple are done; the rest carry out on completion. */
+  bigSprintId: string;
+  bigSprintName: string;
+  /** A planned sprint, the carry-over target for the move-to-sprint path. */
+  targetSprintId: string;
+  targetSprintName: string;
+  /** The issues marked done before completion (stay on the completed sprint). */
+  doneIssueIds: string[];
+  /** The unfinished issues that carry OUT on completion (the list shrinks). */
+  unfinishedIssueIds: string[];
+}
+
+/** Seed a single ACTIVE sprint with enough issues to VIRTUALIZE its list, plus a
+ *  planned carry-over target. Completing it carries the unfinished issues out, so
+ *  the (windowed) source list shrinks — the condition that crashed the page when
+ *  a stale window range out-ran the shortened list (bug 11 follow-up). */
+export async function seedBigActiveSprint(email: string): Promise<BigSprintSeed> {
+  const { ctx, projectId } = await makeTenant(email);
+
+  const bigSprintName = 'Crowded Sprint';
+  const big = await sprintsService.createSprint(projectId, { name: bigSprintName }, ctx);
+
+  // 16 issues — well over what a 50vh list shows at a 600px-tall viewport, so the
+  // sprint container windows. The FIRST two are marked done (they stay); the rest
+  // are unfinished and carry out on completion, shrinking the list 16 → 2.
+  const doneIssueIds: string[] = [];
+  const unfinishedIssueIds: string[] = [];
+  for (let i = 0; i < 16; i++) {
+    const issue = await addIssue(ctx, projectId, `Crowded issue ${i + 1}`, big.id, 1);
+    if (i < 2) {
+      await db.workItem.update({ where: { id: issue.id }, data: { status: 'done' } });
+      doneIssueIds.push(issue.id);
+    } else {
+      unfinishedIssueIds.push(issue.id);
+    }
+  }
+
+  // Start it so the active-sprint Complete entry point renders.
+  await sprintsService.startSprint(big.id, { name: bigSprintName }, ctx);
+
+  const targetSprintName = 'Next Sprint';
+  const target = await sprintsService.createSprint(projectId, { name: targetSprintName }, ctx);
+
+  return {
+    email,
+    password: LIFECYCLE_SEED_PASSWORD,
+    projectName: 'Lifecycle',
+    bigSprintId: big.id,
+    bigSprintName,
+    targetSprintId: target.id,
+    targetSprintName,
+    doneIssueIds,
+    unfinishedIssueIds,
+  };
+}
+
 /** Seed the lifecycle fixture: a startable main sprint + an empty sprint + a
  *  second sprint, all planned, in one active-pinned project. */
 export async function seedSprintLifecycle(email: string): Promise<LifecycleSeed> {
