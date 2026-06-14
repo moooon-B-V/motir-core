@@ -2478,7 +2478,6 @@
       "billing": "Billing & usage",
       "comingSoon": "Coming soon",
       "newWorkspace": "New workspace",
-      "newWorkspaceHint": "Adds the workspace switcher",
       "switchOrg": "Switch organization",
       "createOrg": "Create organization",
       "workspacesCount": "{count, plural, one {# workspace} other {# workspaces}}"

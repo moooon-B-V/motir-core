@@ -2478,7 +2478,6 @@
       "billing": "账单与用量",
       "comingSoon": "即将推出",
       "newWorkspace": "新建工作区",
-      "newWorkspaceHint": "会显示工作区切换器",
       "switchOrg": "切换组织",
       "createOrg": "创建组织",
       "workspacesCount": "{count} 个工作区"
