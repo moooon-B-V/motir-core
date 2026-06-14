@@ -455,7 +455,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.5',
       title: 'Triage actions service — accept / promote / decline / mark-duplicate-merge / snooze',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 70,
@@ -511,7 +511,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.6',
       title: 'Triage inbox UI — queue + detail + actions (paginated)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 65,
