@@ -571,7 +571,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.4',
       title:
         'Public read-only project view (overview/README landing + board / work items) — internal fields hidden, no edit affordances',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 65,
