@@ -624,7 +624,7 @@ export const story_6_10: PlanStory = {
       id: '6.10.5',
       title:
         'Org admin UI — org settings, cross-workspace member management, the org switcher in the shell',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 70,
@@ -825,7 +825,7 @@ export const story_6_10: PlanStory = {
     {
       id: '6.10.8',
       title: 'E2E — create an org, attach workspaces, manage cross-workspace members',
-      status: 'blocked',
+      status: 'planned',
       type: 'e2e',
       executor: 'coding_agent',
       estimateMinutes: 50,
