@@ -9,7 +9,7 @@ import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { SprintNotFoundError, CrossProjectSprintAssignmentError } from '@/lib/sprints/errors';
 import { WorkItemNotFoundError, CrossProjectParentError } from '@/lib/workItems/errors';
 import { assertValidParent } from '@/lib/issues/parentRules';
@@ -18,14 +18,44 @@ import { toWorkItemDto } from '@/lib/mappers/workItemMappers';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto } from '@/lib/dto/workItems';
-import type { TriageQueuePageDto } from '@/lib/dto/triage';
+import type { TriageQueuePageDto, TriageSubmissionResultDto } from '@/lib/dto/triage';
 import { toTriageQueueItemDto } from '@/lib/mappers/triageMappers';
 import { clampTriageLimit, decodeTriageCursor, encodeTriageCursor } from '@/lib/triage/triageQueue';
 import {
   NotInTriageError,
   TriageSelfMergeError,
   InvalidSnoozeUntilError,
+  InvalidTriageSubmissionKindError,
+  InvalidTriageSubmissionTitleError,
+  MAX_TRIAGE_TITLE_LENGTH,
 } from '@/lib/triage/errors';
+
+/** The two request-grammar kinds a triage submission is born as (ADR §1): a
+ *  `bug` (bug report) or a `task` (feature request). Never epic/story/subtask. */
+export type TriageSubmissionKind = 'bug' | 'task';
+
+/** What the in-app widget (and, via Story 6.12, the public form) sends to
+ *  create a triage item. */
+export interface CreateTriageSubmissionInput {
+  /** The project to submit into — its identifier ("PROD"), resolved within the
+   *  actor's workspace (a cross-tenant / non-browsable key reads as 404). */
+  projectKey: string;
+  kind: TriageSubmissionKind;
+  title: string;
+  descriptionMd?: string | null;
+  /**
+   * The human who submitted (recorded as `work_item.submittedByUserId`).
+   * Defaults to the actor (`ctx.userId`) — the in-app member case, where the
+   * submitter IS the reporter. Story 6.12 passes a signed-in NON-member's id
+   * here while `ctx` carries the project's intake reporter, so a non-member
+   * submission is attributed without making a non-member the tenant reporter
+   * (which `createWorkItem`'s member gate forbids). 6.11 owns this create path;
+   * 6.12 owns its public route + the `canSubmitToTriage` grant.
+   */
+  submittedByUserId?: string;
+}
+
+const TRIAGE_SUBMISSION_KINDS: ReadonlySet<string> = new Set<TriageSubmissionKind>(['bug', 'task']);
 
 // The terminal status a declined / merged submission moves to (ADR §5). It is
 // the default workflow's `cancelled` key (category `done`); the `todo →
@@ -99,6 +129,84 @@ export const triageService = {
         : null;
 
     return { items, nextCursor };
+  },
+
+  /**
+   * Create a triage submission (Subtask 6.11.4) — the intake path the in-app
+   * "report a bug / request a feature" widget posts to, and the SHARED
+   * triage-create authority Story 6.12's public-project "Submit a request"
+   * reuses. A submission IS a `work_item` (kind `bug` or `task`) born with the
+   * `triage` marker and NO parent, so it is EXCLUDED from every normal read
+   * (tree / board / list / ready / search, 6.11.3) until an admin promotes it
+   * (6.11.5); the triage-queue read is the only read that returns it.
+   *
+   * Creation goes through the SAME `workItemsService.createWorkItem` authority
+   * the rest of the app uses (4-layer — no raw Prisma here): it allocates the
+   * key, records the `created` revision, auto-watches the reporter, and runs
+   * the kind-parent matrix + the 6.4 access gates. `createWorkItem` REQUIRES a
+   * member actor (the reporter), which is exactly why intake is signed-in only
+   * — the unauthenticated public portal is dropped (Yue 2026-06-14).
+   *
+   * Attribution: the new item's `reporterId` is the actor (`ctx.userId`, a
+   * member) and `submittedByUserId` is the real submitter — equal for the
+   * in-app member case, distinct for the 6.12 non-member case (see
+   * {@link CreateTriageSubmissionInput.submittedByUserId}).
+   *
+   * Gating mirrors `labelsService` (the no-leak [key] convention): a missing /
+   * cross-tenant / non-browsable project key reads as `ProjectNotFoundError`
+   * (404); a browser without edit rights surfaces `createWorkItem`'s
+   * `ProjectAccessDeniedError` ('edit' → 403). A blank/over-long title or a
+   * non-`bug`/`task` kind is a typed 422.
+   */
+  async createSubmission(
+    input: CreateTriageSubmissionInput,
+    ctx: ServiceContext,
+  ): Promise<TriageSubmissionResultDto> {
+    // Domain validation (the server backstop; the widget gates client-side too).
+    if (!TRIAGE_SUBMISSION_KINDS.has(input.kind)) {
+      throw new InvalidTriageSubmissionKindError();
+    }
+    const title = input.title.trim();
+    if (title.length === 0) throw new InvalidTriageSubmissionTitleError('empty');
+    if (title.length > MAX_TRIAGE_TITLE_LENGTH) {
+      throw new InvalidTriageSubmissionTitleError('too_long');
+    }
+
+    // Resolve the project by key within the workspace, mapping a browse-denial
+    // to 404 so a non-browser can't probe project existence (the labelsService
+    // pattern). The edit gate is left to `createWorkItem` (→ 403 for a browser
+    // without edit rights).
+    const project = await projectRepository.findByIdentifier(
+      ctx.workspaceId,
+      input.projectKey.trim().toUpperCase(),
+    );
+    if (!project) throw new ProjectNotFoundError(input.projectKey);
+    try {
+      await projectAccessService.assertCanBrowse(project.id, ctx);
+    } catch (err) {
+      if (err instanceof ProjectAccessDeniedError && err.kind === 'browse') {
+        throw new ProjectNotFoundError(input.projectKey);
+      }
+      throw err;
+    }
+
+    const description = input.descriptionMd?.trim() ? input.descriptionMd : null;
+
+    const dto = await workItemsService.createWorkItem(
+      {
+        projectId: project.id,
+        kind: input.kind,
+        title,
+        descriptionMd: description,
+        // No parent — a triage submission lands parentless (legal for bug/task);
+        // promotion (6.11.5) sets the parent/rank. The triage marker carries the
+        // real submitter; the reporter is the member actor (`ctx.userId`).
+        triage: { submittedByUserId: input.submittedByUserId ?? ctx.userId },
+      },
+      ctx,
+    );
+
+    return { id: dto.id, kind: dto.kind, identifier: dto.identifier, title: dto.title };
   },
 
   // ─── Triage ACTIONS (Subtask 6.11.5, per docs/decisions/triage-model.md §4/§5) ───
