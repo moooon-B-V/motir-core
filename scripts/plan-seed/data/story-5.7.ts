@@ -773,7 +773,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.10',
       title:
         'In-app `transitioned`/`watching` fan-in delivery — add the registry entry + a `work-item/transitioned` job consumer (paged watcher roster; the in_app gate falls out)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 34,
