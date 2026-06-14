@@ -11,6 +11,7 @@ import {
 import {
   notificationFanInOnCommentCreated,
   notificationFanInOnWorkItemMentioned,
+  notificationFanInOnTransitioned,
 } from './definitions/notificationFanIn';
 import { attachmentGc } from './definitions/attachmentGc';
 import { filterSubscriptionTick } from './definitions/filterSubscriptionTick';
@@ -36,6 +37,7 @@ export const jobFunctions = [
   watcherNotifyOnTransitioned,
   notificationFanInOnCommentCreated,
   notificationFanInOnWorkItemMentioned,
+  notificationFanInOnTransitioned,
   attachmentGc,
   filterSubscriptionTick,
   filterSubscriptionDeliver,

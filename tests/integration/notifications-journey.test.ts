@@ -11,11 +11,14 @@ import { notificationsService } from '@/lib/services/notificationsService';
 import { notificationPreferencesService } from '@/lib/services/notificationPreferencesService';
 import { mentionNotificationsService } from '@/lib/services/mentionNotificationsService';
 import { notificationRepository } from '@/lib/repositories/notificationRepository';
+import { notificationPreferenceRepository } from '@/lib/repositories/notificationPreferenceRepository';
+import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { commentsService } from '@/lib/services/commentsService';
+import { watchersService } from '@/lib/services/watchersService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
-import type { WorkItemCommentCreatedData } from '@/lib/jobs/types';
+import type { WorkItemCommentCreatedData, WorkItemTransitionedData } from '@/lib/jobs/types';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
@@ -529,5 +532,143 @@ describe('a synthetic watching-category event fans in and surfaces under the Wat
     expect(watching.notifications[0]!.category).toBe('watching');
     const direct = await notificationsService.listNotifications({ category: 'direct' }, j.boCtx);
     expect(direct.totalCount).toBe(0);
+  });
+});
+
+// ── TRANSITIONED → WATCHING FEED (5.7.10: the real registry entry) ────────────
+//
+// The seam the synthetic test above stood in for is now LIVE: the production
+// `work-item/transitioned` → `watching` descriptor, the in_app gate that falls
+// out of the generic per-recipient pipeline, and the PAGED watcher-roster walk
+// (finding #57). These assert against the REAL registry, not a synthetic entry.
+
+/** Emit a `work-item/transitioned` event through the REAL production registry
+ * (the 5.7.10 entry). `over` tweaks the payload; `opts.pageSize` shrinks the
+ * roster page to force a multi-page walk. */
+function fanInTransition(
+  j: Journey,
+  over: Partial<WorkItemTransitionedData> = {},
+  opts: { pageSize?: number } = {},
+) {
+  return notificationFanInService.fanIn(
+    'work-item/transitioned',
+    {
+      workspaceId: j.fx.workspaceId,
+      workItemId: j.issueId,
+      actorId: j.fx.ownerId,
+      fromStatusKey: 'todo',
+      toStatusKey: 'in_progress',
+      revisionId: 'rev-1',
+      ...over,
+    } satisfies WorkItemTransitionedData,
+    undefined,
+    opts,
+  );
+}
+
+/** A fresh workspace member who watches the journey issue. */
+async function watchingMember(j: Journey, email: string): Promise<User> {
+  const u = await usersService.createUser({ email, password: 'hunter2hunter2', name: email });
+  await workspacesService.addMember({ userId: u.id, workspaceId: j.fx.workspaceId });
+  await watchersService.watch(j.issueId, { userId: u.id, workspaceId: j.fx.workspaceId });
+  return u;
+}
+
+const watchCtx = (j: Journey, userId: string): ServiceContext => ({
+  userId,
+  workspaceId: j.fx.workspaceId,
+});
+
+describe('a real `work-item/transitioned` event fans into the Watching feed (5.7.10)', () => {
+  it('writes one watching-category row per watcher with the from/to-status payload; the actor is excluded even when on the roster', async () => {
+    const j = await makeJourney();
+    // The actor watches too (auto-watch makes that the common case) — they must
+    // still get NO row.
+    await watchersService.watch(j.issueId, watchCtx(j, j.fx.ownerId));
+    await watchersService.watch(j.issueId, j.boCtx);
+
+    const result = await fanInTransition(j);
+    expect(result.writtenUserIds).toEqual([j.bo.id]); // actor on the roster, excluded
+
+    const page = await notificationsService.listNotifications({ category: 'watching' }, j.boCtx);
+    expect(page.totalCount).toBe(1);
+    const row = page.notifications[0]!;
+    expect(row.category).toBe('watching');
+    expect(row.type).toBe('transitioned');
+    expect(row.workItemId).toBe(j.issueId);
+    expect(row.data.kind).toBe('transitioned');
+    if (row.data.kind === 'transitioned') {
+      // The from/to-status DISPLAY names, read BACK through the 5.7.9 shared DTO
+      // (the writer → mapper seam the per-subtask units don't cross).
+      expect(row.data.issueKey).toBe(j.issueIdentifier);
+      expect(row.data.title).toBe(j.issueTitle);
+      expect(row.data.fromStatus).toBe('To Do');
+      expect(row.data.toStatus).toBe('In Progress');
+    }
+    // It lands under Watching, not Direct; the actor's own feed is empty.
+    const directBo = await notificationsService.listNotifications({ category: 'direct' }, j.boCtx);
+    expect(directBo.totalCount).toBe(0);
+    const actorFeed = await notificationsService.listNotifications({}, j.ownerCtx);
+    expect(actorFeed.totalCount).toBe(0);
+  });
+
+  it('walks the watcher roster in BOUNDED pages (finding #57): at pageSize 1 every watcher across pages still gets a row', async () => {
+    const j = await makeJourney();
+    await watchersService.watch(j.issueId, j.boCtx);
+    const odie = await watchingMember(j, 'odie@example.com');
+    const mo = await watchingMember(j, 'mo@example.com');
+
+    const spy = vi.spyOn(watcherRepository, 'listByWorkItem');
+    const result = await fanInTransition(j, {}, { pageSize: 1 });
+    // Three watchers at page size one → a MULTI-page cursor walk, never one
+    // load-all read.
+    expect(spy.mock.calls.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(result.writtenUserIds)).toEqual(new Set([j.bo.id, odie.id, mo.id]));
+
+    for (const userId of [j.bo.id, odie.id, mo.id]) {
+      const page = await notificationsService.listNotifications(
+        { category: 'watching' },
+        watchCtx(j, userId),
+      );
+      expect(page.totalCount).toBe(1);
+    }
+  });
+
+  it('the `transitioned · in_app` preference gate suppresses an opted-out watcher; a default-on watcher is still written', async () => {
+    const j = await makeJourney();
+    await watchersService.watch(j.issueId, j.boCtx);
+    const odie = await watchingMember(j, 'odie@example.com');
+
+    // Bo turns transitioned·in_app OFF. The matrix toggle is not settable
+    // through the service until 5.7.12, so write the row directly — the resolver
+    // honours any stored row regardless of the settable flag, proving the
+    // descriptor's `transitioned` type flows through the SAME gate (no extra
+    // wiring in the descriptor).
+    await db.$transaction((tx) =>
+      notificationPreferenceRepository.upsert(
+        { userId: j.bo.id, eventType: 'transitioned', channel: 'in_app', enabled: false },
+        tx,
+      ),
+    );
+
+    const result = await fanInTransition(j);
+    expect(result.writtenUserIds).toEqual([odie.id]); // Bo suppressed; Odie (default-on) written
+    const boFeed = await notificationsService.listNotifications({}, j.boCtx);
+    expect(boFeed.totalCount).toBe(0);
+    const odieFeed = await notificationsService.listNotifications({}, watchCtx(j, odie.id));
+    expect(odieFeed.totalCount).toBe(1);
+  });
+
+  it('is idempotent per (revision × recipient): replaying the same event writes no duplicate row', async () => {
+    const j = await makeJourney();
+    await watchersService.watch(j.issueId, j.boCtx);
+
+    const first = await fanInTransition(j, { revisionId: 'rev-dedupe' });
+    expect(first.writtenUserIds).toEqual([j.bo.id]);
+    // Replay the SAME event (same revisionId) — the `(dedupeKey, recipient)`
+    // unique absorbs the second write.
+    await fanInTransition(j, { revisionId: 'rev-dedupe' });
+    const page = await notificationsService.listNotifications({ category: 'watching' }, j.boCtx);
+    expect(page.totalCount).toBe(1);
   });
 });
