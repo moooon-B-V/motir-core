@@ -557,7 +557,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.7',
       title: 'Submission form UI — the in-app report widget',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 40,
@@ -643,7 +643,7 @@ export const story_6_11: PlanStory = {
       id: '6.11.9',
       title:
         'E2E (playwright) — submit a bug → lands in triage (not the tree) → admin promotes → appears in the tree',
-      status: 'blocked',
+      status: 'planned',
       type: 'e2e',
       executor: 'coding_agent',
       estimateMinutes: 55,
