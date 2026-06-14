@@ -1891,7 +1891,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Filters directory (/filters): the filter-name link on a HOVERED row fails AA contrast — --el-link (#0075de) on --el-surface-soft (#fafaf9) is 4.37:1 (needs 4.5:1)',
-        status: 'planned',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
