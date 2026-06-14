@@ -2541,7 +2541,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Sprint report side-by-side charts misalign vertically — Burndown section is missing its `chart-sub` meta line that the 4.6.1 design specifies, but Velocity has one (and is rendering correctly)',
-        status: 'planned',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
