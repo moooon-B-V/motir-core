@@ -4,7 +4,10 @@ import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import type { SavedFilterPageDto } from '@/lib/dto/savedFilters';
 import { ToastProvider } from '@/components/ui/Toast';
-import { renderWithIntl } from '../helpers/renderWithIntl';
+import { renderWithIntl, enMessages } from '../helpers/renderWithIntl';
+import zhMessages from '@/messages/zh.json';
+import { BUILTIN_FILTERS } from '@/lib/savedFilters/builtins';
+import { toBuiltinFilterSummaryDto } from '@/lib/mappers/savedFilterMappers';
 import {
   rowCapabilities,
   type Viewer,
@@ -173,5 +176,76 @@ describe('FiltersDirectory — rendering + gating', () => {
     renderDirectory(<FiltersDirectory projectKey="PROD" viewer={viewer()} />);
 
     expect(await screen.findByText('No saved filters yet')).toBeTruthy();
+  });
+
+  // The built-in defaults are real rows in the table, so the footer total must
+  // count them — not just the paginated saved-filter `total`. Regression: with
+  // 0 saved filters the footer read "0 filters" while eight built-in rows were
+  // visible.
+  it('counts the built-in defaults in the footer total, not just saved filters', async () => {
+    const builtinCount = BUILTIN_FILTERS.length;
+    mockList({
+      items: [row({ name: 'Sprint blockers' })],
+      total: 1,
+      builtins: BUILTIN_FILTERS.map(toBuiltinFilterSummaryDto),
+    });
+    renderDirectory(<FiltersDirectory projectKey="PROD" viewer={viewer()} />);
+
+    await screen.findByText('Sprint blockers');
+    // 1 saved + N built-ins — the footer must not report just "1 filter".
+    expect(screen.getByRole('status').textContent).toContain(`${1 + builtinCount} filters`);
+  });
+});
+
+// Regression for bug-filters-directory-builtins-i18n-and-layout (defect 1): the
+// /filters directory is a SECOND consumer of the built-in DTO that the dropdown
+// i18n fix (bug-builtin-filter-names-not-localized) audit missed. BuiltinFilterRow
+// must thread `t('builtinNames.<slug>')` over the slug (not render the English
+// registry literal), so all eight built-in rows localise under `zh` and stay
+// English under `en` — mirroring the SavedFilterDropdown localisation test.
+describe('FiltersDirectory — built-in name localisation (zh/en)', () => {
+  // The full registry → DTO list (carries `slug`), all eight builtins, no rows.
+  const ALL_BUILTINS = BUILTIN_FILTERS.map(toBuiltinFilterSummaryDto);
+  const enNames = enMessages.savedFilters.builtinNames as Record<string, string>;
+  const zhNames = zhMessages.savedFilters.builtinNames as Record<string, string>;
+
+  function renderLocale(locale: 'en' | 'zh') {
+    return renderWithIntl(
+      <ToastProvider>
+        <FiltersDirectory projectKey="PROD" viewer={viewer()} />
+      </ToastProvider>,
+      {
+        locale,
+        messages: locale === 'zh' ? (zhMessages as Record<string, unknown>) : enMessages,
+      },
+    );
+  }
+
+  it('renders all eight built-in rows in Chinese under the zh locale (no English leak)', async () => {
+    mockList({ items: [], total: 0, builtins: ALL_BUILTINS });
+    renderLocale('zh');
+
+    // The directory lists built-ins inline (no dropdown to open) — wait for the
+    // first row to settle on its zh label, then assert all eight…
+    await screen.findByText(zhNames['my-open-issues']!);
+    for (const def of ALL_BUILTINS) {
+      expect(screen.getByText(zhNames[def.slug]!)).toBeTruthy();
+    }
+    // …and none of the English registry literals leaks through.
+    for (const def of ALL_BUILTINS) {
+      expect(screen.queryByText(def.name)).toBeNull();
+    }
+  });
+
+  it('renders all eight built-in rows in English under the en locale (green path)', async () => {
+    mockList({ items: [], total: 0, builtins: ALL_BUILTINS });
+    renderLocale('en');
+
+    await screen.findByText(enNames['my-open-issues']!);
+    for (const def of ALL_BUILTINS) {
+      // The en catalog value equals the registry English name (byte-identical).
+      expect(enNames[def.slug]).toBe(def.name);
+      expect(screen.getByText(def.name)).toBeTruthy();
+    }
   });
 });
