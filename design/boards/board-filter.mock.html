@@ -24,8 +24,9 @@
       this; the UI code subtask (6.15.3) dependsOn it.
 
       REUSE, don't redraw: the filter UI is the SAME quick-filter popover
-      (IssueFilterBar — text · kind · status · assignee), the SAME [Advanced]
-      builder trigger (IssueAdvancedFilter / FilterConditionBuilder), and the
+      (IssueFilterBar — text · kind · WORK TYPE · status · assignee), the SAME
+      [Advanced] builder trigger (IssueAdvancedFilter / FilterConditionBuilder),
+      and the
       SAME [Saved] dropdown picker + applied name-chip (SavedFilterDropdown /
       IssueAppliedFilterBar) the /issues navigator ships (design/work-items/
       filter.mock.html, filter-builder.mock.html, saved-filters.mock.html). This
@@ -79,6 +80,7 @@
         --color-accent: #ff64c8;
         --color-accent-teal: #2a9d99;
         --color-accent-green: #1aae39;
+        --color-accent-orange: #dd5b00;
         --color-tint-peach: #ffe8d4;
         --color-tint-rose: #fde0ec;
         --color-tint-mint: #d9f3e1;
@@ -151,6 +153,18 @@
         --el-type-task: var(--color-info);
         --el-type-bug: var(--color-destructive);
         --el-type-subtask: var(--color-accent-teal);
+        /* Work-type hues (the 2.7.1 taxonomy — WORK_ITEM_TYPE_META) — the
+           AI-native execution field, distinct from the issue KIND above. */
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
         --focus-ring-color: var(--color-primary);
       }
       [data-theme='dark'] {
@@ -166,6 +180,7 @@
         --color-muted-foreground: #a4a097;
         --color-border: #2a2a2a;
         --color-primary: #7b6ce5;
+        --color-accent-orange: #f0742a;
         --color-tint-peach: #3a2a1a;
         --color-tint-rose: #3a1f2a;
         --color-tint-mint: #1a2f25;
@@ -247,7 +262,7 @@
         overflow: visible;
       }
       .stage.is-pop .page {
-        min-height: 580px;
+        min-height: 980px;
       }
 
       /* ── Page shell — header + toolbar (mirrors app/(authed)/boards/page.tsx) ── */
@@ -450,7 +465,10 @@
         text-decoration: none;
       }
       .fp-body {
-        max-height: 440px;
+        /* Shipped popover keeps a scrolling cap (~440px); the mock shows the
+           full facet list expanded so every group (incl. the 6.15 Work type
+           facet) is visible in the PNG export. */
+        max-height: 880px;
         overflow-y: auto;
         padding: 6px;
       }
@@ -610,6 +628,40 @@
       }
       .t-subtask {
         color: var(--el-type-subtask);
+      }
+      /* Work-type glyph hues (WORK_ITEM_TYPE_META) */
+      .wt-code {
+        color: var(--el-type-code);
+      }
+      .wt-design {
+        color: var(--el-type-design);
+      }
+      .wt-test {
+        color: var(--el-type-test);
+      }
+      .wt-content {
+        color: var(--el-type-content);
+      }
+      .wt-research {
+        color: var(--el-type-research);
+      }
+      .wt-review {
+        color: var(--el-type-review);
+      }
+      .wt-deploy {
+        color: var(--el-type-deploy);
+      }
+      .wt-decision {
+        color: var(--el-type-decision);
+      }
+      .wt-manual {
+        color: var(--el-type-manual);
+      }
+      .wt-chore {
+        color: var(--el-type-chore);
+      }
+      .wt-untyped {
+        color: var(--el-text-faint);
       }
       .status-dot {
         width: 10px;
@@ -1257,6 +1309,146 @@
           <path d="M13 12h8" />
           <path d="M13 18h8" />
         </g>
+        <!-- the ten WORK-TYPE glyphs (WORK_ITEM_TYPE_META) + the untyped bucket -->
+        <g
+          id="wt-code"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m16 18 6-6-6-6M8 6l-6 6 6 6" />
+        </g>
+        <g
+          id="wt-design"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          />
+          <path d="m15 5 4 4" />
+        </g>
+        <g
+          id="wt-test"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"
+          />
+          <path d="M6.453 15h11.094M8.5 2h7" />
+        </g>
+        <g
+          id="wt-content"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" />
+          <path d="M14 2v4a2 2 0 0 0 2 2h4M16 13H8M16 17H8M10 9H8" />
+        </g>
+        <g
+          id="wt-research"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
+          />
+          <path d="M9 18h6M10 22h4" />
+        </g>
+        <g
+          id="wt-review"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="8" y="2" width="8" height="4" rx="1" />
+          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+          <path d="m9 14 2 2 4-4" />
+        </g>
+        <g
+          id="wt-deploy"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"
+          />
+          <path
+            d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"
+          />
+          <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+        </g>
+        <g
+          id="wt-decision"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1zM2 16l3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"
+          />
+          <path d="M7 21h10M12 3v18M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" />
+        </g>
+        <g
+          id="wt-manual"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2" />
+          <path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2" />
+          <path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8" />
+          <path
+            d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+          />
+        </g>
+        <g
+          id="wt-chore"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
+          />
+        </g>
+        <g
+          id="wt-untyped"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-dasharray="3 3"
+        >
+          <circle cx="12" cy="12" r="9" />
+        </g>
         <g
           id="i-arrow-up"
           fill="none"
@@ -1850,6 +2042,80 @@
                       </div>
                     </div>
                   </div>
+                  <!-- WORK TYPE — the 6.15 net-new facet (the WorkItemType field,
+                       previously reachable only via [Advanced]). 10 types + the
+                       nullable "Untyped" bucket; glyph + hue per WORK_ITEM_TYPE_META. -->
+                  <div class="fp-group" role="group" aria-label="Work type">
+                    <div class="fp-group-label">Work type</div>
+                    <div role="listbox" aria-label="Work type" aria-multiselectable="true">
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-code"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-code" /></svg></span
+                        ><span class="lbl">Code</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="true">
+                        <span class="type-icon wt-design"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-design" /></svg></span
+                        ><span class="lbl">Design</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="true">
+                        <span class="type-icon wt-test"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-test" /></svg></span
+                        ><span class="lbl">Test</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-content"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-content" /></svg></span
+                        ><span class="lbl">Content</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-research"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-research" /></svg></span
+                        ><span class="lbl">Research</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-review"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-review" /></svg></span
+                        ><span class="lbl">Review</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-decision"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-decision" /></svg></span
+                        ><span class="lbl">Decision</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-deploy"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-deploy" /></svg></span
+                        ><span class="lbl">Deploy</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-manual"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-manual" /></svg></span
+                        ><span class="lbl">Manual</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-chore"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-chore" /></svg></span
+                        ><span class="lbl">Chore</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-untyped"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-untyped" /></svg></span
+                        ><span class="lbl">Untyped</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                    </div>
+                  </div>
                   <div class="fp-group" role="group" aria-label="Status">
                     <div class="fp-group-label">Status</div>
                     <div role="listbox" aria-label="Status" aria-multiselectable="true">
@@ -2038,8 +2304,8 @@
               <button class="tb-btn is-active" aria-haspopup="dialog" aria-expanded="false">
                 <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter<span
                   class="tb-count"
-                  aria-label="3 filters active"
-                  >3</span
+                  aria-label="4 filters active"
+                  >4</span
                 >
               </button>
               <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
@@ -2075,6 +2341,7 @@
             </svg>
           </button>
           <span class="sum-chip"><strong>Kind</strong>&nbsp;is&nbsp;Bug</span>
+          <span class="sum-chip"><strong>Work type</strong>&nbsp;is&nbsp;Code</span>
           <span class="sum-chip"><strong>Priority</strong>&nbsp;is any of&nbsp;Highest, High</span>
           <button class="sum-clear">
             <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear
