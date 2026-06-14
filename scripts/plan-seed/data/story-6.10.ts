@@ -105,7 +105,7 @@ import type { PlanStory } from '../types';
 export const story_6_10: PlanStory = {
   id: '6.10',
   title: 'Organization (root-account) tier + org admin',
-  status: 'planned',
+  status: 'done',
   gitBranch: 'feat/PROD-6.10-organization-tier-admin',
   descriptionMd:
     'Introduce the missing TOP tenancy tier above the workspace — the ' +
@@ -838,7 +838,7 @@ export const story_6_10: PlanStory = {
     {
       id: '6.10.8',
       title: 'E2E — create an org, attach workspaces, manage cross-workspace members',
-      status: 'in_progress',
+      status: 'done',
       type: 'e2e',
       executor: 'coding_agent',
       estimateMinutes: 50,
