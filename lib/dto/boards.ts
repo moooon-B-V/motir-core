@@ -15,6 +15,7 @@ import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { SprintPointsDto } from '@/lib/dto/estimation';
 import type { SprintStateDto } from '@/lib/dto/sprints';
+import type { FilterAst } from '@/lib/filters/ast';
 
 /** Board kind — mirrors the Prisma `BoardType` enum (Story 3.1.1). */
 export type BoardTypeDto = 'kanban' | 'scrum';
@@ -314,4 +315,21 @@ export interface BoardProjectionDto {
    * summary here.
    */
   sprint: SprintSummaryDto | null;
+}
+
+/**
+ * The optional board FILTER input (Story 6.15.2) — what the 6.15.3 board
+ * toolbar passes to `boardsService.getBoard` to narrow the board. Either an
+ * **inline** `ast` (the quick-filter builder's compiled `FilterAst`, the same
+ * one the `/issues` navigator threads) OR a **`savedFilterId`** (a row id or a
+ * `builtin:<slug>`) resolved through the 6.2 saved-filter access gate — never
+ * both (the service prefers `savedFilterId` when both are present). Absent (or
+ * an empty AST) leaves the board unfiltered — byte-for-byte the prior
+ * projection. The board read applies the predicate per column AND to the
+ * cap/`truncated` count + the swimlane lane aggregates, and composes it with
+ * the 4.5 Scrum sprint scope (it narrows WITHIN the sprint, never widening it).
+ */
+export interface BoardFilterInput {
+  ast?: FilterAst;
+  savedFilterId?: string;
 }
