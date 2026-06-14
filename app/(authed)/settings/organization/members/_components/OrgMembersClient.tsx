@@ -15,10 +15,12 @@ import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import type { OrgMemberDTO, OrgMemberPageDTO } from '@/lib/dto/organizations';
-
-// The page size for the cross-workspace roster. Small so the pager is exercised
-// at realistic team sizes; the service clamps any client-supplied limit.
-export const ORG_ROSTER_PAGE_SIZE = 10;
+// `ORG_ROSTER_PAGE_SIZE` lives in a non-'use client' module (../rosterPageSize)
+// so the server component (page.tsx) can import the numeric value directly — a
+// value imported FROM this client module into a server component becomes a
+// client reference, not the number, and crashes the roster query (a non-numeric
+// `take`).
+import { ORG_ROSTER_PAGE_SIZE } from '../rosterPageSize';
 
 const ORG_ROLES: OrganizationRole[] = [
   ORGANIZATION_ROLE.owner,

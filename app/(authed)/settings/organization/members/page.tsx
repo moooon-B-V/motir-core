@@ -9,7 +9,8 @@ import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { buttonVariants } from '@/components/ui/Button';
-import { OrgMembersClient, ORG_ROSTER_PAGE_SIZE } from './_components/OrgMembersClient';
+import { OrgMembersClient } from './_components/OrgMembersClient';
+import { ORG_ROSTER_PAGE_SIZE } from './rosterPageSize';
 
 // Cross-workspace member management (Story 6.10.5, design/org-admin panel 3) —
 // the roster of everyone across the org's workspaces, paginated (the at-scale
