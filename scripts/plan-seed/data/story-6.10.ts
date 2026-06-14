@@ -1086,5 +1086,85 @@ export const story_6_10: PlanStory = {
         'cited create-with-config-copy mirror.',
       dependsOn: ['6.10.1', '6.10.2'],
     },
+    {
+      id: 'bug-org-last-owner-race',
+      kind: 'bug',
+      title:
+        'Org last-owner guard has no row lock — concurrent removals can drop an org to zero owners',
+      status: 'planned',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 40,
+      descriptionMd:
+        '**Type:** bug · **Parent:** Story 6.10 · **Discovered in:** Subtask ' +
+        '6.10.7 (the org-tier Vitest matrix) · **In shipped code from:** 6.10.4 ' +
+        '(`organizationsService`).\n\n' +
+        'The last-owner guard in `organizationsService.removeMember` / ' +
+        '`changeMemberRole` is NOT race-safe. It reads ' +
+        '`organizationMembershipRepository.countOwnersByOrg` — a plain ' +
+        '`SELECT count(*)` with **no `SELECT … FOR UPDATE`** — inside ' +
+        '`withOrgContext`, which opens a default-isolation (READ COMMITTED) ' +
+        'transaction. So two concurrent removals of the **two** owners of a ' +
+        '2-owner org both observe `count = 2`, both pass the guard, and both ' +
+        'delete → the org drops to **ZERO owners** (an unadministrable org). ' +
+        'The same lost-update shape affects concurrent **demotion** of two ' +
+        'owners via `changeMemberRole`.\n\n' +
+        '**Reproduced deterministically** in 6.10.7 while writing the ' +
+        'concurrency suite: two `removeMember` self-leaves fired with ' +
+        '`Promise.allSettled` on a warm connection pool leave `owners = 0` ' +
+        '(it only serializes — masking the bug — when the pool is cold, e.g. a ' +
+        'single test in isolation). The `removeMember` / `changeMemberRole` ' +
+        'doc-comments CLAIM "the count and the update run in one transaction so ' +
+        'a concurrent demotion can’t drop the org to zero owners" — that ' +
+        'comment is WRONG without a lock: a same-transaction COUNT does not ' +
+        'lock the rows another transaction deletes.\n\n' +
+        '**Why not fixed in 6.10.7:** 6.10.7 is a `type: test` subtask; per ' +
+        'the CLAUDE.md debug protocol a pre-existing bug in shipped code is ' +
+        'logged + surfaced, NOT absorbed into the test PR, and no flaky / race-' +
+        'dependent assertion is shipped. The 6.10.7 suite locks only the ' +
+        'deterministic, genuinely-protected unique-constraint races; this card ' +
+        'owns the fix + its regression test.\n\n' +
+        '**Root cause / fix.** The guard reads a derived value (the owner ' +
+        'count) then writes based on it, with no lock between — the ' +
+        'lock-before-read-derived-update rule (CLAUDE.md § 4-layer: "reads ' +
+        'inside transactions that guard a write use `SELECT FOR UPDATE` when ' +
+        'concurrent writes could race"). Fix: make the last-owner guard LOCK ' +
+        'the org’s owner membership rows before counting — e.g. a ' +
+        '`countOwnersByOrgForUpdate` repository read issued as `$queryRaw(… ' +
+        'WHERE "organizationId" = $1 AND "role" = \'owner\' FOR UPDATE)` inside ' +
+        'the same `withOrgContext` tx — so the second concurrent remover blocks ' +
+        'until the first commits, re-counts, and correctly hits ' +
+        '`LastOrgOwnerError`. (Alternatively escalate the guarded flows to ' +
+        'SERIALIZABLE + retry on 40001, but the row-lock is the cheaper, ' +
+        'localised fix and matches the existing rule.) Audit the sibling ' +
+        '`workspacesService.removeMember` last-member guard (`countByWorkspace`, ' +
+        'same non-locking shape) and apply the same fix if it shares the gap.\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- The last-owner guard locks the owner rows before counting; two ' +
+        'concurrent removals of the two owners of a 2-owner org leave exactly ' +
+        'ONE owner (the second hits `LastOrgOwnerError`), never zero — same for ' +
+        'concurrent demotion via `changeMemberRole`.\n' +
+        '- A regression test asserts the invariant over a real Postgres with a ' +
+        'WARM pool (mirroring the 6.10.7 concurrency describe — the race only ' +
+        'manifests when the two transactions truly run in parallel); the ' +
+        'sequential last-owner guard still passes.\n' +
+        '- The `workspacesService` last-member guard is audited; fixed if it ' +
+        'shares the gap, or a one-line note says why it’s safe.\n' +
+        '- 4-layer respected (the locking read is a single-op repository method ' +
+        'taking `tx`; the service composes it in the existing transaction).\n\n' +
+        '## Context refs\n\n' +
+        '- `motir-core/lib/services/organizationsService.ts` — ' +
+        '`assertNotLastOwner`, `removeMember`, `changeMemberRole`.\n' +
+        '- `motir-core/lib/repositories/organizationMembershipRepository.ts` — ' +
+        '`countOwnersByOrg` (add the FOR-UPDATE variant).\n' +
+        '- `motir-core/lib/organizations/context.ts` — `withOrgContext` (the ' +
+        'READ COMMITTED tx the guard runs in).\n' +
+        '- `motir-core/tests/organizations-tier.test.ts` — the 6.10.7 ' +
+        'concurrency describe + the NOTE documenting this race (the regression ' +
+        'test slots in beside it).\n' +
+        '- `motir-core/CLAUDE.md` § lock-before-read-derived-update / ' +
+        '`SELECT FOR UPDATE`.',
+      dependsOn: ['6.10.4'],
+    },
   ],
 };
