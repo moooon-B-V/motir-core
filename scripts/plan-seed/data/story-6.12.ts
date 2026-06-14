@@ -495,7 +495,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.3',
       title:
         'Schema + access — add `public` to `ProjectAccessLevel`; extend the access-check cross-org for READ; migration',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
