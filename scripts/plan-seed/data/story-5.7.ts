@@ -709,7 +709,7 @@ export const story_5_7: PlanStory = {
       kind: 'bug',
       title:
         "Bug — fan-in Notification.data keys (`workItemKey`/`workItemTitle`) don't match the read API's `NotificationData` DTO (`issueKey`/`title`); the mapper passes data through unmapped, so a fanned-in row reads with `issueKey`/`title` undefined",
-      status: 'in_progress',
+      status: 'done',
       type: 'bug',
       executor: 'coding_agent',
       estimateMinutes: 16,
