@@ -41,6 +41,7 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     snoozedUntil: null,
     externalSubmitterName: null,
     externalSubmitterEmail: null,
+    publicChildrenHidden: false,
     createdAt: FIXED_DATE,
     updatedAt: FIXED_DATE,
     ...overrides,

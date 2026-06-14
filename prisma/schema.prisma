@@ -731,6 +731,24 @@ model WorkItem {
   // predicate, so no redundant `submittedByUserId` is stored (ADR §3).
   externalSubmitterName  String?
   externalSubmitterEmail String?
+  // Epic-level privacy on public projects (Story 6.14 · Subtask 6.14.3, per
+  // docs/decisions/epic-privacy.md §1). When TRUE on an EPIC-kind item, the
+  // epic's DESCENDANTS (stories / tasks / subtasks) and its aggregate TELLS
+  // (child count / progress / point total) are hidden from a public/non-member
+  // viewer — the epic ROW itself stays visible as a "this epic is not public"
+  // placeholder. Meaningful ONLY for an epic on a `public` project; a no-op
+  // everywhere else (a member is the only viewer on a non-public project, and
+  // 6.12's cross-org read exception is what creates the "public/non-member
+  // viewer" population at all). The epic-only rule is enforced at the WRITE
+  // layer (`workItemsService`, 6.14.7) — not a DB CHECK, since "true only when
+  // kind = 'epic'" is awkward and brittle across the kind enum (ADR §1). The
+  // server-side exclusion predicate (6.14.4) threads "descends from a private
+  // epic" into the 6.12.4 public projection across EVERY read path; this column
+  // is the flag that predicate reads. A boolean, not an enum: the only state
+  // the locked model needs is binary (hiding the row is a named non-goal), so a
+  // boolean is the complete state space — migrating to an enum later is a
+  // contained change if a third visibility mode is ever added (ADR §1).
+  publicChildrenHidden   Boolean                   @default(false)
   createdAt              DateTime                  @default(now())
   updatedAt              DateTime                  @updatedAt
 
@@ -797,6 +815,18 @@ model WorkItem {
   // the migrate-dev-no-drift contract, CLAUDE.md, outranks that preference; the
   // triage staging set is small, so a plain composite stays cheap.)
   @@index([projectId, triagedAt])
+  // Epic-privacy predicate support (Subtask 6.14.3, per docs/decisions/epic-privacy.md
+  // §6.1): the exclusion resolves a project's private-epic id set with
+  // `SELECT id FROM work_item WHERE projectId = ? AND kind = 'epic' AND
+  // publicChildrenHidden = true`, then drops descendants of that set from every
+  // public read. This composite keeps that lookup an indexable `where`, never a
+  // load-all-then-filter-in-app (finding #57). (The ADR notes a PARTIAL index
+  // `WHERE publicChildrenHidden` would be tighter, but — exactly like the triage
+  // composite above — Prisma can't express a partial index without `migrate dev`
+  // re-proposing a DROP every run; the migrate-dev-no-drift contract, CLAUDE.md,
+  // outranks that preference, and the private-epic set is tiny so a plain
+  // composite stays cheap.)
+  @@index([projectId, publicChildrenHidden])
   // pg_trgm GIN over the free-text contains-match columns (Story 6.1 · 6.1.1,
   // finding #57): the filter builder's `text contains` compiles to ILIKE over
   // title + description, which must not table-scan at 10k issues. A multicolumn
