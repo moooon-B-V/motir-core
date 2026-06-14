@@ -6,12 +6,15 @@ import type { Project } from '@prisma/client';
 import {
   canBrowse,
   canComment,
+  canCommentPublicRequest,
   canCreateAttachments,
   canDeleteAllAttachments,
   canEdit,
   canManageProject,
   canManageWatchers,
   canModerateComments,
+  canSubmitToTriage,
+  canUpvotePublicRequest,
   type ProjectAccessInputs,
 } from '@/lib/projects/access';
 import { isWorkspaceManager } from '@/lib/projects/roles';
@@ -79,6 +82,58 @@ async function resolveInputs(
     : await workspaceMembershipRepository.findByUserAndWorkspace(ctx.userId, ctx.workspaceId);
   const projectMembership = await projectMembershipRepository.findByUserAndProject(
     ctx.userId,
+    projectId,
+    tx,
+  );
+  return {
+    accessLevel: project.accessLevel,
+    workspaceRole: workspaceMembership?.role ?? null,
+    projectRole: projectMembership?.role ?? null,
+  };
+}
+
+/**
+ * Resolve the policy inputs for a PUBLIC-read actor — the ONE path that bypasses
+ * the workspace-equality 404 guard (Story 6.12 · Subtask 6.12.3, ADR §2.2). The
+ * existing `resolveInputs` is left UNTOUCHED, so the 404-not-403 cross-tenant
+ * posture for non-public projects is fully preserved; THIS function is the single
+ * auditable place the org/workspace boundary is crossed for READ, and ONLY for a
+ * `public` project.
+ *
+ * `actorUserId` is NULLABLE: READ on a public project is anonymous (logged out /
+ * a crawler), so a null actor resolves to null roles and the leading `public`
+ * branch of `canBrowse` grants the read. An authenticated actor (cross-org
+ * included) has their roles resolved against the PROJECT'S OWN workspace — a
+ * cross-org viewer resolves to null roles (browse still granted by the public
+ * branch), while a viewer who also happens to be a member of that workspace keeps
+ * their richer role + normal capabilities.
+ *
+ * A NON-public project throws ProjectNotFoundError (→ 404) for ANY actor here
+ * (anonymous or cross-org): it stays indistinguishable from never-existed, no
+ * existence leak. Members reach a non-public project through the normal
+ * workspace-scoped capability methods, never this public path.
+ */
+async function resolvePublicInputs(
+  projectId: string,
+  actorUserId: string | null,
+  tx?: Prisma.TransactionClient,
+): Promise<ProjectAccessInputs> {
+  const project = await projectRepository.findById(projectId, tx);
+  if (!project || project.accessLevel !== 'public') {
+    throw new ProjectNotFoundError(projectId);
+  }
+  if (!actorUserId) {
+    return { accessLevel: project.accessLevel, workspaceRole: null, projectRole: null };
+  }
+  const workspaceMembership = tx
+    ? await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
+        actorUserId,
+        project.workspaceId,
+        tx,
+      )
+    : await workspaceMembershipRepository.findByUserAndWorkspace(actorUserId, project.workspaceId);
+  const projectMembership = await projectMembershipRepository.findByUserAndProject(
+    actorUserId,
     projectId,
     tx,
   );
@@ -273,6 +328,104 @@ export const projectAccessService = {
     const inputs = await resolveInputs(projectId, ctx, tx);
     if (!canBrowse(inputs)) throw new ProjectAccessDeniedError(projectId, 'browse');
     if (!canEdit(inputs)) throw new ProjectAccessDeniedError(projectId, 'edit');
+  },
+
+  // --- Public-project access (Story 6.12 · Subtask 6.12.3) -------------------
+  // These methods go through `resolvePublicInputs` — the SINGLE place the
+  // workspace-equality 404 guard is skipped, and ONLY for a `public` project.
+  // `actorUserId` is nullable on the READ paths (anonymous public READ) and
+  // REQUIRED on the three write-grant asserts (sign-in-to-act: the route has
+  // already gated on a session). The pure grant predicates are also re-exported
+  // below so a batch/caller can decide without a per-project round-trip.
+  canSubmitToTriage,
+  canUpvotePublicRequest,
+  canCommentPublicRequest,
+
+  /**
+   * The actor's PUBLIC-project capabilities — `{ canBrowse, canSubmitToTriage,
+   * canUpvotePublicRequest, canCommentPublicRequest }` (the 6.12.4 view + the
+   * 6.12.5 / 6.12.6 write entry points). `actorUserId` is NULLABLE: an anonymous
+   * (logged-out) reader resolves to `canBrowse: true`; the write grants are true
+   * for any account on a public project (authentication is enforced upstream — the
+   * write routes gate on a session). Throws ProjectNotFoundError on a non-public
+   * project (no existence leak, cross-org or anonymous).
+   */
+  async getPublicCapabilities(
+    projectId: string,
+    actorUserId: string | null,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{
+    canBrowse: boolean;
+    canSubmitToTriage: boolean;
+    canUpvotePublicRequest: boolean;
+    canCommentPublicRequest: boolean;
+  }> {
+    const inputs = await resolvePublicInputs(projectId, actorUserId, tx);
+    return {
+      canBrowse: canBrowse(inputs),
+      canSubmitToTriage: canSubmitToTriage(inputs),
+      canUpvotePublicRequest: canUpvotePublicRequest(inputs),
+      canCommentPublicRequest: canCommentPublicRequest(inputs),
+    };
+  },
+
+  /**
+   * Assert the actor may BROWSE the public project — the anonymous public-read
+   * gate (6.12.4). `actorUserId` nullable (logged out / crawler). Throws
+   * ProjectNotFoundError (→ 404) on a non-public project (indistinguishable from
+   * never-existed); for a public project `canBrowse` is always true, so the
+   * assert resolves and returns.
+   */
+  async assertCanBrowsePublic(
+    projectId: string,
+    actorUserId: string | null,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const inputs = await resolvePublicInputs(projectId, actorUserId, tx);
+    if (!canBrowse(inputs)) throw new ProjectAccessDeniedError(projectId, 'browse');
+  },
+
+  /**
+   * Assert the (authenticated) actor may SUBMIT a request into the public
+   * project's triage (6.12.5). `actorUserId` is REQUIRED — the route has gated on
+   * a session (sign-in-to-act). Throws ProjectNotFoundError (→ 404) on a
+   * non-public project; ProjectAccessDeniedError('edit') if the grant is denied.
+   */
+  async assertCanSubmitToTriage(
+    projectId: string,
+    actorUserId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const inputs = await resolvePublicInputs(projectId, actorUserId, tx);
+    if (!canSubmitToTriage(inputs)) throw new ProjectAccessDeniedError(projectId, 'edit');
+  },
+
+  /**
+   * Assert the (authenticated) actor may UPVOTE a public request (6.12.6).
+   * `actorUserId` REQUIRED. Throws ProjectNotFoundError (→ 404) on a non-public
+   * project; ProjectAccessDeniedError('edit') if the grant is denied.
+   */
+  async assertCanUpvotePublicRequest(
+    projectId: string,
+    actorUserId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const inputs = await resolvePublicInputs(projectId, actorUserId, tx);
+    if (!canUpvotePublicRequest(inputs)) throw new ProjectAccessDeniedError(projectId, 'edit');
+  },
+
+  /**
+   * Assert the (authenticated) actor may COMMENT on a public request (6.12.6).
+   * `actorUserId` REQUIRED. Throws ProjectNotFoundError (→ 404) on a non-public
+   * project; ProjectAccessDeniedError('edit') if the grant is denied.
+   */
+  async assertCanCommentPublicRequest(
+    projectId: string,
+    actorUserId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const inputs = await resolvePublicInputs(projectId, actorUserId, tx);
+    if (!canCommentPublicRequest(inputs)) throw new ProjectAccessDeniedError(projectId, 'edit');
   },
 
   /**

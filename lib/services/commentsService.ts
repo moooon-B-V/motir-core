@@ -71,7 +71,7 @@ interface CommentGate {
     canBrowse: boolean;
     canComment: boolean;
     canModerate: boolean;
-    accessLevel: 'open' | 'limited' | 'private';
+    accessLevel: 'open' | 'limited' | 'private' | 'public';
   };
 }
 

@@ -28,7 +28,10 @@ export const assignableMembersService = {
    */
   async list(input: {
     projectId: string;
-    accessLevel: 'open' | 'limited' | 'private';
+    // `public` (Story 6.12) scopes like `open`/`limited` here — the `!== 'private'`
+    // branch lists every workspace member (the internal authoring pickers; a
+    // public project's PUBLIC view hides assignees entirely, 6.12.4).
+    accessLevel: 'open' | 'limited' | 'private' | 'public';
     ctx: WorkspaceContext;
   }): Promise<WorkspaceMemberDTO[]> {
     if (input.accessLevel !== 'private') {

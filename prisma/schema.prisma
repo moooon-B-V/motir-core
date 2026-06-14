@@ -155,6 +155,11 @@ model User {
   // notificationPreferences pattern). Modelled on both sides per the
   // FK-`@relation` rule so `migrate dev` reports no drift.
   apiTokens                 ApiToken[]
+  // Upvotes the user cast on public requests (Story 6.12 · Subtask 6.12.3) —
+  // the demand signal the triage queue sorts by (6.12.6). Cascade: a vote is
+  // personal substrate, it dies with the user (the apiTokens pattern). Modelled
+  // on both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
+  publicRequestVotes        PublicRequestVote[]
 
   @@map("user")
 }
@@ -369,6 +374,14 @@ model Project {
   /// lock every current member out. The browse/edit policy that reads this is
   /// computed at the service layer in Subtask 6.4.3.
   accessLevel         ProjectAccessLevel  @default(open)
+  /// Public Overview / README (Story 6.12 · Subtask 6.12.3) — the authored
+  /// Markdown body shown on the DEFAULT public Overview tab (6.12.4), edited by
+  /// the project admin via the shipped `MarkdownEditor` in settings (6.12.8).
+  /// A public-SAFE field: it rides the public projection only when the project
+  /// is `public`. Nullable — an empty field falls back to a slim auto-intro
+  /// (never a blank page), so every existing project backfills to NULL with no
+  /// migration data step.
+  publicOverviewMd    String?             @map("public_overview_md")
   /// Estimation config (Story 4.3) — the planning estimate is a property of the
   /// PROJECT's planning, not of a particular board read view. Jira configures
   /// estimation in BOARD settings, but here a board is a per-project read
@@ -594,6 +607,14 @@ enum ProjectAccessLevel {
   open
   limited
   private
+  /// `public` (Story 6.12) — the project is open for read-only VIEW to ANYONE
+  /// on the web (no sign-in), ACROSS orgs/workspaces. The openness ladder is
+  /// public > open > limited > private; `public` is the ONLY level that crosses
+  /// the org boundary for READ (the single exception the access policy carves).
+  /// The default stays `open` — a project becomes public only by an explicit
+  /// admin action (the make-public toggle, Subtask 6.12.8), so adding the value
+  /// locks nothing out.
+  public
 
   @@map("project_access_level")
 }
@@ -834,6 +855,12 @@ model WorkItem {
   // FK is nullable on the notification side (non-item notifications stay
   // modellable), so this back-relation lists only the rows that name the issue.
   notifications        Notification[]
+  // Public-request upvotes (Story 6.12 · Subtask 6.12.3). A public request IS a
+  // triage `work_item`; cross-org accounts upvote it (the demand signal the
+  // 6.11.3 queue sorts by, wired in 6.12.6). Cascade — votes die with the item
+  // (the comments / notifications pattern). Modelled on both sides per the
+  // FK-`@relation` rule.
+  publicRequestVotes   PublicRequestVote[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -871,6 +898,30 @@ model WorkItem {
   // created by the migration SQL (Prisma doesn't model extensions here).
   @@index([title(ops: raw("gin_trgm_ops")), descriptionMd(ops: raw("gin_trgm_ops"))], type: Gin)
   @@map("work_item")
+}
+
+/// One upvote by one account on one public request (Story 6.12 · Subtask
+/// 6.12.3). A public request IS a triage `work_item`; a signed-in account
+/// (cross-org included) casts AT MOST ONE vote on it — the `@@unique` makes a
+/// second upvote a no-op/toggle, never a double count (the demand signal the
+/// 6.11.3 triage queue sorts by; the write + count land in 6.12.6). Both FKs
+/// are modelled as `@relation` per the FK-`@relation` rule so `migrate dev`
+/// reports no drift; both cascade (the vote is association substrate that dies
+/// with either the request or the voter).
+model PublicRequestVote {
+  id         String   @id @default(cuid())
+  workItemId String   @map("work_item_id")
+  userId     String   @map("user_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // One vote per (request, account) — the server-enforced one-vote rule.
+  @@unique([workItemId, userId])
+  // The count read (votes for a request) + the toggle lookup both ride this.
+  @@index([workItemId])
+  @@map("public_request_vote")
 }
 
 /// Many-to-many issue-to-issue relationships (Subtask 1.4.3). Models the four

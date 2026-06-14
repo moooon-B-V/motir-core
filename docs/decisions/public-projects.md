@@ -277,7 +277,22 @@ excluded from the normal board/list reads by the 6.11 `triagedAt` gate, and
 surface only on the public submit / request-detail / roadmap-"submitted"
 reads (§6).
 
-### 5. Account-required, NOT anonymous
+### 5. READ is anonymous; WRITE requires sign-in
+
+> **⚠️ REVISED 2026-06-14 (supersedes "Account-required, NOT anonymous" for
+> READ).** Yue locked a revised model: a public project page is **FULLY PUBLIC —
+> anyone VIEWS it with NO sign-in**, server-rendered + crawlable (SEO/GEO). Only
+> the three **WRITES** (submit / upvote / comment) still require a signed-in
+> account ("sign-in-to-act", the GitHub / Canny standard). Anonymous _writes_
+> stay out of scope (they need the deferred abuse / anonymous-identity model).
+> This matches the revised Story 6.12 seed + the 6.12.3 card, and is what Subtask
+> 6.12.3 implements: `canBrowse` returns true for ANYONE — an unauthenticated
+> request included — on a public project (the §2.1 leading branch already admits
+> a null-role actor), and the public-read resolver (`resolvePublicInputs`) takes
+> a NULLABLE actor. The bullets below describe the ORIGINAL (pre-revision)
+> account-required posture and are retained for history; where they say "every
+> public route is session-gated" / "there is no unauthenticated principal", read
+> the revision: **READ is not session-gated; only the three writes are.**
 
 A public viewer **MUST be a signed-in Motir account** (any org). Anonymous /
 logged-out access is explicitly **out of scope (future)** — it would need an

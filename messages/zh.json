@@ -1290,12 +1290,14 @@
       "level": {
         "open": "开放",
         "limited": "受限",
-        "private": "私有"
+        "private": "私有",
+        "public": "公开"
       },
       "levelDesc": {
         "open": "{workspaceName} 工作区的任何成员都可以查看和编辑此项目。",
         "limited": "任何工作区成员都可以查看和评论，但只有项目成员才能编辑。",
-        "private": "只有下方添加到项目中的人才能找到或打开它，对其他人隐藏。"
+        "private": "只有下方添加到项目中的人才能找到或打开它，对其他人隐藏。",
+        "public": "互联网上的任何人都可以在无需登录的情况下查看此项目。只有登录的账户才能提交请求、点赞或评论。"
       },
       "goPrivateNote": "当前可以访问 <strong>{projectName}</strong> 的 {count} 人将被添加为项目成员，因此没有人会失去访问权限。你可以在成员列表中调整其角色或将其移除。",
       "levelChangedToast": "项目访问权限已设为{level}",

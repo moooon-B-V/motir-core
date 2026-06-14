@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Eye, Globe, Info, Lock, Users } from 'lucide-react';
+import { Eye, Globe, Globe2, Info, Lock, Users } from 'lucide-react';
+import type { ProjectAccessLevel } from '@prisma/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
@@ -30,27 +31,40 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 // data read-only (role chips, no selects, no add/remove) — the gate stays
 // legible rather than the controls vanishing.
 
+// The SETTABLE access levels (the radio control). `public` (Story 6.12) is
+// deliberately NOT here yet — making a project public ships with its own
+// make-public toggle + share link in Subtask 6.12.8 (per the 6.12.1 Panel 5
+// design); 6.12.3 only lands the enum value + the access policy. The icon /
+// tint / label maps below ARE total over `ProjectAccessLevel` so a project that
+// is ALREADY `public` (set via 6.12.8 / seed) still renders its current-level
+// summary pill without crashing.
 const ACCESS_LEVELS = ['open', 'limited', 'private'] as const;
 type AccessLevel = (typeof ACCESS_LEVELS)[number];
 
-const ACCESS_ICON: Record<AccessLevel, typeof Globe> = {
+const ACCESS_ICON: Record<ProjectAccessLevel, typeof Globe> = {
   open: Globe,
   limited: Eye,
   private: Lock,
+  // Interim — 6.12.8 finalises the public-level control per design/public-projects Panel 5.
+  public: Globe2,
 };
 // Icon-tile tint per level — mirrors the 6.4.1 mockup (open = mint, limited =
 // sky, private = lavender), hue in the tint with strong text (AA, finding #35).
-const ACCESS_TINT: Record<AccessLevel, string> = {
+const ACCESS_TINT: Record<ProjectAccessLevel, string> = {
   open: 'bg-(--el-tint-mint)',
   limited: 'bg-(--el-tint-sky)',
   private: 'bg-(--el-tint-lavender)',
+  public: 'bg-(--el-tint-peach)',
 };
 
 export interface ProjectMembersSettingsProps {
   projectKey: string;
   projectName: string;
   workspaceName: string;
-  accessLevel: AccessLevel;
+  // The project's CURRENT level (display) — `ProjectAccessLevel`, so a project
+  // already set to `public` renders. The SETTABLE radio is still `ACCESS_LEVELS`
+  // (open/limited/private) until 6.12.8 adds the make-public control.
+  accessLevel: ProjectAccessLevel;
   members: ProjectMemberDTO[];
   workspaceMembers: WorkspaceMemberDTO[];
   currentUserId: string;
@@ -70,7 +84,7 @@ export function ProjectMembersSettings({
   const t = useTranslations('settings');
   const { toast } = useToast();
 
-  const [accessLevel, setAccessLevel] = useState<AccessLevel>(initialAccessLevel);
+  const [accessLevel, setAccessLevel] = useState<ProjectAccessLevel>(initialAccessLevel);
   const [members, setMembers] = useState<ProjectMemberDTO[]>(initialMembers);
   const [accessPending, setAccessPending] = useState(false);
   const [pendingUserIds, setPendingUserIds] = useState<ReadonlySet<string>>(new Set());
@@ -426,7 +440,7 @@ export function ProjectMembersSettings({
   );
 }
 
-function AccessSummaryPill({ level, label }: { level: AccessLevel; label: string }) {
+function AccessSummaryPill({ level, label }: { level: ProjectAccessLevel; label: string }) {
   const Icon = ACCESS_ICON[level];
   return (
     <Pill tone="neutral" className="shrink-0">
