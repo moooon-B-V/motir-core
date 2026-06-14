@@ -12,7 +12,15 @@
       design gate produces this. It is the layout source of truth for the two UI
       code subtasks that carry 6.11.1 in dependsOn:
         - 6.11.6 — the admin triage inbox (queue + detail + actions).
-        - 6.11.7 — the submission surfaces (in-app widget + public portal form).
+        - 6.11.7 — the in-app report widget (signed-in member submission).
+
+      Model revision (Yue, 2026-06-14): a work item is created only by a
+      signed-in account, so the unauthenticated public portal form is DROPPED.
+      Triage intake is two signed-in surfaces — the in-app "Report" widget (a
+      workspace member) and the 6.12 public-project "Submit a request" (a
+      signed-in non-member; designed in design/public-projects/). Both post into
+      this same triage queue. The inbox simply renders a non-member submission
+      with a "Public" chip; there is no captured external name/email here.
 
       Built FROM the real design system: the token block below is copied 1:1
       from app/globals.css (Tier-0 --color-* + the shape tokens + Tier-3 --el-*),
@@ -31,17 +39,14 @@
 
       Covers (multi-panel — review EACH, mistake #31):
         (1)  the admin triage inbox — paginated queue (left) + detail pane
-             (right) + the action bar; one queue row external, one snoozed.
+             (right) + the action bar; one queue row public (non-member), one snoozed.
         (1b) the Promote picker (OPEN) — Backlog / Sprint / Epic / Story targets
              + the position/rank chooser.
         (1c) the Mark-duplicate / Merge picker (OPEN) — the canonical-item
              Combobox.
         (1d) the Snooze picker (OPEN) — the time options.
         (2)  the empty queue state — the EmptyState primitive ("No items to triage").
-        (3)  the in-app "report a bug / request a feature" widget (modal).
-        (4)  the public portal form — unauthenticated, branded, single column.
-        (4b) the public form CONFIRMATION ("Thanks — we got it").
-        (4c) the public form RATE-LIMIT / error state.
+        (3)  the in-app "report a bug / request a feature" widget (modal, signed-in member).
       Toggle dark mode to confirm token parity. See design-notes.md for the spec.
     -->
     <style>
@@ -330,7 +335,7 @@
         color: var(--el-text-secondary);
         border: 1px solid var(--el-border);
       }
-      /* the external-submitter chip — hue in the peach tint bg, strong text (AA ~10:1) */
+      /* the public-submitter chip — hue in the peach tint bg, strong text (AA ~10:1) */
       .pill-external {
         background: var(--el-tint-peach);
         color: var(--el-text-strong);
@@ -1003,152 +1008,6 @@
         line-height: 1.5;
       }
 
-      /* public portal page */
-      .portal {
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-card);
-        box-shadow: var(--shadow-card);
-        background: var(--el-page-bg);
-        overflow: hidden;
-      }
-      .portal-top {
-        height: 6px;
-        background: var(--el-accent);
-      }
-      .portal-inner {
-        padding: 30px 30px 34px;
-      }
-      .brand {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 4px;
-      }
-      .brand .logo {
-        width: 30px;
-        height: 30px;
-        border-radius: var(--radius-control);
-        background: var(--el-accent);
-        color: var(--el-accent-text);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 800;
-        font-family: var(--font-serif);
-        font-size: 16px;
-      }
-      .brand .name {
-        font-weight: 700;
-        font-size: 15px;
-        color: var(--el-text);
-      }
-      .portal h2 {
-        font-family: var(--font-serif);
-        font-size: 22px;
-        font-weight: 600;
-        margin: 16px 0 6px;
-        color: var(--el-text);
-      }
-      .portal .lede {
-        font-size: 14px;
-        color: var(--el-text-muted);
-        margin: 0 0 22px;
-        line-height: 1.55;
-      }
-      .two-col {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 14px;
-      }
-      .portal-foot {
-        margin-top: 22px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-      }
-      .privacy {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        font-size: 12px;
-        color: var(--el-text-faint);
-      }
-
-      /* confirmation + error states */
-      .state-card {
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-card);
-        box-shadow: var(--shadow-card);
-        background: var(--el-page-bg);
-        padding: 44px 30px;
-        text-align: center;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-      }
-      .state-card .badge {
-        width: 48px;
-        height: 48px;
-        border-radius: 9999px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 14px;
-      }
-      .badge-success {
-        background: var(--el-tint-mint);
-      }
-      .badge-success .ic {
-        color: var(--el-success);
-        width: 24px;
-        height: 24px;
-      }
-      .badge-warning {
-        background: var(--el-tint-peach);
-      }
-      .badge-warning .ic {
-        color: var(--el-warning);
-        width: 24px;
-        height: 24px;
-      }
-      .state-card h3 {
-        font-family: var(--font-serif);
-        font-size: 19px;
-        font-weight: 600;
-        margin: 0 0 6px;
-        color: var(--el-text);
-      }
-      .state-card p {
-        font-size: 13.5px;
-        color: var(--el-text-muted);
-        margin: 0;
-        max-width: 380px;
-        line-height: 1.55;
-      }
-      /* inline validation/rate-limit banner (Toast-ish) */
-      .banner {
-        display: flex;
-        align-items: flex-start;
-        gap: 10px;
-        padding: 12px 14px;
-        border-radius: var(--radius-card);
-        background: var(--el-tint-peach);
-        margin-bottom: 18px;
-      }
-      .banner .ic {
-        color: var(--el-warning);
-        margin-top: 1px;
-      }
-      .banner .bt {
-        font-size: 13px;
-        color: var(--el-text-strong);
-        line-height: 1.5;
-      }
-      .banner .bt b {
-        font-weight: 700;
-      }
-
       /* Toast (per-action confirmation, mirror components/ui/Toast.tsx) */
       .toast {
         display: inline-flex;
@@ -1231,10 +1090,6 @@
           </p>
         </div>
         <div class="head-actions">
-          <button class="btn btn-outline">
-            <svg class="ic"><use href="#i-external-link" /></svg>
-            Public form link
-          </button>
           <button class="btn btn-primary">
             <svg class="ic"><use href="#i-bug" /></svg>
             Report
@@ -1273,7 +1128,7 @@
                 </div>
               </div>
             </div>
-            <!-- external row -->
+            <!-- public (non-member) row -->
             <div class="q-row">
               <div class="glyph type-icon">
                 <svg class="ic t-task"><use href="#i-task" /></svg>
@@ -1286,10 +1141,9 @@
                   Would love a heads-up in Slack so I don't have to keep the tab…
                 </p>
                 <div class="q-meta">
-                  <span class="pill pill-external">
-                    <svg class="ic" style="width: 12px; height: 12px"><use href="#i-mail" /></svg>
-                    External · dana@acme.io
-                  </span>
+                  <span class="who"><span class="avatar av-sky">D</span> Dana Reyes</span>
+                  <span class="pill pill-external">Public</span>
+                  <span class="q-dot">·</span>
                   <span class="q-age">5h ago</span>
                 </div>
               </div>
@@ -1428,8 +1282,9 @@
       </div>
       <p class="cap" style="margin-top: 10px">
         The queue is paginated / cursor'd (finding #57) — never a load-all list. Submitter shows a
-        member avatar OR the peach "External" chip. A snoozed item is dimmed out of the active queue
-        until its time or new activity.
+        member avatar, or an avatar + the peach "Public" chip for a signed-in non-member (via the
+        6.12 submit). A snoozed item is dimmed out of the active queue until its time or new
+        activity.
       </p>
     </div>
 
@@ -1564,8 +1419,8 @@
           </div>
           <h3>No items to triage</h3>
           <p>
-            New bug reports and feature requests land here. Share the public form or use the in-app
-            “Report” button to collect them.
+            New bug reports and feature requests land here — from the in-app “Report” button or a
+            signed-in “Submit a request” on the public project page.
           </p>
         </div>
         <div class="stack" style="padding-top: 40px">
@@ -1586,8 +1441,8 @@
       </div>
     </div>
 
-    <!-- ════════════════ PANELS 3 + 4 — the submission surfaces ════════════════ -->
-    <div class="panel-label">(3 + 4) Submission surfaces — in-app widget · public portal form</div>
+    <!-- ════════════════ PANEL 3 — the submission surface ════════════════ -->
+    <div class="panel-label">(3) Submission surface — in-app report widget (signed-in member)</div>
     <div class="panel">
       <div class="surfaces">
         <!-- (3) in-app widget -->
@@ -1645,124 +1500,6 @@ When I drag a card to the rightmost column it snaps back to the one on its left.
             Goes straight to the project's triage queue (never the tree). Attributed to the
             signed-in member.
           </p>
-        </div>
-
-        <!-- (4) public portal form -->
-        <div>
-          <p class="cap">(4) Public portal form — unauthenticated, branded, shareable URL</p>
-          <div class="portal">
-            <div class="portal-top"></div>
-            <div class="portal-inner">
-              <div class="brand">
-                <span class="logo">M</span>
-                <span class="name">Motir</span>
-              </div>
-              <h2>Report a bug or request a feature</h2>
-              <p class="lede">
-                Tell us what's broken or what you'd like to see. We read every submission.
-              </p>
-
-              <div class="field">
-                <div class="segmented" role="tablist">
-                  <span class="seg on"
-                    ><svg class="ic t-task"><use href="#i-task" /></svg> Feature request</span
-                  >
-                  <span class="seg"
-                    ><svg class="ic t-bug"><use href="#i-bug" /></svg> Bug</span
-                  >
-                </div>
-              </div>
-              <div class="two-col">
-                <div class="field">
-                  <label>Your name</label>
-                  <input class="input" placeholder="Jane Doe" />
-                </div>
-                <div class="field">
-                  <label>Email</label>
-                  <input class="input" placeholder="jane@company.com" />
-                </div>
-              </div>
-              <div class="field">
-                <label>Summary</label>
-                <input class="input" placeholder="A short title" />
-              </div>
-              <div class="field">
-                <label>Details</label>
-                <textarea class="input" placeholder="What would you like, and why?"></textarea>
-              </div>
-              <!-- honeypot field is visually hidden in the real form; noted here -->
-              <div class="portal-foot">
-                <span class="privacy">
-                  <svg class="ic" style="width: 14px; height: 14px"><use href="#i-shield" /></svg>
-                  We never share your email
-                </span>
-                <button class="btn btn-primary btn-lg">
-                  <svg class="ic"><use href="#i-send" /></svg>
-                  Send it
-                </button>
-              </div>
-            </div>
-          </div>
-          <p class="hint">
-            Exposes no tree or project internals — only accepts a submission. Rate-limited +
-            honeypot guarded (panel 4c).
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <!-- ════════════════ PANELS 4b + 4c — public form result states ════════════════ -->
-    <div class="panel-label">
-      (4b + 4c) Public form result states — confirmation · rate-limit / error
-    </div>
-    <div class="panel">
-      <div class="surfaces">
-        <!-- (4b) confirmation -->
-        <div>
-          <p class="cap">(4b) Confirmation — after a successful submit</p>
-          <div class="state-card">
-            <span class="badge badge-success"
-              ><svg class="ic"><use href="#i-check-check" /></svg
-            ></span>
-            <h3>Thanks — we got it</h3>
-            <p>
-              Your feature request is with the Motir team. We'll take it from here — no account
-              needed.
-            </p>
-          </div>
-        </div>
-
-        <!-- (4c) rate-limit / error -->
-        <div>
-          <p class="cap">(4c) Rate-limit / error — graceful, never a raw 500</p>
-          <div class="portal">
-            <div class="portal-top"></div>
-            <div class="portal-inner">
-              <div class="brand"><span class="logo">M</span><span class="name">Motir</span></div>
-              <h2 style="font-size: 20px">Report a bug or request a feature</h2>
-              <div class="banner" style="margin-top: 18px">
-                <svg class="ic"><use href="#i-alarm" /></svg>
-                <span class="bt">
-                  <b>You're sending these a little fast.</b> Please wait a moment and try again —
-                  this keeps the form free of spam.
-                </span>
-              </div>
-              <div class="field">
-                <label>Summary</label>
-                <input class="input" value="Add Slack notifications" />
-              </div>
-              <div class="portal-foot">
-                <span class="privacy">
-                  <svg class="ic" style="width: 14px; height: 14px"><use href="#i-shield" /></svg>
-                  We never share your email
-                </span>
-                <button class="btn btn-primary btn-lg" style="opacity: 0.55">
-                  <svg class="ic"><use href="#i-clock" /></svg>
-                  Try again in 30s
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
