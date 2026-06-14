@@ -511,7 +511,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.6',
       title: 'Triage inbox UI — queue + detail + actions (paginated)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 65,
